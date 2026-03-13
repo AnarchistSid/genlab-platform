@@ -1,14 +1,9 @@
 """Tests for platform protocol definitions."""
 from __future__ import annotations
 
-import pytest
-from datetime import datetime
-from typing import runtime_checkable
-
 
 def test_publisher_protocol_is_runtime_checkable():
     from genlab_core.platforms.protocols import Publisher
-    assert hasattr(Publisher, "__protocol_attrs__") or runtime_checkable
 
     class FakePublisher:
         platform_id = "fake"
