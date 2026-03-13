@@ -1,6 +1,7 @@
 # Postiz — social media scheduling (shadow eval)
-# Start: docker compose up -d
-# Stop:  docker compose down
+# DISABLED: Stopped in Sprint 45B pending active integration.
+# All containers stopped to eliminate restart-loop noise.
+# To re-enable: docker compose up -d
 # Logs:  docker compose logs -f postiz
 
 services:
@@ -38,6 +39,8 @@ services:
     container_name: genlab-postiz
     ports:
       - "5100:5000"
+    env_file:
+      - ../../docker/.env.docker
     environment:
       DATABASE_URL: postgresql://postiz:postiz_local_dev@postiz-postgres:5432/postiz
       REDIS_URL: redis://postiz-redis:6379
@@ -51,15 +54,15 @@ services:
       STORAGE_PROVIDER: local
       UPLOAD_DIRECTORY: /uploads
       NEXT_PUBLIC_UPLOAD_DIRECTORY: /uploads
-      # ── Social provider OAuth credentials ──
-      X_API_KEY: FgXP2OEXCaQmi1EbI0MTsXqbe
-      X_API_SECRET: sm4UOwqqf4Hsns91qzcTD9CFeWN7HdGYgpLrXDE6laSgq8Oz6J
-      FACEBOOK_APP_ID: "2203397347132949"
-      FACEBOOK_APP_SECRET: a3065e671bf60a453f4c3dfd20cd75a3
-      INSTAGRAM_CLIENT_ID: "1416127452837173"
-      INSTAGRAM_CLIENT_SECRET: 22a4602015bac7f885018152cfb9ca15
-      YOUTUBE_CLIENT_ID: 421065395448-qi8d5hr64tff57b9ssha8306vvlmgnro.apps.googleusercontent.com
-      YOUTUBE_CLIENT_SECRET: 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
+      # ── Social provider OAuth credentials (from .env.docker) ──
+      X_API_KEY: ${X_API_KEY}
+      X_API_SECRET: ${X_API_SECRET}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-2203397347132949}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET}
+      INSTAGRAM_CLIENT_ID: ${INSTAGRAM_CLIENT_ID:-1416127452837173}
+      INSTAGRAM_CLIENT_SECRET: ${INSTAGRAM_CLIENT_SECRET}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET}
     volumes:
       - postiz-config:/config/
       - postiz-uploads:/uploads/
