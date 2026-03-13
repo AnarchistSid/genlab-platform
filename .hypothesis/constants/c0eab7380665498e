@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/contracts.py
+# hypothesis_version: 6.151.9
+
+['BlueprintContract', 'candidate_id', 'candidate_id_missing', 'fields', 'fields_not_dict', 'format', 'id', 'record_id_missing', 'record_not_dict', 'status', 'story_id']

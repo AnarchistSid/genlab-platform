@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/intelligence/score_normalizer.py
+# hypothesis_version: 6.151.9
+
+[0.0, 1e-09, 0.5, 1.0, 2.0, 24.0, 'M2', 'count', 'mean']

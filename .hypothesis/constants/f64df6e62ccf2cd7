@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/hook_features.py
+# hypothesis_version: 6.151.9
+
+[0.0, 1.0, 126976, '.,!?:;', '?', 'Sk', 'So', 'avg_word_length', 'emoji_count', 'has_number', 'has_question', 'has_superlative', 'starts_with_you', 'unique_word_ratio', 'word_count', 'you', "you're", 'your']

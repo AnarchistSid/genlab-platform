@@ -1,0 +1,50 @@
+# Monetisation thresholds per platform.
+# These are the specific numbers we need to hit.
+# Source: verified platform documentation, March 2026.
+
+youtube:
+  traditional:
+    subscribers:
+      target: 1000
+      unit: "subscribers"
+      notes: "YouTube Partner Program traditional path"
+    watch_hours_12mo:
+      target: 4000
+      unit: "hours"
+      notes: "Must be achieved within a rolling 12-month window"
+  shorts:
+    shorts_views_90d:
+      target: 10_000_000
+      unit: "views"
+      notes: "Shorts path — often faster than traditional for short-form channels"
+  # A channel qualifies once EITHER traditional OR shorts threshold is met
+
+facebook:
+  followers:
+    target: 5000
+    unit: "followers"
+  minutes_viewed_60d:
+    target: 600000
+    unit: "minutes"
+    notes: "Rolling 60-day window"
+
+instagram:
+  followers:
+    target: 10000
+    unit: "followers"
+    notes: "No fixed monetisation threshold — tracking growth toward invite criteria"
+  dm_sends_7d:
+    target: null
+    unit: "sends"
+    notes: "No threshold — track velocity as primary algo signal (3-5x weight > likes)"
+
+# Reward multiplier when within proximity of threshold
+reward_boost:
+  within_20pct: 3.0
+  within_50pct: 1.5
+  above_threshold: 1.0  # once monetised, normal weighting resumes
+
+# SharePoint list for tracker output
+sharepoint:
+  list_id: "1a464f5e-fc95-4597-84ab-3fe6e7f4274a"
+  list_name: "GenLab_MonetisationProgress"

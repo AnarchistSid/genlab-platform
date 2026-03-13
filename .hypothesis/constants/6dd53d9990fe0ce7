@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/hooks/hook_validator.py
+# hypothesis_version: 6.151.9
+
+[150, '\\s{2,}', 'gaming_formal_opener', 'gaming_news_prefix', 'gaming_reddit_phrase', 'gaming_too_long', 'gaming_too_short', 'gaming_weak_opener', 'instagram']

@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/ffmpeg.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.14, 0.35, 1.0, 4.0, 6.0, 1000000.0, -2000, 720, 1080, 1280, 1920, 48000, ',', '-ar', '-b:a', '-bufsize', '-c:a', '-c:v', '-color_primaries', '-color_trc', '-colorspace', '-crf', '-encoders', '-f', '-i', '-maxrate', '-of', '-preset', '-r', '-show_entries', '-tag:v', '-v', '-vf', '-y', '0', '12M', '192k', '24M', '256k', '320k', ':', 'FFMPEG_BINARY', 'FFPROBE_BINARY', 'aac', 'bin', 'bt709', 'error', 'facebook', 'ffmpeg', 'ffprobe', 'ffv1', 'format=duration', 'h264_amf', 'h264_nvenc', 'h264_tee', 'h264_videotoolbox', 'hevc_amf', 'hevc_nvenc', 'hevc_videotoolbox', 'hvc1', 'instagram', 'libx264', 'libx265', 'lossless', 'master', 'medium', 'pcm_s24le', 'premium', 'quiet', 'replace', 'setpgrp', 'slow', 'source', 'standard', 'tee', 'threads', 'tier', 'tiktok', 'twitter', 'x_premium', 'x_standard', 'youtube', '|']

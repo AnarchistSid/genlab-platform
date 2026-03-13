@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/video/standards.py
+# hypothesis_version: 6.151.9
+
+[0.12, 0.18, 720, 1080, 1280, 1920, 12000, '16:9', '9:16', 'bt709', 'facebook', 'instagram', 'libx264', 'libx265', 'medium', 'slow', 'threads', 'tiktok', 'x_premium', 'x_standard', 'youtube']

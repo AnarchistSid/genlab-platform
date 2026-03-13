@@ -1,0 +1,5 @@
+[   33582ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://ogads-pa.clients6.google.com/$rpc/google.internal.onegoogle.asyncdata.v1.AsyncDataService/GetAsyncData:0
+[   65742ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://netbanking.kotak.bank.in/knb2/ebwedmbac.js:0
+[   77903ms] SyntaxError: Unexpected token ')'
+    at https://netbanking.kotak.bank.in/knb2/assets/js/trusted-device/riskminder-client.js:729:228
+[   78251ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://netbanking.kotak.bank.in/knb-desktop/src/assets/fonts/Roboto-Medium.ttf:0

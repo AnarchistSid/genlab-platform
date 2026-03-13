@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/media/ffmpeg_gaming.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.001, 0.5, 0.9, 120, 1080, 1920, '+faststart', ',', '-ac', '-ar', '-b:a', '-c:a', '-c:v', '-color_primaries', '-color_trc', '-colorspace', '-crf', '-filter_complex', '-i', '-map', '-movflags', '-pix_fmt', '-preset', '-r', '-ss', '-to', '-vf', '-y', '17', '192k', '2', '48000', ';', '[0:a]', '[0:v]', '[outa]', '[outv]', '[silent0]', 'aac', 'audio', 'bt709', 'center', 'channels', 'chromatic_aberration', 'color', 'copy', 'crop', 'duration', 'end_time', 'fade', 'font_file', 'glitch', 'hard_cut', 'height', 'horzopen', 'libx264', 'margin_x', 'margin_y', 'pillarbox', 'pixelize', 'position', 'size', 'slow', 'smoothup', 'start_time', 'stroke_color', 'stroke_width', 'text', 'type', 'video', 'white_flash', 'width', 'yuv420p', 'zoom_impact']

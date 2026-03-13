@@ -1,0 +1,21 @@
+[     601ms] [ERROR] The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy. @ https://developers.tiktok.com/app/7613687579988510732/pending:0
+[    3252ms] [WARNING] RTC_AMBULANCE have non-native code:
+ RTCPeerConnection.prototype.addStream
+RTCPeerConnection.prototype.addTrack
+RTCPeerConnection.prototype.createDataChannel
+RTCPeerConnection.prototype.getLocalStreams
+RTCPeerConnection.prototype.getStats
+RTCPeerConnection.prototype.removeStream
+RTCPeerConnection.prototype.removeTrack
+RTCPeerConnection.prototype.setRemoteDescription
+RTCPeerConnection.prototype.addEventListener
+RTCPeerConnection.prototype.removeEventListener
+navigator.mediaDevices.getUserMedia
+navigator.mediaDevices.getDisplayMedia @ https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/tiktok/web/tt4d_coze_ai_bot/coze-chat-app-sdk/1.2.0-beta.19-tt4d-t6/libs/oversea/index.js:12
+[    4624ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    4626ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    4632ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    4669ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    4670ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    4672ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0
+[    5207ms] [WARNING] The 'deprecatedStyle' prop is deprecated. Please use the associated style props instead (e.g. "marginInline", "flex") @ https://sf16-website.neutral.ttwstatic.com/obj/tiktok_web_static/developers/build/vendors/112-a24db718645345e8-ce27d2c95f2da0f14f95cb08851d62a597491534.js:0

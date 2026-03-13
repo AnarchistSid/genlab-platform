@@ -1,0 +1,37 @@
+# Registered Gen Lab niches. Add new entry when a new agent is activated.
+# niche_id must match the value stored in SharePoint niche_id fields.
+niches:
+  - id: ai_news
+    display_name: "Blackbox Brief"
+    status: active
+    color: "#6366F1"
+    vertical: ai_news
+    pipeline_repo: "Content Scraper"
+
+  - id: gaming
+    display_name: "CriticalRush"
+    status: active
+    color: "#F97316"
+    vertical: gaming
+    pipeline_repo: "CriticalRush"
+
+  - id: sports
+    display_name: "ClutchWire"
+    status: mvp
+    color: "#10B981"
+    vertical: sports
+    pipeline_repo: "ClutchWire"
+
+  - id: movies
+    display_name: "SpliceReel"
+    status: mvp
+    color: "#8B5CF6"
+    vertical: movies
+    pipeline_repo: "SpliceReel"
+
+  - id: fashion
+    display_name: "FrameDrift"
+    status: mvp
+    color: "#EC4899"
+    vertical: fashion
+    pipeline_repo: "FrameDrift"

@@ -1,0 +1,11 @@
+[  183276ms] [ERROR] ErrorUtils caught an error:
+
+Missing cryptedUid for successful web login
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773059823, extra: Object, guardList: Array(1), hash: qbajcp} @ https://static.cdninstagram.com/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76
+[  209482ms] [ERROR] ErrorUtils caught an error:
+
+Routing payload expected for /oauth/oidc/?e_un&app_id=17951132926087090&redirect_uri=https%3A%2F%2Fbusiness.facebook.com%2Fpage%2Finstagram%2Foidclink%2F&scope=openid%2Clinking&response_type=code&state=%7B%22create_business_manager%22%3Atrue%2C%22csrf_nonce%22%3A%226jIyjO4gJR0uRjg0%22%2C%22enable_signup_web%22%3Atrue%2C%22entry_point%22%3A%22bizweb_home_header%22%2C%22f3_request_id%22%3A%2227c758de-c9fe-48d3-8f7d-a02dd24ee1e1%22%2C%22from%22%3A%22bizweb_home_header%22%2C%22link_flow_source%22%3A%22biz_web%22%2C%22page_ids%22%3A%5B%22931856753354344%22%5D%2C%22redirect_uri%22%3A%22https%3A%2F%2Fbusiness.facebook.com%2Fpage%2Finstagram%2Foidclink%2F%22%2C%22require_professional%22%3Atrue%7D&enable_fb_login=true&force_consent=true&logger_id=27c758de-c9fe-48d3-8f7d-a02dd24ee1e1&force_authentication=0, but got {"__ar":1,"error":1357004,"errorSummary":"Sorry, something went wrong","errorDescription":"Please try closing and re-opening your browser window.","isNotCritical":1,"rid":"AG-j5uKVLDujx0IgZRnwElF","payload":null,"lid":"7615234065867233676"}
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773059849, extra: Object, guardList: Array(2), hash: lfmdd2} @ https://static.cdninstagram.com/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76
+[  221587ms] [ERROR] Permissions policy violation: unload is not allowed in this document. @ https://static.xx.fbcdn.net/rsrc.php/v4/yw/r/h0R5SaW-d1w.js:249

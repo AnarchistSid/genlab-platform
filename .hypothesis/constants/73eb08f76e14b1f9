@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platform/postiz_client.py
+# hypothesis_version: 6.151.9
+
+[2.0, 3.0, 5.0, 120.0, 200, '/', '/api/integrations', '/api/media', '/api/posts', '/api/user', 'Authorization', 'Content-Type', 'POSTIZ_SHADOW_MODE', 'application/json', 'content', 'facebook', 'false', 'file', 'id', 'instagram', 'integrationId', 'linkedin', 'media', 'now', 'path', 'primary', 'provider', 'providerIdentifier', 'rb', 'shadow', 'threads', 'tiktok', 'true', 'twitter', 'type', 'unknown', 'url', 'youtube']

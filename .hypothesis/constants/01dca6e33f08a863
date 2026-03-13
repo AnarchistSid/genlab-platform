@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/hook_classifier.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.1, 0.5, 100, 'ai_news', 'avg_word_length', 'emoji_count', 'has_number', 'has_question', 'has_superlative', 'logloss', 'models', 'starts_with_you', 'unique_word_ratio', 'word_count']

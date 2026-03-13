@@ -1,0 +1,48 @@
+[    5171ms] [ERROR] prefetch image SyntaxError: Unexpected end of JSON input @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/user-prefetch.feced1b0.js:1
+[    5227ms] [WARNING] Reflect is already polyfilled. @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5263ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5288ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5290ms] [WARNING] AppContext will be overwritten @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5290ms] [WARNING] loadable: `loadableReady()` requires state, please use `getScriptTags` or `getScriptElements` server-side @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:1
+[    5339ms] [ERROR] Error: Unable to determine theme from timezone. Falling back to local time-based method. Error: Timezone "Asia/Calcutta" not found
+    at w (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:2:102180)
+    at x (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:1:154160)
+    at https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:1:155421
+    at lI (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:165676)
+    at iU (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:194669)
+    at iT (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:177525)
+    at r6 (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:126479)
+    at https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:193115
+    at i$ (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:193121)
+    at iE (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:176528) @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    5390ms] [ERROR] Error: Unable to determine theme from timezone. Falling back to local time-based method. Error: Timezone "Asia/Calcutta" not found
+    at w (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:2:102180)
+    at x (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:1:154160)
+    at https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:1:155421
+    at lI (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:165676)
+    at iU (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:194669)
+    at https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:189244
+    at x (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:247116)
+    at MessagePort.F (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/npm-react.c4ee0173.js:2:247646) @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/webapp-desktop.3b9f5761.js:0
+[    8744ms] [WARNING] [i18n] missing key [en] Webapp Close_button Close_button @ https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/biz.common.lib.dec29af8.js:0
+[   10671ms] Uncaught (in promise) TypeError: a.init is not a function
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:544225)
+    at l (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:537319)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:538676)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:537712)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:1:216447)
+    at d (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:1:216196)
+    at value (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:543765)
+    at value (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:543644)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:616432)
+    at l (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:608621)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:609978)
+    at <anonymous> (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/async/64887.616a53c2.js:1:609014)
+    at a (https://lf16-tiktok-web.tiktokcdn-us.com/obj/tiktok-web-tx/tiktok/webapp/main/react-v18/webapp-desktop/static/js/1933.3bcb432e.js:1:216252)

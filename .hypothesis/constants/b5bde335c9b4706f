@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/sources/playwright_profile_connector.py
+# hypothesis_version: 6.151.9
+
+[120, 450, 1000, 1280, 2000, 3200, 12000, 15000, 45000, '0', '1', 'False', 'PLAYWRIGHT_HEADLESS', 'author', 'domcontentloaded', 'entries', 'entry_count', 'error', 'failed', 'false', 'fetch_method', 'fetch_status', 'generic', 'height', 'instagram', 'link', 'max_items', 'media', 'networkidle', 'params', 'platform', 'published', 'requires_auth', 'requires_login', 'scroll_rounds', 'success', 'summary', 'text', 'threads', 'threads.net', 'tiktok', 'timeout', 'title', 'url', 'wait_ms', 'width']

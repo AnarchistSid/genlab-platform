@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/tts/_text_cleaner.py
+# hypothesis_version: 6.151.9
+
+['#\\w+', '\\*+', '\\s+', '^[^\\w]+', 'https?://\\S+']

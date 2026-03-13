@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/audio_probe.py
+# hypothesis_version: 6.151.9
+
+[120, '-', '-ac', '-acodec', '-af', '-ar', '-f', '-i', '-of', '-select_streams', '-show_entries', '-v', '-vn', '-y', '1', '16000', 'a', 'error', 'json', 'null', 'pcm_s16le', 'silent', 'speech', 'streams', 'volumedetect']

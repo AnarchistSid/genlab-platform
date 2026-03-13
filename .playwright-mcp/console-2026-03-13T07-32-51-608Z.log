@@ -1,0 +1,8 @@
+[      31ms] [ERROR] Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked. @ http://localhost:5151/runs:10
+[      44ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
+[      94ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
+[      95ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5151/runs:0
+[     108ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=kxn5ocdr&sid=dlVointWHUZhRj6kAAEW:0
+[     108ms] [WARNING] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=dlVointWHUZhRj6kAAEW' failed: WebSocket is closed before the connection is established. @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[     112ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=kxn5vs4w&sid=dlVointWHUZhRj6kAAEW:0
+[    5737ms] [ERROR] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=vBgF2aL1OXf20eCyAAEn' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5151/assets/index-BasIDPJx.js:10

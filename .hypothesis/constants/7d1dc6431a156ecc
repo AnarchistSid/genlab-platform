@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/pending_feedback_task.py
+# hypothesis_version: 6.151.9
+
+[500, '168h', '24h', '48h', '6h', 'BanditArm', 'BanditContext', 'EarlyStop', 'HookLength', 'HookText', 'HookType', 'NicheId', 'Platform', 'PostContentType', 'PostID', 'PublishedAt', 'Status', 'Title', 'awaiting_168h', 'awaiting_24h', 'awaiting_48h', 'awaiting_6h', 'complete', 'early_stopped', 'error', 'gaming', 'json', 'unknown']

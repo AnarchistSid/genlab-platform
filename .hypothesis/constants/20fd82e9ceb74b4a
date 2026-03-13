@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/core/publishing_queue.py
+# hypothesis_version: 6.151.9
+
+[0.0, 500, 'APPROVED', 'HELD', 'PENDING_APPROVAL', 'PUBLISHED', 'PUBLISH_FAILED', '[QUEUE] Approved %s', 'action_taken', 'ai_news', 'approved', 'error_log', 'failed', 'fields', 'held', 'id', 'niche_id', 'pending', 'priority_score', 'published', 'queue_status', 'review_notes', 'reviewed_at', 'status', 'total']

@@ -1,0 +1,11 @@
+# Visual identity for movies niche (STUB — not yet active)
+# Consumed by genlab_core.media.VideoCompositor via VisualConfig
+
+niche_id: movies
+logo_path: "assets/movies_logo.png"
+accent_color: "#8B5CF6"
+top_bar_height_pct: 0.12
+bottom_bar_height_pct: 0.18
+logo_height_px: 60
+hook_font_size: 32
+hook_max_lines: 2

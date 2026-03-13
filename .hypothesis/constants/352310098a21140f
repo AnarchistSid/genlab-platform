@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/comment_processor.py
+# hypothesis_version: 6.151.9
+
+['a', 'author_name', 'c', 'comment_id', 'comment_text', 'config', 'created_at', 'facebook', 'failed', 'instagram', 'niche_id', 'p', 'persona.yaml', 'personas', 'platform', 'post_context', 'post_id', 'rate_limited', 'replied', 'skipped', 'text', 'threads', 'tiktok', 'x_twitter', 'youtube']

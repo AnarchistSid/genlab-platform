@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/intelligence/hook_validator.py
+# hypothesis_version: 6.151.9
+
+[0.2, 0.3, 100, 280, 500, 2200, '.,;:!?—-', '...', ':', 'AFK', 'AGI', 'AI', 'API', 'AR', 'BREAKING', 'CEO', 'CTO', 'DLC', 'EU', 'FPS', 'GG', 'GPT', 'JUST IN', 'LLM', 'MASSIVE', 'MMO', 'MVP', 'NPC', 'OP', 'PVE', 'PVP', 'RNG', 'RPG', 'SDK', 'UI', 'UK', 'UPDATE', 'URGENT', 'USA', 'UX', 'VR', 'WATCH', 'XR', '[!]{3,}|[?]{3,}', '[-\\u2014\\u2013]\\s*$', 'a', 'an', 'and', 'at', 'by', 'contains_url', 'emoji_spam', 'facebook', 'for', 'hook_too_long', 'hook_too_short', 'in', 'incomplete_sentence', 'instagram', 'markdown_artifacts', 'mixed_caps_lowercase', 'of', 'on', 'or', 'reddit_formatting', 'the', 'threads', 'tiktok', 'to', 'twitter', 'with', 'x', 'youtube']

@@ -1,0 +1,36 @@
+# Postiz on fly.io — GenLab social media scheduling
+# Deploy: flyctl deploy --region sin
+# Requires: flyctl auth login + flyctl postgres create + flyctl redis create
+
+app = "genlab-postiz"
+primary_region = "sin"
+
+[build]
+  image = "ghcr.io/gitroomhq/postiz-app:latest"
+
+[env]
+  IS_GENERAL = "true"
+  STORAGE_PROVIDER = "local"
+  UPLOAD_DIRECTORY = "/uploads"
+  NEXT_PUBLIC_UPLOAD_DIRECTORY = "/uploads"
+  BACKEND_INTERNAL_URL = "http://localhost:3000"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[mounts]
+  source = "postiz_uploads"
+  destination = "/uploads"

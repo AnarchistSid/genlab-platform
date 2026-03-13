@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/learning/bandit.py
+# hypothesis_version: 6.151.9
+
+[-1.0, 0.0, 1.0, 'alpha', 'arm_id', 'beta', 'content_type', 'controversy', 'esports_result', 'facebook', 'game_launch_hype', 'instagram', 'last_updated', 'patch_notes', 'platform', 'review_score', 'threads', 'tier_list', 'tiktok', 'total_pulls', 'viral_moment', 'x', 'youtube']

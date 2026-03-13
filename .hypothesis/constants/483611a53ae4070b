@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/parse_extract.py
+# hypothesis_version: 6.151.9
+
+[0.5, 500, 5000, '%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S%z', '%Y-%m-%dT%H:%M:%SZ', '--run-id', '--verbose', '.tmp', '/comments/', '/u/', '/user/', '<[^>]+>', '?', 'Domains: %s', '__main__', 'a', 'author', 'domain', 'domain_distribution', 'entries', 'entry_count', 'fetch_log.json', 'flagged_count', 'gallery_metadata', 'href', 'html.parser', 'http://', 'https://', 'img', 'injection_flags', 'item_count', 'items', 'link', 'media_hint_urls', 'media_hints', 'parsed_at', 'parsed_items.json', 'primary_url', 'published', 'published_at', 'reddit.com', 'reddit.com/', 'results', 'run_id', 'runs', 'skipped_no_url', 'source', 'source_post_url', 'source_priority', 'src', 'store_true', 'story_id', 'summary', 'timestamp', 'title', 'unknown', 'url', 'video', 'w', 'www.']

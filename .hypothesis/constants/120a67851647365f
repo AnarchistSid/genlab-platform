@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/scrapers/gallery_scrapers.py
+# hypothesis_version: 6.151.9
+
+[1000, 1500, 2000, 15000, 30000, '\nRaw result preview:', '--headful', '--max-posts', '--test', 'Max posts to extract', 'Pixwith.AI', 'Run browser with UI', 'Unknown', '__main__', 'ai_image', 'ai_video', 'all', 'author', 'content_type', 'creator', 'creator_handle', 'entries', 'entry_count', 'error', 'fetch_method', 'fetched_at', 'gallery_metadata', 'gallery_source', 'imagineart', 'imagineart_community', 'link', 'media_urls', 'model', 'networkidle', 'pixwith', 'pixwith_explore', 'playwright_gallery', 'post_id', 'prompt', 'published', 'revid', 'revid_gallery', 'store_true', 'summary', 'thumbnails', 'title', 'url', 'videoSrc']

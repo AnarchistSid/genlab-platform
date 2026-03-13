@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/tools/_twitch_auth.py
+# hypothesis_version: 6.151.9
+
+[0.0, 3600, 'access_token', 'client_credentials', 'client_id', 'client_secret', 'expires_in', 'grant_type']

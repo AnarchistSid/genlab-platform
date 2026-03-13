@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/tools/bandit_optimizer.py
+# hypothesis_version: 6.151.9
+
+[-1.0, 0.0, 0.01, 0.05, 0.4, 0.7, 1.0, 'BanditOptimizer', 'alphas', 'arm', 'arms', 'betas', 'completion_rate', 'dimensions', 'discount_factor', 'engagement_rate', 'expected_value', 'failure', 'neutral', 'pulls', 'saved_at', 'state', 'success', 'thresholds', 'total_trials', 'w']

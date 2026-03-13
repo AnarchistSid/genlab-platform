@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/sandbox_runner.py
+# hypothesis_version: 6.151.9
+
+[-2000, -500, 200, 300, '/', '/workspace', '600', 'OPENSANDBOX_SERVER', 'SandboxRunResult', 'exit_code', 'false', 'ffmpeg', 'ffmpeg-render', 'genlab', 'purpose', 'stderr', 'stdout', 'true']

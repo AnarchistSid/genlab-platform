@@ -1,0 +1,5 @@
+[     320ms] [WARNING] No routes matched location "/login"  @ http://127.0.0.1:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:643
+[     320ms] [WARNING] No routes matched location "/login"  @ http://127.0.0.1:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:643
+[     321ms] [ERROR] Error handled by React Router default ErrorBoundary: ErrorResponseImpl @ http://127.0.0.1:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     323ms] [ERROR] Error handled by React Router default ErrorBoundary: ErrorResponseImpl @ http://127.0.0.1:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     342ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://127.0.0.1:5174/login:0

@@ -1,0 +1,15 @@
+[importlinter]
+root_packages =
+    genlab_core
+
+[importlinter:contract:no-upward-imports]
+name = Service modules may depend on interfaces, not vice versa
+type = layers
+layers =
+    genlab_core.tts
+    genlab_core.http
+    genlab_core.media
+    genlab_core.ratelimit
+    genlab_core.cache
+    genlab_core.models
+    genlab_core.interfaces

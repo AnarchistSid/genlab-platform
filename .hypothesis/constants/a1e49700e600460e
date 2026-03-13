@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/cleanup_artifacts.py
+# hypothesis_version: 6.151.9
+
+['*', ', ', '--delete-path', '--dry-run', '--json', '--keep-logs', '--keep-run-id', '--keep-runs', '--project-root', '--wipe-audio-cache', '--wipe-fetch-cache', '--wipe-media-cache', '.layout_tmp', '.pytest_cache', '.ruff_cache', '.tmp', 'ARCHIVED', 'PUBLISHED', 'Removed runs: %s', '__main__', '_landscape', 'append', 'audio', 'audio_demo', 'cache', 'candidate_id', 'clips', 'coverage.xml', 'eval', 'feedback', 'fields', 'logs', 'media', 'mid_hook_ab_test', 'rejected_hooks.json', 'removed', 'rendered', 'run_*.log', 'runs', 'smoke', 'store_true', 'style_eval', 'test_video_dl', 'visual_paths', 'visuals', 'would be removed']

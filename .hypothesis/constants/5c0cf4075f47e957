@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/hook_training_data.py
+# hypothesis_version: 6.151.9
+
+[200, 'NicheId', 'Platform', 'PostID', 'PublishedAt', 'Reward48h', "Status eq 'complete'", 'all', 'caption_hook', 'content_id', 'fields', 'get_items', 'hook', 'hook_text', 'niche_id', 'pending_feedback', 'platform', 'published_at', 'reward_48h', "{Status}='complete'"]
