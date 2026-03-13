@@ -59,7 +59,7 @@ def _make_comment(**overrides):
 class TestFullReplyPipeline:
     """End-to-end: process_reply_event generates a reply and posts it."""
 
-    @patch("genlab_core.engagement.comment_processor.USE_NATIVE_CLIENTS", False)
+    @patch("genlab_core.platforms.get_client", side_effect=ValueError("no client"))
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.platform_clients.youtube.post_youtube_reply")
@@ -68,7 +68,7 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_reply_posted_and_marked_idempotent(
         self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_yt_reply, mock_time, mock_delay, agent_root,
+        mock_yt_reply, mock_time, mock_delay, mock_get_client, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             process_reply_event,
@@ -110,7 +110,7 @@ class TestFullReplyPipeline:
         # Confirm idempotency record exists
         assert _has_replied("c200", "youtube") is True
 
-    @patch("genlab_core.engagement.comment_processor.USE_NATIVE_CLIENTS", False)
+    @patch("genlab_core.platforms.get_client", side_effect=ValueError("no client"))
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.platform_clients.x_twitter.post_x_reply")
@@ -119,7 +119,7 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_x_twitter_reply_uses_correct_client(
         self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_x_reply, mock_time, mock_delay, agent_root,
+        mock_x_reply, mock_time, mock_delay, mock_get_client, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             process_reply_event,
