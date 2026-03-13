@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from genlab_core.http.async_bridge import run_async
+from genlab_core.utils.text_sanitizer import sanitize_fields_for_graph_api
 
 logger = logging.getLogger(__name__)
 
@@ -653,5 +654,9 @@ class GraphTableProxy:
         for key, value in de_aliased.items():
             internal = self._to_internal_name(key)
             mapped[internal] = value
+
+        # Sanitize all string values for Graph API compatibility
+        # (strips non-BMP emoji, replaces curly quotes with ASCII)
+        mapped = sanitize_fields_for_graph_api(mapped)
 
         return mapped
