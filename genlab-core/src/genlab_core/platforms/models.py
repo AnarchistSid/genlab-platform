@@ -43,12 +43,18 @@ class ThreadsSpecific:
     pass
 
 
+@dataclass
+class TikTokSpecific:
+    pass
+
+
 PlatformSpecific = Union[
     YouTubeSpecific,
     TwitterSpecific,
     InstagramSpecific,
     FacebookSpecific,
     ThreadsSpecific,
+    TikTokSpecific,
 ]
 
 
