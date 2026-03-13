@@ -15,6 +15,8 @@ import os
 import time
 from pathlib import Path
 
+USE_NATIVE_CLIENTS = os.environ.get("USE_NATIVE_CLIENTS", "true").lower() == "true"
+
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.persona_engine import PersonaEngine
 from genlab_core.engagement.toxicity_gate import ToxicityGate
@@ -233,7 +235,34 @@ def _post_reply(platform: str, post_id: str, comment_id: str, reply_text: str) -
 
     Returns True if the reply was actually posted, False otherwise.
     Platform clients return bool — True on success, False on failure.
+
+    When USE_NATIVE_CLIENTS is True (default), uses the unified platform
+    registry (genlab_core.platforms). Falls back to the legacy per-function
+    engagement.platform_clients path when the flag is False or the client
+    does not implement the Engageable protocol.
     """
+    if USE_NATIVE_CLIENTS:
+        from genlab_core.platforms import get_client
+        from genlab_core.platforms.protocols import Engageable
+
+        try:
+            client = get_client(platform)
+        except (ValueError, ImportError) as exc:
+            logger.warning(
+                "Engagement: could not load native client for '%s' (%s) — "
+                "falling back to legacy path", platform, exc,
+            )
+        else:
+            if isinstance(client, Engageable):
+                return client.post_reply(
+                    parent_id=comment_id, text=reply_text, context_id=post_id
+                )
+            logger.warning(
+                "Engagement: native client for '%s' does not implement Engageable — "
+                "falling back to legacy path", platform,
+            )
+
+    # Legacy per-platform dispatch (also used when USE_NATIVE_CLIENTS=false)
     if platform == "youtube":
         from genlab_core.engagement.platform_clients.youtube import post_youtube_reply
         return post_youtube_reply(video_id=post_id, parent_id=comment_id, text=reply_text)

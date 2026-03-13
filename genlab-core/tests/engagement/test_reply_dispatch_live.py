@@ -59,6 +59,7 @@ def _make_comment(**overrides):
 class TestFullReplyPipeline:
     """End-to-end: process_reply_event generates a reply and posts it."""
 
+    @patch("genlab_core.engagement.comment_processor.USE_NATIVE_CLIENTS", False)
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.platform_clients.youtube.post_youtube_reply")
@@ -109,6 +110,7 @@ class TestFullReplyPipeline:
         # Confirm idempotency record exists
         assert _has_replied("c200", "youtube") is True
 
+    @patch("genlab_core.engagement.comment_processor.USE_NATIVE_CLIENTS", False)
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.platform_clients.x_twitter.post_x_reply")
