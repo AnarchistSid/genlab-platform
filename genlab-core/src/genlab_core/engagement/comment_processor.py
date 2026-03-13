@@ -232,11 +232,7 @@ def _post_reply(platform: str, post_id: str, comment_id: str, reply_text: str) -
     """Route to the correct platform client for posting the reply.
 
     Returns True if the reply was actually posted, False otherwise.
-    Platform clients return bool — True on success, False on failure.
-
-    Uses the unified platform registry (genlab_core.platforms) first. Falls
-    back to the legacy per-function engagement.platform_clients path when
-    the client does not implement the Engageable protocol.
+    Uses the unified platform registry (genlab_core.platforms).
     """
     from genlab_core.platforms import get_client
     from genlab_core.platforms.protocols import Engageable
@@ -244,63 +240,47 @@ def _post_reply(platform: str, post_id: str, comment_id: str, reply_text: str) -
     try:
         client = get_client(platform)
     except (ValueError, ImportError) as exc:
-        logger.warning(
-            "Engagement: could not load native client for '%s' (%s) — "
-            "falling back to legacy path", platform, exc,
-        )
-    else:
-        if isinstance(client, Engageable):
-            return client.post_reply(
-                parent_id=comment_id, text=reply_text, context_id=post_id
+        if platform == "tiktok":
+            logger.info(
+                "Engagement: TikTok engagement not available via API — "
+                "manual reply required for comment %s", comment_id,
             )
-        logger.warning(
-            "Engagement: native client for '%s' does not implement Engageable — "
-            "falling back to legacy path", platform,
+            return False
+        logger.error(
+            "Engagement: could not load client for '%s': %s", platform, exc,
+        )
+        return False
+
+    if isinstance(client, Engageable):
+        return client.post_reply(
+            parent_id=comment_id, text=reply_text, context_id=post_id
         )
 
-    # Legacy per-platform dispatch (fallback when native client is unavailable or not Engageable)
-    if platform == "youtube":
-        from genlab_core.engagement.platform_clients.youtube import post_youtube_reply
-        return post_youtube_reply(video_id=post_id, parent_id=comment_id, text=reply_text)
-    elif platform == "instagram":
-        from genlab_core.engagement.platform_clients.instagram import post_instagram_reply
-        return post_instagram_reply(media_id=post_id, comment_id=comment_id, text=reply_text)
-    elif platform == "x_twitter":
-        from genlab_core.engagement.platform_clients.x_twitter import post_x_reply
-        return post_x_reply(tweet_id=comment_id, text=reply_text)
-    elif platform == "facebook":
-        from genlab_core.engagement.platform_clients.facebook import post_facebook_reply
-        return post_facebook_reply(comment_id=comment_id, text=reply_text)
-    elif platform == "threads":
-        from genlab_core.engagement.platform_clients.threads import post_threads_reply
-        return post_threads_reply(thread_id=comment_id, text=reply_text)
-    elif platform == "tiktok":
-        logger.info(
-            "Engagement: TikTok engagement not available via API — "
-            "manual reply required for comment %s", comment_id,
-        )
-        return False
-    else:
-        logger.error("Engagement: unknown platform '%s'", platform)
-        return False
+    logger.error(
+        "Engagement: client for '%s' does not implement Engageable — cannot reply",
+        platform,
+    )
+    return False
 
 
 def _post_like(platform: str, comment_id: str, post_id: str | None = None) -> None:
     """Route to the correct platform client for liking a comment."""
-    if platform == "youtube":
-        from genlab_core.engagement.platform_clients.youtube import like_youtube_comment
-        like_youtube_comment(comment_id=comment_id)
-    elif platform == "instagram":
-        from genlab_core.engagement.platform_clients.instagram import like_instagram_comment
-        like_instagram_comment(comment_id=comment_id)
-    elif platform == "x_twitter":
-        from genlab_core.engagement.platform_clients.x_twitter import like_x_tweet
-        like_x_tweet(tweet_id=comment_id)
-    elif platform in ("facebook", "threads"):
+    from genlab_core.platforms import get_client
+    from genlab_core.platforms.protocols import Engageable
+
+    try:
+        client = get_client(platform)
+    except (ValueError, ImportError) as exc:
         logger.warning(
-            "Engagement: like not yet implemented for %s "
-            "(comment_id=%s, post_id=%s). Add platform client when ready.",
-            platform, comment_id, post_id,
+            "Engagement: could not load client for '%s' to like comment %s: %s",
+            platform, comment_id, exc,
         )
+        return
+
+    if isinstance(client, Engageable):
+        client.like(target_id=comment_id, context_id=post_id or "")
     else:
-        logger.warning("Engagement: like not supported for platform '%s'", platform)
+        logger.warning(
+            "Engagement: client for '%s' does not implement Engageable — "
+            "cannot like comment %s", platform, comment_id,
+        )
