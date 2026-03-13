@@ -1,0 +1,805 @@
+[2026-03-11 00:15:57,089] [PID 52833] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-11 00:15:57,088] [PID 52836] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-11 00:15:57,079] [PID 52837] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-11 00:40:10,863] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/config.json "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 69795.11it/s]
+[1mBertForSequenceClassification LOAD REPORT[0m from: None
+Key                          | Status     |  | 
+-----------------------------+------------+--+-
+bert.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[2026-03-11 00:40:11,244] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+[2026-03-11 00:40:11,491] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:40:11,740] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[2026-03-11 00:40:11,993] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:40:12,243] [PID 52837] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[2026-03-11 00:40:12,373] [PID 52837] [Thread-9] [genlab_core.engagement.toxicity_gate] [INFO] [TOXICITY] Detoxify model loaded
+[2026-03-11 00:40:12,924] [PID 52837] [Thread-9] [dramatiq.worker.WorkerThread] [ERROR] Failed to process message reply_to_comment_normal({'comment_id': 'UgwXoHfzYv97_sQHTG94AaABAg', 'comment_text': 'サイモン&ガーファンクルのスカボローフェア、素晴らしい名曲です。彼らにはたくさんの名曲がありますが、その中でも大好きな曲です。', 'platform': 'youtube', 'niche_id': 'ai_news', 'post_id': 'l8dbBZPrxZo', 'post_context': ''}) with unhandled exception.
+Traceback (most recent call last):
+  File "/Users/anarchistsid/GenLab/.venv/lib/python3.14/site-packages/dramatiq/worker.py", line 540, in process_message
+    res = actor(*message.args, **message.kwargs)
+  File "/Users/anarchistsid/GenLab/.venv/lib/python3.14/site-packages/dramatiq/actor.py", line 194, in __call__
+    return self.fn(*args, **kwargs)
+           ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/tasks.py", line 58, in reply_to_comment_normal
+    process_reply_event(event)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/comment_processor.py", line 143, in process_reply_event
+    persona = _load_persona(niche_id)
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/comment_processor.py", line 92, in _load_persona
+    raise FileNotFoundError(
+    ...<2 lines>...
+    )
+FileNotFoundError: No persona.yaml found for niche 'ai_news'. Searched: ['/Users/anarchistsid/GenLab/CriticalRush/config/persona.yaml', '/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/personas/ai_news.yaml']
+[2026-03-11 00:40:12,930] [PID 52837] [Thread-9] [dramatiq.middleware.retries.Retries] [INFO] Retrying message '2e7880dd-72b4-4ed7-8a01-a736fbfc1cf3' in 26649 milliseconds.
+[2026-03-11 00:40:47,220] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/config.json "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 22264.17it/s]
+[1mBertForSequenceClassification LOAD REPORT[0m from: None
+Key                          | Status     |  | 
+-----------------------------+------------+--+-
+bert.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[2026-03-11 00:40:47,619] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+[2026-03-11 00:40:47,918] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:40:48,269] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[2026-03-11 00:40:48,576] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:40:48,833] [PID 52836] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[2026-03-11 00:40:48,926] [PID 52836] [Thread-9] [genlab_core.engagement.toxicity_gate] [INFO] [TOXICITY] Detoxify model loaded
+[2026-03-11 00:40:49,099] [PID 52836] [Thread-9] [dramatiq.worker.WorkerThread] [ERROR] Failed to process message reply_to_comment_normal({'comment_id': 'UgwXoHfzYv97_sQHTG94AaABAg', 'comment_text': 'サイモン&ガーファンクルのスカボローフェア、素晴らしい名曲です。彼らにはたくさんの名曲がありますが、その中でも大好きな曲です。', 'platform': 'youtube', 'niche_id': 'ai_news', 'post_id': 'l8dbBZPrxZo', 'post_context': ''}) with unhandled exception.
+Traceback (most recent call last):
+  File "/Users/anarchistsid/GenLab/.venv/lib/python3.14/site-packages/dramatiq/worker.py", line 540, in process_message
+    res = actor(*message.args, **message.kwargs)
+  File "/Users/anarchistsid/GenLab/.venv/lib/python3.14/site-packages/dramatiq/actor.py", line 194, in __call__
+    return self.fn(*args, **kwargs)
+           ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/tasks.py", line 58, in reply_to_comment_normal
+    process_reply_event(event)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/comment_processor.py", line 143, in process_reply_event
+    persona = _load_persona(niche_id)
+  File "/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/comment_processor.py", line 92, in _load_persona
+    raise FileNotFoundError(
+    ...<2 lines>...
+    )
+FileNotFoundError: No persona.yaml found for niche 'ai_news'. Searched: ['/Users/anarchistsid/GenLab/CriticalRush/config/persona.yaml', '/Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/personas/ai_news.yaml']
+[2026-03-11 00:40:49,101] [PID 52836] [Thread-9] [dramatiq.middleware.retries.Retries] [INFO] Retrying message '2e7880dd-72b4-4ed7-8a01-a736fbfc1cf3' in 41014 milliseconds.
+[2026-03-11 00:41:31,369] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/config.json "HTTP/1.1 200 OK"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-03-11 00:41:31,373] [PID 52836] [Thread-8] [huggingface_hub.utils._http] [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 13145.01it/s]
+[1mBertForSequenceClassification LOAD REPORT[0m from: None
+Key                          | Status     |  | 
+-----------------------------+------------+--+-
+bert.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[2026-03-11 00:41:31,743] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+[2026-03-11 00:41:31,988] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:41:32,234] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[2026-03-11 00:41:32,486] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 00:41:32,737] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[2026-03-11 00:41:32,818] [PID 52836] [Thread-8] [genlab_core.engagement.toxicity_gate] [INFO] [TOXICITY] Detoxify model loaded
+[2026-03-11 00:41:36,018] [PID 52836] [Thread-8] [httpx] [INFO] HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+[2026-03-11 00:41:38,294] [PID 52836] [Thread-8] [genlab_core.engagement.platform_clients.youtube] [WARNING] YouTube: failed to post reply to UgwXoHfzYv97_sQHTG94AaABAg: No module named 'google'
+[2026-03-11 00:41:38,296] [PID 52836] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: replied to comment UgwXoHfzYv97_sQHTG94AaABAg on youtube
+[2026-03-11 00:43:24,179] [PID 52833] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-11 00:43:24,186] [PID 52836] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Stopping worker process...
+[2026-03-11 00:43:24,186] [PID 52837] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Stopping worker process...
+[2026-03-11 00:43:24,599] [PID 52836] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 00:43:24,784] [PID 52837] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 00:43:26,641] [PID 52836] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 00:43:26,685] [PID 52837] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 00:43:29,683] [PID 64617] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-11 00:43:29,681] [PID 64619] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-11 00:43:29,681] [PID 64620] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-11 00:45:02,200] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 00:50:02,622] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 00:55:03,554] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:00:03,618] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:05:04,335] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:10:04,901] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:15:05,374] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:20:05,773] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:25:06,477] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:30:07,460] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:35:07,483] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:40:08,419] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:45:08,808] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:50:09,542] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 01:55:10,262] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:00:10,873] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:05:10,887] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:10:12,022] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:15:12,521] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:20:12,703] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:25:13,243] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:30:13,623] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:35:14,930] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:40:15,382] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:45:16,076] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:50:15,917] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 02:55:16,741] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:00:17,735] [PID 64620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:05:17,716] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:10:18,531] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:15:18,882] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:20:19,457] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:25:20,251] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:30:20,629] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:35:21,128] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:40:21,929] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:45:22,392] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:50:22,881] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 03:55:24,740] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:00:25,759] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:05:26,820] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:10:27,262] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:15:27,756] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:20:28,304] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:25:29,335] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:30:30,108] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 04:35:30,745] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:31:17,241] [PID 64620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:36:17,762] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:41:17,898] [PID 64619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:46:18,448] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:51:18,933] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 06:56:20,117] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:01:19,840] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:06:20,432] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:11:21,050] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:16:21,696] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:21:21,947] [PID 64619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:26:22,612] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:31:23,334] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:36:23,426] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:41:23,949] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:46:24,884] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:51:24,947] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 07:56:25,612] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:01:26,518] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:06:26,748] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:11:26,990] [PID 64620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:16:27,520] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:21:31,157] [PID 64620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:26:32,006] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:31:32,266] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:36:38,247] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/config.json "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 73520.11it/s]
+[1mBertForSequenceClassification LOAD REPORT[0m from: None
+Key                          | Status     |  | 
+-----------------------------+------------+--+-
+bert.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[2026-03-11 08:36:38,554] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+[2026-03-11 08:36:38,789] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 08:36:39,025] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[2026-03-11 08:36:39,259] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 08:36:39,517] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[2026-03-11 08:36:39,583] [PID 64619] [Thread-9] [genlab_core.engagement.toxicity_gate] [INFO] [TOXICITY] Detoxify model loaded
+[2026-03-11 08:36:42,007] [PID 64619] [Thread-9] [httpx] [INFO] HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+[2026-03-11 08:36:51,675] [PID 64619] [Thread-9] [genlab_core.engagement.platform_clients.youtube] [WARNING] YouTube: failed to post reply to UgwXoHfzYv97_sQHTG94AaABAg: 'YOUTUBE_CLIENT_ID'
+[2026-03-11 08:36:51,675] [PID 64619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: replied to comment UgwXoHfzYv97_sQHTG94AaABAg on youtube
+[2026-03-11 08:41:33,508] [PID 64620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:46:33,526] [PID 64619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 08:49:21,669] [PID 64617] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-11 08:49:22,602] [PID 64619] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Stopping worker process...
+[2026-03-11 08:49:22,687] [PID 64620] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Stopping worker process...
+[2026-03-11 08:49:22,818] [PID 64619] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 08:49:23,624] [PID 64620] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 08:49:24,297] [PID 64619] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 08:49:24,959] [PID 64620] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 08:49:25,545] [PID 64617] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-11 08:49:28,274] [PID 81134] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-11 08:49:28,273] [PID 81137] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-11 08:49:28,243] [PID 81138] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-11 08:51:40,702] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/config.json "HTTP/1.1 200 OK"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-03-11 08:51:40,702] [PID 81137] [Thread-11] [huggingface_hub.utils._http] [WARNING] Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 80047.01it/s]
+[1mBertForSequenceClassification LOAD REPORT[0m from: None
+Key                          | Status     |  | 
+-----------------------------+------------+--+-
+bert.embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+[2026-03-11 08:51:41,025] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: HEAD https://huggingface.co/bert-base-uncased/resolve/main/tokenizer_config.json "HTTP/1.1 200 OK"
+[2026-03-11 08:51:41,257] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 08:51:41,490] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+[2026-03-11 08:51:41,722] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 307 Temporary Redirect"
+[2026-03-11 08:51:41,961] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: GET https://huggingface.co/api/models/google-bert/bert-base-uncased/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+[2026-03-11 08:51:42,048] [PID 81137] [Thread-11] [genlab_core.engagement.toxicity_gate] [INFO] [TOXICITY] Detoxify model loaded
+[2026-03-11 08:51:44,509] [PID 81137] [Thread-11] [httpx] [INFO] HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+[2026-03-11 08:52:12,702] [PID 81137] [Thread-11] [genlab_core.engagement.platform_clients.youtube] [INFO] YouTube: posted reply to comment UgwXoHfzYv97_sQHTG94AaABAg on video l8dbBZPrxZo
+[2026-03-11 08:56:34,578] [PID 81138] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:01:35,012] [PID 81138] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:03:05,772] [PID 81134] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-11 09:03:05,775] [PID 81137] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Stopping worker process...
+[2026-03-11 09:03:05,776] [PID 81138] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Stopping worker process...
+[2026-03-11 09:03:06,435] [PID 81138] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 09:03:06,470] [PID 81137] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 09:03:08,205] [PID 81138] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 09:03:08,214] [PID 81137] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 09:03:12,622] [PID 84617] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-11 09:03:12,622] [PID 84619] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-11 09:03:12,616] [PID 84620] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-11 09:06:35,747] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:11:36,103] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:16:36,289] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:21:36,831] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:26:37,758] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:31:38,133] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:36:38,056] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:41:38,468] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:46:39,237] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:51:39,744] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 09:56:40,519] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:01:40,837] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:06:41,617] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:11:41,608] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:16:42,458] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:21:42,949] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:26:43,366] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:31:43,702] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:36:44,724] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:41:44,906] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:46:45,508] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:51:45,998] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 10:56:46,402] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:07:02,367] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:12:02,594] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:17:03,021] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:22:03,572] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:27:03,970] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:32:05,015] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:37:05,359] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:42:05,885] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:47:06,624] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:52:06,713] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 11:57:07,684] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:02:07,564] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:07:08,184] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:12:08,670] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:17:09,004] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:22:10,322] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:27:10,270] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:32:11,560] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:37:11,899] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:42:12,376] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:47:13,083] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:52:14,697] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 12:57:14,395] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:02:15,193] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:07:15,197] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:12:16,306] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:17:16,526] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:22:17,024] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:27:17,409] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:32:18,230] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:37:18,726] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:42:19,452] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:47:19,708] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:52:20,778] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 13:57:21,075] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:02:21,753] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:07:22,455] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:12:23,260] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:17:23,977] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:22:26,097] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:27:27,495] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:32:27,723] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:37:28,207] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:42:28,209] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:47:29,247] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:52:29,395] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 14:57:30,362] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:02:30,873] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:07:31,030] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:12:31,492] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:17:31,999] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:22:32,820] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:27:32,912] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:32:33,670] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:37:34,081] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:42:34,383] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:47:34,768] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:52:35,399] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 15:57:36,210] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:02:36,529] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:07:37,314] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:12:37,572] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:17:37,948] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:22:38,723] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:27:39,366] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:32:39,397] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:37:40,115] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:42:40,478] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:47:41,112] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:52:41,471] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 16:57:42,340] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:02:42,367] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:07:44,280] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:12:45,051] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:17:45,346] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:22:45,801] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:27:46,648] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:32:47,090] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:37:47,268] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:42:49,022] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:47:49,945] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:52:50,536] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 17:57:52,295] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:02:52,987] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:07:53,370] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:12:53,952] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:17:54,309] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:22:55,008] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:27:55,007] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:32:56,019] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:37:56,328] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:42:57,016] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:47:57,640] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:52:58,438] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 18:57:58,682] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:03:01,374] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:08:01,947] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:13:02,618] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:18:03,110] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:23:03,953] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:28:04,106] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:33:04,592] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:38:05,380] [PID 84620] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:43:05,782] [PID 84620] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:48:06,354] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:53:06,648] [PID 84619] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 19:58:07,254] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:03:07,970] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:08:09,822] [PID 84619] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:13:12,002] [PID 84620] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:18:12,894] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:23:13,214] [PID 84620] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:28:13,972] [PID 84619] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:33:14,540] [PID 84619] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:36:32,289] [PID 84617] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-11 20:36:32,311] [PID 84620] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Stopping worker process...
+[2026-03-11 20:36:32,311] [PID 84619] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Stopping worker process...
+[2026-03-11 20:36:32,315] [PID 84619] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 20:36:32,588] [PID 84620] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-11 20:36:33,798] [PID 84619] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 20:36:34,268] [PID 84620] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-11 20:43:59,627] [PID 1981] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-11 20:43:59,622] [PID 1986] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-11 20:43:59,526] [PID 1987] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-11 20:43:59,850] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:49:00,162] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:54:00,819] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 20:59:01,541] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:04:01,956] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:09:02,424] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:14:03,047] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:19:03,405] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:24:03,981] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:29:04,245] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:34:04,686] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:46:57,995] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:51:58,595] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 21:56:58,839] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:01:59,483] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:07:00,135] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:12:01,058] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:17:01,588] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:22:01,909] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:27:02,361] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:32:03,183] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:37:03,146] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:42:05,567] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:47:08,251] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:52:10,770] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 22:57:10,971] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:02:11,652] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:07:12,498] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:12:12,853] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:17:13,275] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:22:14,033] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:27:14,325] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:32:14,480] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:37:15,094] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:42:16,036] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:47:16,309] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:52:16,915] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-11 23:57:17,416] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:02:17,734] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:07:19,073] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:12:19,394] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:17:20,015] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:22:20,063] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:27:21,087] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:32:21,395] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:37:22,579] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:42:22,539] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:47:23,497] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:52:23,500] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 00:57:24,417] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:02:24,965] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:07:25,170] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:12:25,681] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:17:26,651] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:22:26,966] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:27:27,687] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:32:28,186] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:37:28,528] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:42:29,293] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:47:29,425] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:52:29,931] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 01:57:31,157] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:02:30,973] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:07:31,622] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:12:32,249] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:17:32,932] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:22:33,532] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:27:33,382] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:32:33,805] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:37:34,253] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:42:34,992] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:47:36,045] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:52:35,669] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 02:57:36,649] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:02:36,994] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:07:37,429] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:12:37,955] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:17:38,829] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:22:39,168] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:27:39,423] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:32:39,951] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:37:40,544] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:42:41,268] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:47:41,671] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:52:42,635] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 03:57:42,898] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:02:43,893] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:07:44,189] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:12:44,508] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:17:45,273] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:22:46,126] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:27:46,462] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:32:46,786] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:37:47,262] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:42:47,680] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:47:48,357] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:52:49,110] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 04:57:49,547] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:02:49,770] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:07:50,475] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:12:51,061] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:17:51,831] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:22:51,939] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:27:52,593] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:32:53,695] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:37:53,439] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:42:53,847] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:47:54,848] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:52:55,307] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 05:57:55,407] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 06:02:55,999] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 06:07:56,324] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 06:12:56,811] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 06:17:57,353] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 07:02:02,218] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 07:54:50,392] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 08:58:48,360] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 09:27:02,948] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:20:24,901] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:27:23,924] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:32:23,867] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:37:24,328] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:42:25,363] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:47:25,497] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:52:26,226] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 10:57:27,065] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:02:27,309] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:07:28,976] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:12:29,229] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:17:30,340] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:22:30,689] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:27:30,959] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:32:31,343] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:37:32,299] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:42:32,471] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:47:33,284] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:52:34,088] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 11:57:34,737] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:02:34,922] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:07:35,809] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:12:35,919] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:17:36,590] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:22:37,344] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:27:38,592] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:32:38,647] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:37:39,283] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:42:39,853] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:47:40,724] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:52:41,650] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 12:57:42,016] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:02:42,431] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:07:43,823] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:12:44,499] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:17:45,590] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:22:46,180] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:27:46,571] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:32:47,028] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:37:47,413] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:42:48,456] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:47:48,669] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:52:49,072] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 13:57:49,944] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:02:50,597] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:07:50,956] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:12:51,815] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:17:52,367] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:22:53,343] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:27:53,974] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:50:08,818] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 14:55:21,392] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 15:19:10,135] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 16:42:32,281] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:03:49,552] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:08:50,220] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:13:50,779] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:18:51,124] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:23:52,460] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:48:58,212] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:53:57,954] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 17:58:59,204] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:03:59,410] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:08:59,856] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:14:00,762] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:19:00,909] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:24:02,176] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:29:02,640] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:34:03,334] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:39:03,510] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:44:04,200] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 18:58:15,909] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:13:23,587] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:27:06,637] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:32:07,286] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:37:07,722] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:42:08,788] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:47:08,934] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:52:09,404] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 19:57:11,014] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:02:11,262] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:07:11,774] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:12:12,471] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:17:12,860] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:22:13,447] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:27:13,973] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:32:15,781] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:37:17,529] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:42:20,193] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:47:21,958] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:52:23,938] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 20:57:26,294] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:02:27,178] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:07:27,597] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:12:28,207] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:17:28,818] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:22:29,070] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:27:29,928] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:32:30,266] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:37:30,977] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:42:31,337] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:47:31,558] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:52:32,230] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 21:57:32,691] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:02:33,548] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:07:33,789] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:12:34,607] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:17:34,871] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:22:35,825] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:27:36,041] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:32:36,723] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:37:37,151] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:42:37,887] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:47:38,995] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:52:38,972] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 22:57:39,386] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:02:40,075] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:07:40,948] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:12:41,207] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:17:41,403] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:22:42,290] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:27:42,776] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:32:42,901] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:37:43,401] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:42:46,037] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:47:48,905] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:52:51,301] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-12 23:57:54,054] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:02:56,836] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:07:59,259] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:13:01,688] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:18:04,173] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:23:04,698] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:28:05,526] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:33:05,546] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:38:06,065] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:43:06,508] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:48:06,902] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:53:07,971] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 00:58:07,918] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:03:08,999] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:08:09,252] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:13:09,658] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:18:09,962] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:23:10,931] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:28:10,848] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:33:11,343] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:38:12,314] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:43:12,116] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:48:12,790] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:53:13,385] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 01:58:13,526] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:03:14,350] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:08:14,588] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:13:15,531] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:18:16,263] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:23:16,479] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:28:16,771] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:33:17,156] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:38:17,517] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:43:18,126] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:48:18,961] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:53:19,020] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 02:58:19,668] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:03:19,920] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:08:21,066] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:13:21,262] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:18:21,435] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:23:22,349] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:28:22,780] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:33:23,429] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:38:23,542] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:43:23,977] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:48:25,186] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:53:24,923] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 03:58:25,551] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:03:25,910] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:08:26,625] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:13:27,652] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:18:28,152] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:23:28,597] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:28:28,753] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:33:29,574] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:38:30,121] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:43:30,559] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:48:30,971] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:53:31,388] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 04:58:31,909] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:03:32,307] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:08:32,850] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:13:33,304] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:18:34,023] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:23:34,828] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:28:35,188] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:33:35,634] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:38:35,943] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:43:36,432] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:48:37,091] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:53:37,643] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 05:58:38,395] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:03:38,994] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:08:39,320] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:13:39,676] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:18:40,335] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:23:40,783] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:28:41,204] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:33:41,885] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:38:42,067] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:43:42,955] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:48:43,759] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:53:44,103] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 06:58:44,919] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:03:46,055] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:08:46,091] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:13:46,537] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:18:47,039] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:23:47,755] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:28:48,829] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:33:48,994] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:38:49,790] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 07:43:49,468] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 10:38:36,033] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 11:57:37,306] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:02:38,222] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:07:38,349] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:12:39,105] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:17:39,575] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:22:40,565] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:27:40,831] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:32:41,588] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:37:42,135] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:42:43,005] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:47:43,469] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:52:44,214] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 12:57:44,596] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:02:45,381] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:07:46,239] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:12:46,463] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:17:47,070] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:22:47,621] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:27:48,481] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:32:48,509] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:37:49,038] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:42:49,624] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:47:49,900] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:52:50,351] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 13:57:51,487] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:02:51,442] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:07:52,189] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:12:52,714] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:17:53,477] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:22:54,200] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:27:54,698] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:32:54,753] [PID 1987] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:37:55,659] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:42:55,987] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:47:56,627] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:52:57,362] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 14:57:57,831] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:02:58,645] [PID 1986] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:07:59,363] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:12:59,896] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:18:00,961] [PID 1987] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:23:00,942] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:28:01,657] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:33:02,052] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:38:02,686] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:43:03,021] [PID 1986] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:48:03,524] [PID 1986] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:53:04,442] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 15:58:04,792] [PID 1987] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:03:05,282] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:08:06,087] [PID 1986] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:13:06,266] [PID 1987] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:13:45,783] [PID 1981] [MainThread] [dramatiq.MainProcess] [INFO] Sending signal 'SIGTERM' to subprocesses...
+[2026-03-13 16:13:45,811] [PID 1987] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Stopping worker process...
+[2026-03-13 16:13:45,811] [PID 1986] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Stopping worker process...
+[2026-03-13 16:13:46,092] [PID 1986] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-13 16:13:46,184] [PID 1987] [MainThread] [dramatiq.worker.Worker] [INFO] Shutting down...
+[2026-03-13 16:13:47,608] [PID 1986] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-13 16:13:47,869] [PID 1987] [MainThread] [dramatiq.worker.Worker] [INFO] Worker has been shut down.
+[2026-03-13 16:13:49,363] [PID 85372] [MainThread] [dramatiq.MainProcess] [INFO] Dramatiq '2.1.0' is booting up.
+[2026-03-13 16:13:49,363] [PID 85374] [MainThread] [dramatiq.WorkerProcess(0)] [INFO] Worker process is ready for action.
+[2026-03-13 16:13:49,341] [PID 85375] [MainThread] [dramatiq.WorkerProcess(1)] [INFO] Worker process is ready for action.
+[2026-03-13 16:18:06,784] [PID 85375] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:23:07,131] [PID 85375] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:28:07,894] [PID 85375] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:33:08,339] [PID 85375] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:38:09,131] [PID 85374] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:43:09,645] [PID 85374] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:48:09,758] [PID 85374] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:53:10,423] [PID 85375] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 16:58:11,319] [PID 85374] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:03:11,420] [PID 85374] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:08:11,919] [PID 85375] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:13:12,054] [PID 85375] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:18:13,060] [PID 85374] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:23:13,138] [PID 85374] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:28:14,117] [PID 85375] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:33:14,687] [PID 85374] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:38:14,975] [PID 85374] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:43:15,869] [PID 85375] [Thread-10] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:48:15,760] [PID 85374] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:53:16,345] [PID 85374] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 17:58:16,888] [PID 85375] [Thread-8] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 18:03:17,325] [PID 85375] [Thread-9] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping
+[2026-03-13 18:08:18,166] [PID 85374] [Thread-11] [genlab_core.engagement.comment_processor] [INFO] Engagement: already replied to UgwXoHfzYv97_sQHTG94AaABAg on youtube, skipping

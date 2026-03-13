@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/build_trend_pack.py
+# hypothesis_version: 6.151.9
+
+['  - %s', '--cluster-mode', '--run-id', '--skip-validation', '--top-n', '--verbose', '.tmp', '1.0', '__main__', 'all', 'cluster_id', 'cluster_member_urls', 'cluster_mode', 'cluster_size', 'composite_score', 'domain', 'generated_at', 'injection_flags', 'published_at', 'rank', 'ranked_stories.json', 'run_id', 'runs', 'schemas', 'scores', 'store_true', 'stories', 'story_count', 'story_id', 'summary', 'title', 'topic_scoring', 'trend_pack.json', 'unique', 'url', 'version', 'w']

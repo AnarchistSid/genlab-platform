@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/qc_template_constraints.py
+# hypothesis_version: 6.151.9
+
+['--blueprint-file', '--run-id', '.tmp', '__main__', 'auto_fixed', 'beat_cadence_seconds', 'blueprint_pack.json', 'candidate_id', 'candidates', 'config', 'constraints', 'failures', 'hook', 'max_reel_seconds', 'max_slides', 'passed', 'runs', 'structure', 'template_id', 'templates', 'templates.yaml', 'total', 'unknown', 'w']

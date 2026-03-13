@@ -1,0 +1,409 @@
+"""Score-weighted disk quota management for Gen Lab agents.
+
+Enforces per-agent disk quotas with intelligent eviction:
+- Two-pass eviction: heavy subdirs (clips/) first, then full runs
+- Score-weighted: lowest-scoring runs evicted first
+- Protection: published runs and N most recent runs never evicted
+
+Usage:
+    manager = DiskQuotaManager(config)
+    status = manager.get_status("content_scraper")
+    ok = manager.preflight_check("content_scraper", estimated_bytes=5_000_000_000)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_QUOTA_GB = 50
+_DEFAULT_WARN_PCT = 80
+_DEFAULT_EVICT_PCT = 90
+_DEFAULT_PROTECT_RECENT = 3
+# Subdirectories to evict in pass 1 (before deleting full runs).
+# These are the largest space consumers that can be regenerated.
+_HEAVY_SUBDIRS = ("clips",)
+
+
+@dataclass
+class RunRecord:
+    """Metadata for a single pipeline run directory."""
+
+    run_id: str
+    path: Path
+    size_bytes: int
+    created_at: float  # Unix timestamp (mtime)
+    score: float  # 0.0-1.0, higher = more valuable
+    is_published: bool
+    clips_bytes: int = 0
+    rendered_bytes: int = 0
+
+
+@dataclass
+class QuotaStatus:
+    """Current disk quota status for an agent."""
+
+    agent: str
+    quota_bytes: int
+    used_bytes: int
+    pct_used: float
+    run_count: int
+    evictable_count: int
+    evictable_bytes: int
+    over_quota: bool
+    over_warn: bool
+
+
+# ── Helpers ──────────────────────────────────────────────────
+
+
+def _dir_size(path: Path) -> int:
+    """Total size in bytes of all files under *path*."""
+    if not path.exists():
+        return 0
+    total = 0
+    try:
+        for f in path.rglob("*"):
+            if f.is_file():
+                try:
+                    total += f.stat().st_size
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def _extract_score(run_dir: Path) -> float:
+    """Extract a representative quality score from run artifacts.
+
+    Priority:
+      1. run_report.json -> metrics.score_distribution.top5_avg
+      2. blueprint_pack.json -> mean(priority_score)
+      3. Default 0.0 (unscored runs evict first)
+    """
+    report_path = run_dir / "run_report.json"
+    if report_path.is_file():
+        try:
+            with open(report_path) as f:
+                report = json.load(f)
+            top5 = (
+                report.get("metrics", {})
+                .get("score_distribution", {})
+                .get("top5_avg")
+            )
+            if top5 is not None:
+                return float(top5)
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            pass
+
+    bp_path = run_dir / "blueprint_pack.json"
+    if bp_path.is_file():
+        try:
+            with open(bp_path) as f:
+                data = json.load(f)
+            items = (
+                data
+                if isinstance(data, list)
+                else data.get("blueprints", data.get("candidates", []))
+            )
+            scores = [
+                item.get("priority_score", item.get("composite_score", 0))
+                for item in items
+                if isinstance(item, dict)
+            ]
+            if scores:
+                return sum(scores) / len(scores)
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            pass
+
+    return 0.0
+
+
+def _is_published(run_dir: Path) -> bool:
+    """Detect whether a run contains published content."""
+    if (run_dir / "publish_all_summary.json").is_file():
+        return True
+    if run_dir.name.endswith("_pub"):
+        return True
+    return False
+
+
+def _filesystem_free_bytes(path: Path) -> int:
+    """Free bytes on the filesystem containing *path*, or -1 if unknown."""
+    try:
+        stat = os.statvfs(path)
+        return stat.f_bavail * stat.f_frsize
+    except (OSError, AttributeError):
+        return -1
+
+
+# ── Manager ──────────────────────────────────────────────────
+
+
+class DiskQuotaManager:
+    """Score-weighted disk quota enforcement.
+
+    Config format::
+
+        agents:
+          content_scraper:
+            runs_dir: "/path/to/.tmp/runs"
+            quota_gb: 50
+            warn_pct: 80
+            evict_pct: 90
+            protect_recent: 3
+    """
+
+    def __init__(self, config: Dict[str, Any]):
+        self._config = config
+
+    @classmethod
+    def from_yaml(cls, path: Path | str) -> DiskQuotaManager:
+        import yaml
+
+        with open(path) as f:
+            return cls(yaml.safe_load(f) or {})
+
+    # ── Config accessors ─────────────────────────────────────
+
+    def _agent_cfg(self, agent: str) -> Dict[str, Any]:
+        return self._config.get("agents", {}).get(agent, {})
+
+    def _runs_dir(self, agent: str) -> Path:
+        cfg = self._agent_cfg(agent)
+        runs_dir = cfg.get("runs_dir")
+        if not runs_dir:
+            raise ValueError(f"No runs_dir configured for agent {agent!r}")
+        return Path(runs_dir)
+
+    def _quota_bytes(self, agent: str) -> int:
+        gb = self._agent_cfg(agent).get("quota_gb", _DEFAULT_QUOTA_GB)
+        return int(float(gb) * (1024**3))
+
+    def _warn_pct(self, agent: str) -> float:
+        return float(self._agent_cfg(agent).get("warn_pct", _DEFAULT_WARN_PCT))
+
+    def _evict_pct(self, agent: str) -> float:
+        return float(self._agent_cfg(agent).get("evict_pct", _DEFAULT_EVICT_PCT))
+
+    def _protect_recent(self, agent: str) -> int:
+        return int(self._agent_cfg(agent).get("protect_recent", _DEFAULT_PROTECT_RECENT))
+
+    # ── Core API ─────────────────────────────────────────────
+
+    def scan_runs(self, agent: str) -> List[RunRecord]:
+        """Scan and return metadata for all run directories, newest first."""
+        runs_dir = self._runs_dir(agent)
+        if not runs_dir.is_dir():
+            return []
+
+        records: List[RunRecord] = []
+        for entry in runs_dir.iterdir():
+            if not entry.is_dir():
+                continue
+
+            try:
+                created = entry.stat().st_mtime
+            except OSError:
+                created = 0.0
+
+            records.append(
+                RunRecord(
+                    run_id=entry.name,
+                    path=entry,
+                    size_bytes=_dir_size(entry),
+                    created_at=created,
+                    score=_extract_score(entry),
+                    is_published=_is_published(entry),
+                    clips_bytes=_dir_size(entry / "clips"),
+                    rendered_bytes=_dir_size(entry / "rendered"),
+                )
+            )
+
+        records.sort(key=lambda r: r.created_at, reverse=True)
+        return records
+
+    def get_status(self, agent: str) -> QuotaStatus:
+        """Current quota status for an agent."""
+        records = self.scan_runs(agent)
+        quota = self._quota_bytes(agent)
+        used = sum(r.size_bytes for r in records)
+        protect_n = self._protect_recent(agent)
+
+        evictable = [r for r in records[protect_n:] if not r.is_published]
+        evictable_bytes = sum(r.size_bytes for r in evictable)
+        pct = (used / quota * 100) if quota > 0 else 0.0
+
+        return QuotaStatus(
+            agent=agent,
+            quota_bytes=quota,
+            used_bytes=used,
+            pct_used=round(pct, 1),
+            run_count=len(records),
+            evictable_count=len(evictable),
+            evictable_bytes=evictable_bytes,
+            over_quota=pct >= self._evict_pct(agent),
+            over_warn=pct >= self._warn_pct(agent),
+        )
+
+    def evict(
+        self,
+        agent: str,
+        target_free_bytes: Optional[int] = None,
+    ) -> List[str]:
+        """Two-pass score-weighted eviction.
+
+        Pass 1: Delete clips/ from ANY non-published run (including recent).
+                Clips are regenerable and should not be shielded by protect_recent.
+        Pass 2: Delete full run directories (only unprotected, non-published).
+
+        Returns list of paths removed.
+        """
+        records = self.scan_runs(agent)
+        quota = self._quota_bytes(agent)
+        used = sum(r.size_bytes for r in records)
+        protect_n = self._protect_recent(agent)
+
+        if target_free_bytes is not None:
+            current_free = max(0, quota - used)
+            need_to_free = target_free_bytes - current_free
+        else:
+            # Bring usage below warn_pct to create headroom
+            target_used = int(quota * self._warn_pct(agent) / 100)
+            need_to_free = used - target_used
+
+        if need_to_free <= 0:
+            return []
+
+        evicted_paths: List[str] = []
+        freed = 0
+
+        # Pass 1: delete heavy subdirectories from ALL runs (including
+        # published and recent).  Clips are regenerable source material —
+        # the final rendered output lives elsewhere in the run dir.
+        # Sorted by score ascending (lowest value evicted first).
+        clips_candidates = sorted(records, key=lambda r: r.score)
+        for record in clips_candidates:
+            if freed >= need_to_free:
+                break
+            for subdir_name in _HEAVY_SUBDIRS:
+                subdir = record.path / subdir_name
+                if subdir.is_dir():
+                    size = _dir_size(subdir)
+                    if size == 0:
+                        continue
+                    try:
+                        shutil.rmtree(subdir)
+                        freed += size
+                        evicted_paths.append(str(subdir))
+                        logger.info(
+                            "[QUOTA] Pass 1: removed %s (%.1f MB, score=%.3f)",
+                            subdir,
+                            size / (1024**2),
+                            record.score,
+                        )
+                    except OSError as e:
+                        logger.warning("[QUOTA] Failed to remove %s: %s", subdir, e)
+
+        # Pass 2: delete full run directories (not published, not recent).
+        if freed < need_to_free:
+            evictable_full = sorted(
+                [r for r in records[protect_n:] if not r.is_published],
+                key=lambda r: r.score,
+            )
+            for record in evictable_full:
+                if freed >= need_to_free:
+                    break
+                if not record.path.exists():
+                    continue
+                size = _dir_size(record.path)
+                if size == 0:
+                    continue
+                try:
+                    shutil.rmtree(record.path)
+                    freed += size
+                    evicted_paths.append(str(record.path))
+                    logger.info(
+                        "[QUOTA] Pass 2: removed %s (%.1f MB, score=%.3f)",
+                        record.path,
+                        size / (1024**2),
+                        record.score,
+                    )
+                except OSError as e:
+                    logger.warning("[QUOTA] Failed to remove %s: %s", record.path, e)
+
+        logger.info(
+            "[QUOTA] Eviction complete: freed %.1f MB across %d paths",
+            freed / (1024**2),
+            len(evicted_paths),
+        )
+        return evicted_paths
+
+    def preflight_check(
+        self,
+        agent: str,
+        estimated_bytes: int = 0,
+    ) -> bool:
+        """Pre-flight check before a pipeline run.
+
+        Returns True if there is (or can be made) enough space.
+        Triggers eviction automatically when projected usage exceeds evict_pct.
+        """
+        status = self.get_status(agent)
+        quota = status.quota_bytes
+        if quota <= 0:
+            return True
+
+        projected_pct = (status.used_bytes + estimated_bytes) / quota * 100
+
+        if projected_pct < self._evict_pct(agent):
+            if projected_pct >= self._warn_pct(agent):
+                logger.warning(
+                    "[QUOTA] %s at %.1f%% (projected %.1f%%) — approaching limit",
+                    agent,
+                    status.pct_used,
+                    projected_pct,
+                )
+            return True
+
+        # Over quota — try eviction
+        logger.warning(
+            "[QUOTA] %s projected %.1f%% — triggering eviction", agent, projected_pct
+        )
+        self.evict(agent, target_free_bytes=estimated_bytes)
+
+        # Re-check after eviction
+        status_after = self.get_status(agent)
+        projected_after = (
+            (status_after.used_bytes + estimated_bytes) / quota * 100
+            if quota > 0
+            else 0
+        )
+
+        if projected_after >= self._evict_pct(agent):
+            logger.error(
+                "[QUOTA] %s still at %.1f%% after eviction — cannot proceed",
+                agent,
+                projected_after,
+            )
+            return False
+
+        # Also check real filesystem space
+        fs_free = _filesystem_free_bytes(self._runs_dir(agent))
+        if fs_free >= 0 and estimated_bytes > 0 and fs_free < estimated_bytes:
+            logger.error(
+                "[QUOTA] Filesystem has only %.1f GB free, need %.1f GB",
+                fs_free / (1024**3),
+                estimated_bytes / (1024**3),
+            )
+            return False
+
+        return True

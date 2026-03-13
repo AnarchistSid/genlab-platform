@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/platform_clients/youtube.py
+# hypothesis_version: 6.151.9
+
+['Authorization', 'YOUTUBE_CLIENT_ID', 'access_token', 'banAuthor', 'client_id', 'client_secret', 'grant_type', 'id', 'moderationStatus', 'parentId', 'part', 'published', 'refresh_token', 'snippet', 'textOriginal']

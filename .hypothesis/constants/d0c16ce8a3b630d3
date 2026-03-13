@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/tools/schema_validator.py
+# hypothesis_version: 6.151.9
+
+['Schema not found: %s', 'r', 'schemas']

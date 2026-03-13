@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/tasks.py
+# hypothesis_version: 6.151.9
+
+[30000, 60000, 120000, '0', '1', '6379', 'DRAMATIQ_TEST', 'REDIS_HOST', 'REDIS_PORT', 'engagement_high', 'engagement_low', 'engagement_normal', 'localhost']

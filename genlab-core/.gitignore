@@ -1,0 +1,27 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Temporary files
+.tmp/
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Credentials
+credentials.json
+token.json
+
+# Build
+dist/
+*.egg-info/
+.hypothesis/
+=0.27
+.coverage

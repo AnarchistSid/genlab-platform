@@ -1,0 +1,33 @@
+[     140ms] [ERROR] Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked. @ http://localhost:5151/schedule:10
+[     178ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
+[     256ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
+[     257ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5151/schedule:0
+[     257ms] [ERROR] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=xiSS87a4Kgj4IQL0AAEe' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[     519ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lss62vvs&sid=xiSS87a4Kgj4IQL0AAEe:0
+[     521ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lss65em4&sid=xiSS87a4Kgj4IQL0AAEe:0
+[    1439ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lssuyqoe&sid=yGZYLKKP8NKSOmYzAAEp:0
+[    3011ms] [ERROR] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=1iADDu_djcXhSw7eAAEg' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[    3012ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsu3a01x&sid=1iADDu_djcXhSw7eAAEg:0
+[    3013ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsu3e9tv&sid=1iADDu_djcXhSw7eAAEg:0
+[    4072ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsuwr13n&sid=BCOkS11AU_kysT6SAAEi:0
+[    4073ms] [WARNING] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=BCOkS11AU_kysT6SAAEi' failed: WebSocket is closed before the connection is established. @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[    4075ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsuwuq3u&sid=BCOkS11AU_kysT6SAAEi:0
+[    5249ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsvtei22&sid=8oMcDqUYLgO9cc8AAAEr:0
+[    6937ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsx4667s&sid=-eKM55R0KwK2qMv8AAEk:0
+[    6938ms] [WARNING] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=-eKM55R0KwK2qMv8AAEk' failed: WebSocket is closed before the connection is established. @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[    6940ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsx4f5sn&sid=-eKM55R0KwK2qMv8AAEk:0
+[    7622ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsxn29yk&sid=n7H-IPY627_xDhAjAAEt:0
+[    7623ms] [WARNING] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=n7H-IPY627_xDhAjAAEt' failed: WebSocket is closed before the connection is established. @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[    7628ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lsxngygh&sid=n7H-IPY627_xDhAjAAEt:0
+[  290795ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  291800ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  293804ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  294808ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  295813ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  297818ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:5151/api/v1/cross-niche/overview:0
+[  316705ms] [ERROR] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=0MBVoGiT__63xQOYAAAA' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[  316706ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lzk3r3s1&sid=0MBVoGiT__63xQOYAAAA:0
+[  316709ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=lzk54izn&sid=0MBVoGiT__63xQOYAAAA:0
+[  318309ms] [ERROR] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=PgYSePFONnm2I1YGAAAA' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5151/assets/index-BasIDPJx.js:10
+[  343311ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=m04o13jh&sid=PgYSePFONnm2I1YGAAAA:0
+[  343318ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=m04o466l&sid=PgYSePFONnm2I1YGAAAA:0

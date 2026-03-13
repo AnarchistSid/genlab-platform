@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/sources/registry.py
+# hypothesis_version: 6.151.9
+
+['429', 'civitai', 'connector', 'entries', 'entry_count', 'error', 'failed', 'fetch_method', 'fetch_status', 'fetched_at', 'hf_spaces', 'platform', 'playwright_profile', 'rate limit', 'rate_limited', 'source_id', 'success', 'timed out', 'timeout', 'too many requests', 'twitter', 'unknown', 'url', 'x', 'youtube']

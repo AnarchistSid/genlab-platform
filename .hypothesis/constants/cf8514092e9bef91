@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/stages/render_visual_stages.py
+# hypothesis_version: 6.151.9
+
+['.tmp', 'DRAFTED', 'VISUAL_READY', 'runs', 'slides', 'templates', 'visuals']

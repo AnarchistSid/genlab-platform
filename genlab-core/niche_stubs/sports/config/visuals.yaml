@@ -1,0 +1,11 @@
+# Visual identity for sports niche (STUB — not yet active)
+# Consumed by genlab_core.media.VideoCompositor via VisualConfig
+
+niche_id: sports
+logo_path: "assets/sports_logo.png"
+accent_color: "#10B981"
+top_bar_height_pct: 0.12
+bottom_bar_height_pct: 0.18
+logo_height_px: 60
+hook_font_size: 32
+hook_max_lines: 2

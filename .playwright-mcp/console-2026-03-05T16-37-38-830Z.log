@@ -1,0 +1,5 @@
+[   13145ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/focus-review:0
+[   13529ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/focus-review:0
+[   13529ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2:0
+[   16170ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/focus-review:0
+[   16170ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2:0

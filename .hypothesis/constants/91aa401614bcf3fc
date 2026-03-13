@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/orchestration/models.py
+# hypothesis_version: 6.151.9
+
+[0.0, 'PENDING', 'pending', 'running', 'scheduled']

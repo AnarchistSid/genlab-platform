@@ -1,0 +1,16 @@
+[   83399ms] [ERROR] ErrorUtils caught an error:
+
+terminate stream because StartStreamFailure with msg : UNAUTHENTICATED [Caught in: Subscription error in preprocessResponse]
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 180, clientTime: 1773044711, extra: Object, guardList: Array(0), hash: pcvpf3} @ https://static.xx.fbcdn.net/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76
+[   98503ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ https://developers.facebook.com/tools/explorer/:0
+[  102725ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102726ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102728ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102728ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102730ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102730ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102732ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  102732ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ about:blank:0
+[  104877ms] [ERROR] Refused to get unsafe header "X-FB-Debug" @ https://static.xx.fbcdn.net/rsrc.php/v4i7M54/yW/l/en_US-j/dVrobI6ZDUL.js:24
+[  185445ms] [ERROR] Refused to get unsafe header "X-FB-Debug" @ https://static.xx.fbcdn.net/rsrc.php/v4i7M54/yW/l/en_US-j/dVrobI6ZDUL.js:24

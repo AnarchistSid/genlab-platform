@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/playwright_fetcher.py
+# hypothesis_version: 6.151.9
+
+[200, 500, 2000, 15000, 20000, 30000, '/', "a[href*='/index/']", "a[href*='/news/']", 'anthropic.com', 'article', 'article a', 'article_selector', 'author', 'entries', 'entry_count', 'error', 'fetch_method', 'fetched_at', 'href', 'http', 'https://openai.com', 'link', 'link_prefix', 'max_articles', 'networkidle', 'openai.com', 'playwright', 'playwright_failed', 'published', 'summary', 'title', 'title_attr', 'url', 'wait_selector', 'wait_timeout_ms', 'www.']

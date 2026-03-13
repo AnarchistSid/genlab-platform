@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/bb_strategies/scoring.py
+# hypothesis_version: 6.151.9
+
+[0.85, '.tmp', 'clustering_stats', 'dedup_stats', 'injection_flags', 'input_count', 'item_count', 'items', 'novelty_threshold', 'output_count', 'parsed_items.json', 'quality_filtered', 'ranked_stories.json', 'run_id', 'run_stats', 'runs', 'scored_count', 'scoring', 'stories', 'timestamp', 'title_removed', 'url_removed', 'w']

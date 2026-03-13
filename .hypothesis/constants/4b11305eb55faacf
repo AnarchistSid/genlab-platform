@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/sources/civitai_connector.py
+# hypothesis_version: 6.151.9
+
+[200, 350, 429, '+00:00', '429', 'Month', 'Most Reactions', 'None', 'Z', 'ai video', 'author', 'connector:civitai', 'createdAt', 'creator', 'creator_feeds', 'creators', 'entries', 'entry_count', 'error', 'failed', 'fetch_method', 'fetch_status', 'flux', 'https://civitai.com', 'id', 'image.civitai.com', 'items', 'kling', 'limit', 'link', 'meta', 'midjourney', 'mixed', 'mode', 'nsfw', 'params', 'period', 'postId', 'postTitle', 'prompt', 'published', 'query', 'rate_limited', 'runway', 'sort', 'success', 'summary', 'tags', 'title', 'url', 'user', 'username']

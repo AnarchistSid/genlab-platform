@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/tts/providers.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.015, 0.3, 0.75, 0.85, 1.0, 1000, 1024, '+5%', '-2Hz', '-of', '-show_entries', '-v', 'ELEVENLABS_API_KEY', 'ErXwobaYiN019PkySvjV', 'OPENAI_API_KEY', 'com', 'edge_tts', 'elevenlabs', 'en', 'en-US-AndrewNeural', 'error', 'ffprobe', 'format=duration', 'gtts', 'mp3', 'mp3_44100_192', 'onyx', 'openai_tts', 'tts-1-hd']

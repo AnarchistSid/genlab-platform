@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/dashboard/server/api/learning.py
+# hypothesis_version: 6.151.9
+
+[500, '/api/v1/learning', '/bandit-state', 'ai_news', 'alpha', 'anime', 'beta', 'error', 'expected_reward', 'feature_names', 'gaming', 'genlab-core', 'learning_api', 'models', 'movies', 'n_examples', 'n_features', 'pos_rate', 'sports', 'trained']

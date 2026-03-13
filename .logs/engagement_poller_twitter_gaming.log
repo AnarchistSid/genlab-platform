@@ -1,0 +1,280 @@
+2026-03-11 20:43:58,159 engagement.poller INFO Engagement poller starting — mode=DISPATCH niche=gaming platform=twitter
+2026-03-11 20:43:58,194 engagement.poller INFO Starting X/Twitter poller for niche=gaming user=2029218265801846784 interval=900s
+2026-03-11 20:43:59,989 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 20:59:00,597 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 21:14:01,103 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 21:29:01,686 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 21:51:55,077 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 22:06:55,646 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 22:21:56,075 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 22:36:56,595 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 22:51:57,527 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 23:06:58,331 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 23:21:58,805 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 23:36:59,296 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-11 23:51:59,709 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 00:07:00,496 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 00:22:01,237 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 00:37:01,936 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 00:52:02,334 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 01:07:02,853 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 01:22:03,320 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 01:37:03,998 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 01:52:04,595 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 02:07:05,104 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 02:22:05,612 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 02:37:06,087 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 02:52:06,465 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 03:07:06,918 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 03:22:07,439 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 03:37:08,030 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 03:52:08,537 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 04:07:09,076 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 04:22:09,559 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 04:37:11,897 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 04:52:12,316 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 05:07:12,739 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 05:22:13,107 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 05:37:13,657 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 05:52:14,209 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 06:07:14,725 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 06:39:01,060 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 09:25:51,675 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 10:31:39,086 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 10:46:39,531 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 11:01:39,938 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 11:16:40,706 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 11:31:41,260 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 11:46:41,650 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 12:01:42,204 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 12:16:42,671 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 12:31:43,062 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 12:46:46,287 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 13:01:46,840 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 13:16:47,424 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 13:31:47,890 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 13:46:48,389 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 14:01:48,903 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 14:16:49,488 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 14:31:49,914 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 16:26:18,442 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 17:12:43,402 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 17:47:49,267 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 18:02:49,780 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 18:17:50,248 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 18:32:50,859 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 18:57:01,882 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 19:30:50,531 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 19:45:50,978 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 20:00:51,474 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 20:15:51,939 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 20:30:53,069 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 20:45:54,206 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 21:00:54,687 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 21:15:55,301 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 21:30:55,716 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 21:45:56,127 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 22:00:56,754 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 22:15:57,294 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 22:30:57,925 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 22:45:58,508 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 23:00:59,120 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 23:15:59,694 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 23:31:00,090 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-12 23:46:01,399 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 00:01:02,693 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 00:16:03,951 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 00:31:04,392 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 00:46:04,982 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 01:01:05,501 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 01:16:06,018 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 01:31:06,662 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 01:46:06,995 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 02:01:07,464 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 02:16:08,984 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 02:31:09,377 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 02:46:09,827 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 03:01:10,250 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 03:16:10,635 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 03:31:11,076 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 03:46:11,487 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 04:01:11,934 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 04:16:12,272 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 04:31:12,739 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 04:46:13,324 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 05:01:13,847 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 05:16:14,331 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 05:31:14,751 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 05:46:15,323 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 06:01:15,741 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 06:16:16,248 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 06:31:16,858 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 06:46:17,338 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 07:01:17,797 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 07:16:18,358 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 07:31:18,739 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 07:54:24,813 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 12:00:05,757 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 12:15:06,118 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 12:30:06,741 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 12:45:07,110 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 13:00:07,551 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 13:15:08,057 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 13:30:08,607 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 13:45:08,972 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 14:00:09,426 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 14:15:10,040 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 14:30:10,536 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 14:45:11,042 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 15:00:11,465 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 15:15:12,084 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 15:30:12,486 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 15:45:12,863 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 16:00:13,365 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 16:15:13,781 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 16:30:14,139 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 16:45:14,533 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 17:00:15,164 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 17:15:15,549 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 17:30:16,046 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 17:45:16,434 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized
+2026-03-13 18:00:16,860 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
+Unauthorized

@@ -1,0 +1,222 @@
+[     465ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/pipeline:0
+[     514ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[     803ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     804ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     809ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     810ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[     811ms] [ERROR] %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) The above error occurred in the <RunHistoryTable> component. React will try to recreate this component tree from scratch using the error boundary you provided, RenderErrorBoundary. @ http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7000
+[     811ms] [ERROR] React Router caught the following error during render TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6267
+[    1986ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[    3372ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[    7212ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   13356ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   14319ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/pipeline:0
+[   14321ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   14648ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[   14648ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[   14653ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[   14654ms] [ERROR] Error handled by React Router default ErrorBoundary: TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6228
+[   14655ms] [ERROR] %o
+
+%s
+
+%s
+ TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) The above error occurred in the <RunHistoryTable> component. React will try to recreate this component tree from scratch using the error boundary you provided, RenderErrorBoundary. @ http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7000
+[   14655ms] [ERROR] React Router caught the following error during render TypeError: Cannot read properties of undefined (reading 'length')
+    at http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:121:36
+    at Array.map (<anonymous>)
+    at RunHistoryTable (http://localhost:5174/src/views/pipeline/RunHistoryTable.tsx:117:54)
+    at Object.react_stack_bottom_frame (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:18509:20)
+    at renderWithHooks (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:5654:24)
+    at updateFunctionComponent (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:7475:21)
+    at beginWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:8525:20)
+    at runWithFiberInDEV (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:997:72)
+    at performUnitOfWork (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12561:98)
+    at workLoopSync (http://localhost:5174/node_modules/.vite/deps/react-dom_client.js?v=af17d221:12424:43) @ http://localhost:5174/node_modules/.vite/deps/chunk-ZSXL5F2W.js?v=af17d221:6267
+[   15489ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   18218ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   23409ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   29024ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   42925ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[   72942ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  102967ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  132596ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/pipeline:0
+[  132597ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  133665ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  135064ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  139795ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  145818ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  161270ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  191422ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  221463ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  251516ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  281532ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  311545ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  341561ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  371586ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  401616ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  431633ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  461643ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  491691ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  521827ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  551866ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  581878ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[  611886ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1843473ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5174/api/v1/pipeline/status:0
+[ 1844491ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5174/api/v1/pipeline/status:0
+[ 1844733ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5174/api/v1/pipeline/runs?per_page=20:0
+[ 1845747ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5174/api/v1/pipeline/runs?per_page=20:0
+[ 1897833ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/focus-review:0
+[ 1898243ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/focus-review:0
+[ 1898243ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2:0
+[ 1900335ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/focus-review:0
+[ 1900335ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2:0
+[ 1905153ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1905722ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1907092ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1912213ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1919383ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1935203ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1965232ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 1995265ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2025283ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2055339ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2085376ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2115402ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2145412ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2149953ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5174/analytics:0
+[ 2149999ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2150041ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/analytics:0
+[ 2150041ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geistmono/v4/or3nQ6H-1_WfwkMZI_qYFrcdmhHkjko.woff2:0
+[ 2150049ms] [ERROR] Access to font at 'https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2' from origin 'http://localhost:5174' has been blocked by CORS policy: Request header field authorization is not allowed by Access-Control-Allow-Headers in preflight response. @ http://localhost:5174/analytics:0
+[ 2150049ms] [ERROR] Failed to load resource: net::ERR_FAILED @ https://fonts.gstatic.com/s/geist/v4/gyByhwUxId8gMEwcGFWNOITd.woff2:0
+[ 2151268ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2154209ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2160045ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2167687ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2191434ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2221446ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2251455ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2281491ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2311547ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2341580ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2371615ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2401644ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2431668ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2461675ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523
+[ 2491699ms] [ERROR] WebSocket connection to 'ws://localhost:5174/socket.io/?EIO=4&transport=websocket' failed: Error during WebSocket handshake: Unexpected response code: 400 @ http://localhost:5174/node_modules/.vite/deps/socket__io-client.js?v=af17d221:1523

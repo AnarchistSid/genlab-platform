@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.genlab.quota-monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/anarchistsid/.local/bin/uv</string>
+        <string>run</string>
+        <string>--package</string>
+        <string>genlab-core</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>genlab_core.storage.quota_daemon</string>
+        <string>--config</string>
+        <string>/Users/anarchistsid/GenLab/Content Scraper/config/disk_quota.yaml</string>
+        <string>--interval</string>
+        <string>60</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/anarchistsid/GenLab</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/anarchistsid/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/anarchistsid</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/quota_monitor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/quota_monitor_error.log</string>
+</dict>
+</plist>

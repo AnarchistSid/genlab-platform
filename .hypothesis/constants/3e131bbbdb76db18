@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/cache/text_sanitizer.py
+# hypothesis_version: 6.151.9
+
+[200, 10000, '...', '</?system\\s*>', '<\\s*/?prompt\\s*>', 'DAN mode', '\\[INST\\]|\\[/INST\\]', '\\s+', 'act as if', 'content', 'developer mode', 'jailbreak', 'new instructions?:', 'system:?\\s*you are']

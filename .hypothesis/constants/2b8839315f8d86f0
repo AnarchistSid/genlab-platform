@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/word_by_word_animator.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.01, 0.15, 0.2, 0.3, 0.5, 0.55, 0.9, 1.45, 60.0, 100, 120, 150, 160, 250, 1080, 1920, '#', '#000000', '#FFD700', '#FFFFFF', '%', '%%', "'", "'\\\\\\''", ',', '000000', ':', ';', 'FFD700', 'FFFFFF', '[', '\\', '\\:', '\\;', '\\[', '\\\\\\\\', '\\]', ']', 'animation', 'base_color', 'body_gap', 'char_width_factor', 'config', 'highlight_color', 'hook', 'instagram_specs.yaml', 'line_height_factor', 'max_words_per_line', 'shadow_alpha', 'shadow_color', 'space_width_factor', 'start_delay', 'transition_duration', 'word_by_word', 'wpm']

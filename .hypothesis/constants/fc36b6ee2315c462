@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/tools/video_hasher.py
+# hypothesis_version: 6.151.9
+
+['-frames:v', '-i', '-of', '-q:v', '-show_entries', '-ss', '-v', '-y', '1', '2', 'added_at', 'clip_id', 'csv=p=0', 'ffmpeg', 'ffprobe', 'format=duration', 'hamming_distance', 'hash_hex', 'quiet', 'r', 'source_url', 'w']

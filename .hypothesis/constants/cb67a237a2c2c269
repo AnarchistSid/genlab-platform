@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/analytics/youtube_analytics_client.py
+# hypothesis_version: 6.151.9
+
+[0.0, 3600, '%Y-%m-%d', '48h', 'averageViewDuration', 'avg_view_duration_s', 'avg_view_pct', 'collected_at', 'columnHeaders', 'comments', 'likes', 'name', 'rows', 'shares', 'subscribersGained', 'subscribers_gained', 'unknown', 'v2', 'video', 'video_id', 'views', 'watch_minutes', 'window_label', 'youtubeAnalytics']

@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/learning/hook_predictor.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.1, 0.6, 100, '!', '?', 'Sk', 'So', '\\d', 'are', 'binary:logistic', 'breaking', 'can', 'capitalized_words', 'char_count', 'did', 'do', 'does', 'emoji_count', 'eta', 'eval_metric', 'exclamation_count', 'has_number', 'hook_model.json', 'hook_text', 'how', 'is', 'is_question', 'just', 'logloss', 'max_depth', 'new', 'nthread', 'objective', 'reward_score', 'sample', 'this', 'watch', 'what', 'when', 'where', 'who', 'why', 'will', 'word_count']

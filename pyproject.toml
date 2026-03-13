@@ -1,0 +1,10 @@
+[tool.uv.workspace]
+members = [
+    "genlab-core",
+    "CriticalRush",
+    "Content Scraper",
+    "dashboard",
+    "ClutchWire",
+    "SpliceReel",
+    "FrameDrift",
+]

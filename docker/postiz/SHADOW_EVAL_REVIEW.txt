@@ -1,0 +1,9 @@
+Shadow Evaluation Review Date: 2026-04-07
+
+Checklist:
+- [ ] Postiz Docker running for 4 weeks
+- [ ] Shadow publish logs in .logs/shadow_eval.log
+- [ ] Compare: native publish success rate vs Postiz success rate
+- [ ] Compare: publish latency (native vs Postiz)
+- [ ] Compare: content fidelity (text truncation, image handling)
+- [ ] Decision: migrate to Postiz or stay native

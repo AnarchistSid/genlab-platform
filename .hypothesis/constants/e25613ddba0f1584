@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/bb_strategies/writing.py
+# hypothesis_version: 6.151.9
+
+['.tmp', 'blueprint_pack.json', 'candidates', 'completed', 'content_generated_at', 'content_writing', 'ranked_stories.json', 'run_id', 'run_stats', 'runs', 'status', 'stories', 'story_id', 'w', 'written_count']

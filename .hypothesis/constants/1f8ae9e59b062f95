@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/feedback/hook_analyzer.py
+# hypothesis_version: 6.151.9
+
+[200, 'HookLength', 'HookText', 'HookType', 'NicheId', 'Platform', 'PostContentType', 'ReelsSkipRate', 'Reward48h', '__main__', 'content_type', 'fields', 'hook_length', 'hook_text', 'hook_type', 'niche_id', 'pending_feedback', 'platform', 'reels_skip_rate', 'reward_48h', "{Status}='complete'"]

@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/local_cdn.py
+# hypothesis_version: 6.151.9
+
+[200, 600, 1024, '12h', '1h', '24h', '72h', 'cdn', 'config', 'data', 'file', 'fileToUpload', 'fileupload', 'http://', 'http://tmpfiles.org/', 'https://', 'max_upload_attempts', 'publishing.yaml', 'r', 'rb', 'reqtype', 'retry_max_wait_s', 'retry_min_wait_s', 'status', 'success', 'time', 'url', 'utf-8']

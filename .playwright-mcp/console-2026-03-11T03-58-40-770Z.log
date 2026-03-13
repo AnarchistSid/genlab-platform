@@ -1,0 +1,14 @@
+[    1273ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
+[    1279ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1283ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
+[    1288ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
+[    1293ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
+[    1298ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
+[    1309ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1310ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1311ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1329ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1345ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1350ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1365ms] [ERROR] Broken trigger flowlet chain! @ https://static.xx.fbcdn.net/rsrc.php/v4/yK/r/zU7w-bxkBNJ.js:270
+[    1504ms] [ERROR] Loading the image 'https://www.google.co.in/ads/ga-audiences?v=1&t=sr&slf_rd=1&_r=4&tid=G-WN22ZHXY2R&cid=1712158793.1773201522&gtm=45je6391v873164061za200zd873164061&aip=1&dma=0&gcd=13l3l3l3l1l1&npa=0&frm=0&tag_exp=103116026~103200004~115616985~115938466~115938468~116024733~117484252&z=850164676' violates the following Content Security Policy directive: "img-src *.fbcdn.net *.facebook.com data: https://*.fbsbx.com facebook.com *.cdninstagram.com fbsbx.com fbcdn.net connect.facebook.net blob: android-webview-video-poster: *.whatsapp.net *.fb.com *.oculuscdn.com https://*.google-analytics.com https://*.googletagmanager.com https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net *.doubleclick.net *.tenor.co *.tenor.com *.giphy.com https://trustly.one/ https://*.trustly.one/ https://paywithmybank.com/ https://*.paywithmybank.com/ dc.ads.linkedin.com analytics.twitter.com t.co". The action has been blocked. @ https://developers.facebook.com/docs/resp-plat-initiatives/appreview/:0

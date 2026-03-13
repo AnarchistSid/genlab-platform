@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/dashboard/server/api/platform_posts.py
+# hypothesis_version: 6.151.9
+
+['/api/v1/platforms', '/threads/posts', '/tiktok/posts', 'GET', 'audit_approved', 'blueprint_id', 'comments', 'data', 'engagement_rate', 'false', 'fields', 'id', 'impressions', 'likes', 'meta', 'note', 'permalink', 'platform_posts_api', 'post_id', 'published_at', 'quotes', 'replies', 'reposts', 'shares', 'status', 'total', 'true', 'views']

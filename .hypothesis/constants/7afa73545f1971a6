@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/flows/spike_detector_flow.py
+# hypothesis_version: 6.151.9
+
+[0.0, 0.3, 0.5, 1.0, 2.0, 100, 120, 3600, '.tmp', '__main__', 'app_id', 'appid', 'detect_spikes', 'dry_run', 'games', 'games_tracked', 'history', 'id', 'items', 'name', 'no_data', 'no_spikes', 'pct_change', 'player_count', 'players', 'poll_steam_players', 'r', 'rank', 'rank_history', 'rank_velocity', 'response', 'signals', 'spike', 'spikes', 'spikes_detected', 'status', 'steam-spike-detector', 'timestamp', 'top_sellers', 'trigger', 'triggered', 'triggered_run_id', 'w', 'z_score']

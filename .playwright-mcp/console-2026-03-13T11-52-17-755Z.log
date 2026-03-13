@@ -1,0 +1,2 @@
+[   -1557ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ https://static.xx.fbcdn.net/rsrc.php/v4im9L4/y6/l/en_US-j/ouCGE8H2Aji.js:63
+[   -1557ms] [ERROR] The source list for the Content Security Policy directive 'connect-src' contains an invalid source: 'https://*-fort.facebook.com'. It will be ignored. @ https://static.xx.fbcdn.net/rsrc.php/v4im9L4/y6/l/en_US-j/ouCGE8H2Aji.js:63

@@ -1,0 +1,276 @@
+"""Training data pipeline for the hook quality classifier.
+
+Pulls historical hook + engagement pairs from SharePoint for training.
+Cross-references PendingFeedback (completed tasks with reward_48h) with
+Blueprints (hook_text) to build labelled training examples.
+
+The 75th percentile of reward_48h is used as the label threshold:
+examples above it are "high quality" (label=1), below are label=0.
+"""
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+MIN_EXAMPLES = 200
+
+
+@dataclass
+class HookExample:
+    """One training example: a hook paired with its engagement outcome."""
+
+    hook_text: str
+    platform: str
+    niche_id: str
+    reward_48h: float
+    published_at: str = ""
+    skip_rate_proxy: float | None = None  # IG Reels: 1 - (avg_watch_time / video_duration)
+
+
+def pull_training_data(
+    backlog_client: Any,
+    niche_id: str | None = None,
+    min_age_hours: float = 72,
+) -> list[HookExample]:
+    """Pull completed feedback tasks cross-referenced with blueprints for hook text.
+
+    Steps:
+        1. Query GenLab_PendingFeedback where Status='complete'
+        2. For each task, look up the corresponding blueprint for hook_text
+        3. Return list of HookExample with reward_48h as the engagement signal
+
+    Args:
+        backlog_client: An initialized BacklogClient instance.
+        niche_id: If set, only return examples for this niche.
+        min_age_hours: Minimum hours since publish (ignored — filtering
+            is done by status='complete' which implies 48h+ has passed).
+
+    Returns:
+        List of HookExample instances. Empty list on any error.
+    """
+    from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
+
+    store = PendingFeedbackStore(backlog_client)
+
+    # Step 1: Get completed feedback tasks via the analytics proxy.
+    # PendingFeedbackStore stores items in a SharePoint list accessible
+    # via backlog_client's low-level proxy pattern.
+    try:
+        # The PendingFeedback list is not a first-class BacklogClient table,
+        # so we query it via the graph proxy pattern used by the store.
+        # BacklogClient exposes named proxy attributes; PendingFeedback
+        # is accessed via get_items on the store's client reference.
+        # Since get_items may not exist on BacklogClient, fall back to
+        # using the store's internal parsing.
+        items = _query_completed_feedback(backlog_client)
+    except Exception as exc:
+        logger.warning("[hook_training] Failed to query PendingFeedback: %s", exc)
+        return []
+
+    examples: list[HookExample] = []
+    _blueprint_cache: dict[str, dict | None] = {}
+    _analytics_cache: dict[str, float | None] = {}  # content_id → skip_rate
+
+    for item in items:
+        fields = item.get("fields", item)
+
+        # Filter by niche_id if specified
+        item_niche = fields.get("NicheId", fields.get("niche_id", ""))
+        if niche_id and item_niche != niche_id:
+            continue
+
+        # Must have reward_48h
+        reward_raw = fields.get("Reward48h", fields.get("reward_48h"))
+        if reward_raw is None:
+            continue
+        try:
+            reward = float(reward_raw)
+        except (TypeError, ValueError):
+            continue
+
+        # Get content_id to look up blueprint for hook_text
+        content_id = fields.get("PostID", fields.get("content_id", ""))
+        if not content_id:
+            continue
+
+        # Blueprint lookup (cached)
+        if content_id not in _blueprint_cache:
+            try:
+                _blueprint_cache[content_id] = (
+                    backlog_client.find_blueprint_by_candidate_id(content_id)
+                )
+            except Exception:
+                _blueprint_cache[content_id] = None
+
+        blueprint = _blueprint_cache[content_id]
+        hook_text = _extract_hook_text(blueprint)
+        if not hook_text:
+            continue
+
+        platform = fields.get("Platform", fields.get("platform", ""))
+        published_at = fields.get("PublishedAt", fields.get("published_at", ""))
+
+        # Compute skip_rate_proxy for IG Reels from Analytics data
+        skip_rate = None
+        if platform == "instagram" and content_id:
+            skip_rate = _lookup_skip_rate(backlog_client, content_id, _analytics_cache)
+
+        examples.append(
+            HookExample(
+                hook_text=hook_text,
+                platform=platform,
+                niche_id=item_niche,
+                reward_48h=reward,
+                published_at=published_at,
+                skip_rate_proxy=skip_rate,
+            )
+        )
+
+    logger.info(
+        "[hook_training] Pulled %d training examples (niche=%s)",
+        len(examples),
+        niche_id or "all",
+    )
+    return examples
+
+
+def compute_engagement_labels(
+    examples: list[HookExample],
+    skip_rate_threshold: float = 0.30,
+) -> list[int]:
+    """Compute binary labels using engagement + skip rate signals.
+
+    Label = 1 (high quality) when EITHER:
+      - reward_48h >= 75th percentile, OR
+      - skip_rate_proxy is available AND < skip_rate_threshold (0.30)
+
+    This dual-signal approach means a hook that retains viewers (low skip
+    rate) is labelled positively even if engagement is moderate, because
+    retention is the strongest algo signal for Reels distribution.
+
+    For tiny datasets (< 5 examples), falls back to labelling all as 0
+    since there isn't enough data for a meaningful threshold.
+
+    Args:
+        examples: List of HookExample with reward_48h values.
+        skip_rate_threshold: Skip rate below this is labelled positive.
+
+    Returns:
+        List of int labels (0 or 1), same length as examples.
+    """
+    if not examples:
+        return []
+
+    rewards = np.array([ex.reward_48h for ex in examples])
+
+    if len(rewards) < 5:
+        return [0] * len(examples)
+
+    reward_threshold = float(np.percentile(rewards, 75))
+
+    labels = []
+    for ex, r in zip(examples, rewards):
+        # Primary signal: engagement above 75th percentile
+        if r >= reward_threshold:
+            labels.append(1)
+        # Secondary signal: low skip rate (strong retention)
+        elif (
+            ex.skip_rate_proxy is not None
+            and ex.skip_rate_proxy < skip_rate_threshold
+        ):
+            labels.append(1)
+        else:
+            labels.append(0)
+
+    return labels
+
+
+# ── Internal helpers ─────────────────────────────────────────────────
+
+
+def _lookup_skip_rate(
+    backlog_client: Any,
+    content_id: str,
+    cache: dict[str, float | None],
+) -> float | None:
+    """Look up skip_rate_proxy from Analytics for an IG Reels post.
+
+    skip_rate_proxy = 1 - (ig_reels_avg_watch_time / video_duration)
+    Returns None if metrics are unavailable.
+    """
+    if content_id in cache:
+        return cache[content_id]
+
+    try:
+        records = backlog_client.analytics.all(
+            formula=f"AND({{candidate_id}}='{content_id}',{{platform}}='instagram')",
+            max_records=1,
+        )
+        if not records:
+            cache[content_id] = None
+            return None
+
+        rec = records[0].get("fields", records[0])
+        avg_watch = rec.get("ig_reels_avg_watch_time")
+        duration = rec.get("video_duration")
+
+        if avg_watch is not None and duration and float(duration) > 0:
+            skip_rate = 1.0 - (float(avg_watch) / float(duration))
+            skip_rate = max(0.0, min(1.0, skip_rate))
+            cache[content_id] = skip_rate
+            return skip_rate
+
+        cache[content_id] = None
+        return None
+
+    except Exception as exc:
+        logger.debug("[hook_training] skip_rate lookup failed for %s: %s", content_id, exc)
+        cache[content_id] = None
+        return None
+
+
+def _query_completed_feedback(backlog_client: Any) -> list[dict]:
+    """Query the PendingFeedback list for completed items.
+
+    Tries multiple access patterns since the BacklogClient interface
+    for PendingFeedback is not fully standardised.
+    """
+    # Approach 1: direct get_items (if available on the client)
+    if hasattr(backlog_client, "get_items"):
+        return backlog_client.get_items(
+            "GenLab_PendingFeedback",
+            filter_query="Status eq 'complete'",
+        )
+
+    # Approach 2: use the graph proxy if exposed
+    # The store injects backlog_client; if it has a _pending_feedback proxy,
+    # use it. Otherwise try constructing one.
+    if hasattr(backlog_client, "pending_feedback"):
+        return backlog_client.pending_feedback.all(
+            formula="{Status}='complete'",
+        )
+
+    # Approach 3: fallback — no way to query
+    logger.warning(
+        "[hook_training] BacklogClient has no get_items or pending_feedback proxy. "
+        "Returning empty results."
+    )
+    return []
+
+
+def _extract_hook_text(blueprint: dict | None) -> str:
+    """Extract hook text from a blueprint record, trying multiple field names."""
+    if not blueprint:
+        return ""
+    fields = blueprint.get("fields", blueprint)
+    # Try field names in priority order
+    for key in ("hook_text", "hook", "caption_hook"):
+        val = fields.get(key, "")
+        if val and isinstance(val, str) and val.strip():
+            return val.strip()
+    return ""

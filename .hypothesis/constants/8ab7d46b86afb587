@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/bb_strategies/content_research.py
+# hypothesis_version: 6.151.9
+
+['.tmp', 'cache_hit', 'cache_hits', 'cache_misses', 'entry_count', 'error', 'fetch', 'fetch_log.json', 'flagged_count', 'injection_flags', 'item_count', 'items', 'parsed_items', 'parsed_items.json', 'results', 'run_id', 'run_stats', 'runs', 'sources_attempted', 'sources_failed', 'sources_succeeded', 'timestamp', 'total_entries', 'w']

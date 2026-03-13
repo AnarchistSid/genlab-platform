@@ -1,0 +1,1 @@
+[   62169ms] [ERROR] Failed to load resource: the server responded with a status of 504 (Gateway Time-out) @ http://localhost:5100/api/copilot/chat:0

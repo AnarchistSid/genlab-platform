@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/config_writer.py
+# hypothesis_version: 6.151.9
+
+[0.0, 1e-09, 0.1, 0.5, 1.0, '.yaml.tmp', ':', 'content_type', 'format', 'ratio', 'schedule_slots', 'template_id', 'templates', 'w']

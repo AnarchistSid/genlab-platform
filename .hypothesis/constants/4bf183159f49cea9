@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/Content Scraper/execution/sources/youtube_connector.py
+# hypothesis_version: 6.151.9
+
+[200, 350, 3600, '%Y-%m-%dT%H:%M:%SZ', ',', '@', 'UC', 'Unknown Creator', 'YOUTUBE_CLIENT_ID', 'any', 'author', 'channel', 'channelId', 'channelTitle', 'channel_allowlist', 'channels', 'connector:youtube', 'contentDetails', 'date', 'description', 'duration', 'en', 'entries', 'entry_count', 'fetch_method', 'fetch_status', 'id', 'items', 'keyword_discovery', 'kling ai video', 'link', 'made with AI short', 'max_results', 'midjourney animation', 'mixed', 'mode', 'moderate', 'params', 'per_seed', 'published', 'publishedAt', 'published_after_days', 'queries', 'require_shorts', 'short', 'snippet', 'sora ai demo', 'success', 'summary', 'title', 'url', 'v3', 'video', 'videoId', 'video_duration', 'youtube']

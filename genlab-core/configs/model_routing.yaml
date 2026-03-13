@@ -1,0 +1,30 @@
+# configs/model_routing.yaml
+# LiteLLM model routing by pipeline task type.
+# Tiered strategy: Sonnet for quality-critical, GPT-4o-mini for volume, Haiku for utility.
+
+default_model: "gpt-4o-mini"
+
+task_routing:
+  # Quality-critical
+  generate_hooks: "claude-sonnet-4-6"
+  score_hook_quality: "claude-sonnet-4-6"
+  write_post_content: "claude-sonnet-4-6"
+
+  # Volume work
+  generate_script: "gpt-4o-mini"
+  write_gaming_content: "gpt-4o-mini"
+  write_sports_content: "gpt-4o-mini"
+  write_movie_content: "gpt-4o-mini"
+  write_fashion_content: "gpt-4o-mini"
+  generate_captions: "gpt-4o-mini"
+  adapt_for_platforms: "gpt-4o-mini"
+
+  # Utility
+  extract_game_name: "claude-haiku-4-5-20251001"
+  classify_content_type: "claude-haiku-4-5-20251001"
+  enrich_metadata: "claude-haiku-4-5-20251001"
+  summarise_article: "claude-haiku-4-5-20251001"
+
+budget_fallbacks:
+  expensive_to_mid: "gpt-4o-mini"
+  mid_to_cheapest: "claude-haiku-4-5-20251001"

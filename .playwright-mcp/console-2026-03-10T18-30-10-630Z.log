@@ -1,0 +1,3 @@
+[    1876ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://developer.x.com/etc/designs/developer2-twitter/public/css/data-protection.css:0
+[    1920ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://sentry.io/api/1819089/envelope/?sentry_key=ec08c1e7b72a4d64a4d2848effd5f0f2&sentry_version=7:0
+[    2465ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://developer.x.com/etc/designs/developer2-twitter/public/js/data-protection.js:0

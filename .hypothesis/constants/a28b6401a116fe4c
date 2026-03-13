@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/learning/meta_prior.py
+# hypothesis_version: 6.151.9
+
+[0.3, 0.35, 0.45, 0.5, 1.0, 2.0, '__', 'ai_news', 'dry_run', 'fashion', 'gaming', 'movies', 'skipped_has_obs', 'sports', 'updated']
