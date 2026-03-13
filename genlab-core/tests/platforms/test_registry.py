@@ -27,9 +27,14 @@ def test_get_client_deferred_import_error():
     """If a platform module doesn't exist yet, get_client raises ImportError."""
     from genlab_core.platforms import registry
 
-    # Clear cache to ensure a fresh import attempt
-    registry._CLASS_CACHE.clear()
+    # Temporarily register a platform that points to a non-existent module
+    registry._REGISTRY["_test_missing"] = "genlab_core.platforms._does_not_exist:FakeClient"
+    registry._CLASS_CACHE.pop("_test_missing", None)
 
-    # instagram.py doesn't exist yet — this should raise
-    with pytest.raises((ImportError, ModuleNotFoundError)):
-        registry.get_client("instagram")
+    try:
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            registry.get_client("_test_missing")
+    finally:
+        # Clean up injected test entry
+        registry._REGISTRY.pop("_test_missing", None)
+        registry._CLASS_CACHE.pop("_test_missing", None)
