@@ -59,22 +59,21 @@ def _make_comment(**overrides):
 class TestFullReplyPipeline:
     """End-to-end: process_reply_event generates a reply and posts it."""
 
-    @patch("genlab_core.platforms.get_client", side_effect=ValueError("no client"))
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
-    @patch("genlab_core.engagement.platform_clients.youtube.post_youtube_reply")
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_reply_posted_and_marked_idempotent(
         self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_yt_reply, mock_time, mock_delay, mock_get_client, agent_root,
+        mock_time, mock_delay, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             process_reply_event,
             _has_replied,
             _rate_limiter,
         )
+        from genlab_core.platforms.protocols import Engageable
 
         # Toxicity gate: clean inbound
         mock_result = MagicMock()
@@ -84,8 +83,12 @@ class TestFullReplyPipeline:
         # Persona engine: return a reply
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for watching!"
 
-        # Rate limiter: allow
-        with patch.object(_rate_limiter, "acquire", return_value=True):
+        # Mock the unified client
+        mock_client = MagicMock(spec=Engageable)
+        mock_client.post_reply.return_value = True
+
+        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
+             patch.object(_rate_limiter, "acquire", return_value=True):
             event = {
                 "comment_id": "c200",
                 "comment_text": "Love the content",
@@ -96,42 +99,46 @@ class TestFullReplyPipeline:
             }
             process_reply_event(event)
 
-        # Reply posted to YouTube
-        mock_yt_reply.assert_called_once_with(
-            video_id="v1", parent_id="c200", text="Thanks for watching!",
+        # Reply posted via unified client
+        mock_client.post_reply.assert_called_once_with(
+            parent_id="c200", text="Thanks for watching!", context_id="v1",
         )
 
         # Idempotency: second call should be a no-op
-        mock_yt_reply.reset_mock()
-        with patch.object(_rate_limiter, "acquire", return_value=True):
+        mock_client.post_reply.reset_mock()
+        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
+             patch.object(_rate_limiter, "acquire", return_value=True):
             process_reply_event(event)
-        mock_yt_reply.assert_not_called()
+        mock_client.post_reply.assert_not_called()
 
         # Confirm idempotency record exists
         assert _has_replied("c200", "youtube") is True
 
-    @patch("genlab_core.platforms.get_client", side_effect=ValueError("no client"))
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
-    @patch("genlab_core.engagement.platform_clients.x_twitter.post_x_reply")
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_x_twitter_reply_uses_correct_client(
         self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_x_reply, mock_time, mock_delay, mock_get_client, agent_root,
+        mock_time, mock_delay, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             process_reply_event,
             _rate_limiter,
         )
+        from genlab_core.platforms.protocols import Engageable
 
         mock_result = MagicMock()
         mock_result.is_toxic = False
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
         mock_engine_cls.return_value.generate_reply.return_value = "Nice take!"
 
-        with patch.object(_rate_limiter, "acquire", return_value=True):
+        mock_client = MagicMock(spec=Engageable)
+        mock_client.post_reply.return_value = True
+
+        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
+             patch.object(_rate_limiter, "acquire", return_value=True):
             process_reply_event({
                 "comment_id": "tw123",
                 "comment_text": "Interesting thread",
@@ -141,7 +148,9 @@ class TestFullReplyPipeline:
                 "post_context": "",
             })
 
-        mock_x_reply.assert_called_once_with(tweet_id="tw123", text="Nice take!")
+        mock_client.post_reply.assert_called_once_with(
+            parent_id="tw123", text="Nice take!", context_id="t1",
+        )
 
 
 class TestDispatchToProcessorIntegration:
