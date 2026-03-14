@@ -38,6 +38,9 @@ token.json
 *.log
 *.cache
 
+# Hypothesis test artifacts
+.hypothesis/
+
 # Node (dashboard frontend)
 node_modules/
 dashboard/frontend/dist/

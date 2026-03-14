@@ -148,6 +148,8 @@ class GenericPipelineRunner:
                 return ctx
 
             context_dict: Dict[str, Any] = {
+                "niche_id": niche_id,
+                "run_id": run_id,
                 "stories": ctx.stories,
                 "blueprints": ctx.blueprints,
                 "run_stats": ctx.run_stats,
