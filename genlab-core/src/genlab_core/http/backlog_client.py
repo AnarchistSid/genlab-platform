@@ -802,7 +802,7 @@ class BacklogClient:
         if status == "SUCCESS":
             fields["published_at"] = datetime.now(timezone.utc).isoformat()
         if blueprint_record_id:
-            fields["blueprint"] = [blueprint_record_id]
+            fields["blueprint_link"] = str(blueprint_record_id)
         if niche_id:
             fields["niche_id"] = niche_id
 

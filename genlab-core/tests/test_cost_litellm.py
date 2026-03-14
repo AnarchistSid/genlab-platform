@@ -1,6 +1,14 @@
 """Tests for litellm-primary cost computation."""
+import pytest
 from unittest.mock import patch
 from genlab_core.intelligence.cost_accumulator import _compute_cost
+
+_litellm_available = False
+try:
+    import litellm  # noqa: F401
+    _litellm_available = True
+except ImportError:
+    pass
 
 
 class TestComputeCostLitellm:
@@ -10,6 +18,7 @@ class TestComputeCostLitellm:
         # litellm should return a positive cost
         assert cost > 0
 
+    @pytest.mark.skipif(not _litellm_available, reason="litellm not installed")
     def test_falls_back_on_litellm_exception(self):
         """If litellm raises, fall back to local table."""
         with patch(
@@ -19,6 +28,7 @@ class TestComputeCostLitellm:
             cost = _compute_cost("claude-haiku-4-5-20251001", 1000, 200)
             assert cost > 0  # Local table should work
 
+    @pytest.mark.skipif(not _litellm_available, reason="litellm not installed")
     def test_falls_back_on_zero_cost(self):
         """If litellm returns 0, fall back to local table."""
         with patch(

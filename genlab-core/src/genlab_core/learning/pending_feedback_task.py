@@ -86,5 +86,5 @@ class PendingFeedbackTask(BaseModel):
         }
         if self.hook_text:
             fields["HookText"] = self.hook_text[:500]
-            fields["HookLength"] = self.hook_length or len(self.hook_text.split())
+            fields["HookLength"] = self.hook_length or len(self.hook_text)
         return fields

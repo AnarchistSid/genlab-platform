@@ -111,7 +111,7 @@ class TestPendingFeedbackTask:
         )
         fields = task.to_sharepoint_fields()
         assert fields["HookText"] == "You won't believe this AI breakthrough"
-        assert fields["HookLength"] == 6  # word count
+        assert fields["HookLength"] == 38  # character count
 
     def test_hook_fields_omitted_when_empty(self):
         task = PendingFeedbackTask(

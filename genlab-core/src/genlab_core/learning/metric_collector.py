@@ -331,6 +331,7 @@ def process_pending_task(
     shaper: RewardShaper,
     now: datetime | None = None,
     bandit_updater: Optional[BanditUpdater] = None,
+    backlog_client: Any = None,
 ) -> bool:
     """Process a single pending task: check window, fetch, update.
 
@@ -343,6 +344,7 @@ def process_pending_task(
             (niche_id, content_type, platform, reward). Allows niche-specific
             bandit implementations to receive partial_fit updates without
             genlab-core importing them directly.
+        backlog_client: BacklogClient for writing metrics to the Analytics table.
 
     Returns True if a window was processed.
     """
@@ -390,6 +392,23 @@ def process_pending_task(
                     exc,
                 )
 
+    # Write fetched metrics to the Analytics table for dashboard consumption
+    if metrics and backlog_client is not None:
+        try:
+            backlog_client.upsert_analytics(
+                post_id=task_record.platform_post_id,
+                platform=task_record.platform,
+                insights=metrics,
+                published_at=task_record.published_at.isoformat(),
+                fetch_window=window,
+                niche_id=task_record.niche_id,
+            )
+        except Exception as exc:
+            logger.debug(
+                "[metric_collector] Analytics upsert failed for %s/%s: %s",
+                task_record.platform, task_record.platform_post_id, exc,
+            )
+
     store.update_window(task_record, window, reward_48h=reward_48h)
     return True
 
@@ -434,7 +453,9 @@ def collect_metrics(
     for task_record in pending:
         try:
             if process_pending_task(
-                task_record, store, shaper, now=now, bandit_updater=bandit_updater,
+                task_record, store, shaper, now=now,
+                bandit_updater=bandit_updater,
+                backlog_client=backlog_client,
             ):
                 processed += 1
         except Exception as exc:

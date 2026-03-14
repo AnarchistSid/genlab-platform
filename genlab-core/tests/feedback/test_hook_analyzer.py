@@ -49,7 +49,7 @@ class TestGetHookTrainingData:
                 "fields": {
                     "HookText": "You won't believe this AI breakthrough",
                     "HookType": "reaction",
-                    "HookLength": 6,
+                    "HookLength": 40,
                     "Platform": "instagram",
                     "NicheId": "ai_creators",
                     "PostContentType": "reel",
