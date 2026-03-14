@@ -562,12 +562,63 @@ class FetchTrendingVideos:
             len(videos), niche_id,
         )
 
+        # ── Composite quality gate ──────────────────────────────────
+        # Score each video and filter out those below the niche threshold.
+        # Only videos that pass the gate become stories for downstream stages.
+        scoring_cfg = vs_config.get("composite_quality_gate", {})
+        from genlab_core.scoring.composite_scorer import CompositeScorer
+        scorer = CompositeScorer(
+            niche_id,
+            velocity_threshold=scoring_cfg.get("velocity_threshold"),
+            min_composite=scoring_cfg.get("min_composite_score"),
+        )
+
+        # Build per-video trend multipliers from Google Trends (if available)
+        trend_multipliers: Dict[str, float] = {}
+        if extra_keywords and vs_config.get("use_google_trends", False):
+            try:
+                from genlab_core.intel.google_trends import GoogleTrendsIntel
+                trends_intel = GoogleTrendsIntel()
+                for v in videos:
+                    mult = trends_intel.get_trending_score_multiplier(v.title, niche_id)
+                    if mult != 1.0:
+                        trend_multipliers[v.video_id] = mult
+            except Exception as e:
+                logger.warning("[FetchTrendingVideos] Trend multiplier lookup failed: %s", e)
+
+        video_dicts = [v.to_dict() for v in videos]
+        scored = scorer.score_and_rank(video_dicts, trend_multipliers=trend_multipliers)
+        passed_ids = {s.video_id for s in scored}
+        videos = [v for v in videos if v.video_id in passed_ids]
+
+        # Attach composite_score to each video for downstream use
+        composite_map = {s.video_id: s.composite for s in scored}
+
+        logger.info(
+            "[FetchTrendingVideos] Quality gate: %d/%d passed for %s",
+            len(videos), len(video_dicts), niche_id,
+        )
+        # ── End quality gate ────────────────────────────────────────
+
         # Convert to story dicts and prepend to context stories
-        video_stories = [v.to_story() for v in videos]
+        video_stories = []
+        for v in videos:
+            story = v.to_story()
+            story["composite_score"] = round(composite_map.get(v.video_id, 0.0), 4)
+            video_stories.append(story)
         existing_stories = context.get("stories", [])
         context["stories"] = video_stories + existing_stories
         context["trending_videos"] = [v.to_dict() for v in videos]
-        context.setdefault("run_stats", {})["trending_videos_found"] = len(videos)
+        run_stats = context.setdefault("run_stats", {})
+        run_stats["trending_videos_found"] = len(videos)
+        run_stats["trending_videos_fetched"] = len(video_dicts)
+        run_stats["trending_videos_filtered"] = len(video_dicts) - len(videos)
+        if not videos and video_dicts:
+            logger.warning(
+                "[FetchTrendingVideos] All %d videos filtered by quality gate for %s — "
+                "no content will be published this run",
+                len(video_dicts), niche_id,
+            )
 
         # Save trending videos manifest to run_dir
         run_dir = context.get("run_dir")

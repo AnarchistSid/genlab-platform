@@ -17,6 +17,13 @@ from genlab_core.media.sandbox_runner import (
     sandbox_rendering_enabled,
 )
 
+_opensandbox_available = False
+try:
+    import opensandbox  # noqa: F401
+    _opensandbox_available = True
+except ImportError:
+    pass
+
 
 GENLAB_ROOT = Path("/Users/anarchistsid/GenLab")
 
@@ -114,6 +121,7 @@ def _server_running() -> bool:
         return False
 
 
+@pytest.mark.skipif(not _opensandbox_available, reason="opensandbox not installed")
 class TestEgressPolicyConstruction:
     """Verify _build_network_policy produces correct structures."""
 

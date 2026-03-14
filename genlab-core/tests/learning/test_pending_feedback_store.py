@@ -65,7 +65,7 @@ class TestCreate:
         store.create(task)
         fields = mock_proxy.create.call_args[0][0]
         assert fields["HookText"] == "You won't believe this play"
-        assert fields["HookLength"] == 5  # word count
+        assert fields["HookLength"] == 27  # character count
         assert fields["HookType"] == "reaction"
 
     def test_create_raises_if_no_proxy(self):
