@@ -30,16 +30,12 @@ logger = logging.getLogger(__name__)
 _CONFIG_ROOT = Path(__file__).resolve().parents[4] / "config"
 _GENLAB_ROOT = Path(__file__).resolve().parents[4]
 
-NICHES = ["ai_news", "gaming", "sports", "movies", "anime"]
+NICHES = ["ai_creators", "gaming", "sports", "movies", "anime"]
 
-# Niche → env var prefix mapping for platform credentials
-_NICHE_ENV_PREFIX: dict[str, str] = {
-    "ai_news": "META",
-    "gaming": "CRITICALRUSH",
-    "sports": "CLUTCHWIRE",
-    "movies": "SPLICEREEL",
-    "anime": "FRAMEDRIFT",
-}
+# Import canonical prefixes and extend with ai_creators (BB uses global META_* vars)
+from genlab_core.publishing.niche_credentials import NICHE_CREDENTIAL_PREFIXES
+
+_NICHE_ENV_PREFIX: dict[str, str] = {**NICHE_CREDENTIAL_PREFIXES, "ai_creators": "META"}
 
 
 def _load_targets(config_path: Optional[Path] = None) -> dict:
@@ -90,8 +86,11 @@ class MonetisationTracker:
             from genlab_core.http.graph_proxy import GraphTableProxy
 
             site_id = os.environ.get("SHAREPOINT_SITE_ID", "").strip()
+            graph = getattr(self._client, "_graph", None) or getattr(self._client, "_graph_client", None)
+            if graph is None:
+                raise RuntimeError("BacklogClient has no _graph or _graph_client attribute")
             self._proxy = GraphTableProxy(
-                self._client._graph_client,
+                graph,
                 site_id,
                 self._sp_list_id,
                 "GenLab_MonetisationProgress",

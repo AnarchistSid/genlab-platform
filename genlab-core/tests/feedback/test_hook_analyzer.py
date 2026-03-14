@@ -51,7 +51,7 @@ class TestGetHookTrainingData:
                     "HookType": "reaction",
                     "HookLength": 6,
                     "Platform": "instagram",
-                    "NicheId": "ai_news",
+                    "NicheId": "ai_creators",
                     "PostContentType": "reel",
                     "Reward48h": 0.78,
                     "ReelsSkipRate": 0.23,

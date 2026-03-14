@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from genlab_core.platforms.models import PublishPayload, ThreadsSpecific
+from genlab_core.platforms.models import PublishPayload
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ def _make_payload(
         media_type=media_type,
         hashtags=hashtags or [],
         hook="",
-        niche_id="ai_news",
+        niche_id="ai_creators",
     )
 
 

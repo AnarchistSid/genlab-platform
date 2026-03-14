@@ -10,7 +10,7 @@ from genlab_core.media.sandbox_runner import (
 )
 from genlab_core.media.egress_policies import get_egress_allow
 from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_audio
-from genlab_core.media.whisper_timing import align_words, transcribe_words
+from genlab_core.media.whisper_timing import align_words, get_model, transcribe_words
 
 __all__ = [
     "VideoCompositor",
@@ -23,5 +23,6 @@ __all__ = [
     "extract_audio_track",
     "has_meaningful_audio",
     "align_words",
+    "get_model",
     "transcribe_words",
 ]

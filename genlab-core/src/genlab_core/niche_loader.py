@@ -31,7 +31,7 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
       2. {project_root}/niches/{niche_id}/config/niche.yaml — CriticalRush nested
 
     Args:
-        niche_id: The niche identifier (e.g. "gaming", "ai_news").
+        niche_id: The niche identifier (e.g. "gaming", "ai_creators").
         project_root: Absolute path to the calling agent's project root.
 
     Returns:

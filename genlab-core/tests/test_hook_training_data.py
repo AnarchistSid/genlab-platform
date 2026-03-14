@@ -5,7 +5,6 @@ and the tiny-dataset fallback behavior.
 """
 from __future__ import annotations
 
-import pytest
 
 from genlab_core.learning.hook_training_data import (
     HookExample,
@@ -19,7 +18,7 @@ def _make_examples(rewards: list[float]) -> list[HookExample]:
         HookExample(
             hook_text=f"Hook text {i}",
             platform="instagram",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             reward_48h=r,
         )
         for i, r in enumerate(rewards)

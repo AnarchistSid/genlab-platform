@@ -1,9 +1,7 @@
 """Tests for YouTubeClient — mocks all HTTP and Google API calls."""
 from __future__ import annotations
 
-import time
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -38,7 +36,7 @@ def video_payload(tmp_path):
         media_type="video",
         hashtags=["#AI", "#Shorts"],
         hook="Amazing hook",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=YouTubeSpecific(
             shorts_title="Test Short #Shorts",
             category_id="28",
@@ -56,7 +54,7 @@ def no_media_payload():
         media_type="text",
         hashtags=[],
         hook="",
-        niche_id="ai_news",
+        niche_id="ai_creators",
     )
 
 
@@ -181,7 +179,7 @@ class TestPublish:
             media_type="video",
             hashtags=["#AI"],
             hook="Incredible AI breakthrough",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             # No platform_specific — should fall back to hook
         )
 
@@ -222,7 +220,7 @@ class TestPublish:
             media_type="video",
             hashtags=[],
             hook="Short hook",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform_specific=YouTubeSpecific(shorts_title=long_title),
         )
 

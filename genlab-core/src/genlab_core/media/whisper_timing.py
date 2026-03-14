@@ -32,12 +32,21 @@ except ImportError:
 _model_cache: dict[str, object] = {}
 
 
-def _get_model(
+def get_model(
     model_size: str = "base",
     device: str = "auto",
     compute_type: str = "default",
 ) -> WhisperModel:
-    """Return a lazily-loaded WhisperModel singleton, keyed by model_size."""
+    """Return a lazily-loaded WhisperModel singleton, keyed by model_size.
+
+    Raises:
+        ImportError: If faster-whisper is not installed.
+    """
+    if not _FASTER_WHISPER_AVAILABLE:
+        raise ImportError(
+            "faster-whisper is required but not installed. "
+            "Install with: pip install 'genlab-core[whisper]'"
+        )
     key = f"{model_size}:{device}:{compute_type}"
     if key not in _model_cache:
         logger.info(
@@ -88,7 +97,7 @@ def transcribe_words(
     audio_path = Path(audio_path)
 
     try:
-        model = _get_model(model_size)
+        model = get_model(model_size)
         segments, _info = model.transcribe(str(audio_path), word_timestamps=True)
 
         words: list[dict] = []

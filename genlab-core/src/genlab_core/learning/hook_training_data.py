@@ -10,7 +10,7 @@ examples above it are "high quality" (label=1), below are label=0.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np

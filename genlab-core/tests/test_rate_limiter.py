@@ -3,7 +3,6 @@
 import asyncio
 import threading
 import time
-from pathlib import Path
 
 import pytest
 
@@ -160,7 +159,7 @@ class TestRateLimiterRegistry:
 
 # --- Domain limiter (migrated from Content Scraper) -------------------------
 
-from genlab_core.ratelimit.domain_limiter import RateLimiter, get_limiter
+from genlab_core.ratelimit.domain_limiter import RateLimiter
 
 
 class TestDomainLimiterBasic:

@@ -1,5 +1,4 @@
 """Property-based tests for DedupEngine and jaccard_similarity."""
-import pytest
 from hypothesis import given, assume, settings
 from hypothesis import strategies as st
 

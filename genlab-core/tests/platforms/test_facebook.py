@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,7 +36,7 @@ def video_payload(tmp_path):
         media_type="video",
         hashtags=["#AI", "#Tech"],
         hook="Breaking news!",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=FacebookSpecific(),
     )
 
@@ -50,7 +49,7 @@ def text_payload():
         media_type="link",
         hashtags=["#AI"],
         hook="",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=FacebookSpecific(),
     )
 

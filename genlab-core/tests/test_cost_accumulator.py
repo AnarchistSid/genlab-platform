@@ -6,7 +6,6 @@ import pytest
 
 from genlab_core.intelligence.cost_accumulator import (
     CostAccumulator,
-    CostEntry,
     MODEL_COSTS,
     get_accumulator,
     reset_accumulator,

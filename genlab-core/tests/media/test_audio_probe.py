@@ -8,7 +8,6 @@ FFmpeg/ffprobe execution required.
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.media.audio_probe import (
     extract_audio_track,

@@ -5,11 +5,9 @@ pipeline and the make_content_id utility.
 """
 import hashlib
 
-import pytest
 
 from genlab_core.intelligence.dedup_engine import (
     DedupEngine,
-    DedupResult,
     jaccard_similarity,
     make_content_id,
 )

@@ -52,7 +52,7 @@ def _make_payload(
         media_type=media_type,
         hashtags=["#test"],
         hook="hook text",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=TwitterSpecific(
             routing=routing,
             tweet_text=tweet_text,

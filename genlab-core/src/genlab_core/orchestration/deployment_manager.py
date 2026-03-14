@@ -12,7 +12,6 @@ from __future__ import annotations
 import importlib
 import logging
 import os
-import sys
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +19,17 @@ logger = logging.getLogger(__name__)
 # Each entry: (module_path, flow_function_name, deployment_configs)
 _FLOW_REGISTRY: list[tuple[str, str, list[dict]]] = [
     (
-        "niches.ai_news.flows.ai_news_flow",
-        "ai_news_pipeline",
+        "niches.ai_creators.flows.ai_creators_flow",
+        "ai_creators_pipeline",
         [
             {
-                "name": "ai-news-scheduled",
+                "name": "ai-creators-scheduled",
                 "cron": "0 6 * * *",  # 6 AM UTC daily
-                "tags": ["ai_news", "scheduled"],
+                "tags": ["ai_creators", "scheduled"],
             },
             {
-                "name": "ai-news-manual",
-                "tags": ["ai_news", "manual"],
+                "name": "ai-creators-manual",
+                "tags": ["ai_creators", "manual"],
             },
         ],
     ),

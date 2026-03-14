@@ -115,7 +115,7 @@ def _poll_once(
                     pass
 
             # Determine niche_id
-            niche_id = "gaming" if "gaming" in flow_name else "ai_news"
+            niche_id = "gaming" if "gaming" in flow_name else "ai_creators"
 
             progress = {
                 "niche_id": niche_id,
@@ -133,7 +133,7 @@ def _poll_once(
 
         elif state_type in ("COMPLETED", "FAILED") and run_id in previously_running:
             # Transition: was running, now done
-            niche_id = "gaming" if "gaming" in flow_name else "ai_news"
+            niche_id = "gaming" if "gaming" in flow_name else "ai_creators"
 
             started = run.get("start_time")
             finished = run.get("end_time")

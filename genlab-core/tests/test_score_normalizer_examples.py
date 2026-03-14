@@ -3,7 +3,6 @@
 These tests use concrete, hand-computed values to serve as documentation and
 regression anchors for the scoring math infrastructure.
 """
-import math
 
 import pytest
 

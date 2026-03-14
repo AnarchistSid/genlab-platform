@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -321,7 +320,7 @@ class InstagramClient:
         """
         status_url = f"{self._base_url}/{creation_id}"
         status_params = {
-            "fields": "status_code",
+            "fields": "status_code,status",
             "access_token": self._access_token,
         }
         poll_start = time.time()
@@ -354,8 +353,11 @@ class InstagramClient:
                     return True  # Already live, skip media_publish
 
                 if status_code == "ERROR":
+                    # status field contains human-readable error detail
+                    error_detail = data.get("status", "")
                     logger.error(
-                        "Reel container processing error: %s", data
+                        "Reel container processing error: %s (detail: %s)",
+                        data, error_detail,
                     )
                     return None
 

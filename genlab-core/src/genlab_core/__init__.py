@@ -23,7 +23,7 @@ _SUBMODULES = [
     "models",
     "niche_loader",
     "orchestration",
-    "platform",
+    "platforms",
     "publishing",
     "ratelimit",
     "rendering",

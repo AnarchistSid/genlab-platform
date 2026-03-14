@@ -132,13 +132,13 @@ class TestTransferMatrix:
         assert "gaming" in TRANSFER_MATRIX["sports"]
         assert TRANSFER_MATRIX["sports"]["gaming"] == 0.45
 
-        # Movies pulls from ai_news
-        assert "ai_news" in TRANSFER_MATRIX["movies"]
-        assert TRANSFER_MATRIX["movies"]["ai_news"] == 0.35
+        # Movies pulls from ai_creators
+        assert "ai_creators" in TRANSFER_MATRIX["movies"]
+        assert TRANSFER_MATRIX["movies"]["ai_creators"] == 0.35
 
-        # Anime pulls from ai_news
-        assert "ai_news" in TRANSFER_MATRIX["anime"]
-        assert TRANSFER_MATRIX["anime"]["ai_news"] == 0.30
+        # Anime pulls from ai_creators
+        assert "ai_creators" in TRANSFER_MATRIX["anime"]
+        assert TRANSFER_MATRIX["anime"]["ai_creators"] == 0.30
 
 
 # ---------------------------------------------------------------------------

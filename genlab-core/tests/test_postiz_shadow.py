@@ -1,8 +1,7 @@
 """Tests for PostizClient and ShadowPublisher."""
 import os
 from unittest.mock import MagicMock, patch
-import pytest
-from genlab_core.platform.postiz_client import (
+from genlab_core.platforms.postiz import (
     PostizClient, PublishResult, ShadowPublisher,
 )
 

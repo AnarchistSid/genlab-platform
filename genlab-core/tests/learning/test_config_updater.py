@@ -1,11 +1,8 @@
 """Tests for genlab_core.learning.config_updater."""
 
 import yaml
-import pytest
 
 from genlab_core.learning.config_updater import (
-    CHANGE_THRESHOLD,
-    MIN_DATA_POINTS,
     ConfigUpdater,
 )
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask

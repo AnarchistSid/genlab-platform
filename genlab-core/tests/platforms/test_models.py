@@ -1,7 +1,6 @@
 """Tests for platform data models."""
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 
@@ -14,7 +13,7 @@ def test_publish_payload_creation():
         media_type="video",
         hashtags=["#test"],
         hook="Breaking news",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=YouTubeSpecific(shorts_title="Test Short"),
     )
     assert payload.caption == "Test caption"

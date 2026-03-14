@@ -34,7 +34,6 @@ import os
 import shlex
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

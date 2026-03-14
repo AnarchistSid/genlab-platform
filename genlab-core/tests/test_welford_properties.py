@@ -1,6 +1,5 @@
 """Property-based tests for WelfordNormalizer and temporal_decay."""
-import pytest
-from hypothesis import given, settings, assume
+from hypothesis import given, assume
 from hypothesis import strategies as st
 
 from genlab_core.intelligence.score_normalizer import WelfordNormalizer, temporal_decay

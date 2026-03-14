@@ -1,7 +1,5 @@
 """Tests for genlab_core.monitoring.monetisation_tracker — daily metric collector."""
 
-import os
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -98,12 +96,12 @@ class TestTrackerDryRun:
         with patch.object(tracker, "_collect_youtube", return_value={"status": "no_credentials", "metrics": {}}), \
              patch.object(tracker, "_collect_facebook", return_value={"status": "no_credentials", "metrics": {}}), \
              patch.object(tracker, "_collect_instagram", return_value={"status": "no_credentials", "metrics": {}}):
-            results = tracker.run(dry_run=True, niche_filter="ai_news")
+            results = tracker.run(dry_run=True, niche_filter="ai_creators")
 
-        assert "ai_news" in results
-        assert "youtube" in results["ai_news"]
-        assert "facebook" in results["ai_news"]
-        assert "instagram" in results["ai_news"]
+        assert "ai_creators" in results
+        assert "youtube" in results["ai_creators"]
+        assert "facebook" in results["ai_creators"]
+        assert "instagram" in results["ai_creators"]
 
     def test_run_iterates_all_niches(self, mock_client, targets_yaml):
         """Without niche_filter, run should iterate all 5 niches."""
@@ -115,7 +113,7 @@ class TestTrackerDryRun:
             results = tracker.run(dry_run=True)
 
         assert len(results) == 5
-        assert set(results.keys()) == {"ai_news", "gaming", "sports", "movies", "anime"}
+        assert set(results.keys()) == {"ai_creators", "gaming", "sports", "movies", "anime"}
 
 
 class TestUpsertProgress:
@@ -125,7 +123,7 @@ class TestUpsertProgress:
 
         # Should log without writing to SP (dry_run=True)
         tracker._upsert_progress(
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform="youtube",
             metric_name="subscribers",
             current_value=500,
@@ -144,7 +142,7 @@ class TestUpsertProgress:
         tracker._proxy = mock_proxy
 
         tracker._upsert_progress(
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform="youtube",
             metric_name="subscribers",
             current_value=1200,

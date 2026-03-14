@@ -1,7 +1,6 @@
 """Tests for genlab_core.intelligence.dedup_engine."""
 import hashlib
 
-import pytest
 
 from genlab_core.intelligence.dedup_engine import (
     DedupEngine,

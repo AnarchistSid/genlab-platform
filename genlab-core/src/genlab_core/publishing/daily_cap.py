@@ -18,7 +18,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CAPS: dict[str, int] = {
-    p: 2 for p in
+    p: 1 for p in
     ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
 }
 
@@ -40,11 +40,11 @@ def _load_caps(config_path: Optional[Path] = None) -> dict[str, int]:
         return {k.lower(): int(v) for k, v in caps.items()}
     except FileNotFoundError:
         logger.warning(
-            "platform_caps.yaml not found at %s. Using default cap of 2.", config_path
+            "platform_caps.yaml not found at %s. Using default cap of 1.", config_path
         )
         return dict(_DEFAULT_CAPS)
     except Exception as e:
-        logger.error("Error loading platform caps: %s. Using default cap of 2.", e)
+        logger.error("Error loading platform caps: %s. Using default cap of 1.", e)
         return dict(_DEFAULT_CAPS)
 
 
@@ -119,7 +119,7 @@ class DailyCapEnforcer:
     def get_remaining(self, platform: str) -> int:
         """Return how many posts can still go out today for this platform."""
         platform = platform.lower()
-        cap = self._caps.get(platform, 2)
+        cap = self._caps.get(platform, 1)
         return max(0, cap - self._get_counts().get(platform, 0))
 
     def log_headroom(self) -> None:

@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 TRANSFER_MATRIX: dict[str, dict[str, float]] = {
     "sports": {"gaming": 0.45},
-    "movies": {"ai_news": 0.35},
-    "anime": {"ai_news": 0.30},
+    "movies": {"ai_creators": 0.35},
+    "anime": {"ai_creators": 0.30},
 }
 
 EXPLORATION_INFLATION = 0.5

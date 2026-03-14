@@ -11,7 +11,6 @@ Model is persisted as JSON at:
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -63,7 +62,7 @@ class HookClassifier:
     scores (0.5) when xgboost is unavailable or no model is loaded.
 
     Args:
-        niche_id: Niche identifier (e.g. "ai_news", "gaming").
+        niche_id: Niche identifier (e.g. "ai_creators", "gaming").
             Determines which model file to load.
         models_dir: Override for model directory. Defaults to
             genlab-core/models/.
@@ -71,7 +70,7 @@ class HookClassifier:
 
     def __init__(
         self,
-        niche_id: str = "ai_news",
+        niche_id: str = "ai_creators",
         models_dir: Path | None = None,
     ) -> None:
         self.niche_id = niche_id
@@ -162,7 +161,7 @@ class HookClassifier:
 def train_and_save(
     examples: list[Any],
     labels: list[int],
-    niche_id: str = "ai_news",
+    niche_id: str = "ai_creators",
     models_dir: Path | None = None,
 ) -> bool:
     """Train an XGBoost classifier on hook examples and save to disk.

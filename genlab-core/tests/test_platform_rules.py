@@ -1,7 +1,6 @@
-"""Tests for genlab_core.platform.platform_rules."""
-import pytest
+"""Tests for genlab_core.platforms.rules."""
 
-from genlab_core.platform.platform_rules import (
+from genlab_core.platforms.rules import (
     AdaptedContent,
     enforce_platform_rules,
 )
@@ -238,6 +237,74 @@ class TestFacebookRules:
             caption=long_caption,
         )
         assert "What do you think" not in result.caption
+
+    def test_url_stripped_from_caption(self):
+        """D1: Facebook captions must not contain URLs (spam trigger)."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="Check this out https://example.com/story for more details about the AI breakthrough",
+        )
+        assert "https://example.com" not in result.caption
+        assert "Check this out" in result.caption
+        assert any("URL stripped" in w for w in result.warnings)
+
+    def test_competitor_hashtags_removed_from_caption(self):
+        """D1: Competitor platform mentions removed from FB caption."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="Amazing AI news #tiktok #youtube #instagram and more",
+        )
+        assert "#tiktok" not in result.caption.lower()
+        assert "#youtube" not in result.caption.lower()
+        assert "#instagram" not in result.caption.lower()
+        assert any("Competitor" in w for w in result.warnings)
+
+    def test_competitor_hashtags_removed_from_hashtags_list(self):
+        """D1: Competitor hashtags also filtered from the hashtags list."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="Some content about AI",
+            hashtags=["#AI", "#Tech", "#tiktok", "#twitter", "#News"],
+        )
+        for h in result.hashtags:
+            assert h.lower() not in ("#tiktok", "#twitter")
+        assert "#AI" in result.hashtags
+
+    def test_hashtags_capped_at_5(self):
+        """D1: Facebook hashtags capped at 5 (more triggers spam detection)."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="Content here",
+            hashtags=["#AI", "#Tech", "#News", "#ML", "#Data", "#Python", "#Code", "#Dev"],
+        )
+        assert len(result.hashtags) <= 5
+        assert any("capped" in w.lower() for w in result.warnings)
+
+    def test_5_or_fewer_hashtags_no_cap_warning(self):
+        """No cap warning when hashtags are already <= 5."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="Content here",
+            hashtags=["#AI", "#Tech", "#News"],
+        )
+        assert not any("capped" in w.lower() for w in result.warnings)
+
+    def test_url_and_competitor_and_engagement_combined(self):
+        """D1: All three rules apply together — URL stripped, competitor removed, engagement Q."""
+        result = enforce_platform_rules(
+            platform="facebook",
+            title="Test",
+            caption="See https://link.com #tiktok cool",
+        )
+        assert "https://" not in result.caption
+        assert "#tiktok" not in result.caption.lower()
+        # Short caption + engagement question
+        assert "What do you think" in result.caption
 
 
 # ---------------------------------------------------------------------------

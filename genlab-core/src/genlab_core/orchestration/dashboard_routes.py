@@ -15,8 +15,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -48,8 +47,8 @@ def _extract_niche_id(flow_name: str, parameters: dict) -> str:
     """Extract niche_id from flow name or parameters."""
     if "gaming" in flow_name:
         return "gaming"
-    if "ai_news" in flow_name or "ai-news" in flow_name:
-        return "ai_news"
+    if "ai_creators" in flow_name or "ai-creators" in flow_name:
+        return "ai_creators"
     return parameters.get("niche_id", "unknown")
 
 
@@ -125,7 +124,7 @@ def health():
 def pipeline_status():
     """Get current pipeline status per niche.
 
-    Returns the most recent run per flow (gaming-pipeline, ai-news-pipeline)
+    Returns the most recent run per flow (gaming-pipeline, ai-creators-pipeline)
     to determine if each niche is running/idle/error.
     """
     client = _get_client()
@@ -244,7 +243,7 @@ def trigger_run():
 
     deployment_map = {
         "gaming": "gaming-pipeline/gaming-manual",
-        "ai_news": "ai-news-pipeline/ai-news-manual",
+        "ai_creators": "ai-creators-pipeline/ai-creators-manual",
     }
 
     targets = (

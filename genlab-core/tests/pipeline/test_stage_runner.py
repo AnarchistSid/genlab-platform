@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -308,7 +308,6 @@ class TestRunParallel:
     def test_parallel_runs_concurrently(self):
         """Stages in a batch should execute on threads (via pool)."""
         import threading
-        import time as _t
 
         # Use a barrier to prove true concurrency — both must reach it
         # before either can proceed.

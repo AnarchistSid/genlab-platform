@@ -389,7 +389,7 @@ rm "/Users/anarchistsid/GenLab/Content Scraper/runbooks/review_server_wrapper.sh
 
 **Step 2: Verify Content Scraper daily pipeline still works**
 
-The daily pipeline scripts (fetch_ai_news.py, etc.) should NOT import from execution/api/ or review_server. Verify:
+The daily pipeline scripts (fetch_ai_creators.py, etc.) should NOT import from execution/api/ or review_server. Verify:
 
 ```bash
 grep -rn "from execution.api\|from execution.review_server\|import execution.api\|import execution.review_server" "/Users/anarchistsid/GenLab/Content Scraper/execution/"*.py 2>/dev/null | grep -v __pycache__

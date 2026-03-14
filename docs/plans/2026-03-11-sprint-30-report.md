@@ -67,7 +67,7 @@ Blockers per niche:
 - Zero platform credentials configured
 - Null account IDs across all platforms
 - Incomplete `publishing.yaml` (missing platform sections)
-- No per-niche credential switching in publisher (hardcoded `ai_news`)
+- No per-niche credential switching in publisher (hardcoded `ai_creators`)
 - FrameDrift `niche_id` still says `anime` in some configs
 
 ## Track D: Postiz Fly.io

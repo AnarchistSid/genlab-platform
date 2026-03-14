@@ -171,13 +171,32 @@ class PendingFeedbackStore:
         bandit_ctx_raw = fields.get("BanditContext", "")
         bandit_ctx = json.loads(bandit_ctx_raw) if bandit_ctx_raw else None
 
+        status = fields.get("Status", "awaiting_6h")
+
+        # Derive completed_windows from Status since they aren't persisted.
+        # A task at awaiting_24h has already completed 6h, etc.
+        _STATUS_TO_COMPLETED: dict[str, list[CollectionWindow]] = {
+            "awaiting_6h": [],
+            "awaiting_24h": ["6h"],
+            "awaiting_48h": ["6h", "24h"],
+            "awaiting_168h": ["6h", "24h", "48h"],
+            "complete": ["6h", "24h", "48h", "168h"],
+        }
+        completed = _STATUS_TO_COMPLETED.get(status, [])
+
+        raw_pub = fields.get("PublishedAt")
+        if isinstance(raw_pub, datetime):
+            published_at = raw_pub if raw_pub.tzinfo else raw_pub.replace(tzinfo=timezone.utc)
+        elif isinstance(raw_pub, str) and raw_pub.strip():
+            published_at = datetime.fromisoformat(raw_pub.replace("Z", "+00:00"))
+        else:
+            published_at = datetime.now(timezone.utc)
+
         return PendingFeedbackTask(
             content_id=fields.get("PostID", ""),
             platform=fields.get("Platform", ""),
             niche_id=fields.get("NicheId", "gaming"),
-            published_at=datetime.fromisoformat(
-                fields.get("PublishedAt", datetime.now(timezone.utc).isoformat())
-            ),
+            published_at=published_at,
             platform_post_id=fields.get("PostID", ""),
             content_type=fields.get("PostContentType", "unknown"),
             hook_type=fields.get("HookType", ""),
@@ -186,6 +205,7 @@ class PendingFeedbackStore:
             sharepoint_id=item.get("id"),
             bandit_arm=fields.get("BanditArm") or None,
             bandit_context=bandit_ctx,
-            collection_status=fields.get("Status", "awaiting_6h"),
+            collection_status=status,
+            completed_windows=list(completed),
             early_stop=bool(fields.get("EarlyStop", False)),
         )

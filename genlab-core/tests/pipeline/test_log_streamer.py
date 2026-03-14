@@ -6,7 +6,6 @@ import json
 import logging
 from pathlib import Path
 
-import pytest
 
 from genlab_core.pipeline.log_streamer import (
     PipelineLogHandler,

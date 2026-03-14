@@ -8,7 +8,6 @@ import pytest
 
 from genlab_core.analytics.youtube_analytics_client import (
     YouTubeAnalyticsClient,
-    YouTubeAnalyticsMetrics,
 )
 
 

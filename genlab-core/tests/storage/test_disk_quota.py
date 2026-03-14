@@ -10,11 +10,6 @@ import pytest
 
 from genlab_core.storage.disk_quota import (
     DiskQuotaManager,
-    QuotaStatus,
-    RunRecord,
-    _dir_size,
-    _extract_score,
-    _is_published,
 )
 
 # ── Helpers ──────────────────────────────────────────────────

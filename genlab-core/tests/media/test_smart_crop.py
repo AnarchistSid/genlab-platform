@@ -4,9 +4,8 @@ Unit tests run without OpenCV or FFmpeg (mock-based).
 Integration tests require both and are marked with pytest.mark.integration.
 """
 
-import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

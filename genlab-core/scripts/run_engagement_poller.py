@@ -138,7 +138,7 @@ async def _poll_loop_twitter(niche_id: str, user_id: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Engagement comment poller")
-    parser.add_argument("--niche", required=True, help="Niche ID (e.g., gaming, ai_news)")
+    parser.add_argument("--niche", required=True, help="Niche ID (e.g., gaming, ai_creators)")
     parser.add_argument("--platform", required=True, choices=["youtube", "twitter"],
                        help="Platform to poll")
     parser.add_argument("--channel-id", default="", help="YouTube channel ID (required for youtube)")

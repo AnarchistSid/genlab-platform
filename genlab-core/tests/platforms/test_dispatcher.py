@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.platforms.models import PublishPayload, PublishResult
 
@@ -17,7 +16,7 @@ def _make_payload(platform: str) -> PublishPayload:
         media_type="video",
         hashtags=[],
         hook="",
-        niche_id="ai_news",
+        niche_id="ai_creators",
     )
 
 

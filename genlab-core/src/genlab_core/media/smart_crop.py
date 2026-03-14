@@ -27,12 +27,11 @@ Integration with VideoCompositor::
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 import tempfile
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from pydantic import BaseModel
 

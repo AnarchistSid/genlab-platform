@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # Map niche_id to SharePoint list display name
 BANDIT_LIST_NAMES = {
     "gaming": "CriticalRush_BanditArms",
-    "ai_news": "BlackboxBrief_BanditArms",
+    "ai_creators": "BlackboxBrief_BanditArms",
     "sports": "ClutchWire_BanditArms",
     "movies": "SpliceReel_BanditArms",
     "anime": "FrameDrift_BanditArms",

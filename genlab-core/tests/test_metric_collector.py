@@ -8,10 +8,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.learning.metric_collector import (
-    BanditUpdater,
     _fetch_facebook,
     _fetch_instagram_reels_6h,
     _fetch_threads,

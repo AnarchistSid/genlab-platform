@@ -15,6 +15,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from genlab_core.ratelimit.token_bucket import TokenBucket
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +72,8 @@ class YouTubeAnalyticsClient:
     def __init__(self, analytics_service: Any, channel_id: str) -> None:
         self._service = analytics_service
         self._channel_id = channel_id
+        # Conservative: 1 req/sec burst, ~500/day headroom for Data API quota
+        self._rate_limiter = TokenBucket(rate=1.0, burst=5)
 
     def fetch_video_metrics(
         self,
@@ -96,6 +100,7 @@ class YouTubeAnalyticsClient:
         end_date = now.strftime("%Y-%m-%d")
 
         try:
+            self._rate_limiter.acquire()
             response = (
                 self._service.reports()
                 .query(

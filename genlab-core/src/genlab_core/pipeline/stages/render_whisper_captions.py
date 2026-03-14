@@ -16,6 +16,7 @@ Failure is graceful -- video passes through uncaptioned.
 from __future__ import annotations
 
 import logging
+import random
 import subprocess
 import tempfile
 from pathlib import Path
@@ -50,7 +51,18 @@ class RenderWhisperCaptions:
             logger.info("[WHISPER_CAPTIONS] Whisper sync disabled -- skipping")
             return context
 
-        stats = {"captioned": 0, "wpm_fallback": 0, "skipped": 0, "failed": 0}
+        ab_config = ws_config.get("ab_test", {})
+        ab_enabled = ab_config.get("enabled", False)
+        wpm_control_pct = float(ab_config.get("wpm_control_pct", 0.30))
+
+        stats = {
+            "captioned": 0,
+            "wpm_fallback": 0,
+            "skipped": 0,
+            "failed": 0,
+            "ab_synced": 0,
+            "ab_wpm_control": 0,
+        }
 
         for i, story in enumerate(stories):
             media = story.get("media") or {}
@@ -71,18 +83,32 @@ class RenderWhisperCaptions:
                 stats["skipped"] += 1
                 continue
 
+            # A/B test assignment
+            force_wpm = False
+            if ab_enabled and random.random() < wpm_control_pct:
+                force_wpm = True
+                caption_mode = "wpm_control"
+                stats["ab_wpm_control"] += 1
+            else:
+                caption_mode = "synced" if ab_enabled else "synced_no_ab"
+                if ab_enabled:
+                    stats["ab_synced"] += 1
+
+            # Tag story with caption mode for downstream analytics
+            story.setdefault("metadata", {})["caption_mode"] = caption_mode
+
             result = self._render_captions(
                 video_path=Path(rendered_path),
                 caption_text=caption_text,
                 ws_config=ws_config,
                 item_key=f"story_{i}",
                 config=config,
+                force_wpm=force_wpm,
             )
 
             if result is None:
                 stats["failed"] += 1
             elif result == rendered_path:
-                # WPM fallback was used (no whisper), or unchanged
                 stats["wpm_fallback"] += 1
             else:
                 story["media"]["rendered_path"] = result
@@ -90,11 +116,14 @@ class RenderWhisperCaptions:
 
         context.setdefault("run_stats", {})["whisper_captions"] = stats
         logger.info(
-            "[WHISPER_CAPTIONS] %d synced, %d WPM fallback, %d skipped, %d failed",
+            "[WHISPER_CAPTIONS] %d synced, %d WPM fallback, %d skipped, %d failed"
+            " | A/B: %d synced, %d wpm_control",
             stats["captioned"],
             stats["wpm_fallback"],
             stats["skipped"],
             stats["failed"],
+            stats["ab_synced"],
+            stats["ab_wpm_control"],
         )
         return context
 
@@ -165,6 +194,7 @@ class RenderWhisperCaptions:
         ws_config: dict,
         item_key: str,
         config: dict,
+        force_wpm: bool = False,
     ) -> str | None:
         """Render captions onto video. Returns new path, original path (WPM), or None."""
         # Import WordByWordAnimator -- lives in Content Scraper but may be
@@ -175,7 +205,11 @@ class RenderWhisperCaptions:
             return None
 
         # Get whisper words (may be None -> WPM fallback)
-        whisper_words = self._get_whisper_words(video_path, caption_text, ws_config)
+        if force_wpm:
+            whisper_words = None
+            logger.debug("[WHISPER_CAPTIONS] %s: A/B control — forcing WPM", item_key)
+        else:
+            whisper_words = self._get_whisper_words(video_path, caption_text, ws_config)
 
         # Find font
         font_path = self._find_font(config)

@@ -3,7 +3,7 @@
 
 Usage:
     # Train for a single niche
-    uv run --package genlab-core python genlab-core/scripts/train_hook_classifier.py --niche ai_news
+    uv run --package genlab-core python genlab-core/scripts/train_hook_classifier.py --niche ai_creators
 
     # Train for all niches
     uv run --package genlab-core python genlab-core/scripts/train_hook_classifier.py --all
@@ -26,7 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger("train_hook_classifier")
 
 # All known niches
-ALL_NICHES = ["ai_news", "gaming", "sports", "movies", "anime"]
+ALL_NICHES = ["ai_creators", "gaming", "sports", "movies", "anime"]
 
 
 def train_niche(niche_id: str) -> bool:
@@ -81,7 +81,7 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--niche",
-        help="Train for a single niche (e.g. ai_news, gaming)",
+        help="Train for a single niche (e.g. ai_creators, gaming)",
     )
     group.add_argument(
         "--all",

@@ -18,7 +18,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 
