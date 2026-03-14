@@ -30,6 +30,27 @@ SUSPICIOUS_PATTERNS = [
 
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in SUSPICIOUS_PATTERNS]
 
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
+
+
+def strip_html_tags(text: str) -> str:
+    """Remove HTML tags from text, preserving inner content.
+
+    Handles <cite>, <b>, <i>, <a>, and any other HTML tags that leak
+    from RSS feeds into caption/hook fields.
+
+    Args:
+        text: Text that may contain HTML tags.
+
+    Returns:
+        Text with all HTML tags removed and whitespace collapsed.
+    """
+    if not text or '<' not in text:
+        return text or ""
+    clean = _HTML_TAG_RE.sub('', text)
+    clean = re.sub(r'\s+', ' ', clean).strip()
+    return clean
+
 
 def sanitize_text(text: str, max_length: int = 10000) -> str:
     """Clean text: truncate, normalize whitespace, remove control chars.
@@ -44,6 +65,7 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
     if not text:
         return ""
 
+    text = strip_html_tags(text)
     text = text[:max_length]
     text = re.sub(r'\s+', ' ', text)
     text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\r\t')

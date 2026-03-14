@@ -18,6 +18,9 @@ from typing import Any, Dict, Optional
 # Characters above U+FFFF (non-BMP): emoji, obscure CJK extensions, etc.
 _NON_BMP_RE = re.compile(r"[\U00010000-\U0010FFFF]")
 
+# HTML tags leaked from RSS feeds (e.g. <cite>, <b>, <a href=...>)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
 # Curly / smart quotes and apostrophes that Graph rejects
 _SMART_QUOTES: Dict[str, str] = {
     "\u2018": "'",   # LEFT SINGLE QUOTATION MARK
@@ -40,6 +43,10 @@ def sanitize_for_graph_api(text: Optional[str]) -> Optional[str]:
         return None
     if not isinstance(text, str):
         return text  # type: ignore[return-value]
+
+    # Strip HTML tags leaked from RSS feeds (e.g. <cite>Title</cite>)
+    if '<' in text:
+        text = _HTML_TAG_RE.sub('', text)
 
     # Replace smart quotes first (before BMP strip collapses context)
     for char, replacement in _SMART_QUOTES.items():
