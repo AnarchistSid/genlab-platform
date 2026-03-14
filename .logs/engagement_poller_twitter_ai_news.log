@@ -458,3 +458,107 @@ Unauthorized
 Unauthorized
 2026-03-13 18:00:16,853 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
 Unauthorized
+2026-03-13 18:15:17,298 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 18:30:17,846 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 18:45:18,387 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 19:00:18,907 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 19:15:20,079 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 19:30:21,297 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 19:45:22,497 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 20:00:22,974 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 20:15:23,344 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 20:30:23,766 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 20:45:24,205 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 21:00:24,591 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 21:15:25,005 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 21:30:25,543 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 21:45:26,105 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 22:00:26,845 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 22:15:27,278 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 22:30:27,820 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 22:45:28,332 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 23:00:28,847 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 23:15:29,310 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 23:30:29,794 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-13 23:45:30,283 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 00:00:30,809 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 00:15:31,266 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 00:30:31,726 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 00:45:32,207 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 01:00:32,745 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 01:15:33,285 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 01:30:51,430 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: HTTPSConnectionPool(host='api.twitter.com', port=443): Read timed out. (read timeout=None)
+2026-03-14 01:45:51,797 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 02:00:52,196 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 02:15:52,706 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 02:30:53,101 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 02:45:53,444 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 03:00:53,924 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 03:15:54,277 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 03:30:54,617 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 03:45:55,041 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 04:00:55,555 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 04:15:55,875 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 04:30:56,231 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 04:45:56,653 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 05:00:57,209 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 05:15:57,634 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 05:30:58,086 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 05:45:58,461 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 06:00:58,938 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for ai_news: 401 Unauthorized
+Unauthorized
+2026-03-14 06:12:40,587 engagement.poller INFO Engagement poller starting — mode=OBSERVE niche=ai_creators platform=twitter
+2026-03-14 06:12:40,593 engagement.poller INFO Starting X/Twitter poller for niche=ai_creators user=632788275 interval=900s
+2026-03-14 06:12:40,593 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 06:27:40,600 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 06:42:40,611 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 06:57:40,623 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 07:12:40,632 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 07:27:40,644 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-14 07:42:40,653 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll

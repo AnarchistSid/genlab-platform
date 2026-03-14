@@ -1347,3 +1347,312 @@ NameError: name '_check_gate' is not defined
 2026-03-13 18:03:17,220 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
 2026-03-13 18:08:17,678 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
 2026-03-13 18:08:17,685 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:13:18,223 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:13:18,230 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:18:18,739 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:18:18,745 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:23:19,221 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:23:19,232 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:28:19,738 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:28:19,744 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:33:20,147 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:33:20,153 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:38:20,722 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:38:20,727 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:43:21,352 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:43:21,361 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:48:21,944 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:48:21,950 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:53:22,612 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:53:22,631 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 18:58:23,248 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 18:58:23,256 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:03:25,840 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:03:25,847 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:08:28,453 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:08:28,461 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:13:31,372 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:13:31,380 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:18:34,034 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:18:34,044 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:23:36,847 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:23:36,854 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:28:39,444 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:28:39,451 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:33:41,810 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:33:41,822 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:38:44,256 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:38:44,264 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:43:46,986 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:43:46,992 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:48:47,570 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:48:47,588 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:53:49,824 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:53:49,830 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 19:58:50,353 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 19:58:50,357 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:03:50,828 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:03:50,832 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:08:51,417 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:08:51,420 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:13:52,020 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:13:52,023 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:18:52,875 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:18:52,879 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:23:53,680 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:23:53,685 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:28:54,244 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:28:54,249 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:33:54,946 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:33:54,949 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:38:55,440 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:38:55,467 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:43:55,965 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:43:55,975 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:48:56,479 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:48:56,492 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:53:56,964 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:53:56,969 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 20:58:57,512 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 20:58:57,520 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:03:58,071 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:03:58,078 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:08:58,566 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:08:58,574 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:14:02,564 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:14:02,570 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:19:03,057 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:19:03,066 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:24:03,497 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:24:03,503 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:29:04,045 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:29:04,054 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:34:04,809 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:34:04,814 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:39:05,261 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:39:05,272 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:44:05,723 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:44:05,731 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:49:06,140 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:49:06,146 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:54:06,642 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:54:06,650 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 21:59:08,304 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 21:59:08,333 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:04:08,785 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:04:08,794 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:09:09,231 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:09:09,239 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:14:09,796 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:14:09,805 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:19:10,697 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:19:10,746 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:24:11,186 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:24:11,193 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:29:11,596 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:29:11,604 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:34:12,056 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:34:12,061 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:39:14,190 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:39:14,200 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:44:14,673 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:44:14,685 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:49:15,072 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:49:15,077 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:54:15,590 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:54:15,600 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 22:59:16,023 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 22:59:16,033 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:04:16,478 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:04:16,485 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:09:16,911 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:09:16,920 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:14:17,327 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:14:17,332 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:19:17,794 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:19:17,804 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:24:18,253 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:24:18,262 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:29:18,681 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:29:18,688 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:34:19,256 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:34:19,266 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:39:19,715 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:39:19,722 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:44:20,106 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:44:20,110 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:49:20,508 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:49:20,513 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:54:20,893 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:54:20,901 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-13 23:59:21,306 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-13 23:59:21,314 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:04:21,723 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:04:21,730 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:09:22,150 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:09:22,157 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:14:22,566 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:14:22,573 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:19:22,965 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:19:22,974 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:24:23,396 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:24:23,404 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:29:23,811 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:29:23,817 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:34:34,301 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:34:34,312 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:39:34,823 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:39:34,836 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:44:35,447 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:44:35,460 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:49:36,122 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:49:36,130 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:54:36,523 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:54:36,533 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 00:59:37,102 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 00:59:37,113 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:04:37,531 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:04:37,546 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:09:38,157 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:09:38,164 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:14:38,554 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:14:38,563 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:19:39,183 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:19:39,192 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:24:39,594 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:24:39,599 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:30:05,059 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:30:05,067 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:35:05,498 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:35:05,509 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:40:05,927 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:40:05,941 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:45:06,381 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:45:06,389 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:50:06,850 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:50:06,856 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 01:55:08,178 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 01:55:08,186 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:00:08,601 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:00:08,605 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:05:09,070 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:05:09,077 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:10:09,494 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:10:09,501 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:15:10,020 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:15:10,030 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:20:10,447 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:20:10,462 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:25:10,885 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:25:10,894 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:30:11,328 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:30:11,335 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:35:11,760 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:35:11,763 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:40:12,198 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:40:12,206 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:45:12,625 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:45:12,635 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:50:13,061 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:50:13,072 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 02:55:13,486 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 02:55:13,493 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:00:13,935 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:00:13,945 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:05:14,389 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:05:14,396 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:10:14,813 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:10:14,822 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:15:15,649 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:15:15,659 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:20:16,426 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:20:16,434 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:25:17,225 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:25:17,234 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:30:18,012 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:30:18,020 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:35:18,833 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:35:18,842 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:40:19,727 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:40:19,734 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:45:20,159 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:45:20,167 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:50:20,596 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:50:20,600 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 03:55:21,137 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 03:55:21,143 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:00:21,528 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:00:21,537 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:05:21,951 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:05:21,960 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:10:22,404 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:10:22,413 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:15:22,830 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:15:22,838 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:20:24,233 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:20:24,243 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:25:24,658 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:25:24,666 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:30:25,143 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:30:25,156 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:35:25,552 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:35:25,561 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:40:25,968 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:40:25,977 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:45:26,437 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:45:26,453 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:50:26,849 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:50:26,857 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 04:55:27,272 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 04:55:27,280 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:00:27,693 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:00:27,702 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:05:28,130 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:05:28,139 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:10:28,528 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:10:28,537 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:15:28,969 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:15:28,976 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:20:29,389 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:20:29,396 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:25:29,860 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:25:29,870 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:30:30,287 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:30:30,295 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:35:30,738 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:35:30,754 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:40:31,538 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:40:31,547 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:45:31,931 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:45:31,939 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:50:32,356 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:50:32,361 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 05:55:32,791 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 05:55:32,796 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 06:00:33,220 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 06:00:33,227 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 06:05:33,615 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 06:05:33,621 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 06:10:34,019 genlab_core.engagement.poller INFO [POLLER] YouTube: fetched 1 comments for ai_news
+2026-03-14 06:10:34,024 engagement.poller INFO YouTube: dispatched 1 comments to Dramatiq
+2026-03-14 06:12:40,585 engagement.poller INFO Engagement poller starting — mode=DISPATCH niche=ai_creators platform=youtube
+2026-03-14 06:12:40,592 engagement.poller INFO Starting YouTube poller for niche=ai_creators channel=UC3GCipF_BTgjaxu-iSuBZ-g interval=300s
+2026-03-14 06:12:41,223 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:17:41,762 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:22:42,239 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:27:42,755 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:32:43,166 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:37:43,739 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:42:44,151 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:47:44,586 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:52:44,997 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 06:57:45,670 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:02:46,030 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:07:46,583 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:12:47,103 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:17:47,455 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:22:47,962 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:27:48,496 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:32:48,847 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:37:49,245 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50
+2026-03-14 07:42:49,783 genlab_core.engagement.poller WARNING [POLLER] YouTube poll failed for ai_creators: 403 Client Error: Forbidden for url: https://www.googleapis.com/youtube/v3/commentThreads?allThreadsRelatedToChannelId=UC3GCipF_BTgjaxu-iSuBZ-g&part=snippet&order=time&maxResults=50

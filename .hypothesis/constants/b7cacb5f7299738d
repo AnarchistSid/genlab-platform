@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platforms/facebook.py
+# hypothesis_version: 6.151.9
+
+[200, 300, ',', 'META_ACCESS_TOKEN', 'META_FB_PAGE_ID', 'Unknown error', 'access_token', 'code', 'data', 'description', 'error', 'facebook', 'file_url', 'http://', 'https://', 'id', 'message', 'metric', 'name', 'post_comments', 'post_impressions', 'post_shares', 'post_video_views', 'rb', 'source', 'v21.0', 'value', 'values', 'video', 'video/mp4']

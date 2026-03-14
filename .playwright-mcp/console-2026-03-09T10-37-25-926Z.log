@@ -1,6 +1,0 @@
-[    4670ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.x.com/graphql/vqu78dKcEkW-UAYLw5rriA/useFetchProfileSections_canViewExpandedProfileQuery?variables=%7B%22screenName%22%3A%22Cr1tical_Rush%22%7D:0
-[    5309ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://api.x.com/1.1/graphql/error_log.json:0
-[    5861ms] [ERROR] Not signed in with the identity provider. @ https://x.com/Cr1tical_Rush:0
-[    5861ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with AbortError: signal is aborted without reason @ https://accounts.google.com/gsi/client:81
-[    5861ms] [ERROR] Not signed in with the identity provider. @ https://x.com/Cr1tical_Rush:0
-[   16562ms] [ERROR] [GSI_LOGGER]: FedCM get() rejects with NetworkError: Error retrieving a token. @ https://accounts.google.com/gsi/client:81

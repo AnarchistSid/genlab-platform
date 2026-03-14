@@ -1,0 +1,4 @@
+# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platforms/x_twitter.py
+# hypothesis_version: 6.151.9
+
+[0.0, 3600, '.gif', '.mov', '.mp4', '401', '403', 'Forbidden', 'TooManyRequests', 'Unauthorized', 'X_ACCESS_SECRET', 'X_ACCESS_TOKEN', 'X_API_KEY', 'X_API_SECRET', 'data', 'forbidden', 'id', 'image_indices', 'impression_count', 'impressions', 'in_reply_to_tweet_id', 'like_count', 'media_ids', 'public_metrics', 'reply_count', 'retweet_count', 'retweets', 'single', 'text', 'thread', 'thread_tweet_ids', 'unauthorized', 'unknown', 'username', 'x_twitter']

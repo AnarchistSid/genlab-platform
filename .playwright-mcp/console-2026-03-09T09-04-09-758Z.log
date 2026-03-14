@@ -1,5 +1,0 @@
-[     119ms] [ERROR] ErrorUtils caught an error:
-
-missing switch account (logout) handler for surface: BARCELONA_WEB
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773047049, extra: Object, guardList: Array(1), hash: mpaci4} @ https://static.cdninstagram.com/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76

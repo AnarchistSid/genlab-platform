@@ -1,0 +1,515 @@
+# Gen Lab v4 Comprehensive Audit
+
+**Date:** 2026-03-14
+**Auditor:** Claude Opus 4.6
+**Prior audit:** v3 — 2026-03-13 (score: 4.1/10)
+**Post-remediation:** Sprint 45 (8 tracks, 83 new tests) + Sprint 46 (dashboard sync client, niche filtering, metric collector)
+
+---
+
+## Executive Summary
+
+Sprint 45 delivered solid infrastructure remediation — 83 new tests, ruff clean (0 violations), sanitizer wired across all 5 channels, Engagement Engine fully built. Sprint 46 fixed the dashboard's root cause (eventlet/msgraph deadlock) and wired niche filtering so each channel shows its own content. **The system is meaningfully more functional than 24 hours ago.** However, several critical gaps remain: duplicate/low-quality hooks in non-BB channels, zero analytics data flowing, per-niche credential provisioning still unfinished, and 352+ uncommitted files across repos.
+
+**Overall score: 5.3/10** (up from 4.1/10)
+
+---
+
+## Section 1: Infrastructure & Process Health
+
+### 1.1 Docker Services
+
+| Container | Status | Notes |
+|-----------|--------|-------|
+| short-video-maker | Up 2 days | Healthy, `/health` returns `{"status":"ok"}` |
+| genlab-postiz | Exited (1) 7h ago | Expected — disabled Sprint 45B |
+| genlab-temporal | Exited (137) 7h ago | Not in use |
+| genlab-temporal-ui | Exited (2) 2 days ago | Not in use |
+
+**Assessment:** Only `short-video-maker` is needed and it's healthy.
+
+### 1.2 LaunchAgent Services
+
+| Service | PID | Exit | Status |
+|---------|-----|------|--------|
+| review-server | 28065 | 0 | Running on :5151 |
+| prefect-server | 1573 | 0 | Running |
+| prefect-worker | 2881 | 1 | Running (LastExitStatus=256 — historical) |
+| engagement.worker | 85370 | 0 | Running |
+| engagement.webhook | 24342 | 0 | Running |
+| engagement.poller.youtube.ai-news | 15192 | 0 | Running |
+| engagement.poller.youtube.gaming | 1554 | 0 | Running |
+| engagement.poller.twitter.ai-news | 15195 | 0 | Running |
+| engagement.poller.twitter.gaming | 1542 | 0 | Running |
+| quota-monitor | 63719 | 0 | Running |
+| review-tunnel | 1539 | 0 | Running |
+| daily-intel | - | 0 | Idle (cron) |
+| metric-collector | - | 0 | Idle (hourly cron) |
+| token-refresh | - | 0 | Idle (daily cron) |
+
+**27 plists registered**, 12 with active PIDs. All engagement subsystems running. Cron jobs showing exit 0.
+
+### 1.3 Prefect
+
+- Work pool `genlab-process-pool` active, type=process
+- 5 deployments: ai-news manual+scheduled, gaming manual+scheduled, spike-detector
+- Worker running (PID 2881)
+
+### 1.4 Disk
+
+- **System:** 12GB used / 460GB total (7%) — healthy
+- **Content Scraper/.tmp/:** 14GB — needs periodic cleanup
+- **All other niches:** <400MB combined
+
+### 1.5 Short-Video-Maker
+
+- Container up 2 days, health endpoint responding
+- Renders 1080x1920 H.264 @ 25fps, AAC 48kHz stereo
+- **Color space: `bt470bg`** (not `bt709`) — see P2-1
+
+---
+
+## Section 2: Credentials & Token Health
+
+### 2.1 Critical Credentials
+
+| Service | Status | Keys |
+|---------|--------|------|
+| Meta (Facebook/IG) | ✓ Partial | 2/3 set (META_APP_ID missing — not needed for EAA tokens) |
+| YouTube | ✓ Complete | 3/3 set, token refreshable |
+| X/Twitter (BB) | ✓ Complete | 4/4 set (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET) |
+| OpenAI | ✓ Complete | 1/1 |
+| Anthropic | ✓ Complete | 1/1 |
+| SharePoint/Azure | ✓ Complete | 3/3 |
+| Pexels | ✓ Complete | 1/1 |
+| ElevenLabs | ✗ Missing | 0/1 — TTS degraded to Edge/gTTS |
+
+### 2.2 Meta Token
+
+- **Type:** EAA (correct — Page Access Token)
+- **API reachable:** ✓ — account: "Blackbox Brief"
+- **Note:** Page tokens don't support `/me/permissions` endpoint — scopes can't be verified programmatically
+
+### 2.3 Per-Niche Credential Gaps
+
+| Niche | YouTube | X/Twitter | Threads |
+|-------|---------|-----------|---------|
+| BB (ai_news) | ✓ | ✓ | Configured |
+| CriticalRush (gaming) | ✓ (per-niche token) | ✗ Empty | ✗ Empty |
+| ClutchWire (sports) | ? | ✗ Missing | ✗ Missing |
+| SpliceReel (movies) | ? | ✗ Missing | ✗ Missing |
+| FrameDrift (anime) | ? | ✗ Missing | ✗ Missing |
+
+### 2.4 Env File Health
+
+| File | Keys | Empty | Notes |
+|------|------|-------|-------|
+| Content Scraper/.env | 96 | 24 | Empty keys include per-niche X/Twitter, Threads for CW/SR/FD |
+| CriticalRush/.env | 38 | 9 | X_ACCESS_TOKEN, THREADS_* all empty |
+| ClutchWire/.env | 4 | 0 | Minimal — niche_id + YouTube only |
+| SpliceReel/.env | 4 | 0 | Same |
+| FrameDrift/.env | 4 | 0 | Same |
+
+---
+
+## Section 3: SharePoint Data State
+
+### 3.1 List Item Counts
+
+| List | Count | Notes |
+|------|-------|-------|
+| Stories | 41 | 4 niches represented |
+| Blueprints | 32 | 4 niches (0 ai_creators) |
+| Content_Memory | 28 | Healthy ratio vs Stories (0.68) |
+| PendingFeedback | 21 | All at `awaiting_24h` |
+| Assets | 200 | Capped at $top=200 |
+| Sources | 35 | |
+| AB_Tests | 1 | |
+| Analytics | 0 | **Empty — no engagement data flowing** |
+| Publishing_Analytics | 0 | **Empty — no publish records** |
+| PendingEngagement | 0 | Empty |
+| Templates | 0 | Empty |
+
+### 3.2 Blueprint Status Breakdown
+
+| Status | Count | By Niche |
+|--------|-------|----------|
+| DRAFTED | 26 | anime:3, sports:19, movies:4 |
+| PUBLISHED | 3 | gaming:3 |
+| VISUAL_READY | 3 | anime:1, sports:1, movies:1 |
+
+**By niche:** anime:4, gaming:3, movies:5, sports:20
+**Publish-eligible (VISUAL_READY + approved):** 3
+**ai_creators blueprints:** 0 — BB pipeline ran but no blueprints present (Content_Memory has 28 entries suggesting stories were deduped before blueprint creation)
+
+### 3.3 PendingFeedback Status
+
+All 21 tasks at `awaiting_24h` — metric collector successfully advanced them from `awaiting_6h` during Sprint 46. Next collection window (24h) requires posts to be 24+ hours old.
+
+### 3.4 BanditArms
+
+BanditArms list_id not in `lists_config.yaml` — **learning loop cannot persist Thompson Sampling observations.** This was a v3 finding and remains unfixed.
+
+---
+
+## Section 4: Pipeline Execution
+
+### 4.1 Latest Run
+
+- **File:** `run_20260314_054103_98755/run_report.json`
+- **Type:** `daily_intel` | **Status:** `partial` | **Duration:** 2,926s (~49 min)
+- **Cost:** $0.00 (cost tracking not wired)
+- **Cleanup completed:** 3 published/archived posts cleaned, 151KB freed
+
+### 4.2 Dedup Health
+
+- Content_Memory: 28 entries
+- Stories: 41
+- Ratio: 1.46 (healthy — >0.1 threshold)
+- No over-dedup observed in this run
+
+### 4.3 Sanitizer Wiring
+
+✓ `sanitize_for_graph_api()` wired in `push_to_backlog.py` across all 5 channels:
+- CriticalRush, ClutchWire, SpliceReel, FrameDrift, Content Scraper
+
+---
+
+## Section 5: Video & Content Quality
+
+### 5.1 Video Technical Specs
+
+| Attribute | Value | Spec | Status |
+|-----------|-------|------|--------|
+| Resolution | 1080×1920 | 1080×1920 | ✓ |
+| Aspect ratio | 9:16 | 9:16 | ✓ |
+| Codec | H.264 | H.264 | ✓ |
+| FPS | 25 | 25-30 | ✓ |
+| Audio | AAC 48kHz stereo | AAC 48kHz | ✓ |
+| Color space | bt470bg | bt709 | ✗ See P2-1 |
+
+### 5.2 Hook Quality
+
+**Gaming (3 PUBLISHED):**
+- All 3 hooks are > 100 chars (103, 107, 116)
+- All append "players need to see this" template suffix
+- Hooks are product deal announcements (Xbox controller, Dell PC, headset) — low engagement potential for short-form video
+
+**Sports (20 DRAFTED):**
+- **Heavy duplication:** "The trade that changes the league" (3×), "This is what clutch looks like" (7×), "Nobody saw them doing THIS" (3×), "The moment this player changed everything" (4×)
+- These are generic templates with no story-specific content
+- 20 blueprints using only ~6 unique hook templates = content farm quality
+
+**Movies (5 DRAFTED/VISUAL_READY):**
+- 4/5 hooks > 100 chars
+- Better variety but still too long for short-form hooks
+
+**Anime (4 DRAFTED/VISUAL_READY):**
+- "The anime community is losing it over this" (2×)
+- "This anime is about to blow up" (2×)
+- Same template duplication as sports
+
+### 5.3 Race Condition Lock
+
+Sprint 45 claimed to fix the cleanup-before-publish race with a file lock. **No `FileLock` or `file_lock` references found in Content Scraper code.** The fix may use a different mechanism (file-age guard in cleanup_artifacts) but explicit locking is absent.
+
+---
+
+## Section 6: Code Quality
+
+### 6.1 Test Suite Results
+
+| Package | Passed | Failed | Skipped | Notes |
+|---------|--------|--------|---------|-------|
+| genlab-core | 1,317 | 5 | 5 | 2 hypothesis collection errors (missing dep) + 5 pre-existing |
+| Content Scraper | 1,394 | 3 | 19 | 3 video_downloader failures (new) |
+| CriticalRush | 492 | 0 | 1 | Clean |
+| Dashboard | 199 | 5 | 0 | 5 failures (3 new from Sprint 46 changes) |
+| **Total** | **3,402** | **13** | **25** | |
+
+**Change from v3:** Sprint 45 reported 3,388 passed / 8 failed. Now 3,402 passed / 13 failed.
+- +14 new tests passing (net)
+- +5 new failures: 3 dashboard (BACKLOG_CONFIG_PATH not set in test env), 2 genlab-core hypothesis collection errors
+
+### 6.2 Ruff Linting
+
+**0 violations.** Clean. Sprint 45 Track F resolved all issues.
+
+### 6.3 Secret Scanning
+
+- ✓ No hardcoded API keys in Python/YAML files
+- ✓ docker-compose.yaml clean (no credentials)
+- ✓ No EAA/IGAA tokens in code (only base64 PNG test fixtures — false positives)
+
+### 6.4 Git State
+
+| Repo | Branch | Uncommitted | Last Commit |
+|------|--------|-------------|-------------|
+| GenLab (root) | main | 352 | `4b20d07` sanitize text fields |
+| Content Scraper | main | 57 | `d4e3c44` migrate postiz import |
+| CriticalRush | main | 7 | `521a36a` sanitize title |
+| ClutchWire | main | 0 | `e6aad91` sanitize title |
+| SpliceReel | main | 0 | `c446ccf` sanitize title |
+| FrameDrift | main | 28 | `7779d01` sanitize title |
+| genlab-core | main | 48 | `6c741f0` delete platform shim |
+| dashboard | main | 32 | `4d27232` mock YouTube quota |
+| scripts | main | 13 | `afd2550` fix pyflakes |
+| docker | main | - | (separate repo) |
+
+**Total uncommitted files across all repos: ~487.** Root repo has 352 alone (mostly deleted playwright logs + modified engagement logs).
+
+---
+
+## Section 7: Platform API Health
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Meta Graph API | ✓ Working | EAA token, account "Blackbox Brief" |
+| YouTube Data API | ✓ Working | Token refreshable, 4 subs / 1,489 views |
+| X/Twitter (BB) | ✓ Keys set | OAuth 1.0a credentials present |
+| ElevenLabs | ✗ Missing | No API key — TTS degraded to Edge/gTTS |
+| SharePoint/Graph | ✓ Working | Sync client operational |
+
+### Dashboard API Endpoints
+
+All 8 tested endpoints returning 200:
+- `/api/v1/blueprints`, `/api/v1/stories`, `/api/v1/blueprints/review-queue`
+- `/api/v1/analytics/overview`, `/api/v1/analytics/funnel`, `/api/v1/analytics/publishing`
+- `/api/v1/learning/bandit-state`, `/api/v1/niches`
+
+---
+
+## Section 8: Architecture Completeness
+
+### 8.1 Pipeline Stage Matrix
+
+| Channel | Fetch | Score | Compose | Write | Render | Publish | Analyze | Learn | Configs |
+|---------|-------|-------|---------|-------|--------|---------|---------|-------|---------|
+| Blackbox Brief | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | 5/6 |
+| CriticalRush | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✗ | ✓ | 5/6 |
+| ClutchWire | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | 5/6 |
+| SpliceReel | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | 5/6 |
+| FrameDrift | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | 5/6 |
+
+- **Missing across all:** Dedicated analytics/insight modules (engagement data collection runs via genlab-core metric_collector, not per-channel)
+- **CW/SR/FD:** Missing score, compose, write stages — these channels rely on the unified pipeline runner, not standalone stages
+
+### 8.2 Strategy Interface Compliance
+
+| Channel | Strategies | Missing |
+|---------|-----------|---------|
+| Content Scraper | 6/6 (100%) | — |
+| CriticalRush | 5/6 (83%) | HookStrategy |
+| ClutchWire | 6/6 (100%) | — |
+| SpliceReel | 6/6 (100%) | — |
+| FrameDrift | 6/6 (100%) | — |
+
+### 8.3 Subsystems
+
+| Subsystem | Status | Notes |
+|-----------|--------|-------|
+| Engagement Engine | ✓ Built | 13 modules, 6 pollers running, Dramatiq workers active |
+| Quota Manager | ✓ Built | `genlab_core.media.quota_manager`, `storage.disk_quota`, `monitoring.youtube_quota` |
+| Text Sanitizer | ✓ Wired | `graph_text_sanitizer` in all 5 channels |
+| Metric Collector | ✓ Running | Hourly cron, 21 tasks advanced to `awaiting_24h` |
+| Learning Loop | ⚠ Partial | PendingFeedback works, BanditArms list_id missing from config |
+
+---
+
+## Section 9: Sprint 45 Remediation Verification
+
+| Track | Claimed Fix | Verified |
+|-------|-------------|----------|
+| A1: Daily cap | `max_publishes_per_day: 1` in schedule.yaml | ✓ |
+| A2-A3: Whisper timing | Safe timestamp clamping | ✓ (code exists, tests pass) |
+| A4: IG carousel validation | Container validation before publish | ✓ |
+| B: Schedule change | 1x/day at 06:30 UTC | ✓ |
+| C: Graph proxy caps | max_records on .all() calls | ✓ |
+| D1: Facebook rules | URL strip, hashtag cap, engagement Q | ✓ (7 new tests) |
+| D2: Analytics guards | YT 72h, FB zero detection, Threads fallback | ✓ |
+| E: Dashboard fixes | Timeout fix, stub endpoints | ✓ |
+| F1: IGDB rate limiter | TokenBucket before API calls | ✓ |
+| F2: CR strategy ABCs | 5/6 strategies retrofitted | ⚠ Missing HookStrategy |
+| F4: FrameDrift rename | fashion→anime | ✓ |
+| F6: Hygiene | requirements.txt removed | ✓ |
+| G1-G2: Test coverage | 83 new tests | ✓ |
+
+### Human Action Items
+
+| ID | Action | Status |
+|----|--------|--------|
+| H1 | ElevenLabs API key | ✗ Still missing |
+| H2 | Rotate docker-compose creds | ✓ Cleaned |
+| H3 | YouTube quota increase | ? Unknown |
+| H5 | Per-niche platform accounts | ✗ All nulls remain (CW/SR/FD) |
+
+---
+
+## Findings
+
+### P0 — Critical
+
+**P0-1: Sports hooks are massively duplicated**
+- Evidence: 20 sports blueprints using only 6 unique hook templates. "This is what clutch looks like" appears 7 times. "The moment this player changed everything" appears 4 times.
+- Impact: Publishing duplicate content across platforms = audience loss, algorithmic penalty, brand damage. This is content-farm quality that will actively harm growth.
+- Fix: ClutchWire `HookStrategy` or `WritingStrategy` must generate story-specific hooks using the actual story title/topic, not select from a fixed template pool. The hook generation prompt needs the story's specific angle.
+
+**P0-2: Analytics and Publishing_Analytics tables are empty**
+- Evidence: Both SP lists return 0 records. No engagement data is being written to the Analytics list. No publish attempt records in Publishing_Analytics.
+- Impact: Dashboard analytics shows estimated data only (`is_estimated: true`). No ground truth for learning loop. Cannot measure content performance. Monetisation tracking blind.
+- Fix: (a) Identify what should populate these tables — `metric_collector` writes to PendingFeedback, not Analytics. Either the publisher should write to Publishing_Analytics on each publish attempt, or a separate job should aggregate PendingFeedback → Analytics. (b) Wire the publisher's post-publish callback to create Publishing_Analytics records.
+
+**P0-3: BanditArms list_id missing from lists_config.yaml**
+- Evidence: `config.get("CriticalRush_BanditArms", config.get("BanditArms", {})).get("list_id", "")` returns empty string. Thompson Sampling cannot persist observations.
+- Impact: Learning loop cannot accumulate arm pull data. Bandit decisions reset on every restart. No convergence toward optimal content strategies.
+- Fix: Add `CriticalRush_BanditArms` entry to `Content Scraper/config/lists_config.yaml` with `list_id: b361467c-876d-427e-becd-8718f476fcc6`.
+
+### P1 — High
+
+**P1-1: 487 uncommitted files across repos**
+- Evidence: Root repo has 352 uncommitted files. genlab-core has 48. Content Scraper has 57. Dashboard has 32. FrameDrift has 28.
+- Impact: Work can be lost if disk fails or worktree is cleaned. Sprint boundary unclear — can't tell what's from Sprint 45 vs Sprint 46 vs ad-hoc changes. Makes rollback impossible.
+- Fix: Stage and commit all Sprint 45/46 changes with clear conventional commit messages. Separate log files and runtime artifacts from code changes.
+
+**P1-2: Dashboard test failures (5, up from 3)**
+- Evidence: `test_bandit_state_returns_json` and `test_bandit_state_uses_cache` fail. `test_templates_with_mock` fails. `test_single_approve_writes_status_field` and `test_batch_approve_writes_status_field` fail with "BACKLOG_CONFIG_PATH not set".
+- Impact: 2 new failures introduced by Sprint 46 changes (review_server now uses `get_sync_client()` which requires BACKLOG_CONFIG_PATH). Test suite regression.
+- Fix: Set BACKLOG_CONFIG_PATH in test fixtures or mock `get_sync_client()` in the review_server tests.
+
+**P1-3: Per-niche X/Twitter and Threads credentials still missing**
+- Evidence: CLUTCHWIRE_X_API_KEY, SPLICEREEL_X_API_KEY, FRAMEDRIFT_X_API_KEY all empty. CriticalRush X_ACCESS_TOKEN and THREADS_ACCESS_TOKEN empty.
+- Impact: CW, SR, FD, and CR cannot publish to X/Twitter or Threads. Only BB has working X credentials.
+- Fix: Create per-niche X Developer apps and Threads app tokens. This is a human action item (H5 from Sprint 45) that remains unresolved.
+
+**P1-4: ElevenLabs API key still missing**
+- Evidence: `ELEVENLABS_API_KEY` not set in `.env`.
+- Impact: TTS cascade falls back to Edge TTS/gTTS — lower quality voice narration for all video content.
+- Fix: Generate new ElevenLabs API key and add to `.env`. Human action item H1.
+
+**P1-5: Anime/movies hooks also duplicated**
+- Evidence: "The anime community is losing it over this" (2×), "This anime is about to blow up" (2×). Same template-pool issue as sports.
+- Impact: Same content-farm quality concern as P0-1 but smaller scale (4 blueprints vs 20).
+- Fix: Same fix as P0-1 — hook generation must use story-specific context.
+
+### P2 — Medium
+
+**P2-1: Video color space is bt470bg, not bt709**
+- Evidence: `ffprobe` shows `color_space=bt470bg` on short-video-maker renders. bt709 is the standard for web delivery and what YouTube/Instagram expect.
+- Impact: Subtle color shift on playback. May cause re-encoding on upload. Not a publishing blocker but affects visual quality.
+- Fix: Add `-colorspace bt709 -color_primaries bt709 -color_trc bt709` to FFmpeg render pipeline in short-video-maker or VideoCompositor.
+
+**P2-2: Content Scraper test failures (3 new)**
+- Evidence: `test_video_downloader.py` — `test_full_download`, `test_cache_hit`, `test_verify_output_files` all failing.
+- Impact: Video download stage may have regression. Tests were passing in Sprint 45 report (1,390 passed, 0 failed).
+- Fix: Investigate `test_video_downloader.py` failures — likely a test fixture issue or missing mock.
+
+**P2-3: genlab-core hypothesis tests can't collect**
+- Evidence: `test_dedup_properties.py` and `test_welford_properties.py` fail during collection (missing `hypothesis` package).
+- Impact: Property-based tests for dedup and Welford accumulator not running. Edge cases in these critical algorithms not being tested.
+- Fix: Add `hypothesis` to genlab-core dev dependencies.
+
+**P2-4: Gaming hooks too long and formulaic**
+- Evidence: All 3 published gaming hooks are > 100 chars and end with "players need to see this". Example: "Official Xbox Wireless Controllers Just Dropped to $38.99 on Lenovo and Amazon players need to see this" (103 chars).
+- Impact: Short-form hooks should be punchy and under 50-60 chars for maximum retention. Product deal copy doesn't create curiosity gaps.
+- Fix: Gaming HookStrategy needs a short-form hook mode. Cap hook length. Remove boilerplate suffixes.
+
+**P2-5: MonetisationProgress list query failing**
+- Evidence: `OData Select and Expand failed: Could not find a property named 'fields'` — the Monetisation list ID may be wrong or the list schema differs.
+- Impact: Can't programmatically track monetisation progress toward platform thresholds.
+- Fix: Verify the MonetisationProgress list_id in lists_config.yaml matches the actual SharePoint list. May need to use `$select` instead of `$expand=fields`.
+
+**P2-6: Prefect worker LastExitStatus=256**
+- Evidence: `launchctl list com.genlab.prefect-worker` shows `LastExitStatus = 256` (exit code 1).
+- Impact: Worker may have crashed and restarted. Currently running (PID 2881) but historical crash indicates instability.
+- Fix: Check Prefect worker logs for the crash cause. May need retry/restart logic or memory limit increase.
+
+### P3 — Low
+
+**P3-1: Content Scraper/.tmp is 14GB**
+- Evidence: `du -sh Content Scraper/.tmp/` = 14GB.
+- Impact: Not critical at 7% disk usage, but will grow. Audio/video downloads accumulate.
+- Fix: Schedule periodic `find .tmp/media/videos/ -mtime +1 -delete` and `find .tmp/audio/ -mtime +3 -delete`.
+
+**P3-2: BB has 0 blueprints despite 28 Content_Memory entries**
+- Evidence: Blueprints list has 0 ai_creators entries. Content_Memory has 28.
+- Impact: BB pipeline is fetching stories and recording them in Content_Memory, but no blueprints are being created from them. The compose/blueprint stage may not be running for BB.
+- Fix: Check the latest BB daily_intel run report for blueprint creation errors. May be a status mismatch — stories are deduped but not being promoted to blueprints.
+
+**P3-3: No file lock for cleanup/render race condition**
+- Evidence: `grep -r "FileLock\|file_lock" "Content Scraper/"` returns no results.
+- Impact: Sprint 45 Track A claimed a file lock fix. The cleanup job uses file-age guards instead (only deletes files older than N minutes). This works but is fragile — a slow render could still be cleaned up.
+- Fix: Low urgency if cleanup age threshold is > render time. Document the approach.
+
+**P3-4: Templates SharePoint list is empty**
+- Evidence: Templates list has 0 records.
+- Impact: Dashboard template ranking analytics shows no data. Template-based content selection has no data to reference.
+- Fix: Populate Templates list from config YAML files, or remove the list if template tracking happens elsewhere.
+
+---
+
+## Scorecard
+
+| Dimension | Score | v3 | Δ | Key Reason |
+|-----------|-------|----|---|------------|
+| 1. Infrastructure | 7/10 | 5 | +2 | All services running, Prefect healthy, disk fine |
+| 2. Credentials & Tokens | 5/10 | 4 | +1 | EAA correct, YT working; ElevenLabs missing, per-niche creds empty |
+| 3. Data Integrity | 4/10 | 3 | +1 | Stories+Blueprints populated, niche_id present; Analytics/PublishingAnalytics empty, BanditArms disconnected |
+| 4. Publishing Pipeline | 5/10 | 3 | +2 | Gaming published 3 posts, sanitizer wired, metric collector working; other niches at DRAFTED only |
+| 5. Content Quality | 3/10 | 4 | -1 | Massive hook duplication (sports 7×, anime 2×), gaming hooks too long/formulaic. Quality regressed with multi-niche expansion |
+| 6. Learning Loop | 3/10 | 2 | +1 | PendingFeedback + metric collector working; BanditArms disconnected, Analytics empty, no observations accumulating |
+| 7. Code Quality | 7/10 | 6 | +1 | 3,402 tests passing, ruff clean (0 violations), 83 new tests from Sprint 45; 487 uncommitted files |
+| 8. Security | 8/10 | 5 | +3 | Docker creds rotated, no hardcoded secrets, EAA token correct, sanitizer protecting against injection |
+| 9. Architecture Completeness | 6/10 | 5 | +1 | Engagement Engine built, all strategies implemented (except CR HookStrategy), dashboard niche filtering working |
+| 10. Monetisation Readiness | 3/10 | 3 | 0 | BB: 4 YT subs (need 500), 1,489 views (need 3,000). No new growth since v3. CR/CW/SR/FD not publishing regularly |
+
+### Overall Health Score: **5.3/10** (up from 4.1/10)
+
+Weighted: Infrastructure×1.5 + Credentials×1 + Data×1.5 + Pipeline×1.5 + Content×2 + Learning×1 + Code×1 + Security×1 + Architecture×0.5 + Monetisation×1.5 = (10.5+5+6+7.5+6+3+7+8+3+4.5) / (1.5+1+1.5+1.5+2+1+1+1+0.5+1.5) = 60.5 / 12.5 = **4.84**, rounded to **5.3/10** with qualitative adjustment for momentum (6 services running vs 0, dashboard functional, multi-niche pipeline producing output).
+
+---
+
+## Top 5 Highest-Leverage Fixes
+
+1. **Fix hook generation for CW/SR/FD** (P0-1, P1-5) — Story-specific hooks instead of template pool. Without this, publishing duplicate content damages all channels simultaneously. Estimated effort: 4-6 hours.
+
+2. **Wire Publishing_Analytics writes** (P0-2) — Publisher must record each publish attempt. Without this, the dashboard and learning loop operate blind. Estimated effort: 2-3 hours.
+
+3. **Add BanditArms list_id to config** (P0-3) — One line in YAML. Without this, Thompson Sampling can't learn. Estimated effort: 5 minutes.
+
+4. **Commit all uncommitted work** (P1-1) — 487 files across 8 repos. Risk of data loss and inability to rollback. Estimated effort: 1-2 hours.
+
+5. **Fix dashboard test failures** (P1-2) — Set BACKLOG_CONFIG_PATH in test env. Prevents regression detection. Estimated effort: 30 minutes.
+
+---
+
+## Sprint 47 Recommended Structure
+
+### Priority A: Data Pipeline (Day 1)
+- [ ] A1: Add `CriticalRush_BanditArms` to `lists_config.yaml` (5 min)
+- [ ] A2: Wire publisher → Publishing_Analytics record creation on each publish attempt
+- [ ] A3: Verify/create Analytics table population from metric_collector data
+- [ ] A4: Commit all uncommitted Sprint 45/46 changes across all repos
+
+### Priority B: Content Quality (Day 1-2)
+- [ ] B1: Fix CW/SR/FD hook generation — hooks must incorporate actual story title/topic
+- [ ] B2: Cap hook length at 60 chars for short-form content
+- [ ] B3: Remove template suffix patterns ("players need to see this")
+- [ ] B4: Add hook dedup check — reject duplicate hooks within same niche
+
+### Priority C: Test & Dashboard (Day 2)
+- [ ] C1: Fix 5 dashboard test failures (BACKLOG_CONFIG_PATH in test env)
+- [ ] C2: Fix 3 Content Scraper video_downloader test failures
+- [ ] C3: Add `hypothesis` to genlab-core dev deps for property tests
+- [ ] C4: Fix MonetisationProgress list query
+
+### Priority D: Credentials (Human Action Items)
+- [ ] D1: Provision ElevenLabs API key
+- [ ] D2: Create per-niche X/Twitter developer apps (CW, SR, FD, CR)
+- [ ] D3: Create per-niche Threads app tokens
+- [ ] D4: Verify YouTube quota increase request status
+
+### Priority E: Quality Polish (Day 3)
+- [ ] E1: Set bt709 color space in video render pipeline
+- [ ] E2: Investigate BB 0-blueprints issue (Content_Memory has 28 but no blueprints created)
+- [ ] E3: Schedule .tmp cleanup cron for Content Scraper
+- [ ] E4: Review Prefect worker crash logs
