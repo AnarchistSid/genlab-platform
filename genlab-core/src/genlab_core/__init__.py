@@ -16,6 +16,7 @@ _SUBMODULES = [
     "context",
     "engagement",
     "http",
+    "intel",
     "intelligence",
     "interfaces",
     "learning",
@@ -33,6 +34,7 @@ _SUBMODULES = [
     "testing",
     "tts",
     "utils",
+    "writing",
 ]
 
 
