@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import threading
-import time
-from contextlib import contextmanager
-from datetime import date
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 

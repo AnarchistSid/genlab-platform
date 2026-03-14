@@ -30,7 +30,7 @@ _niche_cache: dict[str, str] = {}
 
 
 def _resolve_niche(media_id: str) -> str:
-    """Look up niche_id for an Instagram media ID, defaulting to ai_news."""
+    """Look up niche_id for an Instagram media ID, defaulting to ai_creators."""
     if media_id in _niche_cache:
         return _niche_cache[media_id]
     env_niche = os.environ.get("NICHE_ID", "")
@@ -44,12 +44,12 @@ def _resolve_niche(media_id: str) -> str:
             max_records=1,
         )
         if records:
-            niche = records[0].get("fields", {}).get("niche_id", "ai_news")
+            niche = records[0].get("fields", {}).get("niche_id", "ai_creators")
             _niche_cache[media_id] = niche
             return niche
     except Exception as exc:
         logger.debug("Niche lookup failed for %s: %s", media_id, exc)
-    return "ai_news"
+    return "ai_creators"
 
 
 @app.get("/webhooks/meta")

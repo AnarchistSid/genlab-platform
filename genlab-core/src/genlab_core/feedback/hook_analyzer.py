@@ -76,7 +76,7 @@ def print_hook_readiness_report(backlog_client: Any) -> None:
     remaining = max(0, MIN_EXAMPLES - count)
     days_est = remaining / max(POSTS_PER_DAY, 1)
 
-    print(f"Hook classifier training readiness")
+    print("Hook classifier training readiness")
     print(f"  Examples collected: {count}/{MIN_EXAMPLES}")
     print(f"  Remaining:         {remaining}")
     print(f"  Estimated days:    {days_est:.0f}")

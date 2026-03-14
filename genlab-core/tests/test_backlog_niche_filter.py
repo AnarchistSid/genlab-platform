@@ -28,8 +28,8 @@ class TestInjectNicheFilter:
 
     def test_complex_formula(self):
         formula = "AND({status}='DRAFTED', {format}='reel')"
-        result = _inject_niche_filter(formula, "ai_news")
-        assert result == "AND(AND({status}='DRAFTED', {format}='reel'), {niche_id}='ai_news')"
+        result = _inject_niche_filter(formula, "ai_creators")
+        assert result == "AND(AND({status}='DRAFTED', {format}='reel'), {niche_id}='ai_creators')"
 
 
 class TestListNiches:
@@ -46,7 +46,7 @@ class TestListNiches:
                 data = yaml.safe_load(f)
             niches = data.get("niches", [])
             assert len(niches) >= 5
-            assert niches[0]["id"] == "ai_news"
+            assert niches[0]["id"] == "ai_creators"
             assert niches[1]["id"] == "gaming"
         else:
             pytest.skip("niches_registry.yaml not found")

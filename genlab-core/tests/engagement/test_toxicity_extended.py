@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
-import pytest
 
 from genlab_core.engagement.toxicity_gate import ToxicityGate, ToxicityResult
 

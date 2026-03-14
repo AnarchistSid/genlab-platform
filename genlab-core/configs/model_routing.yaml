@@ -15,7 +15,7 @@ task_routing:
   write_gaming_content: "gpt-4o-mini"
   write_sports_content: "gpt-4o-mini"
   write_movie_content: "gpt-4o-mini"
-  write_fashion_content: "gpt-4o-mini"
+  write_anime_content: "gpt-4o-mini"
   generate_captions: "gpt-4o-mini"
   adapt_for_platforms: "gpt-4o-mini"
 

@@ -39,7 +39,7 @@ _PROJECT_ROOT = Path(
 # or in its launch configuration. This ensures settings.py finds the correct
 # .env file for that agent.
 NICHE_REQUIREMENTS: Dict[str, List[str]] = {
-    "ai_news": [
+    "ai_creators": [
         # Backlog
         "azure_tenant_id", "azure_client_id", "azure_client_secret",
         "sharepoint_site_id",

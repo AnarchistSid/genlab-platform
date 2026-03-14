@@ -101,12 +101,12 @@ class TestGetPending:
         items = [
             {"id": "1", "fields": {"PostID": "ig_1", "Platform": "instagram", "NicheId": "gaming",
                                     "PublishedAt": datetime.now(timezone.utc).isoformat(), "Status": "awaiting_6h"}},
-            {"id": "2", "fields": {"PostID": "ig_2", "Platform": "instagram", "NicheId": "ai_news",
+            {"id": "2", "fields": {"PostID": "ig_2", "Platform": "instagram", "NicheId": "ai_creators",
                                     "PublishedAt": datetime.now(timezone.utc).isoformat(), "Status": "awaiting_6h"}},
         ]
         mock_proxy.all.return_value = items
-        tasks = store.get_pending(niche_id="ai_news")
-        assert all(t.niche_id == "ai_news" for t in tasks)
+        tasks = store.get_pending(niche_id="ai_creators")
+        assert all(t.niche_id == "ai_creators" for t in tasks)
 
 
 class TestNextCollectionWindow:

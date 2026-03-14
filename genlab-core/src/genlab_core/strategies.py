@@ -1,6 +1,6 @@
 """Abstract strategy interfaces for Gen Lab niche pipelines.
 
-Every niche (ai_news, gaming, sports, anime, movies, etc.) implements these
+Every niche (ai_creators, gaming, sports, anime, movies, etc.) implements these
 six strategies. The pipeline runner calls them polymorphically — it doesn't
 know or care which niche is active, only that the strategies conform to
 these contracts.

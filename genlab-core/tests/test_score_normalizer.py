@@ -1,7 +1,5 @@
 """Tests for genlab_core.intelligence.score_normalizer."""
-import math
 
-import pytest
 
 from genlab_core.intelligence.score_normalizer import (
     ScoringWeightLoader,

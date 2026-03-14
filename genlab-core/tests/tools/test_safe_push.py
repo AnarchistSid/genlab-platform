@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from genlab_core.tools.safe_push import (
     PROTECTED_BRANCHES,
-    get_current_branch,
-    has_uncommitted_changes,
     main,
 )
 

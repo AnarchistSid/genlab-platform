@@ -6,8 +6,6 @@ to platform client posting, with all external calls mocked.
 from __future__ import annotations
 
 import importlib.util
-import json
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -143,7 +141,7 @@ class TestFullReplyPipeline:
                 "comment_id": "tw123",
                 "comment_text": "Interesting thread",
                 "platform": "x_twitter",
-                "niche_id": "ai_news",
+                "niche_id": "ai_creators",
                 "post_id": "t1",
                 "post_context": "",
             })

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from genlab_core.platforms.gatekeeper import GateResult, PublishGatekeeper
+from genlab_core.platforms.gatekeeper import PublishGatekeeper
 
 
 @pytest.fixture

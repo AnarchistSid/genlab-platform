@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
 
-from genlab_core.learning.arm_loader import BANDIT_LIST_NAMES, load_all_arms, save_arm
+from genlab_core.learning.arm_loader import BANDIT_LIST_NAMES, load_all_arms
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +59,7 @@ class TestLoadAllArmsError:
 
 class TestBanditListNames:
     def test_bandit_list_names_covers_all_niches(self):
-        expected = {"gaming", "ai_news", "sports", "movies", "anime"}
+        expected = {"gaming", "ai_creators", "sports", "movies", "anime"}
         assert set(BANDIT_LIST_NAMES.keys()) == expected
 
         # Each value should be a non-empty string ending with _BanditArms

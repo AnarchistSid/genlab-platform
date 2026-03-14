@@ -221,7 +221,7 @@ def test_publish_payload_creation():
         media_type="video",
         hashtags=["#test"],
         hook="Breaking news",
-        niche_id="ai_news",
+        niche_id="ai_creators",
         platform_specific=YouTubeSpecific(shorts_title="Test Short"),
     )
     assert payload.caption == "Test caption"
@@ -750,7 +750,7 @@ class TestPublish:
             media_type="video",
             hashtags=["#test"],
             hook="Watch this",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform_specific=InstagramSpecific(share_to_feed=True),
         )
 
@@ -781,7 +781,7 @@ class TestPublish:
             media_type="text",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
         )
         result = ig_client.publish(payload)
         assert result.success is False
@@ -1280,7 +1280,7 @@ def _make_payload(platform: str) -> PublishPayload:
         media_type="video",
         hashtags=[],
         hook="",
-        niche_id="ai_news",
+        niche_id="ai_creators",
     )
 
 

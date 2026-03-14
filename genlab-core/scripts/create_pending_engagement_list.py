@@ -38,7 +38,7 @@ COLUMNS = [
     ("AuthorName",  "text",     "Display name of the commenter"),
     ("AuthorId",    "text",     "Platform-native user ID of the commenter"),
     ("CreatedAt",   "dateTime", "ISO-8601 UTC timestamp of the original comment"),
-    ("NicheId",     "text",     "Niche that owns this post: ai_news | gaming | sports | movies | fashion"),
+    ("NicheId",     "text",     "Niche that owns this post: ai_creators | gaming | sports | movies | anime"),
     ("Status",      "text",     "Processing status: pending | replied | skipped | toxic"),
     ("IsReply",     "boolean",  "True if this is a reply to another comment"),
     ("ParentId",    "text",     "Parent comment ID for nested replies (nullable)"),

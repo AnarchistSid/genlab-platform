@@ -5,7 +5,6 @@ and correct behavior with mock models.
 """
 from __future__ import annotations
 
-import pytest
 
 from genlab_core.learning.hook_classifier import HookClassifier, train_and_save
 from genlab_core.learning.hook_training_data import HookExample

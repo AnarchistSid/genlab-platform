@@ -9,7 +9,6 @@ import pytest
 
 from genlab_core.learning.reward_shaper import (
     BASE_WEIGHTS,
-    MONETISATION_THRESHOLDS,
     RewardShaper,
     _normalise_metric,
     _normalise_weights,

@@ -2,7 +2,6 @@
 import importlib
 import sys
 
-import pytest
 
 from genlab_core.engagement.tasks import (
     like_comment,

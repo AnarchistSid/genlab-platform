@@ -36,6 +36,7 @@ from typing import Any
 import requests
 
 from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
+from genlab_core.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,8 @@ class ThreadsClient:
         )
         self._user_id: str = user_id or os.environ.get("THREADS_USER_ID", "")
         self._base_url = "https://graph.threads.net/v1.0"
+        # Threads API: 250 posts/hr. Conservative rate limiter.
+        self._rate_limiter = TokenBucket(rate=250 / 3600, burst=10)
 
     # ------------------------------------------------------------------
     # Publisher protocol
@@ -348,6 +351,7 @@ class ThreadsClient:
 
         Returns the container ID on success, ``None`` on failure.
         """
+        self._rate_limiter.acquire()
         url = f"{self._base_url}/{self._user_id}/threads"
         data: dict[str, Any] = {
             "media_type": media_type,

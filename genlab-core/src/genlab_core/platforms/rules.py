@@ -44,6 +44,16 @@ _MONTH_NAMES = [
 # URL pattern for stripping
 _URL_RE = re.compile(r"https?://\S+")
 
+# Competitor platform mentions to strip from Facebook captions
+# (FB flags these as spam/cross-promotion)
+_COMPETITOR_HASHTAGS_RE = re.compile(
+    r"#(?:tiktok|twitter|youtube|instagram|threads|snapchat|twitch)\b",
+    re.IGNORECASE,
+)
+
+# Max hashtags for Facebook (more than 5 triggers spam detection)
+_FB_MAX_HASHTAGS = 5
+
 # Default CTA templates (niche can override via cta parameter)
 _DEFAULT_CTAS = [
     "Save this for later!",
@@ -215,14 +225,40 @@ def _enforce_twitter_rules(
 
 
 def _enforce_facebook_rules(adapted: AdaptedContent) -> None:
-    """Facebook: ensure caption meets minimum engagement length."""
+    """Facebook: strip URLs, cap hashtags, remove competitor mentions, engagement Q."""
     caption = adapted.caption
+
+    # 1. Strip all URLs (FB flags external links as spam/promotional)
+    if _URL_RE.search(caption):
+        caption = _URL_RE.sub("", caption)
+        caption = re.sub(r"\n{3,}", "\n\n", caption).strip()
+        adapted.warnings.append("External URL stripped from Facebook caption")
+
+    # 2. Remove competitor platform hashtags (#tiktok, #twitter, etc.)
+    if _COMPETITOR_HASHTAGS_RE.search(caption):
+        caption = _COMPETITOR_HASHTAGS_RE.sub("", caption)
+        caption = re.sub(r"  +", " ", caption).strip()
+        adapted.warnings.append("Competitor platform mentions removed from Facebook caption")
+
+    # Also strip competitor hashtags from the hashtags list
+    adapted.hashtags = [
+        h for h in adapted.hashtags
+        if not _COMPETITOR_HASHTAGS_RE.match(h if h.startswith("#") else f"#{h}")
+    ]
+
+    # 3. Cap hashtags at _FB_MAX_HASHTAGS
+    if len(adapted.hashtags) > _FB_MAX_HASHTAGS:
+        adapted.hashtags = adapted.hashtags[:_FB_MAX_HASHTAGS]
+        adapted.warnings.append(f"Facebook hashtags capped at {_FB_MAX_HASHTAGS}")
+
+    # 4. Short captions get engagement question
     if caption and len(caption) < 200:
         caption = (
             f"{caption}\n\n"
             "What do you think about this? Let us know in the comments."
         )
         adapted.warnings.append("Engagement question added to short caption")
+
     adapted.caption = caption
 
 

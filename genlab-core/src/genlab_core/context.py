@@ -14,7 +14,7 @@ explicit parameter threading can use the ContextVar accessor:
 Usage:
     from core.context import PipelineContext, set_current_context
 
-    ctx = PipelineContext(niche_id="ai_news", run_id="20260305_120000")
+    ctx = PipelineContext(niche_id="ai_creators", run_id="20260305_120000")
     token = set_current_context(ctx)
     try:
         run_pipeline(ctx)
@@ -36,7 +36,7 @@ class PipelineContext:
     """Mutable state bag for a single pipeline run.
 
     Required fields (must be provided at construction):
-        niche_id:  Which niche this run targets ("ai_news", "gaming", etc.)
+        niche_id:  Which niche this run targets ("ai_creators", "gaming", etc.)
         run_id:    Unique run identifier (typically YYYYMMDD_HHMMSS)
 
     All other fields have safe defaults and are populated as stages execute.
@@ -81,7 +81,7 @@ class PipelineContext:
         """Append a structured error entry.
 
         Args:
-            stage: Pipeline stage name (e.g. "fetch_ai_news").
+            stage: Pipeline stage name (e.g. "fetch_ai_creators").
             error: The exception that occurred.
             fatal: If True, sets ``is_aborted`` so the runner stops.
         """

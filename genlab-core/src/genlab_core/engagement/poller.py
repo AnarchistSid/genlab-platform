@@ -126,12 +126,28 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
             access_token_secret=access_secret,
         )
 
-        resp = client.get_users_mentions(
-            id=user_id,
-            max_results=50,
-            tweet_fields=["author_id", "created_at", "in_reply_to_user_id"],
-            expansions=["author_id"],
-        )
+        try:
+            resp = client.get_users_mentions(
+                id=user_id,
+                max_results=50,
+                tweet_fields=["author_id", "created_at", "in_reply_to_user_id"],
+                expansions=["author_id"],
+            )
+        except tweepy.Unauthorized:
+            logger.error(
+                "[POLLER] X/Twitter 401 Unauthorized for %s — OAuth tokens may be "
+                "expired or revoked. Regenerate at developer.twitter.com and update "
+                "X_ACCESS_TOKEN / X_ACCESS_SECRET in .env",
+                niche_id,
+            )
+            return []
+        except tweepy.Forbidden:
+            logger.warning(
+                "[POLLER] X/Twitter 403 Forbidden for %s — mentions endpoint may "
+                "require elevated access (Basic plan or higher)",
+                niche_id,
+            )
+            return []
 
         mentions: list[dict] = []
         # Build author lookup from includes

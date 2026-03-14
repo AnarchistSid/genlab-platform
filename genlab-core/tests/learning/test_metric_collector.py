@@ -4,12 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.learning.metric_collector import (
     collect_metrics,
     compute_reward,
-    fetch_platform_metrics,
     process_pending_task,
 )
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
@@ -29,7 +27,7 @@ def _make_task(
     return PendingFeedbackTask(
         content_id="cand_abc",
         platform=platform,
-        niche_id="ai_news",
+        niche_id="ai_creators",
         published_at=datetime.now(timezone.utc) - timedelta(hours=published_hours_ago),
         platform_post_id=post_id,
         content_type="reel",
@@ -92,9 +90,9 @@ class TestCollectMetricsFlow:
         mock_store_cls.return_value = store
         mock_shaper_cls.return_value = _mock_shaper()
 
-        collect_metrics(niche_id="ai_news", backlog_client=MagicMock())
+        collect_metrics(niche_id="ai_creators", backlog_client=MagicMock())
 
-        store.get_pending.assert_called_once_with(niche_id="ai_news")
+        store.get_pending.assert_called_once_with(niche_id="ai_creators")
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,6 @@ import pytest
 
 from genlab_core.monitoring.youtube_quota import (
     DAILY_QUOTA,
-    HARD_STOP_PCT,
     PACIFIC,
     UPLOAD_COST,
     YouTubeQuotaTracker,

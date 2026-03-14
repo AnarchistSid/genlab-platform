@@ -1090,7 +1090,7 @@ class BacklogClient:
 
         # Hardcoded fallback
         return [
-            {"id": "ai_news", "display_name": "Blackbox Brief", "status": "active"},
+            {"id": "ai_creators", "display_name": "Blackbox Brief", "status": "active"},
             {"id": "gaming", "display_name": "CriticalRush", "status": "active"},
             {"id": "sports", "display_name": "ClutchWire", "status": "mvp"},
             {"id": "movies", "display_name": "SpliceReel", "status": "mvp"},

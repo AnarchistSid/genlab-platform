@@ -10,7 +10,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from genlab_core.platform.postiz_client import (
+from genlab_core.platforms.postiz import (
     MultiPublishResult,
     PostizClient,
     PostizPlatform,
@@ -237,7 +237,7 @@ class TestGetIntegrationByProvider:
 class TestMissingApiKey:
     def test_no_key_raises(self):
         with patch(
-            "genlab_core.platform.postiz_client.settings"
+            "genlab_core.platforms.postiz.settings"
         ) as mock_settings:
             mock_settings.postiz_url = "http://localhost:5000"
             mock_settings.postiz_api_key = None

@@ -1,13 +1,10 @@
 """Tests for shared FFmpeg overlay compositor."""
 
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 from genlab_core.rendering.overlay_compositor import (
     OverlaySpec,
-    TextOverlay,
     composite_overlay,
     _escape_drawtext,
 )

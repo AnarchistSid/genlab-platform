@@ -22,7 +22,7 @@ class TestPersonaLoadFromYaml:
         assert persona.voice.enthusiasm > 0.8  # High energy
         assert persona.voice.emoji_density == "high"
 
-    def test_ai_news_persona_loads(self):
+    def test_ai_creators_persona_loads(self):
         """Load the actual BB persona.yaml and verify key fields."""
         path = Path("/Users/anarchistsid/GenLab/Content Scraper/config/persona.yaml")
         if not path.exists():

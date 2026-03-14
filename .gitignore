@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.python-version
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+credentials.json
+token.json
+*.pem
+
+# Temp and cache
+.tmp/
+*.log
+*.cache
+
+# Node (dashboard frontend)
+node_modules/
+dashboard/frontend/dist/
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Stale debug files
+fashion_pipeline_logs.jsonl
+
+# Firebase
+firebase-debug.log
+
+# Reference material (not source code)
+_reference/

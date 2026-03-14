@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import importlib.util
 import logging
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 # Load the script module via importlib (it's a script, not a package)
 _script_path = Path(__file__).resolve().parents[2] / "scripts" / "run_engagement_poller.py"

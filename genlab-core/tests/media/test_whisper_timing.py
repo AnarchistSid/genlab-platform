@@ -8,7 +8,6 @@ All tests are mock-based -- no real faster-whisper model required.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.media.whisper_timing import (
     _flatten_whisper_words,
@@ -41,7 +40,7 @@ def _mock_segment(words: list[MagicMock]) -> MagicMock:
 
 
 class TestTranscribeWords:
-    @patch("genlab_core.media.whisper_timing._get_model")
+    @patch("genlab_core.media.whisper_timing.get_model")
     @patch("genlab_core.media.whisper_timing._FASTER_WHISPER_AVAILABLE", True)
     def test_returns_word_dicts(self, mock_get_model, tmp_path):
         """3 words should come back as list of dicts with correct keys."""
@@ -67,7 +66,7 @@ class TestTranscribeWords:
         assert result[0]["end"] == 0.3
         assert result[0]["confidence"] == 0.95
 
-    @patch("genlab_core.media.whisper_timing._get_model")
+    @patch("genlab_core.media.whisper_timing.get_model")
     @patch("genlab_core.media.whisper_timing._FASTER_WHISPER_AVAILABLE", True)
     def test_filters_low_confidence(self, mock_get_model, tmp_path):
         """Words with probability below min_confidence should be excluded."""
@@ -96,7 +95,7 @@ class TestTranscribeWords:
         result = transcribe_words(audio)
         assert result is None
 
-    @patch("genlab_core.media.whisper_timing._get_model")
+    @patch("genlab_core.media.whisper_timing.get_model")
     @patch("genlab_core.media.whisper_timing._FASTER_WHISPER_AVAILABLE", True)
     def test_transcription_error_returns_none(self, mock_get_model, tmp_path):
         """RuntimeError during transcription should return None, not raise."""

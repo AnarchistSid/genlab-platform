@@ -1,6 +1,6 @@
 """Gen Lab universal video compositor — single source of truth for visual standards.
 
-All niches (gaming, ai_news, sports, anime, ...) call this module for rendered
+All niches (gaming, ai_creators, sports, anime, ...) call this module for rendered
 video output.  Niche identity comes from the VisualConfig passed at instantiation;
 no niche-specific code should exist here.
 

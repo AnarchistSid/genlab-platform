@@ -1,7 +1,6 @@
 """Tests for MonetisationMultiplierProvider in reward_shaper.py."""
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -35,16 +34,16 @@ def provider(targets_yaml):
         p = MonetisationMultiplierProvider.__new__(MonetisationMultiplierProvider)
         p._client = None
         p._cache = {
-            "ai_news/youtube/subscribers": {
-                "niche_id": "ai_news",
+            "ai_creators/youtube/subscribers": {
+                "niche_id": "ai_creators",
                 "platform": "youtube",
                 "metric_name": "subscribers",
                 "pct_complete": 85.0,
                 "target_value": 1000,
                 "is_threshold_met": False,
             },
-            "ai_news/youtube/watch_hours_12mo": {
-                "niche_id": "ai_news",
+            "ai_creators/youtube/watch_hours_12mo": {
+                "niche_id": "ai_creators",
                 "platform": "youtube",
                 "metric_name": "watch_hours_12mo",
                 "pct_complete": 45.0,
@@ -81,8 +80,8 @@ class TestPctToMultiplier:
 
 class TestGetMultiplier:
     def test_multiplier_within_20pct(self, provider):
-        """ai_news/youtube has max pct=85 → within_20pct → 3.0."""
-        mult = provider.get_multiplier("ai_news", "youtube")
+        """ai_creators/youtube has max pct=85 → within_20pct → 3.0."""
+        mult = provider.get_multiplier("ai_creators", "youtube")
         assert mult == 3.0
 
     def test_multiplier_above_threshold(self, provider):
@@ -93,7 +92,7 @@ class TestGetMultiplier:
 
 class TestGetProgress:
     def test_get_existing_record(self, provider):
-        rec = provider.get_progress("ai_news", "youtube", "subscribers")
+        rec = provider.get_progress("ai_creators", "youtube", "subscribers")
         assert rec is not None
         assert rec["pct_complete"] == 85.0
 

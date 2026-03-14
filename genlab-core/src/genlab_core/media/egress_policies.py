@@ -43,7 +43,7 @@ _BUILTIN_POLICIES: dict[str, list[str]] = {
         "api.anthropic.com",
     ],
     # BB fetch: RSS sources + scraping (broad, many domains)
-    "fetch_ai_news": [
+    "fetch_ai_creators": [
         "*.openai.com",
         "*.anthropic.com",
         "*.theverge.com",

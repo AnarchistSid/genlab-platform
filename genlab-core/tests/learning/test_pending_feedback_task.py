@@ -2,7 +2,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
 
 from genlab_core.learning.pending_feedback_task import (
     PendingFeedbackTask,

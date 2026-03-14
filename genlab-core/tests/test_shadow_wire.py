@@ -10,13 +10,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch
+from typing import Any, List
+from unittest.mock import MagicMock
 
-import pytest
 
-from genlab_core.platform.postiz_client import PublishResult, ShadowPublisher
+from genlab_core.platforms.postiz import PublishResult, ShadowPublisher
 
 
 # ---------------------------------------------------------------------------

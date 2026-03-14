@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-import pytest
 
 from genlab_core.media.egress_policies import (
     _BUILTIN_POLICIES,

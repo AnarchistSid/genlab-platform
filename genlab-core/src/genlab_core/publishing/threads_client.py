@@ -254,7 +254,7 @@ class ThreadsClient:
     def refresh_token(self) -> str:
         """Refresh the long-lived token before it expires. Returns new token."""
         resp = requests.get(
-            f"https://graph.threads.net/refresh_access_token",
+            "https://graph.threads.net/refresh_access_token",
             params={
                 "grant_type": "th_refresh_token",
                 "access_token": self._access_token,

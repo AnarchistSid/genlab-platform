@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 from zoneinfo import ZoneInfo

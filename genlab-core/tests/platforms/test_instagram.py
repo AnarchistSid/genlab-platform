@@ -28,7 +28,7 @@ class TestPublish:
             media_type="video",
             hashtags=["#test"],
             hook="Watch this",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform_specific=InstagramSpecific(share_to_feed=True),
         )
 
@@ -57,7 +57,7 @@ class TestPublish:
             media_type="text",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
         )
         result = ig_client.publish(payload)
         assert result.success is False
@@ -71,7 +71,7 @@ class TestPublish:
             media_type="video",
             hashtags=["#ai"],
             hook="Big news!",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform_specific=InstagramSpecific(share_to_feed=True),
         )
 
@@ -134,7 +134,7 @@ class TestPublish:
             media_type="video",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
         )
 
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
@@ -155,7 +155,7 @@ class TestPublish:
             media_type="video",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
         )
 
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
@@ -179,7 +179,7 @@ class TestPublish:
             media_type="video",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
         )
 
         captured_urls = []
@@ -210,7 +210,7 @@ class TestPublish:
             media_type="video",
             hashtags=[],
             hook="",
-            niche_id="ai_news",
+            niche_id="ai_creators",
             platform_specific=InstagramSpecific(
                 cover_url="https://example.com/cover.jpg",
                 share_to_feed=True,

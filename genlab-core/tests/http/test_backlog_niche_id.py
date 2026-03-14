@@ -93,7 +93,7 @@ class TestCreateStoryNicheId:
         call_args = client.stories.create.call_args[0][0]
         assert "niche_id" not in call_args
 
-    def test_story_with_ai_news_niche(self, mock_config):
+    def test_story_with_ai_creators_niche(self, mock_config):
         client = _make_client(mock_config)
         client.stories.create = MagicMock(return_value={"id": "rec1"})
 
@@ -101,12 +101,12 @@ class TestCreateStoryNicheId:
             "story_id": "sid_456",
             "title": "AI News Story",
             "url": "https://example.com/ai",
-            "niche_id": "ai_news",
+            "niche_id": "ai_creators",
         }
         client.create_story(story)
 
         call_args = client.stories.create.call_args[0][0]
-        assert call_args["niche_id"] == "ai_news"
+        assert call_args["niche_id"] == "ai_creators"
 
 
 class TestCreateBlueprintNicheId:

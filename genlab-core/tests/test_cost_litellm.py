@@ -1,7 +1,6 @@
 """Tests for litellm-primary cost computation."""
-from unittest.mock import patch, MagicMock
-import pytest
-from genlab_core.intelligence.cost_accumulator import _compute_cost, CostAccumulator
+from unittest.mock import patch
+from genlab_core.intelligence.cost_accumulator import _compute_cost
 
 
 class TestComputeCostLitellm:

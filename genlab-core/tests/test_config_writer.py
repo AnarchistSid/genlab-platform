@@ -1,15 +1,12 @@
 """Tests for genlab_core.learning.config_writer — bandit → YAML write-back."""
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 from genlab_core.learning.config_writer import (
-    ALLOWED_HOUR_RANGE,
-    MAX_SHIFT_HOURS,
     MIN_OBSERVATIONS_PER_ARM,
     MIN_RATIO,
     MAX_RATIO,
