@@ -145,9 +145,9 @@ class RunReport:
     def _resolve_run_dir(niche_id: str, run_id: str) -> Path:
         """Find or create the run output directory."""
         # Try standard .tmp/runs/ location relative to workspace
-        from genlab_core.settings import get_project_root
+        from genlab_core.settings import settings
         try:
-            root = get_project_root()
+            root = settings.get_project_root()
             return root / ".tmp" / "runs" / run_id
         except Exception:
             # Fallback to /tmp
