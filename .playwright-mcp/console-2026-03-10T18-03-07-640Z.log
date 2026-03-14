@@ -1,2 +1,0 @@
-[   31571ms] [ERROR] Permissions policy violation: unload is not allowed in this document. @ https://static.xx.fbcdn.net/rsrc.php/v4/yw/r/h0R5SaW-d1w.js:249
-[   94563ms] [ERROR] Failed to load resource: the server responded with a status of 504 (Gateway Time-out) @ http://localhost:5100/api/copilot/chat:0

@@ -1,7 +1,0 @@
-[    1580ms] [ERROR] Permissions policy violation: unload is not allowed in this document. @ https://static.xx.fbcdn.net/rsrc.php/v4/yO/r/YdJqtQ7glMZ.js:333
-[    2417ms] [WARNING] Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently @ https://static.xx.fbcdn.net/rsrc.php/v4iDz34/y7/l/en_US-j/rzkAThUQu5lUblQEdQ1ZeO1ZV7hZaaoltiyPzUi4fUty3BwbjEibhVR-4DPO83G5Xt_CTH-caqTilmZHT34nG5H60CU29HK942pjKkEts3DM1GmQTaLOQ8lhg3iF2ZiEZhcWgOOTYsj8hEbEuINMLLZZGbfgngRZgrMIhCUZgbTHIvR_DDLaoFz4FJj2eXxDYLbWOzU5aF2729_Tbf_SlX34MtYpDB6WO8jmEXE.js:699
-[    4602ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
-[    4603ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
-[    4604ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
-[    4604ms] [ERROR] Failed to load resource: net::ERR_FAILED @ chrome-extension://invalid/:0
-[   46499ms] [WARNING] Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently @ https://static.xx.fbcdn.net/rsrc.php/v4iRMN4/yc/l/en_US-j/gOOTYsj8hEb.js:18

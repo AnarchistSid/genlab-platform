@@ -1,7 +1,0 @@
-[   66362ms] [ERROR] ErrorUtils caught an error:
-
-missing switch account (logout) handler for surface: BARCELONA_WEB
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773046948, extra: Object, guardList: Array(1), hash: mpaci4} @ https://static.cdninstagram.com/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76
-[   72937ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.postMessage call. @ https://static.xx.fbcdn.net/rsrc.php/v4i7M54/yW/l/en_US-j/dVrobI6ZDUL.js:49
-[   72937ms] [ERROR] Cross-Origin-Opener-Policy policy would block the window.postMessage call. @ https://static.xx.fbcdn.net/rsrc.php/v4i7M54/yW/l/en_US-j/dVrobI6ZDUL.js:49

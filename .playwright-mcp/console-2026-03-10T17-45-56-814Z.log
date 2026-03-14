@@ -1,4 +1,0 @@
-[    2983ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5100/auth/oauth/GITHUB:0
-[    4785ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5100/auth/oauth/GITHUB:0
-[   33245ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5100/auth/register:0
-[   51542ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5100/auth/register:0

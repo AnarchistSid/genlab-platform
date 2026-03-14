@@ -1,2 +1,0 @@
-[    3867ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://api.x.com/graphql/vqu78dKcEkW-UAYLw5rriA/useFetchProfileSections_canViewExpandedProfileQuery?variables=%7B%22screenName%22%3A%22BlackBoxBrief%22%7D:0
-[    4436ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://api.x.com/1.1/graphql/error_log.json:0

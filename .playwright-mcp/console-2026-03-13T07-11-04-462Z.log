@@ -1,7 +1,0 @@
-[      91ms] [ERROR] Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: "style-src 'self' 'unsafe-inline'". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked. @ http://localhost:5151/queue:10
-[     166ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
-[     226ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=k5mn8l6a&sid=E-wZm0tEyEGf0HrfAAA8:0
-[     227ms] [WARNING] WebSocket connection to 'ws://localhost:5151/socket.io/?EIO=4&transport=websocket&sid=E-wZm0tEyEGf0HrfAAA8' failed: WebSocket is closed before the connection is established. @ http://localhost:5151/assets/index-BasIDPJx.js:10
-[     231ms] [ERROR] Failed to load resource: the server responded with a status of 400 (BAD REQUEST) @ http://localhost:5151/socket.io/?EIO=4&transport=polling&t=k5mnkpm1&sid=E-wZm0tEyEGf0HrfAAA8:0
-[     321ms] [ERROR] Manifest: Line: 1, column: 1, Syntax error. @ http://localhost:5151/manifest.json:0
-[     321ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ http://localhost:5151/queue:0

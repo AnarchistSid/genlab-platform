@@ -1,5 +1,0 @@
-[    7582ms] [ERROR] ErrorUtils caught an error:
-
-Converting to a string will drop content data. Hash="undefined" Translation="Log In-App Purchases Automatically (Recommended) {log-in-tooltip}" Content="Context not logged." (type=object,Object)
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773167318, extra: Object, guardList: Array(4), hash: yn2qoz} @ https://static.xx.fbcdn.net/rsrc.php/v4/yO/r/YdJqtQ7glMZ.js:75

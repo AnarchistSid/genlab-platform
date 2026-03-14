@@ -1,4 +1,0 @@
-[     188ms] [ERROR] CopilotKit Error (hidden in production): CombinedError: [Network] Unknown error occurred
-    at ek (http://localhost:5100/_next/static/chunks/7003-635558af8fd1fca8.js:315:2267)
-    at eI (http://localhost:5100/_next/static/chunks/7003-635558af8fd1fca8.js:315:5422)
-    at async http://localhost:5100/_next/static/chunks/7003-635558af8fd1fca8.js:314:11187 @ http://localhost:5100/_next/static/chunks/1528-b7f16832d6c40136.js:0

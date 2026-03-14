@@ -1,6 +1,0 @@
-[    1922ms] [ERROR] ErrorUtils caught an error:
-
-<Surface> is used without AutoLogging initialization
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773045016, extra: Object, guardList: Array(4), hash: nvdem0} @ https://static.xx.fbcdn.net/rsrc.php/v4/yO/r/YdJqtQ7glMZ.js:75
-[   15341ms] [ERROR] Refused to get unsafe header "X-FB-Debug" @ https://static.xx.fbcdn.net/rsrc.php/v4i7M54/yW/l/en_US-j/dVrobI6ZDUL.js:24

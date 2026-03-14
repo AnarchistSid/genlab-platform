@@ -1,6 +1,0 @@
-[   30952ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://developers.facebook.com/apps/2203397347132949/async/threads-login/setting/save/?th_app_id=918419570569169&_callFlowletID=0&_triggerFlowletID=6842&qpl_active_e2e_trace_ids=:0
-[   30999ms] [ERROR] ErrorUtils caught an error:
-
-Async request failed with error 404: Something went wrong. We're working on getting this fixed as soon as we can. You may be able to try again. when requesting /apps/2203397347132949/async/threads-login/setting/save/?th_app_id=918419570569169
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 17870, clientTime: 1773046855, extra: Object, guardList: Array(1), hash: snpxzs} @ https://static.xx.fbcdn.net/rsrc.php/v4/yO/r/YdJqtQ7glMZ.js:75

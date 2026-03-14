@@ -1,5 +1,0 @@
-[   42112ms] [ERROR] ErrorUtils caught an error:
-
-terminate stream because StartStreamFailure with msg : UNAUTHENTICATED [Caught in: Subscription error in preprocessResponse]
-
-Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. {column: 180, clientTime: 1773055709, extra: Object, guardList: Array(0), hash: df1cli} @ https://static.xx.fbcdn.net/rsrc.php/v4/ya/r/Hf54VCqkkAe.js:76
