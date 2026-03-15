@@ -125,4 +125,5 @@ class TestEscapeDrawtext:
         assert "\\:" in _escape_drawtext("Team: Name")
 
     def test_escapes_apostrophes(self):
-        assert "\\'" in _escape_drawtext("O'Brien")
+        assert "\u2019" in _escape_drawtext("O'Brien")
+        assert "'" not in _escape_drawtext("O'Brien")

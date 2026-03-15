@@ -321,12 +321,14 @@ def get_fps(path: str | Path) -> float:
 def escape_drawtext(text: str) -> str:
     """Escape text for FFmpeg drawtext filter (filter_complex mode).
 
-    Escapes: backslash, colon, single quote, semicolon, square brackets.
-    Designed for filter_complex mode where double-escaping is needed.
+    Escapes: backslash, colon, semicolon, square brackets.
+    Single quotes are replaced with Unicode RIGHT SINGLE QUOTATION MARK
+    (U+2019) — visually identical but won't terminate the drawtext value
+    delimiter in filter_complex strings.
     """
     text = text.replace("\\", "\\\\\\\\")
     text = text.replace(":", "\\:")
-    text = text.replace("'", "'\\\\\\''")
+    text = text.replace("'", "\u2019")
     text = text.replace(";", "\\;")
     text = text.replace("[", "\\[")
     text = text.replace("]", "\\]")
@@ -434,6 +436,50 @@ def build_loudnorm_filter(
 ) -> str:
     """Build loudnorm audio filter string."""
     return f"loudnorm=I={target_i}:TP={target_tp}:LRA={target_lra}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# FFmpeg runner with preset fallback
+# ══════════════════════════════════════════════════════════════════
+
+
+def _swap_preset(cmd: list[str], new_preset: str) -> list[str]:
+    """Replace -preset value in an FFmpeg command list."""
+    cmd = list(cmd)  # copy
+    try:
+        idx = cmd.index("-preset")
+        cmd[idx + 1] = new_preset
+    except (ValueError, IndexError):
+        # No -preset found — insert before output file (last arg)
+        cmd = cmd[:-1] + ["-preset", new_preset, cmd[-1]]
+    return cmd
+
+
+def run_ffmpeg(
+    cmd: list[str],
+    timeout: int = FFMPEG_TIMEOUT,
+    fallback_preset: str = "fast",
+) -> subprocess.CompletedProcess:
+    """Run FFmpeg with timeout and preset fallback.
+
+    If the command times out (likely -preset slow on long clips),
+    swaps to fallback_preset and retries with 180s timeout.
+    """
+    try:
+        return subprocess.run(
+            cmd, timeout=timeout, check=True,
+            capture_output=True, text=True,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "FFmpeg timed out after %ds, retrying with -preset %s",
+            timeout, fallback_preset,
+        )
+        fallback_cmd = _swap_preset(cmd, fallback_preset)
+        return subprocess.run(
+            fallback_cmd, timeout=180, check=True,
+            capture_output=True, text=True,
+        )
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -27,6 +27,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from genlab_core.media.ffmpeg_utils import run_ffmpeg
+from genlab_core.media.ffmpeg_utils import escape_drawtext
 from genlab_core.video.standards import Platform, get_standard
 
 logger = logging.getLogger(__name__)
@@ -119,9 +121,9 @@ class VideoRenderer:
         video_h = (frame_h - top_bar_h - bottom_bar_h - hook_h) & ~1
         video_y = top_bar_h + hook_h
 
-        safe_hook = _escape_drawtext(hook_text)
-        safe_name = _escape_drawtext(self._config.channel_name)
-        safe_handle = _escape_drawtext(self._config.channel_handle)
+        safe_hook = escape_drawtext(hook_text)
+        safe_name = escape_drawtext(self._config.channel_name)
+        safe_handle = escape_drawtext(self._config.channel_handle)
 
         filter_graph = (
             # Scale source to fill video area
@@ -183,21 +185,17 @@ class VideoRenderer:
             return output_path
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode != 0:
-            logger.error("ffmpeg_error stderr=%s", result.stderr[-500:])
-            raise RuntimeError(f"FFmpeg failed (exit {result.returncode})")
+        try:
+            result = run_ffmpeg(cmd, timeout=300, fallback_preset="fast")
+        except subprocess.CalledProcessError as exc:
+            logger.error("ffmpeg_error stderr=%s", (exc.stderr or "")[-500:])
+            raise RuntimeError(
+                f"FFmpeg failed (exit {exc.returncode})"
+            ) from exc
 
         logger.info("render_complete niche=%s output=%s", self._config.niche_id, output_path)
         return output_path
 
 
-def _escape_drawtext(text: str) -> str:
-    """Escape text for use in FFmpeg drawtext filter."""
-    return (
-        text
-        .replace("\\", "\\\\\\\\")
-        .replace("'", "'\\\\\\''")
-        .replace(":", "\\\\:")
-        .replace("%", "%%")
-    )
+
+# _escape_drawtext removed — use canonical escape_drawtext from ffmpeg_utils

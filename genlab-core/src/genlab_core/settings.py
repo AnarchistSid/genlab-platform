@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,6 +27,15 @@ logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(
     os.getenv("AGENT_ROOT", str(Path(__file__).resolve().parent.parent.parent.parent))
 )
+
+# Populate os.environ from root .env so code using os.environ.get() can
+# find shared credentials (e.g. ANTHROPIC_API_KEY, YOUTUBE_API_KEY).
+# pydantic-settings reads .env into model fields only — it does NOT call
+# load_dotenv(), leaving os.environ empty for direct lookups.
+# override=False means existing env vars (e.g. from shell) take precedence.
+_root_env = _PROJECT_ROOT / ".env"
+if _root_env.is_file():
+    load_dotenv(str(_root_env), override=False)
 
 
 # ---------------------------------------------------------------------------

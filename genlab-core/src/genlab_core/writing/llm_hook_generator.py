@@ -134,6 +134,10 @@ def generate_hook(
 
         hook = response.content[0].text.strip().strip('"').strip("'")
 
+        # Normalize smart quotes to ASCII equivalents (prevents FFmpeg drawtext issues)
+        hook = hook.replace("\u2019", "'").replace("\u2018", "'")
+        hook = hook.replace("\u201c", '"').replace("\u201d", '"')
+
         # Enforce length
         if len(hook) > 60:
             hook = hook[:57].rsplit(" ", 1)[0] + "..."

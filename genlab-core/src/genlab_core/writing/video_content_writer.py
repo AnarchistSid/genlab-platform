@@ -146,8 +146,13 @@ def write_video_content(
         clean = re.sub(r"```(?:json)?|```", "", response).strip()
         content = json.loads(clean)
 
-        # Validate hook length
+        # Normalize smart quotes to ASCII equivalents (prevents FFmpeg drawtext issues)
         hook = content.get("hook", "")
+        hook = hook.replace("\u2019", "'").replace("\u2018", "'")
+        hook = hook.replace("\u201c", '"').replace("\u201d", '"')
+        content["hook"] = hook
+
+        # Validate hook length
         if len(hook) > 60:
             hook = hook[:57].rsplit(" ", 1)[0] + "..."
             content["hook"] = hook

@@ -53,6 +53,8 @@ from typing import Optional
 
 import yaml
 
+from genlab_core.media.ffmpeg_utils import run_ffmpeg
+
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------
@@ -100,6 +102,14 @@ GREY_HANDLE = "0xAAAAAA"
 # -------------------------------------------------------------
 
 @dataclass
+class FFmpegConfig:
+    """FFmpeg render settings from visuals.yaml."""
+    preset: str = "slow"
+    fallback_preset: str = "fast"
+    timeout_seconds: int = 120
+
+
+@dataclass
 class ChannelBranding:
     """Per-channel branding loaded from visuals.yaml."""
     channel_name: str           # e.g. "CriticalRush"
@@ -107,6 +117,11 @@ class ChannelBranding:
     accent_color: str           # e.g. "#00FF88" (for future tinted elements)
     logo_path: str              # absolute or relative path to logo PNG
     niche_id: str               # e.g. "gaming"
+    ffmpeg: FFmpegConfig = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.ffmpeg is None:
+            self.ffmpeg = FFmpegConfig()
 
     @classmethod
     def from_visuals_yaml(cls, path: str) -> "ChannelBranding":
@@ -121,6 +136,14 @@ class ChannelBranding:
         # Also check frame_layout.branding (Sprint 56 structure)
         fl = cfg.get("frame_layout", {})
         fl_branding = fl.get("branding", {})
+
+        # FFmpeg render config
+        ff_cfg = cfg.get("ffmpeg", {})
+        ffmpeg = FFmpegConfig(
+            preset=ff_cfg.get("preset", "slow"),
+            fallback_preset=ff_cfg.get("fallback_preset", "fast"),
+            timeout_seconds=int(ff_cfg.get("timeout_seconds", 120)),
+        )
 
         return cls(
             channel_name=(
@@ -147,6 +170,7 @@ class ChannelBranding:
                 or branding.get("niche_id")
                 or cfg.get("niche_id", "")
             ),
+            ffmpeg=ffmpeg,
         )
 
 
@@ -251,7 +275,7 @@ class FrameCompositor:
         duration_seconds: Optional[float] = None,
         trim_start: float = 0.0,
         crf: int = 15,
-        preset: str = "slow",
+        preset: Optional[str] = None,
         force_fps: int = 30,
     ) -> str:
         """Render a reel with the canonical frame layout.
@@ -263,7 +287,7 @@ class FrameCompositor:
             duration_seconds: Clip duration cap (None = use full clip).
             trim_start: Start trimming from this offset in seconds.
             crf: H.264 CRF (15 for Instagram quality, 17 for FB, 18 for YT).
-            preset: FFmpeg preset (slow for best quality).
+            preset: FFmpeg preset. Defaults to visuals.yaml ffmpeg.preset.
             force_fps: Output frame rate.
 
         Returns:
@@ -272,6 +296,10 @@ class FrameCompositor:
         Raises:
             RuntimeError: if FFmpeg fails.
         """
+        # Use config defaults from visuals.yaml
+        ff = self.branding.ffmpeg
+        if preset is None:
+            preset = ff.preset
         # Validate hook length
         if len(hook_text) > HOOK_MAX_CHARS:
             logger.warning(
@@ -307,15 +335,18 @@ class FrameCompositor:
                 info, duration_seconds, trim_start, crf, preset, force_fps,
             )
 
-        logger.info(f"[{self.branding.niche_id}] Running FFmpeg: {' '.join(ffmpeg_cmd[:8])}...")
-        result = subprocess.run(
-            ffmpeg_cmd,
-            capture_output=True, text=True, timeout=300,
-        )
-
-        if result.returncode != 0:
-            logger.error(f"FFmpeg failed:\n{result.stderr[-2000:]}")
-            raise RuntimeError(f"FFmpeg composition failed: {result.stderr[-500:]}")
+        logger.info(f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}...")
+        try:
+            result = run_ffmpeg(
+                ffmpeg_cmd,
+                timeout=ff.timeout_seconds,
+                fallback_preset=ff.fallback_preset,
+            )
+        except subprocess.CalledProcessError as exc:
+            logger.error(f"FFmpeg failed:\n{(exc.stderr or '')[-2000:]}")
+            raise RuntimeError(
+                f"FFmpeg composition failed: {(exc.stderr or '')[-500:]}"
+            ) from exc
 
         logger.info(f"[{self.branding.niche_id}] Rendered -> {output_path}")
         return output_path
@@ -563,11 +594,17 @@ class FrameCompositor:
 
     @staticmethod
     def _escape_drawtext(text: str) -> str:
-        """Escape text for FFmpeg drawtext filter."""
+        """Escape text for FFmpeg drawtext filter.
+
+        Single quotes cannot be reliably escaped inside drawtext values
+        delimited by '...' in a filter_complex string — FFmpeg treats \\'
+        as end-of-value.  Replace with Unicode RIGHT SINGLE QUOTATION MARK
+        (U+2019) which is visually identical and harmless.
+        """
         return (
             text
             .replace("\\", "\\\\")
-            .replace("'", "\\'")
+            .replace("'", "\u2019")      # curly quote — safe inside '...'
             .replace(":", "\\:")
             .replace("[", "\\[")
             .replace("]", "\\]")
