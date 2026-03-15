@@ -43,7 +43,7 @@ class RunReport:
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         run_stats = context.get("run_stats", {})
         niche_config = context.get("niche_config", {})
-        niche_id = niche_config.get("niche_id", "unknown")
+        niche_id = context.get("niche_id") or niche_config.get("niche_id", "unknown")
         stories = context.get("stories", [])
         blueprints = context.get("blueprints", [])
 
@@ -53,8 +53,10 @@ class RunReport:
         stage_timings = run_stats.get("_stage_timings", {})
         total_duration = sum(stage_timings.values()) if stage_timings else 0
 
-        # Determine run_id from context or generate
-        run_id = run_stats.get("run_id", f"{niche_id}_{now.strftime('%Y%m%d_%H%M%S')}")
+        # Determine run_id from context (top-level), then run_stats, then generate
+        run_id = context.get("run_id") or run_stats.get(
+            "run_id", f"{niche_id}_{now.strftime('%Y%m%d_%H%M%S')}",
+        )
 
         # Collect sub-stage stats
         qc = run_stats.get("qc", {})
@@ -114,9 +116,10 @@ class RunReport:
             "slo_violations": slo_violations,
         }
 
-        # Write to run directory
+        # Write to run directory — prefer context's run_dir (set by pipeline_runner)
         try:
-            run_dir = self._resolve_run_dir(niche_id, run_id)
+            ctx_run_dir = context.get("run_dir")
+            run_dir = Path(ctx_run_dir) if ctx_run_dir else self._resolve_run_dir(niche_id, run_id)
             run_dir.mkdir(parents=True, exist_ok=True)
             report_path = run_dir / "run_report.json"
             report_path.write_text(json.dumps(report, indent=2, default=str))

@@ -181,12 +181,13 @@ class TestDownloadVideosForStories:
         assert "HTTP 403" in entries["fail_dl"]["error"]
         assert entries["fail_dl"]["source_url"] == "https://youtube.com/watch?v=fail"
 
-    def test_skips_stories_without_id(self, tmp_path):
-        """Stories missing story_id are skipped."""
+    def test_generates_story_id_when_missing(self, tmp_path):
+        """Stories missing story_id get an auto-generated hash ID."""
         with patch(
             "genlab_core.media.video_sourcer.VideoSourcer"
         ) as MockSourcer:
             instance = MockSourcer.return_value
+            instance.find_video_for_story.return_value = None
             instance.get_stats.return_value = {
                 "direct_url": 0, "youtube": 0, "reddit": 0, "tmdb": 0, "none": 0,
             }
@@ -202,9 +203,11 @@ class TestDownloadVideosForStories:
                 max_stories=10,
             )
 
-        assert len(entries) == 0
-        # find_video_for_story should never be called
-        instance.find_video_for_story.assert_not_called()
+        # Stories now get processed with auto-generated IDs
+        assert len(entries) == 2
+        # Verify story_id was backfilled on the original dicts
+        assert stories[0]["story_id"] != ""
+        assert stories[1]["story_id"] != ""
 
     @patch("genlab_core.media.download_top_videos._download_video")
     @patch("genlab_core.media.download_top_videos._validate_download")
