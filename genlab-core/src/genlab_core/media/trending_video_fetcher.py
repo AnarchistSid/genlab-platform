@@ -312,11 +312,12 @@ class TrendingVideoFetcher:
             )
             resp.raise_for_status()
             items = resp.json().get("items", [])
-            return [
-                v for v in
-                (self._parse_video(item, "mostPopular") for item in items)
-                if v is not None and self._is_recent(item, published_after)
-            ]
+            results = []
+            for item in items:
+                v = self._parse_video(item, "mostPopular")
+                if v is not None and self._is_recent(item, published_after):
+                    results.append(v)
+            return results
         except Exception as e:
             logger.error("mostPopular fetch failed for category %s: %s", category_id, e)
             return []

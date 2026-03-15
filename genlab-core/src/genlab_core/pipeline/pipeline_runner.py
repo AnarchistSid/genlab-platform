@@ -147,9 +147,13 @@ class GenericPipelineRunner:
                     self._post_run_hook(ctx)
                 return ctx
 
+            run_dir = self._genlab_root / ".tmp" / "runs" / run_id
+            run_dir.mkdir(parents=True, exist_ok=True)
+
             context_dict: Dict[str, Any] = {
                 "niche_id": niche_id,
                 "run_id": run_id,
+                "run_dir": str(run_dir),
                 "stories": ctx.stories,
                 "blueprints": ctx.blueprints,
                 "run_stats": ctx.run_stats,

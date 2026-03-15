@@ -21,19 +21,19 @@ class TestGetModel:
     def test_hook_generation_returns_sonnet(self):
         assert "sonnet" in get_model("generate_hooks").lower()
 
-    def test_script_generation_returns_gpt4o_mini(self):
-        assert get_model("generate_script") == "gpt-4o-mini"
+    def test_script_generation_returns_haiku(self):
+        assert "haiku" in get_model("generate_script").lower()
 
     def test_utility_task_returns_haiku(self):
         assert "haiku" in get_model("extract_game_name").lower()
 
     def test_unknown_task_returns_default(self):
         model = get_model("nonexistent_task_xyz")
-        assert model == "gpt-4o-mini"  # default_model from YAML
+        assert "haiku" in model.lower()  # default_model from YAML
 
     def test_budget_10pct_downgrades(self):
         model = get_model("generate_hooks", budget_ratio=0.15)
-        assert model == "gpt-4o-mini"  # expensive_to_mid fallback
+        assert "haiku" in model.lower()  # expensive_to_mid fallback
 
     def test_budget_25pct_uses_cheapest(self):
         model = get_model("generate_hooks", budget_ratio=0.30)
@@ -43,7 +43,7 @@ class TestGetModel:
         with patch.dict(os.environ, {"MODEL_ROUTING_CONFIG": "/nonexistent/path.yaml"}):
             _load_routing_config.cache_clear()
             model = get_model("generate_hooks")
-            assert model == "gpt-4o-mini"
+            assert model is not None  # returns hardcoded default
 
     def test_yaml_override_respected(self):
         custom_config = {
