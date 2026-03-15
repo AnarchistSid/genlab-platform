@@ -181,11 +181,11 @@ def _fetch_instagram(post_id: str) -> Optional[Dict[str, Any]]:
         return None
     data = r.json()
 
-    # Insights
+    # Insights — Reels do NOT support 'impressions' (400 error); use reach,saved,shares,total_interactions
     insights_resp = requests.get(
         f"{api_base}/{post_id}/insights",
         params={
-            "metric": "reach,saved,shares,total_interactions,impressions",
+            "metric": "reach,saved,shares,total_interactions",
             "access_token": token,
         },
         timeout=15,
@@ -201,7 +201,6 @@ def _fetch_instagram(post_id: str) -> Optional[Dict[str, Any]]:
         "likes": data.get("like_count", 0),
         "comments": data.get("comments_count", 0),
         "reach": insights.get("reach", 0),
-        "impressions": insights.get("impressions", 0),
         "saved": insights.get("saved", 0),
         "shares": insights.get("shares", 0),
         "engagement": insights.get("total_interactions", 0),
@@ -299,6 +298,64 @@ def _fetch_twitter(post_id: str) -> Optional[Dict[str, Any]]:
         "engagement": likes + retweets + replies,
         "reach": metrics.get("impression_count", 0),
     }
+
+
+def _write_back_to_blueprint(
+    client: Any,
+    blueprint_record_id: str,
+    platform: str,
+    insights: Dict[str, Any],
+    window: int,
+) -> None:
+    """Write key engagement metrics back to the blueprint record.
+
+    Non-fatal: caller wraps in try/except. Analytics upsert has already
+    succeeded at this point — a blueprint write-back failure is logged
+    but never fails the whole insights run.
+    """
+    fields: Dict[str, Any] = {}
+
+    if platform == "instagram":
+        fields["ig_reach"] = insights.get("reach", 0)
+        fields["ig_likes"] = insights.get("likes", 0)
+        fields["ig_comments"] = insights.get("comments", 0)
+    elif platform == "youtube":
+        fields["yt_views"] = insights.get("views", 0)
+        fields["yt_likes"] = insights.get("likes", 0)
+        fields["yt_comments"] = insights.get("comments", 0)
+
+    # Compute engagement_rate
+    ig_reach = fields.get("ig_reach", 0) or 0
+    ig_likes = fields.get("ig_likes", 0) or 0
+    ig_comments = fields.get("ig_comments", 0) or 0
+    yt_views = fields.get("yt_views", 0) or 0
+    yt_likes = fields.get("yt_likes", 0) or 0
+    yt_comments = fields.get("yt_comments", 0) or 0
+
+    if ig_reach > 0:
+        fields["engagement_rate"] = round((ig_likes + ig_comments) / ig_reach, 4)
+    elif yt_views > 0:
+        fields["engagement_rate"] = round((yt_likes + yt_comments) / yt_views, 4)
+
+    # Timestamps
+    now_iso = datetime.now(timezone.utc).isoformat()
+    fields["insights_collected_at"] = now_iso
+    if window <= 8:
+        fields["insights_6h_at"] = now_iso
+    elif window <= 26:
+        fields["insights_24h_at"] = now_iso
+
+    # Remove None/empty values
+    fields = {k: v for k, v in fields.items() if v is not None}
+
+    if not fields:
+        return
+
+    client.blueprints.update(blueprint_record_id, fields, typecast=True)
+    logger.info(
+        "Blueprint %s write-back: platform=%s fields=%s",
+        blueprint_record_id, platform, list(fields.keys()),
+    )
 
 
 def _mark_window_completed(
@@ -408,6 +465,18 @@ def fetch_insights_for_window(
             # Mark window completed
             existing_windows = f.get("insight_windows_completed", "")
             _mark_window_completed(client, r["id"], existing_windows, window)
+
+            # Write key metrics back to blueprint for dashboard display
+            if blueprint_record_id:
+                try:
+                    _write_back_to_blueprint(
+                        client, blueprint_record_id, platform, insights, window,
+                    )
+                except Exception as wb_exc:
+                    logger.warning(
+                        "Blueprint write-back failed for %s (non-fatal): %s",
+                        blueprint_record_id, wb_exc,
+                    )
 
             logger.info(
                 "Fetched %s/%s: engagement=%s (age=%.0fh, window=%sh)",
