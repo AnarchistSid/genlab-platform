@@ -168,31 +168,33 @@ def write_video_content(
             hash_parts = [p for p in ig_parts if p.strip().startswith("#")]
             body = "\n\n".join(body_parts).strip()
 
-            # Truncate body to ~180 chars (leaves room for hashtags + CTA)
-            if len(body) > 180:
-                body = body[:177].rsplit(" ", 1)[0] + "..."
-
-            # Enforce 3-5 hashtags
+            # Enforce 3-5 hashtags (extract before body truncation)
             all_tags = re.findall(r"#\w+", " ".join(hash_parts) + " " + body)
-            # Remove hashtags from body text
             body = re.sub(r"\s*#\w+", "", body).strip()
             if len(all_tags) < 3:
                 all_tags = list(voice["hashtags"][:4])
             elif len(all_tags) > 5:
                 all_tags = all_tags[:5]
 
-            # Ensure CTA at the end
+            # Ensure CTA
             ctas = voice.get("ctas", [])
-            has_cta = any(
-                cta.lower() in body.lower() for cta in ctas
-            )
-            if not has_cta and ctas:
-                import random
-                cta = random.choice(ctas[:3])
-                body = f"{body}\n\n{cta.capitalize()}"
+            has_cta = any(cta.lower() in body.lower() for cta in ctas)
+            import random
+            cta_text = "" if has_cta else random.choice(ctas[:3]).capitalize() if ctas else ""
 
-            # Reassemble: body + CTA + hashtags
-            ig = f"{body}\n\n{' '.join(all_tags)}"
+            # Calculate space budget: 200 total - hashtags - CTA - newlines
+            tags_str = " ".join(all_tags)
+            overhead = len(tags_str) + len(cta_text) + 4  # 4 = two "\n\n" separators
+            body_budget = 200 - overhead
+            if len(body) > body_budget:
+                body = body[:body_budget - 3].rsplit(" ", 1)[0] + "..."
+
+            # Reassemble: body + CTA + hashtags (total ≤200 chars)
+            parts = [body]
+            if cta_text:
+                parts.append(cta_text)
+            parts.append(tags_str)
+            ig = "\n\n".join(parts)
             content["instagram_caption"] = ig
 
         # ── Enforce Twitter ≤280 chars ───────────────────────
