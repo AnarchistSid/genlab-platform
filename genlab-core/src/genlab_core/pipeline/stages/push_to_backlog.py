@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -195,6 +195,16 @@ class PushToBacklog:
 
                     if rendered_path:
                         fields["visual_paths"] = json.dumps([rendered_path])
+                        # Auto-schedule for today's publish window (06:30 UTC = 12:00 IST)
+                        today_utc = datetime.now(timezone.utc).date()
+                        publish_time = datetime(
+                            today_utc.year, today_utc.month, today_utc.day,
+                            6, 30, tzinfo=timezone.utc,
+                        )
+                        # If we're past today's window, schedule for tomorrow
+                        if datetime.now(timezone.utc) > publish_time:
+                            publish_time += timedelta(days=1)
+                        fields["scheduled_for"] = publish_time.isoformat()
                     # clip_url and thumbnail_url intentionally omitted — not SharePoint columns
 
                     client.blueprints.create(fields, typecast=True)

@@ -1,14 +1,15 @@
 """Pipeline stage: Validate rendered videos meet platform specs.
 
 Checks each rendered video against Instagram Reels / YouTube Shorts specs:
-  - Dimensions: 1080×1920 (9:16) preferred, min 600×1067
+  - Dimensions: 1080×1920 (9:16) required
   - Codec: H.264 (libx264)
   - Pixel format: yuv420p
-  - Audio: AAC, 48kHz preferred
-  - Duration: 3-90 seconds
+  - Color space: bt709
+  - Audio: AAC, 48kHz stereo
+  - Duration: 15-60 seconds
   - File size: < 100 MB
 
-Auto-fix attempts re-encoding for codec/pixel format mismatches.
+Auto-fix attempts re-encoding for codec/pixel format/color space mismatches.
 VMAF check is optional (requires vmaf model, disabled by default).
 
 Non-fatal: invalid videos are flagged but don't crash the pipeline.
@@ -20,7 +21,7 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 
@@ -28,15 +29,16 @@ logger = logging.getLogger(__name__)
 
 # Platform specs
 SPEC = {
-    "min_width": 600,
-    "min_height": 1067,
     "target_width": 1080,
     "target_height": 1920,
     "codec": "h264",
     "pix_fmt": "yuv420p",
+    "color_space": "bt709",
     "audio_codec": "aac",
-    "min_duration": 3.0,
-    "max_duration": 90.0,
+    "audio_sample_rate": 48000,
+    "audio_channels": 2,
+    "min_duration": 15.0,
+    "max_duration": 60.0,
     "max_file_size_mb": 100,
 }
 
@@ -159,13 +161,13 @@ class ValidateVideos:
             issues.append("no_video_stream")
             return issues
 
-        # Dimensions
+        # Dimensions — must be exactly 1080x1920
         width = int(video_stream.get("width", 0))
         height = int(video_stream.get("height", 0))
-        if width < SPEC["min_width"] or height < SPEC["min_height"]:
-            issues.append(f"dimensions_too_small:{width}x{height}")
+        if width != SPEC["target_width"] or height != SPEC["target_height"]:
+            issues.append(f"wrong_dimensions:{width}x{height}")
 
-        # Codec
+        # Codec — must be H.264
         codec = video_stream.get("codec_name", "")
         if codec != SPEC["codec"]:
             issues.append(f"wrong_codec:{codec}")
@@ -175,7 +177,31 @@ class ValidateVideos:
         if pix_fmt != SPEC["pix_fmt"]:
             issues.append(f"wrong_pix_fmt:{pix_fmt}")
 
-        # Duration
+        # Color space — must be bt709
+        color_space = video_stream.get("color_space", "")
+        if color_space and color_space != SPEC["color_space"]:
+            issues.append(f"wrong_color_space:{color_space}")
+
+        # Audio checks
+        if not audio_stream:
+            issues.append("no_audio_stream")
+        else:
+            # Audio codec — must be AAC
+            audio_codec = audio_stream.get("codec_name", "")
+            if audio_codec != SPEC["audio_codec"]:
+                issues.append(f"wrong_audio_codec:{audio_codec}")
+
+            # Audio sample rate — must be 48kHz
+            sample_rate = int(audio_stream.get("sample_rate", 0))
+            if sample_rate != SPEC["audio_sample_rate"]:
+                issues.append(f"wrong_sample_rate:{sample_rate}")
+
+            # Audio channels — must be stereo (2)
+            channels = int(audio_stream.get("channels", 0))
+            if channels != SPEC["audio_channels"]:
+                issues.append(f"wrong_audio_channels:{channels}")
+
+        # Duration — must be 15-60 seconds
         fmt = probe.get("format", {})
         duration = float(fmt.get("duration", 0))
         if duration < SPEC["min_duration"]:
@@ -192,8 +218,11 @@ class ValidateVideos:
 
     @staticmethod
     def _can_fix(issues: List[str]) -> bool:
-        """Determine if issues are auto-fixable (codec/pix_fmt only)."""
-        fixable = {"wrong_codec", "wrong_pix_fmt"}
+        """Determine if issues are auto-fixable via re-encoding."""
+        fixable = {
+            "wrong_codec", "wrong_pix_fmt", "wrong_color_space",
+            "wrong_audio_codec", "wrong_sample_rate", "wrong_audio_channels",
+        }
         return all(
             any(issue.startswith(f) for f in fixable)
             for issue in issues
@@ -205,7 +234,7 @@ class ValidateVideos:
         probe: Dict[str, Any],
         issues: List[str],
     ) -> Optional[Path]:
-        """Re-encode to fix codec/pix_fmt issues."""
+        """Re-encode to fix codec/pix_fmt/color_space/audio issues."""
         ffmpeg = get_ffmpeg_binary()
         out = path.with_stem(f"{path.stem}_fixed")
 
@@ -214,8 +243,12 @@ class ValidateVideos:
             "-i", str(path),
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
             "-c:a", "aac",
             "-ar", "48000",
+            "-ac", "2",
             "-movflags", "+faststart",
             str(out),
         ]
