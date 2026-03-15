@@ -328,10 +328,13 @@ class TestValidateVideos:
                     "width": 1080,
                     "height": 1920,
                     "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
                 },
                 {
                     "codec_type": "audio",
                     "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
                 },
             ],
             "format": {"duration": "30.0", "size": "5000000"},
@@ -349,6 +352,13 @@ class TestValidateVideos:
                     "width": 1080,
                     "height": 1920,
                     "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
                 },
             ],
             "format": {"duration": "30.0", "size": "5000000"},
@@ -366,12 +376,163 @@ class TestValidateVideos:
                     "width": 1080,
                     "height": 1920,
                     "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
                 },
             ],
-            "format": {"duration": "1.5", "size": "100000"},
+            "format": {"duration": "5.0", "size": "100000"},
         }
         issues = stage._check(probe)
         assert any("too_short" in i for i in issues)
+
+    def test_check_too_long(self):
+        """Videos longer than 60s must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1080,
+                    "height": 1920,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
+                },
+            ],
+            "format": {"duration": "120.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("too_long" in i for i in issues)
+
+    def test_check_wrong_dimensions(self):
+        """Non-1080x1920 dimensions must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 720,
+                    "height": 1280,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
+                },
+            ],
+            "format": {"duration": "30.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("wrong_dimensions" in i for i in issues)
+
+    def test_check_wrong_color_space(self):
+        """bt470bg color space must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1080,
+                    "height": 1920,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt470bg",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 2,
+                },
+            ],
+            "format": {"duration": "30.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("wrong_color_space" in i for i in issues)
+
+    def test_check_wrong_audio_sample_rate(self):
+        """Non-48kHz audio must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1080,
+                    "height": 1920,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "44100",
+                    "channels": 2,
+                },
+            ],
+            "format": {"duration": "30.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("wrong_sample_rate" in i for i in issues)
+
+    def test_check_wrong_audio_channels(self):
+        """Non-stereo audio must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1080,
+                    "height": 1920,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+                {
+                    "codec_type": "audio",
+                    "codec_name": "aac",
+                    "sample_rate": "48000",
+                    "channels": 1,
+                },
+            ],
+            "format": {"duration": "30.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("wrong_audio_channels" in i for i in issues)
+
+    def test_check_no_audio_stream(self):
+        """Missing audio stream must be flagged."""
+        stage = self._make()
+        probe = {
+            "streams": [
+                {
+                    "codec_type": "video",
+                    "codec_name": "h264",
+                    "width": 1080,
+                    "height": 1920,
+                    "pix_fmt": "yuv420p",
+                    "color_space": "bt709",
+                },
+            ],
+            "format": {"duration": "30.0", "size": "5000000"},
+        }
+        issues = stage._check(probe)
+        assert any("no_audio_stream" in i for i in issues)
 
 
 # ── FetchInsights ───────────────────────────────────────────────
