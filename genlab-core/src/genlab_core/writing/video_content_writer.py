@@ -75,6 +75,7 @@ def write_video_content(
     niche_id: str,
     llm_client: Any,
     existing_hooks: Optional[list[str]] = None,
+    extra_instructions: str = "",
 ) -> dict:
     """Generate platform-specific content for a trending video.
 
@@ -84,6 +85,8 @@ def write_video_content(
         niche_id: gaming, sports, movies, anime, ai_news
         llm_client: Object with .complete(system, user, max_tokens, temperature)
         existing_hooks: Already-used hooks to avoid duplicates
+        extra_instructions: Optional niche-specific instructions (banned phrases,
+            tone guidance, examples) appended to the system prompt.
 
     Returns:
         Dict with: hook, instagram_caption, twitter_content,
@@ -116,6 +119,7 @@ def write_video_content(
             f"{existing_hooks_text}\n\n"
             if existing_hooks_text else ""
         )
+        + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + "Respond ONLY with valid JSON. No markdown, no explanation."
     )
 
