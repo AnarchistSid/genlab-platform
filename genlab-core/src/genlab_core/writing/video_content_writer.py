@@ -108,12 +108,14 @@ def write_video_content(
         "You are writing content FOR a video that's already going viral.\n"
         "Reference what's actually happening in the video — be specific.\n"
         "Never use generic templates like \"something big happened\".\n\n"
-        "RULES:\n"
-        "- Hook: ≤60 characters, story-specific, creates curiosity\n"
-        "- Instagram: 150-200 chars + 3-5 relevant hashtags + CTA\n"
-        "- Twitter: ≤280 chars, NO external links\n"
-        "- YouTube title: question format, ≤40 characters\n"
-        "- Facebook: 200-300 chars, engaging question\n\n"
+        "STRICT CHARACTER LIMITS (enforced — content will be truncated if exceeded):\n"
+        "- hook: ≤60 characters. Story-specific, creates curiosity. NO generic phrases.\n"
+        "- instagram_caption: EXACTLY 150-180 characters of body text, then a line break,\n"
+        "  then a CTA (e.g. 'Follow for daily sports'), then a line break,\n"
+        "  then EXACTLY 3-5 relevant hashtags. Total must be under 200 chars.\n"
+        "- twitter_content: ≤280 chars. Punchy, conversational. NO external links.\n"
+        "- youtube_content: Question format, ≤40 characters total.\n"
+        "- facebook_content: 200-300 chars. Ask an engaging question.\n\n"
         + (
             "These hooks are already used — DO NOT duplicate:\n"
             f"{existing_hooks_text}\n\n"
@@ -157,11 +159,59 @@ def write_video_content(
             hook = hook[:57].rsplit(" ", 1)[0] + "..."
             content["hook"] = hook
 
-        # Ensure hashtags in instagram caption
+        # ── Enforce Instagram caption standards ──────────────
         ig = content.get("instagram_caption", "")
-        if ig and "#" not in ig:
-            ig += f"\n\n{' '.join(voice['hashtags'][:4])}"
+        if ig:
+            # Split caption body from hashtags
+            ig_parts = ig.split("\n\n")
+            body_parts = [p for p in ig_parts if not p.strip().startswith("#")]
+            hash_parts = [p for p in ig_parts if p.strip().startswith("#")]
+            body = "\n\n".join(body_parts).strip()
+
+            # Truncate body to ~180 chars (leaves room for hashtags + CTA)
+            if len(body) > 180:
+                body = body[:177].rsplit(" ", 1)[0] + "..."
+
+            # Enforce 3-5 hashtags
+            all_tags = re.findall(r"#\w+", " ".join(hash_parts) + " " + body)
+            # Remove hashtags from body text
+            body = re.sub(r"\s*#\w+", "", body).strip()
+            if len(all_tags) < 3:
+                all_tags = list(voice["hashtags"][:4])
+            elif len(all_tags) > 5:
+                all_tags = all_tags[:5]
+
+            # Ensure CTA at the end
+            ctas = voice.get("ctas", [])
+            has_cta = any(
+                cta.lower() in body.lower() for cta in ctas
+            )
+            if not has_cta and ctas:
+                import random
+                cta = random.choice(ctas[:3])
+                body = f"{body}\n\n{cta.capitalize()}"
+
+            # Reassemble: body + CTA + hashtags
+            ig = f"{body}\n\n{' '.join(all_tags)}"
             content["instagram_caption"] = ig
+
+        # ── Enforce Twitter ≤280 chars ───────────────────────
+        tw = content.get("twitter_content", "")
+        if tw and len(tw) > 280:
+            tw = tw[:277].rsplit(" ", 1)[0] + "..."
+            content["twitter_content"] = tw
+
+        # ── Enforce YouTube title ≤40 chars + question format ─
+        yt = content.get("youtube_content", "")
+        if yt and len(yt) > 40:
+            yt = yt[:37].rsplit(" ", 1)[0] + "?"
+            content["youtube_content"] = yt
+
+        # ── Enforce Facebook 200-300 chars ───────────────────
+        fb = content.get("facebook_content", "")
+        if fb and len(fb) > 300:
+            fb = fb[:297].rsplit(" ", 1)[0] + "..."
+            content["facebook_content"] = fb
 
         return content
 
