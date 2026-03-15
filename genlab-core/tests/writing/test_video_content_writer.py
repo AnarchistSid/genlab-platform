@@ -97,3 +97,45 @@ class TestVideoContentWriter:
         )
         result = write_video_content(_make_video(), "sports", llm)
         assert result["hook"] == "Works"
+
+    def test_extra_instructions_in_system_prompt(self):
+        llm = _make_llm(
+            '{"hook":"Test","instagram_caption":"x #Sports",'
+            '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
+        )
+        result = write_video_content(
+            _make_video(), "sports", llm,
+            extra_instructions="BANNED PHRASES:\n  - the sports world is watching",
+        )
+        call_args = llm.complete.call_args
+        system_prompt = call_args.kwargs.get("system", "")
+        assert "BANNED PHRASES" in system_prompt
+        assert "the sports world is watching" in system_prompt
+
+    def test_extra_instructions_empty_no_effect(self):
+        llm = _make_llm(
+            '{"hook":"Test","instagram_caption":"x #Sports",'
+            '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
+        )
+        result = write_video_content(_make_video(), "sports", llm, extra_instructions="")
+        call_args = llm.complete.call_args
+        system_prompt = call_args.kwargs.get("system", "")
+        # Should not have a stray double newline before the JSON instruction
+        assert "BANNED" not in system_prompt
+        assert result["hook"] == "Test"
+
+    def test_extra_instructions_before_json_instruction(self):
+        llm = _make_llm(
+            '{"hook":"Ok","instagram_caption":"x #Sports",'
+            '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
+        )
+        write_video_content(
+            _make_video(), "sports", llm,
+            extra_instructions="TONE: Be exciting",
+        )
+        call_args = llm.complete.call_args
+        system_prompt = call_args.kwargs.get("system", "")
+        # extra_instructions should appear before the JSON-only instruction
+        tone_pos = system_prompt.index("TONE: Be exciting")
+        json_pos = system_prompt.index("Respond ONLY with valid JSON")
+        assert tone_pos < json_pos
