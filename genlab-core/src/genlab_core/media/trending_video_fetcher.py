@@ -168,6 +168,7 @@ class TrendingVideo:
         from genlab_core.cache.stable_ids import generate_story_id
 
         sid = generate_story_id(self.download_url, self.published_at.isoformat())
+        now_iso = datetime.now(timezone.utc).isoformat()
         return {
             "story_id": sid,
             "title": self.title,
@@ -175,6 +176,8 @@ class TrendingVideo:
             "source_url": self.download_url,
             "canonical_url": self.download_url,
             "published_date": self.published_at.isoformat(),
+            "published_at": self.published_at.isoformat(),
+            "fetched_at": now_iso,
             "summary": self.description_snippet,
             "channel_name": self.channel_name,
             "view_count": self.view_count,
@@ -186,6 +189,8 @@ class TrendingVideo:
             "video_source": "trending",
             "video_id": self.video_id,
             "is_official_channel": self.is_official_channel,
+            # Trending videos already have proven engagement
+            "source_mention_count": 3,
             # Pre-filled clip info so DownloadTopVideos can skip re-sourcing
             "_trending_video": True,
         }
