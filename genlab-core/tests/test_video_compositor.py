@@ -373,8 +373,10 @@ class TestComposeVertical:
         compositor: VideoCompositor,
         tmp_assets: dict[str, Path],
     ) -> None:
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="Error: something broke",
+        # run_ffmpeg uses check=True, so subprocess.run raises CalledProcessError
+        # on non-zero exit rather than returning a CompletedProcess with bad rc.
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd="ffmpeg", stderr="Error: something broke",
         )
         with pytest.raises(RuntimeError, match="FFmpeg failed.*sandwich"):
             compositor.compose_vertical(

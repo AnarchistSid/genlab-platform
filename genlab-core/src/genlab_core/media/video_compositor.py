@@ -48,6 +48,7 @@ from genlab_core.media.ffmpeg_utils import (
     concat,
     escape_drawtext,
     probe_video_metadata,
+    run_ffmpeg,
 )
 
 logger = logging.getLogger(__name__)
@@ -186,15 +187,13 @@ class VideoCompositor:
                 args=cmd, returncode=0, stdout=result.stdout, stderr=result.stderr
             )
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-        )
-        if result.returncode != 0:
+        try:
+            return run_ffmpeg(cmd, timeout=timeout, fallback_preset="fast")
+        except subprocess.CalledProcessError as exc:
             raise RuntimeError(
-                f"FFmpeg failed [{label}] (exit {result.returncode}):\n"
-                + result.stderr[-2000:]
-            )
-        return result
+                f"FFmpeg failed [{label}] (exit {exc.returncode}):\n"
+                + (exc.stderr or "")[-2000:]
+            ) from exc
 
     # ── Public API ────────────────────────────────────────────────────────────
 

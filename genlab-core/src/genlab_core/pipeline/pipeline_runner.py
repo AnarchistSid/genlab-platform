@@ -152,6 +152,7 @@ class GenericPipelineRunner:
 
             context_dict: Dict[str, Any] = {
                 "niche_id": niche_id,
+                "niche_root": str(niche_root),
                 "run_id": run_id,
                 "run_dir": str(run_dir),
                 "stories": ctx.stories,

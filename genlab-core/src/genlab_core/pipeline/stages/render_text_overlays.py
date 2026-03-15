@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
+from genlab_core.media.ffmpeg_utils import escape_drawtext
 
 logger = logging.getLogger(__name__)
 
@@ -110,13 +111,8 @@ class RenderTextOverlays:
         """Burn drawtext overlay onto video, return output path."""
         ffmpeg = get_ffmpeg_binary()
 
-        # Escape text for FFmpeg drawtext
-        escaped = (
-            text.replace("\\", "\\\\")
-            .replace("'", "'\\''")
-            .replace(":", "\\:")
-            .replace("%", "%%")
-        )
+        # Escape text for FFmpeg drawtext (canonical escaping from ffmpeg_utils)
+        escaped = escape_drawtext(text)
 
         # Output alongside source with _overlaid suffix
         out_path = video_path.with_stem(f"{video_path.stem}_overlaid")

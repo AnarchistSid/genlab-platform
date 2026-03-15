@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict
 
 from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_id
@@ -37,11 +38,26 @@ class PushToBacklog:
     def _get_client(self, context: Dict[str, Any]) -> BacklogClient:
         """Lazy-initialize BacklogClient.
 
-        Uses the default settings-based config path. If the context
-        provides a ``backlog_config_path`` key, that path is used instead.
+        Config path resolution (in priority order):
+          1. context["backlog_config_path"] — explicit override
+          2. context["niche_root"] / config / lists_config.yaml — niche dir
+          3. Fall through to BacklogClient() defaults (BACKLOG_CONFIG_PATH
+             env var → CWD walk)
         """
         if self._client is None:
             config_path = context.get("backlog_config_path")
+
+            if not config_path:
+                niche_root = context.get("niche_root")
+                if niche_root:
+                    candidate = Path(niche_root) / "config" / "lists_config.yaml"
+                    if candidate.exists():
+                        config_path = str(candidate)
+                        logger.debug(
+                            "[PUSH] Resolved backlog config from niche_root: %s",
+                            config_path,
+                        )
+
             if config_path:
                 self._client = BacklogClient(config_path=config_path)
             else:
@@ -143,12 +159,6 @@ class PushToBacklog:
             fb = content.get("facebook", {})
 
             rendered_path = (story.get("media") or {}).get("rendered_path", "")
-            clip_data = (story.get("media") or {}).get("clip") or {}
-            clip_url = (
-                clip_data.get("source_url", "")
-                if isinstance(clip_data, dict)
-                else ""
-            ) or (story.get("media") or {}).get("source_url", "")
 
             try:
                 existing_bp = client.blueprints.all(
@@ -184,9 +194,7 @@ class PushToBacklog:
 
                     if rendered_path:
                         fields["visual_paths"] = json.dumps([rendered_path])
-                    if clip_url:
-                        fields["clip_url"] = clip_url
-                    # thumbnail_url intentionally omitted — not a SharePoint column
+                    # clip_url and thumbnail_url intentionally omitted — not SharePoint columns
 
                     client.blueprints.create(fields, typecast=True)
                     blueprints_pushed += 1

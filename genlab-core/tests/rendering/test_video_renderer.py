@@ -3,7 +3,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from genlab_core.rendering.video_renderer import VideoRenderer, NicheVisualConfig, _escape_drawtext
+from genlab_core.media.ffmpeg_utils import escape_drawtext
+from genlab_core.rendering.video_renderer import VideoRenderer, NicheVisualConfig
 
 
 @pytest.fixture
@@ -50,20 +51,28 @@ def test_get_standard_instagram_returns_h264():
 
 def test_render_raises_on_ffmpeg_failure(config, tmp_path):
     """RuntimeError when FFmpeg returns non-zero exit code."""
+    import subprocess as sp
     src = tmp_path / "source.mp4"
     src.touch()
     renderer = VideoRenderer(config)
-    with patch("genlab_core.rendering.video_renderer.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=1, stderr="fake error")
+    # run_ffmpeg lives in ffmpeg_utils — mock subprocess.run there
+    with patch("genlab_core.media.ffmpeg_utils.subprocess.run") as mock_run:
+        # run_ffmpeg uses check=True, so subprocess.run raises CalledProcessError
+        mock_run.side_effect = sp.CalledProcessError(
+            returncode=1, cmd="ffmpeg", stderr="fake error",
+        )
         with pytest.raises(RuntimeError, match="FFmpeg failed"):
             renderer.render(str(src), "Hook", str(tmp_path / "out.mp4"))
 
 
 def test_escape_drawtext_handles_special_chars():
-    """Verify FFmpeg-unsafe characters are escaped."""
-    result = _escape_drawtext("It's a test: 100%")
-    assert "'" not in result or "\\'" in result
-    assert "%%" in result
+    """Verify FFmpeg-unsafe characters are escaped (canonical escape_drawtext)."""
+    result = escape_drawtext("It's a test: 100%")
+    # Apostrophe replaced with Unicode U+2019
+    assert "'" not in result
+    assert "\u2019" in result
+    # Colon escaped
+    assert "\\:" in result
 
 
 def test_niche_visual_config_is_frozen():
