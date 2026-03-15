@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -176,7 +177,7 @@ class PushToBacklog:
                         "story_id": story_id,
                         "hook_text": hook,
                         "caption": ig.get("caption", ""),
-                        "hashtags": " ".join(ig.get("hashtags", [])),
+                        "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
                         "youtube_content": f"{yt.get('title', '')}\n\n{yt.get('description', '')}",
                         "twitter_content": tw.get("tweet", ""),
                         "facebook_content": fb.get("caption", ""),
