@@ -165,10 +165,10 @@ class FetchInsights:
                 return None
             data = resp.json()
 
-            # Insights (reach, impressions, saved, shares)
+            # Insights — Reels do NOT support 'impressions' (400 error)
             insights_url = f"https://graph.facebook.com/v21.0/{post_id}/insights"
             insights_params = {
-                "metric": "reach,saved,shares,total_interactions,impressions",
+                "metric": "reach,saved,shares,total_interactions",
                 "access_token": token,
             }
             insights_resp = requests.get(insights_url, params=insights_params, timeout=15)
@@ -183,7 +183,6 @@ class FetchInsights:
                 "likes": data.get("like_count", 0),
                 "comments": data.get("comments_count", 0),
                 "reach": insights.get("reach", 0),
-                "impressions": insights.get("impressions", 0),
                 "saved": insights.get("saved", 0),
                 "shares": insights.get("shares", 0),
             }
