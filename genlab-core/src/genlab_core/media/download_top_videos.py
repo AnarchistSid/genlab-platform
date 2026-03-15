@@ -218,8 +218,12 @@ def download_videos_for_stories(
         story_id = str(story.get("story_id", "")).strip()
         title = story.get("title", "untitled")
         if not story_id:
-            logger.warning("Story %d has no story_id, skipping", i)
-            continue
+            # Generate stable story_id from title hash — niche strategies
+            # don't always set story_id before the download stage.
+            import hashlib
+            story_id = hashlib.sha256(title.encode()).hexdigest()
+            story["story_id"] = story_id
+            logger.debug("Story %d: generated story_id from title hash", i)
 
         logger.info(
             "[%d/%d] Sourcing video for: %s (story_id=%s)",
