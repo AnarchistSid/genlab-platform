@@ -19,51 +19,72 @@ logger = logging.getLogger(__name__)
 NICHE_VOICE: Dict[str, Dict[str, Any]] = {
     "gaming": {
         "account": "@CriticalRush",
-        "style": "hype, community-focused, uses gaming slang naturally (goated, no cap, W)",
+        "style": (
+            "You sound like a Twitch streamer reacting live. High energy, "
+            "niche slang (goated, no cap, W, L, clutch, broken). React to "
+            "the moment FIRST, explain second. Never sound like a journalist."
+        ),
         "audience": "gamers aged 16-30",
         "ctas": [
-            "follow for daily gaming", "drop your take below",
-            "who else saw this?", "tag a gamer who needs to see this",
+            "drop your take below", "who else saw this?",
+            "tag a gamer who needs to see this", "save this 💀",
         ],
-        "hashtags": ["#Gaming", "#Gamer", "#Games", "#VideoGames", "#GamingClips"],
+        "hashtags": ["#Gaming", "#Gamer", "#GamingClips", "#VideoGames"],
     },
     "sports": {
         "account": "@ClutchWire",
-        "style": "electrifying, fan-energy, conversational, stats-aware",
+        "style": (
+            "You sound like the most passionate sports fan in the group chat. "
+            "Short, punchy, trash-talk energy. React to the moment, use specific "
+            "player names and stats. Never write a headline — write a reaction."
+        ),
         "audience": "sports fans aged 18-35",
         "ctas": [
-            "follow for daily sports", "comment your hot take",
-            "who saw this coming?", "tag a sports fan",
+            "comment your hot take 👇", "who saw this coming?",
+            "save this", "share with someone who needs to see this",
         ],
-        "hashtags": ["#Sports", "#SportsHighlights", "#Athlete", "#SportsClips"],
+        "hashtags": ["#Sports", "#SportsHighlights", "#Clutch"],
     },
     "movies": {
         "account": "@SpliceReel",
-        "style": "cinephile but accessible, enthusiastic, references film culture",
+        "style": (
+            "You sound like a film-obsessed friend texting at midnight. "
+            "Hot takes, genuine excitement or outrage, reference specific "
+            "scenes/actors/directors. Never write a review — write a reaction."
+        ),
         "audience": "movie fans aged 18-40",
         "ctas": [
-            "follow for daily cinema", "have you seen this yet?",
-            "watch or skip?", "save this for your watchlist",
+            "have you seen this yet?", "watch or skip?",
+            "save this for your watchlist", "what do you think 👇",
         ],
-        "hashtags": ["#Movies", "#Film", "#Cinema", "#FilmTwitter", "#Trailer"],
+        "hashtags": ["#Movies", "#Film", "#Cinema", "#Trailer"],
     },
     "anime": {
         "account": "@FrameDrift",
-        "style": "passionate otaku energy, references anime culture, emotional reactions",
+        "style": (
+            "You sound like the most invested person in the anime Discord. "
+            "Peak/mid/goated vocabulary, emotional reaction first. Debate "
+            "energy. Reference specific shows, characters, studios. "
+            "Never write a press release — write a fan reaction."
+        ),
         "audience": "anime fans aged 16-30",
         "ctas": [
-            "follow for daily anime", "are you watching this?",
+            "are you watching this?", "W take or L take? 👇",
             "tag your anime friend", "save this for later",
         ],
-        "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeClips", "#AnimeFan"],
+        "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeFan"],
     },
     "ai_creators": {
         "account": "@BlackboxBrief",
-        "style": "informed but accessible, explains tech simply, thought-provoking",
+        "style": (
+            "You sound like a tech-savvy person genuinely shocked by what AI "
+            "can do. Accessible, slightly conspiratorial, urgent. Reference "
+            "specific tools, demos, and capabilities. Never write a press release."
+        ),
         "audience": "tech-curious people aged 22-45",
         "ctas": [
-            "follow for daily AI", "what do you think?",
-            "save for later", "follow for more AI updates",
+            "what do you think?", "save for later",
+            "follow for more AI updates", "share this 👀",
         ],
         "hashtags": ["#AI", "#ArtificialIntelligence", "#Tech", "#MachineLearning"],
     },
