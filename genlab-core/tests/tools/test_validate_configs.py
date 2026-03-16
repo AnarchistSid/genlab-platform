@@ -62,7 +62,7 @@ class TestValidateConfigs:
                 "video_gate: require\nfallback_to_text_render: false\n"
             )
             result = validate_niche_dir(d)
-            assert result.ok  # should pass — errors list is empty
+            assert result.ok  # should pass -- errors list is empty
             assert len(result.warnings) > 0  # but warns about optional files
 
     def test_ok_property(self):

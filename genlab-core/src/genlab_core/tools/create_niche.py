@@ -68,7 +68,7 @@ def scaffold_niche(
     # Create assets directory
     (output_dir / "assets").mkdir(exist_ok=True)
 
-    # Replacement map: template-specific content → new niche content
+    # Replacement map: template-specific content -> new niche content
     brand_clean = brand_name.replace(" ", "")
     replacements = {
         # Placeholder tokens (forward compat)
@@ -90,7 +90,7 @@ def scaffold_niche(
         "TemplateHook": f"{brand_clean}Hook",
         "TemplateVisualRender": f"{brand_clean}VisualRender",
         "TemplatePlatformAdaptation": f"{brand_clean}PlatformAdaptation",
-        # Pipeline stage class names (Anime → Brand)
+        # Pipeline stage class names (Anime -> Brand)
         "AnimeContentResearchStrategy": f"{brand_clean}ContentResearchStrategy",
         "AnimeScoringStrategy": f"{brand_clean}ScoringStrategy",
         "AnimeWritingStrategy": f"{brand_clean}WritingStrategy",

@@ -1,4 +1,4 @@
-"""Tests to verify ai_news → ai_creators niche ID migration.
+"""Tests to verify ai_news -> ai_creators niche ID migration.
 
 All lookup dicts must have ai_creators as the canonical key.
 ai_news must remain as a backward-compat alias key that resolves
@@ -68,7 +68,7 @@ class TestAiCreatorsCanonical:
 
 
 class TestCommentProcessorPersonaAlias:
-    """Comment processor persona loading resolves ai_news ↔ ai_creators."""
+    """Comment processor persona loading resolves ai_news <-> ai_creators."""
 
     def test_load_persona_ai_creators_resolves_via_alias(self):
         """ai_creators resolves to ai_news.yaml persona via alias fallback."""
