@@ -255,8 +255,9 @@ class HookValidator:
         """
         stripped = hook.rstrip()
 
-        # Trailing ellipsis
-        if stripped.endswith("..."):
+        # Trailing ellipsis — only flag if 4+ dots (genuine truncation artifact).
+        # Deliberate "..." is used by content writers to shorten hooks to ≤60 chars.
+        if re.search(r"\.{4,}$", stripped):
             result.failures.append(HookFailure.INCOMPLETE_SENTENCE)
             return
 

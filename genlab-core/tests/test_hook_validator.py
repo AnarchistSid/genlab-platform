@@ -128,8 +128,14 @@ class TestExcessivePunctuation:
 
 
 class TestIncompleteSentence:
-    def test_trailing_ellipsis(self, validator):
+    def test_trailing_ellipsis_allowed(self, validator):
+        """Deliberate '...' is used by content writers for hook truncation — allowed."""
         result = validator.validate("When you see what happens next...", "instagram")
+        assert result.passed
+
+    def test_trailing_many_dots_rejected(self, validator):
+        """4+ dots is a genuine truncation artifact — rejected."""
+        result = validator.validate("When you see what happens next....", "instagram")
         assert HookFailure.INCOMPLETE_SENTENCE in result.failures
 
     def test_trailing_colon(self, validator):
