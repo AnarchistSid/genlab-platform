@@ -16,13 +16,10 @@ class TestPollYoutubeComments:
 
     def test_returns_correct_dict_keys_on_success(self, monkeypatch):
         """poll_youtube_comments returns dicts with InboundComment-compatible keys."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
-
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
+        monkeypatch.setenv("YOUTUBE_API_KEY", "test_api_key")
+        monkeypatch.delenv("YOUTUBE_CLIENT_ID", raising=False)
+        monkeypatch.delenv("YOUTUBE_CLIENT_SECRET", raising=False)
+        monkeypatch.delenv("YOUTUBE_REFRESH_TOKEN", raising=False)
 
         fake_playlist_resp = MagicMock()
         fake_playlist_resp.raise_for_status = MagicMock()
@@ -69,8 +66,7 @@ class TestPollYoutubeComments:
                 return fake_playlist_resp
             return fake_comments_resp
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", side_effect=mock_get):
+        with patch("requests.get", side_effect=mock_get):
             from genlab_core.engagement.poller import poll_youtube_comments
 
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))

@@ -22,11 +22,14 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
     """Fetch new comments on recent YouTube videos via Data API v3.
 
     Uses per-video polling (videoId) instead of channel-wide polling
-    (allThreadsRelatedToChannelId) which requires channel-owner OAuth scope
-    and was returning 403 Forbidden with standard OAuth tokens.
+    (allThreadsRelatedToChannelId) which requires channel-owner OAuth scope.
+
+    Auth strategy: prefers YOUTUBE_API_KEY (Data API key, works for all
+    public read operations) over OAuth. Falls back to OAuth only if no
+    API key is available.
 
     Flow:
-      1. Refresh OAuth access token
+      1. Resolve auth (API key or OAuth token)
       2. Get recent video IDs from channel uploads playlist
       3. Poll commentThreads per video using videoId parameter
     """
@@ -34,31 +37,38 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
 
     logger.debug("[POLLER] YouTube poll for %s (channel=%s)", niche_id, channel_id)
 
-    client_id = os.environ.get("YOUTUBE_CLIENT_ID", "")
-    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
-    refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
+    api_key = os.environ.get("YOUTUBE_API_KEY", "") or os.environ.get("YOUTUBE_DATA_API_KEY", "")
 
-    if not all([client_id, client_secret, refresh_token]):
-        logger.warning("[POLLER] YouTube credentials not set — skipping poll")
-        return []
+    if not api_key:
+        # Fall back to OAuth if no API key
+        client_id = os.environ.get("YOUTUBE_CLIENT_ID", "")
+        client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
+        if not all([client_id, client_secret, refresh_token]):
+            logger.warning("[POLLER] YouTube credentials not set — skipping poll")
+            return []
 
     try:
         import requests as _requests
 
-        # Step 1: Refresh the access token
-        token_resp = _requests.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "grant_type": "refresh_token",
-            },
-            timeout=10,
-        )
-        token_resp.raise_for_status()
-        access_token = token_resp.json()["access_token"]
-        headers = {"Authorization": f"Bearer {access_token}"}
+        # Step 1: Resolve auth — API key param or OAuth bearer header
+        auth_params: dict[str, str] = {}
+        headers: dict[str, str] = {}
+        if api_key:
+            auth_params["key"] = api_key
+        else:
+            token_resp = _requests.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                },
+                timeout=10,
+            )
+            token_resp.raise_for_status()
+            headers["Authorization"] = f"Bearer {token_resp.json()['access_token']}"
 
         # Step 2: Get recent video IDs from the uploads playlist
         # YouTube convention: uploads playlist ID = "UU" + channel_id[2:]
@@ -69,8 +79,9 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                 "playlistId": uploads_playlist,
                 "part": "contentDetails",
                 "maxResults": 10,
+                **auth_params,
             },
-            headers=headers,
+            headers=headers or None,
             timeout=15,
         )
         playlist_resp.raise_for_status()
@@ -96,8 +107,9 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                         "part": "snippet",
                         "order": "time",
                         "maxResults": 20,
+                        **auth_params,
                     },
-                    headers=headers,
+                    headers=headers or None,
                     timeout=15,
                 )
                 if resp.status_code == 403:
