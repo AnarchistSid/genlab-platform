@@ -36,13 +36,19 @@ RATE_CAPS: dict[str, int] = {
 _rate_limiter = EngagementRateLimiter(RATE_CAPS)
 
 
+_backlog_client_singleton = None
+
+
 def _get_backlog_client():
-    """Lazily load BacklogClient. Returns None if not configured."""
-    try:
-        from genlab_core.http.backlog_client import BacklogClient
-        return BacklogClient()
-    except Exception:
-        return None
+    """Lazily load BacklogClient singleton. Returns None if not configured."""
+    global _backlog_client_singleton
+    if _backlog_client_singleton is None:
+        try:
+            from genlab_core.http.backlog_client import BacklogClient
+            _backlog_client_singleton = BacklogClient()
+        except Exception:
+            return None
+    return _backlog_client_singleton
 
 
 def _get_agent_root() -> Path:

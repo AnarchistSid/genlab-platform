@@ -1,0 +1,20 @@
+# Disk quota enforcement for media workspaces.
+# Consumed by genlab_core.storage.disk_quota.DiskQuotaManager.
+#
+# Two-pass eviction: clips/ subdirs first, then full run dirs.
+# Published runs and N most recent runs are protected.
+
+agents:
+  content_scraper:
+    runs_dir: "/Users/anarchistsid/GenLab/Content Scraper/.tmp/runs"
+    quota_gb: 80
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
+
+  criticalrush:
+    runs_dir: "/Users/anarchistsid/GenLab/CriticalRush/.tmp/runs"
+    quota_gb: 30
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3

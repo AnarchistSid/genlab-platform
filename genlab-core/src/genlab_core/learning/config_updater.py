@@ -241,17 +241,17 @@ class ConfigUpdater:
 
     def _write_yaml_key(self, path: Path, data: dict, key: str, value: Any) -> None:
         """Write a nested YAML key using dot notation.
-        Creates a backup (.bak) before writing for safety.
+        Uses atomic tmp+rename to avoid corrupting YAML on crash.
         """
-        shutil.copy2(path, path.with_name(path.name + ".bak"))
-
         keys = key.split(".")
         target = data
         for k in keys[:-1]:
             target = target.setdefault(k, {})
         target[keys[-1]] = value
 
-        with open(path, "w") as f:
+        tmp_path = path.with_suffix(".yaml.tmp")
+        with open(tmp_path, "w") as f:
             yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        tmp_path.replace(path)
 
         logger.info("[CONFIG_UPDATE] Wrote %s=%r to %s", key, value, path)

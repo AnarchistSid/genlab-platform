@@ -117,7 +117,9 @@ class TestConfigUpdater:
         records = _make_records(25, hook_type="new_hook", reward=0.80)
         updater.run(feedback_records=records)
 
-        assert (config_dir / "templates.yaml.bak").exists()
+        # Atomic write: tmp+rename, no .bak file created
+        assert not (config_dir / "templates.yaml.bak").exists()
+        assert templates.exists()  # Original file still valid
 
     def test_circular_hour_comparison(self):
         """23:00 → 01:00 is 2 hours, not 22."""
