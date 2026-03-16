@@ -20,11 +20,15 @@ from genlab_core.media.frame_compositor import (
     L_VIDEO_Y,
     L_ACCENT_Y,
     L_ACCENT_H,
+    L_BOTTOM_H,
     S_VIDEO_Y,
     S_VIDEO_H,
-    S_GAP,
-    P_OVERLAY_H,
+    S_BOTTOM_H,
+    P_VIDEO_Y,
+    P_VIDEO_H,
     P_ACCENT_Y,
+    P_ACCENT_H,
+    P_BOTTOM_H,
     ChannelBranding,
     FrameCompositor,
     VideoInfo,
@@ -134,35 +138,42 @@ class TestLockedConstants:
         assert CANVAS_W == 1080
         assert CANVAS_H == 1920
 
-    def test_landscape_video_centred(self):
-        """Video centre must be at canvas centre (960)."""
-        video_centre = L_VIDEO_Y + L_VIDEO_H // 2
-        assert video_centre == CANVAS_H // 2
-
-    def test_landscape_symmetry(self):
-        """Equal black above and below video."""
-        black_above = L_VIDEO_Y
-        black_below = CANVAS_H - (L_VIDEO_Y + L_VIDEO_H)
-        assert black_above == black_below == 656
+    def test_landscape_zones_sum(self):
+        """All landscape zones must add up to full canvas height."""
+        total = L_VIDEO_Y + L_VIDEO_H + L_BOTTOM_H
+        assert total == CANVAS_H
 
     def test_landscape_accent_position(self):
-        assert L_ACCENT_Y == 650
+        assert L_ACCENT_Y == 460
         assert L_ACCENT_H == 6
         assert L_ACCENT_Y + L_ACCENT_H == L_VIDEO_Y
 
+    def test_landscape_bottom_bar(self):
+        """Bottom bar must satisfy YouTube (420px) and Instagram (320px) safe zones."""
+        assert L_BOTTOM_H == 846
+        assert L_BOTTOM_H >= 420, "YouTube needs 420px"
+        assert L_BOTTOM_H >= 320, "Instagram needs 320px"
+
     def test_square_zones_sum(self):
-        total = 160 + 6 + S_GAP + S_VIDEO_H + S_GAP
+        """All square zones must add up to full canvas height."""
+        total = S_VIDEO_Y + S_VIDEO_H + S_BOTTOM_H
         assert total == CANVAS_H
 
-    def test_square_gaps_equal(self):
-        assert S_GAP == 337
+    def test_square_bottom_bar(self):
+        assert S_BOTTOM_H == 374
 
-    def test_portrait_overlay(self):
-        assert P_OVERLAY_H == 220
-        assert P_ACCENT_Y == 220
+    def test_portrait_zones_sum(self):
+        """All portrait zones must add up to full canvas height."""
+        total = P_VIDEO_Y + P_VIDEO_H + P_BOTTOM_H
+        assert total == CANVAS_H
+
+    def test_portrait_accent_position(self):
+        assert P_ACCENT_Y == 460
+        assert P_ACCENT_H == 6
+        assert P_ACCENT_Y + P_ACCENT_H == P_VIDEO_Y
 
     def test_bottom_safe_zone_satisfies_platforms(self):
-        bottom_clear = CANVAS_H - (L_VIDEO_Y + L_VIDEO_H)
+        bottom_clear = L_BOTTOM_H
         assert bottom_clear >= 420, "YouTube needs 420px"
         assert bottom_clear >= 320, "Instagram needs 320px"
 
@@ -181,11 +192,11 @@ class TestHookWrapping:
     def test_long_hook_wraps(self):
         lines = FrameCompositor._wrap_hook("Bam Adebayo just dropped 83 points in a single game tonight")
         assert len(lines) >= 2
-        assert all(len(line) <= 32 for line in lines)
+        assert all(len(line) <= 35 for line in lines)
 
-    def test_max_3_lines(self):
+    def test_max_2_lines(self):
         lines = FrameCompositor._wrap_hook("A " * 100)
-        assert len(lines) <= 3
+        assert len(lines) <= 2
 
     def test_empty_hook(self):
         lines = FrameCompositor._wrap_hook("")
@@ -248,26 +259,40 @@ class TestFFmpegCommandStructure:
         fc = cmd[cmd.index("-filter_complex") + 1]
         assert "ff4500" in fc.lower(), "Accent color must appear in filtergraph"
 
-    def test_portrait_no_hook_text(self):
+    def test_portrait_has_hook_text(self):
         comp = self._make_compositor()
         info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "This hook should NOT appear", "/out.mp4", info, 30, 0, 15, "slow", 30)
+        cmd = comp._build_cmd_portrait("/src.mp4", "This hook appears", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "This hook" not in fc, "Portrait must NOT render hook text"
+        assert "This hook appears" in fc, "Portrait sandwich layout must render hook text"
 
-    def test_portrait_has_dark_overlay(self):
+    def test_portrait_has_black_canvas(self):
         comp = self._make_compositor()
         info = self._make_info(1080, 1920)
         cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "black@0.55" in fc or "0x000000@0.55" in fc
+        assert "color=black" in fc, "Portrait sandwich layout must use black canvas"
 
-    def test_portrait_no_channel_name(self):
+    def test_portrait_has_channel_name(self):
         comp = self._make_compositor()
         info = self._make_info(1080, 1920)
         cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "CriticalRush" not in fc, "Portrait must NOT render channel name"
+        assert "CriticalRush" in fc, "Portrait sandwich layout must render channel name"
+
+    def test_portrait_video_at_correct_y(self):
+        comp = self._make_compositor()
+        info = self._make_info(1080, 1920)
+        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        assert f"overlay=0:{P_VIDEO_Y}" in fc, "Portrait video must be placed at P_VIDEO_Y"
+
+    def test_portrait_has_accent_line(self):
+        comp = self._make_compositor()
+        info = self._make_info(1080, 1920)
+        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        assert "ff4500" in fc.lower(), "Portrait accent color must appear in filtergraph"
 
     def test_square_video_at_correct_y(self):
         comp = self._make_compositor()
