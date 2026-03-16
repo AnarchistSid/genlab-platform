@@ -62,6 +62,9 @@ def _download_video(url: str, output_path: str) -> Dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
+        # YouTube bot detection bypass: use browser cookies + JS challenge solver
+        "--cookies-from-browser", "chrome",
+        "--remote-components", "ejs:github",
         url,
     ]
     t0 = time.monotonic()
