@@ -288,7 +288,9 @@ class TestFindVideoDirectUrl:
         vs.find_video_for_story(story)
         assert vs.get_stats()["direct_url"] == 1
 
-    def test_none_result_increments_none_stats(self):
+    def test_none_result_increments_none_stats(self, monkeypatch):
+        monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+        monkeypatch.delenv("YOUTUBE_DATA_API_KEY", raising=False)
         vs = VideoSourcer(niche_id="anime", youtube_api_key="")
         story = {"title": "Anime news", "url": "https://example.com/article"}
         vs.find_video_for_story(story)
