@@ -214,7 +214,8 @@ class PushToBacklog:
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
                         "story_id": story_id,
-                        "video_id": video_id,
+                        # video_id omitted — column not yet in SharePoint Blueprints list.
+                        # Video dedup uses client-side check above (lines 162-178).
                         "hook_text": hook,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),

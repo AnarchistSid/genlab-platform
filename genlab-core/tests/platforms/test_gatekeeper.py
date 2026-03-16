@@ -27,7 +27,8 @@ class TestApprovalGate:
         result = gatekeeper._approval_gate(bp, "instagram")
         assert result.allowed is True
 
-    def test_not_approved_blocks(self, gatekeeper):
+    def test_not_approved_blocks(self, gatekeeper, monkeypatch):
+        monkeypatch.delenv("SKIP_APPROVAL_GATE", raising=False)
         bp = {"action_taken": ""}
         result = gatekeeper._approval_gate(bp, "instagram")
         assert result.allowed is False
@@ -84,7 +85,8 @@ class TestEvaluateChain:
         assert result.allowed is True
         assert result.gate_name == "all"
 
-    def test_first_failure_wins(self, gatekeeper):
+    def test_first_failure_wins(self, gatekeeper, monkeypatch):
+        monkeypatch.delenv("SKIP_APPROVAL_GATE", raising=False)
         bp = {"action_taken": ""}  # Fails approval
         result = gatekeeper.evaluate(bp, "instagram")
         assert result.allowed is False

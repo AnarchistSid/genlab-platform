@@ -351,7 +351,8 @@ class TestElevenLabsTTS:
 
 
 class TestOpenAITTS:
-    def test_unavailable_without_key(self):
+    def test_unavailable_without_key(self, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from genlab_core.tts.providers import OpenAITTS
         p = OpenAITTS(api_key="")
         assert not p.available
@@ -363,7 +364,8 @@ class TestOpenAITTS:
         cost = p.estimate_cost("a" * 1000)
         assert abs(cost - 0.015) < 0.001
 
-    def test_synthesize_returns_error_when_unavailable(self, tmp_path):
+    def test_synthesize_returns_error_when_unavailable(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from genlab_core.tts.providers import OpenAITTS
         p = OpenAITTS(api_key="")
         result = p.synthesize("test text", tmp_path / "out.mp3")
