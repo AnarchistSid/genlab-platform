@@ -206,11 +206,11 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any
         return None
     data = r.json()
 
-    # Insights — Reels do NOT support 'impressions' (400 error); use reach,saved,shares,total_interactions
+    # Reels insights — v22.0+ deprecated plays; use full metric set
     insights_resp = requests.get(
         f"{api_base}/{post_id}/insights",
         params={
-            "metric": "reach,saved,shares,total_interactions",
+            "metric": "reach,saved,shares,likes,comments,total_interactions,ig_reels_video_view_total_time",
             "access_token": token,
         },
         timeout=15,
@@ -222,13 +222,18 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any
             values = item.get("values", [{}])
             insights[name] = values[0].get("value", 0) if values else 0
 
+    watch_time_ms = insights.get("ig_reels_video_view_total_time", 0)
+    watch_time_min = round(watch_time_ms / 60000, 1) if watch_time_ms else 0
+
     return {
-        "likes": data.get("like_count", 0),
-        "comments": data.get("comments_count", 0),
+        "likes": insights.get("likes", data.get("like_count", 0)),
+        "comments": insights.get("comments", data.get("comments_count", 0)),
         "reach": insights.get("reach", 0),
         "saved": insights.get("saved", 0),
         "shares": insights.get("shares", 0),
         "engagement": insights.get("total_interactions", 0),
+        "watch_time_minutes": watch_time_min,
+        "impressions": insights.get("reach", 0),
     }
 
 
