@@ -77,19 +77,15 @@ L_NAME_ROW_Y = 310
 L_NAME_ROW_H = 60
 L_HOOK_ZONE_Y = 380
 L_HOOK_ZONE_H = 80
-L_ACCENT_Y = 460
-L_ACCENT_H = 6
-L_VIDEO_Y = 466
-L_VIDEO_H = 810             # ~42% of canvas (was 608/32%)
-L_BOTTOM_H = 644            # ~34% of canvas (was 846/44%)
+L_VIDEO_Y = 460              # video starts right after hook zone (no accent line)
+L_VIDEO_H = 816              # ~42% of canvas
+L_BOTTOM_H = 644             # ~34% of canvas
 
 # Layout B: Portrait (fill-canvas with dark gradient overlay for logo+hook)
 # Portrait videos fill the entire 1080x1920 canvas. Logo + hook are overlaid
 # on a semi-transparent dark gradient at the top, matching the Evolving AI style.
 P_OVERLAY_H = 480           # dark gradient zone height (top 25%)
 P_OVERLAY_OPACITY = 0.55    # gradient opacity
-P_ACCENT_Y = 470            # accent line y position
-P_ACCENT_H = 6
 P_LOGO_Y = 310              # logo y — same proportional position as landscape
 P_HOOK_Y = 390              # hook text y
 
@@ -99,11 +95,9 @@ S_NAME_ROW_Y = 40
 S_NAME_ROW_H = 60
 S_HOOK_ZONE_Y = 100
 S_HOOK_ZONE_H = 60
-S_ACCENT_Y = 160
-S_ACCENT_H = 6
-S_VIDEO_Y = 340              # centered: (1920-1080)/2 - 80 for header offset
+S_VIDEO_Y = 166              # video starts right after hook zone (no accent line)
 S_VIDEO_H = 1080
-S_BOTTOM_H = 500             # 1920 - 340 - 1080
+S_BOTTOM_H = 674             # 1920 - 166 - 1080
 
 # Shared text
 LOGO_SIZE = 60
@@ -417,8 +411,6 @@ class FrameCompositor:
         handle = self.branding.handle
         safe_name = self._escape_drawtext(channel_name)
         safe_handle = self._escape_drawtext(handle)
-        accent = self._accent_hex()
-
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
@@ -459,13 +451,10 @@ class FrameCompositor:
                 f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
                 # Place video at y=656
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
-                # Logo scaled to 56px
+                # Logo scaled to 60px
                 f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                # Accent line at y=650
-                f"[base]drawbox=x=0:y={L_ACCENT_Y}:w={CANVAS_W}:h={L_ACCENT_H}:"
-                f"color=0x{accent}:t=fill[accented];"
                 # Overlay logo
-                f"[accented][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
+                f"[base][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
                 # Channel name
                 f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
@@ -485,9 +474,7 @@ class FrameCompositor:
                 f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
                 f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
-                f"[base]drawbox=x=0:y={L_ACCENT_Y}:w={CANVAS_W}:h={L_ACCENT_H}:"
-                f"color=0x{accent}:t=fill[accented];"
-                f"[accented]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
                 f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
@@ -525,8 +512,6 @@ class FrameCompositor:
         handle = self.branding.handle
         safe_name = self._escape_drawtext(channel_name)
         safe_handle = self._escape_drawtext(handle)
-        accent = self._accent_hex()
-
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
@@ -623,8 +608,6 @@ class FrameCompositor:
         handle = self.branding.handle
         safe_name = self._escape_drawtext(channel_name)
         safe_handle = self._escape_drawtext(handle)
-        accent = self._accent_hex()
-
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
@@ -664,13 +647,10 @@ class FrameCompositor:
                 f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 # Place video at y=503
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
-                # Logo scaled to 56px
+                # Logo scaled to 60px
                 f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                # Accent line at y=160
-                f"[base]drawbox=x=0:y={S_ACCENT_Y}:w={CANVAS_W}:h={S_ACCENT_H}:"
-                f"color=0x{accent}:t=fill[accented];"
                 # Overlay logo
-                f"[accented][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
+                f"[base][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
                 # Channel name
                 f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
@@ -690,9 +670,7 @@ class FrameCompositor:
                 f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
                 f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
-                f"[base]drawbox=x=0:y={S_ACCENT_Y}:w={CANVAS_W}:h={S_ACCENT_H}:"
-                f"color=0x{accent}:t=fill[accented];"
-                f"[accented]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
                 f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
