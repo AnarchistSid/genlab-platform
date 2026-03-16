@@ -58,4 +58,4 @@ EAA Page Tokens are permanent — never call `ig_refresh_token`.
 
 ## Niche Registration
 
-`pipeline_runner.SUPPORTED_NICHES` maps niche_id → root dir. All 5 niches: ai_news, gaming, sports, movies, anime.
+`GenericPipelineRunner` accepts a `niche_roots` mapping of niche_id → root dir. All 5 niches: ai_creators, gaming, sports, movies, anime.
