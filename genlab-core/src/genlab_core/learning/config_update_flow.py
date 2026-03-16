@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 
 try:
     from prefect import flow, task
+    from prefect.cache_policies import NO_CACHE
+
+    _TASK_DEFAULTS = {"cache_policy": NO_CACHE}
 except ImportError:  # pragma: no cover — Prefect is optional
+    _TASK_DEFAULTS = {}
+
     def flow(fn=None, **kwargs):  # type: ignore[misc]
         if fn is not None:
             return fn
@@ -53,7 +58,7 @@ MIN_PLATFORM_OBS = 50  # Minimum tasks per platform before trusting schedule dat
 # Optimal hour computation
 # ---------------------------------------------------------------------------
 
-@task(name="compute_optimal_hours")
+@task(name="compute_optimal_hours", **_TASK_DEFAULTS)
 def compute_optimal_hours(
     completed_tasks: list[PendingFeedbackTask],
 ) -> tuple[dict[str, int], dict[str, int]]:
@@ -106,7 +111,7 @@ def compute_optimal_hours(
     return optimal, dict(platform_counts)
 
 
-@task(name="compute_arm_posteriors")
+@task(name="compute_arm_posteriors", **_TASK_DEFAULTS)
 def compute_arm_posteriors(
     completed_tasks: list[PendingFeedbackTask],
 ) -> tuple[dict[str, tuple[float, float]], dict[str, int]]:
@@ -149,7 +154,7 @@ def compute_arm_posteriors(
 # Fetch completed tasks
 # ---------------------------------------------------------------------------
 
-@task(name="fetch_completed_tasks")
+@task(name="fetch_completed_tasks", **_TASK_DEFAULTS)
 def fetch_completed_tasks(
     backlog_client: Any,
     niche_id: Optional[str] = None,

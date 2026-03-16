@@ -23,8 +23,12 @@ logger = logging.getLogger(__name__)
 
 try:
     from prefect import flow, task
+    from prefect.cache_policies import NO_CACHE
+
+    _TASK_DEFAULTS = {"cache_policy": NO_CACHE}
 except ImportError:  # pragma: no cover — Prefect is optional
-    # Provide no-op decorators so the module loads without Prefect installed.
+    _TASK_DEFAULTS = {}
+
     def flow(fn=None, **kwargs):  # type: ignore[misc]
         if fn is not None:
             return fn
@@ -47,7 +51,7 @@ from genlab_core.learning.reward_shaper import RewardShaper
 # Platform metric fetching (delegates to lightweight HTTP calls)
 # ---------------------------------------------------------------------------
 
-@task(name="fetch_platform_metrics", retries=1)
+@task(name="fetch_platform_metrics", retries=1, **_TASK_DEFAULTS)
 def fetch_platform_metrics(
     platform: str,
     post_id: str,
@@ -321,7 +325,7 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 # Core flow
 # ---------------------------------------------------------------------------
 
-@task(name="compute_reward")
+@task(name="compute_reward", **_TASK_DEFAULTS)
 def compute_reward(
     metrics: dict[str, Any],
     platform: str,
@@ -331,7 +335,7 @@ def compute_reward(
     return shaper.compute_reward(platform=platform, metrics=metrics)
 
 
-@task(name="process_pending_task")
+@task(name="process_pending_task", **_TASK_DEFAULTS)
 def process_pending_task(
     task_record: PendingFeedbackTask,
     store: PendingFeedbackStore,
