@@ -57,7 +57,7 @@ NICHE_VOICE: Dict[str, Dict[str, Any]] = {
         ],
         "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeClips", "#AnimeFan"],
     },
-    "ai_news": {
+    "ai_creators": {
         "account": "@BlackboxBrief",
         "style": "informed but accessible, explains tech simply, thought-provoking",
         "audience": "tech-curious people aged 22-45",
@@ -82,7 +82,7 @@ def write_video_content(
     Args:
         video: TrendingVideo.to_dict() or equivalent with title, channel_name,
                view_count, view_velocity, description_snippet, tags, video_id
-        niche_id: gaming, sports, movies, anime, ai_news
+        niche_id: gaming, sports, movies, anime, ai_creators
         llm_client: Object with .complete(system, user, max_tokens, temperature)
         existing_hooks: Already-used hooks to avoid duplicates
         extra_instructions: Optional niche-specific instructions (banned phrases,

@@ -12,7 +12,7 @@
         <string>genlab-core</string>
         <string>python</string>
         <string>-m</string>
-        <string>genlab_core.platform.engagement_poller</string>
+        <string>genlab_core.engagement.poller</string>
         <string>--niche</string>
         <string>gaming</string>
     </array>
@@ -28,6 +28,8 @@
     <dict>
         <key>PATH</key>
         <string>/usr/local/bin:/usr/bin:/bin:/Users/anarchistsid/.local/bin</string>
+        <key>HOME</key>
+        <string>/Users/anarchistsid</string>
     </dict>
     <key>WorkingDirectory</key>
     <string>/Users/anarchistsid/GenLab</string>

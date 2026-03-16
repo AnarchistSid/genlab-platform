@@ -72,10 +72,17 @@ def compute_optimal_hours(
     )
     platform_counts: dict[str, int] = defaultdict(int)
 
+    # Schedule configs use IST (UTC+5:30) — convert timestamps before extracting hour
+    _IST_OFFSET = timedelta(hours=5, minutes=30)
+
     for t in completed_tasks:
         if t.reward_48h is None:
             continue
-        pub_hour = t.published_at.hour  # Local hour from stored timestamp
+        pub_utc = t.published_at
+        if pub_utc.tzinfo is None:
+            pub_utc = pub_utc.replace(tzinfo=timezone.utc)
+        pub_ist = pub_utc + _IST_OFFSET
+        pub_hour = pub_ist.hour
         hour_rewards[t.platform][pub_hour].append(t.reward_48h)
         platform_counts[t.platform] += 1
 
@@ -157,11 +164,8 @@ def fetch_completed_tasks(
     cutoff = datetime.now(tz=timezone.utc) - timedelta(days=lookback_days)
 
     try:
-        # Query all items (including complete) to get historical data
-        items = backlog_client.get_items(
-            store.LIST_NAME,
-            filter_query="Status eq 'complete'",
-        )
+        # Query completed items via the store's proxy
+        items = store._proxy.all(formula="{Status}='complete'")
     except Exception as exc:
         logger.warning("[config_update] Failed to fetch completed tasks: %s", exc)
         return []

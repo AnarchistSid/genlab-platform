@@ -57,10 +57,10 @@ def save_arm(
     content_type: str = "",
     platform: str = "",
 ) -> None:
-    """Save a single bandit arm via proxy.create().
+    """Save a single bandit arm — upsert by Title.
 
-    Always creates a new item — the warm-start only runs once per niche
-    and only touches arms that don't have existing observations.
+    Checks for an existing arm with the same Title and updates it
+    instead of creating a duplicate row.
     """
     fields = {
         "Title": arm_id,
@@ -72,6 +72,15 @@ def save_arm(
         "LastUpdated": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        proxy.create(fields)
+        existing = proxy.all()
+        match = next(
+            (item for item in existing
+             if (item.get("fields", item)).get("Title") == arm_id),
+            None,
+        )
+        if match:
+            proxy.update(match["id"], fields)
+        else:
+            proxy.create(fields)
     except Exception as e:
         logger.warning("[arm_loader] save failed for %s: %s", arm_id, e)

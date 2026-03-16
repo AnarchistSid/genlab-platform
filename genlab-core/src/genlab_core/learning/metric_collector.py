@@ -52,16 +52,17 @@ def fetch_platform_metrics(
     platform: str,
     post_id: str,
     window: CollectionWindow,
+    niche_id: str = "",
 ) -> dict[str, Any]:
     """Fetch metrics for a single post from its platform API.
 
-    Kept intentionally thin — each platform handler mirrors the patterns
-    already established in CriticalRush FeedbackCollector.
+    Uses per-niche credentials via niche_credentials to avoid cross-channel
+    token leakage (e.g. fetching CriticalRush metrics with BB tokens).
     """
     # Instagram Reels: use specialised 6h fetcher for early skip-rate signal
     if platform == "instagram" and window == "6h":
         try:
-            return _fetch_instagram_reels_6h(post_id)
+            return _fetch_instagram_reels_6h(post_id, niche_id=niche_id)
         except Exception as exc:
             logger.warning("[metric_collector] instagram reels 6h fetch failed for %s: %s", post_id, exc)
             return {}
@@ -80,20 +81,22 @@ def fetch_platform_metrics(
         logger.warning("[metric_collector] no fetcher for platform '%s'", platform)
         return {}
     try:
-        return fn(post_id)
+        return fn(post_id, niche_id=niche_id)
     except Exception as exc:
         logger.warning("[metric_collector] %s fetch failed for %s: %s", platform, post_id, exc)
         return {}
 
 
-def _fetch_youtube(post_id: str) -> dict:
-    """YouTube Data API v3 basic stats."""
-    import os
+def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
+    """YouTube Data API v3 basic stats (per-niche credentials)."""
     import requests
 
-    client_id = os.getenv("YOUTUBE_CLIENT_ID", "").strip()
-    client_secret = os.getenv("YOUTUBE_CLIENT_SECRET", "").strip()
-    refresh_token = os.getenv("YOUTUBE_REFRESH_TOKEN", "").strip()
+    from genlab_core.publishing.niche_credentials import resolve_youtube_credentials
+
+    creds = resolve_youtube_credentials(niche_id)
+    client_id = creds.get("client_id", "")
+    client_secret = creds.get("client_secret", "")
+    refresh_token = creds.get("refresh_token", "")
     if not all([client_id, client_secret, refresh_token]):
         return {}
 
@@ -129,11 +132,12 @@ def _fetch_youtube(post_id: str) -> dict:
     }
 
 
-def _fetch_instagram(post_id: str) -> dict:
-    import os
+def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     import requests
 
-    token = os.getenv("META_ACCESS_TOKEN", "").strip()
+    from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
+    token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
     if not token:
         return {}
     resp = requests.get(
@@ -157,12 +161,13 @@ def _fetch_instagram(post_id: str) -> dict:
     return metrics
 
 
-def _fetch_instagram_reels_6h(post_id: str) -> dict:
+def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
     """IG Reels-specific metrics for early 6h skip-rate signal."""
-    import os
     import requests
 
-    token = os.getenv("META_ACCESS_TOKEN", "").strip()
+    from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
+    token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
     if not token:
         return {}
     resp = requests.get(
@@ -188,11 +193,12 @@ def _fetch_instagram_reels_6h(post_id: str) -> dict:
     return metrics
 
 
-def _fetch_facebook(post_id: str) -> dict:
-    import os
+def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     import requests
 
-    token = os.getenv("FB_PAGE_ACCESS_TOKEN", "").strip()
+    from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
+    token, _page_id = resolve_fb_credentials(niche_id)
     if not token:
         return {}
     resp = requests.get(
@@ -220,11 +226,11 @@ def _fetch_facebook(post_id: str) -> dict:
     return metrics
 
 
-def _fetch_x(post_id: str) -> dict:
+def _fetch_x(post_id: str, niche_id: str = "") -> dict:
     import os
     import requests
 
-    bearer = os.getenv("X_BEARER_TOKEN", "").strip()
+    bearer = os.getenv("X_BEARER_TOKEN", "").strip()  # X bearer is app-wide, no per-niche
     if not bearer:
         return {}
     resp = requests.get(
@@ -243,12 +249,12 @@ def _fetch_x(post_id: str) -> dict:
     }
 
 
-def _fetch_tiktok(post_id: str) -> dict:
+def _fetch_tiktok(post_id: str, niche_id: str = "") -> dict:
     """TikTok Content Posting API — video insights."""
     import os
     import requests
 
-    token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()
+    token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()  # TikTok disabled, no per-niche yet
     if not token:
         return {}
     try:
@@ -280,12 +286,13 @@ def _fetch_tiktok(post_id: str) -> dict:
         return {}
 
 
-def _fetch_threads(post_id: str) -> dict:
+def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
     """Threads API — media insights."""
-    import os
     import requests
 
-    token = os.getenv("THREADS_ACCESS_TOKEN", "").strip()
+    from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+
+    token, _user_id = resolve_threads_credentials(niche_id)
     if not token:
         return {}
     try:
@@ -356,6 +363,7 @@ def process_pending_task(
         task_record.platform,
         task_record.platform_post_id,
         window,
+        niche_id=task_record.niche_id,
     )
 
     reward_48h: float | None = None
