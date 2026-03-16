@@ -160,6 +160,7 @@ class FetchTwitchClips:
             for clip in all_clips[:10]:  # Cap at 10 clips
                 clip_url = clip["clip_url"]
                 sid = generate_story_id(clip_url, now_iso)
+                broadcaster = clip.get("broadcaster", "")
                 new_stories.append({
                     "story_id": sid,
                     "title": clip["title"],
@@ -168,11 +169,14 @@ class FetchTwitchClips:
                     "canonical_url": clip_url,
                     "published_at": clip.get("created_at", now_iso),
                     "fetched_at": now_iso,
-                    "summary": f"Twitch clip by {clip.get('broadcaster', '')}",
+                    "summary": f"Twitch clip by {broadcaster}",
                     "view_count": clip.get("view_count", 0),
                     "duration_seconds": clip.get("duration", 0),
                     "niche_id": niche_id,
                     "video_source": "twitch",
+                    # Attribution: Twitch Creator Terms require crediting streamer
+                    "broadcaster": broadcaster,
+                    "attribution": f"Clip from {broadcaster} on Twitch" if broadcaster else "",
                     # Pre-filled clip info so DownloadTopVideos can use directly
                     "_trending_video": True,
                     "_clip_url": clip_url,

@@ -18,15 +18,11 @@ from genlab_core.media.frame_compositor import (
     PORTRAIT_THRESHOLD,
     L_VIDEO_H,
     L_VIDEO_Y,
-    L_ACCENT_Y,
-    L_ACCENT_H,
     L_BOTTOM_H,
     S_VIDEO_Y,
     S_VIDEO_H,
     S_BOTTOM_H,
     P_OVERLAY_H,
-    P_ACCENT_Y,
-    P_ACCENT_H,
     P_LOGO_Y,
     P_HOOK_Y,
     ChannelBranding,
@@ -144,10 +140,8 @@ class TestLockedConstants:
         total = L_VIDEO_Y + L_VIDEO_H + L_BOTTOM_H
         assert total == CANVAS_H
 
-    def test_landscape_accent_position(self):
-        assert L_ACCENT_Y == 460
-        assert L_ACCENT_H == 6
-        assert L_ACCENT_Y + L_ACCENT_H == L_VIDEO_Y
+    def test_landscape_video_starts_after_hook(self):
+        assert L_VIDEO_Y == 460, "Video starts right after hook zone"
 
     def test_landscape_bottom_bar(self):
         """Bottom bar must satisfy YouTube (420px) and Instagram (320px) safe zones."""
@@ -161,17 +155,13 @@ class TestLockedConstants:
         assert total == CANVAS_H
 
     def test_square_bottom_bar(self):
-        assert S_BOTTOM_H == 500
+        assert S_BOTTOM_H == 674
 
     def test_portrait_fills_canvas(self):
         """Portrait layout fills canvas — no sandwich zones to sum."""
         assert P_OVERLAY_H > 0, "Portrait must have dark overlay zone"
         assert P_LOGO_Y > 0, "Portrait must position logo"
         assert P_HOOK_Y > P_LOGO_Y, "Hook must be below logo"
-
-    def test_portrait_accent_position(self):
-        assert P_ACCENT_Y == 470
-        assert P_ACCENT_H == 6
 
     def test_bottom_safe_zone_satisfies_platforms(self):
         bottom_clear = L_BOTTOM_H
@@ -253,12 +243,13 @@ class TestFFmpegCommandStructure:
         fc = cmd[cmd.index("-filter_complex") + 1]
         assert f"overlay=0:{L_VIDEO_Y}" in fc
 
-    def test_landscape_has_accent_line(self):
+    def test_landscape_no_accent_line(self):
+        """Accent line was removed for cleaner Evolving AI-style layout."""
         comp = self._make_compositor()
         info = self._make_info(1920, 1080)
         cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "ff4500" in fc.lower(), "Accent color must appear in filtergraph"
+        assert "drawbox" not in fc, "No accent line drawbox in landscape layout"
 
     def test_portrait_has_hook_text(self):
         comp = self._make_compositor()

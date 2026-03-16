@@ -206,6 +206,15 @@ def process_reply_event(event: dict) -> None:
     post_id = event["post_id"]
     post_context = event.get("post_context", "")
 
+    # Sanitize external comment text against prompt injection
+    from genlab_core.cache.text_sanitizer import check_for_injection
+    if check_for_injection(comment_text):
+        logger.warning(
+            "Engagement: injection pattern in comment %s — skipping LLM reply",
+            comment_id,
+        )
+        return
+
     # 1. Idempotency
     if _has_replied(comment_id, platform):
         logger.info("Engagement: already replied to %s on %s, skipping", comment_id, platform)
