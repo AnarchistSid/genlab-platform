@@ -47,12 +47,11 @@ NICHE_ENV_DIRS: Dict[str, str] = {
 ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 
 # Window definitions: (min_age_hours, max_age_hours)
-# Widened ranges: catch posts that missed their exact window
-# 6h window: posts 4-36h old (covers late publishes and missed runs)
-# 24h window: posts 20-72h old (covers weekend backlog)
+# Wide ranges: catch ALL posts that haven't been collected yet.
+# Idempotency via insight_windows_completed prevents double-fetching.
 WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
-    6: (4.0, 36.0),
-    24: (20.0, 72.0),
+    6: (4.0, 168.0),    # Any post 4h-7d old
+    24: (20.0, 168.0),   # Any post 20h-7d old
 }
 
 
@@ -98,9 +97,16 @@ def _get_eligible_records(
     min_age, max_age = WINDOW_RANGES[window]
 
     try:
-        formula = "{status}='SUCCESS'"
+        # 6h window: fetch SUCCESS records
+        # 24h window: fetch INSIGHTS_6H records (already had 6h collection)
+        if window == 6:
+            target_status = "SUCCESS"
+        else:
+            target_status = "INSIGHTS_6H"
+
+        formula = f"{{status}}='{target_status}'"
         if niche_id != "all":
-            formula = f"AND({{status}}='SUCCESS',{{niche_id}}='{niche_id}')"
+            formula = f"AND({{status}}='{target_status}',{{niche_id}}='{niche_id}')"
         records = client.publishing_analytics.all(
             formula=formula,
             max_records=200,
@@ -123,10 +129,12 @@ def _get_eligible_records(
             continue
 
         # Idempotency: check if already fetched at this window
-        fetched_windows = f.get("insight_windows_completed", "")
-        window_tag = f"{window}h"
-        if window_tag in str(fetched_windows):
-            continue
+        # Status progression: SUCCESS → INSIGHTS_6H → INSIGHTS_24H
+        record_status = str(f.get("status", ""))
+        if window == 6 and "INSIGHTS" in record_status:
+            continue  # Already collected
+        if window == 24 and "24H" in record_status:
+            continue  # Already collected at 24h
 
         eligible.append((r, f"window_{window}h"))
 
@@ -340,21 +348,18 @@ def _write_back_to_blueprint(
     elif yt_views > 0:
         fields["engagement_rate"] = round((yt_likes + yt_comments) / yt_views, 4)
 
-    # Timestamps
-    now_iso = datetime.now(timezone.utc).isoformat()
-    fields["insights_collected_at"] = now_iso
-    if window <= 8:
-        fields["insights_6h_at"] = now_iso
-    elif window <= 26:
-        fields["insights_24h_at"] = now_iso
-
     # Remove None/empty values
     fields = {k: v for k, v in fields.items() if v is not None}
 
     if not fields:
         return
 
-    client.blueprints.update(blueprint_record_id, fields, typecast=True)
+    # Write fields one at a time — skip any that don't exist in SharePoint
+    for field_name, field_value in fields.items():
+        try:
+            client.blueprints.update(blueprint_record_id, {field_name: field_value}, typecast=True)
+        except Exception:
+            logger.debug("Blueprint field '%s' not in schema — skipping", field_name)
     logger.info(
         "Blueprint %s write-back: platform=%s fields=%s",
         blueprint_record_id, platform, list(fields.keys()),
@@ -367,16 +372,16 @@ def _mark_window_completed(
     existing_windows: str,
     window: int,
 ) -> None:
-    """Mark a window as completed on the Publishing_Analytics record."""
-    window_tag = f"{window}h"
-    updated = f"{existing_windows},{window_tag}" if existing_windows else window_tag
+    """Mark a window as completed on the Publishing_Analytics record.
+
+    Uses status field (SUCCESS → INSIGHTS_6H → INSIGHTS_24H) since
+    insight_windows_completed column doesn't exist in SharePoint.
+    """
+    new_status = f"INSIGHTS_{window}H"
     try:
         client.publishing_analytics.update(
             record_id,
-            {
-                "engagement_fetched_at": datetime.now(timezone.utc).isoformat(),
-                "insight_windows_completed": updated,
-            },
+            {"status": new_status},
             typecast=True,
         )
     except Exception as exc:
