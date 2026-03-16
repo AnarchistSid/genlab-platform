@@ -11,14 +11,14 @@ from genlab_core.intel.google_trends import (
 
 class TestGoogleTrendsIntel:
     def test_fallback_to_seed_keywords(self):
-        """When pytrends is unavailable, returns static seed keywords."""
+        """When all tiers fail (RSS + pytrends), returns static seed keywords."""
         intel = GoogleTrendsIntel()
-        with patch.object(intel, "_get_realtime_trending", side_effect=Exception("no network")), \
+        with patch.object(intel, "_get_rss_trending", side_effect=Exception("no network")), \
+             patch.object(intel, "_get_realtime_trending", side_effect=Exception("no network")), \
              patch.object(intel, "_get_daily_trending", side_effect=Exception("no network")):
             topics = intel.get_trending_topics("gaming", top_n=5)
 
         assert len(topics) > 0
-        # Should be the seed keywords
         assert topics == NICHE_SEED_KEYWORDS["gaming"]
 
     def test_all_niches_have_seed_keywords(self):

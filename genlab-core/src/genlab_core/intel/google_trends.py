@@ -47,8 +47,11 @@ class GoogleTrendsIntel:
 
     def _get_client(self):
         if self._pytrends is None:
-            from pytrends.request import TrendReq
-            self._pytrends = TrendReq(hl="en-US", tz=self.tz)
+            try:
+                from pytrends.request import TrendReq
+                self._pytrends = TrendReq(hl="en-US", tz=self.tz)
+            except ImportError:
+                pass
         return self._pytrends
 
     def get_trending_topics(
@@ -58,11 +61,21 @@ class GoogleTrendsIntel:
     ) -> list[str]:
         """Get top trending topics for a niche right now.
 
-        Falls back gracefully: real-time → daily → seed keywords.
+        Falls back gracefully: RSS feed → pytrends → seed keywords.
+        RSS is preferred because pytrends is unreliable (rate-limited by Google).
         """
+        # Tier 1: Google Trends RSS (zero cost, no auth)
+        try:
+            rss_topics = self._get_rss_trending(niche_id)
+            if rss_topics:
+                logger.info("[%s] Google Trends RSS: %s", niche_id, rss_topics[:3])
+                return rss_topics[:top_n]
+        except Exception as e:
+            logger.warning("[%s] Trends RSS failed: %s", niche_id, e)
+
+        # Tier 2: pytrends real-time (often rate-limited)
         try:
             realtime = self._get_realtime_trending(niche_id)
-            # Filter out empty strings that pytrends sometimes returns
             realtime = [t for t in realtime if t and t.strip()] if realtime else []
             if realtime:
                 logger.info("[%s] Google Trends real-time: %s", niche_id, realtime[:3])
@@ -70,6 +83,7 @@ class GoogleTrendsIntel:
         except Exception as e:
             logger.warning("[%s] Real-time trends failed: %s", niche_id, e)
 
+        # Tier 3: pytrends daily (also often rate-limited)
         try:
             daily = self._get_daily_trending(niche_id)
             daily = [t for t in daily if t and t.strip()] if daily else []
@@ -83,9 +97,51 @@ class GoogleTrendsIntel:
         logger.warning("[%s] Google Trends unavailable — using seed keywords: %s", niche_id, seeds)
         return seeds
 
+    def _get_rss_trending(self, niche_id: str) -> list[str]:
+        """Fetch daily trending Google searches via official RSS feed.
+
+        Zero cost, no auth, no rate limiting. Returns top 20 topics.
+        Replaces pytrends which was archived/broken by Google in 2025.
+        """
+        import urllib.request
+        import xml.etree.ElementTree as ET
+
+        rss_url = f"https://trends.google.com/trending/rss?geo={self.geo}"
+        req = urllib.request.Request(
+            rss_url,
+            headers={"User-Agent": "GenLab/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
+
+        root = ET.fromstring(data)
+        topics = []
+        for item in root.iter("item"):
+            title_el = item.find("title")
+            if title_el is not None and title_el.text:
+                topics.append(title_el.text.strip())
+
+        if not topics:
+            return []
+
+        # Filter for niche relevance
+        niche_keywords = NICHE_SEED_KEYWORDS.get(niche_id, [])
+        niche_terms = []
+        general_terms = []
+        for term in topics:
+            term_lower = term.lower()
+            if any(kw.lower() in term_lower for kw in niche_keywords):
+                niche_terms.append(term)
+            else:
+                general_terms.append(term)
+
+        return (niche_terms + general_terms)[:20]
+
     def _get_realtime_trending(self, niche_id: str) -> list[str]:
-        """Get today's real-time trending searches."""
+        """Get today's real-time trending searches via pytrends."""
         pt = self._get_client()
+        if pt is None:
+            return []
         trending_df = pt.trending_searches(pn="united_states")
         topics = trending_df[0].tolist()
 
@@ -106,6 +162,8 @@ class GoogleTrendsIntel:
     def _get_daily_trending(self, niche_id: str) -> list[str]:
         """Get related queries from Google Trends for seed keywords."""
         pt = self._get_client()
+        if pt is None:
+            return []
         seeds = NICHE_SEED_KEYWORDS.get(niche_id, [niche_id])[:3]
 
         pt.build_payload(
