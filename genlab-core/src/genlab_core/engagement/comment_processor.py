@@ -95,10 +95,27 @@ def _load_persona(niche_id: str) -> NichePersona:
     """Load persona YAML. Raises FileNotFoundError if absent."""
     import yaml
 
-    candidate_paths = [
-        _get_agent_root() / "config" / "persona.yaml",
-        Path(__file__).parent / "personas" / f"{niche_id}.yaml",
-    ]
+    # Normalise niche_id aliases
+    niche_aliases = [niche_id]
+    if niche_id == "ai_creators":
+        niche_aliases.append("ai_news")
+    elif niche_id == "ai_news":
+        niche_aliases.append("ai_creators")
+
+    personas_dir = Path(__file__).parent / "personas"
+    candidate_paths = []
+
+    # Try agent root first (niche-specific persona.yaml in channel config/)
+    try:
+        agent_root = _get_agent_root()
+        candidate_paths.append(agent_root / "config" / "persona.yaml")
+    except Exception:
+        pass
+
+    # Then try package personas/ directory with alias resolution
+    for alias in niche_aliases:
+        candidate_paths.append(personas_dir / f"{alias}.yaml")
+
     for path in candidate_paths:
         if path.exists():
             with open(path) as f:
