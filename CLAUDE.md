@@ -173,9 +173,37 @@ Other channels: try hard to find a clip; only skip if truly none exists.
   SKIPPED record to Publishing_Analytics — never silent-fail
 - Facebook post survival check at 24h: if post removed by Meta, mark REMOVED_BY_META
 - YouTube titles: question format, ≤40 chars
-- **SKIP_APPROVAL_GATE=true** is set globally in root `.env` during test phase.
-  This bypasses the dashboard approval gate so pipelines can publish without
-  manual review. Remove this line when transitioning to production approval flow.
+- **SKIP_APPROVAL_GATE is REMOVED** (Sprint 62). Dashboard approval is the real gate.
+  Auto-scheduling on approval is niche-aware (checks slot collisions per niche).
+
+---
+
+## CREDENTIAL ARCHITECTURE (Sprint 62)
+
+- Root `GenLab/.env` — shared credentials + all per-niche prefixed vars
+- Per-niche `.env` — that channel's own tokens (belt + suspenders)
+- `niche_credentials.py` resolves `{PREFIX}_{KEY}` per niche, never falls back cross-channel
+- FB tokens are permanent EAA Page Tokens (expires_at=0) via Aspire Publisher app
+- **Never run env consolidation AFTER token provisioning** — stale values overwrite fresh ones
+
+## PIPELINE SCHEDULE (Sprint 62)
+
+| Channel | IST | UTC | Plist |
+|---------|-----|-----|-------|
+| BB | 08:00 | 02:30 | com.genlab.daily-intel |
+| CR (gaming) | 09:30 | 04:00 | com.genlab.criticalrush |
+| FD (anime) | 11:30 | 06:00 | com.genlab.framedrift |
+| SR (movies) | 13:30 | 08:00 | com.genlab.splicereel |
+| CW (sports) | 15:30 | 10:00 | com.genlab.clutchwire |
+
+Publish window: 06:30 UTC (12:00 IST) — PushToBacklog schedules at this time.
+
+## DEDUP ARCHITECTURE (Sprint 62)
+
+Three layers prevent duplicates:
+1. **video_id dedup** in PushToBacklog — same clip never creates two blueprints
+2. **DailyCapEnforcer** with niche_id — per-channel caps, not global
+3. **PUBLISHED skip** — PushToBacklog won't overwrite PUBLISHED/VISUAL_READY blueprints
 
 ---
 

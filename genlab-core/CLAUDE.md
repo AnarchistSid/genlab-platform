@@ -59,3 +59,25 @@ EAA Page Tokens are permanent — never call `ig_refresh_token`.
 ## Niche Registration
 
 `GenericPipelineRunner` accepts a `niche_roots` mapping of niche_id → root dir. All 5 niches: ai_creators, gaming, sports, movies, anime.
+
+## Shared Configs
+
+`genlab-core/config/` holds shared configs (moved from Content Scraper in Sprint 62):
+- `lists_config.yaml` — SharePoint list IDs
+- `platform_caps.yaml` — daily post caps per platform
+- `disk_quota.yaml` — disk usage quotas
+Symlinks in `Content Scraper/config/` for backward compat.
+
+## Frame Compositor (Sprint 62 redesign)
+
+Three layout modes in `frame_compositor.py`:
+- **Landscape** (w/h ≥ 1.33): sandwich — black bars top+bottom, video 810px in middle
+- **Portrait** (w/h ≤ 0.75): fill canvas, dark gradient overlay for logo+hook
+- **Square** (0.75–1.33): compact header (160px), video fills most of canvas
+Logo path resolved to absolute against niche_root from visuals.yaml location.
+
+## Cleanup Protection
+
+`disk_quota.py._is_published()` protects any run directory with:
+visuals/, visuals_v2/, visuals_v3/, rendered/, clips/ containing MP4s.
+Approved posts' media is NEVER deleted by cleanup.
