@@ -39,6 +39,7 @@ DEFAULT_VELOCITY_THRESHOLDS: Dict[str, float] = {
     "movies": 800.0,
     "anime": 600.0,
     "ai_news": 400.0,
+    "ai_creators": 400.0,
 }
 
 # Minimum composite score to pass the quality gate.
@@ -49,6 +50,7 @@ DEFAULT_MIN_COMPOSITE: Dict[str, float] = {
     "movies": 0.30,
     "anime": 0.30,
     "ai_news": 0.25,
+    "ai_creators": 0.25,
 }
 
 

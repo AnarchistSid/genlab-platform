@@ -15,7 +15,7 @@
         <string>-m</string>
         <string>genlab_core.storage.quota_daemon</string>
         <string>--config</string>
-        <string>/Users/anarchistsid/GenLab/Content Scraper/config/disk_quota.yaml</string>
+        <string>/Users/anarchistsid/GenLab/genlab-core/config/disk_quota.yaml</string>
         <string>--interval</string>
         <string>60</string>
     </array>
@@ -38,8 +38,8 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/quota_monitor.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/quota_monitor.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/quota_monitor_error.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/quota_monitor_error.log</string>
 </dict>
 </plist>
