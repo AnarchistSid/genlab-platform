@@ -327,6 +327,16 @@ class BacklogClient:
         except (ValueError, KeyError):
             self.pending_feedback = None
 
+        try:
+            self.bandit_arms = _proxy("BanditArms")
+        except (ValueError, KeyError):
+            self.bandit_arms = None
+
+        try:
+            self.content_memory = _proxy("Content_Memory")
+        except (ValueError, KeyError):
+            self.content_memory = None
+
     # ── Private helpers ──────────────────────────────────────────────
 
     def _resolve_source(self, story: Dict) -> str:
