@@ -35,7 +35,7 @@ DEFAULT_P95_TARGET = 600
 class RunReport:
     """Write per-run JSON summary to .tmp/runs/<run_id>/run_report.json.
 
-    Reads: context['run_stats'], context['stories'], context['blueprints'],
+    Reads: context['run_stats'], context['stories'],
            context['niche_config']
     Writes: context['run_stats']['report_path']
     """
@@ -45,7 +45,7 @@ class RunReport:
         niche_config = context.get("niche_config", {})
         niche_id = context.get("niche_id") or niche_config.get("niche_id", "unknown")
         stories = context.get("stories", [])
-        blueprints = context.get("blueprints", [])
+        blueprints_pushed = run_stats.get("backlog_push", {}).get("blueprints_pushed", 0)
 
         now = datetime.now(timezone.utc)
 
@@ -102,7 +102,7 @@ class RunReport:
             "status": status,
             "metrics": {
                 "stories_count": len(stories),
-                "blueprints_count": len(blueprints),
+                "blueprints_count": blueprints_pushed,
                 "qc": qc,
                 "virality": virality,
                 "video_validation": video_val,
@@ -133,7 +133,7 @@ class RunReport:
             "[RunReport] %s | %s | %.0fs | stories=%d blueprints=%d | "
             "QC: %s | violations=%d",
             niche_id, status, total_duration,
-            len(stories), len(blueprints),
+            len(stories), blueprints_pushed,
             qc.get("pass_rate", "n/a"),
             len(slo_violations),
         )
