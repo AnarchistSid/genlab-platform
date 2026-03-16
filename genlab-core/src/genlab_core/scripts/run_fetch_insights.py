@@ -2,18 +2,22 @@
 """Deferred engagement insights fetcher — standalone script for launchd.
 
 Fetches post-publish engagement metrics at configurable time windows
-(6h, 24h) for any niche. Designed to be called by launchd plists after
-the daily publish completes.
+(6h, 24h, 48h, 168h) for any niche. Designed to be called by launchd plists
+after the daily publish completes.
 
 Usage:
     uv run python -m genlab_core.scripts.run_fetch_insights --niche-id anime --window 6
     uv run python -m genlab_core.scripts.run_fetch_insights --niche-id gaming --window 24
+    uv run python -m genlab_core.scripts.run_fetch_insights --niche-id gaming --window 48
+    uv run python -m genlab_core.scripts.run_fetch_insights --niche-id gaming --window 168
     uv run python -m genlab_core.scripts.run_fetch_insights --niche-id all --window 6
     uv run python -m genlab_core.scripts.run_fetch_insights --niche-id anime --window 6 --dry-run
 
 Windows:
-    6h:  Fetch posts published 5-7h ago (first engagement snapshot)
-    24h: Fetch posts published 23-25h ago + trigger performance_learner
+    6h:   Fetch posts published 5-7h ago (first engagement snapshot)
+    24h:  Fetch posts published 23-25h ago + trigger performance_learner
+    48h:  Fetch posts published 44-168h ago (growth tracking + bandit reward)
+    168h: Fetch posts published 164-336h ago (final weekly snapshot)
 """
 
 from __future__ import annotations
@@ -50,8 +54,10 @@ ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 # Wide ranges: catch ALL posts that haven't been collected yet.
 # Idempotency via insight_windows_completed prevents double-fetching.
 WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
-    6: (4.0, 168.0),    # Any post 4h-7d old
-    24: (20.0, 168.0),   # Any post 20h-7d old
+    6: (4.0, 168.0),      # Any post 4h-7d old
+    24: (20.0, 168.0),    # Any post 20h-7d old
+    48: (44.0, 168.0),    # Any post 44h-7d old (growth tracking)
+    168: (164.0, 336.0),  # Any post 164h-14d old (final weekly snapshot)
 }
 
 
@@ -99,14 +105,17 @@ def _get_eligible_records(
     """
     min_age, max_age = WINDOW_RANGES[window]
 
-    try:
-        # 6h window: fetch SUCCESS records
-        # 24h window: fetch INSIGHTS_6H records (already had 6h collection)
-        if window == 6:
-            target_status = "SUCCESS"
-        else:
-            target_status = "INSIGHTS_6H"
+    # Status progression: SUCCESS → INSIGHTS_6H → INSIGHTS_24H → INSIGHTS_48H → INSIGHTS_168H
+    # Each window targets the status from the previous window.
+    window_target_status = {
+        6: "SUCCESS",
+        24: "INSIGHTS_6H",
+        48: "INSIGHTS_24H",
+        168: "INSIGHTS_48H",
+    }
+    target_status = window_target_status.get(window, "SUCCESS")
 
+    try:
         formula = f"{{status}}='{target_status}'"
         if niche_id != "all":
             formula = f"AND({{status}}='{target_status}',{{niche_id}}='{niche_id}')"
@@ -132,12 +141,11 @@ def _get_eligible_records(
             continue
 
         # Idempotency: check if already fetched at this window
-        # Status progression: SUCCESS → INSIGHTS_6H → INSIGHTS_24H
+        # Status progression: SUCCESS → INSIGHTS_6H → INSIGHTS_24H → INSIGHTS_48H → INSIGHTS_168H
         record_status = str(f.get("status", ""))
-        if window == 6 and "INSIGHTS" in record_status:
-            continue  # Already collected
-        if window == 24 and "24H" in record_status:
-            continue  # Already collected at 24h
+        window_tag = f"{window}H"
+        if window_tag in record_status:
+            continue  # Already collected at this window
 
         eligible.append((r, f"window_{window}h"))
 
