@@ -47,9 +47,12 @@ NICHE_ENV_DIRS: Dict[str, str] = {
 ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 
 # Window definitions: (min_age_hours, max_age_hours)
+# Widened ranges: catch posts that missed their exact window
+# 6h window: posts 4-36h old (covers late publishes and missed runs)
+# 24h window: posts 20-72h old (covers weekend backlog)
 WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
-    6: (5.0, 7.0),
-    24: (23.0, 25.0),
+    6: (4.0, 36.0),
+    24: (20.0, 72.0),
 }
 
 
