@@ -57,6 +57,9 @@ WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
 
 def _load_env_for_niche(niche_id: str) -> None:
     """Load the .env file for a given niche."""
+    # Handle legacy alias
+    if niche_id == "ai_news":
+        niche_id = "ai_creators"
     dir_name = NICHE_ENV_DIRS.get(niche_id)
     if not dir_name:
         return
@@ -148,19 +151,20 @@ def _get_eligible_records(
 def _fetch_platform_insights(
     platform: str,
     post_id: str,
+    niche_id: str = "",
 ) -> Optional[Dict[str, Any]]:
     """Fetch engagement metrics for a single post from its platform API.
 
-    Uses the same API patterns as Content Scraper/execution/fetch_insights.py.
-    Non-fatal: returns None on any failure.
+    Uses per-niche credentials via niche_credentials to avoid cross-channel
+    token leakage.
     """
     try:
         if platform == "instagram":
-            return _fetch_instagram(post_id)
+            return _fetch_instagram(post_id, niche_id=niche_id)
         elif platform == "youtube":
             return _fetch_youtube(post_id)
         elif platform == "facebook":
-            return _fetch_facebook(post_id)
+            return _fetch_facebook(post_id, niche_id=niche_id)
         elif platform in ("x", "twitter", "x_twitter"):
             return _fetch_twitter(post_id)
         else:
@@ -171,11 +175,13 @@ def _fetch_platform_insights(
         return None
 
 
-def _fetch_instagram(post_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch IG metrics via graph.facebook.com."""
-    token = os.getenv("META_ACCESS_TOKEN", "")
+def _fetch_instagram(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]]:
+    """Fetch IG metrics via graph.facebook.com using per-niche credentials."""
+    from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
+    token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
     if not token:
-        logger.debug("META_ACCESS_TOKEN not set — skipping IG")
+        logger.debug("IG token not set for niche '%s' — skipping", niche_id)
         return None
 
     import requests
@@ -249,34 +255,46 @@ def _fetch_youtube(post_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def _fetch_facebook(post_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch FB metrics via Graph API."""
-    token = os.getenv("META_ACCESS_TOKEN", "") or os.getenv("FB_PAGE_ACCESS_TOKEN", "")
+def _fetch_facebook(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]]:
+    """Fetch FB metrics via Graph API using per-niche credentials."""
+    from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
+    token, _page_id = resolve_fb_credentials(niche_id)
     if not token:
-        logger.debug("FB token not set — skipping FB")
+        logger.debug("FB token not set for niche '%s' — skipping", niche_id)
         return None
 
     import requests
+
+    # FB Reels use /video_insights instead of /insights (which returns 400)
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{post_id}",
-        params={
-            "fields": "shares,reactions.summary(total_count),comments.summary(total_count)",
-            "access_token": token,
-        },
+        f"https://graph.facebook.com/v21.0/{post_id}/video_insights",
+        params={"access_token": token},
         timeout=15,
     )
     if resp.status_code != 200:
+        logger.debug("FB video_insights %d: %s", resp.status_code, resp.text[:100])
         return None
-    data = resp.json()
-    shares = data.get("shares", {}).get("count", 0)
-    reactions = data.get("reactions", {}).get("summary", {}).get("total_count", 0)
-    comments = data.get("comments", {}).get("summary", {}).get("total_count", 0)
+
+    metrics: Dict[str, Any] = {}
+    likes = 0
+    for item in resp.json().get("data", []):
+        name = item.get("name", "")
+        values = item.get("values", [{}])
+        val = values[0].get("value", 0) if values else 0
+        if name == "post_video_likes_by_reaction_type" and isinstance(val, dict):
+            likes = sum(val.values())
+        elif name == "post_video_views":
+            metrics["views"] = val
+        elif name == "post_video_view_time":
+            metrics["watch_time_ms"] = val
+
     return {
-        "shares": shares,
-        "likes": reactions,
-        "comments": comments,
-        "engagement": reactions + comments + shares,
-        "reach": reactions + comments + shares,
+        "likes": likes,
+        "views": metrics.get("views", 0),
+        "watch_time_ms": metrics.get("watch_time_ms", 0),
+        "engagement": likes + metrics.get("views", 0),
+        "reach": metrics.get("views", 0),
     }
 
 
@@ -437,7 +455,7 @@ def fetch_insights_for_window(
         if niche_id == "all" and record_niche:
             _load_env_for_niche(record_niche)
 
-        insights = _fetch_platform_insights(platform, post_id)
+        insights = _fetch_platform_insights(platform, post_id, niche_id=record_niche or niche_id)
         if not insights:
             p_stats["errors"] += 1
             stats["errors"] += 1
