@@ -73,6 +73,7 @@ def _dispatch_to_dramatiq(comments: list[dict], niche_id: str) -> int:
         return 0
 
     from genlab_core.engagement.tasks import (
+        like_comment,
         reply_to_comment_high,
         reply_to_comment_normal,
     )
@@ -88,6 +89,10 @@ def _dispatch_to_dramatiq(comments: list[dict], niche_id: str) -> int:
             "post_context": "",
         }
 
+        # Always like every comment (high priority — fast, no LLM needed)
+        like_comment.send(event)
+
+        # Then queue a reply
         priority = _classify_priority(raw)
         if priority == "high":
             reply_to_comment_high.send(event)
