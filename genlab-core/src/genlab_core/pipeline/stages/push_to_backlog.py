@@ -236,12 +236,11 @@ class PushToBacklog:
 
                     if rendered_path:
                         fields["visual_paths"] = json.dumps([rendered_path])
-                        # Auto-schedule for next 14:00 UTC publish window (19:30 IST)
-                        # Pipelines run 08:30-10:30 UTC, content feeds tomorrow's window
+                        # Auto-schedule for next 06:30 UTC = 12:00 IST publish window
                         tomorrow_utc = datetime.now(timezone.utc).date() + timedelta(days=1)
                         publish_time = datetime(
                             tomorrow_utc.year, tomorrow_utc.month, tomorrow_utc.day,
-                            14, 0, tzinfo=timezone.utc,
+                            6, 30, tzinfo=timezone.utc,
                         )
                         fields["scheduled_for"] = publish_time.isoformat()
                     # clip_url and thumbnail_url intentionally omitted — not SharePoint columns
