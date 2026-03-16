@@ -580,30 +580,66 @@ class TestFetchInsights:
         from genlab_core.pipeline.stages.fetch_insights import FetchInsights
         return FetchInsights()
 
-    def test_empty_stories(self):
+    def test_no_backlog_client(self):
+        """Without a backlog_client, stage is a no-op."""
         stage = self._make()
-        ctx = {"stories": []}
+        ctx = {"stories": [], "niche_id": "gaming"}
         result = stage.execute(ctx)
         assert result is ctx
 
-    def test_skips_unpublished(self):
+    def test_skips_already_fetched(self):
+        """Posts with metrics_fetched set should be skipped."""
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone, timedelta
+
         stage = self._make()
+        mock_client = MagicMock()
+        pub_dt = datetime.now(timezone.utc) - timedelta(hours=12)
+        mock_client.publishing_analytics.all.return_value = [
+            {
+                "id": "rec_1",
+                "fields": {
+                    "post_id": "yt_123",
+                    "platform": "youtube",
+                    "niche_id": "gaming",
+                    "published_at": pub_dt.isoformat(),
+                    "metrics_fetched": "2026-03-16T12:00:00+00:00",
+                },
+            },
+        ]
         ctx = {
-            "stories": [{"title": "Test", "published_platforms": {}}],
+            "niche_id": "gaming",
+            "backlog_client": mock_client,
+            "stories": [],
             "niche_config": {},
         }
         result = stage.execute(ctx)
         assert result["run_stats"]["insights"]["skipped"] == 1
 
-    def test_skips_no_publish_time(self):
+    def test_skips_too_young(self):
+        """Posts published less than 6h ago should be skipped."""
+        from unittest.mock import MagicMock
+        from datetime import datetime, timezone, timedelta
+
         stage = self._make()
-        ctx = {
-            "stories": [
-                {
-                    "title": "Test",
-                    "published_platforms": {"instagram": "123"},
+        mock_client = MagicMock()
+        pub_dt = datetime.now(timezone.utc) - timedelta(hours=2)
+        mock_client.publishing_analytics.all.return_value = [
+            {
+                "id": "rec_1",
+                "fields": {
+                    "post_id": "ig_123",
+                    "platform": "instagram",
+                    "niche_id": "gaming",
+                    "published_at": pub_dt.isoformat(),
+                    "metrics_fetched": "",
                 },
-            ],
+            },
+        ]
+        ctx = {
+            "niche_id": "gaming",
+            "backlog_client": mock_client,
+            "stories": [],
             "niche_config": {},
         }
         result = stage.execute(ctx)
