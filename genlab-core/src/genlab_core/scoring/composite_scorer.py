@@ -194,3 +194,62 @@ class CompositeScorer:
 
         passed.sort(key=lambda s: s.composite, reverse=True)
         return passed
+
+
+# ---------------------------------------------------------------------------
+# Visual potential scoring — used by RSS-sourced stories BEFORE video sourcing
+# ---------------------------------------------------------------------------
+
+# Stories with no visual hook waste YouTube API quota and produce mismatches.
+# Score 0.0–1.0; stories below the threshold are dropped before VideoSourcer.
+
+_ZERO_VISUAL_PATTERNS = [
+    "opinion:", "editorial:", "weekly releases", "release schedule",
+    "manga releases", "podcast", "interview:", "analysis:",
+    "doesn't need to", "should give up", "here's why", "the case for",
+    "the case against", "north american releases", "adds digitally",
+    "web novels", "buying guide", "best of 20",
+]
+
+_STRONG_VISUAL_SIGNALS: Dict[str, List[str]] = {
+    "sports": ["highlights", "scored", "dunk", "play", "win", "loss",
+               "record", "comeback", "ejected", "clutch", "game winner"],
+    "gaming": ["gameplay", "clip", "stream", "tournament", "patch",
+               "banned", "viral", "world record", "speedrun", "trailer"],
+    "movies": ["trailer", "clip", "scene", "teaser", "footage",
+               "box office", "premiere", "first look"],
+    "anime": ["episode", "fight", "scene", "finale", "trailer",
+              "moment", "animation", "arc", "premiere"],
+    "ai_creators": ["demo", "tool", "generates", "creates", "watch",
+                    "shows", "reveals", "launches"],
+}
+
+
+def score_visual_potential(story: dict, niche_id: str) -> float:
+    """Score 0.0–1.0 based on how likely this story has usable video footage.
+
+    Stories scoring below 0.3 should be rejected before VideoSourcer runs.
+    Prevents opinion articles, release schedules, and weekly roundups from
+    entering the video pipeline and wasting API quota.
+    """
+    title = (story.get("title") or "").lower()
+    description = (story.get("description") or story.get("summary") or "").lower()
+    text = f"{title} {description}"
+
+    for pattern in _ZERO_VISUAL_PATTERNS:
+        if pattern in text:
+            logger.debug(
+                "[VISUAL_SCORE] 0.0 (matched '%s'): %s",
+                pattern, story.get("title", "")[:60],
+            )
+            return 0.0
+
+    niche_signals = _STRONG_VISUAL_SIGNALS.get(niche_id, [])
+    strong_matches = sum(1 for sig in niche_signals if sig in text)
+
+    if strong_matches >= 2:
+        return 1.0
+    elif strong_matches == 1:
+        return 0.7
+    else:
+        return 0.4  # Unknown — let through at lower priority
