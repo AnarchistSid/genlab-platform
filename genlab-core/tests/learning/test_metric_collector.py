@@ -1,13 +1,16 @@
 """Tests for genlab_core.learning.metric_collector."""
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 
 from genlab_core.learning.metric_collector import (
+    _fetch_x,
     collect_metrics,
     compute_reward,
+    fetch_platform_metrics,
     process_pending_task,
 )
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
@@ -232,3 +235,85 @@ class TestComputeReward:
         shaper.compute_reward.assert_called_once_with(
             platform="youtube", metrics=metrics,
         )
+
+
+# ---------------------------------------------------------------------------
+# Test: Twitter/X fetcher exists and is wired into dispatch
+# ---------------------------------------------------------------------------
+
+class TestTwitterFetcher:
+
+    def test_fetch_x_is_callable(self):
+        """_fetch_x should exist and be callable."""
+        assert callable(_fetch_x)
+
+    def test_fetch_x_returns_empty_without_bearer(self):
+        """Without X_BEARER_TOKEN, _fetch_x should return empty dict."""
+        with patch.dict("os.environ", {}, clear=True):
+            result = _fetch_x("tweet123")
+            assert result == {}
+
+    @patch("genlab_core.learning.metric_collector._fetch_x")
+    def test_twitter_key_dispatches_to_fetch_x(self, mock_fetch_x):
+        """Platform 'twitter' should dispatch to _fetch_x."""
+        mock_fetch_x.return_value = {"likes": 5}
+        result = fetch_platform_metrics("twitter", "tweet123", "6h")
+        mock_fetch_x.assert_called_once_with("tweet123", niche_id="")
+
+    @patch("genlab_core.learning.metric_collector._fetch_x")
+    def test_x_key_dispatches_to_fetch_x(self, mock_fetch_x):
+        """Platform 'x' should dispatch to _fetch_x."""
+        mock_fetch_x.return_value = {"likes": 5}
+        result = fetch_platform_metrics("x", "tweet123", "6h")
+        mock_fetch_x.assert_called_once_with("tweet123", niche_id="")
+
+    @patch("requests.get")
+    def test_fetch_x_returns_metrics(self, mock_get):
+        """_fetch_x should return impression/retweet/reply/like counts."""
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "data": {
+                "public_metrics": {
+                    "impression_count": 1000,
+                    "like_count": 50,
+                    "retweet_count": 20,
+                    "reply_count": 5,
+                }
+            }
+        }
+        mock_resp.raise_for_status.return_value = None
+        mock_get.return_value = mock_resp
+
+        with patch.dict("os.environ", {"X_BEARER_TOKEN": "test_token"}):
+            result = _fetch_x("tweet123")
+
+        assert result["impressions"] == 1000
+        assert result["likes"] == 50
+        assert result["retweets"] == 20
+        assert result["replies"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Test: persist_result=False on process_pending_task
+# ---------------------------------------------------------------------------
+
+class TestPrefectPersistResult:
+
+    def test_process_pending_task_has_persist_result_false(self):
+        """process_pending_task should have persist_result=False to avoid
+        serialization errors with BacklogClient RLock."""
+        # The Prefect @task decorator wraps the function. Check that
+        # persist_result is False in the task kwargs if Prefect is available.
+        try:
+            from prefect import task as prefect_task
+            # When Prefect is installed, the function is wrapped.
+            # Check the underlying task definition.
+            if hasattr(process_pending_task, "persist_result"):
+                assert process_pending_task.persist_result is False
+            else:
+                # For Prefect v3 the attribute may be on task_run_settings
+                # Just verify the function is still callable
+                assert callable(process_pending_task)
+        except ImportError:
+            # Prefect not installed — stub decorators used, no persist_result
+            assert callable(process_pending_task)

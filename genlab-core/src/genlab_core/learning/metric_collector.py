@@ -335,7 +335,7 @@ def compute_reward(
     return shaper.compute_reward(platform=platform, metrics=metrics)
 
 
-@task(name="process_pending_task", **_TASK_DEFAULTS)
+@task(name="process_pending_task", persist_result=False, **_TASK_DEFAULTS)
 def process_pending_task(
     task_record: PendingFeedbackTask,
     store: PendingFeedbackStore,
