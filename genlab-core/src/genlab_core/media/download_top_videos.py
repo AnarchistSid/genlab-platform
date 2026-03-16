@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 _NICHE_KEYWORDS: Dict[str, List[str]] = {
     "ai_creators": ["AI", "artificial intelligence", "machine learning"],
-    "ai_news": ["AI", "artificial intelligence", "machine learning"],
+    "ai_news": ["AI", "artificial intelligence", "machine learning"],  # backward compat alias
     "anime": ["anime", "manga", "otaku"],
     "movies": ["movie", "film", "cinema", "trailer"],
     "sports": ["sports", "highlights", "game", "match"],

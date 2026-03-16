@@ -52,7 +52,8 @@ YOUTUBE_CATEGORIES: Dict[str, str] = {
     "sports": "17",
     "movies": "1",           # Film & Animation
     "entertainment": "24",   # Entertainment (backup for movies)
-    "ai_news": "28",         # Science & Technology
+    "ai_creators": "28",     # Science & Technology (canonical)
+    "ai_news": "28",         # backward compat alias
 }
 
 # Keyword sets for YouTube search per niche
@@ -86,7 +87,14 @@ NICHE_SEARCH_KEYWORDS: Dict[str, List[str]] = {
         "anime episode reaction",
         "anime opening 2026",
     ],
-    "ai_news": [
+    "ai_creators": [
+        "AI demo 2026",
+        "artificial intelligence explained",
+        "AI tool tutorial",
+        "LLM explained",
+        "AI model released",
+    ],
+    "ai_news": [  # backward compat alias
         "AI demo 2026",
         "artificial intelligence explained",
         "AI tool tutorial",
@@ -101,7 +109,8 @@ MIN_VIEW_VELOCITY: Dict[str, float] = {
     "sports": 800,
     "movies": 300,
     "anime": 400,
-    "ai_news": 150,
+    "ai_creators": 150,
+    "ai_news": 150,  # backward compat alias
 }
 
 MAX_DURATION_SECONDS = 240  # 4 minutes
