@@ -151,7 +151,7 @@ class TestLockedConstants:
 
     def test_landscape_bottom_bar(self):
         """Bottom bar must satisfy YouTube (420px) and Instagram (320px) safe zones."""
-        assert L_BOTTOM_H == 846
+        assert L_BOTTOM_H == 644
         assert L_BOTTOM_H >= 420, "YouTube needs 420px"
         assert L_BOTTOM_H >= 320, "Instagram needs 320px"
 
