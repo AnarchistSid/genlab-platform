@@ -128,10 +128,26 @@ def _extract_score(run_dir: Path) -> float:
 
 
 def _is_published(run_dir: Path) -> bool:
-    """Detect whether a run contains published content."""
+    """Detect whether a run contains published or scheduled content.
+
+    Protects runs that:
+    - Have been published (publish_all_summary.json exists)
+    - Are publish runs (_pub suffix)
+    - Have VISUAL_READY renders (approved posts waiting to publish)
+    - Were rerendered (visuals_v2/ or visuals_v3/ exist)
+    """
     if (run_dir / "publish_all_summary.json").is_file():
         return True
     if run_dir.name.endswith("_pub"):
+        return True
+    # Protect runs with rendered visuals — these are approved posts waiting to publish
+    for vis_dir in ("visuals", "visuals_v2", "visuals_v3", "rendered"):
+        vd = run_dir / vis_dir
+        if vd.is_dir() and any(vd.rglob("*.mp4")):
+            return True
+    # Protect runs with downloaded clips — source material for future renders
+    clips_dir = run_dir / "clips"
+    if clips_dir.is_dir() and any(clips_dir.glob("*.mp4")):
         return True
     return False
 
