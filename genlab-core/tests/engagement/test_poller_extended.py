@@ -14,11 +14,11 @@ from genlab_core.engagement.poller import (
 
 
 def _make_yt_mocks(comment_items=None):
-    """Build mock responses for the 2-step YouTube poller (playlist + comments)."""
-    fake_token_resp = MagicMock()
-    fake_token_resp.raise_for_status = MagicMock()
-    fake_token_resp.json.return_value = {"access_token": "at123"}
+    """Build mock responses for the 2-step YouTube poller (playlist + comments).
 
+    Tests use YOUTUBE_API_KEY (Data API key) as the auth method.
+    No OAuth token mocking needed.
+    """
     playlist_resp = MagicMock()
     playlist_resp.raise_for_status = MagicMock()
     playlist_resp.json.return_value = {
@@ -35,7 +35,15 @@ def _make_yt_mocks(comment_items=None):
             return playlist_resp
         return comments_resp
 
-    return fake_token_resp, mock_get, playlist_resp, comments_resp
+    return mock_get, playlist_resp, comments_resp
+
+
+def _set_api_key(monkeypatch):
+    """Set YOUTUBE_API_KEY and clear OAuth vars so poller uses API key path."""
+    monkeypatch.setenv("YOUTUBE_API_KEY", "test_api_key")
+    monkeypatch.delenv("YOUTUBE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("YOUTUBE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("YOUTUBE_REFRESH_TOKEN", raising=False)
 
 
 class TestPollingConstants:
@@ -52,20 +60,16 @@ class TestPollingConstants:
 class TestYouTubePollerParams:
     def test_playlist_requests_10_recent_videos(self, monkeypatch):
         """Playlist call should request maxResults=10 for recent uploads."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+        _set_api_key(monkeypatch)
 
-        fake_token, mock_get_fn, playlist_resp, _ = _make_yt_mocks()
+        mock_get_fn, _, _ = _make_yt_mocks()
         get_calls = []
-        original_get_fn = mock_get_fn
 
         def tracking_get(url, **kwargs):
             get_calls.append((url, kwargs))
-            return original_get_fn(url, **kwargs)
+            return mock_get_fn(url, **kwargs)
 
-        with patch("requests.post", return_value=fake_token), \
-             patch("requests.get", side_effect=tracking_get):
+        with patch("requests.get", side_effect=tracking_get):
             asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         # First GET = playlistItems with maxResults=10
@@ -73,23 +77,20 @@ class TestYouTubePollerParams:
         params = playlist_call[1].get("params", {})
         assert params["maxResults"] == 10
         assert "playlistItems" in playlist_call[0]
+        assert params["key"] == "test_api_key"
 
     def test_comment_threads_use_video_id(self, monkeypatch):
         """commentThreads calls should use videoId, not allThreadsRelatedToChannelId."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+        _set_api_key(monkeypatch)
 
-        fake_token, mock_get_fn, _, _ = _make_yt_mocks()
+        mock_get_fn, _, _ = _make_yt_mocks()
         get_calls = []
-        original_get_fn = mock_get_fn
 
         def tracking_get(url, **kwargs):
             get_calls.append((url, kwargs))
-            return original_get_fn(url, **kwargs)
+            return mock_get_fn(url, **kwargs)
 
-        with patch("requests.post", return_value=fake_token), \
-             patch("requests.get", side_effect=tracking_get):
+        with patch("requests.get", side_effect=tracking_get):
             asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         # Second GET = commentThreads with videoId
@@ -101,13 +102,7 @@ class TestYouTubePollerParams:
 
     def test_returns_empty_on_quota_exceeded(self, monkeypatch):
         """HTTP 403 quota exceeded returns empty list, doesn't crash."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
-
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
+        _set_api_key(monkeypatch)
 
         import requests as _requests
         quota_resp = MagicMock()
@@ -116,17 +111,14 @@ class TestYouTubePollerParams:
             "403 Client Error: Forbidden (quotaExceeded)"
         )
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", return_value=quota_resp):
+        with patch("requests.get", return_value=quota_resp):
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         assert result == []
 
     def test_is_question_detection(self, monkeypatch):
         """Comments with '?' should have is_question=True."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+        _set_api_key(monkeypatch)
 
         comment_items = [
             {
@@ -157,10 +149,9 @@ class TestYouTubePollerParams:
             },
         ]
 
-        fake_token, mock_get_fn, _, _ = _make_yt_mocks(comment_items)
+        mock_get_fn, _, _ = _make_yt_mocks(comment_items)
 
-        with patch("requests.post", return_value=fake_token), \
-             patch("requests.get", side_effect=mock_get_fn):
+        with patch("requests.get", side_effect=mock_get_fn):
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         assert result[0]["is_question"] is True
@@ -169,9 +160,7 @@ class TestYouTubePollerParams:
 
     def test_self_comments_filtered_out(self, monkeypatch):
         """Comments from the channel owner should be excluded."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+        _set_api_key(monkeypatch)
 
         comment_items = [
             {
@@ -202,10 +191,9 @@ class TestYouTubePollerParams:
             },
         ]
 
-        fake_token, mock_get_fn, _, _ = _make_yt_mocks(comment_items)
+        mock_get_fn, _, _ = _make_yt_mocks(comment_items)
 
-        with patch("requests.post", return_value=fake_token), \
-             patch("requests.get", side_effect=mock_get_fn):
+        with patch("requests.get", side_effect=mock_get_fn):
             result = asyncio.run(poll_youtube_comments("gaming", "UC_MYCHANNEL"))
 
         assert len(result) == 1
@@ -213,20 +201,16 @@ class TestYouTubePollerParams:
 
     def test_uploads_playlist_id_derivation(self, monkeypatch):
         """Uploads playlist ID should be UC→UU prefix swap."""
-        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
-        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
-        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+        _set_api_key(monkeypatch)
 
-        fake_token, mock_get_fn, _, _ = _make_yt_mocks()
+        mock_get_fn, _, _ = _make_yt_mocks()
         get_calls = []
-        original_get_fn = mock_get_fn
 
         def tracking_get(url, **kwargs):
             get_calls.append((url, kwargs))
-            return original_get_fn(url, **kwargs)
+            return mock_get_fn(url, **kwargs)
 
-        with patch("requests.post", return_value=fake_token), \
-             patch("requests.get", side_effect=tracking_get):
+        with patch("requests.get", side_effect=tracking_get):
             asyncio.run(poll_youtube_comments("gaming", "UC3GCipF_BTgjaxu"))
 
         playlist_params = get_calls[0][1].get("params", {})
