@@ -5,14 +5,21 @@ Idempotency is non-negotiable. The YouTube poller runs every 5 minutes.
 Without a "already replied" check, the same comment receives multiple
 replies before the rate limiter catches up. Uses a simple append-only
 JSONL file keyed by (comment_id, platform) as the replied-set.
+
+Confidence routing (hybrid auto-reply):
+  auto    — confidence >= 0.85 AND toxicity < 0.15 AND safe pattern AND <100 chars
+  review  — confidence >= 0.5 AND toxicity < 0.3
+  discard — low confidence OR high toxicity
 """
 from __future__ import annotations
 
 import fcntl
 import json
 import logging
+import re
 import time
 from pathlib import Path
+from typing import Literal
 
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.persona_engine import PersonaEngine
@@ -23,6 +30,60 @@ from genlab_core.engagement.rate_limiter import EngagementRateLimiter
 from genlab_core.utils.env import get_agent_root
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Confidence routing — hybrid auto-reply
+# ---------------------------------------------------------------------------
+
+# Safe patterns for auto-reply. If the generated reply matches any of these
+# AND confidence/toxicity thresholds are met, the reply is posted immediately.
+SAFE_PATTERNS = [
+    re.compile(r"^(thanks|thank you|glad you (liked|enjoyed)|appreciate)", re.I),
+    re.compile(r"^(right\??|ikr|fr|exactly|so true|facts)", re.I),
+    re.compile(r"^(check out|watch|subscribe|follow)", re.I),
+    re.compile(r"^[\U0001F300-\U0001F9FF\u2600-\u27BF\s!]+$"),  # emoji-only
+]
+
+
+def _is_safe_reply(text: str) -> bool:
+    """Return True if the reply text matches a known-safe pattern.
+
+    Safe replies are short (< 100 chars) acknowledgments, agreements,
+    CTAs, or emoji-only messages that carry minimal risk of controversy.
+    """
+    if len(text) > 100:
+        return False
+    return any(p.search(text.strip()) for p in SAFE_PATTERNS)
+
+
+def classify_reply_action(
+    reply_text: str,
+    confidence: float,
+    toxicity: float,
+) -> Literal["auto", "review", "discard"]:
+    """Classify a generated reply into an action tier.
+
+    Tiers:
+      auto    — post immediately (high confidence, low toxicity, safe pattern)
+      review  — queue for human approval
+      discard — log and drop
+
+    Args:
+        reply_text: The generated reply text.
+        confidence: Persona engine confidence score (0.0-1.0).
+        toxicity: Outbound toxicity score (0.0-1.0).
+
+    Returns:
+        One of "auto", "review", or "discard".
+    """
+    if toxicity >= 0.3:
+        return "discard"
+    if confidence < 0.5:
+        return "discard"
+    if confidence >= 0.85 and toxicity < 0.15 and _is_safe_reply(reply_text):
+        return "auto"
+    return "review"
+
 
 # Per-platform reply rate caps (actions per hour).
 RATE_CAPS: dict[str, int] = {
