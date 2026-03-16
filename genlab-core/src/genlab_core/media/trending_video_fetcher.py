@@ -76,8 +76,8 @@ YOUTUBE_CATEGORIES: Dict[str, str] = {
     "sports": "17",
     "movies": "1",           # Film & Animation
     "entertainment": "24",   # Entertainment (backup for movies)
-    "ai_news": "28",         # Science & Technology
     "ai_creators": "28",     # Science & Technology (canonical)
+    "ai_news": "28",         # backward compat alias
 }
 
 # Keyword sets for YouTube search per niche
@@ -111,8 +111,14 @@ NICHE_SEARCH_KEYWORDS: Dict[str, List[str]] = {
         "anime episode reaction",
         "anime opening 2026",
     ],
-    "ai_news": [
-    # ai_creators alias handled by ai_news entry above
+    "ai_creators": [
+        "AI demo 2026",
+        "artificial intelligence explained",
+        "AI tool tutorial",
+        "LLM explained",
+        "AI model released",
+    ],
+    "ai_news": [  # backward compat alias
         "AI demo 2026",
         "artificial intelligence explained",
         "AI tool tutorial",
@@ -127,8 +133,8 @@ MIN_VIEW_VELOCITY: Dict[str, float] = {
     "sports": 800,
     "movies": 300,
     "anime": 400,
-    "ai_news": 150,
     "ai_creators": 150,
+    "ai_news": 150,  # backward compat alias
 }
 
 MAX_DURATION_SECONDS = 240  # 4 minutes
@@ -825,8 +831,8 @@ class FetchTrendingVideos:
             "sports": _PROJECT_ROOT / "ClutchWire" / "config" / "sources.yaml",
             "movies": _PROJECT_ROOT / "SpliceReel" / "config" / "sources.yaml",
             "anime": _PROJECT_ROOT / "FrameDrift" / "config" / "sources.yaml",
-            "ai_news": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",
             "ai_creators": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",
+            "ai_news": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",  # backward compat alias
         }
         path = sources_paths.get(niche_id)
         if path and path.is_file():
@@ -892,6 +898,28 @@ class FetchTrendingVideos:
             "[FetchTrendingVideos] Found %d trending videos for %s",
             len(videos), niche_id,
         )
+
+        # ── Content relevance filter ─────────────────────────────────
+        # Reject off-niche content using per-niche keyword lists from
+        # sources.yaml ``content_filter``. Runs before composite quality
+        # gate so obviously irrelevant videos never consume scoring quota.
+        content_filter_config = sources_config.get("content_filter", {})
+        if content_filter_config:
+            from genlab_core.media.relevance_filter import RelevanceFilter
+
+            rf = RelevanceFilter(niche_id, content_filter_config)
+            pre_count = len(videos)
+            videos = [
+                v for v in videos
+                if rf.score(v.title, v.description_snippet) >= rf.threshold
+            ]
+            rejected_count = pre_count - len(videos)
+            if rejected_count:
+                logger.info(
+                    "[FetchTrendingVideos] Relevance filter: rejected=%d kept=%d for %s",
+                    rejected_count, len(videos), niche_id,
+                )
+        # ── End relevance filter ──────────────────────────────────────
 
         # ── Composite quality gate ──────────────────────────────────
         # Score each video and filter out those below the niche threshold.

@@ -245,7 +245,7 @@ class TestFetchTrendingVideosStage:
 
         mock_video = TrendingVideo(
             video_id="trend1",
-            title="Trending",
+            title="Epic Gaming Gameplay Highlights",
             channel_name="Ch",
             channel_id="UC",
             published_at=datetime.now(timezone.utc),
