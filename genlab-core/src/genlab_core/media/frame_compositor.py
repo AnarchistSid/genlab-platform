@@ -443,7 +443,7 @@ class FrameCompositor:
             hook_filters += (
                 f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
                 f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={line_y}:"
+                f"x={HOOK_X}:y={line_y}:"
                 f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
                 f"[{out_label}];"
             )
@@ -453,9 +453,10 @@ class FrameCompositor:
             filtergraph = (
                 # Black canvas 1080x1920
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                # Source video scaled to fit 1080x608 (maintain AR, pad)
+                # Source video scaled to fit canvas width (maintain AR), top-aligned
+                # so video is flush below the accent line — no gap between branding and content
                 f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
                 # Place video at y=656
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
                 # Logo scaled to 56px
@@ -482,7 +483,7 @@ class FrameCompositor:
             filtergraph = (
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
                 f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
                 f"[base]drawbox=x=0:y={L_ACCENT_Y}:w={CANVAS_W}:h={L_ACCENT_H}:"
                 f"color=0x{accent}:t=fill[accented];"
@@ -648,7 +649,7 @@ class FrameCompositor:
             hook_filters += (
                 f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
                 f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={line_y}:"
+                f"x={HOOK_X}:y={line_y}:"
                 f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
                 f"[{out_label}];"
             )

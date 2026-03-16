@@ -23,6 +23,8 @@ NICHE_CREDENTIAL_PREFIXES: Dict[str, str] = {
     "movies": "SPLICEREEL",
     "anime": "FRAMEDRIFT",
     "gaming": "CRITICALRUSH",
+    "ai_creators": "BLACKBOXBRIEF",
+    "ai_tech": "BLACKBOXBRIEF",  # alias — normalizes to ai_creators
 }
 
 

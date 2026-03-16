@@ -54,10 +54,10 @@ ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 # Wide ranges: catch ALL posts that haven't been collected yet.
 # Idempotency via insight_windows_completed prevents double-fetching.
 WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
-    6: (4.0, 168.0),      # Any post 4h-7d old
-    24: (20.0, 168.0),    # Any post 20h-7d old
-    48: (44.0, 168.0),    # Any post 44h-7d old (growth tracking)
-    168: (164.0, 336.0),  # Any post 164h-14d old (final weekly snapshot)
+    6: (4.0, 8760.0),     # Any post 4h+ old (effectively unlimited for backfill)
+    24: (20.0, 8760.0),   # Any post 20h+ old
+    48: (44.0, 8760.0),   # Any post 44h+ old (growth tracking)
+    168: (164.0, 8760.0), # Any post 164h+ old (final weekly snapshot)
 }
 
 
