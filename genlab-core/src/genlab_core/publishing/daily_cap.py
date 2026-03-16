@@ -49,7 +49,10 @@ def _load_caps(config_path: Optional[Path] = None) -> dict[str, int]:
 
 
 class DailyCapEnforcer:
-    """Enforces a hard cap of N posts per platform per UTC calendar day.
+    """Enforces a hard cap of N posts per platform per niche per UTC calendar day.
+
+    When ``niche_id`` is provided, counts are scoped to that niche only —
+    gaming's Instagram cap is independent of ai_creators' cap.
 
     Designed to be instantiated once per publish run. Thread-safe for
     sequential use (not concurrent — parallel publishers in different
@@ -57,7 +60,7 @@ class DailyCapEnforcer:
 
     Usage::
 
-        enforcer = DailyCapEnforcer(backlog_client)
+        enforcer = DailyCapEnforcer(backlog_client, niche_id="gaming")
 
         for platform in platforms:
             if not enforcer.can_publish(platform):
@@ -68,8 +71,9 @@ class DailyCapEnforcer:
                 enforcer.record_publish(platform)
     """
 
-    def __init__(self, backlog_client, config_path: Optional[Path] = None):
+    def __init__(self, backlog_client, niche_id: str = "", config_path: Optional[Path] = None):
         self._client = backlog_client
+        self._niche_id = niche_id
         self._caps = _load_caps(config_path)
         self._session_counts: dict[str, int] = {}
         self._counts_loaded_for: Optional[date] = None
@@ -161,6 +165,11 @@ class DailyCapEnforcer:
                 status = str(fields.get("status") or "").strip()
                 if status != "SUCCESS":
                     continue
+                # Filter by niche_id when set — each channel's cap is independent
+                if self._niche_id:
+                    item_niche = str(fields.get("niche_id") or "").strip()
+                    if item_niche and item_niche != self._niche_id:
+                        continue
                 # published_at may be a datetime object from Graph SDK
                 raw_pub = fields.get("published_at")
                 if isinstance(raw_pub, datetime):
@@ -179,5 +188,6 @@ class DailyCapEnforcer:
                 "Starting from 0 (fail-open).", e
             )
 
-        logger.info("Loaded today's counts (%s): %s", today_str, counts)
+        niche_label = f" for {self._niche_id}" if self._niche_id else " (global)"
+        logger.info("Loaded today's counts%s (%s): %s", niche_label, today_str, counts)
         return counts
