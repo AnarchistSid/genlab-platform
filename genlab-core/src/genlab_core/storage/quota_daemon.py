@@ -41,7 +41,7 @@ def main() -> None:
         "--config",
         default=os.getenv(
             "DISK_QUOTA_CONFIG",
-            str(Path.home() / "GenLab" / "Content Scraper" / "config" / "disk_quota.yaml"),
+            str(Path.home() / "GenLab" / "genlab-core" / "config" / "disk_quota.yaml"),
         ),
         help="Path to disk_quota.yaml",
     )

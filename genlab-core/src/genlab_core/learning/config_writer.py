@@ -102,13 +102,15 @@ def update_schedule_from_bandit(
                 new_slots.append(slot_str)
                 continue
 
-            current_h = int(slot_str.split(":")[0])
+            parts = slot_str.split(":")
+            current_h = int(parts[0])
+            current_m = parts[1] if len(parts) > 1 else "00"
             raw_shift = best_hour - current_h
             shift = max(-MAX_SHIFT_HOURS, min(MAX_SHIFT_HOURS, raw_shift))
             new_h = current_h + shift
             # Clamp to allowed range
             new_h = max(ALLOWED_HOUR_RANGE[0], min(ALLOWED_HOUR_RANGE[1], new_h))
-            new_slot = f"{new_h:02d}:00"
+            new_slot = f"{new_h:02d}:{current_m}"
 
             if new_slot != slot_str:
                 logger.info(

@@ -73,13 +73,15 @@ class LocalCDNUpload:
         logger.info("[CDN] Uploaded %s → %s", src.name, public_url)
         return public_url
 
-    def cleanup(self, local_path: str) -> None:
-        """Remove the CDN copy after Threads confirms the post."""
-        src_name = Path(local_path).name
-        if not self._serve_dir.exists():
-            return
+    def cleanup(self, cdn_url_or_path: str) -> None:
+        """Remove a specific CDN copy after the platform confirms the post.
 
-        for f in self._serve_dir.iterdir():
-            if f.name.endswith(f"_{src_name}"):
-                f.unlink(missing_ok=True)
-                logger.debug("[CDN] Cleaned up %s", f.name)
+        Accepts either the public URL returned by upload() or the CDN filename.
+        Only deletes the exact file — not all files matching the source name.
+        """
+        # Extract filename from URL or path
+        cdn_filename = cdn_url_or_path.rsplit("/", 1)[-1]
+        target = self._serve_dir / cdn_filename
+        if target.exists():
+            target.unlink()
+            logger.debug("[CDN] Cleaned up %s", cdn_filename)

@@ -26,9 +26,9 @@ _DEFAULT_CAPS: dict[str, int] = {
 def _load_caps(config_path: Optional[Path] = None) -> dict[str, int]:
     """Load daily post caps from config/platform_caps.yaml. Falls back to 2/platform."""
     if config_path is None:
-        # Walk up from this file to genlab-core root, then sibling Content Scraper
+        # Walk up from this file to genlab-core root, then config/ subdir
         genlab_root = Path(__file__).resolve().parents[4]
-        config_path = genlab_root / "Content Scraper" / "config" / "platform_caps.yaml"
+        config_path = genlab_root / "genlab-core" / "config" / "platform_caps.yaml"
 
     try:
         with open(config_path) as f:

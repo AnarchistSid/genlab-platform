@@ -11,19 +11,18 @@ import logging
 import os
 from pathlib import Path
 
-# Ensure Content Scraper .env is loaded for credentials
+# Load credentials from the shared root .env
 _GENLAB_ROOT = Path(__file__).resolve().parents[4]
-_CS_ROOT = _GENLAB_ROOT / "Content Scraper"
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(_CS_ROOT / ".env")
+    load_dotenv(_GENLAB_ROOT / ".env")
 except ImportError:
     pass
 
 os.environ.setdefault(
     "BACKLOG_CONFIG_PATH",
-    str(_CS_ROOT / "config" / "lists_config.yaml"),
+    str(_GENLAB_ROOT / "genlab-core" / "config" / "lists_config.yaml"),
 )
 
 

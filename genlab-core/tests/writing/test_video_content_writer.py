@@ -61,7 +61,7 @@ class TestVideoContentWriter:
         assert result["hook"].endswith("...")
 
     def test_niche_voice_defined_for_all_channels(self):
-        for niche in ["gaming", "sports", "movies", "anime", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "anime", "ai_creators"]:
             assert niche in NICHE_VOICE
             voice = NICHE_VOICE[niche]
             assert "account" in voice

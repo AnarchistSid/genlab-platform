@@ -109,8 +109,12 @@ class PersonaEngine:
                 return reply
 
             except Exception as e:
-                logger.error("[PERSONA] Reply generation failed: %s", e)
-                return None
+                logger.warning(
+                    "[PERSONA] Reply generation failed (attempt %d): %s",
+                    attempt + 1, e,
+                )
+                if attempt >= max_retries:
+                    return None
 
         logger.warning(
             "[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1
