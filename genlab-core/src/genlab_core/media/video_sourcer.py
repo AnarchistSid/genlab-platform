@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 # Niche → subreddit mapping for Reddit search
 # ---------------------------------------------------------------------------
 NICHE_SUBREDDITS: dict[str, list[str]] = {
-    "ai_tech": ["artificial", "MachineLearning", "LocalLLaMA", "singularity"],
-    "ai_news": ["artificial", "MachineLearning", "LocalLLaMA", "singularity"],
     "ai_creators": ["artificial", "MachineLearning", "LocalLLaMA", "singularity"],
+    "ai_tech": ["artificial", "MachineLearning", "LocalLLaMA", "singularity"],  # backward compat alias
+    "ai_news": ["artificial", "MachineLearning", "LocalLLaMA", "singularity"],  # backward compat alias
     "gaming": ["gaming", "pcgaming", "Games", "GameDeals"],
     "sports": ["sports", "nba", "soccer", "nfl"],
     "movies": ["movies", "MovieClips", "trailers", "boxoffice"],

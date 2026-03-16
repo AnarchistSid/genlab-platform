@@ -38,8 +38,8 @@ DEFAULT_VELOCITY_THRESHOLDS: Dict[str, float] = {
     "sports": 2000.0,
     "movies": 800.0,
     "anime": 600.0,
-    "ai_news": 400.0,
     "ai_creators": 400.0,
+    "ai_news": 400.0,  # backward compat alias
 }
 
 # Minimum composite score to pass the quality gate.
@@ -49,8 +49,8 @@ DEFAULT_MIN_COMPOSITE: Dict[str, float] = {
     "sports": 0.35,
     "movies": 0.30,
     "anime": 0.30,
-    "ai_news": 0.25,
     "ai_creators": 0.25,
+    "ai_news": 0.25,  # backward compat alias
 }
 
 
