@@ -67,6 +67,11 @@ class RenderTextOverlays:
                 or media.get("hook_text", "")
             )
 
+            if media.get("compositor") == "frame_compositor":
+                # frame_compositor already burned logo + hook into the video
+                skipped += 1
+                continue
+
             if not rendered or not Path(rendered).exists():
                 skipped += 1
                 continue
