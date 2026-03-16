@@ -38,7 +38,7 @@ class PerformanceLearner:
         niche_config = context.get("niche_config", {})
         niche_id = niche_config.get("niche_id", "unknown")
 
-        # Collect stories with engagement data
+        # First check current run's stories for engagement data
         with_engagement = [
             s for s in stories
             if s.get("engagement") and any(
@@ -47,6 +47,31 @@ class PerformanceLearner:
                 if isinstance(platform_data, dict)
             )
         ]
+
+        # If no engagement in current stories, check Analytics for PREVIOUSLY
+        # published posts with engagement data (collected by fetch_insights)
+        if len(with_engagement) < MIN_STORIES_WITH_DATA:
+            try:
+                from genlab_core.http.backlog_client import BacklogClient
+                client = BacklogClient()
+                analytics = client.analytics.all(max_records=50)
+                for a in analytics:
+                    f = a.get("fields", a)
+                    if (str(f.get("niche_id", "")) == niche_id and
+                            f.get("engagement_rate") is not None):
+                        with_engagement.append({
+                            "story_id": f.get("candidate_id", ""),
+                            "hook_formula": f.get("hook_formula", ""),
+                            "template_id": f.get("template_id", ""),
+                            "scheduled_slot": f.get("scheduled_slot", ""),
+                            "engagement": {
+                                f.get("platform", "unknown"): {
+                                    "metrics": {"engagement_rate": f.get("engagement_rate", 0)}
+                                }
+                            },
+                        })
+            except Exception as exc:
+                logger.debug("[PerformanceLearner] Analytics check failed: %s", exc)
 
         if len(with_engagement) < MIN_STORIES_WITH_DATA:
             logger.info(
