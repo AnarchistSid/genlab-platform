@@ -1,12 +1,14 @@
 """Pipeline stage: Fetch post-publish engagement metrics.
 
-Pulls metrics from Instagram, YouTube, Facebook, and X/Twitter for
-recently published stories. Uses multi-window strategy:
+Queries SharePoint Publishing_Analytics for PREVIOUSLY published posts
+(6h-7d ago) and fetches engagement metrics from platform APIs.
+
+Uses multi-window strategy:
   - FRESH: 6-48h after publish (first snapshot)
   - WARM:  2-7 days (growth tracking)
 
-Writes metrics into context['run_stats']['insights'] and updates
-each story's engagement data in context['stories'].
+Writes metrics into context['run_stats']['insights'] and marks fetched
+records in SharePoint via metrics_fetched timestamp.
 
 Non-fatal: API failures are logged per-platform, never crash pipeline.
 """
@@ -29,36 +31,57 @@ MAX_WARM_DAYS = 7
 class FetchInsights:
     """Fetch post-publish engagement metrics from platform APIs.
 
-    Reads: context['stories'], context['niche_config']
-    Writes: context['stories'][*]['engagement'], context['run_stats']['insights']
+    Queries SharePoint Publishing_Analytics for posts published 6h-7d ago
+    that haven't had metrics collected yet (metrics_fetched is empty).
+
+    Reads: context['backlog_client'], context['niche_id'], context['niche_config']
+    Writes: context['run_stats']['insights']
     """
 
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        stories = context.get("stories", [])
-        if not stories:
-            logger.info("[FetchInsights] No stories to fetch insights for")
+        niche_id = context.get("niche_id", "")
+        client = context.get("backlog_client")
+        config = context.get("niche_config", {})
+
+        if not client:
+            logger.info("[FetchInsights] No backlog_client — skipping")
             return context
 
-        config = context.get("niche_config", {})
         now = datetime.now(timezone.utc)
-
         fetched = 0
         skipped = 0
         errors = 0
         platform_stats: Dict[str, Dict[str, int]] = {}
 
-        for story in stories:
-            published = story.get("published_platforms", {})
-            if not published:
+        # Query Publishing_Analytics for posts in this niche
+        try:
+            formula = f"AND({{niche_id}}='{niche_id}')"
+            records = client.publishing_analytics.all(formula=formula)
+        except Exception:
+            logger.exception("[FetchInsights] Failed to query Publishing_Analytics")
+            context.setdefault("run_stats", {})["insights"] = {
+                "fetched": 0, "skipped": 0, "errors": 1, "platforms": {},
+            }
+            return context
+
+        for record in records:
+            fields = record.get("fields", {})
+            post_id = fields.get("post_id", "")
+            platform = fields.get("platform", "")
+            published_at = fields.get("published_at", "")
+            metrics_fetched = fields.get("metrics_fetched", "")
+
+            # Skip already fetched
+            if metrics_fetched:
                 skipped += 1
                 continue
 
-            published_at = story.get("published_at")
-            if not published_at:
+            # Skip if no post_id or platform
+            if not post_id or not platform:
                 skipped += 1
                 continue
 
-            # Parse publish time
+            # Parse publish time and check age
             try:
                 if isinstance(published_at, str):
                     pub_dt = datetime.fromisoformat(
@@ -78,50 +101,47 @@ class FetchInsights:
                 skipped += 1
                 continue
 
-            engagement = story.setdefault("engagement", {})
-
-            for platform, post_data in published.items():
-                post_id = post_data if isinstance(post_data, str) else post_data.get("id", "")
-                if not post_id:
-                    continue
-
-                stats = platform_stats.setdefault(
-                    platform, {"fetched": 0, "errors": 0},
+            # Fetch metrics
+            stats = platform_stats.setdefault(
+                platform, {"fetched": 0, "errors": 0},
+            )
+            try:
+                metrics = self._fetch_platform(platform, post_id, config)
+                if metrics:
+                    # Mark as fetched in SharePoint
+                    try:
+                        client.publishing_analytics.update(
+                            record["id"],
+                            {"metrics_fetched": now.isoformat()},
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[FetchInsights] Failed to mark %s as fetched",
+                            post_id,
+                        )
+                    stats["fetched"] += 1
+                    fetched += 1
+                else:
+                    skipped += 1
+            except Exception:
+                logger.exception(
+                    "[FetchInsights] %s fetch failed for post %s",
+                    platform, post_id,
                 )
-
-                try:
-                    metrics = self._fetch_platform(platform, post_id, config)
-                    if metrics:
-                        engagement[platform] = {
-                            "metrics": metrics,
-                            "fetched_at": now.isoformat(),
-                            "age_hours": round(age_hours, 1),
-                        }
-                        stats["fetched"] += 1
-                        fetched += 1
-                    else:
-                        stats["errors"] += 1
-                except Exception:
-                    logger.exception(
-                        "[FetchInsights] %s fetch failed for post %s",
-                        platform, post_id,
-                    )
-                    stats["errors"] += 1
-                    errors += 1
+                stats["errors"] += 1
+                errors += 1
 
         logger.info(
             "[FetchInsights] %d fetched, %d skipped, %d errors | %s",
             fetched, skipped, errors,
-            {p: s for p, s in platform_stats.items()},
+            {k: v for k, v in platform_stats.items() if v["fetched"] or v["errors"]},
         )
-
         context.setdefault("run_stats", {})["insights"] = {
             "fetched": fetched,
             "skipped": skipped,
             "errors": errors,
             "platforms": platform_stats,
         }
-
         return context
 
     def _fetch_platform(
