@@ -492,10 +492,12 @@ class BacklogClient:
         try:
             record = self.blueprints.create(fields, typecast=True)
         except Exception as e:
-            if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
+            err_str = str(e)
+            if "UNKNOWN_FIELD_NAME" in err_str or "columnNotFound" in err_str or "not recognized" in err_str:
                 for f in (
                     "template_id", "template_name", "topic_category",
                     "hook_formula", "published_hour", "published_day",
+                    "clip_url",
                 ):
                     fields.pop(f, None)
                 record = self.blueprints.create(fields)

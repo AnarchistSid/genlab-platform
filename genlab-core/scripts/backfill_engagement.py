@@ -56,31 +56,40 @@ POSTS = [
 
 
 def fetch_youtube_stats(video_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch YouTube video statistics. Only needs YOUTUBE_API_KEY."""
+    """Fetch YouTube video statistics. Only needs YOUTUBE_API_KEY.
+
+    Retries once on empty response (video may not be indexed yet).
+    """
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     if not api_key:
         logger.warning("YOUTUBE_API_KEY not set — skipping YT")
         return None
 
     import requests
-    resp = requests.get(
-        "https://www.googleapis.com/youtube/v3/videos",
-        params={"part": "statistics", "id": video_id, "key": api_key},
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        logger.warning("YT API %d for %s: %s", resp.status_code, video_id, resp.text[:100])
-        return None
-    items = resp.json().get("items", [])
-    if not items:
-        logger.warning("YT video %s not found", video_id)
-        return None
-    stats = items[0].get("statistics", {})
-    return {
-        "views": int(stats.get("viewCount", 0)),
-        "likes": int(stats.get("likeCount", 0)),
-        "comments": int(stats.get("commentCount", 0)),
-    }
+    for attempt in range(2):
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"part": "statistics", "id": video_id, "key": api_key},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.warning("YT API %d for %s: %s", resp.status_code, video_id, resp.text[:100])
+            return None
+        items = resp.json().get("items", [])
+        if items:
+            stats = items[0].get("statistics", {})
+            return {
+                "views": int(stats.get("viewCount", 0)),
+                "likes": int(stats.get("likeCount", 0)),
+                "comments": int(stats.get("commentCount", 0)),
+            }
+        # Empty response — video may not be indexed yet, retry once
+        if attempt == 0:
+            logger.info("YT video %s returned empty — retrying in 2s", video_id)
+            time.sleep(2)
+
+    logger.warning("YT video %s not found after retry", video_id)
+    return None
 
 
 def fetch_instagram_insights(post_id: str) -> Optional[Dict[str, Any]]:
@@ -132,6 +141,15 @@ def fetch_instagram_insights(post_id: str) -> Optional[Dict[str, Any]]:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Backfill engagement data for live posts")
+    parser.add_argument("--force-refresh", action="store_true",
+                        help="Re-fetch and overwrite even if data exists")
+    parser.add_argument("--window", type=int, default=6,
+                        help="Collection window in hours (6 or 24) — sets timestamp field")
+    args = parser.parse_args()
+
     from genlab_core.http.backlog_client import BacklogClient
 
     client = BacklogClient()
@@ -147,7 +165,7 @@ def main() -> None:
 
         fields: Dict[str, Any] = {}
 
-        # YouTube
+        # YouTube — write None explicitly on failure (not absent)
         yt_id = post["yt_video_id"]
         if yt_id:
             yt = fetch_youtube_stats(yt_id)
@@ -157,10 +175,13 @@ def main() -> None:
                 fields["yt_comments"] = yt["comments"]
                 logger.info("  YT: views=%d likes=%d comments=%d", yt["views"], yt["likes"], yt["comments"])
             else:
-                logger.warning("  YT: no data for %s", yt_id)
+                logger.warning("  YT: no data for %s — writing None", yt_id)
+                fields["yt_views"] = None
+                fields["yt_likes"] = None
+                fields["yt_comments"] = None
             time.sleep(1)
 
-        # Instagram
+        # Instagram — write None explicitly on failure (not absent)
         ig_id = post["ig_post_id"]
         if ig_id:
             ig = fetch_instagram_insights(ig_id)
@@ -170,30 +191,34 @@ def main() -> None:
                 fields["ig_comments"] = ig["comments"]
                 logger.info("  IG: reach=%d likes=%d comments=%d", ig["reach"], ig["likes"], ig["comments"])
             else:
-                logger.warning("  IG: no data for %s", ig_id)
+                logger.warning("  IG: no data for %s — writing None", ig_id)
+                fields["ig_reach"] = None
+                fields["ig_likes"] = None
+                fields["ig_comments"] = None
             time.sleep(1)
 
         # Engagement rate
-        ig_reach = fields.get("ig_reach", 0) or 0
-        ig_likes = fields.get("ig_likes", 0) or 0
-        ig_comments = fields.get("ig_comments", 0) or 0
-        yt_views = fields.get("yt_views", 0) or 0
-        yt_likes = fields.get("yt_likes", 0) or 0
-        yt_comments = fields.get("yt_comments", 0) or 0
+        ig_reach = fields.get("ig_reach") or 0
+        ig_likes = fields.get("ig_likes") or 0
+        ig_comments = fields.get("ig_comments") or 0
+        yt_views = fields.get("yt_views") or 0
+        yt_likes = fields.get("yt_likes") or 0
+        yt_comments = fields.get("yt_comments") or 0
 
         if ig_reach > 0:
             fields["engagement_rate"] = round((ig_likes + ig_comments) / ig_reach, 4)
         elif yt_views > 0:
             fields["engagement_rate"] = round((yt_likes + yt_comments) / yt_views, 4)
 
+        # Timestamps
         fields["insights_collected_at"] = now_iso
+        window = args.window
+        if window <= 8:
+            fields["insights_6h_at"] = now_iso
+        elif window <= 26:
+            fields["insights_24h_at"] = now_iso
 
-        if len(fields) <= 1:  # only insights_collected_at
-            logger.warning("  No engagement data for #%s — skipping write", bp_id)
-            errors += 1
-            continue
-
-        # Write to blueprint
+        # Always write — even if all metrics are None (explicit absence > silent gap)
         try:
             client.blueprints.update(bp_id, fields, typecast=True)
             logger.info("  Written to blueprint #%s: %s", bp_id, list(fields.keys()))

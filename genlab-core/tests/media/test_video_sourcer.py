@@ -71,6 +71,27 @@ class TestIsDirectVideoUrl:
     def test_not_video_plain_text(self):
         assert not is_direct_video_url("just some text")
 
+    def test_twitch_clip_page(self):
+        assert is_direct_video_url("https://clips.twitch.tv/FunnyClipName-abc123")
+
+    def test_twitch_cdn_mp4(self):
+        assert is_direct_video_url(
+            "https://clips-media-assets2.twitch.tv/AT-cm%7C12345.mp4"
+        )
+
+    def test_direct_mp4_url(self):
+        assert is_direct_video_url(
+            "https://cdn.example.com/videos/clip.mp4"
+        )
+
+    def test_direct_webm_url(self):
+        assert is_direct_video_url(
+            "https://cdn.example.com/videos/clip.webm"
+        )
+
+    def test_streamable(self):
+        assert is_direct_video_url("https://streamable.com/abc123")
+
 
 # ---------------------------------------------------------------
 # parse_iso_duration
@@ -272,3 +293,16 @@ class TestFindVideoDirectUrl:
         story = {"title": "Anime news", "url": "https://example.com/article"}
         vs.find_video_for_story(story)
         assert vs.get_stats()["none"] == 1
+
+    def test_story_with_clip_url_field(self):
+        """Twitch clips set _clip_url with a clip page URL (yt-dlp downloads natively)."""
+        vs = VideoSourcer(niche_id="gaming", youtube_api_key="")
+        story = {
+            "title": "Insane Fortnite clip",
+            "_clip_url": "https://www.twitch.tv/streamer/clip/FunnyClipName-abc123",
+            "source_url": "https://www.twitch.tv/streamer/clip/FunnyClipName-abc123",
+        }
+        result = vs.find_video_for_story(story)
+        assert result is not None
+        assert result.backend == "direct_url"
+        assert "twitch.tv" in result.url

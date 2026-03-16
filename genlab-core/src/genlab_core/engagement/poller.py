@@ -21,8 +21,14 @@ THREADS_POLL_INTERVAL = 600    # 10 minutes
 async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
     """Fetch new comments on recent YouTube videos via Data API v3.
 
-    Uses existing YouTube OAuth credentials from env vars.
-    Returns list of raw comment dicts ready for InboundComment conversion.
+    Uses per-video polling (videoId) instead of channel-wide polling
+    (allThreadsRelatedToChannelId) which requires channel-owner OAuth scope
+    and was returning 403 Forbidden with standard OAuth tokens.
+
+    Flow:
+      1. Refresh OAuth access token
+      2. Get recent video IDs from channel uploads playlist
+      3. Poll commentThreads per video using videoId parameter
     """
     import os
 
@@ -52,44 +58,80 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
         )
         token_resp.raise_for_status()
         access_token = token_resp.json()["access_token"]
+        headers = {"Authorization": f"Bearer {access_token}"}
 
-        # Step 2: Fetch comment threads
-        resp = _requests.get(
-            "https://www.googleapis.com/youtube/v3/commentThreads",
+        # Step 2: Get recent video IDs from the uploads playlist
+        # YouTube convention: uploads playlist ID = "UU" + channel_id[2:]
+        uploads_playlist = "UU" + channel_id[2:]
+        playlist_resp = _requests.get(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
             params={
-                "allThreadsRelatedToChannelId": channel_id,
-                "part": "snippet",
-                "order": "time",
-                "maxResults": 50,
+                "playlistId": uploads_playlist,
+                "part": "contentDetails",
+                "maxResults": 10,
             },
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers=headers,
             timeout=15,
         )
-        resp.raise_for_status()
-        data = resp.json()
+        playlist_resp.raise_for_status()
+        video_ids = [
+            item["contentDetails"]["videoId"]
+            for item in playlist_resp.json().get("items", [])
+            if "contentDetails" in item and "videoId" in item["contentDetails"]
+        ]
 
-        # Step 3: Convert to InboundComment dict format, filtering self-comments
+        if not video_ids:
+            logger.debug("[POLLER] YouTube: no recent uploads for %s", niche_id)
+            return []
+
+        # Step 3: Poll comments per video using videoId
         comments: list[dict] = []
         skipped_self = 0
-        for item in data.get("items", []):
-            snippet = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
-            author_id = snippet.get("authorChannelId", {}).get("value", "")
-            if author_id == channel_id:
-                skipped_self += 1
+        for video_id in video_ids:
+            try:
+                resp = _requests.get(
+                    "https://www.googleapis.com/youtube/v3/commentThreads",
+                    params={
+                        "videoId": video_id,
+                        "part": "snippet",
+                        "order": "time",
+                        "maxResults": 20,
+                    },
+                    headers=headers,
+                    timeout=15,
+                )
+                if resp.status_code == 403:
+                    # Comments disabled on this video
+                    logger.debug("[POLLER] YouTube: comments disabled on %s", video_id)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as e:
+                logger.debug("[POLLER] YouTube: comment fetch failed for %s: %s", video_id, e)
                 continue
-            comments.append({
-                "platform": "youtube",
-                "post_id": snippet.get("videoId", ""),
-                "comment_id": item.get("id", ""),
-                "author_id": author_id,
-                "author_name": snippet.get("authorDisplayName", ""),
-                "text": snippet.get("textOriginal", ""),
-                "is_question": "?" in snippet.get("textOriginal", ""),
-            })
+
+            for item in data.get("items", []):
+                snippet = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
+                author_id = snippet.get("authorChannelId", {}).get("value", "")
+                if author_id == channel_id:
+                    skipped_self += 1
+                    continue
+                comments.append({
+                    "platform": "youtube",
+                    "post_id": video_id,
+                    "comment_id": item.get("id", ""),
+                    "author_id": author_id,
+                    "author_name": snippet.get("authorDisplayName", ""),
+                    "text": snippet.get("textOriginal", ""),
+                    "is_question": "?" in snippet.get("textOriginal", ""),
+                })
 
         if skipped_self:
             logger.debug("[POLLER] YouTube: skipped %d self-comments for %s", skipped_self, niche_id)
-        logger.info("[POLLER] YouTube: fetched %d comments for %s", len(comments), niche_id)
+        logger.info(
+            "[POLLER] YouTube: fetched %d comments across %d videos for %s",
+            len(comments), len(video_ids), niche_id,
+        )
         return comments
 
     except Exception as e:
