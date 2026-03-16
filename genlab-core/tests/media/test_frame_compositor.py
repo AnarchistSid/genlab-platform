@@ -24,11 +24,11 @@ from genlab_core.media.frame_compositor import (
     S_VIDEO_Y,
     S_VIDEO_H,
     S_BOTTOM_H,
-    P_VIDEO_Y,
-    P_VIDEO_H,
+    P_OVERLAY_H,
     P_ACCENT_Y,
     P_ACCENT_H,
-    P_BOTTOM_H,
+    P_LOGO_Y,
+    P_HOOK_Y,
     ChannelBranding,
     FrameCompositor,
     VideoInfo,
@@ -84,7 +84,8 @@ class TestChannelBranding:
         )
         b = ChannelBranding.from_visuals_yaml(str(yaml_file))
         assert b.channel_name == "ClutchWire"
-        assert b.logo_path == "new/logo.png"
+        # Logo path is resolved to absolute against niche_root (yaml parent.parent)
+        assert b.logo_path.endswith("new/logo.png")
 
 
 # --- Layout case detection -------------------------------------------
@@ -160,17 +161,17 @@ class TestLockedConstants:
         assert total == CANVAS_H
 
     def test_square_bottom_bar(self):
-        assert S_BOTTOM_H == 374
+        assert S_BOTTOM_H == 500
 
-    def test_portrait_zones_sum(self):
-        """All portrait zones must add up to full canvas height."""
-        total = P_VIDEO_Y + P_VIDEO_H + P_BOTTOM_H
-        assert total == CANVAS_H
+    def test_portrait_fills_canvas(self):
+        """Portrait layout fills canvas — no sandwich zones to sum."""
+        assert P_OVERLAY_H > 0, "Portrait must have dark overlay zone"
+        assert P_LOGO_Y > 0, "Portrait must position logo"
+        assert P_HOOK_Y > P_LOGO_Y, "Hook must be below logo"
 
     def test_portrait_accent_position(self):
-        assert P_ACCENT_Y == 460
+        assert P_ACCENT_Y == 470
         assert P_ACCENT_H == 6
-        assert P_ACCENT_Y + P_ACCENT_H == P_VIDEO_Y
 
     def test_bottom_safe_zone_satisfies_platforms(self):
         bottom_clear = L_BOTTOM_H
@@ -266,33 +267,28 @@ class TestFFmpegCommandStructure:
         fc = cmd[cmd.index("-filter_complex") + 1]
         assert "This hook appears" in fc, "Portrait sandwich layout must render hook text"
 
-    def test_portrait_has_black_canvas(self):
+    def test_portrait_fills_canvas_not_sandwich(self):
         comp = self._make_compositor()
         info = self._make_info(1080, 1920)
         cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "color=black" in fc, "Portrait sandwich layout must use black canvas"
+        # Portrait fills canvas — scales to cover, not to fit
+        assert f"scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase" in fc
+        assert "crop=" in fc, "Portrait must crop to fill canvas"
+
+    def test_portrait_has_dark_overlay(self):
+        comp = self._make_compositor()
+        info = self._make_info(1080, 1920)
+        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
+        fc = cmd[cmd.index("-filter_complex") + 1]
+        assert "black@" in fc, "Portrait must have dark gradient overlay"
 
     def test_portrait_has_channel_name(self):
         comp = self._make_compositor()
         info = self._make_info(1080, 1920)
         cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
         fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "CriticalRush" in fc, "Portrait sandwich layout must render channel name"
-
-    def test_portrait_video_at_correct_y(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert f"overlay=0:{P_VIDEO_Y}" in fc, "Portrait video must be placed at P_VIDEO_Y"
-
-    def test_portrait_has_accent_line(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "ff4500" in fc.lower(), "Portrait accent color must appear in filtergraph"
+        assert "CriticalRush" in fc, "Portrait must render channel name"
 
     def test_square_video_at_correct_y(self):
         comp = self._make_compositor()
