@@ -7,9 +7,17 @@ from genlab_core.publishing.daily_cap import DailyCapEnforcer, _load_caps
 
 
 def make_enforcer(published_today: dict[str, int]) -> DailyCapEnforcer:
-    """Helper: create enforcer with pre-seeded today counts, no SharePoint call."""
+    """Helper: create enforcer with pre-seeded today counts, no SharePoint call.
+
+    Uses explicit cap=1 per platform so tests are independent of whatever
+    platform_caps.yaml contains on disk.
+    """
     client = MagicMock()
     enforcer = DailyCapEnforcer(client)
+    # Override caps loaded from YAML to guarantee cap=1 (Sprint 45 target)
+    enforcer._caps = {
+        p: 1 for p in ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
+    }
     enforcer._session_counts = dict(published_today)
     # Must use UTC date to match _today_utc() in the enforcer
     enforcer._counts_loaded_for = datetime.now(timezone.utc).date()
