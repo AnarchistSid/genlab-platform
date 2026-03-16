@@ -83,6 +83,14 @@ class FacebookClient:
         Returns:
             :class:`~genlab_core.platforms.models.PublishResult`
         """
+        # Pre-flight: validate token before attempting publish
+        if not self._validate_token_preflight():
+            return PublishResult(
+                platform=self.platform_id,
+                success=False,
+                error="Facebook token invalid or missing — skipped publish",
+            )
+
         # Build caption + hashtags
         hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
         message = payload.caption
@@ -96,6 +104,42 @@ class FacebookClient:
             return self._publish_video(video_url=video_url, message=message)
         else:
             return self._publish_feed(message=message, payload=payload)
+
+    def _validate_token_preflight(self) -> bool:
+        """Quick /me check to catch expired or missing tokens before publish."""
+        if not self._access_token:
+            logger.error(
+                "Facebook: no access token configured — "
+                "set FB_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN in .env"
+            )
+            return False
+        if not self._page_id:
+            logger.error(
+                "Facebook: no page ID configured — "
+                "set META_FB_PAGE_ID or FB_PAGE_ID in .env"
+            )
+            return False
+        try:
+            resp = requests.get(
+                f"{self._base_url}/me",
+                params={"access_token": self._access_token},
+                timeout=10,
+            )
+            if resp.status_code == 400:
+                logger.error(
+                    "Facebook: token invalid or expired (HTTP 400). "
+                    "Skipping Facebook publish. Refresh token in .env."
+                )
+                return False
+            if resp.status_code != 200:
+                logger.warning(
+                    "Facebook: token check returned HTTP %d — proceeding cautiously",
+                    resp.status_code,
+                )
+            return True
+        except Exception as e:
+            logger.warning("Facebook: token pre-flight check failed: %s", e)
+            return True  # Network error — don't block, let publish try
 
     def _resolve_video_url(self, payload: PublishPayload) -> str:
         """Extract a video URL or path from the payload.
