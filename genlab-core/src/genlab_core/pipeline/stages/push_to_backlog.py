@@ -196,8 +196,18 @@ class PushToBacklog:
                     max_records=1,
                 )
                 if existing_bp:
-                    client.blueprints.update(existing_bp[0]["id"], {"niche_id": niche_id})
-                    logger.debug("[PUSH] Blueprint '%s' already exists", title)
+                    existing_status = (
+                        existing_bp[0].get("fields", existing_bp[0]).get("status", "")
+                    )
+                    if existing_status in ("PUBLISHED", "PUBLISHING", "VISUAL_READY"):
+                        logger.info(
+                            "[PUSH] Blueprint '%s' already %s — skipping",
+                            title, existing_status,
+                        )
+                    else:
+                        # DRAFTED or SCORED — safe to update
+                        client.blueprints.update(existing_bp[0]["id"], {"niche_id": niche_id})
+                        logger.debug("[PUSH] Blueprint '%s' already exists (%s), updated niche_id", title, existing_status)
                 else:
                     story_record_id = story_record["id"]
                     fields: Dict[str, Any] = {
