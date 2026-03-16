@@ -13,6 +13,31 @@ from genlab_core.engagement.poller import (
 )
 
 
+def _make_yt_mocks(comment_items=None):
+    """Build mock responses for the 2-step YouTube poller (playlist + comments)."""
+    fake_token_resp = MagicMock()
+    fake_token_resp.raise_for_status = MagicMock()
+    fake_token_resp.json.return_value = {"access_token": "at123"}
+
+    playlist_resp = MagicMock()
+    playlist_resp.raise_for_status = MagicMock()
+    playlist_resp.json.return_value = {
+        "items": [{"contentDetails": {"videoId": "vid_1"}}]
+    }
+
+    comments_resp = MagicMock()
+    comments_resp.status_code = 200
+    comments_resp.raise_for_status = MagicMock()
+    comments_resp.json.return_value = {"items": comment_items or []}
+
+    def mock_get(url, **kwargs):
+        if "playlistItems" in url:
+            return playlist_resp
+        return comments_resp
+
+    return fake_token_resp, mock_get, playlist_resp, comments_resp
+
+
 class TestPollingConstants:
     def test_youtube_poll_interval_is_5_minutes(self):
         assert YOUTUBE_POLL_INTERVAL == 300
@@ -25,49 +50,53 @@ class TestPollingConstants:
 
 
 class TestYouTubePollerParams:
-    def test_max_results_capped_at_50(self, monkeypatch):
-        """YouTube API call should request maxResults=50."""
+    def test_playlist_requests_10_recent_videos(self, monkeypatch):
+        """Playlist call should request maxResults=10 for recent uploads."""
         monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
         monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
         monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
 
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
+        fake_token, mock_get_fn, playlist_resp, _ = _make_yt_mocks()
+        get_calls = []
+        original_get_fn = mock_get_fn
 
-        fake_comments_resp = MagicMock()
-        fake_comments_resp.raise_for_status = MagicMock()
-        fake_comments_resp.json.return_value = {"items": []}
+        def tracking_get(url, **kwargs):
+            get_calls.append((url, kwargs))
+            return original_get_fn(url, **kwargs)
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", return_value=fake_comments_resp) as mock_get:
+        with patch("requests.post", return_value=fake_token), \
+             patch("requests.get", side_effect=tracking_get):
             asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
-        # Verify the GET call used maxResults=50
-        call_kwargs = mock_get.call_args
-        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params")
-        assert params["maxResults"] == 50
+        # First GET = playlistItems with maxResults=10
+        playlist_call = get_calls[0]
+        params = playlist_call[1].get("params", {})
+        assert params["maxResults"] == 10
+        assert "playlistItems" in playlist_call[0]
 
-    def test_orders_by_time(self, monkeypatch):
-        """YouTube poll should order by time (newest first)."""
+    def test_comment_threads_use_video_id(self, monkeypatch):
+        """commentThreads calls should use videoId, not allThreadsRelatedToChannelId."""
         monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
         monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
         monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
 
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
+        fake_token, mock_get_fn, _, _ = _make_yt_mocks()
+        get_calls = []
+        original_get_fn = mock_get_fn
 
-        fake_comments_resp = MagicMock()
-        fake_comments_resp.raise_for_status = MagicMock()
-        fake_comments_resp.json.return_value = {"items": []}
+        def tracking_get(url, **kwargs):
+            get_calls.append((url, kwargs))
+            return original_get_fn(url, **kwargs)
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", return_value=fake_comments_resp) as mock_get:
+        with patch("requests.post", return_value=fake_token), \
+             patch("requests.get", side_effect=tracking_get):
             asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
-        call_kwargs = mock_get.call_args
-        params = call_kwargs.kwargs.get("params") or call_kwargs[1].get("params")
+        # Second GET = commentThreads with videoId
+        comment_call = get_calls[1]
+        params = comment_call[1].get("params", {})
+        assert params["videoId"] == "vid_1"
+        assert "allThreadsRelatedToChannelId" not in params
         assert params["order"] == "time"
 
     def test_returns_empty_on_quota_exceeded(self, monkeypatch):
@@ -99,45 +128,39 @@ class TestYouTubePollerParams:
         monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
         monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
 
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
-
-        fake_comments_resp = MagicMock()
-        fake_comments_resp.raise_for_status = MagicMock()
-        fake_comments_resp.json.return_value = {
-            "items": [
-                {
-                    "id": "c1",
-                    "snippet": {
-                        "topLevelComment": {
-                            "snippet": {
-                                "videoId": "v1",
-                                "authorChannelId": {"value": "a1"},
-                                "authorDisplayName": "User",
-                                "textOriginal": "What settings do you use?",
-                            }
+        comment_items = [
+            {
+                "id": "c1",
+                "snippet": {
+                    "topLevelComment": {
+                        "snippet": {
+                            "videoId": "v1",
+                            "authorChannelId": {"value": "a1"},
+                            "authorDisplayName": "User",
+                            "textOriginal": "What settings do you use?",
                         }
-                    },
+                    }
                 },
-                {
-                    "id": "c2",
-                    "snippet": {
-                        "topLevelComment": {
-                            "snippet": {
-                                "videoId": "v1",
-                                "authorChannelId": {"value": "a2"},
-                                "authorDisplayName": "Fan",
-                                "textOriginal": "Sick clip bro",
-                            }
+            },
+            {
+                "id": "c2",
+                "snippet": {
+                    "topLevelComment": {
+                        "snippet": {
+                            "videoId": "v1",
+                            "authorChannelId": {"value": "a2"},
+                            "authorDisplayName": "Fan",
+                            "textOriginal": "Sick clip bro",
                         }
-                    },
+                    }
                 },
-            ]
-        }
+            },
+        ]
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", return_value=fake_comments_resp):
+        fake_token, mock_get_fn, _, _ = _make_yt_mocks(comment_items)
+
+        with patch("requests.post", return_value=fake_token), \
+             patch("requests.get", side_effect=mock_get_fn):
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         assert result[0]["is_question"] is True
@@ -150,49 +173,64 @@ class TestYouTubePollerParams:
         monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
         monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
 
-        fake_token_resp = MagicMock()
-        fake_token_resp.raise_for_status = MagicMock()
-        fake_token_resp.json.return_value = {"access_token": "at123"}
-
-        fake_comments_resp = MagicMock()
-        fake_comments_resp.raise_for_status = MagicMock()
-        fake_comments_resp.json.return_value = {
-            "items": [
-                {
-                    "id": "c_self",
-                    "snippet": {
-                        "topLevelComment": {
-                            "snippet": {
-                                "videoId": "v1",
-                                "authorChannelId": {"value": "UC_MYCHANNEL"},
-                                "authorDisplayName": "MyChannel",
-                                "textOriginal": "What would you build?",
-                            }
+        comment_items = [
+            {
+                "id": "c_self",
+                "snippet": {
+                    "topLevelComment": {
+                        "snippet": {
+                            "videoId": "v1",
+                            "authorChannelId": {"value": "UC_MYCHANNEL"},
+                            "authorDisplayName": "MyChannel",
+                            "textOriginal": "What would you build?",
                         }
-                    },
+                    }
                 },
-                {
-                    "id": "c_viewer",
-                    "snippet": {
-                        "topLevelComment": {
-                            "snippet": {
-                                "videoId": "v1",
-                                "authorChannelId": {"value": "UC_VIEWER"},
-                                "authorDisplayName": "Viewer",
-                                "textOriginal": "Great video!",
-                            }
+            },
+            {
+                "id": "c_viewer",
+                "snippet": {
+                    "topLevelComment": {
+                        "snippet": {
+                            "videoId": "v1",
+                            "authorChannelId": {"value": "UC_VIEWER"},
+                            "authorDisplayName": "Viewer",
+                            "textOriginal": "Great video!",
                         }
-                    },
+                    }
                 },
-            ]
-        }
+            },
+        ]
 
-        with patch("requests.post", return_value=fake_token_resp), \
-             patch("requests.get", return_value=fake_comments_resp):
+        fake_token, mock_get_fn, _, _ = _make_yt_mocks(comment_items)
+
+        with patch("requests.post", return_value=fake_token), \
+             patch("requests.get", side_effect=mock_get_fn):
             result = asyncio.run(poll_youtube_comments("gaming", "UC_MYCHANNEL"))
 
         assert len(result) == 1
         assert result[0]["comment_id"] == "c_viewer"
+
+    def test_uploads_playlist_id_derivation(self, monkeypatch):
+        """Uploads playlist ID should be UC→UU prefix swap."""
+        monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
+        monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", "csec")
+        monkeypatch.setenv("YOUTUBE_REFRESH_TOKEN", "rtok")
+
+        fake_token, mock_get_fn, _, _ = _make_yt_mocks()
+        get_calls = []
+        original_get_fn = mock_get_fn
+
+        def tracking_get(url, **kwargs):
+            get_calls.append((url, kwargs))
+            return original_get_fn(url, **kwargs)
+
+        with patch("requests.post", return_value=fake_token), \
+             patch("requests.get", side_effect=tracking_get):
+            asyncio.run(poll_youtube_comments("gaming", "UC3GCipF_BTgjaxu"))
+
+        playlist_params = get_calls[0][1].get("params", {})
+        assert playlist_params["playlistId"] == "UU3GCipF_BTgjaxu"
 
 
 class TestTwitterPollerEdgeCases:

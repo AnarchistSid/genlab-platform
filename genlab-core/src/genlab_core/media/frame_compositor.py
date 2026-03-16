@@ -1,6 +1,6 @@
 """Frame compositor for Gen Lab video reels.
 
-Implements the canonical two-case frame layout for all 5 channels.
+Implements the canonical three-case frame layout for all 5 channels.
 This is the ONLY place that frame composition logic lives.
 All channels call this. Zero per-channel compositor divergence allowed.
 
@@ -8,28 +8,29 @@ THE LOCKED SPEC
 ───────────────
 Canvas: 1080 x 1920 (9:16 portrait, always)
 
-TOP BAR (both cases):
-  Solid black rectangle painted ON TOP of the frame.
-  Height: 180px (y=0 to y=180)
-  Logo: 48px tall, x=30, vertically centred (y_center=90)
-  Channel name: 24px bold white, x=logo_right+14, y~82
-  Handle: 17px regular #AAAAAA, below name
+LANDSCAPE (source aspect ratio >= 1.33):
+  y=0-80:     Logo(56px circle x=36) + channel name(32px x=108 y=24)
+              + handle(22px x=108 y=50)  [solid black]
+  y=80-650:   Hook text zone (570px, 28px bold white, vertically centered,
+              max 3 lines)  [solid black]
+  y=650-656:  Accent line (6px, channel accent color)
+  y=656-1264: VIDEO 1080x608 — ZERO overlays on video
+  y=1264-1920: Solid black (656px)
 
-CASE 1 -- Native 9:16 source (aspect ~ 0.56):
-  Video fills full 1080x1920 canvas (scaled/cropped).
-  NO bottom safe zone -- video runs edge-to-edge.
-  Top bar painted ON TOP of video.
-  Hook text drawn over video, y~200-280.
+PORTRAIT (source aspect ratio <= 0.75):
+  y=0-220:    Dark overlay (black@0.55) ON TOP of video. Logo ONLY (44px,
+              x=30, y=30). NO name, NO hook.
+  y=220-226:  Accent line (6px, channel accent color)
+  y=226-1920: Video continues clean (no overlay)
+  Video fills full 1080x1920 canvas.
 
-CASE 2 -- 16:9 source (landscape, aspect > 1.0):
-  Black canvas. Video scaled to 1080px wide -> 608px tall.
-  Video centered: y_start=656, y_end=1264.
-  Hook text centered in black zone: y=180 to y=656 (476px).
-  Bottom black zone: y=1264 to y=1920 (656px, satisfies all platform safe zones).
-
-CASE 3 -- Other (square, unusual vertical):
-  Scale to fit, pillarbox/letterbox with black.
-  Same top bar and hook zone treatment as Case 2.
+SQUARE (source aspect ratio 0.75 to 1.33):
+  y=0-80:     Logo(56px) + channel name + handle  [same as landscape]  [solid black]
+  y=80-160:   Hook text zone (80px, 28px bold white, vertically centered)  [solid black]
+  y=160-166:  Accent line (6px, channel accent color)
+  y=166-503:  Solid black gap (337px)
+  y=503-1583: VIDEO 1080x1080 — ZERO overlays on video
+  y=1583-1920: Solid black gap (337px)
 
 Usage:
     comp = FrameCompositor.from_visuals_yaml("path/to/visuals.yaml")
@@ -63,38 +64,59 @@ logger = logging.getLogger(__name__)
 CANVAS_W = 1080
 CANVAS_H = 1920
 
-TOP_BAR_H = 180          # px -- height of black top bar
-LOGO_H    = 48           # px -- logo height inside bar
-LOGO_X    = 30           # px -- logo left edge
-LOGO_Y    = int((TOP_BAR_H - LOGO_H) / 2)   # vertically centred in bar = 66
-NAME_X    = LOGO_X       # resolved to LOGO_X + logo_width + 14 at render time
-NAME_Y    = 82           # px -- channel name baseline
-HANDLE_Y  = NAME_Y + 22  # px -- handle text baseline
+# Aspect ratio thresholds
+LANDSCAPE_THRESHOLD = 1.33   # w/h >= this -> landscape
+PORTRAIT_THRESHOLD = 0.75    # w/h <= this -> portrait
+# Between 0.75 and 1.33 = SQUARE
 
-# Hook text zone (Case 1 -- painted over video)
-HOOK_Y_NATIVE = 220      # px -- vertical centre of hook text for 9:16 clips
+# Layout A: Landscape
+L_NAME_ROW_H = 80
+L_HOOK_ZONE_Y = 80
+L_HOOK_ZONE_H = 570
+L_ACCENT_Y = 650
+L_ACCENT_H = 6
+L_VIDEO_Y = 656
+L_VIDEO_H = 608
+L_BOTTOM_H = 656
 
-# 16:9 derived constants
-VIDEO_W_LANDSCAPE = CANVAS_W                          # 1080
-VIDEO_H_LANDSCAPE = int(CANVAS_W * 9 / 16)            # 608
-VIDEO_Y_LANDSCAPE = int((CANVAS_H - VIDEO_H_LANDSCAPE) / 2)   # 656
-HOOK_Y_LANDSCAPE  = int(TOP_BAR_H + (VIDEO_Y_LANDSCAPE - TOP_BAR_H) / 2)  # ~418
+# Layout B: Portrait
+P_OVERLAY_H = 220
+P_OVERLAY_OPACITY = 0.55
+P_ACCENT_Y = 220
+P_ACCENT_H = 6
+P_LOGO_SIZE = 44
+P_LOGO_X = 30
+P_LOGO_Y = 30
 
-# Aspect ratio decision boundary
-# Native 9:16 = 0.5625. We call anything under 0.65 "portrait" (Case 1/3).
-# 16:9 = 1.778. Anything over 0.9 is "landscape" (Case 2).
-PORTRAIT_THRESHOLD  = 0.65   # w/h < this -> portrait (Case 1 if ~9:16, else Case 3)
-LANDSCAPE_THRESHOLD = 0.90   # w/h > this -> landscape -> Case 2
+# Layout C: Square
+S_NAME_ROW_H = 80
+S_HOOK_ZONE_Y = 80
+S_HOOK_ZONE_H = 80
+S_ACCENT_Y = 160
+S_ACCENT_H = 6
+S_VIDEO_Y = 503
+S_VIDEO_H = 1080
+S_GAP = 337
 
-FONT_NAME_SIZE    = 24    # px
-FONT_HANDLE_SIZE  = 17    # px
-FONT_HOOK_SIZE    = 40    # px -- hook text on video
-HOOK_MAX_CHARS    = 60    # characters -- enforced upstream, checked here too
+# Shared text
+LOGO_SIZE = 56
+LOGO_X = 36
+LOGO_Y = 12           # (80-56)/2
+NAME_FONT_SIZE = 32
+NAME_X = 108
+NAME_Y = 24
+HANDLE_FONT_SIZE = 22
+HANDLE_X = 108
+HANDLE_Y = 50
+HANDLE_OPACITY = 0.70
+HOOK_FONT_SIZE = 28
+HOOK_LINE_H = 38
+HOOK_MAX_LINES = 3
+HOOK_MAX_CHARS_LINE = 32
+SHADOW_OFFSET = 2
+SHADOW_OPACITY = 0.50
 
-# Colours
-BLACK = "0x000000"
-WHITE = "0xFFFFFF"
-GREY_HANDLE = "0xAAAAAA"
+HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 
 
 # -------------------------------------------------------------
@@ -114,7 +136,7 @@ class ChannelBranding:
     """Per-channel branding loaded from visuals.yaml."""
     channel_name: str           # e.g. "CriticalRush"
     handle: str                 # e.g. "@CriticalRush"
-    accent_color: str           # e.g. "#00FF88" (for future tinted elements)
+    accent_color: str           # e.g. "#00FF88" (for accent line)
     logo_path: str              # absolute or relative path to logo PNG
     niche_id: str               # e.g. "gaming"
     ffmpeg: FFmpegConfig = None  # type: ignore[assignment]
@@ -185,18 +207,18 @@ class VideoInfo:
     duration_seconds: float
     fps: float
     aspect_ratio: float       # width / height
-    is_portrait: bool         # aspect_ratio < PORTRAIT_THRESHOLD
-    is_landscape: bool        # aspect_ratio > LANDSCAPE_THRESHOLD
-    is_native_9_16: bool      # close to 9:16 portrait
+    is_portrait: bool         # aspect_ratio <= PORTRAIT_THRESHOLD
+    is_landscape: bool        # aspect_ratio >= LANDSCAPE_THRESHOLD
+    is_native_9_16: bool      # kept for backward compat; True when portrait
 
     @property
-    def layout_case(self) -> int:
-        """1 = native 9:16, 2 = landscape 16:9, 3 = other"""
-        if self.is_native_9_16:
-            return 1
-        if self.is_landscape:
-            return 2
-        return 3
+    def layout_case(self) -> str:
+        """'landscape', 'portrait', or 'square'."""
+        if self.aspect_ratio >= LANDSCAPE_THRESHOLD:
+            return "landscape"
+        elif self.aspect_ratio <= PORTRAIT_THRESHOLD:
+            return "portrait"
+        return "square"
 
 
 def probe_video(path: str) -> VideoInfo:
@@ -235,10 +257,9 @@ def probe_video(path: str) -> VideoInfo:
     except Exception:
         fps = 30.0
 
-    is_portrait = ar < PORTRAIT_THRESHOLD
-    is_landscape = ar > LANDSCAPE_THRESHOLD
-    # Native 9:16: aspect between 0.50 and 0.65 (portrait phone video)
-    is_native_9_16 = 0.50 <= ar <= PORTRAIT_THRESHOLD
+    is_portrait = ar <= PORTRAIT_THRESHOLD
+    is_landscape = ar >= LANDSCAPE_THRESHOLD
+    is_native_9_16 = is_portrait  # backward compat
 
     return VideoInfo(
         width=w, height=h, duration_seconds=duration,
@@ -309,31 +330,24 @@ class FrameCompositor:
 
         # Probe source
         info = probe_video(source_video_path)
+        case = info.layout_case
         logger.info(
             f"[{self.branding.niche_id}] Source: {info.width}x{info.height} "
-            f"ar={info.aspect_ratio:.3f} -> Case {info.layout_case} "
-            f"({'native 9:16' if info.layout_case == 1 else '16:9' if info.layout_case == 2 else 'other'})"
+            f"ar={info.aspect_ratio:.3f} -> {case}"
         )
 
         # Ensure output directory exists
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-        if info.layout_case == 1:
-            ffmpeg_cmd = self._build_cmd_case1(
-                source_video_path, hook_text, output_path,
-                info, duration_seconds, trim_start, crf, preset, force_fps,
-            )
-        elif info.layout_case == 2:
-            ffmpeg_cmd = self._build_cmd_case2(
-                source_video_path, hook_text, output_path,
-                info, duration_seconds, trim_start, crf, preset, force_fps,
-            )
-        else:
-            # Case 3: scale to fit, black bars, same treatment as Case 2
-            ffmpeg_cmd = self._build_cmd_case3(
-                source_video_path, hook_text, output_path,
-                info, duration_seconds, trim_start, crf, preset, force_fps,
-            )
+        builder = {
+            "landscape": self._build_cmd_landscape,
+            "portrait": self._build_cmd_portrait,
+            "square": self._build_cmd_square,
+        }[case]
+        ffmpeg_cmd = builder(
+            source_video_path, hook_text, output_path,
+            info, duration_seconds, trim_start, crf, preset, force_fps,
+        )
 
         logger.info(f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}...")
         try:
@@ -351,154 +365,118 @@ class FrameCompositor:
         logger.info(f"[{self.branding.niche_id}] Rendered -> {output_path}")
         return output_path
 
-    # --- Case 1: Native 9:16 -- video fills full canvas ----------------
+    # --- Hook text wrapping -----------------------------------------------
 
-    def _build_cmd_case1(
+    @staticmethod
+    def _wrap_hook(text: str, max_chars: int = HOOK_MAX_CHARS_LINE) -> list[str]:
+        """Word-wrap hook text into lines of at most max_chars characters."""
+        words = text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            if current and len(current) + 1 + len(word) > max_chars:
+                lines.append(current)
+                current = word
+            else:
+                current = f"{current} {word}".strip()
+        if current:
+            lines.append(current)
+        return lines[:HOOK_MAX_LINES]  # max 3 lines
+
+    # --- Accent color helper ----------------------------------------------
+
+    def _accent_hex(self) -> str:
+        """Strip '#' from accent_color for FFmpeg."""
+        return self.branding.accent_color.lstrip("#").lower()
+
+    # --- Layout A: Landscape (ar >= 1.33) ---------------------------------
+
+    def _build_cmd_landscape(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Native 9:16 clip: video IS the canvas. Top bar + hook painted on top."""
+        """Landscape clip: video at y=656, hook text zone above, accent line separator."""
 
         logo_path = self.branding.logo_path
         channel_name = self.branding.channel_name
         handle = self.branding.handle
-        safe_hook = self._escape_drawtext(hook)
         safe_name = self._escape_drawtext(channel_name)
         safe_handle = self._escape_drawtext(handle)
+        accent = self._accent_hex()
 
-        # Duration flags
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
-
-        logo_x = LOGO_X
-        logo_y = LOGO_Y
-        name_x = f"{logo_x}+{LOGO_H}+14"   # logo_x + logo_width + 14
-        name_y = NAME_Y
-        handle_y = HANDLE_Y
-        hook_y = HOOK_Y_NATIVE
-        bar_h = TOP_BAR_H
 
         font_bold, font_reg, font_hook = self._resolve_fonts()
 
         has_logo = logo_path and os.path.exists(logo_path)
 
-        if has_logo:
-            filtergraph = (
-                # Input 0 = source video, scale to fill 1080x1920
-                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
-                f"crop={CANVAS_W}:{CANVAS_H}[base];"
-                # Input 1 = logo, scale to LOGO_H
-                f"[1:v]scale=-1:{LOGO_H}[logo];"
-                # Paint black top bar on base
-                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={bar_h}:color=black:t=fill[barred];"
-                # Overlay logo
-                f"[barred][logo]overlay={logo_x}:{logo_y}[withlogo];"
-                # Draw channel name
-                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={name_x}:y={name_y}[withname];"
-                # Draw handle
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={name_x}:y={handle_y}[withhandle];"
-                # Draw hook text (centred horizontally, at hook_y)
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
+        # Wrap hook text and compute vertical centering within hook zone
+        hook_lines = self._wrap_hook(hook)
+        num_lines = len(hook_lines)
+        total_text_h = num_lines * HOOK_LINE_H
+        hook_zone_center_y = L_HOOK_ZONE_Y + L_HOOK_ZONE_H // 2
+        hook_start_y = hook_zone_center_y - total_text_h // 2
+
+        # Build hook drawtext chain
+        hook_filters = ""
+        prev_label = "withhandle"
+        for i, line in enumerate(hook_lines):
+            safe_line = self._escape_drawtext(line)
+            line_y = hook_start_y + i * HOOK_LINE_H
+            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
+            hook_filters += (
+                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
+                f"x=(w-text_w)/2:y={line_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{out_label}];"
             )
-            inputs = ["-i", src, "-i", logo_path]
-        else:
-            filtergraph = (
-                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
-                f"crop={CANVAS_W}:{CANVAS_H}[base];"
-                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={bar_h}:color=black:t=fill[barred];"
-                f"[barred]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={LOGO_X}:y={name_y}[withname];"
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={LOGO_X}:y={handle_y}[withhandle];"
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
-            )
-            inputs = ["-i", src]
-
-        cmd = (
-            ["ffmpeg", "-y"]
-            + trim_flag
-            + inputs
-            + dur_flags
-            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps)
-            + [out]
-        )
-        return cmd
-
-    # --- Case 2: 16:9 clip -- centred on black canvas -----------------
-
-    def _build_cmd_case2(
-        self, src, hook, out, info, duration, trim_start, crf, preset, fps
-    ) -> list[str]:
-        """16:9 clip: scale to 1080 wide, centre on 1080x1920 black canvas."""
-
-        logo_path = self.branding.logo_path
-        channel_name = self.branding.channel_name
-        handle = self.branding.handle
-        safe_hook = self._escape_drawtext(hook)
-        safe_name = self._escape_drawtext(channel_name)
-        safe_handle = self._escape_drawtext(handle)
-
-        dur_flags = self._duration_flags(duration)
-        trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
-
-        bar_h     = TOP_BAR_H
-        vid_h     = VIDEO_H_LANDSCAPE     # 608
-        vid_y     = VIDEO_Y_LANDSCAPE     # 656
-        hook_y    = HOOK_Y_LANDSCAPE      # ~418 -- centred in hook zone
-        logo_x    = LOGO_X
-        logo_y    = LOGO_Y
-        name_x    = f"{logo_x}+{LOGO_H}+14"
-        name_y    = NAME_Y
-        handle_y  = HANDLE_Y
-
-        font_bold, font_reg, font_hook = self._resolve_fonts()
-
-        has_logo = logo_path and os.path.exists(logo_path)
+            prev_label = out_label
 
         if has_logo:
             filtergraph = (
                 # Black canvas 1080x1920
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                # Source video scaled to 1080 wide
-                f"[0:v]scale={CANVAS_W}:{vid_h}[scaled];"
-                # Place video at y=vid_y
-                f"[canvas][scaled]overlay=0:{vid_y}[base];"
-                # Logo
-                f"[1:v]scale=-1:{LOGO_H}[logo];"
-                # Top bar is already black (canvas) -- draw name/handle directly
-                f"[base][logo]overlay={logo_x}:{logo_y}[withlogo];"
+                # Source video scaled to fit 1080x608 (maintain AR, pad)
+                f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                # Place video at y=656
+                f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
+                # Logo scaled to 56px
+                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
+                # Accent line at y=650
+                f"[base]drawbox=x=0:y={L_ACCENT_Y}:w={CANVAS_W}:h={L_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                # Overlay logo
+                f"[accented][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
+                # Channel name
                 f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={name_x}:y={name_y}[withname];"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
+                # Handle
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={name_x}:y={handle_y}[withhandle];"
-                # Hook text in hook zone (centred horizontally, centred vertically in zone)
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
+                # Hook lines
+                f"{hook_filters}"
+                # Final label rename
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src, "-i", logo_path]
         else:
             filtergraph = (
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                f"[0:v]scale={CANVAS_W}:{vid_h}[scaled];"
-                f"[canvas][scaled]overlay=0:{vid_y}[base];"
-                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={LOGO_X}:y={name_y}[withname];"
+                f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
+                f"[base]drawbox=x=0:y={L_ACCENT_Y}:w={CANVAS_W}:h={L_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                f"[accented]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={LOGO_X}:y={handle_y}[withhandle];"
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={LOGO_X}:y={HANDLE_Y}[withhandle];"
+                f"{hook_filters}"
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src]
 
@@ -513,69 +491,148 @@ class FrameCompositor:
         )
         return cmd
 
-    # --- Case 3: Other aspect ratios ----------------------------------
+    # --- Layout B: Portrait (ar <= 0.75) ----------------------------------
 
-    def _build_cmd_case3(
+    def _build_cmd_portrait(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Scale to fit with black pillarbox/letterbox, then same overlay as Case 2."""
+        """Portrait clip: video fills canvas, dark overlay top 220px, logo only."""
 
         logo_path = self.branding.logo_path
-        channel_name = self.branding.channel_name
-        handle = self.branding.handle
-        safe_hook = self._escape_drawtext(hook)
-        safe_name = self._escape_drawtext(channel_name)
-        safe_handle = self._escape_drawtext(handle)
+        accent = self._accent_hex()
 
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
-        bar_h    = TOP_BAR_H
-        logo_x   = LOGO_X
-        logo_y   = LOGO_Y
-        name_x   = f"{logo_x}+{LOGO_H}+14"
-        name_y   = NAME_Y
-        handle_y = HANDLE_Y
-        # Hook y: below top bar, with some padding
-        hook_y   = bar_h + 60
+        has_logo = logo_path and os.path.exists(logo_path)
+
+        if has_logo:
+            filtergraph = (
+                # Scale video to fill 1080x1920 (crop to fit)
+                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
+                f"crop={CANVAS_W}:{CANVAS_H}[base];"
+                # Dark overlay on top 220px
+                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={P_OVERLAY_H}:"
+                f"color=black@{P_OVERLAY_OPACITY}:t=fill[overlaid];"
+                # Accent line at y=220
+                f"[overlaid]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                # Logo scaled to 44px
+                f"[1:v]scale={P_LOGO_SIZE}:{P_LOGO_SIZE}[logo];"
+                # Overlay logo at x=30 y=30
+                f"[accented][logo]overlay={P_LOGO_X}:{P_LOGO_Y}[out]"
+            )
+            inputs = ["-i", src, "-i", logo_path]
+        else:
+            filtergraph = (
+                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
+                f"crop={CANVAS_W}:{CANVAS_H}[base];"
+                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={P_OVERLAY_H}:"
+                f"color=black@{P_OVERLAY_OPACITY}:t=fill[overlaid];"
+                f"[overlaid]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[out]"
+            )
+            inputs = ["-i", src]
+
+        cmd = (
+            ["ffmpeg", "-y"]
+            + trim_flag
+            + inputs
+            + dur_flags
+            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
+            + self._output_flags(crf, preset, fps)
+            + [out]
+        )
+        return cmd
+
+    # --- Layout C: Square (0.75 < ar < 1.33) ------------------------------
+
+    def _build_cmd_square(
+        self, src, hook, out, info, duration, trim_start, crf, preset, fps
+    ) -> list[str]:
+        """Square-ish clip: video at y=503 (1080x1080), hook in 80px zone, accent line."""
+
+        logo_path = self.branding.logo_path
+        channel_name = self.branding.channel_name
+        handle = self.branding.handle
+        safe_name = self._escape_drawtext(channel_name)
+        safe_handle = self._escape_drawtext(handle)
+        accent = self._accent_hex()
+
+        dur_flags = self._duration_flags(duration)
+        trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
         font_bold, font_reg, font_hook = self._resolve_fonts()
 
         has_logo = logo_path and os.path.exists(logo_path)
 
-        scale_pad = (
-            f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=decrease,"
-            f"pad={CANVAS_W}:{CANVAS_H}:(ow-iw)/2:(oh-ih)/2:black[padded]"
-        )
+        # Wrap hook text and compute vertical centering within hook zone (80px)
+        hook_lines = self._wrap_hook(hook)
+        num_lines = len(hook_lines)
+        total_text_h = num_lines * HOOK_LINE_H
+        hook_zone_center_y = S_HOOK_ZONE_Y + S_HOOK_ZONE_H // 2
+        hook_start_y = hook_zone_center_y - total_text_h // 2
+
+        # Build hook drawtext chain
+        hook_filters = ""
+        prev_label = "withhandle"
+        for i, line in enumerate(hook_lines):
+            safe_line = self._escape_drawtext(line)
+            line_y = hook_start_y + i * HOOK_LINE_H
+            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
+            hook_filters += (
+                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
+                f"x=(w-text_w)/2:y={line_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{out_label}];"
+            )
+            prev_label = out_label
 
         if has_logo:
             filtergraph = (
-                f"{scale_pad};"
-                f"[1:v]scale=-1:{LOGO_H}[logo];"
-                f"[padded]drawbox=x=0:y=0:w={CANVAS_W}:h={bar_h}:color=black:t=fill[barred];"
-                f"[barred][logo]overlay={logo_x}:{logo_y}[withlogo];"
+                # Black canvas 1080x1920
+                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+                # Source video scaled to fit 1080x1080 (maintain AR, pad)
+                f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                # Place video at y=503
+                f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
+                # Logo scaled to 56px
+                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
+                # Accent line at y=160
+                f"[base]drawbox=x=0:y={S_ACCENT_Y}:w={CANVAS_W}:h={S_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                # Overlay logo
+                f"[accented][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
+                # Channel name
                 f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={name_x}:y={name_y}[withname];"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
+                # Handle
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={name_x}:y={handle_y}[withhandle];"
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
+                # Hook lines
+                f"{hook_filters}"
+                # Final label rename
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src, "-i", logo_path]
         else:
             filtergraph = (
-                f"{scale_pad};"
-                f"[padded]drawbox=x=0:y=0:w={CANVAS_W}:h={bar_h}:color=black:t=fill[barred];"
-                f"[barred]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={FONT_NAME_SIZE}:fontcolor=white:x={LOGO_X}:y={name_y}[withname];"
+                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+                f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
+                f"[base]drawbox=x=0:y={S_ACCENT_Y}:w={CANVAS_W}:h={S_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                f"[accented]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
                 f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={FONT_HANDLE_SIZE}:fontcolor=0xAAAAAA:x={LOGO_X}:y={handle_y}[withhandle];"
-                f"[withhandle]drawtext=fontfile='{font_hook}':text='{safe_hook}':"
-                f"fontsize={FONT_HOOK_SIZE}:fontcolor=white:"
-                f"x=(w-text_w)/2:y={hook_y}:"
-                f"shadowcolor=black:shadowx=2:shadowy=2[out]"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={LOGO_X}:y={HANDLE_Y}[withhandle];"
+                f"{hook_filters}"
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src]
 
@@ -597,14 +654,14 @@ class FrameCompositor:
         """Escape text for FFmpeg drawtext filter.
 
         Single quotes cannot be reliably escaped inside drawtext values
-        delimited by '...' in a filter_complex string — FFmpeg treats \\'
+        delimited by '...' in a filter_complex string -- FFmpeg treats \\'
         as end-of-value.  Replace with Unicode RIGHT SINGLE QUOTATION MARK
         (U+2019) which is visually identical and harmless.
         """
         return (
             text
             .replace("\\", "\\\\")
-            .replace("'", "\u2019")      # curly quote — safe inside '...'
+            .replace("'", "\u2019")      # curly quote -- safe inside '...'
             .replace(":", "\\:")
             .replace("[", "\\[")
             .replace("]", "\\]")

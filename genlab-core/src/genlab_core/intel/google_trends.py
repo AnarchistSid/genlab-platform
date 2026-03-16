@@ -62,6 +62,8 @@ class GoogleTrendsIntel:
         """
         try:
             realtime = self._get_realtime_trending(niche_id)
+            # Filter out empty strings that pytrends sometimes returns
+            realtime = [t for t in realtime if t and t.strip()] if realtime else []
             if realtime:
                 logger.info("[%s] Google Trends real-time: %s", niche_id, realtime[:3])
                 return realtime[:top_n]
@@ -70,14 +72,16 @@ class GoogleTrendsIntel:
 
         try:
             daily = self._get_daily_trending(niche_id)
+            daily = [t for t in daily if t and t.strip()] if daily else []
             if daily:
                 logger.info("[%s] Google Trends daily: %s", niche_id, daily[:3])
                 return daily[:top_n]
         except Exception as e:
             logger.warning("[%s] Daily trends failed: %s", niche_id, e)
 
-        logger.warning("[%s] Google Trends unavailable — using seed keywords", niche_id)
-        return NICHE_SEED_KEYWORDS.get(niche_id, ["trending", niche_id])
+        seeds = NICHE_SEED_KEYWORDS.get(niche_id, ["trending", niche_id])
+        logger.warning("[%s] Google Trends unavailable — using seed keywords: %s", niche_id, seeds)
+        return seeds
 
     def _get_realtime_trending(self, niche_id: str) -> list[str]:
         """Get today's real-time trending searches."""

@@ -61,7 +61,11 @@ class RenderTextOverlays:
         for story in stories:
             media = story.get("media", {})
             rendered = media.get("rendered_path", "")
-            hook_text = story.get("hook", media.get("hook_text", ""))
+            hook_text = (
+                story.get("hook", "")
+                or (story.get("content") or {}).get("hook", "")
+                or media.get("hook_text", "")
+            )
 
             if not rendered or not Path(rendered).exists():
                 skipped += 1

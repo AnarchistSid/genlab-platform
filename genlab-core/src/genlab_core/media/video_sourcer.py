@@ -48,6 +48,14 @@ _DIRECT_VIDEO_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?:https?://)?vm\.tiktok\.com/[\w-]+"),
     # Twitter / X
     re.compile(r"(?:https?://)?(?:www\.)?(?:twitter|x)\.com/\w+/status/\d+"),
+    # Twitch clips (page URL — yt-dlp handles download natively)
+    re.compile(r"(?:https?://)?clips\.twitch\.tv/[\w-]+"),
+    re.compile(r"(?:https?://)?(?:www\.)?twitch\.tv/\w+/clip/[\w-]+"),
+    re.compile(r"(?:https?://)?clips-media-assets\w*\.twitch\.tv/.+\.mp4"),
+    # Direct MP4/WEBM URLs (Twitch CDN, Steam CDN, etc.)
+    re.compile(r"https?://[^\s\"']+\.(?:mp4|webm)(?:\?[^\s\"']*)?$"),
+    # Streamable
+    re.compile(r"(?:https?://)?(?:www\.)?streamable\.com/[\w-]+"),
 ]
 
 
@@ -284,7 +292,7 @@ class VideoSourcer:
     # ------------------------------------------------------------------
     def _try_direct_url(self, story: dict[str, Any]) -> VideoSearchResult | None:
         """Check story fields for a direct video platform URL."""
-        for key in ("video_url", "url", "source_url", "link"):
+        for key in ("_clip_url", "video_url", "canonical_url", "url", "source_url", "link"):
             url = story.get(key, "")
             if url and is_direct_video_url(url):
                 return VideoSearchResult(

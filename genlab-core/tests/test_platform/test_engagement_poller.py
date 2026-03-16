@@ -24,7 +24,14 @@ class TestPollYoutubeComments:
         fake_token_resp.raise_for_status = MagicMock()
         fake_token_resp.json.return_value = {"access_token": "at123"}
 
+        fake_playlist_resp = MagicMock()
+        fake_playlist_resp.raise_for_status = MagicMock()
+        fake_playlist_resp.json.return_value = {
+            "items": [{"contentDetails": {"videoId": "vid_1"}}]
+        }
+
         fake_comments_resp = MagicMock()
+        fake_comments_resp.status_code = 200
         fake_comments_resp.raise_for_status = MagicMock()
         fake_comments_resp.json.return_value = {
             "items": [
@@ -57,8 +64,13 @@ class TestPollYoutubeComments:
             ]
         }
 
-        with patch("requests.post", return_value=fake_token_resp) as mock_post, \
-             patch("requests.get", return_value=fake_comments_resp) as mock_get:
+        def mock_get(url, **kwargs):
+            if "playlistItems" in url:
+                return fake_playlist_resp
+            return fake_comments_resp
+
+        with patch("requests.post", return_value=fake_token_resp), \
+             patch("requests.get", side_effect=mock_get):
             from genlab_core.engagement.poller import poll_youtube_comments
 
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))

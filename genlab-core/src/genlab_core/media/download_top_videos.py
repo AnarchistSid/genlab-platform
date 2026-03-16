@@ -202,8 +202,14 @@ def download_videos_for_stories(
     clips_dir = run_dir / "clips"
     clips_dir.mkdir(parents=True, exist_ok=True)
 
-    # Apply top-N cutoff
-    top_stories = stories[:max_stories]
+    # Video-first: prioritise stories that already have a video URL
+    # (from FetchTrendingVideos) before applying the top-N cutoff.
+    # Without this, RSS-sourced stories can outscore trending clips
+    # and push them past the limit — wasting the whole pipeline run.
+    video_first = [s for s in stories if s.get("_trending_video")]
+    rest = [s for s in stories if not s.get("_trending_video")]
+    ordered = video_first + rest
+    top_stories = ordered[:max_stories]
 
     keywords = _NICHE_KEYWORDS.get(niche_id, [])
     sourcer = VideoSourcer(

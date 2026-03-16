@@ -5,12 +5,17 @@ The video IS the content. This module finds what's trending on YouTube
 RIGHT NOW for each niche category, so channels can create reels
 around actual video content that audiences are already watching.
 
-Architecture:
-    CriticalRush:   YouTube trending Gaming category (ID: 20) + keyword search
-    ClutchWire:     YouTube trending Sports category (ID: 17) + search
-    SpliceReel:     YouTube trending Film/Entertainment (ID: 1, 24) + trailers
-    FrameDrift:     YouTube keyword search (anime has no native category)
-    BB (ai_news):   YouTube search for creator/explainer clips about AI topics
+Architecture (Sprint 64 — quota-optimized):
+    3-tier strategy to minimize YouTube API quota usage:
+      Tier 1: YouTube RSS feeds for subscribed channels (0 quota)
+      Tier 2: playlistItems.list fallback when RSS fails (1 unit/call)
+      Tier 3: videos.list for stat enrichment (1 unit per 50 videos)
+
+    Category chart (mostPopular) is kept (1 unit) for niches with YT categories.
+    search.list (100 units/call) is REMOVED from default path — only available
+    behind an explicit ``allow_keyword_search: true`` config flag.
+
+    Expected quota: ~20 units/day (down from ~1,500).
 
 Video selection criteria:
     - Published within the last 48 hours (recency)
@@ -20,7 +25,7 @@ Video selection criteria:
 
 Usage:
     fetcher = TrendingVideoFetcher(api_key=os.environ["YOUTUBE_API_KEY"])
-    videos = fetcher.fetch_trending("gaming", limit=10)
+    videos = fetcher.fetch_trending("gaming", limit=10, subscribed_channels=[...])
     for video in videos:
         print(video.title, video.view_velocity, video.download_url)
 
@@ -42,9 +47,28 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import urllib.request
+import xml.etree.ElementTree as ET
+from urllib.parse import parse_qs, urlparse
+
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Quota tracking — reset per pipeline run, logs total units consumed.
+QUOTA_TRACKER: Dict[str, int] = {"units_used": 0, "rss_fetches": 0}
+
+
+def _increment_quota(units: int, operation: str) -> None:
+    """Track YouTube API quota consumption."""
+    QUOTA_TRACKER["units_used"] += units
+    logger.debug("YouTube quota: +%d (%s), total=%d", units, operation, QUOTA_TRACKER["units_used"])
+
+
+def reset_quota_tracker() -> None:
+    """Reset quota tracker — call at start of each pipeline run."""
+    QUOTA_TRACKER["units_used"] = 0
+    QUOTA_TRACKER["rss_fetches"] = 0
 
 # YouTube video category IDs
 YOUTUBE_CATEGORIES: Dict[str, str] = {
@@ -220,16 +244,21 @@ class TrendingVideoFetcher:
         max_age_hours: int = 48,
         min_velocity: Optional[float] = None,
         extra_keywords: Optional[List[str]] = None,
+        subscribed_channels: Optional[List[Dict[str, Any]]] = None,
+        allow_keyword_search: bool = False,
     ) -> list[TrendingVideo]:
-        """Fetch trending videos for a niche.
+        """Fetch trending videos for a niche (quota-optimized).
 
-        Strategy:
-          1. Fetch mostPopular chart for the niche's YouTube category
-          2. Fetch keyword search results (last 48h, sorted by view count)
-          3. Deduplicate by video_id
-          4. Fetch full stats (views, duration) for all candidates
+        Strategy (Sprint 64):
+          1. Fetch mostPopular chart for the niche's YouTube category (1 unit)
+          2. Fetch RSS feeds for subscribed channels (0 quota)
+          3. Fall back to playlistItems.list if RSS returns < 3 items (1 unit)
+          4. Fetch full stats for all candidates via videos.list (1 unit/50)
           5. Filter by duration, age, velocity
           6. Return top N sorted by view_velocity
+
+        search.list (100 units/call) is ONLY used if ``allow_keyword_search``
+        is True — it is NOT part of the default path.
 
         Args:
             niche_id: One of gaming, sports, movies, anime, ai_news
@@ -237,6 +266,10 @@ class TrendingVideoFetcher:
             max_age_hours: Only include videos published within N hours
             min_velocity: Minimum views/hour (defaults to niche threshold)
             extra_keywords: Additional search keywords (e.g. from Google Trends)
+            subscribed_channels: List of channel dicts from sources.yaml
+                Each dict has at minimum: ``url`` (RSS URL with channel_id param)
+                Optional: ``name``, ``weight``, ``category``
+            allow_keyword_search: If True, use search.list as last resort (100 units)
         """
         if min_velocity is None:
             min_velocity = MIN_VIEW_VELOCITY.get(niche_id, 200)
@@ -244,36 +277,54 @@ class TrendingVideoFetcher:
         candidates: dict[str, TrendingVideo] = {}
         published_after = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
 
-        # Strategy 1: Category trending chart
+        # Strategy 1: Category trending chart (1 unit)
         category_id = YOUTUBE_CATEGORIES.get(niche_id)
         if category_id:
             chart_videos = self._fetch_most_popular(category_id, published_after)
             for v in chart_videos:
                 v.niche_id = niche_id
                 candidates[v.video_id] = v
-            logger.info("[%s] Category chart: %d videos", niche_id, len(chart_videos))
+            logger.info("[%s] Category chart: %d videos (1 unit)", niche_id, len(chart_videos))
 
-        # Strategy 2: Keyword search (last 48h)
-        keywords = list(NICHE_SEARCH_KEYWORDS.get(niche_id, []))
-        if extra_keywords:
-            keywords = list(extra_keywords[:3]) + keywords
-        for keyword in keywords[:3]:  # Top 3 to manage quota (100 units each)
-            search_videos = self._search_recent(
-                query=keyword,
-                niche_id=niche_id,
-                published_after=published_after,
+        # Strategy 2: Subscribed channel RSS feeds (0 quota)
+        if subscribed_channels:
+            channel_videos = self._fetch_from_channels(
+                subscribed_channels, niche_id, published_after,
             )
-            for v in search_videos:
+            for v in channel_videos:
                 if v.video_id not in candidates:
                     candidates[v.video_id] = v
-            logger.info("[%s] Keyword '%s': %d videos", niche_id, keyword, len(search_videos))
-            time.sleep(0.2)  # Rate limit spacing
+            logger.info(
+                "[%s] Subscribed channels: %d videos (0 quota from RSS)",
+                niche_id, len(channel_videos),
+            )
+
+        # Strategy 3: External video IDs (from Jikan, TMDB, Twitch, etc.)
+        # These are injected into context by Track B stages as ``external_video_ids``
+        # and enriched here via videos.list (1 unit per 50).
+
+        # Strategy 4 (fallback): Keyword search — ONLY if explicitly enabled
+        if allow_keyword_search and len(candidates) < 3:
+            keywords = list(NICHE_SEARCH_KEYWORDS.get(niche_id, []))
+            if extra_keywords:
+                keywords = list(extra_keywords[:3]) + keywords
+            for keyword in keywords[:2]:  # Cap at 2 = 200 units max
+                search_videos = self._search_recent(
+                    query=keyword,
+                    niche_id=niche_id,
+                    published_after=published_after,
+                )
+                for v in search_videos:
+                    if v.video_id not in candidates:
+                        candidates[v.video_id] = v
+                logger.info("[%s] Search '%s': %d videos (100 units)", niche_id, keyword, len(search_videos))
+                time.sleep(0.2)
 
         if not candidates:
             logger.warning("[%s] No video candidates found", niche_id)
             return []
 
-        # Fetch full stats for all candidates
+        # Fetch full stats for all candidates (1 unit per batch of 50)
         video_ids = list(candidates.keys())
         detailed = self._fetch_video_details(video_ids, niche_id)
         for v in detailed:
@@ -292,16 +343,17 @@ class TrendingVideoFetcher:
 
         results.sort(key=lambda v: v.view_velocity, reverse=True)
         logger.info(
-            "[%s] %d/%d passed filters (velocity≥%.0f, %d–%ds)",
+            "[%s] %d/%d passed filters (velocity≥%.0f, %d–%ds) | quota: %d units",
             niche_id, len(results), len(candidates),
             min_velocity, MIN_DURATION_SECONDS, MAX_DURATION_SECONDS,
+            QUOTA_TRACKER["units_used"],
         )
         return results[:limit]
 
     def _fetch_most_popular(
         self, category_id: str, published_after: datetime,
     ) -> list[TrendingVideo]:
-        """Fetch YouTube's most popular chart for a category."""
+        """Fetch YouTube's most popular chart for a category (1 unit)."""
         try:
             resp = self._session.get(
                 f"{self.BASE_URL}/videos",
@@ -316,6 +368,7 @@ class TrendingVideoFetcher:
                 timeout=15,
             )
             resp.raise_for_status()
+            _increment_quota(1, f"videos.list/mostPopular cat={category_id}")
             items = resp.json().get("items", [])
             results = []
             for item in items:
@@ -327,10 +380,239 @@ class TrendingVideoFetcher:
             logger.error("mostPopular fetch failed for category %s: %s", category_id, e)
             return []
 
+    # ------------------------------------------------------------------
+    # Tier 1: YouTube RSS feeds (0 quota)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_channel_id(rss_url: str) -> Optional[str]:
+        """Extract channel_id from a YouTube RSS feed URL."""
+        try:
+            parsed = urlparse(rss_url)
+            params = parse_qs(parsed.query)
+            ids = params.get("channel_id", [])
+            return ids[0] if ids else None
+        except Exception:
+            return None
+
+    def _fetch_channel_rss(
+        self, rss_url: str, max_items: int = 15,
+    ) -> list[dict]:
+        """Parse a YouTube channel RSS feed — zero API quota.
+
+        Returns lightweight dicts with video_id, title, published_at.
+        These need enrichment via _fetch_video_details() to get stats.
+        """
+        ATOM_NS = "http://www.w3.org/2005/Atom"
+        YT_NS = "http://www.youtube.com/xml/schemas/2015"
+        MEDIA_NS = "http://search.yahoo.com/mrss/"
+        try:
+            req = urllib.request.Request(
+                rss_url,
+                headers={"User-Agent": "GenLab/1.0 (+https://genlab.ai)"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = resp.read()
+            root = ET.fromstring(data)
+            items = []
+            for entry in root.findall(f"{{{ATOM_NS}}}entry")[:max_items]:
+                vid_el = entry.find(f"{{{YT_NS}}}videoId")
+                title_el = entry.find(f"{{{ATOM_NS}}}title")
+                pub_el = entry.find(f"{{{ATOM_NS}}}published")
+                author_el = entry.find(f"{{{ATOM_NS}}}author/{{{ATOM_NS}}}name")
+                # media:group/media:description for snippet
+                media_group = entry.find(f"{{{MEDIA_NS}}}group")
+                desc_el = media_group.find(f"{{{MEDIA_NS}}}description") if media_group is not None else None
+
+                if vid_el is None or not vid_el.text:
+                    continue
+                vid_id = vid_el.text
+                items.append({
+                    "video_id": vid_id,
+                    "title": title_el.text if title_el is not None else "",
+                    "published_at": pub_el.text if pub_el is not None else None,
+                    "channel_name": author_el.text if author_el is not None else "",
+                    "description_snippet": (desc_el.text or "")[:200] if desc_el is not None else "",
+                    "source": "youtube_rss",
+                })
+            QUOTA_TRACKER["rss_fetches"] += 1
+            return items
+        except Exception as e:
+            logger.warning("RSS fetch failed for %s: %s", rss_url, e)
+            return []
+
+    # ------------------------------------------------------------------
+    # Tier 2: playlistItems.list fallback (1 unit per call)
+    # ------------------------------------------------------------------
+
+    def _fetch_playlist_items(
+        self, channel_id: str, max_results: int = 10,
+    ) -> list[dict]:
+        """Fetch recent uploads via playlistItems.list (1 unit).
+
+        Converts channel_id (UC...) to uploads playlist (UU...).
+        """
+        uploads_playlist = channel_id.replace("UC", "UU", 1)
+        try:
+            resp = self._session.get(
+                f"{self.BASE_URL}/playlistItems",
+                params={
+                    "key": self.api_key,
+                    "part": "snippet",
+                    "playlistId": uploads_playlist,
+                    "maxResults": max_results,
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            _increment_quota(1, f"playlistItems.list/{channel_id}")
+            items = []
+            for item in resp.json().get("items", []):
+                snippet = item.get("snippet", {})
+                vid_id = snippet.get("resourceId", {}).get("videoId")
+                if not vid_id:
+                    continue
+                items.append({
+                    "video_id": vid_id,
+                    "title": snippet.get("title", ""),
+                    "published_at": snippet.get("publishedAt"),
+                    "channel_name": snippet.get("channelTitle", ""),
+                    "channel_id": snippet.get("channelId", channel_id),
+                    "description_snippet": snippet.get("description", "")[:200],
+                    "source": "youtube_playlist",
+                })
+            return items
+        except Exception as e:
+            logger.warning("playlistItems fetch failed for %s: %s", channel_id, e)
+            return []
+
+    # ------------------------------------------------------------------
+    # Orchestrate: RSS → playlist fallback for subscribed channels
+    # ------------------------------------------------------------------
+
+    def _fetch_from_channels(
+        self,
+        channels: List[Dict[str, Any]],
+        niche_id: str,
+        published_after: datetime,
+    ) -> list[TrendingVideo]:
+        """Fetch videos from subscribed YouTube channels (RSS-first).
+
+        For each channel:
+          1. Try RSS feed (0 quota) — returns up to 15 recent uploads
+          2. If RSS returns < 3 items, fall back to playlistItems.list (1 unit)
+        Then convert all results to TrendingVideo objects.
+        """
+        all_video_ids: list[str] = []
+        video_metadata: dict[str, dict] = {}  # video_id → metadata from RSS/playlist
+
+        for ch in channels:
+            rss_url = ch.get("url", "")
+            channel_id = self._extract_channel_id(rss_url)
+            if not channel_id and not rss_url:
+                continue
+
+            # Tier 1: RSS
+            items = []
+            if rss_url:
+                items = self._fetch_channel_rss(rss_url)
+                logger.debug(
+                    "[%s] RSS %s: %d items (0 quota)",
+                    niche_id, ch.get("name", channel_id or "?"), len(items),
+                )
+
+            # Tier 2: playlistItems fallback
+            if len(items) < 3 and channel_id:
+                playlist_items = self._fetch_playlist_items(channel_id)
+                # Merge — avoid duplicates
+                existing_ids = {i["video_id"] for i in items}
+                for pi in playlist_items:
+                    if pi["video_id"] not in existing_ids:
+                        items.append(pi)
+                logger.debug(
+                    "[%s] Playlist fallback %s: %d additional items (1 unit)",
+                    niche_id, ch.get("name", channel_id or "?"),
+                    len(playlist_items),
+                )
+
+            # Filter by recency and collect
+            for item in items:
+                vid_id = item["video_id"]
+                pub_str = item.get("published_at")
+                if pub_str:
+                    try:
+                        pub = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                        if pub < published_after:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                if vid_id not in video_metadata:
+                    item["channel_weight"] = ch.get("weight", 0.5)
+                    video_metadata[vid_id] = item
+                    all_video_ids.append(vid_id)
+
+        if not all_video_ids:
+            return []
+
+        # Enrich with full stats via videos.list (1 unit per 50)
+        detailed = self._fetch_video_details(all_video_ids, niche_id)
+        enriched_ids = {v.video_id for v in detailed}
+
+        # Merge channel metadata into detailed videos
+        for v in detailed:
+            meta = video_metadata.get(v.video_id, {})
+            if not v.channel_name and meta.get("channel_name"):
+                v.channel_name = meta["channel_name"]
+            v.search_query = meta.get("source", "channel_subscription")
+
+        # Fallback: create stub TrendingVideos for RSS videos that
+        # didn't get enriched (e.g. YouTube API quota exhausted).
+        # These get a weight-based estimated velocity so they survive
+        # the velocity filter — the actual video exists on YouTube and
+        # yt-dlp can download it without any API quota.
+        unenriched = [vid for vid in all_video_ids if vid not in enriched_ids]
+        if unenriched:
+            logger.info(
+                "[%s] %d/%d RSS videos unenriched (API quota likely exhausted), "
+                "creating stubs with estimated velocity",
+                niche_id, len(unenriched), len(all_video_ids),
+            )
+            for vid_id in unenriched:
+                meta = video_metadata.get(vid_id, {})
+                pub_str = meta.get("published_at", "")
+                try:
+                    pub = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                except (ValueError, TypeError, AttributeError):
+                    pub = datetime.now(timezone.utc) - timedelta(hours=12)
+                # Estimate velocity from channel weight: high-weight channels
+                # (NBA, NFL, Premier League) get higher estimated velocity.
+                channel_weight = meta.get("channel_weight", 0.5)
+                estimated_velocity = 2000.0 * channel_weight  # e.g., 1800 for 0.9 weight
+                detailed.append(TrendingVideo(
+                    video_id=vid_id,
+                    title=meta.get("title", ""),
+                    channel_name=meta.get("channel_name", ""),
+                    channel_id="",
+                    published_at=pub,
+                    view_count=0,
+                    like_count=0,
+                    duration_seconds=120,  # Assume ~2min (within 20s-4min range)
+                    thumbnail_url="",
+                    niche_id=niche_id,
+                    search_query="rss_fallback",
+                    view_velocity=estimated_velocity,
+                    download_url=f"https://www.youtube.com/watch?v={vid_id}",
+                    is_official_channel=True,  # Subscribed channel = trusted
+                    license="youtube",
+                    description_snippet=meta.get("description_snippet", ""),
+                ))
+
+        return detailed
+
     def _search_recent(
         self, query: str, niche_id: str, published_after: datetime,
     ) -> list[TrendingVideo]:
-        """Search YouTube for recent videos matching a keyword."""
+        """Search YouTube for recent videos matching a keyword (100 units)."""
         try:
             resp = self._session.get(
                 f"{self.BASE_URL}/search",
@@ -348,6 +630,7 @@ class TrendingVideoFetcher:
                 timeout=15,
             )
             resp.raise_for_status()
+            _increment_quota(100, f"search.list q={query[:30]}")
             items = resp.json().get("items", [])
             results = []
             for item in items:
@@ -390,7 +673,7 @@ class TrendingVideoFetcher:
     def _fetch_video_details(
         self, video_ids: list[str], niche_id: str = "",
     ) -> list[TrendingVideo]:
-        """Fetch full stats for a list of video IDs (1 unit per call)."""
+        """Fetch full stats for a list of video IDs (1 unit per batch of 50)."""
         results = []
         for i in range(0, len(video_ids), 50):
             batch = video_ids[i:i + 50]
@@ -406,6 +689,7 @@ class TrendingVideoFetcher:
                     timeout=15,
                 )
                 resp.raise_for_status()
+                _increment_quota(1, f"videos.list batch={len(batch)}")
                 for item in resp.json().get("items", []):
                     video = self._parse_video(item, "detail")
                     if video:
@@ -528,6 +812,29 @@ class FetchTrendingVideos:
         - ``run_stats.trending_videos_found``: count of videos found
     """
 
+    @staticmethod
+    def _load_sources_config(niche_id: str) -> dict:
+        """Load sources.yaml for the given niche."""
+        from genlab_core.settings import _PROJECT_ROOT
+
+        sources_paths: Dict[str, Path] = {
+            "gaming": _PROJECT_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "sources.yaml",
+            "sports": _PROJECT_ROOT / "ClutchWire" / "config" / "sources.yaml",
+            "movies": _PROJECT_ROOT / "SpliceReel" / "config" / "sources.yaml",
+            "anime": _PROJECT_ROOT / "FrameDrift" / "config" / "sources.yaml",
+            "ai_news": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",
+            "ai_creators": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",
+        }
+        path = sources_paths.get(niche_id)
+        if path and path.is_file():
+            try:
+                import yaml
+                with open(path) as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                logger.warning("[FetchTrendingVideos] Failed to load %s: %s", path, e)
+        return {}
+
     def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         niche_id = context.get("niche_id", "")
         config = context.get("niche_config", {})
@@ -539,9 +846,21 @@ class FetchTrendingVideos:
             context.setdefault("run_stats", {})["trending_videos_found"] = 0
             return context
 
+        # Reset quota tracker for this run
+        reset_quota_tracker()
+
         top_n = vs_config.get("top_n_per_run", 5)
         max_age = vs_config.get("max_age_hours", 48)
         min_vel = vs_config.get("min_view_velocity")
+
+        # Load subscribed YouTube channels from sources.yaml
+        sources_config = context.get("sources_config") or self._load_sources_config(niche_id)
+        subscribed_channels = sources_config.get("youtube_channels", [])
+        if subscribed_channels:
+            logger.info(
+                "[FetchTrendingVideos] %d subscribed channels for %s",
+                len(subscribed_channels), niche_id,
+            )
 
         # Optionally enrich keywords with Google Trends
         extra_keywords: List[str] = []
@@ -550,6 +869,7 @@ class FetchTrendingVideos:
                 from genlab_core.intel.google_trends import GoogleTrendsIntel
                 intel = GoogleTrendsIntel()
                 extra_keywords = intel.get_trending_topics(niche_id, top_n=5)
+                extra_keywords = [kw for kw in extra_keywords if kw and kw.strip()]
                 logger.info("[FetchTrendingVideos] Trends keywords: %s", extra_keywords[:3])
             except Exception as e:
                 logger.warning("[FetchTrendingVideos] Google Trends failed: %s", e)
@@ -561,6 +881,8 @@ class FetchTrendingVideos:
             max_age_hours=max_age,
             min_velocity=min_vel,
             extra_keywords=extra_keywords or None,
+            subscribed_channels=subscribed_channels or None,
+            allow_keyword_search=vs_config.get("allow_keyword_search", False),
         )
 
         logger.info(
@@ -619,6 +941,8 @@ class FetchTrendingVideos:
         run_stats["trending_videos_found"] = len(videos)
         run_stats["trending_videos_fetched"] = len(video_dicts)
         run_stats["trending_videos_filtered"] = len(video_dicts) - len(videos)
+        run_stats["youtube_quota_units"] = QUOTA_TRACKER["units_used"]
+        run_stats["youtube_rss_fetches"] = QUOTA_TRACKER["rss_fetches"]
         if not videos and video_dicts:
             logger.warning(
                 "[FetchTrendingVideos] All %d videos filtered by quality gate for %s — "

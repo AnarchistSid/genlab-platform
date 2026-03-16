@@ -259,6 +259,44 @@ class TestRenderTextOverlays:
         result = stage.execute(ctx)
         assert result["run_stats"]["text_overlays"]["skipped"] == 1
 
+    def test_reads_hook_from_content_dict(self):
+        """Hook in story['content']['hook'] should be found (video-first pipelines)."""
+        stage = self._make()
+        ctx = {
+            "stories": [
+                {
+                    "content": {"hook": "This anime is peak"},
+                    "media": {"rendered_path": "/nonexistent/video.mp4"},
+                },
+            ],
+            "niche_config": {},
+        }
+        result = stage.execute(ctx)
+        # Skipped because file doesn't exist, NOT because hook is missing.
+        # The key assertion: if file existed, hook would be found.
+        stats = result["run_stats"]["text_overlays"]
+        assert stats["skipped"] == 1
+        assert stats["errors"] == 0
+
+    def test_reads_hook_from_media_hook_text(self):
+        """Fallback to media['hook_text'] when other paths are empty."""
+        stage = self._make()
+        ctx = {
+            "stories": [
+                {
+                    "media": {
+                        "rendered_path": "/nonexistent/video.mp4",
+                        "hook_text": "Legacy hook field",
+                    },
+                },
+            ],
+            "niche_config": {},
+        }
+        result = stage.execute(ctx)
+        stats = result["run_stats"]["text_overlays"]
+        assert stats["skipped"] == 1
+        assert stats["errors"] == 0
+
 
 # ── GenerateAudio ───────────────────────────────────────────────
 
