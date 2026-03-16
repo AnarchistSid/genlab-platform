@@ -158,13 +158,18 @@ class DailyCapEnforcer:
 
             for item in items:
                 fields = item.get("fields", item)
-                status = (fields.get("status") or "").strip()
+                status = str(fields.get("status") or "").strip()
                 if status != "SUCCESS":
                     continue
-                pub_at = (fields.get("published_at") or "").strip()
+                # published_at may be a datetime object from Graph SDK
+                raw_pub = fields.get("published_at")
+                if isinstance(raw_pub, datetime):
+                    pub_at = raw_pub.strftime("%Y-%m-%d")
+                else:
+                    pub_at = str(raw_pub or "").strip()
                 if not pub_at.startswith(today_str):
                     continue
-                platform = (fields.get("platform") or "").lower().strip()
+                platform = str(fields.get("platform") or "").lower().strip()
                 if platform:
                     counts[platform] = counts.get(platform, 0) + 1
 
