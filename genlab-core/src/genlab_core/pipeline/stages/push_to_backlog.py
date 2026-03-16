@@ -105,6 +105,7 @@ class PushToBacklog:
 
         stories_pushed = 0
         blueprints_pushed = 0
+        video_dedup_skipped = 0
         errors: list[str] = []
 
         for story in stories:
@@ -149,6 +150,34 @@ class PushToBacklog:
             if not content:
                 continue
 
+            # Extract video_id for dedup — available from FetchTrendingVideos or DownloadTopVideos
+            video_id = story.get("video_id", "")
+            if not video_id:
+                # Try clip_index lookup
+                clip_index = context.get("clip_index", {})
+                clip_entry = clip_index.get("clips", {}).get(story_id, {})
+                source_url_for_vid = clip_entry.get("source_url", "")
+                if "youtube" in source_url_for_vid:
+                    video_id = source_url_for_vid.split("v=")[-1].split("&")[0]
+
+            # Video-level dedup: same clip must not create multiple blueprints
+            if video_id:
+                try:
+                    existing_by_video = [
+                        bp for bp in client.blueprints.all(max_records=200)
+                        if (bp.get("fields", bp).get("video_id", "") == video_id
+                            and bp.get("fields", bp).get("niche_id", "") == niche_id)
+                    ]
+                    if existing_by_video:
+                        logger.info(
+                            "[PUSH] Video already blueprinted: video_id=%s niche=%s — skipping",
+                            video_id[:20], niche_id,
+                        )
+                        video_dedup_skipped += 1
+                        continue
+                except Exception as e:
+                    logger.warning("[PUSH] Video dedup check failed: %s — allowing through", e)
+
             candidate_id = generate_candidate_id(
                 story_id, f"{niche_id}_default", content.get("hook", title),
             )
@@ -175,6 +204,7 @@ class PushToBacklog:
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
                         "story_id": story_id,
+                        "video_id": video_id,
                         "hook_text": hook,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
@@ -218,12 +248,13 @@ class PushToBacklog:
         context.setdefault("run_stats", {})["backlog_push"] = {
             "stories_pushed": stories_pushed,
             "blueprints_pushed": blueprints_pushed,
+            "video_dedup_skipped": video_dedup_skipped,
             "errors": errors[:5],
             "status": "ok" if not errors else f"partial ({len(errors)} errors)",
         }
 
         logger.info(
-            "[PUSH] %d stories, %d blueprints pushed to backlog (%d errors)",
-            stories_pushed, blueprints_pushed, len(errors),
+            "[PUSH] %d stories, %d blueprints pushed to backlog (%d video-dedup skipped, %d errors)",
+            stories_pushed, blueprints_pushed, video_dedup_skipped, len(errors),
         )
         return context
