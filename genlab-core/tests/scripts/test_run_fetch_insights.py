@@ -47,13 +47,13 @@ class TestWindowRanges:
         assert 6 in WINDOW_RANGES
         min_age, max_age = WINDOW_RANGES[6]
         assert min_age == 4.0  # Widened from 5.0
-        assert max_age == 168.0  # 7 days
+        assert max_age == 8760.0  # Wide range for backfill (idempotency prevents double-fetch)
 
     def test_24h_window_defined(self):
         assert 24 in WINDOW_RANGES
         min_age, max_age = WINDOW_RANGES[24]
         assert min_age == 20.0  # Widened from 23.0
-        assert max_age == 168.0  # 7 days
+        assert max_age == 8760.0  # Wide range for backfill
 
 
 class TestGetEligibleRecords:
