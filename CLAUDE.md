@@ -251,7 +251,7 @@ Every decision should consider multi-tenancy:
 | Channel | niche_id | Accent Color | Logo |
 |---|---|---|---|
 | Blackbox Brief | ai_news | #00D4FF | Content Scraper/assets/logo.png |
-| CriticalRush | gaming | #00FF88 | CriticalRush/assets/logo.png |
+| CriticalRush | gaming | #f97316 | CriticalRush/assets/logo.png |
 | ClutchWire | sports | #FF2040 | ClutchWire/assets/logo.png |
 | SpliceReel | movies | #C9A84C | SpliceReel/assets/logo.png |
 | FrameDrift | anime | #7B3FE4 | FrameDrift/assets/logo.png |
