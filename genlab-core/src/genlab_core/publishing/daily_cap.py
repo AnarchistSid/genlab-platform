@@ -1,6 +1,6 @@
 """DailyCapEnforcer — prevents publishing more than N posts per platform per UTC day.
 
-Caps are declared in config/platform_caps.yaml (Content Scraper).
+Caps are declared in genlab-core/config/platform_caps.yaml.
 Counts are derived from the Publishing_Analytics SharePoint list at run start,
 then maintained in-session via an in-memory counter so that multiple niches
 publishing in the same process run don't race on the same cap.
