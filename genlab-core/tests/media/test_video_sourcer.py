@@ -269,8 +269,10 @@ class TestFindVideoDirectUrl:
         assert result.backend == "direct_url"
         assert "v.redd.it" in result.url
 
-    def test_story_without_video_url_and_no_api_key_returns_none(self):
+    def test_story_without_video_url_and_no_api_key_returns_none(self, monkeypatch):
         """With no direct URL and no API keys, all backends fail → None."""
+        monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+        monkeypatch.delenv("YOUTUBE_DATA_API_KEY", raising=False)
         vs = VideoSourcer(
             niche_id="ai_tech",
             youtube_api_key="",

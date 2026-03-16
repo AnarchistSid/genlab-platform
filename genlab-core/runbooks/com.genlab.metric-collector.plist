@@ -7,6 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
+        <string>/Users/anarchistsid/GenLab/scripts/launch_wrapper.sh</string>
         <string>/Users/anarchistsid/.local/bin/uv</string>
         <string>run</string>
         <string>--package</string>
@@ -17,7 +18,7 @@
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/anarchistsid/GenLab/Content Scraper</string>
+    <string>/Users/anarchistsid/GenLab</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -25,6 +26,8 @@
         <string>/Users/anarchistsid/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
         <string>/Users/anarchistsid</string>
+        <key>BACKLOG_CONFIG_PATH</key>
+        <string>/Users/anarchistsid/GenLab/genlab-core/config/lists_config.yaml</string>
     </dict>
 
     <!-- Run every 60 minutes -->
@@ -35,9 +38,9 @@
     <false/>
 
     <key>StandardOutPath</key>
-    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/metric_collector.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/metric_collector.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/metric_collector_error.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/metric_collector_error.log</string>
 
     <key>TimeOut</key>
     <integer>600</integer>
