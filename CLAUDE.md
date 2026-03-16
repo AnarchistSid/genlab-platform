@@ -173,6 +173,9 @@ Other channels: try hard to find a clip; only skip if truly none exists.
   SKIPPED record to Publishing_Analytics — never silent-fail
 - Facebook post survival check at 24h: if post removed by Meta, mark REMOVED_BY_META
 - YouTube titles: question format, ≤40 chars
+- **SKIP_APPROVAL_GATE=true** is set globally in root `.env` during test phase.
+  This bypasses the dashboard approval gate so pipelines can publish without
+  manual review. Remove this line when transitioning to production approval flow.
 
 ---
 
