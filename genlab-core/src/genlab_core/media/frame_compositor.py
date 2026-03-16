@@ -9,28 +9,30 @@ THE LOCKED SPEC
 Canvas: 1080 x 1920 (9:16 portrait, always)
 
 LANDSCAPE (source aspect ratio >= 1.33):
-  y=0-80:     Logo(56px circle x=36) + channel name(32px x=108 y=24)
-              + handle(22px x=108 y=50)  [solid black]
-  y=80-650:   Hook text zone (570px, 28px bold white, vertically centered,
-              max 3 lines)  [solid black]
-  y=650-656:  Accent line (6px, channel accent color)
-  y=656-1264: VIDEO 1080x608 — ZERO overlays on video
-  y=1264-1920: Solid black (656px)
+  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name(24px x=120 y=322)
+              + handle(17px x=120 y=346)
+  y=310-370:  Name row (60px)  [solid black]
+  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered,
+              max 2 lines)  [solid black]
+  y=460-466:  Accent line (6px, channel accent color)
+  y=466-1074: VIDEO 1080x608 — ZERO overlays on video
+  y=1074-1920: Solid black (846px)
 
 PORTRAIT (source aspect ratio <= 0.75):
-  y=0-220:    Dark overlay (black@0.55) ON TOP of video. Logo ONLY (44px,
-              x=30, y=30). NO name, NO hook.
-  y=220-226:  Accent line (6px, channel accent color)
-  y=226-1920: Video continues clean (no overlay)
-  Video fills full 1080x1920 canvas.
+  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name + handle
+  y=310-370:  Name row (60px)  [solid black]
+  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered)  [solid black]
+  y=460-466:  Accent line (6px, channel accent color)
+  y=466-1466: VIDEO 1080x1000 — ZERO overlays on video (letterboxed if needed)
+  y=1466-1920: Solid black (454px)
 
 SQUARE (source aspect ratio 0.75 to 1.33):
-  y=0-80:     Logo(56px) + channel name + handle  [same as landscape]  [solid black]
-  y=80-160:   Hook text zone (80px, 28px bold white, vertically centered)  [solid black]
-  y=160-166:  Accent line (6px, channel accent color)
-  y=166-503:  Solid black gap (337px)
-  y=503-1583: VIDEO 1080x1080 — ZERO overlays on video
-  y=1583-1920: Solid black gap (337px)
+  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name + handle
+  y=310-370:  Name row (60px)  [solid black]
+  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered)  [solid black]
+  y=460-466:  Accent line (6px, channel accent color)
+  y=466-1546: VIDEO 1080x1080 — ZERO overlays on video
+  y=1546-1920: Solid black (374px)
 
 Usage:
     comp = FrameCompositor.from_visuals_yaml("path/to/visuals.yaml")
@@ -70,51 +72,59 @@ PORTRAIT_THRESHOLD = 0.75    # w/h <= this -> portrait
 # Between 0.75 and 1.33 = SQUARE
 
 # Layout A: Landscape
-L_NAME_ROW_H = 80
-L_HOOK_ZONE_Y = 80
-L_HOOK_ZONE_H = 570
-L_ACCENT_Y = 650
+L_TOP_BAR_H = 310
+L_NAME_ROW_Y = 310
+L_NAME_ROW_H = 60
+L_HOOK_ZONE_Y = 380
+L_HOOK_ZONE_H = 80
+L_ACCENT_Y = 460
 L_ACCENT_H = 6
-L_VIDEO_Y = 656
+L_VIDEO_Y = 466
 L_VIDEO_H = 608
-L_BOTTOM_H = 656
+L_BOTTOM_H = 846
 
-# Layout B: Portrait
-P_OVERLAY_H = 220
-P_OVERLAY_OPACITY = 0.55
-P_ACCENT_Y = 220
+# Layout B: Portrait (sandwich layout — same structure as landscape/square)
+P_TOP_BAR_H = 310
+P_NAME_ROW_Y = 310
+P_NAME_ROW_H = 60
+P_HOOK_ZONE_Y = 380
+P_HOOK_ZONE_H = 80
+P_ACCENT_Y = 460
 P_ACCENT_H = 6
-P_LOGO_SIZE = 44
-P_LOGO_X = 30
-P_LOGO_Y = 30
+P_VIDEO_Y = 466
+P_VIDEO_H = 1000
+P_BOTTOM_H = 454
 
 # Layout C: Square
-S_NAME_ROW_H = 80
-S_HOOK_ZONE_Y = 80
+S_TOP_BAR_H = 310
+S_NAME_ROW_Y = 310
+S_NAME_ROW_H = 60
+S_HOOK_ZONE_Y = 380
 S_HOOK_ZONE_H = 80
-S_ACCENT_Y = 160
+S_ACCENT_Y = 460
 S_ACCENT_H = 6
-S_VIDEO_Y = 503
+S_VIDEO_Y = 466
 S_VIDEO_H = 1080
-S_GAP = 337
+S_BOTTOM_H = 374
 
 # Shared text
-LOGO_SIZE = 56
-LOGO_X = 36
-LOGO_Y = 12           # (80-56)/2
-NAME_FONT_SIZE = 32
-NAME_X = 108
-NAME_Y = 24
-HANDLE_FONT_SIZE = 22
-HANDLE_X = 108
-HANDLE_Y = 50
+LOGO_SIZE = 60
+LOGO_X = 45
+LOGO_Y = 310          # logo top aligned with name-row start (y=310)
+NAME_FONT_SIZE = 24
+NAME_X = 120
+NAME_Y = 322
+HANDLE_FONT_SIZE = 17
+HANDLE_X = 120
+HANDLE_Y = 346
 HANDLE_OPACITY = 0.70
-HOOK_FONT_SIZE = 28
-HOOK_LINE_H = 38
-HOOK_MAX_LINES = 3
-HOOK_MAX_CHARS_LINE = 32
+HOOK_FONT_SIZE = 44
+HOOK_LINE_H = 52
+HOOK_MAX_LINES = 2
+HOOK_MAX_CHARS_LINE = 35
 SHADOW_OFFSET = 2
 SHADOW_OPACITY = 0.50
+HOOK_X = 45
 
 HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 
@@ -394,7 +404,7 @@ class FrameCompositor:
     def _build_cmd_landscape(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Landscape clip: video at y=656, hook text zone above, accent line separator."""
+        """Landscape clip: video at y=466, hook text zone above, accent line separator."""
 
         logo_path = self.branding.logo_path
         channel_name = self.branding.channel_name
@@ -496,41 +506,93 @@ class FrameCompositor:
     def _build_cmd_portrait(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Portrait clip: video fills canvas, dark overlay top 220px, logo only."""
+        """Portrait clip: sandwich layout — black top bar with logo+hook, video in middle, black bottom.
+
+        Video is scaled to fit within 1080xP_VIDEO_H maintaining aspect ratio, centered
+        vertically with black letterbox bars if needed.  Same structure as landscape/square.
+        """
 
         logo_path = self.branding.logo_path
+        channel_name = self.branding.channel_name
+        handle = self.branding.handle
+        safe_name = self._escape_drawtext(channel_name)
+        safe_handle = self._escape_drawtext(handle)
         accent = self._accent_hex()
 
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
+        font_bold, font_reg, font_hook = self._resolve_fonts()
+
         has_logo = logo_path and os.path.exists(logo_path)
+
+        # Wrap hook text and compute vertical centering within hook zone
+        hook_lines = self._wrap_hook(hook)
+        num_lines = len(hook_lines)
+        total_text_h = num_lines * HOOK_LINE_H
+        hook_zone_center_y = P_HOOK_ZONE_Y + P_HOOK_ZONE_H // 2
+        hook_start_y = hook_zone_center_y - total_text_h // 2
+
+        # Build hook drawtext chain
+        hook_filters = ""
+        prev_label = "withhandle"
+        for i, line in enumerate(hook_lines):
+            safe_line = self._escape_drawtext(line)
+            line_y = hook_start_y + i * HOOK_LINE_H
+            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
+            hook_filters += (
+                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
+                f"x=(w-text_w)/2:y={line_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{out_label}];"
+            )
+            prev_label = out_label
 
         if has_logo:
             filtergraph = (
-                # Scale video to fill 1080x1920 (crop to fit)
-                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
-                f"crop={CANVAS_W}:{CANVAS_H}[base];"
-                # Dark overlay on top 220px
-                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={P_OVERLAY_H}:"
-                f"color=black@{P_OVERLAY_OPACITY}:t=fill[overlaid];"
-                # Accent line at y=220
-                f"[overlaid]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
+                # Black canvas 1080x1920
+                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+                # Source video scaled to fit 1080xP_VIDEO_H (maintain AR, letterbox)
+                f"[0:v]scale={CANVAS_W}:{P_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{P_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                # Place video at y=P_VIDEO_Y
+                f"[canvas][scaled]overlay=0:{P_VIDEO_Y}[base];"
+                # Logo scaled to LOGO_SIZE px
+                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
+                # Accent line at y=P_ACCENT_Y
+                f"[base]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
                 f"color=0x{accent}:t=fill[accented];"
-                # Logo scaled to 44px
-                f"[1:v]scale={P_LOGO_SIZE}:{P_LOGO_SIZE}[logo];"
-                # Overlay logo at x=30 y=30
-                f"[accented][logo]overlay={P_LOGO_X}:{P_LOGO_Y}[out]"
+                # Overlay logo
+                f"[accented][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
+                # Channel name
+                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
+                # Handle
+                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
+                # Hook lines
+                f"{hook_filters}"
+                # Final label rename
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src, "-i", logo_path]
         else:
             filtergraph = (
-                f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
-                f"crop={CANVAS_W}:{CANVAS_H}[base];"
-                f"[base]drawbox=x=0:y=0:w={CANVAS_W}:h={P_OVERLAY_H}:"
-                f"color=black@{P_OVERLAY_OPACITY}:t=fill[overlaid];"
-                f"[overlaid]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
-                f"color=0x{accent}:t=fill[out]"
+                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+                f"[0:v]scale={CANVAS_W}:{P_VIDEO_H}:force_original_aspect_ratio=decrease,"
+                f"pad={CANVAS_W}:{P_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"[canvas][scaled]overlay=0:{P_VIDEO_Y}[base];"
+                f"[base]drawbox=x=0:y={P_ACCENT_Y}:w={CANVAS_W}:h={P_ACCENT_H}:"
+                f"color=0x{accent}:t=fill[accented];"
+                f"[accented]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
+                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={LOGO_X}:y={HANDLE_Y}[withhandle];"
+                f"{hook_filters}"
+                f"[withhook]null[out]"
             )
             inputs = ["-i", src]
 
@@ -550,7 +612,7 @@ class FrameCompositor:
     def _build_cmd_square(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Square-ish clip: video at y=503 (1080x1080), hook in 80px zone, accent line."""
+        """Square-ish clip: video at y=466 (1080x1080), hook in 80px zone, accent line."""
 
         logo_path = self.branding.logo_path
         channel_name = self.branding.channel_name
