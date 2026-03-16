@@ -80,8 +80,8 @@ L_HOOK_ZONE_H = 80
 L_ACCENT_Y = 460
 L_ACCENT_H = 6
 L_VIDEO_Y = 466
-L_VIDEO_H = 608
-L_BOTTOM_H = 846
+L_VIDEO_H = 810             # ~42% of canvas (was 608/32%)
+L_BOTTOM_H = 644            # ~34% of canvas (was 846/44%)
 
 # Layout B: Portrait (fill-canvas with dark gradient overlay for logo+hook)
 # Portrait videos fill the entire 1080x1920 canvas. Logo + hook are overlaid
