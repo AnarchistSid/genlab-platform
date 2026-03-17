@@ -158,16 +158,16 @@ class TestFetchTrending:
 
 class TestNicheConfig:
     def test_all_niches_have_keywords(self):
-        for niche in ["gaming", "sports", "movies", "anime", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "anime", "ai_creators"]:
             assert niche in NICHE_SEARCH_KEYWORDS
             assert len(NICHE_SEARCH_KEYWORDS[niche]) >= 3
 
     def test_niche_categories_defined(self):
-        for niche in ["gaming", "sports", "movies", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "ai_creators"]:
             assert niche in YOUTUBE_CATEGORIES
 
     def test_velocity_thresholds_defined(self):
-        for niche in ["gaming", "sports", "movies", "anime", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "anime", "ai_creators"]:
             assert niche in MIN_VIEW_VELOCITY
             assert MIN_VIEW_VELOCITY[niche] > 0
 

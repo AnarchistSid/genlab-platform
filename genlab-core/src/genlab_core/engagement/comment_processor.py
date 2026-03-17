@@ -187,12 +187,7 @@ def _load_persona(niche_id: str) -> NichePersona:
     """Load persona YAML. Raises FileNotFoundError if absent."""
     import yaml
 
-    # Normalise niche_id aliases
     niche_aliases = [niche_id]
-    if niche_id == "ai_creators":
-        niche_aliases.append("ai_news")
-    elif niche_id == "ai_news":
-        niche_aliases.append("ai_creators")
 
     personas_dir = Path(__file__).parent / "personas"
     candidate_paths = []

@@ -45,7 +45,7 @@ class TestFormulaToSQL:
         sql, params = formula_to_sql(
             "AND({status}='PUBLISHED', {niche_id}='sports')"
         )
-        assert sql == "status = $1 AND niche_id = $2"
+        assert sql == "(status = $1 AND niche_id = $2)"
         assert params == ["PUBLISHED", "sports"]
 
     def test_and_three_conditions(self):
@@ -53,7 +53,7 @@ class TestFormulaToSQL:
         sql, params = formula_to_sql(
             "AND({status}='DRAFTED', {niche_id}='gaming', {hook}='test')"
         )
-        assert sql == "status = $1 AND niche_id = $2 AND hook = $3"
+        assert sql == "(status = $1 AND niche_id = $2 AND hook = $3)"
         assert params == ["DRAFTED", "gaming", "test"]
 
     def test_or_condition(self):

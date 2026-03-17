@@ -236,10 +236,16 @@ class MonetisationTracker:
         return result
 
     def _get_youtube_creds(self, niche_id: str) -> Optional[dict]:
-        """Get YouTube OAuth credentials. All niches share the same token for now."""
-        client_id = os.environ.get("YOUTUBE_CLIENT_ID", "").strip()
-        client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "").strip()
-        refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip()
+        """Get YouTube OAuth credentials using per-niche prefix resolution."""
+        prefix = _NICHE_ENV_PREFIX.get(niche_id, niche_id.upper())
+        # Per-niche client_id/secret (fall back to global)
+        client_id = (os.environ.get(f"{prefix}_YOUTUBE_CLIENT_ID")
+                     or os.environ.get("YOUTUBE_CLIENT_ID", "")).strip()
+        client_secret = (os.environ.get(f"{prefix}_YOUTUBE_CLIENT_SECRET")
+                         or os.environ.get("YOUTUBE_CLIENT_SECRET", "")).strip()
+        # Per-niche refresh token (fall back to global)
+        refresh_token = (os.environ.get(f"{prefix}_YOUTUBE_REFRESH_TOKEN")
+                         or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")).strip()
         if not all([client_id, client_secret, refresh_token]):
             return None
         return {

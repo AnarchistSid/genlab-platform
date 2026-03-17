@@ -13,11 +13,16 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _mock_heavy_imports():
-    """Mock Azure SDK and msgraph so tests don't require them installed."""
+    """Mock Azure SDK and msgraph so tests don't require them installed.
+
+    Also clears GENLAB_USE_POSTGRES so backend routing tests exercise
+    the SharePoint code path regardless of what's in the local .env.
+    """
     mock_cred_cls = MagicMock()
     mock_graph_cls = MagicMock()
 
     with (
+        patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False),
         patch.dict("sys.modules", {
             "azure": MagicMock(),
             "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),

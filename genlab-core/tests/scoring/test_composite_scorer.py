@@ -77,7 +77,7 @@ class TestScore:
 
     def test_velocity_capped_at_1(self):
         """View velocity above threshold still caps velocity_score at 1.0."""
-        scorer = CompositeScorer("ai_news")  # threshold = 400
+        scorer = CompositeScorer("ai_creators")  # threshold = 400
         vs = scorer.score(_video(view_velocity=800.0))
         assert vs.velocity_score == 1.0
         assert vs.composite == pytest.approx(1.0)
@@ -130,7 +130,7 @@ class TestNicheDefaults:
         ("sports", 2000.0, 0.35),
         ("movies", 800.0, 0.30),
         ("anime", 600.0, 0.30),
-        ("ai_news", 400.0, 0.25),
+        ("ai_creators", 400.0, 0.25),
     ])
     def test_default_thresholds(self, niche, expected_vel, expected_min):
         scorer = CompositeScorer(niche)
@@ -190,7 +190,7 @@ class TestScoreAndRank:
         assert results == []
 
     def test_trend_multipliers_map(self):
-        scorer = CompositeScorer("ai_news", min_composite=0.0)
+        scorer = CompositeScorer("ai_creators", min_composite=0.0)
         videos = [
             _video("v1", view_velocity=200.0),  # vel_score = 0.5
             _video("v2", view_velocity=200.0),  # vel_score = 0.5

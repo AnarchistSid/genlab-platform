@@ -19,6 +19,7 @@ def _mock_heavy_imports():
     mock_graph_cls = MagicMock()
 
     with (
+        patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False),
         patch.dict("sys.modules", {
             "azure": MagicMock(),
             "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
