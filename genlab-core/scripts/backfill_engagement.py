@@ -27,10 +27,10 @@ from dotenv import load_dotenv
 # Load credentials
 genlab_root = Path(__file__).resolve().parents[2]
 load_dotenv(genlab_root / ".env")
-load_dotenv(genlab_root / "Content Scraper" / ".env")
+load_dotenv(genlab_root / ".env")
 os.environ.setdefault(
     "BACKLOG_CONFIG_PATH",
-    str(genlab_root / "Content Scraper" / "config" / "lists_config.yaml"),
+    str(genlab_root / "genlab-core" / "config" / "lists_config.yaml"),
 )
 
 logging.basicConfig(

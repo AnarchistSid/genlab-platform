@@ -1,22 +1,24 @@
 # Storage backend routing — which engine serves each table.
 #
-# Valid values: "sharepoint" (current), "postgres" (future).
+# Valid values: "sharepoint", "postgres".
 # Default: "sharepoint" if a table is not listed here.
 #
-# During migration, flip individual tables to "postgres" one at a time,
-# verify, then move to the next.  All 11 tables start on SharePoint.
+# Sprint 64: Migrated from SharePoint to PostgreSQL.
+# All tables now served by local PostgreSQL with RLS.
+# SharePoint remains as backup — flip individual tables back to "sharepoint"
+# if issues arise.
 
 tables:
-  Stories: sharepoint
-  Blueprints: sharepoint
-  Templates: sharepoint
-  Assets: sharepoint
-  Sources: sharepoint
-  Publishing_Analytics: sharepoint
-  Analytics: sharepoint
-  AB_Tests: sharepoint
-  Content_Memory: sharepoint
-  PendingEngagement: sharepoint
-  PendingFeedback: sharepoint
-  BanditArms: sharepoint
-  Audience_Snapshots: sharepoint
+  Stories: postgres
+  Blueprints: postgres
+  Templates: postgres
+  Assets: postgres
+  Sources: postgres
+  Publishing_Analytics: postgres
+  Analytics: postgres
+  AB_Tests: postgres
+  Content_Memory: postgres
+  PendingEngagement: postgres
+  PendingFeedback: postgres
+  BanditArms: postgres
+  Audience_Snapshots: postgres
