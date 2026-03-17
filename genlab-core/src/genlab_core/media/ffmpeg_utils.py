@@ -810,6 +810,81 @@ def reencode_for_cdn(
 # ── Compilation shims (used by CriticalRush gaming render) ──────────────────
 
 
+# ── Transition map for xfade filter ──────────────────────────────
+XFADE_MAP: dict[str, str] = {
+    "fade": "fade",
+    "dissolve": "dissolve",
+    "wipeleft": "wipeleft",
+    "wiperight": "wiperight",
+    "wipeup": "wipeup",
+    "wipedown": "wipedown",
+    "slideleft": "slideleft",
+    "slideright": "slideright",
+    "slideup": "slideup",
+    "slidedown": "slidedown",
+    "smoothleft": "smoothleft",
+    "smoothright": "smoothright",
+    "circlecrop": "circlecrop",
+    "rectcrop": "rectcrop",
+    "distance": "distance",
+    "fadeblack": "fadeblack",
+    "fadewhite": "fadewhite",
+    "radial": "radial",
+    "smoothup": "smoothup",
+    "smoothdown": "smoothdown",
+}
+
+
+def build_xfade_transition(
+    transition_name: str = "fade",
+    duration: float = 0.5,
+) -> str:
+    """Build an xfade filter string for FFmpeg.
+
+    Returns the xfade filter value, e.g. ``xfade=transition=fade:duration=0.5``.
+    Falls back to 'fade' if *transition_name* is not in XFADE_MAP.
+    """
+    safe_name = XFADE_MAP.get(transition_name, "fade")
+    return f"xfade=transition={safe_name}:duration={duration}"
+
+
+def landscape_to_vertical(
+    input_path: str,
+    output_path: str,
+    *,
+    width: int = REEL_WIDTH,
+    height: int = REEL_HEIGHT,
+    blur_bg: bool = True,
+) -> bool:
+    """Convert a landscape (16:9) video to vertical (9:16) with blurred pillarbox."""
+    ffmpeg = get_ffmpeg_binary()
+    if blur_bg:
+        vf = (
+            f"split[bg][fg];"
+            f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},boxblur=20:20[bg];"
+            f"[fg]scale={width}:{height}:force_original_aspect_ratio=decrease[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2"
+        )
+    else:
+        vf = (
+            f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black"
+        )
+    cmd = [
+        ffmpeg, "-y", "-i", input_path,
+        "-vf", vf,
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
 def normalize_clip(
     input_path: str,
     output_path: str,
