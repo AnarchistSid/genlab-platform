@@ -43,7 +43,7 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from genlab_core.media.sandbox_runner import SandboxedFFmpegRunner
 
-from genlab_core.media.ffmpeg import get_ffmpeg_binary
+from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform, RenderSpec, get_ffmpeg_binary
 from genlab_core.media.ffmpeg_utils import (
     concat,
     escape_drawtext,
@@ -70,26 +70,98 @@ _FONT_CHAR_WIDTH_RATIO = 0.55
 # Default logo aspect ratio when probe fails (3:2 — common for horizontal logos).
 _DEFAULT_LOGO_ASPECT = 1.5
 
-# ── Encoding defaults (matches existing ffmpeg_utils FINAL_VIDEO_PARAMS) ─────
-_ENCODE_ARGS = [
-    "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-    "-pix_fmt", "yuv420p",
-    "-colorspace", "bt709",
-    "-color_primaries", "bt709",
-    "-color_trc", "bt709",
-    "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-    "-movflags", "+faststart",
-]
-_LANDSCAPE_ENCODE_ARGS = [
-    "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-    "-pix_fmt", "yuv420p",
-    "-colorspace", "bt709",
-    "-color_primaries", "bt709",
-    "-color_trc", "bt709",
-    "-c:a", "aac", "-b:a", "256k", "-ar", "48000",
-    "-movflags", "+faststart",
-]
+# ── Encoding ─────────────────────────────────────────────────────────────────
 _FFMPEG_TIMEOUT = 300
+
+# Map of platform name strings → Platform enum for lookup.
+_PLATFORM_ALIAS: dict[str, Platform] = {
+    "instagram": Platform.INSTAGRAM,
+    "youtube": Platform.YOUTUBE,
+    "tiktok": Platform.TIKTOK,
+    "facebook": Platform.FACEBOOK,
+    "threads": Platform.THREADS,
+    "x_standard": Platform.X_STD,
+    "x_premium": Platform.X_PREMIUM,
+}
+
+# Runtime cache for YAML overrides (populated lazily by load_platform_encode_overrides).
+_override_specs: dict[str, RenderSpec] = {}
+
+
+def load_platform_encode_overrides(yaml_path: Path) -> dict[str, RenderSpec]:
+    """Load per-platform encode spec overrides from a YAML config file.
+
+    The YAML maps platform name → partial RenderSpec fields.  Only fields
+    present in the YAML are overridden; everything else inherits from the
+    built-in PLATFORM_SPECS in ffmpeg.py.
+
+    Returns a dict of platform name → merged RenderSpec.  Returns an empty
+    dict if the file is missing or empty (fail-open: code defaults win).
+    """
+    if not yaml_path.exists():
+        logger.debug("No platform encode overrides at %s — using built-in specs", yaml_path)
+        return {}
+
+    try:
+        with open(yaml_path) as f:
+            raw = yaml.safe_load(f)
+    except Exception:
+        logger.warning("Failed to parse %s — using built-in specs", yaml_path, exc_info=True)
+        return {}
+
+    if not raw or not isinstance(raw, dict):
+        return {}
+
+    result: dict[str, RenderSpec] = {}
+    for platform_name, overrides in raw.items():
+        enum_key = _PLATFORM_ALIAS.get(platform_name)
+        if enum_key is None:
+            logger.debug("Ignoring unknown platform '%s' in encode overrides", platform_name)
+            continue
+        if not isinstance(overrides, dict):
+            continue
+        # Start from the built-in spec and override specified fields
+        base = PLATFORM_SPECS[enum_key]
+        merged = base.model_copy(update=overrides)
+        result[platform_name] = merged
+
+    if result:
+        logger.info(
+            "Loaded platform encode overrides for: %s",
+            ", ".join(sorted(result)),
+        )
+
+    return result
+
+
+def _get_encode_args(platform: str = "instagram") -> list[str]:
+    """Build FFmpeg output args for *platform* using PLATFORM_SPECS.
+
+    Falls back to Instagram spec for unknown platforms.  Adds pix_fmt and
+    movflags which RenderSpec.to_output_args() does not include (they are
+    container-level flags, not codec parameters).
+    """
+    # Check YAML overrides first, then built-in specs
+    if platform in _override_specs:
+        spec = _override_specs[platform]
+    else:
+        enum_key = _PLATFORM_ALIAS.get(platform, Platform.INSTAGRAM)
+        spec = PLATFORM_SPECS.get(enum_key, PLATFORM_SPECS[Platform.INSTAGRAM])
+
+    args = spec.to_output_args()
+
+    # Append pix_fmt (always yuv420p for web delivery) — not in RenderSpec
+    args += ["-pix_fmt", "yuv420p"]
+
+    # Append movflags for progressive download — not in RenderSpec
+    args += ["-movflags", "+faststart"]
+
+    return args
+
+
+def _get_landscape_encode_args(platform: str = "facebook") -> list[str]:
+    """Build FFmpeg output args for landscape variants (Facebook, X)."""
+    return _get_encode_args(platform)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -203,6 +275,7 @@ class VideoCompositor:
         hook_text: str,
         output_path: Path,
         smart_crop: bool | None = None,
+        platform: str = "instagram",
     ) -> Path:
         """Assemble the 9:16 master video with full sandwich treatment.
 
@@ -222,6 +295,9 @@ class VideoCompositor:
         smart_crop : bool | None
             Pre-crop landscape clips to face/motion centre before sandwich.
             ``None`` (default) defers to ``VisualConfig.smart_crop``.
+        platform : str
+            Target platform for encoding (e.g. "instagram", "youtube").
+            Defaults to "instagram" for backward compatibility.
         """
         if not self._config.logo_path.exists():
             raise FileNotFoundError(
@@ -252,7 +328,7 @@ class VideoCompositor:
 
             try:
                 # Step 2: build the full filter_complex and run FFmpeg
-                self._render_sandwich(assembled_clip, hook_text, output_path)
+                self._render_sandwich(assembled_clip, hook_text, output_path, platform=platform)
             finally:
                 if temp_dir is not None:
                     shutil.rmtree(temp_dir, ignore_errors=True)
@@ -268,6 +344,7 @@ class VideoCompositor:
         output_path: Path,
         width: int = LANDSCAPE_WIDTH_FB,
         height: int = LANDSCAPE_HEIGHT_FB,
+        platform: str = "facebook",
     ) -> Path:
         """Derive 16:9 variant from the 9:16 master for Facebook and X.
 
@@ -300,7 +377,7 @@ class VideoCompositor:
             "-i", str(vertical_master),
             "-filter_complex", filter_complex,
             "-map", "[out]", "-map", "0:a?",
-            *_LANDSCAPE_ENCODE_ARGS,
+            *_get_landscape_encode_args(platform),
             str(output_path),
         ]
 
@@ -416,7 +493,11 @@ class VideoCompositor:
         return Path(assembled), temp_dir
 
     def _render_sandwich(
-        self, source: Path, hook_text: str, output: Path,
+        self,
+        source: Path,
+        hook_text: str,
+        output: Path,
+        platform: str = "instagram",
     ) -> None:
         """Run the full sandwich render: scale → bars → logo → hook text."""
         cfg = self._config
@@ -439,7 +520,7 @@ class VideoCompositor:
             "-i", str(cfg.logo_path),
             "-filter_complex", filter_complex,
             "-map", "[out]", "-map", "0:a?",
-            *_ENCODE_ARGS,
+            *_get_encode_args(platform),
             str(output),
         ]
 
