@@ -29,6 +29,7 @@ engagement = [
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",
 ]
+bandit = ["numpy>=1.26"]
 smart-crop = ["opencv-python-headless>=4.8"]
 whisper = ["faster-whisper>=1.0"]
 orchestration = ["prefect>=3.0"]
