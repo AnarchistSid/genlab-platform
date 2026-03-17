@@ -47,8 +47,11 @@ class RelevanceFilter:
             return 1.0
 
         # Positive keyword overlap scoring
+        # Score based on how many keywords match, normalized so 1-2 hits
+        # is enough to pass typical thresholds (0.20-0.35).
+        # Cap denominator at 3 so even large keyword lists are forgiving.
         hits = sum(1 for kw in self.positive_keywords if kw in text)
-        denominator = max(len(self.positive_keywords) * 0.3, 1)
+        denominator = min(max(len(self.positive_keywords) * 0.15, 1), 3)
         return min(1.0, hits / denominator)
 
     def filter(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
