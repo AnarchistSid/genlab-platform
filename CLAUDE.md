@@ -1,6 +1,6 @@
 # CLAUDE.md — Gen Lab
 # Authoritative context for every Claude Code session in this project.
-# Last updated: 2026-03-17 (post-Sprint 63 — definitive audit remediation)
+# Last updated: 2026-03-17 (Sprint 64 — architecture refactor)
 
 ## MISSION — READ THIS FIRST
 
@@ -76,22 +76,33 @@ Layer 3 — niches/*/config/    NICHE CONFIGURATION (pure YAML)
 - Token health manager
 - Metric collector
 - All Pydantic schemas
+- **Base strategy classes** (BasePlatformAdaptation, BaseWriting, BaseHooks, BaseContentResearch)
+- **Platform clients** (Instagram, YouTube, X/Twitter, Facebook, Threads, TikTok)
+- **Unified pipeline CLI** (`python -m genlab_core.pipeline --niche <id>`)
 
 **niches/CHANNEL/** — Everything niche-specific:
 - config/ (niche.yaml, sources.yaml, scoring.yaml, visuals.yaml, schedule.yaml)
-- strategies/ (ContentResearch, Scoring, Writing, Hook, VisualRender, PlatformAdaptation)
-- pipeline/ (fetch_trending_videos.py, compose_blueprints.py, etc.)
+- strategies/ — thin subclasses inheriting from genlab-core base classes
+  - CW: `cw_strategies/`, SR: `sr_strategies/`, FD: `fd_strategies/`, BB: `bb_strategies/`
+  - Each strategy ~50 lines of niche-specific overrides (e.g. `_classify_story()`, `_substitute_placeholders()`)
+- run_pipeline.py — thin wrapper delegating to `genlab_core.pipeline.cli.run_pipeline()`
 - prompts/ (LLM prompts for this specific niche)
 - tests/
 
-### ⚠️ KNOWN ARCHITECTURE DEBT
+### Adding a new channel
 
-**BlackboxBrief** (Blackbox Brief's directory) and **CriticalRush** currently house
-shared infrastructure that all other channels depend on. This is wrong. Migration plan:
-1. Identify all code in `BlackboxBrief/pipeline/` that is imported by other channels
-2. Move to `genlab-core/src/genlab_core/`
-3. Update all imports
-4. BlackboxBrief directory becomes a pure niche directory (Layer 2+3 only)
+1. Create channel dir with `config/niche.yaml` (copy from existing, change niche_id + sources)
+2. Write 4 strategy subclasses (~200 lines total): ContentResearch, Writing, Hooks, PlatformAdaptation
+3. Register in `genlab_core.pipeline.cli.NICHE_DIR_NAMES`
+4. Add to uv workspace in root `pyproject.toml`
+5. Run: `python -m genlab_core.pipeline --niche <new_id>`
+
+### Remaining architecture debt
+
+**BlackboxBrief** still has legacy platform clients in `execution/utils/` (instagram_client,
+twitter_client, youtube_client). Publishers have been migrated to genlab-core clients
+(Sprint 64) but the legacy files remain for engagement engine + token health imports.
+Full cleanup tracked in `docs/superpowers/plans/2026-03-17-platform-client-migration-assessment.md`.
 
 Do NOT add new shared code to BlackboxBrief or CriticalRush. Always add to genlab-core.
 
@@ -370,15 +381,11 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 ---
 
-## CURRENT SPRINT STATUS (as of 2026-03-14)
+## CURRENT SPRINT STATUS (as of 2026-03-17)
 
-Completed: Sprints 1–48
-- Sprint 45: P0–P3 audit remediation, schedule change to 1x/day
-- Sprint 45B: 17 gap items, ruff clean, test fixes
-- Sprint 46A: ClutchWire emoji/apostrophe sanitizer (SP push_to_backlog)
-- Sprint 46B: Fresh pipeline restart, stale data purge
-- Sprint 47: v4 audit remediation, BB 0-blueprint fix, hook overhaul
-- Sprint 47 Addendum: Pre-existing test failures fixed
-- Sprint 48: Video-first architecture — TrendingVideoFetcher, GoogleTrendsIntel, VideoContentWriter
+Completed: Sprints 1–64
+- Sprint 62: Dashboard overhaul, FrameCompositor video layout, schedule board
+- Sprint 63: Audit remediation, engagement reply clients, credential prefixes, SaaS tools
+- Sprint 64: Architecture refactor — base strategies, unified pipeline CLI, BB client migration
 
-Test baseline: ~3,428 passing, target 0 failures
+Test baseline: CW 136, SR 134, FD 143, Dashboard 238, genlab-core 1,875+ — all green
