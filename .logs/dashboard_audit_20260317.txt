@@ -1,0 +1,387 @@
+DASHBOARD AUDIT -- 2026-03-17
+=============================================
+
+BACKEND API: 36/36 GET endpoints returning 200, 1 POST tested OK
+  CSRF protection verified (403 on missing token, 200 with valid token)
+
+  Endpoint                                          Status  Notes
+  -------                                           ------  -----
+  GET  /api/v1/blueprints                           200     2 items in data
+  GET  /api/v1/blueprints?status=VISUAL_READY       200     Working, returns filtered list
+  GET  /api/v1/blueprints?status=PUBLISHED          200     Working, returns published items
+  GET  /api/v1/blueprints?status=DRAFTED            200     Working
+  GET  /api/v1/blueprints/review-queue              200     Working (focus review queue)
+  GET  /api/v1/stories                              200     Working, paginated
+  GET  /api/v1/schedule?from=2026-03-17&to=...      200     Working, 51KB response
+  GET  /api/v1/schedule/coverage                    200     Coverage data returned
+  GET  /api/v1/queue                                200     81 items (98KB response)
+  GET  /api/v1/queue/stats                          200     45 pending, 36 approved
+  GET  /api/v1/pipeline/status                      200     All niches idle, health "unknown"
+  GET  /api/v1/pipeline/runs                        200     Empty array (no runs recorded)
+  GET  /api/v1/pipeline/logs?niche_id=gaming        200     Working
+  GET  /api/v1/analytics/overview                   200     Working with platform breakdown
+  GET  /api/v1/analytics/overview?niche_id=gaming   200     Working, niche-filtered
+  GET  /api/v1/analytics/publishing                 200     Publishing records returned
+  GET  /api/v1/analytics/content                    200     Template breakdown
+  GET  /api/v1/analytics/heatmap                    200     Heatmap data returned
+  GET  /api/v1/analytics/trends                     200     Time-series data
+  GET  /api/v1/analytics/funnel                     200     Funnel stages
+  GET  /api/v1/analytics/engagement                 200     Engagement records
+  GET  /api/v1/analytics/engagement/summary         200     Summary data
+  GET  /api/v1/analytics/content-performance        200     Working
+  GET  /api/v1/analytics/audience                   200     Working
+  GET  /api/v1/analytics/virality-breakdown         200     Working
+  GET  /api/v1/analytics/monetization               200     Working
+  GET  /api/v1/analytics/demographics               200     Working
+  GET  /api/token-health                            200     5 platforms checked
+  GET  /api/v1/niches                               200     5 niches returned
+  GET  /api/v1/config/sources?niche_id=gaming       200     3.4KB config returned
+  GET  /api/v1/config/sources?niche_id=anime        200     3.4KB config returned
+  GET  /api/v1/config/schedule-slots?niche_id=gaming 200    EMPTY slots array (see issues)
+  GET  /api/v1/config/platforms?niche_id=gaming     200     EMPTY array (see issues)
+  GET  /api/v1/config/source-filters?niche_id=gaming 200   EMPTY array (see issues)
+  GET  /api/v1/config/scoring?niche_id=gaming       200    Working, scoring weights returned
+  GET  /api/v1/config/templates                     200     Working
+  GET  /api/v1/platforms/tiktok/posts               200     All SKIPPED status records
+  GET  /api/v1/platforms/threads/posts              200     All empty/null records
+  GET  /api/v1/learning/bandit-state                200     Empty object {} (no arms)
+  GET  /api/v1/learning/hook-classifier-status      200     All 5 niches untrained
+  GET  /api/v1/engagement/status                    200     All zeros across niches
+  GET  /api/v1/engagement/queue                     200     "pending_implementation" stub
+  GET  /api/v1/monitoring/youtube-quota             200     16% used, reset_date 2026-03-16 (STALE)
+  GET  /api/v1/monetisation/progress                200     5.7KB, all 5 niches
+  GET  /api/v1/runway                               200     Gaming: CRITICAL (0 approved)
+  GET  /api/v1/cross-niche/overview                 200     Full overview data
+  GET  /api/v1/channel-health                       200     Platform statuses
+  GET  /legal/status                                200     Returns SPA HTML (not a real route)
+  GET  /legal/privacy                               200     Working, returns privacy policy HTML
+  GET  /legal/deletion                              200     Working, returns deletion info HTML
+  GET  /api/csrf-token                              200     Token returned
+  POST /api/v1/pipeline/trigger                     200     Triggered (returns run_id)
+
+
+FRONTEND VIEWS: 17 view files checked
+=============================================
+
+  views/mission-control/MissionControl.tsx
+    APIs: /api/v1/cross-niche/overview, /api/v1/queue/stats, /api/v1/channel-health,
+          /api/v1/monetisation/progress, /api/v1/analytics/trends
+    Loading: Yes (skeleton grid)
+    Error: Yes (ErrorState with retry)
+    Empty: Yes (queue empty state, no-data for chart)
+    Issues: Hardcoded greeting "Good morning, Aditya." -- not multi-tenant ready
+
+  views/analytics/Analytics.tsx
+    APIs: /api/v1/analytics/overview (with niche_id + window params)
+    Loading: Yes (AnalyticsSkeleton)
+    Error: Yes (error state with retry)
+    Empty: Yes (empty chart, empty platforms, empty performers)
+    Issues:
+      - NICHE_COLORS only has ai_creators and gaming (missing sports, movies, anime)
+      - ReachChart hardcodes only ai_creators_reach and gaming_reach data keys
+      - Top performers table niche label only maps ai_creators -> "AI", gaming -> "Gaming"
+        Other niches show raw niche_id string (e.g. "sports", "movies", "anime")
+      - Niche selector only shows "All Niches" + active niches from registry (works)
+
+  views/analytics.tsx
+    Wrapper file, just re-exports from analytics/Analytics.tsx
+
+  views/pipeline.tsx (Command Center)
+    APIs: /api/v1/pipeline/status, /api/v1/pipeline/runs, /api/v1/schedule,
+          /api/v1/blueprints
+    Loading: Yes (skeleton loaders)
+    Error: Yes (EmptyState with retry)
+    Empty: Yes (for runs table, attention items)
+    Issues:
+      - SCHEDULE_SLOTS hardcoded to ["12:00"] -- should read from config API
+      - Trigger Pipeline button fires without niche_id (triggers default niche)
+
+  views/pipeline/PipelineMonitor.tsx
+    APIs: /api/v1/pipeline/status (via usePipelineMonitor hook), /api/v1/pipeline/runs,
+          /api/v1/pipeline/trigger, /api/v1/pipeline/logs
+    Loading: Yes
+    Error: Yes
+    Empty: Yes
+
+  views/pipeline/RunHistoryTable.tsx, StageWaterfall.tsx, PipelineLogViewer.tsx
+    Sub-components of PipelineMonitor, all properly handle loading/empty states
+
+  views/schedule.tsx
+    APIs: /api/v1/schedule (via ScheduleBoard component), /api/v1/schedule/coverage
+          (via CalendarMonth component)
+    Loading: Delegated to child components
+    Error: Delegated to child components
+    Issues: None
+
+  views/publishing-queue/PublishingQueue.tsx
+    APIs: /api/v1/queue, /api/v1/queue/stats, /api/v1/queue/:id/approve,
+          /api/v1/queue/:id/hold, /api/v1/queue/:id/release
+    Loading: Yes (shimmer placeholders)
+    Error: No explicit error state for queue list fetch failure
+    Empty: Yes (Filter icon + "No items in this queue")
+    Issues: None significant
+
+  views/focus-review.tsx
+    APIs: /api/v1/blueprints/review-queue, /api/v1/blueprints/:id/review-action
+    Loading: Yes (FocusLoading skeleton)
+    Error: Handled via mutation error toast
+    Empty: Yes (completion state)
+    Issues: None significant
+
+  views/blueprints.tsx (Content Board)
+    APIs: /api/v1/blueprints (with status, search, sort, pagination params)
+    Loading: Yes (CardSkeletonGrid)
+    Error: Yes (EmptyState with retry)
+    Empty: Yes ("No blueprints match your filters")
+    Issues: None significant
+
+  views/stories.tsx (Stories Explorer)
+    APIs: /api/v1/stories, /api/v1/config/source-filters
+    Loading: Yes (SkeletonTable)
+    Error: Yes (EmptyState)
+    Empty: Yes ("No stories found")
+    Issues: source-filters endpoint returns empty for gaming (sources.yaml format mismatch)
+
+  views/settings.tsx
+    APIs: /api/v1/config/sources, /api/v1/config/schedule-slots,
+          /api/v1/config/scoring, /api/v1/config/templates,
+          /api/v1/settings/notifications, /api/health
+    Loading: Yes (Skeleton per tab)
+    Error: Graceful (shows EmptyState when config not found)
+    Empty: Yes (EmptyState per section)
+    Issues: Schedule tab shows "No schedule slots" for most niches (config format mismatch)
+
+  views/runs.tsx (Pipeline Runs)
+    APIs: /api/v1/pipeline/runs, /api/v1/pipeline/runs/:id
+    Loading: Yes (SkeletonTable)
+    Error: Yes (EmptyState)
+    Empty: Yes ("No pipeline runs")
+    Issues: None
+
+  views/channel-health/ChannelHealth.tsx
+    APIs: /api/v1/channel-health
+    Loading: Handled by hook
+    Error: Graceful
+    Issues: None
+
+  views/monetisation/MonetisationProgress.tsx
+    APIs: /api/v1/monetisation/progress
+    Loading: Handled by hook
+    Error: Graceful
+    Issues: None
+
+
+MAPPING ISSUES (Frontend -> Backend mismatches)
+=============================================
+
+  1. /api/video/<candidate_id> BROKEN
+     Frontend generates URLs like /api/video/cce9db6f1776211f... (candidate_id, hex hash)
+     Backend route validates with RECORD_RE = r'^\d+$' (digits only)
+     Result: ALL /api/video/ URLs with candidate_id return HTTP 400 "Invalid blueprint ID"
+     Affected: Published blueprints whose all_media_urls use /api/video/ pattern
+     Workaround: Some blueprints use /api/media/ pattern which works correctly
+
+  2. /legal/status NOT A REAL ROUTE
+     Frontend may route to /legal/status but no backend handler exists.
+     Flask legal_bp only registers /legal/privacy and /legal/deletion.
+     The SPA catch-all returns index.html which is wrong for a legal status check.
+
+  3. /api/v1/config/schedule-slots returns empty for most niches
+     Backend expects publishing.yaml to have: instagram.schedule_slots
+     Gaming's publishing.yaml has no schedule_slots key under instagram.
+     Anime's publishing.yaml either doesn't exist or has different structure (404).
+     Only works if BB (Content Scraper) publishing.yaml has the key.
+
+  4. /api/v1/config/platforms returns empty for all niches
+     Backend reads: publishing.yaml -> platforms -> enabled_platforms
+     Gaming's publishing.yaml has: platforms -> enabled (list), not enabled_platforms
+     Key name mismatch causes empty results.
+
+  5. /api/v1/config/source-filters returns empty
+     Backend reads: sources.yaml -> sources (list of objects with platform key)
+     Gaming's sources.yaml uses a different structure (not a flat sources[] array).
+     Result: Filter dropdown in Stories Explorer is always empty.
+
+
+ACCENT COLOR MISMATCHES
+=============================================
+
+  Three places define niche accent colors with DIFFERENT values:
+
+  Niche         CLAUDE.md       niches_registry.yaml    frontend/registry.ts
+  ------------- --------------- ----------------------- --------------------
+  BB/AI         #00D4FF         #6366f1 (WRONG)         #00D4FF (correct)
+  CriticalRush  #f97316         #f97316 (OK)            #F97316 (OK)
+  ClutchWire    #FF2040         #FF2040 (OK)            #FF2040 (OK)
+  SpliceReel    #C9A84C         #EAB308 (WRONG)         #C9A84C (correct)
+  FrameDrift    #7B3FE4         #EC4899 (WRONG)         #7B3FE4 (correct)
+
+  niches_registry.yaml is the source of truth for the backend /api/v1/niches
+  and /api/v1/cross-niche/overview endpoints. This means:
+    - Mission Control niche tiles use WRONG colors (from API, via niches_registry.yaml)
+    - Pipeline status card also uses wrong accent_hex from API
+    - Frontend registry.ts has CORRECT colors but is only used by getActiveNiches()
+      in Analytics niche selector and NicheTilesCard local overlay
+
+  Impact: BB shows indigo (#6366f1) instead of cyan (#00D4FF),
+          SpliceReel shows yellow (#EAB308) instead of gold (#C9A84C),
+          FrameDrift shows pink (#EC4899) instead of purple (#7B3FE4).
+
+
+MEDIA SERVING
+=============================================
+
+  /api/media/<path> -- WORKING
+    Tested with real pipeline output path.
+    Returns 200 with video file for valid paths under PROJECT_ROOT.
+    Path traversal protection in place (rejects ".." and absolute paths).
+
+  /api/video/<blueprint_id> -- BROKEN for candidate_id URLs
+    RECORD_RE only accepts digits (\d+), but published blueprints generate
+    URLs using hex candidate_id (64-char SHA-256 hash).
+    All such URLs return 400 "Invalid blueprint ID".
+    This is the PRIMARY media serving bug.
+
+  Blueprint thumbnail/video paths:
+    - VISUAL_READY items: use /api/media/.tmp/runs/... paths (WORKING)
+    - PUBLISHED items: use /api/video/<candidate_id> paths (BROKEN)
+    - Some use /api/media/ paths (WORKING)
+
+
+WEBSOCKET
+=============================================
+
+  Socket.IO Configuration:
+    - async_mode: "threading" (eventlet not loaded)
+    - CORS: localhost:5151, 127.0.0.1:5151, review.aspirehub.ai
+    - Cloudflare tunnel detection: restricts to polling transport when CLOUDFLARE_TUNNEL_URL set
+    - Transports: ["polling", "websocket"] (frontend), adaptive (server)
+
+  Events defined (server-side):
+    - subscribe_niche / unsubscribe_niche (room management)
+    - blueprint_updated (emitted on review action + auto-approve)
+    - express_progress (emitted during pipeline runs)
+    - pipeline_progress, pipeline_complete, pipeline_started (from pipeline module)
+    - pipeline_state_update, pipeline_logs (from pipeline module)
+    - blueprints_updated (generic refresh signal)
+
+  Events listened (frontend):
+    - pipeline_progress, pipeline_complete, pipeline_state_update, blueprints_updated
+      (useCrossNicheOverview invalidation)
+    - pipeline_started, pipeline_logs, express_progress (PipelineMonitor)
+    - blueprint_updated (focus review)
+
+  Issues:
+    - No heartbeat/keepalive configuration visible (relies on Socket.IO defaults)
+    - subscribe_niche/unsubscribe_niche events are defined but no frontend code
+      was found that calls them (room-based filtering is unused)
+
+
+STARTUP ISSUES
+=============================================
+
+  Import Chain:
+    - All 20 API blueprint modules import successfully (verified by server running)
+    - Prefect routes: gracefully skipped with ImportError (not installed)
+    - No silent try/except swallowing import errors for required modules
+
+  Security:
+    - FLASK_SECRET_KEY: falls back to random key with warning (acceptable for dev)
+    - CSRF: properly enforced on all POST/PATCH/DELETE requests
+    - Auth: Basic auth + session cookie dual mode
+    - Login rate limiting: 5 attempts/minute per IP
+    - Path traversal protection on media routes
+    - RECORD_RE validation on all record ID parameters
+
+  Configuration:
+    - BLUEPRINT_CACHE_TTL_SECONDS: 8s (configurable via env)
+    - SESSION_COOKIE_SECURE: defaults to true (will block cookies on http://localhost
+      unless FLASK_COOKIE_SECURE=false is set)
+
+  Potential Issue:
+    - hmac module imported at line 354 but used at line 265 (within login handler).
+      This works because the import is at module level but the ordering is unusual.
+      If hmac were not a stdlib module, this would cause NameError. Not a bug but
+      noteworthy.
+
+
+ADDITIONAL FINDINGS
+=============================================
+
+  1. YouTube Quota reset_date is stale (2026-03-16, should be 2026-03-17)
+     The YouTubeQuotaTracker likely reads from a cached file that hasn't updated today.
+
+  2. engagement/queue returns "pending_implementation" stub
+     The endpoint is a placeholder that always returns empty data.
+     Frontend does not appear to call this endpoint directly.
+
+  3. pipeline/runs always empty
+     No run_report.json files are being written in a format the dashboard discovers.
+     The pipeline trigger works but runs are not persisted in the runs history.
+
+  4. NICHE_COLORS in Analytics only covers 2 of 5 niches
+     The ReachChart component hardcodes ai_creators_reach and gaming_reach data keys.
+     Sports, movies, and anime data would not render in the reach chart.
+
+  5. pipeline.tsx hardcodes SCHEDULE_SLOTS = ["12:00"]
+     This should be dynamic from /api/v1/config/schedule-slots, but that endpoint
+     itself returns empty for most niches.
+
+  6. MissionControl greeting is hardcoded to "Aditya"
+     Not multi-tenant ready. Should read from session/config.
+
+
+PRIORITY FIXES
+=============================================
+
+  P0 (Blocks user workflows):
+    1. /api/video/<candidate_id> returns 400 for all hex-hash IDs
+       Fix: Update RECORD_RE in stream_video() to also accept hex candidate_ids,
+       or change the URL generation in normalize_blueprint() to use numeric IDs.
+       Impact: Published blueprint videos cannot be previewed in the dashboard.
+
+  P1 (Degraded experience):
+    2. Accent color mismatch in niches_registry.yaml
+       BB (#6366f1 vs #00D4FF), SpliceReel (#EAB308 vs #C9A84C),
+       FrameDrift (#EC4899 vs #7B3FE4)
+       Fix: Update niches_registry.yaml to match CLAUDE.md spec.
+
+    3. Analytics ReachChart only supports 2 niches (ai_creators, gaming)
+       Sports/movies/anime data won't render in the "Reach Over Time" chart.
+       Fix: Add dataKeys for all 5 niches + dynamic rendering.
+
+    4. NICHE_COLORS map in Analytics.tsx missing 3 niches
+       Top performers table shows raw niche_id for sports/movies/anime.
+       Fix: Add sports, movies, anime entries.
+
+    5. /api/v1/config/platforms returns empty (key mismatch)
+       Backend reads "enabled_platforms", YAML has "enabled".
+       Fix: Update config_routes.py to read "enabled" key.
+
+    6. /api/v1/config/schedule-slots returns empty for most niches
+       Most niches' publishing.yaml lacks instagram.schedule_slots.
+       Fix: Read from a more universal config path or add schedule_slots
+       to all publishing.yaml files.
+
+  P2 (Cosmetic/minor):
+    7. /legal/status returns SPA HTML instead of a proper legal status page
+       Not a registered legal route. Either add the route or remove the link.
+
+    8. MissionControl greeting hardcoded to "Aditya"
+       Should be configurable for multi-tenant.
+
+    9. Pipeline SCHEDULE_SLOTS hardcoded to ["12:00"]
+       Should be dynamic.
+
+    10. engagement/queue is a stub returning "pending_implementation"
+        Stub is clearly labeled; just needs implementation when ready.
+
+    11. YouTube quota reset_date appears stale (shows yesterday)
+        Tracker may use cached data that hasn't been refreshed today.
+
+    12. subscribe_niche/unsubscribe_niche WebSocket events defined server-side
+        but never called by frontend (room-based filtering is dead code).
+
+    13. /api/v1/config/source-filters returns empty for gaming
+        sources.yaml structure doesn't have a flat "sources" array with "platform" keys.
+        Stories Explorer filter dropdown is always empty for this niche.

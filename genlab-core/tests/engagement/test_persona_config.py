@@ -24,7 +24,7 @@ class TestPersonaLoadFromYaml:
 
     def test_ai_creators_persona_loads(self):
         """Load the actual BB persona.yaml and verify key fields."""
-        path = Path("/Users/anarchistsid/GenLab/Content Scraper/config/persona.yaml")
+        path = Path("/Users/anarchistsid/GenLab/BlackboxBrief/config/persona.yaml")
         if not path.exists():
             pytest.skip("BB persona.yaml not found")
         with open(path) as f:

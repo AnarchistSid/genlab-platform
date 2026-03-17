@@ -198,7 +198,7 @@ class RenderWhisperCaptions:
     ) -> str | None:
         """Render captions onto video. Returns new path, original path (WPM), or None."""
         # Import WordByWordAnimator -- canonical location is genlab_core.rendering.word_animator.
-        # Falls back to Content Scraper shim if import path not available.
+        # Falls back to BlackboxBrief shim if import path not available.
         WordByWordAnimator = self._get_animator_class()
         if WordByWordAnimator is None:
             logger.warning("[WHISPER_CAPTIONS] WordByWordAnimator not available")
@@ -273,7 +273,7 @@ class RenderWhisperCaptions:
             return WordByWordAnimator
         except ImportError:
             pass
-        # Legacy fallback: Content Scraper location (kept until shim is stable)
+        # Legacy fallback: BlackboxBrief location (kept until shim is stable)
         try:
             from execution.utils.word_by_word_animator import WordByWordAnimator
 

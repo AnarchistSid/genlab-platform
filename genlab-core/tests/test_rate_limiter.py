@@ -157,7 +157,7 @@ class TestRateLimiterRegistry:
         assert fast.rate == 100.0
 
 
-# --- Domain limiter (migrated from Content Scraper) -------------------------
+# --- Domain limiter (migrated from BlackboxBrief) -------------------------
 
 from genlab_core.ratelimit.domain_limiter import RateLimiter
 

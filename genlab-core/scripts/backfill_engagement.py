@@ -6,7 +6,7 @@ computes engagement_rate, and writes to the Blueprints SharePoint list.
 
 Usage:
     cd /Users/anarchistsid/GenLab
-    BACKLOG_CONFIG_PATH="Content Scraper/config/lists_config.yaml" \
+    BACKLOG_CONFIG_PATH="BlackboxBrief/config/lists_config.yaml" \
     uv run --package genlab-core python genlab-core/scripts/backfill_engagement.py
 """
 from __future__ import annotations

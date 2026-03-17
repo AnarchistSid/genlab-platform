@@ -1,7 +1,7 @@
 """
 genlab_core.media.video_validator — Video quality gate before upload.
 
-Extended from Content Scraper's video_content_gate.py with two new gates
+Extended from BlackboxBrief's video_content_gate.py with two new gates
 required for the per-platform quality architecture:
 
   VMAF score check — catches unexpected quality degradation in platform

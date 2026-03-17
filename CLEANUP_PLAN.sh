@@ -11,7 +11,7 @@
 set -euo pipefail
 
 GENLAB="/Users/anarchistsid/GenLab"
-CS="$GENLAB/Content Scraper"
+CS="$GENLAB/BlackboxBrief"
 CR="$GENLAB/CriticalRush"
 GC="$GENLAB/genlab-core"
 
@@ -31,20 +31,20 @@ echo ""
 
 echo "=== TIER 1: Ephemeral artifacts (SAFE) ==="
 
-# 1a. Content Scraper .tmp/runs/ — keep latest 3 runs, nuke the rest
+# 1a. BlackboxBrief .tmp/runs/ — keep latest 3 runs, nuke the rest
 #     Biggest offender: 20260308_084935_54382 alone is 38 GB
-echo "[1a] Content Scraper: prune old runs (keep latest 3 by date)..."
+echo "[1a] BlackboxBrief: prune old runs (keep latest 3 by date)..."
 # cd "$CS/.tmp/runs"
 # ls -d 20*/ 2>/dev/null | sort -r | tail -n +4 | xargs -I{} rm -rf "{}"
 # rm -f full_rerender_*.log landscape_*.log  # orphan log files in runs/
 
-# 1b. Content Scraper .tmp/media/videos/ — 21 GB of downloaded clips
+# 1b. BlackboxBrief .tmp/media/videos/ — 21 GB of downloaded clips
 #     All re-downloadable via yt-dlp
-echo "[1b] Content Scraper: purge media/videos/ (21 GB, re-downloadable)..."
+echo "[1b] BlackboxBrief: purge media/videos/ (21 GB, re-downloadable)..."
 # rm -rf "$CS/.tmp/media/videos/"
 
-# 1c. Content Scraper .tmp/audio/ — 102 MB of generated audio
-echo "[1c] Content Scraper: purge audio/ (102 MB, re-generatable)..."
+# 1c. BlackboxBrief .tmp/audio/ — 102 MB of generated audio
+echo "[1c] BlackboxBrief: purge audio/ (102 MB, re-generatable)..."
 # rm -rf "$CS/.tmp/audio/"
 
 # 1d. CriticalRush .tmp/ artifacts — clips, rendered, captions
@@ -66,8 +66,8 @@ echo ""
 
 echo "=== TIER 2: Logs & caches (SAFE) ==="
 
-# 2a. Content Scraper logs older than 7 days
-echo "[2a] Content Scraper: prune logs older than 7 days..."
+# 2a. BlackboxBrief logs older than 7 days
+echo "[2a] BlackboxBrief: prune logs older than 7 days..."
 # find "$CS/.tmp/logs/" -name "*.log" -mtime +7 -delete
 
 # 2b. CriticalRush phase logs (old test runs)
@@ -76,7 +76,7 @@ echo "[2b] CriticalRush: remove phase logs (8.8 MB)..."
 # rm -f "$CR/.tmp/phase5_e2e_run.log"
 
 # 2c. Playwright MCP console logs
-echo "[2c] Content Scraper: purge .playwright-mcp/ logs (1.2 MB)..."
+echo "[2c] BlackboxBrief: purge .playwright-mcp/ logs (1.2 MB)..."
 # rm -rf "$CS/.playwright-mcp/"
 
 # 2d. firebase-debug.log files
@@ -92,12 +92,12 @@ echo "[2e] Purge all __pycache__ (2.8 MB)..."
 echo "[2f] Purge .pytest_cache (164 KB)..."
 # find "$GENLAB" -name ".pytest_cache" -type d -exec rm -rf {} + 2>/dev/null
 
-# 2g. Content Scraper .tmp/cache/ (4.2 MB, will be rebuilt on next run)
-echo "[2g] Content Scraper: purge HTTP cache (4.2 MB)..."
+# 2g. BlackboxBrief .tmp/cache/ (4.2 MB, will be rebuilt on next run)
+echo "[2g] BlackboxBrief: purge HTTP cache (4.2 MB)..."
 # rm -rf "$CS/.tmp/cache/"
 
-# 2h. Content Scraper .tmp/svm_videos/ (empty) & .tmp/backups/ (15 MB)
-echo "[2h] Content Scraper: purge svm_videos/ (0 B) + backups/ (15 MB)..."
+# 2h. BlackboxBrief .tmp/svm_videos/ (empty) & .tmp/backups/ (15 MB)
+echo "[2h] BlackboxBrief: purge svm_videos/ (0 B) + backups/ (15 MB)..."
 # rm -rf "$CS/.tmp/svm_videos/"
 # rm -rf "$CS/.tmp/backups/"
 
@@ -162,10 +162,10 @@ echo "  .git directories (48.7 MB total) — source control"
 echo "  node_modules (254 MB) — dashboard dev dependencies"
 echo "  dashboard/dist (1.6 MB) — build output"
 echo "  HuggingFace cache (141 MB) — faster-whisper model"
-echo "  Content Scraper .tmp/health/ — runtime health state"
-echo "  Content Scraper .tmp/learning_logs/ — self-learning data"
-echo "  Content Scraper .tmp/notification_prefs.json — user prefs"
-echo "  Content Scraper .tmp/publisher.lock — daemon lock file"
+echo "  BlackboxBrief .tmp/health/ — runtime health state"
+echo "  BlackboxBrief .tmp/learning_logs/ — self-learning data"
+echo "  BlackboxBrief .tmp/notification_prefs.json — user prefs"
+echo "  BlackboxBrief .tmp/publisher.lock — daemon lock file"
 echo "  redis:alpine Docker image (133 MB) — active container"
 echo ""
 

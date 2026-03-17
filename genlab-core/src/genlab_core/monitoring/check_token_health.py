@@ -1,14 +1,14 @@
 """BB-specific platform health checks — canonical location in genlab-core.
 
-Previously lived at Content Scraper/execution/check_token_health.py. Moved here
-so the dashboard can import without requiring Content Scraper on sys.path.
+Previously lived at BlackboxBrief/execution/check_token_health.py. Moved here
+so the dashboard can import without requiring BlackboxBrief on sys.path.
 
 Re-exports the shared functions from genlab_core.monitoring.token_health and
 adds BB-specific checks (check_youtube, check_twitter, check_facebook) that
-were formerly coupled to Content Scraper utilities.
+were formerly coupled to BlackboxBrief utilities.
 
 The YouTube and Facebook checks are implemented inline using standard libraries
-(requests, google-auth) so genlab-core has no dependency on Content Scraper.
+(requests, google-auth) so genlab-core has no dependency on BlackboxBrief.
 
 Usage as library:
     from genlab_core.monitoring.check_token_health import (
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════
-# FACEBOOK PAGE TOKEN CHECK (formerly in Content Scraper)
+# FACEBOOK PAGE TOKEN CHECK (formerly in BlackboxBrief)
 # ══════════════════════════════════════════════════════════════
 
 # Facebook Graph API error codes
@@ -143,7 +143,7 @@ def _verify_page_token(page_id: str, access_token: str, api_version: str = "v21.
 def check_facebook() -> dict:
     """Test Facebook Page token health.
 
-    Uses Meta Graph API directly — no Content Scraper dependency.
+    Uses Meta Graph API directly — no BlackboxBrief dependency.
     """
     token = os.getenv("FB_PAGE_ACCESS_TOKEN", "").strip()
     page_id = os.getenv("META_FB_PAGE_ID", "").strip()
@@ -203,14 +203,14 @@ def check_facebook() -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
-# YOUTUBE OAUTH CHECK (formerly in Content Scraper)
+# YOUTUBE OAUTH CHECK (formerly in BlackboxBrief)
 # ══════════════════════════════════════════════════════════════
 
 
 def check_youtube() -> dict:
     """Test YouTube OAuth connection.
 
-    Uses google-auth + googleapiclient directly — no Content Scraper dependency.
+    Uses google-auth + googleapiclient directly — no BlackboxBrief dependency.
     Falls back to a lightweight token-exchange check when google-auth is unavailable.
     """
     client_id = os.getenv("YOUTUBE_CLIENT_ID", "").strip()
@@ -224,7 +224,7 @@ def check_youtube() -> dict:
     if not refresh_token:
         return {"platform": "youtube", "status": "missing", "message": "YOUTUBE_REFRESH_TOKEN not set"}
 
-    # Try google-auth path first (same approach as YouTubeClient in Content Scraper)
+    # Try google-auth path first (same approach as YouTubeClient in BlackboxBrief)
     try:
         from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
@@ -282,14 +282,14 @@ def check_youtube() -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
-# TWITTER CHECK (formerly in Content Scraper)
+# TWITTER CHECK (formerly in BlackboxBrief)
 # ══════════════════════════════════════════════════════════════
 
 
 def check_twitter() -> dict:
     """Test X/Twitter API connection.
 
-    Uses tweepy directly — no Content Scraper dependency.
+    Uses tweepy directly — no BlackboxBrief dependency.
     403 on /users/me is expected on free-tier X API (treated as healthy-limited).
     """
     api_key = os.getenv("X_API_KEY", "").strip()

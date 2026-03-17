@@ -15,7 +15,7 @@ What belongs here (universal, form-based):
   8. Emoji spam (>7 emojis in hook text)
   9. Mixed CAPS/lowercase (broken template artifacts)
 
-Extracted from Content Scraper's generate_hooks.py validate_hook_grammar().
+Extracted from BlackboxBrief's generate_hooks.py validate_hook_grammar().
 
 What does NOT belong here (niche-specific, content-based):
   - Whether the hook matches the brand voice

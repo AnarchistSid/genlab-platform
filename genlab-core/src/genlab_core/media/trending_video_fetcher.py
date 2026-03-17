@@ -870,8 +870,8 @@ class FetchTrendingVideos:
             "sports": _PROJECT_ROOT / "ClutchWire" / "config" / "sources.yaml",
             "movies": _PROJECT_ROOT / "SpliceReel" / "config" / "sources.yaml",
             "anime": _PROJECT_ROOT / "FrameDrift" / "config" / "sources.yaml",
-            "ai_creators": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",
-            "ai_news": _PROJECT_ROOT / "Content Scraper" / "config" / "sources.yaml",  # backward compat alias
+            "ai_creators": _PROJECT_ROOT / "BlackboxBrief" / "config" / "sources.yaml",
+            "ai_news": _PROJECT_ROOT / "BlackboxBrief" / "config" / "sources.yaml",  # backward compat alias
         }
         path = sources_paths.get(niche_id)
         if path and path.is_file():
