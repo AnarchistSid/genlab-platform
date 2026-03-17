@@ -402,32 +402,42 @@ class TestABTestsBackendDelegation:
 class TestEngagementBackendDelegation:
     def test_write_pending_engagement_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.pending_engagement.create.return_value = {"id": "pe-1"}
+        mock_backend = MagicMock()
+        mock_backend.create.return_value = {"id": "pe-1"}
+        client._backend = MagicMock(return_value=mock_backend)
 
         result = client.write_pending_engagement({
             "comment_id": "cmt_1", "platform": "instagram",
         })
 
         assert result == "pe-1"
-        client.pending_engagement.create.assert_called_once()
+        client._backend.assert_called_with("PendingEngagement")
+        mock_backend.create.assert_called_once()
+        # First positional arg is the table name
+        assert mock_backend.create.call_args[0][0] == "PendingEngagement"
 
     def test_list_pending_engagement_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.pending_engagement.all.return_value = []
+        mock_backend = MagicMock()
+        mock_backend.find.return_value = []
+        client._backend = MagicMock(return_value=mock_backend)
 
         client.list_pending_engagement(niche_id="gaming")
 
-        client.pending_engagement.all.assert_called_once()
-        kwargs = client.pending_engagement.all.call_args[1]
+        client._backend.assert_called_with("PendingEngagement")
+        mock_backend.find.assert_called_once()
+        kwargs = mock_backend.find.call_args[1]
         assert "gaming" in kwargs["formula"]
 
     def test_update_engagement_status_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.pending_engagement.update.return_value = {}
+        mock_backend = MagicMock()
+        client._backend = MagicMock(return_value=mock_backend)
 
         client.update_engagement_status("item-1", "replied", reply_text="Thanks!")
 
-        client.pending_engagement.update.assert_called_once()
+        client._backend.assert_called_with("PendingEngagement")
+        mock_backend.update.assert_called_once()
 
 
 class TestHealthCheckBackendDelegation:
