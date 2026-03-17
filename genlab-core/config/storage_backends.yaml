@@ -3,20 +3,20 @@
 #
 # See: genlab_core.storage.factory for the routing logic.
 
-default_backend: sharepoint
+default_backend: postgres
 
 table_backends:
   blueprints: postgres
-  stories: sharepoint
-  assets: sharepoint
-  templates: sharepoint
-  sources: sharepoint
-  publishing_analytics: sharepoint
-  analytics: sharepoint
-  content_memory: sharepoint
-  bandit_arms: sharepoint
-  pending_engagement: sharepoint
-  pending_feedback: sharepoint
+  stories: postgres
+  assets: postgres
+  templates: postgres
+  sources: postgres
+  publishing_analytics: postgres
+  analytics: postgres
+  content_memory: postgres
+  bandit_arms: postgres
+  pending_engagement: postgres
+  pending_feedback: postgres
 
 postgres:
   host: localhost
