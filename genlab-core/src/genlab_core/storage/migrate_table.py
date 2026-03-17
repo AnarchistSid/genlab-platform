@@ -77,6 +77,10 @@ def flatten_sp_record(record: Dict[str, Any]) -> Dict[str, Any]:
             continue
         flat[key] = value
 
+    # Ensure niche_id is never null (required by PostgreSQL NOT NULL + RLS)
+    if "niche_id" not in flat or not flat["niche_id"]:
+        flat["niche_id"] = "unknown"
+
     # Preserve SharePoint record ID for provenance
     flat["sp_id"] = str(sp_id)
 
@@ -96,14 +100,46 @@ def _build_insert_sql(
     cols: dict[str, Any] = {}
     extra: dict[str, Any] = {}
 
+    from datetime import datetime, date
+
+    def _serialize(val: Any) -> Any:
+        """Make a value JSON-safe."""
+        if isinstance(val, (datetime, date)):
+            return val.isoformat()
+        if isinstance(val, dict):
+            return {k2: _serialize(v2) for k2, v2 in val.items()}
+        if isinstance(val, list):
+            return [_serialize(item) for item in val]
+        return val
+
+    # TIMESTAMPTZ columns that asyncpg expects as datetime objects
+    _TS_COLS = {"scheduled_for", "published_at", "collected_at", "reviewed_at",
+                "first_seen", "last_seen", "last_fetched", "scheduled_at",
+                "publish_time", "metrics_fetched", "created_at", "updated_at"}
+
+    def _parse_datetime(val: Any) -> Any:
+        """Parse ISO datetime strings to datetime objects for TIMESTAMPTZ columns."""
+        if isinstance(val, (datetime, date)):
+            return val
+        if isinstance(val, str) and val:
+            try:
+                return datetime.fromisoformat(val.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                return val
+        return val
+
     for k, v in record.items():
         if k in promoted:
             if isinstance(v, dict):
-                cols[k] = json.dumps(v)
+                cols[k] = json.dumps(_serialize(v))
+            elif k in _TS_COLS:
+                cols[k] = _parse_datetime(v)
+            elif isinstance(v, (datetime, date)):
+                cols[k] = v
             else:
                 cols[k] = v
         else:
-            extra[k] = v
+            extra[k] = _serialize(v)
 
     cols["extra"] = json.dumps(extra) if extra else "{}"
 
