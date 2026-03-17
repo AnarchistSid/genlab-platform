@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Polling intervals in seconds
-YOUTUBE_POLL_INTERVAL = 300    # 5 minutes
+YOUTUBE_POLL_INTERVAL = 1800   # 30 minutes (saves ~2,400 quota units/day)
 TWITTER_POLL_INTERVAL = 900    # 15 minutes
 THREADS_POLL_INTERVAL = 600    # 10 minutes
 
@@ -84,6 +84,13 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
             headers=headers or None,
             timeout=15,
         )
+        if playlist_resp.status_code == 403:
+            error_body = playlist_resp.json().get("error", {}).get("message", "")
+            if "quota" in error_body.lower():
+                logger.warning("[POLLER] YouTube quota exceeded for %s — skipping until reset", niche_id)
+                return []
+            logger.warning("[POLLER] YouTube 403 for %s: %s", niche_id, error_body[:100])
+            return []
         playlist_resp.raise_for_status()
         video_ids = [
             item["contentDetails"]["videoId"]
@@ -113,6 +120,10 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                     timeout=15,
                 )
                 if resp.status_code == 403:
+                    error_msg = resp.json().get("error", {}).get("message", "")
+                    if "quota" in error_msg.lower():
+                        logger.warning("[POLLER] YouTube quota exceeded — stopping comment poll")
+                        break
                     # Comments disabled on this video
                     logger.debug("[POLLER] YouTube: comments disabled on %s", video_id)
                     continue
