@@ -55,8 +55,9 @@ def upgrade() -> None:
         ON blueprints(scheduled_for)
         WHERE scheduled_for IS NOT NULL;
 
-    -- Enable Row Level Security
+    -- Enable Row Level Security (FORCE ensures it applies to table owner too)
     ALTER TABLE blueprints ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE blueprints FORCE ROW LEVEL SECURITY;
 
     -- RLS policy: niche isolation
     -- Allows access when:
