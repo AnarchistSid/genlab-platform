@@ -1,0 +1,42 @@
+# Platform encoding overrides — business-tunable layer on top of PLATFORM_SPECS.
+#
+# Each key maps to a platform name. Only fields listed here override the
+# built-in defaults in genlab_core.media.ffmpeg.PLATFORM_SPECS. Omitted
+# fields inherit from the code defaults.
+#
+# Load with: load_platform_encode_overrides(Path("config/platform_encode_specs.yaml"))
+#
+# CRF guide:
+#   Lower CRF = higher quality, larger file
+#   Higher CRF = lower quality, smaller file
+#   Platform minimums enforced in code (_MIN_REENCODE_CRF = 12)
+#
+# Presets (slower = better compression at same quality):
+#   ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+
+youtube:
+  codec: libx265
+  crf: 18
+  preset: slow
+
+instagram:
+  codec: libx264
+  crf: 15
+  preset: slow
+
+tiktok:
+  codec: libx264
+  crf: 15
+  preset: slow
+  maxrate: "12M"
+  bufsize: "24M"
+
+facebook:
+  codec: libx264
+  crf: 17
+  preset: medium
+
+threads:
+  codec: libx264
+  crf: 15
+  preset: slow
