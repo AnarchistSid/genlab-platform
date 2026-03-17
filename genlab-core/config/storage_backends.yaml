@@ -1,0 +1,22 @@
+# Storage backend routing — which engine serves each table.
+#
+# Valid values: "sharepoint" (current), "postgres" (future).
+# Default: "sharepoint" if a table is not listed here.
+#
+# During migration, flip individual tables to "postgres" one at a time,
+# verify, then move to the next.  All 11 tables start on SharePoint.
+
+tables:
+  Stories: sharepoint
+  Blueprints: sharepoint
+  Templates: sharepoint
+  Assets: sharepoint
+  Sources: sharepoint
+  Publishing_Analytics: sharepoint
+  Analytics: sharepoint
+  AB_Tests: sharepoint
+  Content_Memory: sharepoint
+  PendingEngagement: sharepoint
+  PendingFeedback: sharepoint
+  BanditArms: sharepoint
+  Audience_Snapshots: sharepoint
