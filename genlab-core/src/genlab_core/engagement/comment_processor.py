@@ -122,27 +122,58 @@ def _replied_set_path() -> Path:
     return _get_agent_root() / ".engagement_replied.jsonl"
 
 
-def _has_replied(comment_id: str, platform: str) -> bool:
-    """Check if we have already replied to this (comment_id, platform) pair.
+def _load_replied_set() -> set:
+    """Load all replied (comment_id, platform) pairs from the JSONL file.
 
-    Uses a line-scan of the JSONL file. For the current post volume
-    (hundreds of comments/day) the file scan is fast enough.
+    Returns a set of JSON strings for O(1) membership checks.
+    Called once at the start of a batch to avoid re-scanning per comment.
     """
     path = _replied_set_path()
     if not path.exists():
-        return False
-    needle = json.dumps({"c": comment_id, "p": platform})
+        return set()
     try:
         with open(path) as f:
-            return any(line.strip() == needle for line in f)
+            return {line.strip() for line in f if line.strip()}
     except OSError:
-        return False
+        return set()
+
+
+# Module-level cache — populated once per batch via _ensure_replied_set_loaded()
+_replied_set_cache: set | None = None
+
+
+def _ensure_replied_set_loaded() -> set:
+    """Return the cached replied set, loading it on first call."""
+    global _replied_set_cache
+    if _replied_set_cache is None:
+        _replied_set_cache = _load_replied_set()
+    return _replied_set_cache
+
+
+def _invalidate_replied_cache() -> None:
+    """Reset the cache so the next check reloads from disk."""
+    global _replied_set_cache
+    _replied_set_cache = None
+
+
+def _has_replied(comment_id: str, platform: str) -> bool:
+    """Check if we have already replied to this (comment_id, platform) pair.
+
+    Uses a pre-loaded set for O(1) lookups instead of scanning the file
+    on every call.
+    """
+    needle = json.dumps({"c": comment_id, "p": platform})
+    return needle in _ensure_replied_set_loaded()
 
 
 def _mark_replied(comment_id: str, platform: str) -> None:
     """Append an idempotency record. Uses file-level locking for safety."""
     path = _replied_set_path()
-    record = json.dumps({"c": comment_id, "p": platform}) + "\n"
+    record_str = json.dumps({"c": comment_id, "p": platform})
+    record = record_str + "\n"
+    # Update in-memory cache so subsequent checks within the same batch see it
+    cache = _ensure_replied_set_loaded()
+    cache.add(record_str)
     try:
         with open(path, "a") as f:
             fcntl.flock(f, fcntl.LOCK_EX)

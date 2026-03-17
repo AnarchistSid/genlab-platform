@@ -588,8 +588,9 @@ class MonetisationMultiplierProvider:
 
             new_cache: dict[str, dict] = {}
             for rec in records:
-                key = f"{rec.get('niche_id')}/{rec.get('platform')}/{rec.get('metric_name')}"
-                new_cache[key] = rec
+                fields = rec.get("fields", rec)
+                key = f"{fields.get('niche_id')}/{fields.get('platform')}/{fields.get('metric_name')}"
+                new_cache[key] = fields
 
             self._cache = new_cache
             self._cache_ts = now
