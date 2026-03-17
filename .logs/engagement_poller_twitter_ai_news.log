@@ -562,3 +562,13 @@ Unauthorized
 2026-03-14 07:12:40,632 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
 2026-03-14 07:27:40,644 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
 2026-03-14 07:42:40,653 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 13:47:16,115 engagement.poller INFO Engagement poller starting — mode=DISPATCH niche=ai_creators platform=twitter
+2026-03-16 13:47:16,144 engagement.poller INFO Starting X/Twitter poller for niche=ai_creators user=632788275 interval=900s
+2026-03-16 13:47:16,144 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:02:16,145 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:17:16,161 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:32:16,175 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:47:16,187 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:02:16,198 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:17:16,207 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:32:16,219 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
