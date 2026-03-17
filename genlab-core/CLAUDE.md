@@ -81,3 +81,27 @@ Logo path resolved to absolute against niche_root from visuals.yaml location.
 `disk_quota.py._is_published()` protects any run directory with:
 visuals/, visuals_v2/, visuals_v3/, rendered/, clips/ containing MP4s.
 Approved posts' media is NEVER deleted by cleanup.
+
+## Sprint 63 Additions
+
+### New Modules
+- `media/relevance_filter.py` — Post-fetch niche content validation
+- `http/circuit_breaker.py` — CircuitBreaker + @resilient decorator
+- `learning/linucb.py` — LinUCB contextual bandit (6D features)
+- `observability/logging.py` — structlog JSON logging config
+- `observability/metrics_writer.py` — PipelineMetrics JSONL per-stage timing
+- `tools/create_niche.py` — Scaffold new niche from template
+- `tools/validate_configs.py` — Pydantic config pre-flight checker
+- `engagement/platform_clients/` — 5 reply clients (YT, IG, FB, X, Threads)
+
+### Key Changes
+- `pipeline/stages/fetch_insights.py` — queries SharePoint (not current-run context)
+- `pipeline/stages/validate_videos.py` — VMAF gate enabled (≥85)
+- `media/video_compositor.py` — per-platform transcode via PLATFORM_SPECS
+- `media/trending_video_fetcher.py` — RelevanceFilter + circuit breaker
+- `engagement/comment_processor.py` — hybrid auto-reply (auto/review/discard)
+- `engagement/poller.py` — YouTube 30min interval, quota handling, Facebook poller
+- `learning/arm_loader.py` — LinUCB state persistence
+- `publishing/niche_credentials.py` — ai_creators→BLACKBOXBRIEF mapped
+- `config/platform_encode_specs.yaml` — per-platform encode overrides
+- `config/alerting.yaml` — threshold definitions

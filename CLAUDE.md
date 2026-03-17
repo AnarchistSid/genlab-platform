@@ -1,6 +1,6 @@
 # CLAUDE.md — Gen Lab
 # Authoritative context for every Claude Code session in this project.
-# Last updated: 2026-03-14 (post-Sprint 48)
+# Last updated: 2026-03-17 (post-Sprint 63 — definitive audit remediation)
 
 ## MISSION — READ THIS FIRST
 
@@ -204,6 +204,74 @@ Three layers prevent duplicates:
 1. **video_id dedup** in PushToBacklog — same clip never creates two blueprints
 2. **DailyCapEnforcer** with niche_id — per-channel caps, not global
 3. **PUBLISHED skip** — PushToBacklog won't overwrite PUBLISHED/VISUAL_READY blueprints
+
+## CONTENT RELEVANCE (Sprint 63)
+
+`RelevanceFilter` in `genlab_core.media.relevance_filter` scores video candidates
+against niche-specific keyword lists AFTER YouTube fetch, BEFORE pipeline processing.
+
+- Each niche has `content_filter:` in `config/sources.yaml` with `positive_keywords`,
+  `negative_keywords`, and `relevance_threshold`
+- Hard-rejects on negative keywords (score=0.0). Anime rejects: MMA, UFC, boxing, wrestling
+- Anime threshold 0.35 (strictest — no native YouTube category)
+- Rejected videos logged in run_report for debugging
+
+## VIDEO QUALITY PIPELINE (Sprint 63)
+
+Per-platform transcode via `PLATFORM_SPECS` in `genlab_core.media.ffmpeg`:
+- YouTube: H.265 CRF18 (best quality/size ratio)
+- Instagram/TikTok: H.264 CRF15 (max quality, platform re-encodes)
+- Facebook: H.264 CRF20 (balanced)
+- X/Twitter: H.264 CRF18
+
+VMAF gate enabled (threshold ≥85). On fail: re-encode at CRF-3 (min CRF 12).
+Override via `genlab-core/config/platform_encode_specs.yaml`.
+
+## CIRCUIT BREAKERS (Sprint 63)
+
+`genlab_core.http.circuit_breaker.CircuitBreaker` — CLOSED → OPEN → HALF_OPEN states.
+Pre-configured instances: SHAREPOINT_CB, META_API_CB, YOUTUBE_CB, ANTHROPIC_CB, TWITTER_CB.
+`@resilient` decorator combines retry + circuit breaker.
+
+Wired into: BacklogClient, TrendingVideoFetcher, PersonaEngine, FetchInsights.
+On circuit open: graceful degradation (log + continue), never crash pipeline.
+
+## LEARNING LOOP (Sprint 63 — 100% complete)
+
+Full feedback loop: publish → metrics → reward → bandit update.
+
+- **FetchInsights** queries SharePoint Publishing_Analytics (not current-run context)
+- **MetricCollector** has 6 platform fetchers (YT, IG, FB, X, TikTok, Threads)
+- **20 insight plists** (5 niches × 4 windows: 6h, 24h, 48h, 168h)
+- **LinUCB contextual bandit** with 6D features (day, hour, source, duration, velocity, relevance)
+- Cold-start Thompson Sampling fallback (<50 observations per arm)
+- **RewardShaper** with monetisation-aware threshold proximity boosting
+
+## ENGAGEMENT ENGINE (Sprint 63 — 100% complete)
+
+Hybrid auto-reply system:
+- **auto** (conf ≥0.85, tox <0.15, safe pattern, <100 chars) → post immediately
+- **review** (conf ≥0.5, tox <0.3) → queue for dashboard approval
+- **discard** (low conf or high tox) → log and drop
+
+5 platform reply clients in `engagement/platform_clients/`.
+Pollers: YouTube (30min), Twitter (15min), Threads (10min), Facebook, Instagram (webhook).
+All 5 niches covered. Detoxify toxicity gate, Dramatiq priority queues, lognormal jitter.
+
+YouTube poll interval is 30 minutes (not 5) to conserve 10K daily API quota.
+
+## SAAS TOOLS (Sprint 63)
+
+- `uv run python -m genlab_core.tools.create_niche --niche-id X --brand-name Y --accent-color Z --output-dir /path`
+- `uv run python -m genlab_core.tools.validate_configs --niche-dir /path`
+- Canonical niche_id is `ai_creators` (not `ai_news`). `ai_news` kept as backward-compat alias.
+
+## OBSERVABILITY (Sprint 63)
+
+- **structlog** wraps stdlib logging — JSON output in production, console in dev
+- `PipelineMetrics` auto-records per-stage timing in `metrics.jsonl` per run
+- Alerting thresholds in `genlab-core/config/alerting.yaml`
+- 40 integration smoke tests (`pytest -m integration`)
 
 ---
 
