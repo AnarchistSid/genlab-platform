@@ -1,4 +1,4 @@
-"""PostgresBackend — psycopg2-based storage with Row Level Security.
+"""PostgresBackend — psycopg3-based storage with Row Level Security.
 
 Fully synchronous — no asyncio, no event loop, no monkey-patch conflicts.
 Works under gunicorn with any worker class (eventlet, gthread, sync).
@@ -8,6 +8,12 @@ to each transaction.
 
 Records are returned in the standard {id, fields} format that
 BacklogClient expects, matching the SharePoint record shape.
+
+Uses psycopg3 (the `psycopg` package) with:
+- ConnectionPool for thread-safe pooling
+- dict_row factory for direct dict results (no RealDictCursor)
+- Native type adaptation (datetime, UUID handled automatically)
+- Pipeline mode for batch operations
 """
 from __future__ import annotations
 
@@ -97,9 +103,9 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
 
 
 class PostgresBackend:
-    """Storage backend backed by local PostgreSQL with psycopg2.
+    """Storage backend backed by local PostgreSQL with psycopg3.
 
-    Fully synchronous. Thread-safe via connection pool.
+    Fully synchronous. Thread-safe via psycopg ConnectionPool.
     No asyncio, no event loop — compatible with eventlet, gthread, and sync workers.
     """
 
@@ -121,23 +127,19 @@ class PostgresBackend:
         self._pool = None
         self._pool_lock = threading.Lock()
 
-    def _get_conn(self):
-        """Get a connection from the pool (lazy-initialized)."""
+    def _get_pool(self):
+        """Lazy-initialize the connection pool."""
         if self._pool is None:
             with self._pool_lock:
                 if self._pool is None:
-                    import psycopg2
-                    import psycopg2.extras
-                    import psycopg2.pool
-                    self._pool = psycopg2.pool.ThreadedConnectionPool(
-                        self._min_size, self._max_size, self._dsn,
+                    from psycopg_pool import ConnectionPool
+                    self._pool = ConnectionPool(
+                        self._dsn,
+                        min_size=self._min_size,
+                        max_size=self._max_size,
+                        open=True,
                     )
-        return self._pool.getconn()
-
-    def _put_conn(self, conn):
-        """Return a connection to the pool."""
-        if self._pool is not None:
-            self._pool.putconn(conn)
+        return self._pool
 
     @staticmethod
     def _coerce_value(value: Any) -> Any:
@@ -189,29 +191,25 @@ class PostgresBackend:
             f"VALUES ({', '.join(placeholders)}) RETURNING id"
         )
 
-        conn = self._get_conn()
-        try:
+        pool = self._get_pool()
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, values)
                 row = cur.fetchone()
                 conn.commit()
                 return str(row[0]) if row else record_id
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._put_conn(conn)
 
     # ── GET ─────────────────────────────────────────────────────────
 
     def get(self, table: str, record_id: str) -> dict[str, Any] | None:
         """Get a single record by ID (UUID or legacy SharePoint integer ID)."""
+        from psycopg.rows import dict_row
+
         record_id = str(record_id).strip()
 
-        conn = self._get_conn()
-        try:
-            import psycopg2.extras
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
                 if self._is_uuid(record_id):
                     cur.execute(f"SELECT * FROM {table} WHERE id = %s::uuid", (record_id,))
@@ -225,11 +223,6 @@ class PostgresBackend:
                 if not row:
                     return None
                 return self._row_to_record(dict(row))
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._put_conn(conn)
 
     # ── FIND ────────────────────────────────────────────────────────
 
@@ -242,21 +235,22 @@ class PostgresBackend:
         max_records: int | None = None,
     ) -> list[dict[str, Any]]:
         """Find records matching a formula filter with RLS niche isolation."""
+        from psycopg.rows import dict_row
+
         from genlab_core.storage.formula_sql import formula_to_sql
 
         where_clause, params = formula_to_sql(formula)
 
-        conn = self._get_conn()
-        try:
-            import psycopg2.extras
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(
                     "SELECT set_config('app.niche_id', %s, true)",
                     (niche_id or "",),
                 )
                 sql = f"SELECT * FROM {table}"
                 if where_clause:
-                    # Convert $N positional params to %s for psycopg2
+                    # Convert $N positional params to %s for psycopg
                     import re
                     pg_where = re.sub(r'\$\d+', '%s', where_clause)
                     sql += f" WHERE {pg_where}"
@@ -267,11 +261,6 @@ class PostgresBackend:
                 rows = cur.fetchall()
                 conn.commit()
                 return [self._row_to_record(dict(r)) for r in rows]
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._put_conn(conn)
 
     def all(
         self,
@@ -300,8 +289,8 @@ class PostgresBackend:
         cols, extra = self._split_fields(table, fields)
         record_id = str(record_id).strip()
 
-        conn = self._get_conn()
-        try:
+        pool = self._get_pool()
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
 
@@ -326,11 +315,6 @@ class PostgresBackend:
                 sql = f"UPDATE {table} SET {', '.join(sets)} {where}"
                 cur.execute(sql, values)
                 conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._put_conn(conn)
 
     # ── DELETE ──────────────────────────────────────────────────────
 
@@ -338,8 +322,8 @@ class PostgresBackend:
         """Delete a record by ID."""
         record_id = str(record_id).strip()
 
-        conn = self._get_conn()
-        try:
+        pool = self._get_pool()
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
                 if self._is_uuid(record_id):
@@ -350,17 +334,37 @@ class PostgresBackend:
                         (record_id,),
                     )
                 conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._put_conn(conn)
 
     # ── BATCH CREATE ────────────────────────────────────────────────
 
     def batch_create(self, table: str, records: list[dict[str, Any]]) -> list[str]:
-        """Create multiple records. Returns list of new record IDs."""
-        return [self.create(table, r) for r in records]
+        """Create multiple records using pipeline mode for performance."""
+        if not records:
+            return []
+
+        ids = []
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            with conn.pipeline():
+                with conn.cursor() as cur:
+                    for record in records:
+                        record_id = str(uuid.uuid4())
+                        cols, extra = self._split_fields(table, record)
+                        cols["extra"] = json.dumps(extra) if extra else "{}"
+
+                        col_names = list(cols.keys())
+                        quoted_names = [_quote_col(c) for c in col_names]
+                        placeholders = ["%s"] * (len(col_names) + 1)
+                        values = [record_id] + [cols[c] for c in col_names]
+
+                        sql = (
+                            f"INSERT INTO {table} (id, {', '.join(quoted_names)}) "
+                            f"VALUES ({', '.join(placeholders)}) RETURNING id"
+                        )
+                        cur.execute(sql, values)
+                        ids.append(record_id)
+                conn.commit()
+        return ids
 
     # ── INTERNAL ────────────────────────────────────────────────────
 
