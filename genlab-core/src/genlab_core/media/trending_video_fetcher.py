@@ -53,6 +53,8 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
+
 logger = logging.getLogger(__name__)
 
 # Quota tracking — reset per pipeline run, logs total units consumed.
@@ -364,19 +366,23 @@ class TrendingVideoFetcher:
     ) -> list[TrendingVideo]:
         """Fetch YouTube's most popular chart for a category (1 unit)."""
         try:
-            resp = self._session.get(
-                f"{self.BASE_URL}/videos",
-                params={
-                    "key": self.api_key,
-                    "part": "snippet,statistics,contentDetails,status",
-                    "chart": "mostPopular",
-                    "regionCode": self.region_code,
-                    "videoCategoryId": category_id,
-                    "maxResults": 25,
-                },
-                timeout=15,
-            )
-            resp.raise_for_status()
+            def _do_request():
+                resp = self._session.get(
+                    f"{self.BASE_URL}/videos",
+                    params={
+                        "key": self.api_key,
+                        "part": "snippet,statistics,contentDetails,status",
+                        "chart": "mostPopular",
+                        "regionCode": self.region_code,
+                        "videoCategoryId": category_id,
+                        "maxResults": 25,
+                    },
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                return resp
+
+            resp = YOUTUBE_CB.call(_do_request)
             _increment_quota(1, f"videos.list/mostPopular cat={category_id}")
             items = resp.json().get("items", [])
             results = []
@@ -385,6 +391,9 @@ class TrendingVideoFetcher:
                 if v is not None and self._is_recent(item, published_after):
                     results.append(v)
             return results
+        except CircuitOpenError:
+            logger.warning("YouTube circuit open — skipping mostPopular for category %s", category_id)
+            return []
         except Exception as e:
             logger.error("mostPopular fetch failed for category %s: %s", category_id, e)
             return []
@@ -463,17 +472,21 @@ class TrendingVideoFetcher:
         """
         uploads_playlist = channel_id.replace("UC", "UU", 1)
         try:
-            resp = self._session.get(
-                f"{self.BASE_URL}/playlistItems",
-                params={
-                    "key": self.api_key,
-                    "part": "snippet",
-                    "playlistId": uploads_playlist,
-                    "maxResults": max_results,
-                },
-                timeout=15,
-            )
-            resp.raise_for_status()
+            def _do_playlist():
+                resp = self._session.get(
+                    f"{self.BASE_URL}/playlistItems",
+                    params={
+                        "key": self.api_key,
+                        "part": "snippet",
+                        "playlistId": uploads_playlist,
+                        "maxResults": max_results,
+                    },
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                return resp
+
+            resp = YOUTUBE_CB.call(_do_playlist)
             _increment_quota(1, f"playlistItems.list/{channel_id}")
             items = []
             for item in resp.json().get("items", []):
@@ -491,6 +504,9 @@ class TrendingVideoFetcher:
                     "source": "youtube_playlist",
                 })
             return items
+        except CircuitOpenError:
+            logger.warning("YouTube circuit open — skipping playlistItems for %s", channel_id)
+            return []
         except Exception as e:
             logger.warning("playlistItems fetch failed for %s: %s", channel_id, e)
             return []
@@ -623,22 +639,26 @@ class TrendingVideoFetcher:
     ) -> list[TrendingVideo]:
         """Search YouTube for recent videos matching a keyword (100 units)."""
         try:
-            resp = self._session.get(
-                f"{self.BASE_URL}/search",
-                params={
-                    "key": self.api_key,
-                    "part": "snippet",
-                    "q": query,
-                    "type": "video",
-                    "order": "viewCount",
-                    "publishedAfter": published_after.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "videoDuration": "short",
-                    "videoEmbeddable": "true",
-                    "maxResults": 15,
-                },
-                timeout=15,
-            )
-            resp.raise_for_status()
+            def _do_search():
+                resp = self._session.get(
+                    f"{self.BASE_URL}/search",
+                    params={
+                        "key": self.api_key,
+                        "part": "snippet",
+                        "q": query,
+                        "type": "video",
+                        "order": "viewCount",
+                        "publishedAfter": published_after.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "videoDuration": "short",
+                        "videoEmbeddable": "true",
+                        "maxResults": 15,
+                    },
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                return resp
+
+            resp = YOUTUBE_CB.call(_do_search)
             _increment_quota(100, f"search.list q={query[:30]}")
             items = resp.json().get("items", [])
             results = []
@@ -675,6 +695,9 @@ class TrendingVideoFetcher:
                     description_snippet=snippet.get("description", "")[:200],
                 ))
             return results
+        except CircuitOpenError:
+            logger.warning("YouTube circuit open — skipping search for '%s'", query)
+            return []
         except Exception as e:
             logger.error("YouTube search failed for '%s': %s", query, e)
             return []
@@ -687,23 +710,30 @@ class TrendingVideoFetcher:
         for i in range(0, len(video_ids), 50):
             batch = video_ids[i:i + 50]
             try:
-                resp = self._session.get(
-                    f"{self.BASE_URL}/videos",
-                    params={
-                        "key": self.api_key,
-                        "part": "snippet,statistics,contentDetails,status",
-                        "id": ",".join(batch),
-                        "maxResults": 50,
-                    },
-                    timeout=15,
-                )
-                resp.raise_for_status()
+                def _do_details(b=batch):
+                    resp = self._session.get(
+                        f"{self.BASE_URL}/videos",
+                        params={
+                            "key": self.api_key,
+                            "part": "snippet,statistics,contentDetails,status",
+                            "id": ",".join(b),
+                            "maxResults": 50,
+                        },
+                        timeout=15,
+                    )
+                    resp.raise_for_status()
+                    return resp
+
+                resp = YOUTUBE_CB.call(_do_details)
                 _increment_quota(1, f"videos.list batch={len(batch)}")
                 for item in resp.json().get("items", []):
                     video = self._parse_video(item, "detail")
                     if video:
                         video.niche_id = niche_id
                         results.append(video)
+            except CircuitOpenError:
+                logger.warning("YouTube circuit open — skipping video details batch")
+                break  # No point trying remaining batches
             except Exception as e:
                 logger.error("Video details fetch failed: %s", e)
         return results
