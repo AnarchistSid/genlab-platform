@@ -139,7 +139,11 @@ class PushToBacklog:
                         "status": "INTAKE",
                         "niche_id": niche_id,
                     })
-                    story_record = record
+                    # Postgres create() returns UUID string; SharePoint returns dict
+                    if isinstance(record, str):
+                        story_record = {"id": record}
+                    else:
+                        story_record = record
                     stories_pushed += 1
                     logger.info("[PUSH] Created story '%s' (id=%s)", title, story_id)
             except Exception as e:
