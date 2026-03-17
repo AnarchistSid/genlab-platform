@@ -1,0 +1,25 @@
+{
+  "content": {
+    "hook": "This changes everything we know",
+    "body": "A groundbreaking development has emerged that could reshape the entire landscape. Experts are weighing in on the implications, and the community reaction has been nothing short of electric.",
+    "instagram": {
+      "caption": "The biggest moment of 2026 just happened and nobody was ready for it. This is going to change everything.\n\n#trending #viral #breaking #mustwatch #2026",
+      "hashtags": ["#trending", "#viral", "#breaking", "#mustwatch", "#2026"]
+    },
+    "youtube": {
+      "title": "Did this just change everything?",
+      "description": "The biggest moment of 2026 just happened. Full breakdown of what this means and why everyone is talking about it."
+    },
+    "x_twitter": {
+      "tweet": "This just happened and the internet is NOT ready. The biggest development of 2026 is here."
+    },
+    "facebook": {
+      "caption": "Something massive just happened that could change everything. Have you seen this yet? The reaction has been absolutely wild. What do you think about this development?"
+    }
+  },
+  "model": "claude-3-haiku-20240307",
+  "usage": {
+    "input_tokens": 450,
+    "output_tokens": 280
+  }
+}
