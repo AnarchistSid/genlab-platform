@@ -502,7 +502,15 @@ class MonetisationRewardShaper:
 # MonetisationMultiplierProvider — live SP data for threshold proximity
 # ---------------------------------------------------------------------------
 
-_TARGETS_PATH = Path(__file__).resolve().parents[3] / "config" / "monetisation_targets.yaml"
+def _get_targets_path() -> Path:
+    """Resolve path to monetisation_targets.yaml.
+
+    Uses settings._PROJECT_ROOT (respects AGENT_ROOT env var) so this
+    works under both editable installs and wheel installs where the
+    source-tree relative path ``parents[3]`` would be meaningless.
+    """
+    from genlab_core.settings import _PROJECT_ROOT
+    return _PROJECT_ROOT / "genlab-core" / "config" / "monetisation_targets.yaml"
 
 
 class MonetisationMultiplierProvider:
@@ -532,7 +540,7 @@ class MonetisationMultiplierProvider:
     def _load_boost_tiers() -> dict[str, float]:
         """Load reward_boost tiers from monetisation_targets.yaml."""
         try:
-            with open(_TARGETS_PATH) as f:
+            with open(_get_targets_path()) as f:
                 cfg = yaml.safe_load(f) or {}
             boost = cfg.get("reward_boost", {})
             return {
@@ -561,7 +569,7 @@ class MonetisationMultiplierProvider:
 
             # Load list_id from targets config
             try:
-                with open(_TARGETS_PATH) as f:
+                with open(_get_targets_path()) as f:
                     cfg = yaml.safe_load(f) or {}
                 list_id = cfg.get("sharepoint", {}).get("list_id", "")
             except Exception:

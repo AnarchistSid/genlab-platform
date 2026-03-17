@@ -19,10 +19,15 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# Module-level singletons
+# Module-level singletons — WARNING: these persist for the process lifetime.
+# Calling get_backend_for_table() with different sharepoint_proxies or
+# postgres_dsn will invalidate and replace the cached backend for that engine.
+# Use reset_backends() in tests to clear all cached state.
 _config: Optional[Dict[str, str]] = None
 _sharepoint_backend: Optional[Any] = None
+_sharepoint_proxies_id: Optional[int] = None  # id() of the proxies dict used to create _sharepoint_backend
 _postgres_backend: Optional[Any] = None
+_postgres_dsn_used: Optional[str] = None  # DSN used to create _postgres_backend
 
 
 def _load_config() -> Dict[str, str]:
@@ -67,6 +72,11 @@ def get_backend_for_table(
 ):
     """Return the correct StorageBackend for the given table.
 
+    Backend instances are cached at module level.  If called again with a
+    *different* ``sharepoint_proxies`` dict (by identity) or a different
+    ``postgres_dsn``, the stale cached backend is replaced automatically.
+    Use ``reset_backends()`` in tests to clear all cached state.
+
     Args:
         table: Logical table name (e.g. "Stories", "Blueprints").
         sharepoint_proxies: Dict of table_name -> GraphTableProxy.  Required
@@ -77,20 +87,47 @@ def get_backend_for_table(
     Returns:
         A StorageBackend instance (SharePointBackend or PostgresBackend).
     """
-    global _sharepoint_backend, _postgres_backend
+    global _sharepoint_backend, _sharepoint_proxies_id
+    global _postgres_backend, _postgres_dsn_used
 
     config = _load_config()
     engine = config.get(table, "sharepoint").lower()
 
     if engine == "postgres":
+        dsn = postgres_dsn or os.getenv("DATABASE_URL")
+        if _postgres_backend is not None and dsn != _postgres_dsn_used:
+            logger.debug("Postgres DSN changed — replacing cached backend")
+            _postgres_backend = None
         if _postgres_backend is None:
             from genlab_core.storage.postgres import PostgresBackend
 
-            dsn = postgres_dsn or os.getenv("DATABASE_URL")
-            _postgres_backend = PostgresBackend(dsn=dsn)
+            # PostgresBackend takes host/port/database/user/password, not a DSN string.
+            # Parse DSN if provided, otherwise use defaults.
+            pg_kwargs = {}
+            if dsn:
+                from urllib.parse import urlparse
+                parsed = urlparse(dsn)
+                pg_kwargs = {
+                    k: v for k, v in {
+                        "host": parsed.hostname,
+                        "port": parsed.port,
+                        "database": (parsed.path or "").lstrip("/") or None,
+                        "user": parsed.username,
+                        "password": parsed.password,
+                    }.items() if v is not None
+                }
+            _postgres_backend = PostgresBackend(**pg_kwargs)
+            _postgres_dsn_used = dsn
         return _postgres_backend
 
     # Default: sharepoint
+    if (
+        sharepoint_proxies is not None
+        and _sharepoint_backend is not None
+        and id(sharepoint_proxies) != _sharepoint_proxies_id
+    ):
+        logger.debug("SharePoint proxies changed — replacing cached backend")
+        _sharepoint_backend = None
     if _sharepoint_backend is None:
         if sharepoint_proxies is None:
             raise ValueError(
@@ -100,12 +137,16 @@ def get_backend_for_table(
         from genlab_core.storage.sharepoint import SharePointBackend
 
         _sharepoint_backend = SharePointBackend(sharepoint_proxies)
+        _sharepoint_proxies_id = id(sharepoint_proxies)
     return _sharepoint_backend
 
 
 def reset_backends() -> None:
     """Reset cached backends and config.  Used in tests."""
-    global _config, _sharepoint_backend, _postgres_backend
+    global _config, _sharepoint_backend, _sharepoint_proxies_id
+    global _postgres_backend, _postgres_dsn_used
     _config = None
     _sharepoint_backend = None
+    _sharepoint_proxies_id = None
     _postgres_backend = None
+    _postgres_dsn_used = None

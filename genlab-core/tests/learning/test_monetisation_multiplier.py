@@ -29,7 +29,8 @@ def targets_yaml(tmp_path):
 def provider(targets_yaml):
     """Provider with pre-filled cache to avoid SP calls."""
     with patch(
-        "genlab_core.learning.reward_shaper._TARGETS_PATH", targets_yaml
+        "genlab_core.learning.reward_shaper._get_targets_path",
+        return_value=targets_yaml,
     ):
         p = MonetisationMultiplierProvider.__new__(MonetisationMultiplierProvider)
         p._client = None

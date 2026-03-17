@@ -236,12 +236,22 @@ class PushToBacklog:
 
                     if rendered_path:
                         fields["visual_paths"] = json.dumps([rendered_path])
-                        # Auto-schedule for next 06:30 UTC = 12:00 IST publish window
-                        tomorrow_utc = datetime.now(timezone.utc).date() + timedelta(days=1)
-                        publish_time = datetime(
-                            tomorrow_utc.year, tomorrow_utc.month, tomorrow_utc.day,
+                        # Auto-schedule for next available 06:30 UTC = 12:00 IST
+                        # publish window.  Use today's slot if it hasn't passed yet,
+                        # otherwise fall back to tomorrow.
+                        now_utc = datetime.now(timezone.utc)
+                        today_slot = datetime(
+                            now_utc.year, now_utc.month, now_utc.day,
                             6, 30, tzinfo=timezone.utc,
                         )
+                        if today_slot > now_utc:
+                            publish_time = today_slot
+                        else:
+                            next_day = now_utc.date() + timedelta(days=1)
+                            publish_time = datetime(
+                                next_day.year, next_day.month, next_day.day,
+                                6, 30, tzinfo=timezone.utc,
+                            )
                         fields["scheduled_for"] = publish_time.isoformat()
                     # clip_url and thumbnail_url intentionally omitted — not SharePoint columns
 
