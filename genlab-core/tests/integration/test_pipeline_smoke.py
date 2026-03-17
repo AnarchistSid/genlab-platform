@@ -31,12 +31,14 @@ from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
 # Ensure the tests directory is importable so importlib can resolve
 # mock stage class paths like "tests.integration.mock_stages.MockFetch..."
 # ---------------------------------------------------------------------------
-_TESTS_PARENT = Path(__file__).resolve().parent.parent.parent  # genlab-core/
-if str(_TESTS_PARENT) not in sys.path:
-    sys.path.insert(0, str(_TESTS_PARENT))
+_TESTS_ROOT = Path(__file__).resolve().parent.parent  # genlab-core/tests/
+_GENLAB_CORE = _TESTS_ROOT.parent  # genlab-core/
+for _p in (str(_TESTS_ROOT), str(_GENLAB_CORE)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 # Now we can import mock stages and config builder
-from tests.integration.mock_stages import (  # noqa: E402
+from integration.mock_stages import (  # noqa: E402
     MockEmptyFetch,
     MockFetchInsights,
     MockFetchTrendingVideos,
