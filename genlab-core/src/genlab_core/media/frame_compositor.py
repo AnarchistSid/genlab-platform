@@ -89,15 +89,11 @@ P_OVERLAY_OPACITY = 0.55    # gradient opacity
 P_LOGO_Y = 310              # logo y — same proportional position as landscape
 P_HOOK_Y = 390              # hook text y
 
-# Layout C: Square (compact header, video centered, small bottom bar)
-S_TOP_BAR_H = 160
-S_NAME_ROW_Y = 40
-S_NAME_ROW_H = 60
-S_HOOK_ZONE_Y = 100
-S_HOOK_ZONE_H = 60
-S_VIDEO_Y = 166              # video starts right after hook zone (no accent line)
-S_VIDEO_H = 1080
-S_BOTTOM_H = 674             # 1920 - 166 - 1080
+# Layout C: Square — same Evolving AI header as landscape
+# Reuses the same branding positions so all non-portrait layouts look consistent
+S_VIDEO_Y = L_VIDEO_Y        # 460 — same header height as landscape
+S_VIDEO_H = 1080             # 1080x1080 square video
+S_BOTTOM_H = CANVAS_H - S_VIDEO_Y - S_VIDEO_H  # 380px
 
 # Shared text
 LOGO_SIZE = 60
@@ -601,7 +597,7 @@ class FrameCompositor:
     def _build_cmd_square(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Square-ish clip: video at y=466 (1080x1080), hook in 80px zone, accent line."""
+        """Square-ish clip: same Evolving AI header as landscape, 1080x1080 video below."""
 
         logo_path = self.branding.logo_path
         channel_name = self.branding.channel_name
@@ -615,11 +611,11 @@ class FrameCompositor:
 
         has_logo = logo_path and os.path.exists(logo_path)
 
-        # Wrap hook text and compute vertical centering within hook zone (80px)
+        # Reuse landscape hook zone positions for consistent branding
         hook_lines = self._wrap_hook(hook)
         num_lines = len(hook_lines)
         total_text_h = num_lines * HOOK_LINE_H
-        hook_zone_center_y = S_HOOK_ZONE_Y + S_HOOK_ZONE_H // 2
+        hook_zone_center_y = L_HOOK_ZONE_Y + L_HOOK_ZONE_H // 2
         hook_start_y = hook_zone_center_y - total_text_h // 2
 
         # Build hook drawtext chain
@@ -642,14 +638,13 @@ class FrameCompositor:
             filtergraph = (
                 # Black canvas 1080x1920
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                # Source video scaled to fit 1080x1080 (maintain AR, pad)
+                # Source video scaled to fit 1080x1080 (maintain AR), top-aligned
                 f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-                # Place video at y=503
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+                # Place video below header (same y as landscape)
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
-                # Logo scaled to 60px
+                # Logo
                 f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                # Overlay logo
                 f"[base][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
                 # Channel name
                 f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
@@ -660,7 +655,6 @@ class FrameCompositor:
                 f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
                 # Hook lines
                 f"{hook_filters}"
-                # Final label rename
                 f"[withhook]null[out]"
             )
             inputs = ["-i", src, "-i", logo_path]
@@ -668,7 +662,7 @@ class FrameCompositor:
             filtergraph = (
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
                 f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
                 f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
