@@ -20,6 +20,11 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+from genlab_core.http.circuit_breaker import (
+    CircuitOpenError,
+    get_circuit_breaker,
+)
+
 logger = logging.getLogger(__name__)
 
 # Minimum hours after publish before fetching (API data delay)
@@ -150,7 +155,7 @@ class FetchInsights:
         post_id: str,
         config: Dict[str, Any],
     ) -> Optional[Dict[str, Any]]:
-        """Dispatch to platform-specific fetcher."""
+        """Dispatch to platform-specific fetcher through circuit breaker."""
         fetchers = {
             "instagram": self._fetch_instagram,
             "youtube": self._fetch_youtube,
@@ -162,6 +167,17 @@ class FetchInsights:
         if not fetcher:
             logger.debug("[FetchInsights] No fetcher for platform: %s", platform)
             return None
+
+        cb = get_circuit_breaker(platform)
+        if cb is not None:
+            try:
+                return cb.call(fetcher, post_id, config)
+            except CircuitOpenError:
+                logger.warning(
+                    "[FetchInsights] %s circuit open — skipping %s",
+                    platform, post_id,
+                )
+                return None
         return fetcher(post_id, config)
 
     @staticmethod
