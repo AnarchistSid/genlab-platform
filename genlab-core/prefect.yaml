@@ -1,0 +1,102 @@
+# Prefect deployment configuration for Gen Lab
+# Deploy: prefect deploy --all (from genlab-core/)
+
+name: genlab
+
+deployments:
+  - name: daily-pipeline-gaming
+    entrypoint: src/genlab_core/orchestration/flows.py:daily_pipeline
+    parameters:
+      niche_id: gaming
+    schedule:
+      cron: "0 4 * * *"  # 04:00 UTC = 09:30 IST
+    work_pool:
+      name: genlab-local
+
+  - name: daily-pipeline-ai-creators
+    entrypoint: src/genlab_core/orchestration/flows.py:daily_pipeline
+    parameters:
+      niche_id: ai_creators
+    schedule:
+      cron: "30 2 * * *"  # 02:30 UTC = 08:00 IST
+    work_pool:
+      name: genlab-local
+
+  - name: daily-pipeline-sports
+    entrypoint: src/genlab_core/orchestration/flows.py:daily_pipeline
+    parameters:
+      niche_id: sports
+    schedule:
+      cron: "0 10 * * *"  # 10:00 UTC = 15:30 IST
+    work_pool:
+      name: genlab-local
+
+  - name: daily-pipeline-movies
+    entrypoint: src/genlab_core/orchestration/flows.py:daily_pipeline
+    parameters:
+      niche_id: movies
+    schedule:
+      cron: "0 8 * * *"  # 08:00 UTC = 13:30 IST
+    work_pool:
+      name: genlab-local
+
+  - name: daily-pipeline-anime
+    entrypoint: src/genlab_core/orchestration/flows.py:daily_pipeline
+    parameters:
+      niche_id: anime
+    schedule:
+      cron: "0 6 * * *"  # 06:00 UTC = 11:30 IST
+    work_pool:
+      name: genlab-local
+
+  - name: publish-all
+    entrypoint: src/genlab_core/orchestration/flows.py:publish_all
+    parameters:
+      niche_id: all
+    schedule:
+      cron: "30 6 * * *"  # 06:30 UTC = 12:00 IST (publish window)
+    work_pool:
+      name: genlab-local
+
+  - name: insights-6h
+    entrypoint: src/genlab_core/orchestration/flows.py:collect_insights
+    parameters:
+      window: 6
+    schedule:
+      cron: "30 12 * * *"  # 12:30 UTC (6h after publish)
+    work_pool:
+      name: genlab-local
+
+  - name: insights-24h
+    entrypoint: src/genlab_core/orchestration/flows.py:collect_insights
+    parameters:
+      window: 24
+    schedule:
+      cron: "30 6 * * *"  # next day
+    work_pool:
+      name: genlab-local
+
+  - name: insights-48h
+    entrypoint: src/genlab_core/orchestration/flows.py:collect_insights
+    parameters:
+      window: 48
+    schedule:
+      cron: "35 6 * * *"
+    work_pool:
+      name: genlab-local
+
+  - name: insights-168h
+    entrypoint: src/genlab_core/orchestration/flows.py:collect_insights
+    parameters:
+      window: 168
+    schedule:
+      cron: "0 7 * * 1"  # weekly Monday
+    work_pool:
+      name: genlab-local
+
+  - name: token-health
+    entrypoint: src/genlab_core/orchestration/flows.py:token_health_check
+    schedule:
+      cron: "30 20 * * *"  # daily 20:30 UTC
+    work_pool:
+      name: genlab-local
