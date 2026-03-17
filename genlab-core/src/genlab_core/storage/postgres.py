@@ -87,7 +87,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "niche_id", "source_id", "name", "url", "source_type",
         "tier", "weight", "status", "last_fetched",
     },
-    "monetisationprogress": {
+    "monetisation_progress": {
         "niche_id", "platform", "metric_name", "current_value",
         "target_value", "pct_complete", "delta_7d",
         "days_to_threshold_est", "is_threshold_met", "data_source",
