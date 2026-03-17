@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from genlab_core.http.circuit_breaker import SHAREPOINT_CB, CircuitOpenError
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
 
 logger = logging.getLogger(__name__)
@@ -337,6 +338,17 @@ class BacklogClient:
         except (ValueError, KeyError):
             self.content_memory = None
 
+    # ── Circuit breaker helper ───────────────────────────────────────
+
+    @staticmethod
+    def _sp_call(fn, *args, **kwargs):
+        """Execute a SharePoint/Graph API call through the circuit breaker.
+
+        Falls back to direct call if the circuit is open and we have
+        no alternative — the caller will see the CircuitOpenError.
+        """
+        return SHAREPOINT_CB.call(fn, *args, **kwargs)
+
     # ── Private helpers ──────────────────────────────────────────────
 
     def _resolve_source(self, story: Dict) -> str:
@@ -408,20 +420,20 @@ class BacklogClient:
         }
         if story.get("niche_id"):
             fields["niche_id"] = story["niche_id"]
-        record = self.stories.create(fields)
+        record = self._sp_call(self.stories.create, fields)
         return record["id"]
 
     def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
         formula = f"{{story_id}}='{_esc(story_id)}'"
         formula = _inject_niche_filter(formula, niche_id)
-        records = self.stories.all(formula=formula, max_records=1)
+        records = self._sp_call(self.stories.all, formula=formula, max_records=1)
         return records[0] if records else None
 
     def update_story_status(self, story_id: str, status: str, *, niche_id: str | None = None, **kwargs):
         story = self.find_story_by_story_id(story_id, niche_id=niche_id)
         if not story:
             raise ValueError(f"Story {story_id} not found")
-        self.stories.update(story["id"], {"status": status, **kwargs})
+        self._sp_call(self.stories.update, story["id"], {"status": status, **kwargs})
 
     def batch_create_stories(self, stories: List[Dict]) -> List[str]:
         records = []
@@ -518,7 +530,7 @@ class BacklogClient:
     def find_blueprint_by_candidate_id(self, candidate_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
         formula = f"{{candidate_id}}='{_esc(candidate_id)}'"
         formula = _inject_niche_filter(formula, niche_id)
-        records = self.blueprints.all(formula=formula, max_records=1)
+        records = self._sp_call(self.blueprints.all, formula=formula, max_records=1)
         return records[0] if records else None
 
     def update_blueprint_status(
@@ -550,7 +562,7 @@ class BacklogClient:
     def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> List[Dict]:
         formula = f"{{status}}='{_esc(status)}'"
         formula = _inject_niche_filter(formula, niche_id)
-        return self.blueprints.all(formula=formula)
+        return self._sp_call(self.blueprints.all, formula=formula)
 
     def batch_create_blueprints(self, blueprints: List[Dict]) -> List[str]:
         story_cache: Dict[str, Optional[Dict]] = {}
@@ -819,16 +831,27 @@ class BacklogClient:
             fields["niche_id"] = niche_id
 
         try:
-            existing = self.publishing_analytics.all(
+            existing = self._sp_call(
+                self.publishing_analytics.all,
                 formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
                 max_records=1,
             )
             if existing:
-                self.publishing_analytics.update(existing[0]["id"], fields, typecast=True)
+                self._sp_call(
+                    self.publishing_analytics.update,
+                    existing[0]["id"], fields, typecast=True,
+                )
                 return existing[0]["id"]
             else:
-                record = self.publishing_analytics.create(fields, typecast=True)
+                record = self._sp_call(
+                    self.publishing_analytics.create, fields, typecast=True,
+                )
                 return record["id"]
+        except CircuitOpenError:
+            logger.warning(
+                "Publishing analytics log skipped — SharePoint circuit open"
+            )
+            return None
         except Exception as exc:
             logger.warning("Publishing analytics log failed: %s", exc)
             return None
@@ -848,8 +871,8 @@ class BacklogClient:
             parts.append(f"{{status}}='{_esc(status)}'")
         formula = f"AND({', '.join(parts)})" if parts else ""
         formula = _inject_niche_filter(formula or None, niche_id)
-        return self.publishing_analytics.all(
-            formula=formula, max_records=limit
+        return self._sp_call(
+            self.publishing_analytics.all, formula=formula, max_records=limit,
         )
 
     # ===== ANALYTICS =====
