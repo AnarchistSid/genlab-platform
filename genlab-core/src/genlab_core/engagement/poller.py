@@ -334,3 +334,100 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
     except Exception as e:
         logger.warning("[POLLER] Threads poll failed for %s: %s", niche_id, e)
         return []
+
+
+async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
+    """Fetch comments on recent Facebook Page posts via graph.facebook.com.
+
+    Uses per-niche FB_PAGE_ACCESS_TOKEN from env vars.
+    Returns list of raw comment dicts ready for InboundComment conversion.
+
+    Two-step poll:
+      1. GET /{page_id}/posts → recent post IDs
+      2. GET /{post_id}/comments → comments per post
+    """
+    import os
+
+    logger.debug("[POLLER] Facebook poll for %s (page=%s)", niche_id, page_id)
+
+    from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
+    token, resolved_page_id = resolve_fb_credentials(niche_id)
+    if not token:
+        logger.warning("[POLLER] Facebook credentials not set for %s — skipping", niche_id)
+        return []
+
+    try:
+        import requests as _requests
+
+        base = "https://graph.facebook.com/v21.0"
+
+        # Step 1: Fetch recent posts
+        posts_resp = _requests.get(
+            f"{base}/{resolved_page_id or page_id}/posts",
+            params={
+                "fields": "id",
+                "limit": 10,
+                "access_token": token,
+            },
+            timeout=15,
+        )
+        if posts_resp.status_code == 400:
+            logger.warning("[POLLER] Facebook 400 for %s — token may be invalid", niche_id)
+            return []
+        posts_resp.raise_for_status()
+        post_ids = [item["id"] for item in posts_resp.json().get("data", [])]
+
+        if not post_ids:
+            logger.debug("[POLLER] Facebook: no recent posts for %s", niche_id)
+            return []
+
+        # Step 2: Fetch comments per post
+        comments: list[dict] = []
+        own_page_id = resolved_page_id or page_id
+        skipped_self = 0
+
+        for fb_post_id in post_ids:
+            try:
+                resp = _requests.get(
+                    f"{base}/{fb_post_id}/comments",
+                    params={
+                        "fields": "id,from,message,created_time",
+                        "limit": 50,
+                        "access_token": token,
+                    },
+                    timeout=15,
+                )
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+            except Exception as e:
+                logger.debug("[POLLER] Facebook comment fetch failed for %s: %s", fb_post_id, e)
+                continue
+
+            for comment in data.get("data", []):
+                author = comment.get("from", {})
+                author_id = author.get("id", "")
+                # Skip own replies
+                if author_id == own_page_id:
+                    skipped_self += 1
+                    continue
+
+                comments.append({
+                    "platform": "facebook",
+                    "post_id": fb_post_id,
+                    "comment_id": comment.get("id", ""),
+                    "author_id": author_id,
+                    "author_name": author.get("name", ""),
+                    "text": comment.get("message", ""),
+                    "is_question": "?" in comment.get("message", ""),
+                })
+
+        if skipped_self:
+            logger.debug("[POLLER] Facebook: skipped %d self-comments for %s", skipped_self, niche_id)
+        logger.info("[POLLER] Facebook: fetched %d comments for %s", len(comments), niche_id)
+        return comments
+
+    except Exception as e:
+        logger.warning("[POLLER] Facebook poll failed for %s: %s", niche_id, e)
+        return []
