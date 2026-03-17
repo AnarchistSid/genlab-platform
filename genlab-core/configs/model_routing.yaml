@@ -7,9 +7,11 @@ default_model: "claude-haiku-4-5-20251001"
 
 task_routing:
   # Quality-critical (hooks, captions, post copy)
-  generate_hooks: "claude-sonnet-4-6"
-  score_hook_quality: "claude-sonnet-4-6"
-  write_post_content: "claude-sonnet-4-6"
+  # Switched from Sonnet ($3/$15) to Haiku ($0.80/$4) to cut costs ~80%.
+  # Haiku 4.5 quality is sufficient for hooks + captions at our scale.
+  generate_hooks: "claude-haiku-4-5-20251001"
+  score_hook_quality: "claude-haiku-4-5-20251001"
+  write_post_content: "claude-haiku-4-5-20251001"
 
   # Volume work (content writing, adaptation)
   generate_script: "claude-haiku-4-5-20251001"
