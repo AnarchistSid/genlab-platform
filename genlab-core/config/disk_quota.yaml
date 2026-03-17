@@ -18,3 +18,24 @@ agents:
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
+
+  clutchwire:
+    runs_dir: "/Users/anarchistsid/GenLab/ClutchWire/.tmp/runs"
+    quota_gb: 30
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
+
+  splicereel:
+    runs_dir: "/Users/anarchistsid/GenLab/SpliceReel/.tmp/runs"
+    quota_gb: 30
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
+
+  framedrift:
+    runs_dir: "/Users/anarchistsid/GenLab/FrameDrift/.tmp/runs"
+    quota_gb: 30
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
