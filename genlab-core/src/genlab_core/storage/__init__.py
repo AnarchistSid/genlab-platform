@@ -1,1 +1,4 @@
-"""Storage utilities — disk quota management and cleanup."""
+"""Storage abstraction layer — multi-backend support + disk quota management."""
+from genlab_core.storage.protocol import StorageBackend
+
+__all__ = ["StorageBackend"]
