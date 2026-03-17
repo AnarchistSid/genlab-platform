@@ -40,6 +40,10 @@ packages = ["src/genlab_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: end-to-end pipeline smoke tests (run with: pytest -m integration)",
+]
+addopts = "-m 'not integration'"
 
 [dependency-groups]
 dev = [
