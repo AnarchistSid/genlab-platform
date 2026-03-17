@@ -386,3 +386,13 @@ Unauthorized
 Unauthorized
 2026-03-14 07:31:20,507 genlab_core.engagement.poller WARNING [POLLER] X/Twitter poll failed for gaming: 401 Unauthorized
 Unauthorized
+2026-03-16 13:47:16,052 engagement.poller INFO Engagement poller starting — mode=DISPATCH niche=gaming platform=twitter
+2026-03-16 13:47:16,080 engagement.poller INFO Starting X/Twitter poller for niche=gaming user=2029218265801846784 interval=900s
+2026-03-16 13:47:16,080 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:02:16,080 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:17:16,096 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:32:16,110 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 14:47:16,123 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:02:16,135 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:17:16,188 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
+2026-03-16 15:32:16,199 genlab_core.engagement.poller WARNING [POLLER] X/Twitter credentials not set — skipping poll
