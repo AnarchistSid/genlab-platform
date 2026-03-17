@@ -1,0 +1,28 @@
+# Per-table backend routing. Change a table from "sharepoint" to "postgres"
+# to migrate it. Both backends can run simultaneously during migration.
+#
+# See: genlab_core.storage.factory for the routing logic.
+
+default_backend: sharepoint
+
+table_backends:
+  blueprints: postgres
+  stories: sharepoint
+  assets: sharepoint
+  templates: sharepoint
+  sources: sharepoint
+  publishing_analytics: sharepoint
+  analytics: sharepoint
+  content_memory: sharepoint
+  bandit_arms: sharepoint
+  pending_engagement: sharepoint
+  pending_feedback: sharepoint
+
+postgres:
+  host: localhost
+  port: 5432
+  database: genlab
+  user: genlab
+  password_env: POSTGRES_PASSWORD
+  min_connections: 2
+  max_connections: 10
