@@ -16,7 +16,8 @@ def test_load_config():
     config = load_storage_config()
     assert config["default_backend"] == "sharepoint"
     assert "blueprints" in config["table_backends"]
-    assert config["table_backends"]["blueprints"] == "sharepoint"
+    # Blueprints is now routed to postgres (Phase 1 complete)
+    assert config["table_backends"]["blueprints"] == "postgres"
 
 
 def test_load_config_fallback_when_missing():
@@ -35,8 +36,21 @@ def test_load_config_fallback_when_missing():
         factory.load_storage_config.cache_clear()
 
 
-def test_get_backend_for_table_returns_sharepoint_by_default():
-    """When table is configured as sharepoint, returns SharePointBackend."""
+def test_blueprints_routes_to_postgres():
+    """Blueprints is configured to use postgres backend (Phase 1)."""
+    from genlab_core.storage.factory import get_backend_for_table, load_storage_config
+
+    load_storage_config.cache_clear()
+    with patch("genlab_core.storage.factory._postgres_backend") as mock_pg:
+        mock_backend = MagicMock()
+        mock_pg.return_value = mock_backend
+        backend = get_backend_for_table("blueprints")
+        assert backend is mock_backend
+        mock_pg.assert_called_once()
+
+
+def test_stories_routes_to_sharepoint():
+    """Stories (and other non-migrated tables) still use sharepoint."""
     from genlab_core.storage.factory import get_backend_for_table, load_storage_config
     from genlab_core.storage.sharepoint import SharePointBackend
 
@@ -44,7 +58,7 @@ def test_get_backend_for_table_returns_sharepoint_by_default():
     with patch("genlab_core.storage.factory._sharepoint_backend") as mock_sp:
         mock_backend = MagicMock(spec=SharePointBackend)
         mock_sp.return_value = mock_backend
-        backend = get_backend_for_table("blueprints")
+        backend = get_backend_for_table("stories")
         assert backend is mock_backend
         mock_sp.assert_called_once()
 
