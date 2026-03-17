@@ -194,6 +194,8 @@ class PostgresBackend:
         self._max_size = max_size
         self._pool = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        import threading
+        self._lock = threading.Lock()
 
     def _ensure_pool(self) -> None:
         """Create the event loop and connection pool if they don't exist.
@@ -228,12 +230,13 @@ class PostgresBackend:
     def _run(self, coro):
         """Run an async coroutine synchronously.
 
-        Ensures the pool exists BEFORE entering the event loop, avoiding
-        the "event loop already running" error.
+        Thread-safe: a lock serializes all event-loop operations so
+        gunicorn gthread workers don't race on the same loop.
         """
-        self._ensure_pool()
-        assert self._loop is not None
-        return self._loop.run_until_complete(coro)
+        with self._lock:
+            self._ensure_pool()
+            assert self._loop is not None
+            return self._loop.run_until_complete(coro)
 
     @staticmethod
     def _coerce_value(value: Any) -> Any:
