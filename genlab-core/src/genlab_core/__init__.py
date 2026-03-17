@@ -23,6 +23,7 @@ _SUBMODULES = [
     "media",
     "models",
     "niche_loader",
+    "observability",
     "orchestration",
     "platforms",
     "publishing",
