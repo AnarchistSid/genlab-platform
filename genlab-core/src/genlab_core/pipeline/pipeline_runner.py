@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -132,6 +133,9 @@ class GenericPipelineRunner:
         log_handler, stage_filter, _log_path = install_log_handler(
             niche_id, run_id, log_dir,
         )
+
+        # Inject niche_root into config so _load_stages can add it to sys.path
+        config["_niche_root"] = str(self._niche_roots.get(niche_id, ""))
 
         try:
             stages, declarations = self._load_stages(niche_id, config)
@@ -263,6 +267,13 @@ class GenericPipelineRunner:
                 f"pipeline.stages for '{niche_id}' is empty. "
                 f"Declare at least one stage to run the pipeline."
             )
+
+        # Ensure niche root is on sys.path so niche-specific strategy
+        # modules (bb_strategies, cw_strategies, etc.) can be imported.
+        niche_root = str(config.get("_niche_root", ""))
+        if niche_root and niche_root not in sys.path:
+            sys.path.insert(0, niche_root)
+            logger.debug("[Pipeline] Added %s to sys.path for stage imports", niche_root)
 
         stages = []
         declarations = []
