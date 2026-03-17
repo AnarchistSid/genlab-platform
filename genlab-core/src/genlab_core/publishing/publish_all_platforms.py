@@ -486,7 +486,7 @@ def main() -> int:
     parser.add_argument(
         "--niche",
         required=True,
-        help="Niche ID (ai_creators, gaming, sports, movies, anime)",
+        help="Niche ID (ai_creators, gaming, sports, movies, anime) or 'all'",
     )
     parser.add_argument(
         "--platforms",
@@ -500,6 +500,18 @@ def main() -> int:
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+
+    # Multi-niche mode
+    if args.niche == "all":
+        all_niches = ["ai_creators", "gaming", "sports", "movies", "anime"]
+        total_exit = 0
+        for nid in all_niches:
+            logger.info("=" * 60)
+            logger.info("Publishing for niche: %s", nid)
+            logger.info("=" * 60)
+            exit_code = run_publish(niche_id=nid, platforms=args.platforms)
+            total_exit = max(total_exit, exit_code)
+        return total_exit
 
     niche_id = _validate_niche(args.niche)
 
