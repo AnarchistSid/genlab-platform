@@ -1,4 +1,4 @@
-.PHONY: test test-core test-bb test-cr test-cw test-sr test-fd test-dash lint fix clean plist-status plist-list health logs logs-errors logs-stats
+.PHONY: test test-core test-bb test-cr test-cw test-sr test-fd test-dash lint fix clean plist-status plist-list health logs logs-errors logs-stats db-stats db-vacuum
 
 UV := ~/.local/bin/uv
 
@@ -65,6 +65,13 @@ logs-errors:
 
 logs-stats:
 	python3 scripts/log_aggregator.py --stats
+
+# Database maintenance
+db-stats:
+	@PGPASSWORD=genlab_dev psql -h localhost -p 5432 -U genlab -d genlab -c "SELECT relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size, n_live_tup AS rows FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC;"
+
+db-vacuum:
+	./scripts/db_maintenance.sh
 
 # Clean ephemeral artifacts
 clean:
