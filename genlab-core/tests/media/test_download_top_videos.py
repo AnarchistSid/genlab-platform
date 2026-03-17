@@ -116,7 +116,7 @@ class TestDownloadVideosForStories:
             entries = download_videos_for_stories(
                 stories=stories,
                 run_dir=tmp_path,
-                niche_id="ai_news",
+                niche_id="ai_creators",
                 max_stories=2,
             )
 
@@ -138,7 +138,7 @@ class TestDownloadVideosForStories:
             entries = download_videos_for_stories(
                 stories=stories,
                 run_dir=tmp_path,
-                niche_id="ai_news",
+                niche_id="ai_creators",
                 max_stories=10,
             )
 
@@ -173,7 +173,7 @@ class TestDownloadVideosForStories:
             entries = download_videos_for_stories(
                 stories=stories,
                 run_dir=tmp_path,
-                niche_id="ai_news",
+                niche_id="ai_creators",
                 max_stories=10,
             )
 
@@ -199,7 +199,7 @@ class TestDownloadVideosForStories:
             entries = download_videos_for_stories(
                 stories=stories,
                 run_dir=tmp_path,
-                niche_id="ai_news",
+                niche_id="ai_creators",
                 max_stories=10,
             )
 
@@ -241,7 +241,7 @@ class TestDownloadVideosForStories:
             entries = download_videos_for_stories(
                 stories=stories,
                 run_dir=tmp_path,
-                niche_id="ai_news",
+                niche_id="ai_creators",
                 max_stories=10,
             )
 
@@ -282,7 +282,7 @@ class TestDownloadTopVideosStage:
             "stories": [{"story_id": "sid_0", "title": "Test"}],
             "run_dir": str(tmp_path),
             "run_id": "test_run",
-            "niche_id": "ai_news",
+            "niche_id": "ai_creators",
             "niche_config": {"pipeline": {"max_items_per_run": 5}},
         }
 
@@ -307,7 +307,7 @@ class TestDownloadTopVideosStage:
             "stories": [],
             "run_dir": str(tmp_path),
             "run_id": "empty_run",
-            "niche_id": "ai_news",
+            "niche_id": "ai_creators",
             "niche_config": {"pipeline": {"max_items_per_run": 10}},
         }
 
@@ -323,7 +323,7 @@ class TestDownloadTopVideosStage:
             "stories": [{"story_id": "s1", "title": "Test"}],
             "run_dir": "",
             "run_id": "no_dir",
-            "niche_id": "ai_news",
+            "niche_id": "ai_creators",
         }
         stage = DownloadTopVideos()
         result = stage.execute(context)
@@ -337,7 +337,7 @@ class TestDownloadTopVideosStage:
             "stories": [{"story_id": "s1", "title": "Test"}],
             "run_dir": str(tmp_path),
             "run_id": "run_delegate",
-            "niche_id": "ai_news",
+            "niche_id": "ai_creators",
             "niche_config": {"pipeline": {"max_items_per_run": 5}},
         }
 

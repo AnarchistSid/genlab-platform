@@ -84,8 +84,7 @@ YOUTUBE_CATEGORIES: Dict[str, str] = {
     "sports": "17",
     "movies": "1",           # Film & Animation
     "entertainment": "24",   # Entertainment (backup for movies)
-    "ai_creators": "28",     # Science & Technology (canonical)
-    "ai_news": "28",         # backward compat alias
+    "ai_creators": "28",     # Science & Technology
 }
 
 # Keyword sets for YouTube search per niche
@@ -126,13 +125,6 @@ NICHE_SEARCH_KEYWORDS: Dict[str, List[str]] = {
         "LLM explained",
         "AI model released",
     ],
-    "ai_news": [  # backward compat alias
-        "AI demo 2026",
-        "artificial intelligence explained",
-        "AI tool tutorial",
-        "LLM explained",
-        "AI model released",
-    ],
 }
 
 # View velocity thresholds — minimum views/hour to be considered "trending"
@@ -142,7 +134,6 @@ MIN_VIEW_VELOCITY: Dict[str, float] = {
     "movies": 300,
     "anime": 400,
     "ai_creators": 150,
-    "ai_news": 150,  # backward compat alias
 }
 
 MAX_DURATION_SECONDS = 240  # 4 minutes
@@ -871,7 +862,6 @@ class FetchTrendingVideos:
             "movies": _PROJECT_ROOT / "SpliceReel" / "config" / "sources.yaml",
             "anime": _PROJECT_ROOT / "FrameDrift" / "config" / "sources.yaml",
             "ai_creators": _PROJECT_ROOT / "BlackboxBrief" / "config" / "sources.yaml",
-            "ai_news": _PROJECT_ROOT / "BlackboxBrief" / "config" / "sources.yaml",  # backward compat alias
         }
         path = sources_paths.get(niche_id)
         if path and path.is_file():

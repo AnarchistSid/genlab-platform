@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from genlab_core.http.backlog_client import BacklogClient
 from genlab_core.storage.factory import reset_backends
+
+
+@pytest.fixture(autouse=True)
+def _force_sharepoint_mode():
+    """Ensure tests use SharePoint path regardless of local .env."""
+    with patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False):
+        yield
 
 
 def _make_client_with_mock_analytics() -> tuple[BacklogClient, MagicMock]:

@@ -39,7 +39,6 @@ DEFAULT_VELOCITY_THRESHOLDS: Dict[str, float] = {
     "movies": 800.0,
     "anime": 600.0,
     "ai_creators": 400.0,
-    "ai_news": 400.0,  # backward compat alias
 }
 
 # Minimum composite score to pass the quality gate.
@@ -50,7 +49,6 @@ DEFAULT_MIN_COMPOSITE: Dict[str, float] = {
     "movies": 0.30,
     "anime": 0.30,
     "ai_creators": 0.25,
-    "ai_news": 0.25,  # backward compat alias
 }
 
 
@@ -84,7 +82,7 @@ class CompositeScorer:
     """Score and filter trending videos for a specific niche.
 
     Args:
-        niche_id: Channel niche identifier (gaming, sports, movies, anime, ai_news).
+        niche_id: Channel niche identifier (gaming, sports, movies, anime, ai_creators).
         velocity_threshold: Override per-niche velocity baseline.
             If None, uses DEFAULT_VELOCITY_THRESHOLDS.
         min_composite: Override minimum composite score to pass gate.

@@ -25,8 +25,7 @@ TRENDS_CATEGORIES = {
     "sports": 20,      # Sports
     "movies": 34,      # Movies
     "anime": 0,        # No direct category — use keyword filtering
-    "ai_creators": 5,  # Computers & Electronics (canonical)
-    "ai_news": 5,      # backward compat alias
+    "ai_creators": 5,  # Computers & Electronics
 }
 
 NICHE_SEED_KEYWORDS = {
@@ -35,7 +34,6 @@ NICHE_SEED_KEYWORDS = {
     "movies": ["movies", "film", "cinema", "trailer"],
     "anime": ["anime", "manga", "crunchyroll"],
     "ai_creators": ["artificial intelligence", "AI", "machine learning"],
-    "ai_news": ["artificial intelligence", "AI", "machine learning"],  # backward compat alias
 }
 
 

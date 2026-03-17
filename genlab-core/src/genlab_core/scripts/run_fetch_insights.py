@@ -63,9 +63,6 @@ WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
 
 def _load_env_for_niche(niche_id: str) -> None:
     """Load the .env file for a given niche."""
-    # Handle legacy alias
-    if niche_id == "ai_news":
-        niche_id = "ai_creators"
     dir_name = NICHE_ENV_DIRS.get(niche_id)
     if not dir_name:
         return

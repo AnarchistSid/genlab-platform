@@ -22,12 +22,12 @@ class TestGoogleTrendsIntel:
         assert topics == NICHE_SEED_KEYWORDS["gaming"]
 
     def test_all_niches_have_seed_keywords(self):
-        for niche in ["gaming", "sports", "movies", "anime", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "anime", "ai_creators"]:
             assert niche in NICHE_SEED_KEYWORDS
             assert len(NICHE_SEED_KEYWORDS[niche]) >= 2
 
     def test_all_niches_have_trends_categories(self):
-        for niche in ["gaming", "sports", "movies", "ai_news"]:
+        for niche in ["gaming", "sports", "movies", "ai_creators"]:
             assert niche in TRENDS_CATEGORIES
 
     def test_realtime_trending_returns_list(self):
