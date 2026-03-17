@@ -301,7 +301,8 @@ class BacklogClient:
             return GraphTableProxy(self._graph, self._site_id, list_id, name)
 
         self.stories = _proxy("Stories")
-        self.blueprints = ScheduleGuardedProxy(_proxy("Blueprints"))
+        _raw_blueprints = _proxy("Blueprints")
+        self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
         self.templates = _proxy("Templates")
         self.assets = _proxy("Assets")
         self.sources = _proxy("Sources")
@@ -338,6 +339,34 @@ class BacklogClient:
         except (ValueError, KeyError):
             self.content_memory = None
 
+        # ── Storage backend routing ──────────────────────────────────
+        # Build proxy mapping for SharePointBackend.  Use the
+        # ScheduleGuardedProxy for Blueprints so schedule protection
+        # is enforced even through the backend layer.
+        self._sp_proxies = {
+            "Stories": self.stories,
+            "Blueprints": self.blueprints,
+            "Templates": self.templates,
+            "Assets": self.assets,
+            "Sources": self.sources,
+            "Publishing_Analytics": self.publishing_analytics,
+            "Analytics": self.analytics,
+        }
+        for name, attr in [
+            ("AB_Tests", self.ab_tests),
+            ("Audience_Snapshots", self.audience_snapshots),
+            ("PendingEngagement", self.pending_engagement),
+            ("PendingFeedback", self.pending_feedback),
+            ("BanditArms", self.bandit_arms),
+            ("Content_Memory", self.content_memory),
+        ]:
+            if attr is not None:
+                self._sp_proxies[name] = attr
+
+        # Per-client backend cache — avoids module-level singleton issues
+        # when multiple BacklogClient instances exist (e.g. in tests).
+        self._backend_cache: Dict[str, Any] = {}
+
     # ── Circuit breaker helper ───────────────────────────────────────
 
     @staticmethod
@@ -348,6 +377,37 @@ class BacklogClient:
         no alternative — the caller will see the CircuitOpenError.
         """
         return SHAREPOINT_CB.call(fn, *args, **kwargs)
+
+    # ── Storage backend helper ──────────────────────────────────────
+
+    def _backend(self, table: str):
+        """Return the StorageBackend for the given table.
+
+        Routes to SharePoint or PostgreSQL based on config/storage_backends.yaml.
+        Uses a per-client cache so multiple BacklogClient instances (e.g. in
+        tests) each get their own backends tied to their own proxies.
+        """
+        from genlab_core.storage.factory import _load_config
+
+        cache = getattr(self, "_backend_cache", None)
+        if cache is None:
+            cache = {}
+            self._backend_cache = cache
+
+        config = _load_config()
+        engine = config.get(table, "sharepoint").lower()
+
+        if engine not in cache:
+            if engine == "postgres":
+                from genlab_core.storage.postgres import PostgresBackend
+
+                cache[engine] = PostgresBackend(dsn=os.getenv("DATABASE_URL"))
+            else:
+                from genlab_core.storage.sharepoint import SharePointBackend
+
+                cache[engine] = SharePointBackend(self._sp_proxies)
+
+        return cache[engine]
 
     # ── Private helpers ──────────────────────────────────────────────
 
@@ -420,20 +480,27 @@ class BacklogClient:
         }
         if story.get("niche_id"):
             fields["niche_id"] = story["niche_id"]
-        record = self._sp_call(self.stories.create, fields)
+        record = self._sp_call(
+            self._backend("Stories").create, "Stories", fields,
+        )
         return record["id"]
 
     def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
         formula = f"{{story_id}}='{_esc(story_id)}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        records = self._sp_call(self.stories.all, formula=formula, max_records=1)
+        records = self._sp_call(
+            self._backend("Stories").find, "Stories",
+            formula=formula, niche_id=niche_id, max_records=1,
+        )
         return records[0] if records else None
 
     def update_story_status(self, story_id: str, status: str, *, niche_id: str | None = None, **kwargs):
         story = self.find_story_by_story_id(story_id, niche_id=niche_id)
         if not story:
             raise ValueError(f"Story {story_id} not found")
-        self._sp_call(self.stories.update, story["id"], {"status": status, **kwargs})
+        self._sp_call(
+            self._backend("Stories").update, "Stories",
+            story["id"], {"status": status, **kwargs},
+        )
 
     def batch_create_stories(self, stories: List[Dict]) -> List[str]:
         records = []
@@ -453,7 +520,7 @@ class BacklogClient:
                 "recency_score": scores.get("recency", 0.0),
                 "novelty_score": scores.get("novelty", 0.0),
             })
-        created = self.stories.batch_create(records)
+        created = self._backend("Stories").batch_create("Stories", records)
         return [r["id"] for r in created]
 
     # ===== BLUEPRINTS =====
@@ -512,7 +579,9 @@ class BacklogClient:
                 fields[key] = val
 
         try:
-            record = self.blueprints.create(fields, typecast=True)
+            record = self._backend("Blueprints").create(
+                "Blueprints", fields, typecast=True,
+            )
         except Exception as e:
             err_str = str(e)
             if "UNKNOWN_FIELD_NAME" in err_str or "columnNotFound" in err_str or "not recognized" in err_str:
@@ -522,15 +591,17 @@ class BacklogClient:
                     "clip_url",
                 ):
                     fields.pop(f, None)
-                record = self.blueprints.create(fields)
+                record = self._backend("Blueprints").create("Blueprints", fields)
             else:
                 raise
         return record["id"]
 
     def find_blueprint_by_candidate_id(self, candidate_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
         formula = f"{{candidate_id}}='{_esc(candidate_id)}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        records = self._sp_call(self.blueprints.all, formula=formula, max_records=1)
+        records = self._sp_call(
+            self._backend("Blueprints").find, "Blueprints",
+            formula=formula, niche_id=niche_id, max_records=1,
+        )
         return records[0] if records else None
 
     def update_blueprint_status(
@@ -541,8 +612,9 @@ class BacklogClient:
             raise ValueError(f"Blueprint {candidate_id} not found")
         if not force:
             self.assert_not_scheduled(blueprint, status)
-        self.blueprints.update(
-            blueprint["id"], {"status": status, **kwargs}, typecast=True
+        self._backend("Blueprints").update(
+            "Blueprints", blueprint["id"],
+            {"status": status, **kwargs}, typecast=True,
         )
 
     def get_blueprints_safe_to_cleanup(
@@ -561,8 +633,10 @@ class BacklogClient:
 
     def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> List[Dict]:
         formula = f"{{status}}='{_esc(status)}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        return self._sp_call(self.blueprints.all, formula=formula)
+        return self._sp_call(
+            self._backend("Blueprints").find, "Blueprints",
+            formula=formula, niche_id=niche_id,
+        )
 
     def batch_create_blueprints(self, blueprints: List[Dict]) -> List[str]:
         story_cache: Dict[str, Optional[Dict]] = {}
@@ -603,14 +677,15 @@ class BacklogClient:
                 "why_this_will_work": bp.get("why_this_will_work", ""),
             })
 
-        created = self.blueprints.batch_create(records)
+        created = self._backend("Blueprints").batch_create("Blueprints", records)
         return [r["id"] for r in created]
 
     # ===== TEMPLATES =====
 
     def create_template(self, template: Dict) -> str:
         constraints = template.get("constraints", {})
-        record = self.templates.create(
+        record = self._backend("Templates").create(
+            "Templates",
             {
                 "template_id": template["template_id"],
                 "name": template["name"],
@@ -630,15 +705,19 @@ class BacklogClient:
         return record["id"]
 
     def find_template_by_template_id(self, template_id: str) -> Optional[Dict]:
-        records = self.templates.all(
-            formula=f"{{template_id}}='{_esc(template_id)}'", max_records=1
+        records = self._backend("Templates").find(
+            "Templates",
+            formula=f"{{template_id}}='{_esc(template_id)}'",
+            max_records=1,
         )
         return records[0] if records else None
 
     def get_active_templates(self, *, niche_id: str | None = None) -> List[Dict]:
-        formula = "{status}='active'"
-        formula = _inject_niche_filter(formula, niche_id)
-        return self.templates.all(formula=formula)
+        return self._backend("Templates").find(
+            "Templates",
+            formula="{status}='active'",
+            niche_id=niche_id,
+        )
 
     # ===== ASSETS =====
 
@@ -679,28 +758,33 @@ class BacklogClient:
         if source_url and asset.get("status") == "READY":
             fields["file"] = [{"url": source_url}]
 
+        be = self._backend("Assets")
         if quality_fields:
             try:
-                record = self.assets.create({**fields, **quality_fields}, typecast=True)
+                record = be.create(
+                    "Assets", {**fields, **quality_fields}, typecast=True,
+                )
                 return record["id"]
             except Exception as e:
                 if "UNKNOWN_FIELD_NAME" not in str(e) and "columnNotFound" not in str(e):
                     raise
 
-        record = self.assets.create(fields, typecast=True)
+        record = be.create("Assets", fields, typecast=True)
         return record["id"]
 
     def find_asset_by_asset_id(self, asset_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
         formula = f"{{asset_id}}='{_esc(asset_id)}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        records = self.assets.all(formula=formula, max_records=1)
+        records = self._backend("Assets").find(
+            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+        )
         return records[0] if records else None
 
     def find_asset_by_url(self, url: str, *, niche_id: str | None = None) -> Optional[Dict]:
         escaped = url.replace("'", "\\'")
         formula = f"{{url}}='{escaped}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        records = self.assets.all(formula=formula, max_records=1)
+        records = self._backend("Assets").find(
+            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+        )
         return records[0] if records else None
 
     def find_assets_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> List[Dict]:
@@ -708,16 +792,20 @@ class BacklogClient:
         if not story:
             return []
         formula = f"{{story_link}}='{_esc(story['id'])}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        return self.assets.all(formula=formula)
+        return self._backend("Assets").find(
+            "Assets", formula=formula, niche_id=niche_id,
+        )
 
     def update_asset_status(self, asset_id: str, status: str, *, niche_id: str | None = None, **kwargs):
         formula = f"{{asset_id}}='{_esc(asset_id)}'"
-        formula = _inject_niche_filter(formula, niche_id)
-        records = self.assets.all(formula=formula, max_records=1)
+        records = self._backend("Assets").find(
+            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+        )
         if not records:
             raise ValueError(f"Asset {asset_id} not found")
-        self.assets.update(records[0]["id"], {"status": status, **kwargs})
+        self._backend("Assets").update(
+            "Assets", records[0]["id"], {"status": status, **kwargs},
+        )
 
     def batch_create_assets(self, assets: List[Dict]) -> List[str]:
         created_ids = []
@@ -735,7 +823,7 @@ class BacklogClient:
     # ===== SOURCES =====
 
     def create_source(self, source: Dict) -> str:
-        record = self.sources.create({
+        record = self._backend("Sources").create("Sources", {
             "source_id": source["source_id"],
             "domain": source["domain"],
             "name": source.get("name", source["domain"]),
@@ -748,12 +836,15 @@ class BacklogClient:
         return record["id"]
 
     def update_source_fetch_status(self, source_id: str, status: str):
-        records = self.sources.all(
-            formula=f"{{source_id}}='{_esc(source_id)}'", max_records=1
+        records = self._backend("Sources").find(
+            "Sources",
+            formula=f"{{source_id}}='{_esc(source_id)}'",
+            max_records=1,
         )
         if not records:
             return
-        self.sources.update(
+        self._backend("Sources").update(
+            "Sources",
             records[0]["id"],
             {
                 "last_fetch_at": datetime.now(timezone.utc).isoformat(),
@@ -762,9 +853,11 @@ class BacklogClient:
         )
 
     def get_enabled_sources(self, *, niche_id: str | None = None) -> List[Dict]:
-        formula = "{enabled}=TRUE()"
-        formula = _inject_niche_filter(formula, niche_id)
-        return self.sources.all(formula=formula)
+        return self._backend("Sources").find(
+            "Sources",
+            formula="{enabled}=TRUE()",
+            niche_id=niche_id,
+        )
 
     # ===== ATTACHMENTS =====
 
@@ -780,8 +873,8 @@ class BacklogClient:
             logger.warning("File not found for upload: %s", file_path)
             return None
         try:
-            result = self.blueprints.upload_attachment(
-                record_id, field_name, str(file_path)
+            result = self._backend("Blueprints").upload_attachment(
+                "Blueprints", record_id, field_name, str(file_path),
             )
             return result
         except Exception as exc:
@@ -830,21 +923,22 @@ class BacklogClient:
         if niche_id:
             fields["niche_id"] = niche_id
 
+        be = self._backend("Publishing_Analytics")
         try:
             existing = self._sp_call(
-                self.publishing_analytics.all,
+                be.find, "Publishing_Analytics",
                 formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
                 max_records=1,
             )
             if existing:
                 self._sp_call(
-                    self.publishing_analytics.update,
+                    be.update, "Publishing_Analytics",
                     existing[0]["id"], fields, typecast=True,
                 )
                 return existing[0]["id"]
             else:
                 record = self._sp_call(
-                    self.publishing_analytics.create, fields, typecast=True,
+                    be.create, "Publishing_Analytics", fields, typecast=True,
                 )
                 return record["id"]
         except CircuitOpenError:
@@ -870,9 +964,9 @@ class BacklogClient:
         if status:
             parts.append(f"{{status}}='{_esc(status)}'")
         formula = f"AND({', '.join(parts)})" if parts else ""
-        formula = _inject_niche_filter(formula or None, niche_id)
         return self._sp_call(
-            self.publishing_analytics.all, formula=formula, max_records=limit,
+            self._backend("Publishing_Analytics").find, "Publishing_Analytics",
+            formula=formula or None, niche_id=niche_id, max_records=limit,
         )
 
     # ===== ANALYTICS =====
@@ -954,30 +1048,32 @@ class BacklogClient:
             "format", "fetch_window", "story_title", "niche_id",
         }
 
+        be = self._backend("Analytics")
         try:
-            existing = self.analytics.all(
+            existing = be.find(
+                "Analytics",
                 formula=f"{{post_id}}='{_esc(composite_id)}'",
                 max_records=1,
             )
             if existing:
                 try:
-                    self.analytics.update(existing[0]["id"], fields, typecast=True)
+                    be.update("Analytics", existing[0]["id"], fields, typecast=True)
                 except Exception as e:
                     if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                         for f_name in _OPTIONAL_FIELDS:
                             fields.pop(f_name, None)
-                        self.analytics.update(existing[0]["id"], fields, typecast=True)
+                        be.update("Analytics", existing[0]["id"], fields, typecast=True)
                     else:
                         raise
                 return existing[0]["id"]
             else:
                 try:
-                    record = self.analytics.create(fields, typecast=True)
+                    record = be.create("Analytics", fields, typecast=True)
                 except Exception as e:
                     if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
                         for f_name in _OPTIONAL_FIELDS:
                             fields.pop(f_name, None)
-                        record = self.analytics.create(fields, typecast=True)
+                        record = be.create("Analytics", fields, typecast=True)
                     else:
                         raise
                 return record["id"]
@@ -992,7 +1088,9 @@ class BacklogClient:
             logger.warning("AB_Tests table not configured")
             return None
         try:
-            record = self.ab_tests.create(test, typecast=True)
+            record = self._backend("AB_Tests").create(
+                "AB_Tests", test, typecast=True,
+            )
             return record["id"]
         except Exception as exc:
             logger.warning("Failed to create AB test: %s", exc)
@@ -1002,17 +1100,22 @@ class BacklogClient:
         if not self.ab_tests:
             return []
         formula = f"{{status}}='{_esc(status)}'" if status else None
-        formula = _inject_niche_filter(formula, niche_id)
-        return self.ab_tests.all(formula=formula, max_records=50)
+        return self._backend("AB_Tests").find(
+            "AB_Tests", formula=formula, niche_id=niche_id, max_records=50,
+        )
 
     def update_ab_test(self, test_id: str, fields: Dict):
         if not self.ab_tests:
             return
-        records = self.ab_tests.all(
-            formula=f"{{test_id}}='{_esc(test_id)}'", max_records=1
+        records = self._backend("AB_Tests").find(
+            "AB_Tests",
+            formula=f"{{test_id}}='{_esc(test_id)}'",
+            max_records=1,
         )
         if records:
-            self.ab_tests.update(records[0]["id"], fields, typecast=True)
+            self._backend("AB_Tests").update(
+                "AB_Tests", records[0]["id"], fields, typecast=True,
+            )
 
     # ===== ENGAGEMENT (Sprint 23 — observe-only) =====
 
@@ -1039,7 +1142,9 @@ class BacklogClient:
             "Status": "pending",
         }
         try:
-            result = self.pending_engagement.create(fields)
+            result = self._backend("PendingEngagement").create(
+                "PendingEngagement", fields,
+            )
             return str(result.get("id", "")) or None
         except Exception as e:
             logger.warning("[engagement] write_pending_engagement failed: %s", e)
@@ -1059,7 +1164,8 @@ class BacklogClient:
         if niche_id:
             formula = f"AND({{Status}}='{_esc(status)}', {{NicheId}}='{_esc(niche_id)}')"
         try:
-            return self.pending_engagement.all(
+            return self._backend("PendingEngagement").find(
+                "PendingEngagement",
                 formula=formula,
                 max_records=limit,
             )
@@ -1101,7 +1207,9 @@ class BacklogClient:
             fields["ErrorMessage"] = error_msg[:500]
 
         try:
-            self.pending_engagement.update(item_id, fields)
+            self._backend("PendingEngagement").update(
+                "PendingEngagement", item_id, fields,
+            )
             logger.info("BacklogClient: engagement %s → %s", item_id, status)
         except Exception as e:
             logger.warning("BacklogClient: failed to update engagement %s: %s", item_id, e)
@@ -1136,7 +1244,7 @@ class BacklogClient:
 
     def health_check(self) -> bool:
         try:
-            self.stories.all(max_records=1)
+            self._backend("Stories").find("Stories", max_records=1)
             return True
         except Exception as e:
             err_str = str(e)
