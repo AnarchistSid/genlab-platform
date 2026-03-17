@@ -1,7 +1,7 @@
 """Pipeline stage: Validate rendered videos meet platform specs.
 
 Checks each rendered video against Instagram Reels / YouTube Shorts specs:
-  - Dimensions: 1080×1920 (9:16) required
+  - Dimensions: 1080x1920 (9:16) required
   - Codec: H.264 (libx264)
   - Pixel format: yuv420p
   - Color space: bt709
@@ -9,8 +9,13 @@ Checks each rendered video against Instagram Reels / YouTube Shorts specs:
   - Duration: 15-60 seconds
   - File size: < 100 MB
 
+VMAF gate (enabled by default):
+  - Compares rendered variant against master using Netflix VMAF metric
+  - Threshold: >= 85
+  - On failure: re-encode at CRF-3 (minimum CRF 12), then reject if still failing
+  - Disable via niche_config: video_validation.run_vmaf: false
+
 Auto-fix attempts re-encoding for codec/pixel format/color space mismatches.
-VMAF check is optional (requires vmaf model, disabled by default).
 
 Non-fatal: invalid videos are flagged but don't crash the pipeline.
 """
@@ -24,8 +29,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
+from genlab_core.media.video_validator import check_vmaf
 
 logger = logging.getLogger(__name__)
+
+# Default CRF used for initial encode (matches PLATFORM_SPECS instagram default)
+_DEFAULT_CRF = 15
+# Minimum CRF for VMAF re-encode attempts (lower CRF = higher quality / bigger file)
+_MIN_REENCODE_CRF = 12
+# CRF reduction step on VMAF failure
+_CRF_STEP = 3
 
 # Platform specs
 SPEC = {
@@ -59,6 +72,7 @@ class ValidateVideos:
 
         config = context.get("niche_config", {})
         auto_fix = config.get("video_validation", {}).get("auto_fix", True)
+        run_vmaf = config.get("video_validation", {}).get("run_vmaf", True)
 
         passed = 0
         failed = 0
@@ -83,8 +97,29 @@ class ValidateVideos:
                 issues = self._check(probe)
 
                 if not issues:
-                    media["video_validation"] = {"valid": True, "issues": []}
-                    passed += 1
+                    # Spec checks passed — now run VMAF gate if enabled
+                    if run_vmaf:
+                        vmaf_result = self._run_vmaf_gate(media, video_path)
+                        if vmaf_result == "pass":
+                            media["video_validation"] = {"valid": True, "issues": []}
+                            passed += 1
+                        elif vmaf_result == "reencoded":
+                            media["video_validation"] = {
+                                "valid": True,
+                                "issues": [],
+                                "vmaf_reencoded": True,
+                            }
+                            passed += 1
+                            fixed += 1
+                        else:
+                            media["video_validation"] = {
+                                "valid": False,
+                                "issues": ["vmaf_below_threshold"],
+                            }
+                            failed += 1
+                    else:
+                        media["video_validation"] = {"valid": True, "issues": []}
+                        passed += 1
                 elif auto_fix and self._can_fix(issues):
                     fixed_path = self._fix(Path(video_path), probe, issues)
                     if fixed_path:
@@ -124,6 +159,46 @@ class ValidateVideos:
         }
 
         return context
+
+    def _run_vmaf_gate(self, media: Dict[str, Any], video_path: str) -> str:
+        """Run VMAF check with one re-encode attempt on failure.
+
+        Returns: "pass", "reencoded", or "fail".
+        """
+        master_path = media.get("master_path", "")
+        if not master_path or not Path(master_path).exists():
+            # No master available for comparison — skip VMAF (fail-open)
+            logger.debug("[ValidateVideos] No master_path for VMAF check — skipping")
+            return "pass"
+
+        vmaf_ok, score = check_vmaf(Path(master_path), Path(video_path), "rendered")
+        if vmaf_ok:
+            logger.info("[ValidateVideos] VMAF passed: %.1f", score)
+            return "pass"
+
+        logger.warning(
+            "[ValidateVideos] VMAF %.1f < 85 — attempting re-encode at CRF-%d",
+            score, _CRF_STEP,
+        )
+
+        # Re-encode at lower CRF
+        reencoded = self._vmaf_reencode(Path(video_path), current_crf=_DEFAULT_CRF)
+        if reencoded is None:
+            logger.error("[ValidateVideos] VMAF re-encode failed")
+            return "fail"
+
+        # Check VMAF again on the re-encoded file
+        vmaf_ok_2, score_2 = check_vmaf(Path(master_path), reencoded, "reencoded")
+        if vmaf_ok_2:
+            logger.info("[ValidateVideos] VMAF passed after re-encode: %.1f", score_2)
+            media["rendered_path"] = str(reencoded)
+            return "reencoded"
+
+        logger.error(
+            "[ValidateVideos] VMAF still failing after re-encode: %.1f — rejecting",
+            score_2,
+        )
+        return "fail"
 
     @staticmethod
     def _probe(path: Path) -> Optional[Dict[str, Any]]:
@@ -259,4 +334,52 @@ class ValidateVideos:
                 return out
             return None
         except subprocess.TimeoutExpired:
+            return None
+
+    @staticmethod
+    def _vmaf_reencode(
+        path: Path,
+        current_crf: int = _DEFAULT_CRF,
+    ) -> Optional[Path]:
+        """Re-encode at CRF - _CRF_STEP (minimum _MIN_REENCODE_CRF) to improve VMAF.
+
+        Returns the path to the re-encoded file, or None if FFmpeg fails.
+        """
+        new_crf = max(_MIN_REENCODE_CRF, current_crf - _CRF_STEP)
+        out = path.with_stem(f"{path.stem}_vmaf_fixed")
+        ffmpeg = get_ffmpeg_binary()
+
+        logger.info(
+            "[ValidateVideos] VMAF re-encode: CRF %d → %d for %s",
+            current_crf, new_crf, path.name,
+        )
+
+        cmd = [
+            ffmpeg, "-y",
+            "-i", str(path),
+            "-c:v", "libx264",
+            "-crf", str(new_crf),
+            "-preset", "slow",
+            "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-c:a", "aac",
+            "-b:a", "320k",
+            "-ar", "48000",
+            "-movflags", "+faststart",
+            str(out),
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0 and out.exists():
+                return out
+            logger.warning(
+                "[ValidateVideos] VMAF re-encode ffmpeg exited %d",
+                result.returncode,
+            )
+            return None
+        except subprocess.TimeoutExpired:
+            logger.warning("[ValidateVideos] VMAF re-encode timed out")
             return None
