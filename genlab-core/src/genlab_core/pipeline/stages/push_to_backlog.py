@@ -78,7 +78,9 @@ class PushToBacklog:
             logger.info("[PUSH] No stories to push")
             return context
 
-        if not all([
+        import os
+        _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
+        if not _use_postgres and not all([
             settings.azure_tenant_id,
             settings.azure_client_id,
             settings.azure_client_secret,
@@ -149,6 +151,13 @@ class PushToBacklog:
             content = story.get("content", {})
             if not content:
                 continue
+            # Content may be a JSON string from the writing stage
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning("[PUSH] Blueprint '%s' has unparseable content string", title)
+                    continue
 
             # Extract video_id for dedup — available from FetchTrendingVideos or DownloadTopVideos
             video_id = story.get("video_id", "")
