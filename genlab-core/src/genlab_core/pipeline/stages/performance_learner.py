@@ -1,15 +1,19 @@
-"""Pipeline stage: Update Thompson Sampling bandit posteriors.
+"""Pipeline stage: Update bandit posteriors (Thompson Sampling + LinUCB).
 
 Post-analytics stage that reads engagement metrics from context['stories']
-and updates the bandit arms (alpha/beta) stored in SharePoint.
+and updates bandit arms stored in SharePoint.
 
 Each "arm" represents a content strategy dimension (hook_formula,
 template_type, posting_time_slot, etc.). When engagement data arrives,
-we compute a reward signal and update the Beta distribution:
-  - success: alpha += 1
-  - failure: beta += 1
+we compute a reward signal and update the appropriate model:
 
-Uses genlab_core.learning.arm_loader for SharePoint CRUD and
+  - Arms with >= MIN_OBS_FOR_LINUCB observations: LinUCB contextual update
+    (A += x x^T, b += reward * x)
+  - Arms below threshold: Thompson Sampling update
+    (success: alpha += 1, failure: beta += 1)
+
+Uses genlab_core.learning.arm_loader for SharePoint CRUD,
+genlab_core.learning.linucb for contextual bandit updates, and
 genlab_core.learning.reward_shaper for reward computation.
 
 Non-fatal: learning failures are logged but never block publishing.
@@ -27,7 +31,10 @@ MIN_STORIES_WITH_DATA = 1
 
 
 class PerformanceLearner:
-    """Update Thompson Sampling bandit posteriors from engagement data.
+    """Update bandit posteriors from engagement data.
+
+    Uses LinUCB for arms with sufficient observations, Thompson Sampling
+    otherwise (cold-start protection).
 
     Reads: context['stories'], context['niche_config'], context['run_stats']
     Writes: context['run_stats']['learning']
@@ -82,7 +89,12 @@ class PerformanceLearner:
 
         # Late imports — these modules need SharePoint/Graph credentials
         try:
-            from genlab_core.learning.arm_loader import load_all_arms, BANDIT_LIST_NAMES
+            from genlab_core.learning.arm_loader import (
+                BANDIT_LIST_NAMES,
+                load_all_arms,
+                load_all_arms_extended,
+                save_arm,
+            )
             from genlab_core.learning.reward_shaper import compute_reward
         except ImportError:
             logger.warning("[PerformanceLearner] Learning modules unavailable, skipping")
@@ -95,6 +107,8 @@ class PerformanceLearner:
             return context
 
         updates_made = 0
+        linucb_updates = 0
+        thompson_updates = 0
         errors = 0
 
         try:
@@ -107,13 +121,29 @@ class PerformanceLearner:
                 }
                 return context
 
-            arms = load_all_arms(proxy, niche_id)
-            if not arms:
+            # Load extended arm data (includes LinUCB state)
+            arms_extended = load_all_arms_extended(proxy, niche_id)
+            if not arms_extended:
                 logger.info("[PerformanceLearner] No bandit arms found for %s", niche_id)
                 context.setdefault("run_stats", {})["learning"] = {
                     "status": "no_arms",
                 }
                 return context
+
+            # Try to import LinUCB; if numpy not available, fall back entirely
+            linucb_available = False
+            try:
+                from genlab_core.learning.linucb import (
+                    CONTEXT_DIM,
+                    MIN_OBS_FOR_LINUCB,
+                    LinUCBArm,
+                    build_content_context,
+                )
+                linucb_available = True
+            except ImportError:
+                logger.info(
+                    "[PerformanceLearner] LinUCB unavailable (numpy?), using Thompson only"
+                )
 
             # Compute rewards and update arms
             for story in with_engagement:
@@ -121,16 +151,76 @@ class PerformanceLearner:
                     reward = compute_reward(story, niche_config)
                     arm_ids = self._extract_arm_ids(story)
 
+                    # Build context vector for LinUCB (once per story)
+                    context_vector = None
+                    if linucb_available:
+                        try:
+                            context_vector = build_content_context(story, niche_id)
+                        except Exception:
+                            logger.debug(
+                                "[PerformanceLearner] Context build failed for %s",
+                                story.get("story_id", "unknown"),
+                            )
+
                     for arm_id in arm_ids:
-                        if arm_id not in arms:
+                        if arm_id not in arms_extended:
                             continue
 
-                        alpha, beta = arms[arm_id]
+                        arm_data = arms_extended[arm_id]
+                        alpha = arm_data["alpha"]
+                        beta = arm_data["beta"]
+                        linucb_state = arm_data.get("linucb_state")
+
+                        # Restore or initialize LinUCB arm
+                        linucb_arm = None
+                        if linucb_available and linucb_state is not None:
+                            try:
+                                linucb_arm = LinUCBArm.from_dict(linucb_state)
+                            except Exception:
+                                logger.debug(
+                                    "[PerformanceLearner] Failed to restore LinUCB "
+                                    "state for %s, using Thompson",
+                                    arm_id,
+                                )
+                        elif linucb_available and context_vector is not None:
+                            # No existing LinUCB state — initialize fresh arm
+                            linucb_arm = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+
+                        # Decide update strategy based on observation count
+                        used_linucb = False
+                        if (linucb_arm is not None
+                                and context_vector is not None
+                                and linucb_arm.n_obs >= MIN_OBS_FOR_LINUCB):
+                            # LinUCB update: use contextual information
+                            linucb_arm.update(context_vector, reward)
+                            arm_data["linucb_state"] = linucb_arm.to_dict()
+                            linucb_updates += 1
+                            used_linucb = True
+                            logger.debug(
+                                "[PerformanceLearner] LinUCB update: arm=%s "
+                                "reward=%.3f n_obs=%d",
+                                arm_id, reward, linucb_arm.n_obs,
+                            )
+                        elif linucb_arm is not None and context_vector is not None:
+                            # Below threshold: still accumulate LinUCB observations
+                            # for eventual activation, but use Thompson for decisions
+                            linucb_arm.update(context_vector, reward)
+                            arm_data["linucb_state"] = linucb_arm.to_dict()
+
+                        # Always update Thompson Sampling posteriors (alpha/beta)
+                        # as the cold-start fallback
                         if reward >= 0.5:
                             alpha += 1.0
                         else:
                             beta += 1.0
-                        arms[arm_id] = (alpha, beta)
+                        arm_data["alpha"] = alpha
+                        arm_data["beta"] = beta
+
+                        if used_linucb:
+                            thompson_updates -= 0  # counted as linucb
+                        else:
+                            thompson_updates += 1
+
                         updates_made += 1
 
                 except Exception:
@@ -142,21 +232,23 @@ class PerformanceLearner:
 
             # Write updated arms back to SharePoint
             if updates_made > 0:
-                self._write_arms(proxy, arms)
+                self._write_arms_extended(proxy, arms_extended, save_arm)
 
         except Exception:
             logger.exception("[PerformanceLearner] Failed to update bandits for %s", niche_id)
             errors += 1
 
         logger.info(
-            "[PerformanceLearner] %s: %d arm updates, %d errors",
-            niche_id, updates_made, errors,
+            "[PerformanceLearner] %s: %d arm updates (%d LinUCB, %d Thompson), %d errors",
+            niche_id, updates_made, linucb_updates, thompson_updates, errors,
         )
 
         context.setdefault("run_stats", {})["learning"] = {
             "niche_id": niche_id,
             "stories_with_engagement": len(with_engagement),
             "arm_updates": updates_made,
+            "linucb_updates": linucb_updates,
+            "thompson_updates": thompson_updates,
             "errors": errors,
         }
 
@@ -199,8 +291,33 @@ class PerformanceLearner:
         return arm_ids
 
     @staticmethod
+    def _write_arms_extended(
+        proxy,
+        arms: Dict[str, Dict[str, Any]],
+        save_arm_fn,
+    ) -> None:
+        """Write updated arm posteriors (with LinUCB state) back to SharePoint."""
+        for arm_id, arm_data in arms.items():
+            try:
+                save_arm_fn(
+                    proxy,
+                    arm_id=arm_id,
+                    alpha=arm_data["alpha"],
+                    beta=arm_data["beta"],
+                    linucb_state=arm_data.get("linucb_state"),
+                )
+            except Exception:
+                logger.exception(
+                    "[PerformanceLearner] Failed to update arm %s", arm_id,
+                )
+
+    @staticmethod
     def _write_arms(proxy, arms: Dict[str, tuple]) -> None:
-        """Write updated arm posteriors back to SharePoint."""
+        """Write updated arm posteriors back to SharePoint.
+
+        Legacy method kept for backward compatibility. Prefer
+        _write_arms_extended for new code.
+        """
         for arm_id, (alpha, beta) in arms.items():
             try:
                 proxy.update(

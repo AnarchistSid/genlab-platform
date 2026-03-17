@@ -5,11 +5,17 @@ Each niche has its own list: {NicheDisplayName}_BanditArms
 
 Accepts a proxy object with `.all()`, `.create()`, `.update()` methods
 matching the GraphTableProxy interface.
+
+LinUCB state (A_matrix, b_vector) is persisted as a JSON string in the
+``LinUCB_State`` column. When this field is empty the arm falls back to
+Thompson Sampling (alpha/beta only).
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +55,55 @@ def load_all_arms(proxy, niche_id: str) -> dict[str, tuple[float, float]]:
         return {}
 
 
+def load_all_arms_extended(
+    proxy,
+    niche_id: str,
+) -> dict[str, dict[str, Any]]:
+    """Load all bandit arms with optional LinUCB state.
+
+    Returns {arm_id: {"alpha": float, "beta": float, "linucb_state": dict|None}}.
+
+    The ``LinUCB_State`` column stores a JSON string produced by
+    ``LinUCBArm.to_dict()``. When the field is absent or empty the
+    ``linucb_state`` value is None, signalling that the arm should
+    use Thompson Sampling.
+    """
+    try:
+        items = proxy.all()
+        arms: dict[str, dict[str, Any]] = {}
+        for item in items:
+            fields = item.get("fields", item)
+            arm_id = fields.get("Title", "")
+            if not arm_id:
+                continue
+
+            alpha = float(fields.get("Alpha", 1.0))
+            beta = float(fields.get("Beta", 1.0))
+
+            linucb_state: dict[str, Any] | None = None
+            raw_state = fields.get("LinUCB_State", "")
+            if raw_state:
+                try:
+                    linucb_state = json.loads(raw_state)
+                except (json.JSONDecodeError, TypeError):
+                    logger.debug(
+                        "[arm_loader] invalid LinUCB_State for arm %s, ignoring",
+                        arm_id,
+                    )
+
+            arms[arm_id] = {
+                "alpha": alpha,
+                "beta": beta,
+                "linucb_state": linucb_state,
+            }
+        return arms
+    except Exception as e:
+        logger.warning(
+            "[arm_loader] failed to load extended arms for %s: %s", niche_id, e,
+        )
+        return {}
+
+
 def save_arm(
     proxy,
     arm_id: str,
@@ -56,13 +111,18 @@ def save_arm(
     beta: float,
     content_type: str = "",
     platform: str = "",
+    linucb_state: dict[str, Any] | None = None,
 ) -> None:
     """Save a single bandit arm — upsert by Title.
 
     Checks for an existing arm with the same Title and updates it
     instead of creating a duplicate row.
+
+    Args:
+        linucb_state: Optional LinUCB state dict from ``LinUCBArm.to_dict()``.
+            Serialized as JSON into the ``LinUCB_State`` column.
     """
-    fields = {
+    fields: dict[str, Any] = {
         "Title": arm_id,
         "Alpha": alpha,
         "Beta": beta,
@@ -71,6 +131,8 @@ def save_arm(
         "TotalPulls": 0,
         "LastUpdated": datetime.now(timezone.utc).isoformat(),
     }
+    if linucb_state is not None:
+        fields["LinUCB_State"] = json.dumps(linucb_state)
     try:
         existing = proxy.all()
         match = next(
