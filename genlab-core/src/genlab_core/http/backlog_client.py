@@ -31,6 +31,14 @@ from genlab_core.http.graph_proxy import GraphTableProxy, _esc
 
 logger = logging.getLogger(__name__)
 
+# Canonical blueprint status progression — used by ScheduleGuardedProxy and
+# BacklogClient for demotion detection.  Keep this list in pipeline order.
+STATUS_ORDER: list[str] = [
+    "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED",
+    "DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHED",
+    "ANALYZED", "ARCHIVED",
+]
+
 # Shared error tuple for backlog operations
 try:
     from kiota_abstractions.api_error import APIError as GraphAPIError
@@ -75,11 +83,7 @@ class ScheduleGuardedProxy:
     Blocks status demotions, deletions, and field clearing on scheduled posts.
     """
 
-    _STATUS_ORDER = [
-        "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED",
-        "DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHED",
-        "ANALYZED", "ARCHIVED",
-    ]
+    _STATUS_ORDER = STATUS_ORDER
 
     _GUARDED_FIELDS = frozenset({"status", "visual_paths", "scheduled_for"})
 
@@ -232,11 +236,7 @@ class BacklogClient:
         "video_embed", "stock_search", "generated",
     }
 
-    _STATUS_ORDER = [
-        "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED",
-        "DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHED",
-        "ANALYZED", "ARCHIVED",
-    ]
+    _STATUS_ORDER = STATUS_ORDER
 
     def __init__(
         self,

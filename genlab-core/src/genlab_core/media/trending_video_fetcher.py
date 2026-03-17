@@ -41,6 +41,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -58,19 +59,24 @@ from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
 logger = logging.getLogger(__name__)
 
 # Quota tracking — reset per pipeline run, logs total units consumed.
+# Protected by _QUOTA_LOCK so concurrent niche pipelines don't corrupt counts.
 QUOTA_TRACKER: Dict[str, int] = {"units_used": 0, "rss_fetches": 0}
+_QUOTA_LOCK = threading.Lock()
 
 
 def _increment_quota(units: int, operation: str) -> None:
-    """Track YouTube API quota consumption."""
-    QUOTA_TRACKER["units_used"] += units
-    logger.debug("YouTube quota: +%d (%s), total=%d", units, operation, QUOTA_TRACKER["units_used"])
+    """Track YouTube API quota consumption (thread-safe)."""
+    with _QUOTA_LOCK:
+        QUOTA_TRACKER["units_used"] += units
+        total = QUOTA_TRACKER["units_used"]
+    logger.debug("YouTube quota: +%d (%s), total=%d", units, operation, total)
 
 
 def reset_quota_tracker() -> None:
     """Reset quota tracker — call at start of each pipeline run."""
-    QUOTA_TRACKER["units_used"] = 0
-    QUOTA_TRACKER["rss_fetches"] = 0
+    with _QUOTA_LOCK:
+        QUOTA_TRACKER["units_used"] = 0
+        QUOTA_TRACKER["rss_fetches"] = 0
 
 # YouTube video category IDs
 YOUTUBE_CATEGORIES: Dict[str, str] = {
@@ -353,11 +359,13 @@ class TrendingVideoFetcher:
             results.append(video)
 
         results.sort(key=lambda v: v.view_velocity, reverse=True)
+        with _QUOTA_LOCK:
+            quota_snapshot = QUOTA_TRACKER["units_used"]
         logger.info(
             "[%s] %d/%d passed filters (velocity≥%.0f, %d–%ds) | quota: %d units",
             niche_id, len(results), len(candidates),
             min_velocity, MIN_DURATION_SECONDS, MAX_DURATION_SECONDS,
-            QUOTA_TRACKER["units_used"],
+            quota_snapshot,
         )
         return results[:limit]
 
@@ -453,7 +461,8 @@ class TrendingVideoFetcher:
                     "description_snippet": (desc_el.text or "")[:200] if desc_el is not None else "",
                     "source": "youtube_rss",
                 })
-            QUOTA_TRACKER["rss_fetches"] += 1
+            with _QUOTA_LOCK:
+                QUOTA_TRACKER["rss_fetches"] += 1
             return items
         except Exception as e:
             logger.warning("RSS fetch failed for %s: %s", rss_url, e)
@@ -1002,8 +1011,9 @@ class FetchTrendingVideos:
         run_stats["trending_videos_found"] = len(videos)
         run_stats["trending_videos_fetched"] = len(video_dicts)
         run_stats["trending_videos_filtered"] = len(video_dicts) - len(videos)
-        run_stats["youtube_quota_units"] = QUOTA_TRACKER["units_used"]
-        run_stats["youtube_rss_fetches"] = QUOTA_TRACKER["rss_fetches"]
+        with _QUOTA_LOCK:
+            run_stats["youtube_quota_units"] = QUOTA_TRACKER["units_used"]
+            run_stats["youtube_rss_fetches"] = QUOTA_TRACKER["rss_fetches"]
         if not videos and video_dicts:
             logger.warning(
                 "[FetchTrendingVideos] All %d videos filtered by quality gate for %s — "
