@@ -72,26 +72,54 @@ def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
         quoted_field = _quote_reserved(field)
         return f"{quoted_field} = ${param_idx[0]}"
 
-    # Replace all {field}='value' patterns with parameterized expressions
-    result = re.sub(r"\{(\w+)\}='([^']*)'", _replace_expr, formula)
+    def _replace_blank(match: re.Match) -> str:
+        field = match.group(1)
+        quoted_field = _quote_reserved(field)
+        return f"({quoted_field} IS NULL OR {quoted_field} = '')"
 
-    # Unwrap AND(...) wrapper -> join with AND
-    and_match = re.match(r"^AND\((.+)\)$", result.strip())
-    if and_match:
-        inner = and_match.group(1)
-        # Split on commas that separate top-level AND conditions
-        # Be careful with nested parens (not needed for current patterns)
-        parts = _split_top_level(inner, ",")
-        result = " AND ".join(p.strip() for p in parts)
-    else:
-        # Unwrap OR(...) wrapper -> join with OR
-        or_match = re.match(r"^OR\((.+)\)$", result.strip())
-        if or_match:
-            inner = or_match.group(1)
-            parts = _split_top_level(inner, ",")
-            result = " OR ".join(p.strip() for p in parts)
+    def _replace_datestr(match: re.Match) -> str:
+        """DATESTR({field})='2026-03-17' → field::date = '2026-03-17'"""
+        field = match.group(1)
+        value = match.group(2)
+        param_idx[0] += 1
+        params.append(value)
+        quoted_field = _quote_reserved(field)
+        return f"{quoted_field}::date = ${param_idx[0]}::date"
+
+    # Handle DATESTR({field})='value' before general field='value'
+    result = re.sub(r"DATESTR\(\{(\w+)\}\)='([^']*)'", _replace_datestr, formula)
+
+    # Handle {field}=BLANK()
+    result = re.sub(r"\{(\w+)\}=BLANK\(\)", _replace_blank, result)
+
+    # Replace all {field}='value' patterns with parameterized expressions
+    result = re.sub(r"\{(\w+)\}='([^']*)'", _replace_expr, result)
+
+    # Recursively unwrap AND/OR wrappers
+    result = _unwrap_logic(result.strip())
 
     return result.strip(), params
+
+
+def _unwrap_logic(text: str) -> str:
+    """Recursively unwrap AND(...) and OR(...) wrappers to SQL."""
+    text = text.strip()
+
+    # AND(...)
+    and_match = re.match(r"^AND\((.+)\)$", text)
+    if and_match:
+        inner = and_match.group(1)
+        parts = _split_top_level(inner, ",")
+        return "(" + " AND ".join(_unwrap_logic(p.strip()) for p in parts) + ")"
+
+    # OR(...)
+    or_match = re.match(r"^OR\((.+)\)$", text)
+    if or_match:
+        inner = or_match.group(1)
+        parts = _split_top_level(inner, ",")
+        return "(" + " OR ".join(_unwrap_logic(p.strip()) for p in parts) + ")"
+
+    return text
 
 
 def _split_top_level(text: str, sep: str = ",") -> list[str]:

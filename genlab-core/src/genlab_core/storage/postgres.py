@@ -235,6 +235,29 @@ class PostgresBackend:
         assert self._loop is not None
         return self._loop.run_until_complete(coro)
 
+    @staticmethod
+    def _coerce_value(value: Any) -> Any:
+        """Coerce values to types asyncpg accepts.
+
+        Handles ISO datetime strings → datetime objects, and
+        list/dict values → JSON strings for non-JSONB columns.
+        """
+        if isinstance(value, str) and len(value) >= 19:
+            # Try to parse ISO datetime strings (2026-03-17T06:30:00Z)
+            for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S+00:00",
+                        "%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%S.%f+00:00",
+                        "%Y-%m-%dT%H:%M:%S%z"):
+                try:
+                    return datetime.strptime(value, fmt)
+                except (ValueError, TypeError):
+                    continue
+            # Try fromisoformat (handles +05:30 etc.)
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                pass
+        return value
+
     def _split_fields(
         self, table: str, record: dict[str, Any]
     ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -242,17 +265,17 @@ class PostgresBackend:
 
         Fields in PROMOTED_COLUMNS go to their own SQL columns.
         Everything else gets serialized into the `extra` JSONB column.
+        Datetime strings are coerced to datetime objects for timestamp columns.
         """
         promoted = PROMOTED_COLUMNS.get(table, set())
         cols: dict[str, Any] = {}
         extra: dict[str, Any] = {}
         for k, v in record.items():
             if k in promoted:
-                # JSONB columns need to be serialized
                 if isinstance(v, dict):
                     cols[k] = json.dumps(v)
                 else:
-                    cols[k] = v
+                    cols[k] = self._coerce_value(v)
             else:
                 extra[k] = v
         return cols, extra
@@ -289,18 +312,28 @@ class PostgresBackend:
     def get(self, table: str, record_id: str) -> Optional[Dict[str, Any]]:
         """Get a single record by ID. Returns None if not found.
 
-        Uses empty niche_id (admin mode) to bypass RLS for direct ID lookups.
+        Handles both Postgres UUIDs and legacy SharePoint integer IDs.
+        SharePoint IDs are stored in the extra JSONB column as sp_id.
         """
+        record_id = str(record_id).strip()
+        is_uuid = len(record_id) >= 32 and "-" in record_id
+
         async def _do():
             pool = self._get_pool()
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    # Admin mode: bypass RLS for direct ID lookups
                     await conn.execute("SELECT set_config('app.niche_id', '', true)")
-                    row = await conn.fetchrow(
-                        f"SELECT * FROM {table} WHERE id = $1::uuid",
-                        record_id,
-                    )
+                    if is_uuid:
+                        row = await conn.fetchrow(
+                            f"SELECT * FROM {table} WHERE id = $1::uuid",
+                            record_id,
+                        )
+                    else:
+                        # Legacy SharePoint integer ID — search in extra JSONB
+                        row = await conn.fetchrow(
+                            f"SELECT * FROM {table} WHERE extra->>'sp_id' = $1",
+                            record_id,
+                        )
                     return dict(row) if row else None
 
         row = self._run(_do())
@@ -357,6 +390,14 @@ class PostgresBackend:
 
     # ── UPDATE ──────────────────────────────────────────────────────
 
+    def _where_by_id(self, record_id: str, param_idx: int) -> tuple[str, str]:
+        """Build WHERE clause for UUID or legacy SharePoint integer ID."""
+        record_id = str(record_id).strip()
+        is_uuid = len(record_id) >= 32 and "-" in record_id
+        if is_uuid:
+            return f"WHERE id = ${param_idx}::uuid", record_id
+        return f"WHERE extra->>'sp_id' = ${param_idx}", record_id
+
     def update(
         self,
         table: str,
@@ -372,7 +413,6 @@ class PostgresBackend:
             pool = self._get_pool()
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    # Admin mode for updates (direct ID access)
                     await conn.execute("SELECT set_config('app.niche_id', '', true)")
 
                     sets = []
@@ -391,12 +431,10 @@ class PostgresBackend:
                     sets.append("updated_at = now()")
 
                     idx += 1
-                    values.append(record_id)
+                    where_clause, rid = self._where_by_id(record_id, idx)
+                    values.append(rid)
 
-                    sql = (
-                        f"UPDATE {table} SET {', '.join(sets)} "
-                        f"WHERE id = ${idx}::uuid"
-                    )
+                    sql = f"UPDATE {table} SET {', '.join(sets)} {where_clause}"
                     await conn.execute(sql, *values)
 
         self._run(_do())
@@ -410,9 +448,9 @@ class PostgresBackend:
             async with pool.acquire() as conn:
                 async with conn.transaction():
                     await conn.execute("SELECT set_config('app.niche_id', '', true)")
+                    where_clause, rid = self._where_by_id(record_id, 1)
                     await conn.execute(
-                        f"DELETE FROM {table} WHERE id = $1::uuid",
-                        record_id,
+                        f"DELETE FROM {table} {where_clause}", rid,
                     )
 
         self._run(_do())
