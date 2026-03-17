@@ -15,6 +15,25 @@ import re
 from typing import Optional
 
 
+# PostgreSQL reserved words that require quoting when used as identifiers.
+_PG_RESERVED: frozenset[str] = frozenset({
+    "window", "value", "user", "table", "column", "order", "group",
+    "select", "where", "from", "to", "index", "check", "primary",
+    "references", "constraint", "default", "null", "not", "and", "or",
+    "all", "any", "as", "between", "case", "when", "then", "else",
+    "end", "in", "like", "limit", "offset", "on", "set", "update",
+    "delete", "insert", "into", "values", "create", "drop", "alter",
+    "grant", "revoke", "name", "comment", "key", "type", "role",
+})
+
+
+def _quote_reserved(field: str) -> str:
+    """Double-quote a field name if it is a PostgreSQL reserved word."""
+    if field.lower() in _PG_RESERVED:
+        return f'"{field}"'
+    return field
+
+
 def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
     """Convert an OData-like formula to a SQL WHERE clause + params.
 
@@ -50,7 +69,8 @@ def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
         value = match.group(2)
         param_idx[0] += 1
         params.append(value)
-        return f"{field} = ${param_idx[0]}"
+        quoted_field = _quote_reserved(field)
+        return f"{quoted_field} = ${param_idx[0]}"
 
     # Replace all {field}='value' patterns with parameterized expressions
     result = re.sub(r"\{(\w+)\}='([^']*)'", _replace_expr, formula)

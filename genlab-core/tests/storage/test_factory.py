@@ -14,10 +14,17 @@ def test_load_config():
     # Clear LRU cache so it reloads
     load_storage_config.cache_clear()
     config = load_storage_config()
-    assert config["default_backend"] == "sharepoint"
+    # All tables migrated to postgres (Phases 1-6 complete)
+    assert config["default_backend"] == "postgres"
     assert "blueprints" in config["table_backends"]
-    # Blueprints is now routed to postgres (Phase 1 complete)
     assert config["table_backends"]["blueprints"] == "postgres"
+    # Verify all 11 tables are configured
+    for table in (
+        "blueprints", "stories", "assets", "publishing_analytics",
+        "analytics", "content_memory", "bandit_arms",
+        "pending_engagement", "pending_feedback", "templates", "sources",
+    ):
+        assert config["table_backends"][table] == "postgres"
 
 
 def test_load_config_fallback_when_missing():
@@ -49,30 +56,29 @@ def test_blueprints_routes_to_postgres():
         mock_pg.assert_called_once()
 
 
-def test_stories_routes_to_sharepoint():
-    """Stories (and other non-migrated tables) still use sharepoint."""
+def test_stories_routes_to_postgres():
+    """Stories (and all other tables) now use postgres after full migration."""
     from genlab_core.storage.factory import get_backend_for_table, load_storage_config
-    from genlab_core.storage.sharepoint import SharePointBackend
 
     load_storage_config.cache_clear()
-    with patch("genlab_core.storage.factory._sharepoint_backend") as mock_sp:
-        mock_backend = MagicMock(spec=SharePointBackend)
-        mock_sp.return_value = mock_backend
+    with patch("genlab_core.storage.factory._postgres_backend") as mock_pg:
+        mock_backend = MagicMock()
+        mock_pg.return_value = mock_backend
         backend = get_backend_for_table("stories")
         assert backend is mock_backend
-        mock_sp.assert_called_once()
+        mock_pg.assert_called_once()
 
 
 def test_get_backend_for_unknown_table_uses_default():
-    """Unknown tables fall back to the default_backend."""
+    """Unknown tables fall back to the default_backend (now postgres)."""
     from genlab_core.storage.factory import get_backend_for_table, load_storage_config
 
     load_storage_config.cache_clear()
-    with patch("genlab_core.storage.factory._sharepoint_backend") as mock_sp:
-        mock_sp.return_value = MagicMock()
+    with patch("genlab_core.storage.factory._postgres_backend") as mock_pg:
+        mock_pg.return_value = MagicMock()
         backend = get_backend_for_table("some_new_table")
         assert backend is not None
-        mock_sp.assert_called_once()
+        mock_pg.assert_called_once()
 
 
 def test_get_backend_for_postgres_table():

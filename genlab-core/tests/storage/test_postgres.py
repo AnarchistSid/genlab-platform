@@ -34,10 +34,12 @@ def pg_backend():
         database="genlab",
         user="genlab",
         password=os.environ.get("POSTGRES_PASSWORD", ""),
+        min_size=1,
+        max_size=2,
     )
     yield backend
 
-    # Cleanup: delete all test records using the backend's own loop+pool
+    # Cleanup: delete all test records, then close the pool
     async def cleanup():
         pool = backend._get_pool()
         async with pool.acquire() as conn:
@@ -47,6 +49,7 @@ def pg_backend():
             await conn.execute(
                 "DELETE FROM blueprints WHERE niche_id LIKE 'rls_test_%'"
             )
+        await pool.close()
 
     backend._ensure_pool()
     assert backend._loop is not None

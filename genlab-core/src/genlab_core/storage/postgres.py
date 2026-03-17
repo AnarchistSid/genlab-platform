@@ -17,6 +17,26 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# PostgreSQL reserved words that must be quoted when used as column names.
+# See https://www.postgresql.org/docs/current/sql-keywords-appendix.html
+_RESERVED_WORDS: frozenset[str] = frozenset({
+    "window", "value", "user", "table", "column", "order", "group",
+    "select", "where", "from", "to", "index", "check", "primary",
+    "references", "constraint", "default", "null", "not", "and", "or",
+    "all", "any", "as", "between", "case", "when", "then", "else",
+    "end", "in", "like", "limit", "offset", "on", "set", "update",
+    "delete", "insert", "into", "values", "create", "drop", "alter",
+    "grant", "revoke", "name", "comment", "key", "type", "role",
+})
+
+
+def _quote_col(col: str) -> str:
+    """Double-quote a column name if it is a PostgreSQL reserved word."""
+    if col.lower() in _RESERVED_WORDS:
+        return f'"{col}"'
+    return col
+
+
 # Columns that are promoted to proper SQL columns (not in extra JSONB).
 # Any field NOT in this set for a given table goes into the `extra` JSONB column.
 PROMOTED_COLUMNS: dict[str, set[str]] = {
@@ -34,6 +54,110 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "priority_score",
         "action_taken",
         "reviewed_at",
+    },
+    # Phase 2
+    "stories": {
+        "niche_id",
+        "story_id",
+        "title",
+        "url",
+        "source_name",
+        "source_type",
+        "status",
+        "published_at",
+        "score",
+        "video_url",
+        "video_id",
+    },
+    "assets": {
+        "niche_id",
+        "asset_id",
+        "story_id",
+        "url",
+        "asset_type",
+        "status",
+        "source_type",
+        "file_path",
+    },
+    # Phase 3
+    "publishing_analytics": {
+        "niche_id",
+        "post_id",
+        "platform",
+        "published_at",
+        "status",
+        "views",
+        "likes",
+        "comments",
+        "shares",
+        "saves",
+        "metrics_fetched",
+    },
+    "analytics": {
+        "niche_id",
+        "post_id",
+        "platform",
+        "metric_type",
+        "value",
+        "collected_at",
+        "window",
+    },
+    # Phase 4
+    "content_memory": {
+        "niche_id",
+        "content_hash",
+        "title",
+        "url",
+        "first_seen",
+        "last_seen",
+    },
+    "bandit_arms": {
+        "niche_id",
+        "arm_id",
+        "alpha",
+        "beta",
+        "n_plays",
+        "linucb_state",
+    },
+    # Phase 5
+    "pending_engagement": {
+        "niche_id",
+        "post_id",
+        "platform",
+        "scheduled_at",
+        "status",
+        "attempts",
+    },
+    "pending_feedback": {
+        "niche_id",
+        "task_id",
+        "post_id",
+        "platform",
+        "arm_id",
+        "bandit_context",
+        "collection_status",
+        "reward_48h",
+        "publish_time",
+    },
+    # Phase 6
+    "templates": {
+        "niche_id",
+        "template_id",
+        "name",
+        "category",
+        "max_duration",
+        "status",
+    },
+    "sources": {
+        "niche_id",
+        "source_id",
+        "name",
+        "url",
+        "source_type",
+        "tier",
+        "weight",
+        "status",
+        "last_fetched",
     },
 }
 
@@ -137,12 +261,13 @@ class PostgresBackend:
         cols["extra"] = json.dumps(extra) if extra else "{}"
 
         col_names = list(cols.keys())
+        quoted_names = [_quote_col(c) for c in col_names]
         # $1 is reserved for the id
         placeholders = [f"${i + 2}" for i in range(len(col_names))]
         values = [cols[c] for c in col_names]
 
         sql = (
-            f"INSERT INTO {table} (id, {', '.join(col_names)}) "
+            f"INSERT INTO {table} (id, {', '.join(quoted_names)}) "
             f"VALUES ($1, {', '.join(placeholders)}) RETURNING id"
         )
 
@@ -235,7 +360,7 @@ class PostgresBackend:
                     idx = 0
                     for k, v in cols.items():
                         idx += 1
-                        sets.append(f"{k} = ${idx}")
+                        sets.append(f"{_quote_col(k)} = ${idx}")
                         values.append(v)
 
                     if extra:
