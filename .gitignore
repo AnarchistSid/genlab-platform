@@ -56,3 +56,9 @@ firebase-debug.log
 
 # Reference material (not source code)
 _reference/
+
+# OpenSandbox (vendored, not actively integrated — 120MB)
+OpenSandbox/
+
+# Brand assets at root level (copies live in channel assets/ dirs)
+*.png
