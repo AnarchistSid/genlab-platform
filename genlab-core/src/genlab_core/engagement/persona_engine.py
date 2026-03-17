@@ -11,6 +11,7 @@ from typing import Optional
 
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.toxicity_gate import ToxicityGate
+from genlab_core.http.circuit_breaker import ANTHROPIC_CB, CircuitOpenError
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +91,15 @@ class PersonaEngine:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=150,
-                    system=system,
-                    messages=[{"role": "user", "content": user_content}],
-                )
+                def _llm_call():
+                    return client.messages.create(
+                        model="claude-haiku-4-5-20251001",
+                        max_tokens=150,
+                        system=system,
+                        messages=[{"role": "user", "content": user_content}],
+                    )
+
+                resp = ANTHROPIC_CB.call(_llm_call)
                 reply = resp.content[0].text.strip()
 
                 if self._toxicity_gate and not self._toxicity_gate.is_clean_outbound(reply):
@@ -108,6 +112,11 @@ class PersonaEngine:
 
                 return reply
 
+            except CircuitOpenError:
+                logger.warning(
+                    "[PERSONA] Anthropic circuit open — cannot generate reply"
+                )
+                return None
             except Exception as e:
                 logger.warning(
                     "[PERSONA] Reply generation failed (attempt %d): %s",
