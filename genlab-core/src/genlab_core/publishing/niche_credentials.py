@@ -7,7 +7,8 @@ The guard: when a niche has a registered prefix but the niche-specific env var
 is empty, we return "" rather than falling back to BB's global credentials.
 This prevents accidentally publishing to the wrong channel's pages.
 
-BB (ai_creators) has no prefix and always uses global vars — unaffected by the guard.
+BB (ai_creators/ai_tech) has prefix BLACKBOXBRIEF but falls through to global vars
+when the prefixed var is missing — BB's globals ARE its own tokens.
 """
 
 from __future__ import annotations
@@ -44,6 +45,10 @@ def resolve_niche_env(niche_id: str, global_var: str, niche_suffix: str) -> str:
         val = os.getenv(f"{prefix}_{niche_suffix}", "").strip()
         if val:
             return val
+        # BB (BLACKBOXBRIEF) falls through to global — its globals ARE its own tokens.
+        # Other niches: guard blocks fallback to prevent cross-channel publishing.
+        if prefix == "BLACKBOXBRIEF":
+            return os.getenv(global_var, "").strip()
         logger.debug(
             "Niche '%s' missing %s_%s — refusing fallback to global %s",
             niche_id, prefix, niche_suffix, global_var,
