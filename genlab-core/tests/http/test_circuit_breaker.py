@@ -14,10 +14,8 @@ from __future__ import annotations
 
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.http.circuit_breaker import (
     ANTHROPIC_CB,
     META_API_CB,
@@ -30,7 +28,6 @@ from genlab_core.http.circuit_breaker import (
     get_circuit_breaker,
     resilient,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 

@@ -25,11 +25,10 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
 
@@ -40,7 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger("genlab.fetch_insights")
 
 # Niche-to-env mapping — each channel's .env has platform credentials
-NICHE_ENV_DIRS: Dict[str, str] = {
+NICHE_ENV_DIRS: dict[str, str] = {
     "ai_creators": "BlackboxBrief",
     "gaming": "CriticalRush",
     "sports": "ClutchWire",
@@ -53,7 +52,7 @@ ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 # Window definitions: (min_age_hours, max_age_hours)
 # Wide ranges: catch ALL posts that haven't been collected yet.
 # Idempotency via insight_windows_completed prevents double-fetching.
-WINDOW_RANGES: Dict[int, Tuple[float, float]] = {
+WINDOW_RANGES: dict[int, tuple[float, float]] = {
     6: (4.0, 8760.0),     # Any post 4h+ old (effectively unlimited for backfill)
     24: (20.0, 8760.0),   # Any post 20h+ old
     48: (44.0, 8760.0),   # Any post 44h+ old (growth tracking)
@@ -76,16 +75,16 @@ def _load_env_for_niche(niche_id: str) -> None:
             logger.warning("python-dotenv not installed — env not loaded")
 
 
-def _post_age_hours(published_at: Any) -> Optional[float]:
+def _post_age_hours(published_at: Any) -> float | None:
     """Calculate post age in hours from ISO timestamp."""
     if not published_at:
         return None
     try:
         if isinstance(published_at, datetime):
-            pub_dt = published_at if published_at.tzinfo else published_at.replace(tzinfo=timezone.utc)
+            pub_dt = published_at if published_at.tzinfo else published_at.replace(tzinfo=UTC)
         else:
             pub_dt = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
-        delta = datetime.now(timezone.utc) - pub_dt
+        delta = datetime.now(UTC) - pub_dt
         return delta.total_seconds() / 3600
     except (ValueError, TypeError, AttributeError):
         return None
@@ -95,7 +94,7 @@ def _get_eligible_records(
     client: Any,
     niche_id: str,
     window: int,
-) -> List[Tuple[Dict, str]]:
+) -> list[tuple[dict, str]]:
     """Query Publishing_Analytics for records eligible for insight fetch.
 
     Returns list of (record, reason) tuples.
@@ -157,7 +156,7 @@ def _fetch_platform_insights(
     platform: str,
     post_id: str,
     niche_id: str = "",
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Fetch engagement metrics for a single post from its platform API.
 
     Uses per-niche credentials via niche_credentials to avoid cross-channel
@@ -180,7 +179,7 @@ def _fetch_platform_insights(
         return None
 
 
-def _fetch_instagram(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]]:
+def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
     """Fetch IG metrics via graph.facebook.com using per-niche credentials."""
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
@@ -234,7 +233,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any
     }
 
 
-def _fetch_youtube(post_id: str) -> Optional[Dict[str, Any]]:
+def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
     """Fetch YT metrics via Data API v3."""
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     if not api_key:
@@ -265,7 +264,7 @@ def _fetch_youtube(post_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def _fetch_facebook(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]]:
+def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
     """Fetch FB metrics via Graph API using per-niche credentials."""
     from genlab_core.publishing.niche_credentials import resolve_fb_credentials
 
@@ -286,7 +285,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]
         logger.debug("FB video_insights %d: %s", resp.status_code, resp.text[:100])
         return None
 
-    metrics: Dict[str, Any] = {}
+    metrics: dict[str, Any] = {}
     likes = 0
     for item in resp.json().get("data", []):
         name = item.get("name", "")
@@ -308,7 +307,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> Optional[Dict[str, Any]
     }
 
 
-def _fetch_twitter(post_id: str) -> Optional[Dict[str, Any]]:
+def _fetch_twitter(post_id: str) -> dict[str, Any] | None:
     """Fetch X metrics via API v2."""
     bearer = os.getenv("X_BEARER_TOKEN", "")
     if not bearer:
@@ -343,7 +342,7 @@ def _write_back_to_blueprint(
     client: Any,
     blueprint_record_id: str,
     platform: str,
-    insights: Dict[str, Any],
+    insights: dict[str, Any],
     window: int,
 ) -> None:
     """Write key engagement metrics back to the blueprint record.
@@ -352,7 +351,7 @@ def _write_back_to_blueprint(
     succeeded at this point — a blueprint write-back failure is logged
     but never fails the whole insights run.
     """
-    fields: Dict[str, Any] = {}
+    fields: dict[str, Any] = {}
 
     if platform == "instagram":
         fields["ig_reach"] = insights.get("reach", 0)
@@ -420,7 +419,7 @@ def fetch_insights_for_window(
     niche_id: str,
     window: int,
     dry_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Main entry: fetch insights for a niche at a given time window.
 
     Returns summary stats dict.

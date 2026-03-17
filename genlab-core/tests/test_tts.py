@@ -5,11 +5,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.interfaces.tts import TTSProvider, TTSResult
-from genlab_core.tts.cascade import CircuitBreaker, TTSCascade
 from genlab_core.tts._text_cleaner import clean_text_for_tts
-
+from genlab_core.tts.cascade import CircuitBreaker, TTSCascade
 
 # ── Fake providers for testing ────────────────────────────────────
 

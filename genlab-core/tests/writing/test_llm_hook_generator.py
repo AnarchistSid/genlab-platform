@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.writing.llm_hook_generator import (
     _BANNED_PHRASES,
     NICHE_STYLE,

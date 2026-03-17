@@ -12,11 +12,11 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-NICHE_VOICE: Dict[str, Dict[str, Any]] = {
+NICHE_VOICE: dict[str, dict[str, Any]] = {
     "gaming": {
         "account": "@CriticalRush",
         "style": (
@@ -95,7 +95,7 @@ def write_video_content(
     video: dict,
     niche_id: str,
     llm_client: Any,
-    existing_hooks: Optional[list[str]] = None,
+    existing_hooks: list[str] | None = None,
     extra_instructions: str = "",
 ) -> dict:
     """Generate platform-specific content for a trending video.

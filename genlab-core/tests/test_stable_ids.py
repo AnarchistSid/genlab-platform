@@ -1,7 +1,6 @@
 """Tests for genlab_core.cache.stable_ids — canonical stable ID generation."""
 
 import pytest
-
 from genlab_core.cache.stable_ids import (
     generate_asset_id,
     generate_candidate_id,
@@ -13,7 +12,6 @@ from genlab_core.cache.stable_ids import (
     generate_ugc_asset_id,
     normalize_url,
 )
-
 
 # --- normalize_url -----------------------------------------------------------
 

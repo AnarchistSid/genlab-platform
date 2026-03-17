@@ -1,10 +1,10 @@
 """Tests for genlab_core.rendering.video_renderer — Sprint 37."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
 from genlab_core.media.ffmpeg_utils import escape_drawtext
-from genlab_core.rendering.video_renderer import VideoRenderer, NicheVisualConfig
+from genlab_core.rendering.video_renderer import NicheVisualConfig, VideoRenderer
 
 
 @pytest.fixture

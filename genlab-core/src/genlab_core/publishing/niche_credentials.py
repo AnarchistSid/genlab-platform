@@ -14,11 +14,10 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
-NICHE_CREDENTIAL_PREFIXES: Dict[str, str] = {
+NICHE_CREDENTIAL_PREFIXES: dict[str, str] = {
     "sports": "CLUTCHWIRE",
     "movies": "SPLICEREEL",
     "anime": "FRAMEDRIFT",
@@ -54,7 +53,7 @@ def resolve_niche_env(niche_id: str, global_var: str, niche_suffix: str) -> str:
     return os.getenv(global_var, "").strip()
 
 
-def resolve_meta_credentials(niche_id: str) -> Dict[str, str]:
+def resolve_meta_credentials(niche_id: str) -> dict[str, str]:
     """Resolve Meta (IG + FB) credentials for a niche."""
     return {
         "ig_access_token": resolve_niche_env(niche_id, "META_ACCESS_TOKEN", "META_ACCESS_TOKEN"),
@@ -80,7 +79,7 @@ def resolve_threads_credentials(niche_id: str) -> tuple:
     )
 
 
-def resolve_youtube_credentials(niche_id: str) -> Dict[str, str]:
+def resolve_youtube_credentials(niche_id: str) -> dict[str, str]:
     """Resolve YouTube OAuth credentials for a niche."""
     return {
         "client_id": resolve_niche_env(niche_id, "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_ID"),
@@ -89,7 +88,7 @@ def resolve_youtube_credentials(niche_id: str) -> Dict[str, str]:
     }
 
 
-def resolve_twitter_credentials(niche_id: str) -> Dict[str, str]:
+def resolve_twitter_credentials(niche_id: str) -> dict[str, str]:
     """Resolve X/Twitter OAuth 1.0a credentials for a niche."""
     return {
         "api_key": resolve_niche_env(niche_id, "X_API_KEY", "X_API_KEY"),

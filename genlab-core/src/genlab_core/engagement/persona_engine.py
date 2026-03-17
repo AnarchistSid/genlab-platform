@@ -7,7 +7,6 @@ creative reply; the persona YAML constrains its style.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.toxicity_gate import ToxicityGate
@@ -22,7 +21,7 @@ class PersonaEngine:
     def __init__(
         self,
         persona: NichePersona,
-        toxicity_gate: Optional[ToxicityGate] = None,
+        toxicity_gate: ToxicityGate | None = None,
     ) -> None:
         self._persona = persona
         self._toxicity_gate = toxicity_gate

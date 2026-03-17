@@ -6,14 +6,13 @@ import json
 import logging
 from pathlib import Path
 
-
 from genlab_core.pipeline.log_streamer import (
+    MAX_LOG_LINES,
     PipelineLogHandler,
     StageLoggingFilter,
     install_log_handler,
     read_recent_logs,
     remove_log_handler,
-    MAX_LOG_LINES,
 )
 
 

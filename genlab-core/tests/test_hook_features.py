@@ -4,7 +4,6 @@ Verifies regex-based text feature extraction for hook quality prediction.
 """
 from __future__ import annotations
 
-
 from genlab_core.learning.hook_features import (
     build_feature_vector,
     extract_text_features,

@@ -17,7 +17,7 @@ At publish time, we know:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,17 +45,17 @@ class PendingFeedbackTask(BaseModel):
     hook_type: str = ""
     hook_text: str = ""
     hook_length: int = 0
-    sharepoint_id: Optional[str] = None
-    bandit_arm: Optional[str] = None
-    bandit_context: Optional[dict] = None
+    sharepoint_id: str | None = None
+    bandit_arm: str | None = None
+    bandit_context: dict | None = None
     collection_windows: list[CollectionWindow] = Field(
         default_factory=lambda: ["6h", "24h", "48h", "168h"]
     )
     completed_windows: list[CollectionWindow] = Field(default_factory=list)
     collection_status: CollectionStatus = "awaiting_6h"
     early_stop: bool = False
-    reward_48h: Optional[float] = None
-    error_message: Optional[str] = None
+    reward_48h: float | None = None
+    error_message: str | None = None
 
     @property
     def pending_windows(self) -> list[CollectionWindow]:

@@ -1,13 +1,11 @@
 """Tests for genlab_core.intelligence.dedup_engine."""
 import hashlib
 
-
 from genlab_core.intelligence.dedup_engine import (
     DedupEngine,
     DedupResult,
     jaccard_similarity,
 )
-
 
 # ---------------------------------------------------------------------------
 # jaccard_similarity

@@ -7,7 +7,7 @@ under the hood for SharePoint Lists.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from genlab_core.http.graph_proxy import GraphTableProxy
 
@@ -21,7 +21,7 @@ class SharePointBackend:
     initialised by BacklogClient.__init__.
     """
 
-    def __init__(self, proxies: Dict[str, GraphTableProxy]) -> None:
+    def __init__(self, proxies: dict[str, GraphTableProxy]) -> None:
         """Initialise with a mapping of table_name -> GraphTableProxy.
 
         Args:
@@ -46,32 +46,32 @@ class SharePointBackend:
         formula: str | None = None,
         niche_id: str | None = None,
         max_records: int | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         from genlab_core.http.backlog_client import _inject_niche_filter
 
         formula = _inject_niche_filter(formula, niche_id)
         return self._proxy(table).all(formula=formula, max_records=max_records)
 
-    def get(self, table: str, record_id: str) -> Dict[str, Any]:
+    def get(self, table: str, record_id: str) -> dict[str, Any]:
         return self._proxy(table).get(record_id)
 
     def create(
         self,
         table: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         *,
         typecast: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self._proxy(table).create(fields, typecast=typecast)
 
     def update(
         self,
         table: str,
         record_id: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         *,
         typecast: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return self._proxy(table).update(record_id, fields, typecast=typecast)
 
     def delete(self, table: str, record_id: str) -> None:
@@ -80,16 +80,16 @@ class SharePointBackend:
     def batch_create(
         self,
         table: str,
-        records: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         return self._proxy(table).batch_create(records)
 
     def batch_update(
         self,
         table: str,
-        records: List[Dict[str, Any]],
+        records: list[dict[str, Any]],
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         return self._proxy(table).batch_update(records, **kwargs)
 
     def upload_attachment(
@@ -98,5 +98,5 @@ class SharePointBackend:
         record_id: str,
         field_name: str,
         file_path: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         return self._proxy(table).upload_attachment(record_id, field_name, file_path)

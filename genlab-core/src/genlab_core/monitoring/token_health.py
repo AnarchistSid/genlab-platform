@@ -19,7 +19,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
@@ -147,7 +147,7 @@ def check_meta_token() -> dict:
                 "days_remaining": None,
             }
         else:
-            remaining = (datetime.fromtimestamp(expires_at, tz=timezone.utc) - datetime.now(timezone.utc)).days
+            remaining = (datetime.fromtimestamp(expires_at, tz=UTC) - datetime.now(UTC)).days
             return {
                 "platform": "instagram",
                 "status": "healthy" if remaining > 7 else "expiring",
@@ -184,8 +184,8 @@ def check_tiktok() -> dict:
     try:
         issued_at = datetime.fromisoformat(issued_str)
         if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=timezone.utc)
-        age_hours = (datetime.now(timezone.utc) - issued_at).total_seconds() / 3600
+            issued_at = issued_at.replace(tzinfo=UTC)
+        age_hours = (datetime.now(UTC) - issued_at).total_seconds() / 3600
         remaining = max(0, 24 - age_hours)
 
         audit = os.getenv("TIKTOK_AUDIT_APPROVED", "false").lower() == "true"
@@ -217,8 +217,8 @@ def check_threads() -> dict:
     try:
         issued_at = datetime.fromisoformat(issued_str)
         if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=timezone.utc)
-        age_days = (datetime.now(timezone.utc) - issued_at).days
+            issued_at = issued_at.replace(tzinfo=UTC)
+        age_days = (datetime.now(UTC) - issued_at).days
         remaining = 60 - age_days
 
         if remaining > 15:
@@ -303,7 +303,7 @@ def _token_status_to_dict(ts) -> dict:
 
     if ts.expires_at is not None:
         result["expires_at"] = ts.expires_at.isoformat()
-        remaining_days = (ts.expires_at - datetime.now(timezone.utc)).days
+        remaining_days = (ts.expires_at - datetime.now(UTC)).days
         result["days_remaining"] = remaining_days
 
     if ts.details:
@@ -369,7 +369,7 @@ def run_all_checks() -> dict:
     missing = [r for r in results if r["status"] == "missing"]
 
     summary = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "duration_seconds": elapsed,
         "total_checked": len(results),
         "healthy": len(healthy),

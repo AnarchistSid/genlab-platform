@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict
+from typing import Any
 
 from .interfaces import PlatformAdaptationStrategy
 
@@ -41,7 +41,7 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
     # Per-platform adaptation methods — override in subclass if needed
     # ------------------------------------------------------------------
 
-    def _adapt_x_twitter(self, content: Dict[str, Any], story: Dict[str, Any]) -> None:
+    def _adapt_x_twitter(self, content: dict[str, Any], story: dict[str, Any]) -> None:
         """X/Twitter: Move all links to first_reply. Never in main tweet."""
         tw = content.get("x_twitter", {})
         if not tw.get("tweet"):
@@ -66,19 +66,19 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
         elif story.get("source_url"):
             tw["first_reply"] = story["source_url"]
 
-    def _adapt_instagram(self, content: Dict[str, Any]) -> None:
+    def _adapt_instagram(self, content: dict[str, Any]) -> None:
         """Instagram: Strip external URLs from caption."""
         ig = content.get("instagram", {})
         if ig.get("caption"):
             ig["caption"] = _URL_PATTERN.sub("", ig["caption"]).strip()
 
-    def _adapt_tiktok(self, content: Dict[str, Any]) -> None:
+    def _adapt_tiktok(self, content: dict[str, Any]) -> None:
         """TikTok: Strip URLs (render as unclickable text)."""
         tk = content.get("tiktok", {})
         if tk.get("caption"):
             tk["caption"] = _URL_PATTERN.sub("", tk["caption"]).strip()
 
-    def _adapt_story(self, content: Dict[str, Any], story: Dict[str, Any]) -> None:
+    def _adapt_story(self, content: dict[str, Any], story: dict[str, Any]) -> None:
         """Apply all platform adaptations to a single story.
 
         Override this to add extra platform-specific logic (e.g. Facebook,

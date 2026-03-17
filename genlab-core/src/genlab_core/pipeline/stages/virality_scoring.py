@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ _TUTORIAL = re.compile(r"\b(how to|tutorial|step[- ]by[- ]step|guide|learn|begin
 _LISTICLE = re.compile(r"\b(top\s+\d+|\d+\s+(ways|reasons|tips|tools|things|mistakes|secrets|hacks|steps|rules|signs))\b", re.I)
 
 # Default weights (overridden by niche_config scoring_weights.virality_scoring)
-DEFAULT_WEIGHTS: Dict[str, float] = {
+DEFAULT_WEIGHTS: dict[str, float] = {
     "hook_format_question": 0.12,
     "pop_culture_reference": 0.10,
     "named_tool": 0.15,
@@ -59,7 +59,7 @@ class ViralityScoring:
     Writes: context['blueprints'][*]['virality_score'], context['blueprints'][*]['virality_features']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         blueprints = context.get("blueprints", [])
         if not blueprints:
             logger.info("[ViralityScoring] No blueprints to score")
@@ -101,7 +101,7 @@ class ViralityScoring:
         return context
 
     @staticmethod
-    def _extract_features(text: str) -> List[Tuple[str, bool]]:
+    def _extract_features(text: str) -> list[tuple[str, bool]]:
         """Extract all 9 binary features from text."""
         return [
             ("hook_format_question", bool(_QUESTION.search(text))),
@@ -116,8 +116,8 @@ class ViralityScoring:
         ]
 
     def _score(
-        self, bp: Dict[str, Any], weights: Dict[str, float],
-    ) -> Tuple[List[str], float]:
+        self, bp: dict[str, Any], weights: dict[str, float],
+    ) -> tuple[list[str], float]:
         hook = bp.get("hook", "")
         body = bp.get("body", bp.get("caption", ""))
         text = f"{hook} {body}" if isinstance(body, str) else str(hook)

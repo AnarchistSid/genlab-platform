@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ class AnthropicLLMClient:
     ``anthropic`` package to be installed (graceful degradation).
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self._model = model or "claude-haiku-4-5-20251001"
         self._client = None

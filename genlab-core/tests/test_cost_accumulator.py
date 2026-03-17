@@ -3,10 +3,9 @@ import threading
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.intelligence.cost_accumulator import (
-    CostAccumulator,
     MODEL_COSTS,
+    CostAccumulator,
     get_accumulator,
     reset_accumulator,
     set_accumulator,

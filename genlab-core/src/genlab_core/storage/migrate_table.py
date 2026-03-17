@@ -17,7 +17,7 @@ import logging
 import os
 import sys
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from genlab_core.storage.postgres import PROMOTED_COLUMNS, PostgresBackend, _quote_col
 
@@ -45,7 +45,7 @@ PG_TABLE_TO_SP_LIST: dict[str, str] = {v: k for k, v in SP_LIST_TO_PG_TABLE.item
 # The unique business key per table used for ON CONFLICT.
 # Tables without a unique business key use the SharePoint record ID stored
 # in extra->'sp_id' — we add a fallback dedup check for those.
-TABLE_UNIQUE_KEY: dict[str, Optional[str]] = {
+TABLE_UNIQUE_KEY: dict[str, str | None] = {
     "blueprints": "candidate_id",
     "stories": "story_id",
     "assets": "asset_id",
@@ -61,7 +61,7 @@ TABLE_UNIQUE_KEY: dict[str, Optional[str]] = {
 }
 
 
-def flatten_sp_record(record: Dict[str, Any]) -> Dict[str, Any]:
+def flatten_sp_record(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a SharePoint record {id, fields, createdTime} to a flat dict.
 
     The SharePoint record ID is preserved as ``sp_id`` so we can track
@@ -89,7 +89,7 @@ def flatten_sp_record(record: Dict[str, Any]) -> Dict[str, Any]:
 
 def _build_insert_sql(
     table: str,
-    record: Dict[str, Any],
+    record: dict[str, Any],
 ) -> tuple[str, list[Any]]:
     """Build an INSERT ... ON CONFLICT DO NOTHING statement.
 
@@ -100,7 +100,7 @@ def _build_insert_sql(
     cols: dict[str, Any] = {}
     extra: dict[str, Any] = {}
 
-    from datetime import datetime, date
+    from datetime import date, datetime
 
     def _serialize(val: Any) -> Any:
         """Make a value JSON-safe."""
@@ -170,7 +170,7 @@ def _build_insert_sql(
     return sql, [record_id] + values
 
 
-async def _record_exists(conn, table: str, record: Dict[str, Any]) -> bool:
+async def _record_exists(conn, table: str, record: dict[str, Any]) -> bool:
     """Check if a record already exists by its unique business key.
 
     For tables without a unique key, checks the extra JSONB for sp_id match.
@@ -240,7 +240,7 @@ def _get_sp_proxy(client, sp_list_name: str):
 
 def migrate_table(
     pg: PostgresBackend,
-    sp_records: List[Dict[str, Any]],
+    sp_records: list[dict[str, Any]],
     pg_table: str,
 ) -> dict[str, int]:
     """Migrate records from SharePoint format to PostgreSQL.
@@ -253,7 +253,6 @@ def migrate_table(
     Returns:
         Dict with 'total', 'migrated', 'skipped', 'errors' counts.
     """
-    import asyncio
 
     total = len(sp_records)
     migrated = 0
@@ -317,7 +316,7 @@ def migrate_table(
 
 
 def run_migration(
-    tables: List[str],
+    tables: list[str],
     *,
     dry_run: bool = False,
 ) -> dict[str, dict[str, int]]:

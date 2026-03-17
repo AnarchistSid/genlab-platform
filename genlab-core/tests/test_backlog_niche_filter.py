@@ -37,8 +37,9 @@ class TestListNiches:
         """Test that list_niches returns a list even without BacklogClient instantiation."""
         # We can't easily instantiate BacklogClient without Azure creds,
         # but we can test the YAML loading logic directly
-        import yaml
         from pathlib import Path
+
+        import yaml
 
         registry_path = Path(__file__).resolve().parent.parent / "configs" / "niches_registry.yaml"
         if registry_path.exists():

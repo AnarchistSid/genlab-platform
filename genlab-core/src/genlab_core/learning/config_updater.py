@@ -14,11 +14,10 @@ Conservative update rules:
 from __future__ import annotations
 
 import logging
-import shutil
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -58,7 +57,7 @@ class ConfigUpdater:
             and "48h" in getattr(r, "completed_windows", [])
         ]
 
-        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=30)
+        cutoff = datetime.now(tz=UTC) - timedelta(days=30)
         recent = [
             r for r in records_with_reward
             if r.published_at >= cutoff
@@ -219,7 +218,7 @@ class ConfigUpdater:
 
         return changes
 
-    def _get_current_posting_hour(self, schedule: dict, platform: str) -> Optional[int]:
+    def _get_current_posting_hour(self, schedule: dict, platform: str) -> int | None:
         """Extract the current posting hour for a platform from schedule.yaml."""
         slots = schedule.get("posting_slots", {}).get(platform, [])
         if not slots:

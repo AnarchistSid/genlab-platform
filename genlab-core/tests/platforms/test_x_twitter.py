@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -318,7 +317,7 @@ class TestMetrics:
 
             metrics = tw_client.get_metrics(
                 tweet_id="tweet_metrics_123",
-                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                published_at=datetime(2026, 1, 1, tzinfo=UTC),
             )
 
         assert metrics is not None
@@ -338,7 +337,7 @@ class TestMetrics:
 
             metrics = tw_client.get_metrics(
                 tweet_id="missing_tweet",
-                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                published_at=datetime(2026, 1, 1, tzinfo=UTC),
             )
 
         assert metrics is None
@@ -355,7 +354,7 @@ class TestMetrics:
 
             metrics = tw_client.get_metrics(
                 tweet_id="null_data_tweet",
-                published_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                published_at=datetime(2026, 1, 1, tzinfo=UTC),
             )
 
         assert metrics is None

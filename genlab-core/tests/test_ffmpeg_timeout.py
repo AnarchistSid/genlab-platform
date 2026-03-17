@@ -8,9 +8,7 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.ffmpeg_utils import _swap_preset, run_ffmpeg
-
 
 # ── _swap_preset ──────────────────────────────────────────────────
 

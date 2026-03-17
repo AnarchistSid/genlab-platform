@@ -29,9 +29,10 @@ from __future__ import annotations
 
 import importlib
 import logging
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 from genlab_core.context import PipelineContext, _current_context, set_current_context
 from genlab_core.exceptions import NicheConfigError
@@ -56,11 +57,11 @@ class GenericPipelineRunner:
 
     def __init__(
         self,
-        niche_roots: Dict[str, Path],
+        niche_roots: dict[str, Path],
         genlab_root: Path,
         *,
-        pre_run_hook: Optional[Callable[..., None]] = None,
-        post_run_hook: Optional[Callable[..., None]] = None,
+        pre_run_hook: Callable[..., None] | None = None,
+        post_run_hook: Callable[..., None] | None = None,
     ) -> None:
         self._niche_roots = niche_roots
         self._genlab_root = genlab_root
@@ -68,7 +69,7 @@ class GenericPipelineRunner:
         self._post_run_hook = post_run_hook
 
     @property
-    def supported_niches(self) -> List[str]:
+    def supported_niches(self) -> list[str]:
         return list(self._niche_roots.keys())
 
     def run(
@@ -116,7 +117,7 @@ class GenericPipelineRunner:
         if self._pre_run_hook:
             self._pre_run_hook(niche_id, config)
 
-        run_id = f"{niche_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        run_id = f"{niche_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
         ctx = PipelineContext(
             niche_id=niche_id,
@@ -150,7 +151,7 @@ class GenericPipelineRunner:
             run_dir = self._genlab_root / ".tmp" / "runs" / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            context_dict: Dict[str, Any] = {
+            context_dict: dict[str, Any] = {
                 "niche_id": niche_id,
                 "niche_root": str(niche_root),
                 "run_id": run_id,
@@ -205,18 +206,18 @@ class GenericPipelineRunner:
 
     @staticmethod
     def _group_stages(
-        stages: List[Any],
-        declarations: List[Dict[str, Any]],
-    ) -> List[List[tuple]]:
+        stages: list[Any],
+        declarations: list[dict[str, Any]],
+    ) -> list[list[tuple]]:
         """Group consecutive stages by ``parallel_group`` for concurrent execution.
 
         Returns a list of batches. Each batch is a list of (declaration, stage)
         tuples. Batches with a single entry run sequentially; batches with
         multiple entries run in parallel.
         """
-        batches: List[List[tuple]] = []
+        batches: list[list[tuple]] = []
         current_group: str | None = None
-        current_batch: List[tuple] = []
+        current_batch: list[tuple] = []
 
         for decl, stage in zip(declarations, stages):
             group = decl.get("parallel_group")
@@ -236,8 +237,8 @@ class GenericPipelineRunner:
 
     @staticmethod
     def _load_stages(
-        niche_id: str, config: Dict[str, Any],
-    ) -> tuple[List[Any], List[Dict[str, Any]]]:
+        niche_id: str, config: dict[str, Any],
+    ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Dynamically load pipeline stages from niche configuration.
 
         Reads ``pipeline.stages`` from niche.yaml — each entry declares a

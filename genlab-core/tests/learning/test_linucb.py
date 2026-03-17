@@ -1,18 +1,15 @@
 """Tests for genlab_core.learning.linucb — LinUCB contextual bandit."""
 
-from datetime import datetime, timezone
-from unittest.mock import patch
+from datetime import UTC, datetime
 
 import numpy as np
 import pytest
-
 from genlab_core.learning.linucb import (
     CONTEXT_DIM,
     LinUCBArm,
     LinUCBBandit,
     build_content_context,
 )
-
 
 # ---------------------------------------------------------------------------
 # LinUCBArm
@@ -315,7 +312,7 @@ class TestBuildContentContext:
 
     def test_explicit_datetime_override(self):
         """When now= is passed, day/hour should use that time."""
-        dt = datetime(2026, 3, 16, 14, 0, tzinfo=timezone.utc)  # Monday, 14:00
+        dt = datetime(2026, 3, 16, 14, 0, tzinfo=UTC)  # Monday, 14:00
         story = {"source_type": "youtube"}
         ctx = build_content_context(story, "gaming", now=dt)
         assert ctx[0] == pytest.approx(0.0 / 6.0)  # Monday = 0

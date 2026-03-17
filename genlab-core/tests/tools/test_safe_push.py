@@ -4,7 +4,6 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import patch
 
-
 from genlab_core.tools.safe_push import (
     PROTECTED_BRANCHES,
     main,

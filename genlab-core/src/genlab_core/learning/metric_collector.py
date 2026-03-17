@@ -13,8 +13,9 @@ Or as a Prefect deployment:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 # Callback type: (niche_id, content_type, platform, reward) -> None
 BanditUpdater = Callable[[str, str, str, float], None]
@@ -45,7 +46,6 @@ from genlab_core.learning.pending_feedback_task import (
     PendingFeedbackTask,
 )
 from genlab_core.learning.reward_shaper import RewardShaper
-
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
@@ -232,6 +232,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
 
 def _fetch_x(post_id: str, niche_id: str = "") -> dict:
     import os
+
     import requests
 
     bearer = os.getenv("X_BEARER_TOKEN", "").strip()  # X bearer is app-wide, no per-niche
@@ -256,6 +257,7 @@ def _fetch_x(post_id: str, niche_id: str = "") -> dict:
 def _fetch_tiktok(post_id: str, niche_id: str = "") -> dict:
     """TikTok Content Posting API — video insights."""
     import os
+
     import requests
 
     token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()  # TikTok disabled, no per-niche yet
@@ -341,7 +343,7 @@ def process_pending_task(
     store: PendingFeedbackStore,
     shaper: RewardShaper,
     now: datetime | None = None,
-    bandit_updater: Optional[BanditUpdater] = None,
+    bandit_updater: BanditUpdater | None = None,
     backlog_client: Any = None,
 ) -> bool:
     """Process a single pending task: check window, fetch, update.
@@ -429,7 +431,7 @@ def process_pending_task(
 def collect_metrics(
     niche_id: str | None = None,
     backlog_client: Any = None,
-    bandit_updater: Optional[BanditUpdater] = None,
+    bandit_updater: BanditUpdater | None = None,
 ) -> int:
     """Main Prefect flow: collect metrics for all pending feedback tasks.
 
@@ -460,7 +462,7 @@ def collect_metrics(
 
     logger.info("[metric_collector] Processing %d pending tasks", len(pending))
     processed = 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for task_record in pending:
         try:

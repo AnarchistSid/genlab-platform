@@ -27,8 +27,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from genlab_core.media.ffmpeg_utils import run_ffmpeg
-from genlab_core.media.ffmpeg_utils import escape_drawtext
+from genlab_core.media.ffmpeg_utils import escape_drawtext, run_ffmpeg
 from genlab_core.video.standards import Platform, get_standard
 
 logger = logging.getLogger(__name__)

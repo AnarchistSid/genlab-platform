@@ -1,7 +1,7 @@
 import pytest
 from genlab_core.publishing.niche_credentials import (
-    validate_niche_match,
     CrossChannelPublishError,
+    validate_niche_match,
 )
 
 

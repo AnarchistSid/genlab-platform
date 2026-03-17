@@ -8,13 +8,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.learning.meta_prior import (
     TRANSFER_MATRIX,
     apply_warm_start,
     compute_warm_start_prior,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. Low confidence scales toward uniform Beta(1,1)

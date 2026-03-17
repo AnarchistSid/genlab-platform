@@ -1,13 +1,11 @@
 """Tests for FacebookClient — mocks all HTTP."""
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from genlab_core.platforms.models import PublishPayload, FacebookSpecific
-
+from genlab_core.platforms.models import FacebookSpecific, PublishPayload
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -271,7 +269,7 @@ class TestEngagement:
 class TestMetrics:
     def _old_published_at(self):
         """Return a published_at timestamp 72h ago (past data lag guard)."""
-        return datetime.now(timezone.utc) - timedelta(hours=72)
+        return datetime.now(UTC) - timedelta(hours=72)
 
     def test_get_metrics_returns_platform_metrics(self, fb_client):
         """get_metrics() returns PlatformMetrics with views/likes/comments."""

@@ -22,7 +22,6 @@ import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
 
 from genlab_core.interfaces.tts import TTSProvider, TTSResult
 from genlab_core.tts._text_cleaner import clean_text_for_tts
@@ -95,14 +94,14 @@ class TTSCascade:
 
     def __init__(
         self,
-        providers: List[TTSProvider],
+        providers: list[TTSProvider],
         max_failures: int = 3,
         reset_timeout: float = 60.0,
     ) -> None:
         if not providers:
             raise ValueError("TTSCascade requires at least one provider")
         self._providers = list(providers)
-        self._breakers: Dict[str, CircuitBreaker] = {
+        self._breakers: dict[str, CircuitBreaker] = {
             p.name: CircuitBreaker(
                 max_failures=max_failures,
                 reset_timeout=reset_timeout,
@@ -136,7 +135,7 @@ class TTSCascade:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        tried: List[str] = []
+        tried: list[str] = []
 
         for provider in self._providers:
             breaker = self._breakers[provider.name]
@@ -196,7 +195,7 @@ class TTSCascade:
                 return provider.estimate_cost(text)
         return 0.0
 
-    def available_providers(self) -> Dict[str, bool]:
+    def available_providers(self) -> dict[str, bool]:
         """Report which providers are currently available."""
         return {p.name: p.available for p in self._providers}
 

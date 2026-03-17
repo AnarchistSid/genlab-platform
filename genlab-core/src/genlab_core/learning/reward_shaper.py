@@ -22,9 +22,10 @@ from __future__ import annotations
 
 import logging
 import time as _time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 import yaml
 
@@ -329,7 +330,7 @@ class MonetisationRewardShaper:
         config: dict,
         niche_id: str,
         monetisation_config: dict,
-        multiplier_provider: Optional["MonetisationMultiplierProvider"] = None,
+        multiplier_provider: MonetisationMultiplierProvider | None = None,
     ) -> None:
         self._config = config
         self._niche_id = niche_id
@@ -342,7 +343,7 @@ class MonetisationRewardShaper:
         self._normalizers: dict[str, WelfordNormalizer] = {}
 
     @classmethod
-    def from_config(cls, niche_id: str) -> "MonetisationRewardShaper":
+    def from_config(cls, niche_id: str) -> MonetisationRewardShaper:
         """Load scoring.yaml and monetisation.yaml from AGENT_ROOT."""
         import yaml
 
@@ -588,7 +589,7 @@ class MonetisationMultiplierProvider:
 
     def get_progress(
         self, niche_id: str, platform: str, metric_name: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get raw progress record for a specific metric."""
         self._ensure_cache()
         return self._cache.get(f"{niche_id}/{platform}/{metric_name}")

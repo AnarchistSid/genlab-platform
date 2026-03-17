@@ -1,12 +1,11 @@
 """Tests for genlab_core.media.ffmpeg."""
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.ffmpeg import (
-    HWAccel,
     MASTER_SPEC,
     PLATFORM_SPECS,
+    HWAccel,
     Platform,
     RenderSpec,
     _apply_hw_accel,
@@ -15,7 +14,6 @@ from genlab_core.media.ffmpeg import (
     get_ffprobe_binary,
     resolve_twitter_spec,
 )
-
 
 # ---------------------------------------------------------------------------
 # RenderSpec.to_output_args()

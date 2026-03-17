@@ -11,14 +11,14 @@ expected by GenericPipelineRunner and StageRunner.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
-def _load_fixture(name: str) -> Dict[str, Any]:
+def _load_fixture(name: str) -> dict[str, Any]:
     """Load a JSON fixture file by name."""
     path = FIXTURES_DIR / name
     with open(path, encoding="utf-8") as f:
@@ -28,11 +28,11 @@ def _load_fixture(name: str) -> Dict[str, Any]:
 class MockFetchTrendingVideos:
     """Simulate FetchTrendingVideos — injects mock stories from fixture data."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "unknown")
         fixture = _load_fixture("mock_youtube_trending.json")
-        stories: List[Dict[str, Any]] = []
-        now = datetime.now(timezone.utc)
+        stories: list[dict[str, Any]] = []
+        now = datetime.now(UTC)
 
         for item in fixture.get("items", []):
             snippet = item.get("snippet", {})
@@ -68,7 +68,7 @@ class MockFetchTrendingVideos:
 class MockScoreAndFilter:
     """Simulate scoring — assigns composite scores to stories."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         scored = 0
 
@@ -90,13 +90,13 @@ class MockScoreAndFilter:
 class MockVideoGate:
     """Simulate video gate — marks all stories as having valid clips."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         for story in stories:
             story.setdefault("media", {})["clip_path"] = "/tmp/mock_clip.mp4"
             story["_skip_llm"] = False
 
-        clip_index: Dict[str, Any] = {"clips": {}}
+        clip_index: dict[str, Any] = {"clips": {}}
         for story in stories:
             sid = story.get("story_id", "")
             clip_index["clips"][sid] = {
@@ -116,7 +116,7 @@ class MockVideoGate:
 class MockWriteContent:
     """Simulate LLM content writing — injects mock content from fixture."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         fixture = _load_fixture("mock_anthropic_response.json")
         stories = context.get("stories", [])
         content_template = fixture.get("content", {})
@@ -152,7 +152,7 @@ class MockWriteContent:
 class MockRenderVisuals:
     """Simulate video rendering — sets rendered_path without real FFmpeg."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         rendered = 0
 
@@ -191,7 +191,7 @@ class MockRenderVisuals:
 class MockPushToBacklog:
     """Simulate backlog push — records counts without real SharePoint calls."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         blueprints = context.get("blueprints", [])
         stories_with_content = [s for s in stories if s.get("content")]
@@ -209,7 +209,7 @@ class MockPushToBacklog:
 class MockFetchInsights:
     """Simulate insights fetch — no-op (no previously published posts)."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         context.setdefault("run_stats", {})["insights"] = {
             "fetched": 0,
             "skipped": 0,
@@ -222,7 +222,7 @@ class MockFetchInsights:
 class MockPerformanceLearner:
     """Simulate performance learner — no-op (no engagement data yet)."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         context.setdefault("run_stats", {})["learning"] = {
             "status": "no_engagement_data",
         }
@@ -232,7 +232,7 @@ class MockPerformanceLearner:
 class MockEmptyFetch:
     """Stage that fetches zero stories (for edge case testing)."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         context.setdefault("stories", [])
         context.setdefault("run_stats", {})["fetch_trending"] = {
             "videos_found": 0,

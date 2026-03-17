@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,8 @@ NICHE_STYLE = {
 def generate_hook(
     story: dict[str, Any],
     niche_id: str,
-    used_hooks: Optional[Set[str]] = None,
-) -> Optional[str]:
+    used_hooks: set[str] | None = None,
+) -> str | None:
     """Generate a story-specific hook via Claude Haiku.
 
     Returns None if:

@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.writing.llm_client import AnthropicLLMClient
 
 

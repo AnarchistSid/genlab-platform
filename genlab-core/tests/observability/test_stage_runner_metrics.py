@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from genlab_core.observability.metrics_writer import PipelineMetrics
 from genlab_core.pipeline.stage_runner import (
     LocalStageRunner,
-    StageResult,
 )
 
 

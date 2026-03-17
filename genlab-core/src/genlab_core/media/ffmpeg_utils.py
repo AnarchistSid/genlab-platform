@@ -18,7 +18,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 
@@ -139,7 +139,7 @@ def probe_video_duration(video_path: Path | str) -> float:
     return 0.0
 
 
-def probe_video_metadata(video_path: Path | str) -> Dict[str, Any]:
+def probe_video_metadata(video_path: Path | str) -> dict[str, Any]:
     """Get full video metadata: duration, width, height, fps, codec.
 
     Returns empty dict on failure.
@@ -163,7 +163,7 @@ def probe_video_metadata(video_path: Path | str) -> Dict[str, Any]:
             return {}
         data = json.loads(result.stdout)
 
-        video_stream: Dict[str, Any] = {}
+        video_stream: dict[str, Any] = {}
         for stream in data.get("streams", []):
             if stream.get("codec_type") == "video":
                 video_stream = stream
@@ -265,7 +265,7 @@ def probe_media(path: str | Path) -> dict | None:
         return None
 
 
-def probe_raw_ffprobe(video_path: Path | str) -> Optional[Dict]:
+def probe_raw_ffprobe(video_path: Path | str) -> dict | None:
     """Run ffprobe and return the raw parsed JSON output.
 
     For compliance checking that needs direct access to all stream fields.
@@ -663,7 +663,7 @@ def loudnorm(
 def split_video_segments(
     video_path: Path | str,
     max_segment_seconds: float = 59.0,
-    output_dir: Optional[Path | str] = None,
+    output_dir: Path | str | None = None,
 ) -> list[str]:
     """Split a video into segments using keyframe-aligned stream copy.
 

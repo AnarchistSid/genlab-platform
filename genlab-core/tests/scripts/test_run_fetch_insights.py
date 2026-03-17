@@ -1,29 +1,26 @@
 """Tests for the deferred fetch_insights runner script."""
 
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 from genlab_core.scripts.run_fetch_insights import (
-    _post_age_hours,
-    _get_eligible_records,
-    _fetch_platform_insights,
-    _mark_window_completed,
-    fetch_insights_for_window,
     WINDOW_RANGES,
+    _fetch_platform_insights,
+    _get_eligible_records,
+    _mark_window_completed,
+    _post_age_hours,
 )
 
 
 class TestPostAgeHours:
     def test_iso_string(self):
-        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        one_hour_ago = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         age = _post_age_hours(one_hour_ago)
         assert age is not None
         assert 0.9 < age < 1.1
 
     def test_datetime_object(self):
-        six_hours_ago = datetime.now(timezone.utc) - timedelta(hours=6)
+        six_hours_ago = datetime.now(UTC) - timedelta(hours=6)
         age = _post_age_hours(six_hours_ago)
         assert age is not None
         assert 5.9 < age < 6.1
@@ -36,7 +33,7 @@ class TestPostAgeHours:
         assert _post_age_hours("not-a-date") is None
 
     def test_z_suffix(self):
-        ts = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts = (datetime.now(UTC) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
         age = _post_age_hours(ts)
         assert age is not None
         assert 2.9 < age < 3.1
@@ -58,7 +55,7 @@ class TestWindowRanges:
 
 class TestGetEligibleRecords:
     def _make_record(self, post_id, platform, niche_id, hours_ago, status="SUCCESS"):
-        published_at = (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()
+        published_at = (datetime.now(UTC) - timedelta(hours=hours_ago)).isoformat()
         return {
             "id": f"rec_{post_id}",
             "fields": {

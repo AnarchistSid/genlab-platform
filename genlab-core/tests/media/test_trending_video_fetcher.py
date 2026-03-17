@@ -1,15 +1,14 @@
 """Tests for TrendingVideoFetcher and FetchTrendingVideos pipeline stage."""
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from genlab_core.media.trending_video_fetcher import (
+    MIN_VIEW_VELOCITY,
+    NICHE_SEARCH_KEYWORDS,
+    YOUTUBE_CATEGORIES,
     FetchTrendingVideos,
     TrendingVideo,
     TrendingVideoFetcher,
-    NICHE_SEARCH_KEYWORDS,
-    YOUTUBE_CATEGORIES,
-    MIN_VIEW_VELOCITY,
 )
 
 
@@ -21,7 +20,7 @@ def _make_api_video_item(
     video_id="abc123", age_hours=2, view_count=10000, duration="PT2M30S",
 ):
     published = (
-        datetime.now(timezone.utc) - timedelta(hours=age_hours)
+        datetime.now(UTC) - timedelta(hours=age_hours)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "id": video_id,
@@ -179,7 +178,7 @@ class TestTrendingVideoToStory:
             title="Amazing Gaming Clip",
             channel_name="ProGamer",
             channel_id="UC123",
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
             view_count=50000,
             like_count=2000,
             duration_seconds=120,
@@ -206,7 +205,7 @@ class TestTrendingVideoToStory:
             title="Test",
             channel_name="Ch",
             channel_id="UC",
-            published_at=datetime(2026, 3, 14, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 14, tzinfo=UTC),
             view_count=1000,
             like_count=50,
             duration_seconds=60,
@@ -248,7 +247,7 @@ class TestFetchTrendingVideosStage:
             title="Epic Gaming Gameplay Highlights",
             channel_name="Ch",
             channel_id="UC",
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
             view_count=50000,
             like_count=2000,
             duration_seconds=120,

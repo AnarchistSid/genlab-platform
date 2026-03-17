@@ -16,13 +16,13 @@ class ReplyClient(Protocol):
         ...
 
 
-def get_reply_client(platform: str) -> Optional[ReplyClient]:
+def get_reply_client(platform: str) -> ReplyClient | None:
     """Return a reply client for the given platform, or None if unsupported."""
-    from genlab_core.engagement.platform_clients.youtube_reply import YouTubeReplyClient
-    from genlab_core.engagement.platform_clients.instagram_reply import InstagramReplyClient
     from genlab_core.engagement.platform_clients.facebook_reply import FacebookReplyClient
-    from genlab_core.engagement.platform_clients.twitter_reply import TwitterReplyClient
+    from genlab_core.engagement.platform_clients.instagram_reply import InstagramReplyClient
     from genlab_core.engagement.platform_clients.threads_reply import ThreadsReplyClient
+    from genlab_core.engagement.platform_clients.twitter_reply import TwitterReplyClient
+    from genlab_core.engagement.platform_clients.youtube_reply import YouTubeReplyClient
 
     registry: dict[str, type] = {
         "youtube": YouTubeReplyClient,

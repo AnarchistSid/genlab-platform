@@ -1,9 +1,7 @@
 """Tests for genlab_core.media.video_sourcer."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from genlab_core.media.video_sourcer import (
     VideoSearchResult,
@@ -125,7 +123,7 @@ class TestParseIsoDuration:
 class TestScoreVideoResult:
     def test_relevance_similar_titles_score_higher(self):
         """Two results with different title similarity should score differently."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         similar = VideoSearchResult(
             url="https://youtube.com/watch?v=1",
             title="OpenAI launches GPT-5 model",
@@ -149,7 +147,7 @@ class TestScoreVideoResult:
 
     def test_duration_fit_60s_beats_3600s(self):
         """A 60-second video should score higher on duration than a 1-hour video."""
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         short = VideoSearchResult(
             url="https://youtube.com/watch?v=1",
             title="Test video",
@@ -178,14 +176,14 @@ class TestScoreVideoResult:
             title="Some video",
             duration_seconds=60,
             view_count=500_000,
-            published_at=datetime.now(tz=timezone.utc),
+            published_at=datetime.now(tz=UTC),
             backend="youtube",
         )
         score = score_video_result(result, "Some video")
         assert 0.0 <= score <= 1.0
 
     def test_high_view_count_boosts_score(self):
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         popular = VideoSearchResult(
             url="u1",
             title="AI news",

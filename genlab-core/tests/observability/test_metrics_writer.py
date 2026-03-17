@@ -5,16 +5,13 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.observability.metrics_writer import (
     METRICS_FILENAME,
     PipelineMetrics,
     StageMetric,
 )
-
 
 # ── StageMetric dataclass ───────────────────────────────────────────────────
 

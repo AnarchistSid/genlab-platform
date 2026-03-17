@@ -9,9 +9,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary, RenderSpec
-
+from genlab_core.media.ffmpeg import RenderSpec, get_ffmpeg_binary, get_ffprobe_binary
 
 # ── Binary discovery tests ────────────────────────────────────────
 
@@ -117,13 +115,13 @@ class TestConstants:
         assert "aac" in FINAL_AUDIO_PARAMS
 
     def test_reel_dimensions(self):
-        from genlab_core.media.ffmpeg_utils import REEL_WIDTH, REEL_HEIGHT, REEL_FPS
+        from genlab_core.media.ffmpeg_utils import REEL_FPS, REEL_HEIGHT, REEL_WIDTH
         assert REEL_WIDTH == 1080
         assert REEL_HEIGHT == 1920
         assert REEL_FPS == 30
 
     def test_landscape_dimensions(self):
-        from genlab_core.media.ffmpeg_utils import LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT
+        from genlab_core.media.ffmpeg_utils import LANDSCAPE_HEIGHT, LANDSCAPE_WIDTH
         assert LANDSCAPE_WIDTH == 1920
         assert LANDSCAPE_HEIGHT == 1080
 

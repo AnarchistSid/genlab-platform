@@ -22,7 +22,7 @@ Non-fatal: learning failures are logged but never block publishing.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class PerformanceLearner:
     Writes: context['run_stats']['learning']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         niche_config = context.get("niche_config", {})
         niche_id = niche_config.get("niche_id", "unknown")
@@ -284,7 +284,7 @@ class PerformanceLearner:
             return None
 
     @staticmethod
-    def _extract_arm_ids(story: Dict[str, Any]) -> List[str]:
+    def _extract_arm_ids(story: dict[str, Any]) -> list[str]:
         """Extract bandit arm IDs from story metadata.
 
         Arms correspond to strategy dimensions used when creating
@@ -312,7 +312,7 @@ class PerformanceLearner:
     @staticmethod
     def _write_arms_extended(
         proxy,
-        arms: Dict[str, Dict[str, Any]],
+        arms: dict[str, dict[str, Any]],
         save_arm_fn,
     ) -> None:
         """Write updated arm posteriors (with LinUCB state) back to SharePoint."""
@@ -331,7 +331,7 @@ class PerformanceLearner:
                 )
 
     @staticmethod
-    def _write_arms(proxy, arms: Dict[str, tuple]) -> None:
+    def _write_arms(proxy, arms: dict[str, tuple]) -> None:
         """Write updated arm posteriors back to SharePoint.
 
         Legacy method kept for backward compatibility. Prefer

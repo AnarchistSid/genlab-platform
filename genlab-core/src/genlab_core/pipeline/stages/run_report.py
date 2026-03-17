@@ -22,9 +22,9 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +40,14 @@ class RunReport:
     Writes: context['run_stats']['report_path']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         run_stats = context.get("run_stats", {})
         niche_config = context.get("niche_config", {})
         niche_id = context.get("niche_id") or niche_config.get("niche_id", "unknown")
         stories = context.get("stories", [])
         blueprints_pushed = run_stats.get("backlog_push", {}).get("blueprints_pushed", 0)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Derive run timing
         stage_timings = run_stats.get("_stage_timings", {})

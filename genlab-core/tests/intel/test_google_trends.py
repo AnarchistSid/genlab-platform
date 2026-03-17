@@ -1,11 +1,10 @@
 """Tests for GoogleTrendsIntel."""
-import pytest
 from unittest.mock import MagicMock, patch
 
 from genlab_core.intel.google_trends import (
-    GoogleTrendsIntel,
     NICHE_SEED_KEYWORDS,
     TRENDS_CATEGORIES,
+    GoogleTrendsIntel,
 )
 
 

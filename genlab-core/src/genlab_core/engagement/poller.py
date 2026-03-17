@@ -346,7 +346,6 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
       1. GET /{page_id}/posts → recent post IDs
       2. GET /{post_id}/comments → comments per post
     """
-    import os
 
     logger.debug("[POLLER] Facebook poll for %s (page=%s)", niche_id, page_id)
 

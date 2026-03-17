@@ -5,17 +5,15 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from genlab_core.learning.config_writer import (
+    MAX_RATIO,
     MIN_OBSERVATIONS_PER_ARM,
     MIN_RATIO,
-    MAX_RATIO,
     _load_yaml,
     _save_yaml_atomic,
     update_schedule_from_bandit,
     update_templates_from_bandit,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

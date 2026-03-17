@@ -5,11 +5,9 @@ Mocks all external dependencies: BacklogClient, platform clients, DailyCapEnforc
 from __future__ import annotations
 
 import json
-import os
 import sys
-import textwrap
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,18 +19,16 @@ _SRC = Path(__file__).resolve().parents[2] / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+from genlab_core.platforms.models import PublishPayload, PublishResult
 from genlab_core.publishing.publish_all_platforms import (
     EXIT_ALL_FAILED,
     EXIT_DAILY_CAP,
-    EXIT_LOCK_HELD,
     EXIT_NO_BLUEPRINTS,
     EXIT_SUCCESS,
     PidLock,
     build_payload,
     run_publish,
 )
-from genlab_core.platforms.models import PublishPayload, PublishResult
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -55,7 +51,7 @@ def _make_blueprint(
     action_taken: str = "approved",
     scheduled_for: str = "",
     candidate_id: str = "cand-abc123",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if visual_paths is None:
         visual_paths = ["/tmp/test/video.mp4"]
     return {

@@ -5,12 +5,11 @@ import contextvars
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 # Cost rates per 1M tokens (as of 2026-03)
-MODEL_COSTS: Dict[str, Dict[str, float]] = {
+MODEL_COSTS: dict[str, dict[str, float]] = {
     # Anthropic
     "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
     "claude-haiku-4-5": {"input": 0.80, "output": 4.00},
@@ -29,7 +28,7 @@ CATEGORIES = ("llm", "tts", "image", "compute", "media", "bandwidth")
 def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Compute USD cost. Primary: litellm. Fallback: local MODEL_COSTS table."""
     try:
-        from litellm import completion_cost, ModelResponse, Choices, Message, Usage
+        from litellm import Choices, Message, ModelResponse, Usage, completion_cost
         resp = ModelResponse(
             id="cost-calc",
             choices=[Choices(finish_reason="stop", index=0,
@@ -112,8 +111,8 @@ class CostAccumulator:
         return sum(e.cost_usd for e in self.entries)
 
     @property
-    def by_category(self) -> Dict[str, float]:
-        cats: Dict[str, float] = {}
+    def by_category(self) -> dict[str, float]:
+        cats: dict[str, float] = {}
         for e in self.entries:
             cats[e.category] = cats.get(e.category, 0) + e.cost_usd
         return cats
@@ -124,7 +123,7 @@ class CostAccumulator:
             return 0.0
         return max(0.0, 1.0 - (self.total_usd / self._budget_usd)) * 100
 
-    def summary(self) -> Dict:
+    def summary(self) -> dict:
         return {
             "run_id": self.run_id,
             "total_usd": round(self.total_usd, 4),
@@ -135,12 +134,12 @@ class CostAccumulator:
 
 
 # contextvars-based current accumulator
-_current_accumulator: contextvars.ContextVar[Optional[CostAccumulator]] = (
+_current_accumulator: contextvars.ContextVar[CostAccumulator | None] = (
     contextvars.ContextVar("cost_accumulator", default=None)
 )
 
 
-def get_accumulator() -> Optional[CostAccumulator]:
+def get_accumulator() -> CostAccumulator | None:
     return _current_accumulator.get()
 
 

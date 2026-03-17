@@ -16,7 +16,6 @@ import logging
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ HARD_STOP_PCT: float = 0.90
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
-OPERATION_COSTS: Dict[str, int] = {
+OPERATION_COSTS: dict[str, int] = {
     "upload": 1_600,
     "thumbnail_set": 50,
     "comment_list": 1,
@@ -54,7 +53,7 @@ class YouTubeQuotaTracker:
 
     def __init__(
         self,
-        state_path: Optional[Path] = None,
+        state_path: Path | None = None,
         daily_quota: int = DAILY_QUOTA,
     ) -> None:
         self._lock = threading.Lock()
@@ -115,7 +114,7 @@ class YouTubeQuotaTracker:
             self._maybe_reset()
             return self._upload_count
 
-    def status(self) -> Dict[str, object]:
+    def status(self) -> dict[str, object]:
         """Return a snapshot of today's quota state."""
         with self._lock:
             self._maybe_reset()

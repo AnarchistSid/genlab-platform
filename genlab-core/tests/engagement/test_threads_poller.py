@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
-
 from genlab_core.engagement.poller import (
     THREADS_POLL_INTERVAL,
     poll_threads_comments,

@@ -6,7 +6,7 @@ without changing its domain methods.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -20,7 +20,7 @@ class StorageBackend(Protocol):
         formula: str | None = None,
         niche_id: str | None = None,
         max_records: int | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Return records matching the filter.
 
         Args:
@@ -31,17 +31,17 @@ class StorageBackend(Protocol):
         """
         ...
 
-    def get(self, table: str, record_id: str) -> Dict[str, Any]:
+    def get(self, table: str, record_id: str) -> dict[str, Any]:
         """Fetch a single record by its ID."""
         ...
 
     def create(
         self,
         table: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         *,
         typecast: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a record and return the full record dict (with 'id')."""
         ...
 
@@ -49,10 +49,10 @@ class StorageBackend(Protocol):
         self,
         table: str,
         record_id: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         *,
         typecast: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Update a record's fields and return the updated record."""
         ...
 
@@ -63,17 +63,17 @@ class StorageBackend(Protocol):
     def batch_create(
         self,
         table: str,
-        records: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Create multiple records, returning the created records."""
         ...
 
     def batch_update(
         self,
         table: str,
-        records: List[Dict[str, Any]],
+        records: list[dict[str, Any]],
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Update multiple records (each with 'id' and 'fields' keys)."""
         ...
 
@@ -83,6 +83,6 @@ class StorageBackend(Protocol):
         record_id: str,
         field_name: str,
         file_path: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Upload a file attachment to a record field."""
         ...

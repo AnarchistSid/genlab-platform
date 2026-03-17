@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-
 
 # ── Platform enum (mirrors media.ffmpeg.Platform, kept here to avoid coupling) ─
 
@@ -46,7 +44,7 @@ class VideoStandard:
     preset: str
     color_space: str = "bt709"
     vmaf_floor: int = 85
-    max_bitrate_kbps: Optional[int] = None
+    max_bitrate_kbps: int | None = None
 
 
 @dataclass(frozen=True)

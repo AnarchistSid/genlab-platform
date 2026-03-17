@@ -19,7 +19,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class DiskQuotaManager:
             protect_recent: 3
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         self._config = config
 
     @classmethod
@@ -174,7 +174,7 @@ class DiskQuotaManager:
 
     # ── Config accessors ─────────────────────────────────────
 
-    def _agent_cfg(self, agent: str) -> Dict[str, Any]:
+    def _agent_cfg(self, agent: str) -> dict[str, Any]:
         return self._config.get("agents", {}).get(agent, {})
 
     def _runs_dir(self, agent: str) -> Path:
@@ -199,13 +199,13 @@ class DiskQuotaManager:
 
     # ── Core API ─────────────────────────────────────────────
 
-    def scan_runs(self, agent: str) -> List[RunRecord]:
+    def scan_runs(self, agent: str) -> list[RunRecord]:
         """Scan and return metadata for all run directories, newest first."""
         runs_dir = self._runs_dir(agent)
         if not runs_dir.is_dir():
             return []
 
-        records: List[RunRecord] = []
+        records: list[RunRecord] = []
         for entry in runs_dir.iterdir():
             if not entry.is_dir():
                 continue
@@ -257,8 +257,8 @@ class DiskQuotaManager:
     def evict(
         self,
         agent: str,
-        target_free_bytes: Optional[int] = None,
-    ) -> List[str]:
+        target_free_bytes: int | None = None,
+    ) -> list[str]:
         """Two-pass score-weighted eviction.
 
         Pass 1: Delete clips/ from ANY non-published run (including recent).
@@ -283,7 +283,7 @@ class DiskQuotaManager:
         if need_to_free <= 0:
             return []
 
-        evicted_paths: List[str] = []
+        evicted_paths: list[str] = []
         freed = 0
 
         # Pass 1: delete heavy subdirectories from ALL runs (including

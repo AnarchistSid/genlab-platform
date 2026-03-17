@@ -5,8 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from genlab_core.platforms.models import PublishPayload, InstagramSpecific
+from genlab_core.platforms.models import InstagramSpecific, PublishPayload
 
 
 @pytest.fixture

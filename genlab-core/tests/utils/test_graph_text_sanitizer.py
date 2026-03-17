@@ -9,13 +9,11 @@ Covers:
   - Integration with GraphTableProxy._prepare_fields()
 """
 
-import pytest
 
 from genlab_core.utils.text_sanitizer import (
     sanitize_fields_for_graph_api,
     sanitize_for_graph_api,
 )
-
 
 # ── sanitize_for_graph_api ──────────────────────────────────────────
 

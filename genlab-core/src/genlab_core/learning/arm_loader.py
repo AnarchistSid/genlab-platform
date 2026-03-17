@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -129,7 +129,7 @@ def save_arm(
         "ContentType": content_type,
         "Platform": platform,
         "TotalPulls": 0,
-        "LastUpdated": datetime.now(timezone.utc).isoformat(),
+        "LastUpdated": datetime.now(UTC).isoformat(),
     }
     if linucb_state is not None:
         fields["LinUCB_State"] = json.dumps(linucb_state)

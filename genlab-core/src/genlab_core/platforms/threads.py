@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -446,7 +446,7 @@ class ThreadsClient:
             return False
 
         if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=timezone.utc)
+            issued_at = issued_at.replace(tzinfo=UTC)
 
-        age_days = (datetime.now(timezone.utc) - issued_at).days
+        age_days = (datetime.now(UTC) - issued_at).days
         return age_days >= _NEEDS_REFRESH_AFTER_DAYS

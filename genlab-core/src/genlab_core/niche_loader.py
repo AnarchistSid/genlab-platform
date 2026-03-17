@@ -15,12 +15,12 @@ Usage:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
 # Module-level cache for load_yaml_config — keyed by resolved path.
-_yaml_config_cache: Dict[str, dict] = {}
+_yaml_config_cache: dict[str, dict] = {}
 
 
 def load_niche_config(niche_id: str, project_root: Path) -> dict:
@@ -41,19 +41,19 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
     # Standalone channel folder: config/ is directly under project_root
     standalone_path = project_root / "config" / "niche.yaml"
     if standalone_path.exists():
-        with open(standalone_path, "r", encoding="utf-8") as f:
+        with open(standalone_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
     # CriticalRush nested pattern: niches/{id}/config/
     nested_path = project_root / "niches" / niche_id / "config" / "niche.yaml"
     if nested_path.exists():
-        with open(nested_path, "r", encoding="utf-8") as f:
+        with open(nested_path, encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
 
     return {}
 
 
-def get_feature_flags(niche_id: str, project_root: Path) -> Dict[str, Any]:
+def get_feature_flags(niche_id: str, project_root: Path) -> dict[str, Any]:
     """Return the feature_flags block from a niche config.
 
     Args:
@@ -87,7 +87,7 @@ def load_yaml_config(project_root: Path, relative_path: str) -> dict:
         _yaml_config_cache[key] = {}
         return {}
 
-    with open(full_path, "r", encoding="utf-8") as f:
+    with open(full_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     _yaml_config_cache[key] = data
     return data

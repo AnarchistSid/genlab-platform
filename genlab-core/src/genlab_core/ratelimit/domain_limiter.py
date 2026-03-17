@@ -18,7 +18,6 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import yaml
@@ -51,7 +50,7 @@ DEFAULT_DOMAIN_DELAYS = {
 }
 
 
-def _load_config_delays(config_path: Optional[Path] = None) -> Dict[str, float]:
+def _load_config_delays(config_path: Path | None = None) -> dict[str, float]:
     """Load per-domain delays from config file, if it exists."""
     if config_path is None or not config_path.exists():
         return {}
@@ -75,12 +74,12 @@ class RateLimiter:
     def __init__(
         self,
         default_delay: float = DEFAULT_DELAY_SECONDS,
-        config_path: Optional[Path] = None,
+        config_path: Path | None = None,
     ):
         self._lock = threading.Lock()
-        self._last_request: Dict[str, float] = {}
+        self._last_request: dict[str, float] = {}
         self._default_delay = default_delay
-        self._domain_locks: Dict[str, threading.Lock] = {}
+        self._domain_locks: dict[str, threading.Lock] = {}
         self._domain_locks_lock = threading.Lock()
 
         self._domain_delays = dict(DEFAULT_DOMAIN_DELAYS)
@@ -157,11 +156,11 @@ class RateLimiter:
 
 
 # Module-level singleton
-_global_limiter: Optional[RateLimiter] = None
+_global_limiter: RateLimiter | None = None
 _global_limiter_lock = threading.Lock()
 
 
-def get_limiter(config_path: Optional[Path] = None) -> RateLimiter:
+def get_limiter(config_path: Path | None = None) -> RateLimiter:
     """Get or create the global rate limiter singleton (thread-safe).
 
     Args:

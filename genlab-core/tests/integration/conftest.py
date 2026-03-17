@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -17,7 +17,7 @@ import pytest
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
-def _load_fixture(name: str) -> Dict[str, Any]:
+def _load_fixture(name: str) -> dict[str, Any]:
     """Load a JSON fixture file by name."""
     path = FIXTURES_DIR / name
     with open(path, encoding="utf-8") as f:
@@ -28,19 +28,19 @@ def _load_fixture(name: str) -> Dict[str, Any]:
 
 
 @pytest.fixture()
-def youtube_fixture() -> Dict[str, Any]:
+def youtube_fixture() -> dict[str, Any]:
     """Mock YouTube trending API response."""
     return _load_fixture("mock_youtube_trending.json")
 
 
 @pytest.fixture()
-def sharepoint_fixture() -> Dict[str, Any]:
+def sharepoint_fixture() -> dict[str, Any]:
     """Mock empty SharePoint lists."""
     return _load_fixture("mock_sharepoint_empty.json")
 
 
 @pytest.fixture()
-def anthropic_fixture() -> Dict[str, Any]:
+def anthropic_fixture() -> dict[str, Any]:
     """Mock Anthropic LLM response."""
     return _load_fixture("mock_anthropic_response.json")
 
@@ -75,7 +75,7 @@ _MOCK_MODULE = "tests.integration.mock_stages"
 SUPPORTED_NICHE_IDS = ["gaming", "sports", "movies", "anime", "ai_creators"]
 
 
-def build_mock_niche_config(niche_id: str) -> Dict[str, Any]:
+def build_mock_niche_config(niche_id: str) -> dict[str, Any]:
     """Build a minimal niche config with mock pipeline stages.
 
     The stages reference mock classes in mock_stages.py, allowing
@@ -126,6 +126,6 @@ def niche_id(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture()
-def mock_niche_config(niche_id: str) -> Dict[str, Any]:
+def mock_niche_config(niche_id: str) -> dict[str, Any]:
     """Build mock niche config for the current niche."""
     return build_mock_niche_config(niche_id)

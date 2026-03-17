@@ -30,8 +30,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -48,8 +48,8 @@ class ThreadsClient:
 
     def __init__(
         self,
-        access_token: Optional[str] = None,
-        user_id: Optional[str] = None,
+        access_token: str | None = None,
+        user_id: str | None = None,
         api_version: str = "v1.0",
     ):
         self._access_token = access_token or getattr(settings, "threads_access_token", None)
@@ -73,7 +73,7 @@ class ThreadsClient:
         text: str,
         *,
         reply_control: str = "everyone",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Publish a text-only post to Threads.
 
         Args:
@@ -124,7 +124,7 @@ class ThreadsClient:
         caption: str = "",
         *,
         reply_control: str = "everyone",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Publish an image post to Threads.
 
         Args:
@@ -177,7 +177,7 @@ class ThreadsClient:
         caption: str,
         *,
         reply_control: str = "everyone",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Publish a video to Threads.
 
         Args:
@@ -230,7 +230,7 @@ class ThreadsClient:
         logger.info("[THREADS] Published post %s — %s", threads_id, permalink)
         return {"threads_id": threads_id, "permalink": permalink}
 
-    def get_post_insights(self, threads_id: str) -> Dict[str, Any]:
+    def get_post_insights(self, threads_id: str) -> dict[str, Any]:
         """Fetch engagement metrics for a published post."""
         resp = requests.get(
             f"{self._base_url}/{threads_id}/insights",
@@ -243,7 +243,7 @@ class ThreadsClient:
         resp.raise_for_status()
         raw = resp.json().get("data", [])
 
-        metrics: Dict[str, int] = {}
+        metrics: dict[str, int] = {}
         for item in raw:
             name = item.get("name", "")
             values = item.get("values", [{}])
@@ -296,10 +296,10 @@ class ThreadsTokenManager:
     CRITICAL_AT_DAYS = 58
     TOKEN_LIFETIME_DAYS = 60
 
-    def __init__(self, client: Optional[ThreadsClient] = None):
+    def __init__(self, client: ThreadsClient | None = None):
         self._client = client
 
-    def check_and_refresh(self) -> Dict[str, Any]:
+    def check_and_refresh(self) -> dict[str, Any]:
         """Check token age and refresh if needed.
 
         Returns {"status": "ok"|"refreshed"|"warning"|"critical", "days_remaining": int}
@@ -316,9 +316,9 @@ class ThreadsTokenManager:
             return {"status": "unknown", "days_remaining": -1}
 
         if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=timezone.utc)
+            issued_at = issued_at.replace(tzinfo=UTC)
 
-        age_days = (datetime.now(timezone.utc) - issued_at).days
+        age_days = (datetime.now(UTC) - issued_at).days
         days_remaining = self.TOKEN_LIFETIME_DAYS - age_days
 
         if age_days >= self.CRITICAL_AT_DAYS:

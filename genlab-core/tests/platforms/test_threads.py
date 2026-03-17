@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.platforms.models import PublishPayload
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -434,9 +433,9 @@ class TestTokenHealth:
 
     def test_token_health_needs_refresh_true_when_old_token(self, threads_client):
         """THREADS_TOKEN_ISSUED_AT > 50 days ago → needs_refresh=True."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        old_date = (datetime.now(timezone.utc) - timedelta(days=51)).isoformat()
+        old_date = (datetime.now(UTC) - timedelta(days=51)).isoformat()
 
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch.dict(os.environ, {"THREADS_TOKEN_ISSUED_AT": old_date}):
@@ -451,9 +450,9 @@ class TestTokenHealth:
 
     def test_token_health_needs_refresh_false_when_fresh_token(self, threads_client):
         """THREADS_TOKEN_ISSUED_AT < 50 days ago → needs_refresh=False."""
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
-        fresh_date = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        fresh_date = (datetime.now(UTC) - timedelta(days=5)).isoformat()
 
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch.dict(os.environ, {"THREADS_TOKEN_ISSUED_AT": fresh_date}):

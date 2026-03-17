@@ -5,14 +5,11 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.media.download_top_videos import (
     DownloadTopVideos,
     build_clip_index,
     download_videos_for_stories,
 )
-
 
 # ---------------------------------------------------------------------------
 # build_clip_index

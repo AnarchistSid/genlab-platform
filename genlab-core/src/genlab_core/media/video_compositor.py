@@ -35,7 +35,7 @@ import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 import yaml
 from pydantic import BaseModel
@@ -185,13 +185,13 @@ class VisualConfig(BaseModel):
     hook_font_size: int = 32           # LayoutStandard.hook_font_size
     hook_x_offset: int = 24
     hook_max_lines: int = 2
-    bar_color: List[int] = [0, 0, 0]
-    hook_color: List[int] = [255, 255, 255]
+    bar_color: list[int] = [0, 0, 0]
+    hook_color: list[int] = [255, 255, 255]
     landscape_mode: str = "blurred_pillarbox"
     smart_crop: bool = False
     smart_crop_min_aspect: float = 1.2
-    platforms_vertical: List[str] = ["instagram", "youtube", "tiktok", "threads"]
-    platforms_landscape: List[str] = ["facebook", "twitter"]
+    platforms_vertical: list[str] = ["instagram", "youtube", "tiktok", "threads"]
+    platforms_landscape: list[str] = ["facebook", "twitter"]
 
 
 def load_visual_config(visuals_yaml: Path, niche_root: Path | None = None) -> VisualConfig:
@@ -236,7 +236,7 @@ class VideoCompositor:
     def __init__(
         self,
         config: VisualConfig,
-        sandbox_runner: Optional["SandboxedFFmpegRunner"] = None,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
     ) -> None:
         self._config = config
         self._canvas_w = VERTICAL_WIDTH

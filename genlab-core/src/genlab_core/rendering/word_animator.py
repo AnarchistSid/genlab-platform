@@ -14,7 +14,6 @@ Functions:
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ HOOK_SIZE_RANGE = (120, 160)
 BODY_SIZE_RANGE = (56, 72)
 
 
-def get_wbw_config() -> Dict:
+def get_wbw_config() -> dict:
     """Get the animation.word_by_word config block with defaults.
 
     Returns a flat dict with all word-by-word animation parameters.
@@ -58,7 +57,7 @@ def get_wbw_config() -> Dict:
         Path(__file__).resolve().parent.parent.parent.parent.parent
         / "BlackboxBrief" / "config" / "instagram_specs.yaml",
     ]
-    wbw: Dict = {}
+    wbw: dict = {}
     for specs_path in candidates:
         if specs_path.exists():
             import yaml
@@ -158,8 +157,8 @@ class WordByWordAnimator:
 
     def __init__(
         self,
-        font_path: Optional[str] = None,
-        config: Optional[Dict] = None,
+        font_path: str | None = None,
+        config: dict | None = None,
     ):
         """Initialize with optional font path and config overrides.
 
@@ -206,10 +205,10 @@ class WordByWordAnimator:
     def calculate_word_timings(
         self,
         text: str,
-        wpm: Optional[int] = None,
-        start_time: Optional[float] = None,
-        fade_duration: Optional[float] = None,
-    ) -> List[WordTiming]:
+        wpm: int | None = None,
+        start_time: float | None = None,
+        fade_duration: float | None = None,
+    ) -> list[WordTiming]:
         """Split text into words with appearance timestamps.
 
         Each word appears at a fixed interval derived from the target WPM.
@@ -239,7 +238,7 @@ class WordByWordAnimator:
 
         seconds_per_word = 60.0 / wpm  # e.g., 150 WPM -> 0.4s per word
 
-        timings: List[WordTiming] = []
+        timings: list[WordTiming] = []
         line = 0
         col = 0
 
@@ -273,7 +272,7 @@ class WordByWordAnimator:
         text: str,
         whisper_words: list[dict],
         fade_duration: float | None = None,
-    ) -> List[WordTiming]:
+    ) -> list[WordTiming]:
         """Populate word timings from Whisper speech-to-text timestamps.
 
         Instead of evenly spacing words by WPM, this method maps each
@@ -313,7 +312,7 @@ class WordByWordAnimator:
         n_words = len(words)
         n_whisper = len(whisper_words)
 
-        timings: List[WordTiming] = []
+        timings: list[WordTiming] = []
         line = 0
         col = 0
 
@@ -355,14 +354,14 @@ class WordByWordAnimator:
 
     def layout_words(
         self,
-        timings: List[WordTiming],
+        timings: list[WordTiming],
         font_size: int,
         x: int,
         y: int,
         max_width: int,
-        line_height_factor: Optional[float] = None,
+        line_height_factor: float | None = None,
         align_left: bool = False,
-    ) -> List[WordTiming]:
+    ) -> list[WordTiming]:
         """Compute per-word pixel positions for centered multi-line layout.
 
         Re-wraps words into lines based on actual estimated pixel width,
@@ -424,7 +423,7 @@ class WordByWordAnimator:
             col_idx += 1
 
         # -- Phase 3: center each line and assign positions ---------
-        lines: Dict[int, List[WordTiming]] = {}
+        lines: dict[int, list[WordTiming]] = {}
         for wt in timings:
             lines.setdefault(wt.line, []).append(wt)
 
@@ -451,10 +450,10 @@ class WordByWordAnimator:
 
     def generate_ffmpeg_filters(
         self,
-        timings: List[WordTiming],
+        timings: list[WordTiming],
         font_size: int,
         shadow_offset: int = 6,
-        shadow_alpha: Optional[float] = None,
+        shadow_alpha: float | None = None,
     ) -> str:
         """Generate FFmpeg drawtext filters for the word-by-word animation.
 
@@ -486,7 +485,7 @@ class WordByWordAnimator:
         shadow_alpha = shadow_alpha if shadow_alpha is not None else self.SHADOW_ALPHA
 
         font_arg = f":fontfile='{self.font_path}'" if self.font_path else ""
-        filters: List[str] = []
+        filters: list[str] = []
 
         for wt in timings:
             escaped = self._escape_word(wt.word)
@@ -561,17 +560,17 @@ class WordByWordAnimator:
         self,
         text: str,
         text_type: str = "hook",
-        wpm: Optional[int] = None,
-        start_time: Optional[float] = None,
+        wpm: int | None = None,
+        start_time: float | None = None,
         canvas_width: int = 1080,
         canvas_height: int = 1920,
-        override_y: Optional[int] = None,
-        override_x: Optional[int] = None,
-        override_width: Optional[int] = None,
+        override_y: int | None = None,
+        override_x: int | None = None,
+        override_width: int | None = None,
         align_left: bool = False,
-        max_font_size: Optional[int] = None,
+        max_font_size: int | None = None,
         whisper_words: list | None = None,
-    ) -> Tuple[str, float, int]:
+    ) -> tuple[str, float, int]:
         """Full pipeline: text -> timed word layout -> FFmpeg filters.
 
         Combines calculate_word_timings + layout_words + generate_ffmpeg_filters

@@ -19,7 +19,7 @@ References:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -156,7 +156,7 @@ def build_content_context(
         np.ndarray of shape (CONTEXT_DIM,) with float64 values in [0, 1].
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     return np.array([
         now.weekday() / 6.0,

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -43,7 +43,7 @@ _SEASON_MAP = {1: "WINTER", 2: "WINTER", 3: "SPRING", 4: "SPRING", 5: "SPRING",
 
 
 def _get_current_anime_season() -> tuple[str, int]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     season = _SEASON_MAP[now.month]
     year = now.year
     if now.month == 12:
@@ -133,7 +133,7 @@ class FetchAnimePromos:
     Zero YouTube API quota cost (external APIs only).
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         if niche_id != "anime":
             return context
@@ -142,7 +142,7 @@ class FetchAnimePromos:
         jikan_cfg = sources_config.get("jikan", {})
         anilist_cfg = sources_config.get("anilist", {})
 
-        all_promos: List[dict] = []
+        all_promos: list[dict] = []
 
         # Jikan promos
         if jikan_cfg.get("enabled", True):
@@ -172,7 +172,7 @@ class FetchAnimePromos:
         if unique:
             from genlab_core.cache.stable_ids import generate_story_id
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             new_stories = []
             for p in unique:
                 sid = generate_story_id(p["url"], now_iso)
@@ -203,5 +203,5 @@ class FetchAnimePromos:
         logger.info("[AnimePromos] %d unique promos added to pipeline", len(unique))
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         return self.execute(context)

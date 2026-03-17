@@ -8,16 +8,13 @@ Tests cover:
 """
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import MagicMock, mock_open, patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform, RenderSpec
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. _get_encode_args() tests
@@ -278,7 +275,7 @@ def _make_probe_data(
     color_space: str = "bt709",
     duration: float = 30.0,
     size: int = 50_000_000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Helper to build ffprobe-like output."""
     return {
         "streams": [
@@ -307,7 +304,7 @@ def _make_probe_data(
 class TestValidateVideosVMAFGate:
     """ValidateVideos runs VMAF checks by default and re-encodes on failure."""
 
-    def _make_context(self, tmp_path: Path) -> Dict[str, Any]:
+    def _make_context(self, tmp_path: Path) -> dict[str, Any]:
         """Build a minimal pipeline context with one renderable story."""
         video = tmp_path / "reel.mp4"
         video.write_bytes(b"\x00" * 256)

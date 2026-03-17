@@ -4,7 +4,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.storage.disk_quota import DiskQuotaManager
 
 

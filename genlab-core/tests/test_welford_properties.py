@@ -1,8 +1,7 @@
 """Property-based tests for WelfordNormalizer and temporal_decay."""
-from hypothesis import given, assume
-from hypothesis import strategies as st
-
 from genlab_core.intelligence.score_normalizer import WelfordNormalizer, temporal_decay
+from hypothesis import assume, given
+from hypothesis import strategies as st
 
 safe_float = st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)
 

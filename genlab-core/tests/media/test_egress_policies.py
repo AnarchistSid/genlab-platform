@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 from genlab_core.media.egress_policies import (
     _BUILTIN_POLICIES,
     get_egress_allow,

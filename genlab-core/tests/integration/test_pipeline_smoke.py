@@ -19,11 +19,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.context import PipelineContext
 from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
 
@@ -39,11 +38,7 @@ for _p in (str(_TESTS_ROOT), str(_GENLAB_CORE)):
 
 # Now we can import mock stages and config builder
 from integration.mock_stages import (  # noqa: E402
-    MockEmptyFetch,
-    MockFetchInsights,
     MockFetchTrendingVideos,
-    MockPerformanceLearner,
-    MockPushToBacklog,
     MockRenderVisuals,
     MockScoreAndFilter,
     MockVideoGate,
@@ -59,7 +54,7 @@ _MOCK_MODULE = "integration.mock_stages"
 # ── Config builder (local copy to avoid conftest import issues) ────────────
 
 
-def _build_mock_niche_config(niche_id: str) -> Dict[str, Any]:
+def _build_mock_niche_config(niche_id: str) -> dict[str, Any]:
     """Build a minimal niche config with mock pipeline stages."""
     return {
         "niche_id": niche_id,
@@ -101,7 +96,7 @@ def _run_pipeline(
     niche_id: str,
     tmp_path: Path,
     *,
-    config_override: Dict[str, Any] | None = None,
+    config_override: dict[str, Any] | None = None,
 ) -> PipelineContext:
     """Run the pipeline for a given niche with fully mocked externals.
 
@@ -138,12 +133,12 @@ def _run_pipeline(
     return ctx
 
 
-def _build_context_after_mock_stages(niche_id: str) -> Dict[str, Any]:
+def _build_context_after_mock_stages(niche_id: str) -> dict[str, Any]:
     """Build a context dict as it would look after all mock stages run.
 
     Used for testing real shared stages in isolation.
     """
-    ctx: Dict[str, Any] = {
+    ctx: dict[str, Any] = {
         "niche_id": niche_id,
         "niche_config": _build_mock_niche_config(niche_id),
         "stories": [],

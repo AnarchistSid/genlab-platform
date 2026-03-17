@@ -4,7 +4,6 @@ import json
 import time
 
 import pytest
-
 from genlab_core.cache.disk_cache import Cache
 
 

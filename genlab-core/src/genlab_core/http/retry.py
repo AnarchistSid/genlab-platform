@@ -12,7 +12,6 @@ from __future__ import annotations
 import functools
 import logging
 import time
-from typing import Tuple, Type
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ def retry(
     max_attempts: int = 3,
     backoff: float = 2.0,
     initial_delay: float = 1.0,
-    exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+    exceptions: tuple[type[BaseException], ...] = (Exception,),
 ):
     """Decorator: retry a function on failure with exponential backoff.
 

@@ -9,13 +9,10 @@ Each stage follows execute(context) -> context. Tests verify:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ── QCGates ────────────────────────────────────────────────────
 
@@ -589,12 +586,12 @@ class TestFetchInsights:
 
     def test_skips_already_fetched(self):
         """Posts with metrics_fetched set should be skipped."""
+        from datetime import datetime, timedelta
         from unittest.mock import MagicMock
-        from datetime import datetime, timezone, timedelta
 
         stage = self._make()
         mock_client = MagicMock()
-        pub_dt = datetime.now(timezone.utc) - timedelta(hours=12)
+        pub_dt = datetime.now(UTC) - timedelta(hours=12)
         mock_client.publishing_analytics.all.return_value = [
             {
                 "id": "rec_1",
@@ -618,12 +615,12 @@ class TestFetchInsights:
 
     def test_skips_too_young(self):
         """Posts published less than 6h ago should be skipped."""
+        from datetime import datetime, timedelta
         from unittest.mock import MagicMock
-        from datetime import datetime, timezone, timedelta
 
         stage = self._make()
         mock_client = MagicMock()
-        pub_dt = datetime.now(timezone.utc) - timedelta(hours=2)
+        pub_dt = datetime.now(UTC) - timedelta(hours=2)
         mock_client.publishing_analytics.all.return_value = [
             {
                 "id": "rec_1",

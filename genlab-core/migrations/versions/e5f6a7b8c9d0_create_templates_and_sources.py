@@ -8,16 +8,15 @@ Phase 6: Templates + Sources tables with Row Level Security.
 Templates stores niche video templates with duration/category.
 Sources stores configured content sources per niche with tier/weight.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
 revision: str = "e5f6a7b8c9d0"
-down_revision: Union[str, Sequence[str], None] = "d4e5f6a7b8c9"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

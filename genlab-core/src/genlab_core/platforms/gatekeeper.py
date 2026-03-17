@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +71,8 @@ class PublishGatekeeper:
         try:
             dt = datetime.fromisoformat(scheduled)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            if dt > datetime.now(timezone.utc):
+                dt = dt.replace(tzinfo=UTC)
+            if dt > datetime.now(UTC):
                 return GateResult(
                     allowed=False,
                     reason=f"Scheduled for {dt}",

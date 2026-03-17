@@ -31,7 +31,7 @@ import subprocess
 import tempfile
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -133,7 +133,7 @@ class SmartCropper:
         face_probe_frames: int = _FACE_PROBE_FRAMES,
         min_face_detections: int = _MIN_FACE_DETECTIONS,
         min_landscape_aspect: float = _MIN_LANDSCAPE_ASPECT,
-        sandbox_runner: Optional["SandboxedFFmpegRunner"] = None,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
     ) -> None:
         self._face_probe_frames = face_probe_frames
         self._min_face_detections = min_face_detections
@@ -255,7 +255,7 @@ class SmartCropper:
 
     def _detect_face_center(
         self, clip: Path, w: int, h: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Return median face-centre X from first N frames, or None."""
         cap = cv2.VideoCapture(str(clip))
         if not cap.isOpened():
@@ -267,7 +267,7 @@ class SmartCropper:
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         probe_n = min(self._face_probe_frames, total)
 
-        centres: List[int] = []
+        centres: list[int] = []
         for _ in range(probe_n):
             ret, frame = cap.read()
             if not ret:
@@ -292,7 +292,7 @@ class SmartCropper:
 
     def _detect_motion_center(
         self, clip: Path, w: int, h: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         """Return weighted motion-centre X across sampled frames, or None."""
         cap = cv2.VideoCapture(str(clip))
         if not cap.isOpened():
@@ -306,7 +306,7 @@ class SmartCropper:
         small_w, small_h = w // ds, h // ds
 
         prev_gray = None
-        motion_weights: List[Tuple[int, float]] = []
+        motion_weights: list[tuple[int, float]] = []
         frame_idx = 0
 
         while True:
@@ -354,16 +354,16 @@ class SmartCropper:
     # ── Batch helper ──────────────────────────────────────────────────────────
 
     def pre_crop_clips(
-        self, clips: List[Path],
-    ) -> Tuple[List[Path], Optional[str]]:
+        self, clips: list[Path],
+    ) -> tuple[list[Path], str | None]:
         """Pre-crop a list of clips, returning (new_clips_list, temp_dir).
 
         Portrait/square clips are returned as-is.  Landscape clips get
         cropped into a temp directory.  Caller must clean up *temp_dir*
         when done (if not None).
         """
-        temp_dir: Optional[str] = None
-        result: List[Path] = []
+        temp_dir: str | None = None
+        result: list[Path] = []
 
         for i, clip in enumerate(clips):
             region = self.detect(clip)

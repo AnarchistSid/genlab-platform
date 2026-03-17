@@ -11,10 +11,11 @@ The site ID is hardcoded from the confirmed site:
   veritasonellp.sharepoint.com,4020953b-b622-4a33-a0ea-763386c6af24,9a1be041-799b-4c47-982d-07bb5ceb099e
 """
 from __future__ import annotations
+
 import asyncio
+import logging
 import os
 import sys
-import logging
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -76,10 +77,10 @@ async def create_list(client) -> str:
 
 
 async def add_columns(client, list_id: str) -> None:
+    from msgraph.generated.models.boolean_column import BooleanColumn
     from msgraph.generated.models.column_definition import ColumnDefinition
-    from msgraph.generated.models.text_column      import TextColumn
-    from msgraph.generated.models.boolean_column   import BooleanColumn
     from msgraph.generated.models.date_time_column import DateTimeColumn
+    from msgraph.generated.models.text_column import TextColumn
 
     lists = client.sites.by_site_id(SITE_ID).lists.by_list_id(list_id)
 

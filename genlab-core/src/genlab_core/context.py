@@ -27,8 +27,8 @@ from __future__ import annotations
 import traceback
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
@@ -47,23 +47,23 @@ class PipelineContext:
     run_id: str
 
     # ── Stage data (populated progressively) ──────────────────
-    stories: List[Dict[str, Any]] = field(default_factory=list)
-    blueprints: List[Dict[str, Any]] = field(default_factory=list)
+    stories: list[dict[str, Any]] = field(default_factory=list)
+    blueprints: list[dict[str, Any]] = field(default_factory=list)
 
     # ── Accumulated metrics per stage ─────────────────────────
-    run_stats: Dict[str, Any] = field(default_factory=dict)
+    run_stats: dict[str, Any] = field(default_factory=dict)
 
     # ── Feature flags (loaded from niche config at startup) ───
-    feature_flags: Dict[str, bool] = field(default_factory=dict)
+    feature_flags: dict[str, bool] = field(default_factory=dict)
 
     # ── Niche-specific config snapshot ────────────────────────
-    niche_config: Dict[str, Any] = field(default_factory=dict)
+    niche_config: dict[str, Any] = field(default_factory=dict)
 
     # ── Error log ─────────────────────────────────────────────
-    errors: List[Dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
 
     # ── Timing ────────────────────────────────────────────────
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # ── Abort flag (set by record_error with fatal=True) ──────
     is_aborted: bool = field(default=False, repr=False)
@@ -91,7 +91,7 @@ class PipelineContext:
             "message": str(error),
             "traceback": traceback.format_exception(error),
             "fatal": fatal,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
         if fatal:
             self.is_aborted = True
@@ -111,12 +111,12 @@ class PipelineContext:
 # ---------------------------------------------------------------------------
 # ContextVar — ambient access to the current PipelineContext
 # ---------------------------------------------------------------------------
-_current_context: ContextVar[Optional[PipelineContext]] = ContextVar(
+_current_context: ContextVar[PipelineContext | None] = ContextVar(
     "current_context", default=None
 )
 
 
-def set_current_context(ctx: PipelineContext) -> Token[Optional[PipelineContext]]:
+def set_current_context(ctx: PipelineContext) -> Token[PipelineContext | None]:
     """Set the current pipeline context for this execution scope.
 
     Returns a Token that can be passed to ``_current_context.reset(token)``
@@ -125,6 +125,6 @@ def set_current_context(ctx: PipelineContext) -> Token[Optional[PipelineContext]
     return _current_context.set(ctx)
 
 
-def get_current_context() -> Optional[PipelineContext]:
+def get_current_context() -> PipelineContext | None:
     """Return the active PipelineContext, or None if not inside a run."""
     return _current_context.get()

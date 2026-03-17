@@ -33,7 +33,7 @@ class PostizClient:
             "Postiz integration is abandoned. Use bespoke per-platform publishers."
         )
 
-    def __enter__(self) -> "PostizClient":
+    def __enter__(self) -> PostizClient:
         return self
 
     def __exit__(self, *args: Any) -> None:

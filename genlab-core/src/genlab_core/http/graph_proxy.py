@@ -19,7 +19,7 @@ import logging
 import re
 import time as _time_mod
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from genlab_core.http.async_bridge import run_async
 from genlab_core.utils.text_sanitizer import sanitize_fields_for_graph_api
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Module-level column map cache — eliminates repeated API calls.
 # Entries include a monotonic timestamp; entries older than TTL are refreshed.
-_column_map_cache: Dict[str, tuple] = {}
+_column_map_cache: dict[str, tuple] = {}
 _COLUMN_MAP_TTL = 3600  # 1 hour
 
 
@@ -40,7 +40,7 @@ def _esc(value: str) -> str:
     return value.replace("'", "\\'") if value else ""
 
 
-def formula_to_odata(formula: Optional[str]) -> Optional[str]:
+def formula_to_odata(formula: str | None) -> str | None:
     """Translate legacy formula syntax to OData $filter.
 
     Handles the 8 patterns used across the codebase:
@@ -157,7 +157,7 @@ def _translate_expr(expr: str) -> str:
     return expr
 
 
-def _split_top_level(s: str) -> List[str]:
+def _split_top_level(s: str) -> list[str]:
     """Split a comma-separated string respecting nested parentheses."""
     parts = []
     depth = 0
@@ -200,8 +200,8 @@ class GraphTableProxy:
         self._site_id = site_id
         self._list_id = list_id
         self._list_name = list_name
-        self._display_to_internal: Dict[str, str] = {}
-        self._internal_to_display: Dict[str, str] = {}
+        self._display_to_internal: dict[str, str] = {}
+        self._internal_to_display: dict[str, str] = {}
         self._load_column_map()
 
     def _load_column_map(self) -> None:
@@ -277,7 +277,7 @@ class GraphTableProxy:
         "hook": "hook_text",
     }
 
-    def _to_record(self, item) -> Dict[str, Any]:
+    def _to_record(self, item) -> dict[str, Any]:
         """Convert a Graph ListItem to standard record shape."""
         raw_fields = {}
         if hasattr(item, "fields") and item.fields:
@@ -317,17 +317,17 @@ class GraphTableProxy:
 
     def all(
         self,
-        formula: Optional[str] = None,
-        max_records: Optional[int] = None,
+        formula: str | None = None,
+        max_records: int | None = None,
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         return run_async(self._all_async(formula, max_records))
 
     async def _all_async(
         self,
-        formula: Optional[str],
-        max_records: Optional[int],
-    ) -> List[Dict[str, Any]]:
+        formula: str | None,
+        max_records: int | None,
+    ) -> list[dict[str, Any]]:
         odata_filter = formula_to_odata(formula)
         original_formula = formula
         if odata_filter:
@@ -411,8 +411,8 @@ class GraphTableProxy:
     async def _all_with_client_filter(
         self,
         formula: str,
-        max_records: Optional[int],
-    ) -> List[Dict[str, Any]]:
+        max_records: int | None,
+    ) -> list[dict[str, Any]]:
         """Fetch all records and filter client-side (fallback)."""
         all_records = await self._all_async(formula=None, max_records=None)
 
@@ -474,10 +474,10 @@ class GraphTableProxy:
 
         return filtered
 
-    def get(self, record_id: str) -> Dict[str, Any]:
+    def get(self, record_id: str) -> dict[str, Any]:
         return run_async(self._get_async(record_id))
 
-    async def _get_async(self, record_id: str) -> Dict[str, Any]:
+    async def _get_async(self, record_id: str) -> dict[str, Any]:
         from msgraph.generated.sites.item.lists.item.items.item.list_item_item_request_builder import (
             ListItemItemRequestBuilder,
         )
@@ -497,10 +497,10 @@ class GraphTableProxy:
         )
         return self._to_record(item)
 
-    def create(self, fields: Dict[str, Any], typecast: bool = False) -> Dict[str, Any]:
+    def create(self, fields: dict[str, Any], typecast: bool = False) -> dict[str, Any]:
         return run_async(self._create_async(fields))
 
-    async def _create_async(self, fields: Dict[str, Any]) -> Dict[str, Any]:
+    async def _create_async(self, fields: dict[str, Any]) -> dict[str, Any]:
         from msgraph.generated.models.field_value_set import FieldValueSet
         from msgraph.generated.models.list_item import ListItem
 
@@ -514,13 +514,13 @@ class GraphTableProxy:
         return await self._get_async(str(item.id))
 
     def update(
-        self, record_id: str, fields: Dict[str, Any], typecast: bool = False
-    ) -> Dict[str, Any]:
+        self, record_id: str, fields: dict[str, Any], typecast: bool = False
+    ) -> dict[str, Any]:
         return run_async(self._update_async(record_id, fields))
 
     async def _update_async(
-        self, record_id: str, fields: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, record_id: str, fields: dict[str, Any]
+    ) -> dict[str, Any]:
         from msgraph.generated.models.field_value_set import FieldValueSet
 
         clean_fields = self._prepare_fields(fields)
@@ -545,13 +545,13 @@ class GraphTableProxy:
         )
 
     def batch_create(
-        self, records: List[Dict[str, Any]], **kwargs
-    ) -> List[Dict[str, Any]]:
+        self, records: list[dict[str, Any]], **kwargs
+    ) -> list[dict[str, Any]]:
         return run_async(self._batch_create_async(records))
 
     async def _batch_create_async(
-        self, records: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, records: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         results = []
         for fields in records:
             try:
@@ -562,13 +562,13 @@ class GraphTableProxy:
         return results
 
     def batch_update(
-        self, records: List[Dict[str, Any]], **kwargs
-    ) -> List[Dict[str, Any]]:
+        self, records: list[dict[str, Any]], **kwargs
+    ) -> list[dict[str, Any]]:
         return run_async(self._batch_update_async(records))
 
     async def _batch_update_async(
-        self, records: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        self, records: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         results = []
         for rec in records:
             record_id = rec.get("id", "")
@@ -584,12 +584,12 @@ class GraphTableProxy:
 
     def upload_attachment(
         self, record_id: str, field_name: str, file_path: str
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         return run_async(self._upload_async(record_id, field_name, file_path))
 
     async def _upload_async(
         self, record_id: str, field_name: str, file_path: str
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         path = Path(file_path)
         if not path.exists():
             logger.warning("File not found for upload: %s", path)
@@ -613,7 +613,7 @@ class GraphTableProxy:
     # Sentinel to explicitly clear a field
     CLEAR = object()
 
-    def _prepare_fields(self, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def _prepare_fields(self, fields: dict[str, Any]) -> dict[str, Any]:
         """Convert record field shapes to Graph-compatible fields."""
         clean = {}
         for key, value in fields.items():

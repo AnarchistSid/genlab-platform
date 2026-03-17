@@ -12,8 +12,6 @@ positional parameters ($1, $2, etc.) for use with asyncpg.
 from __future__ import annotations
 
 import re
-from typing import Optional
-
 
 # PostgreSQL reserved words that require quoting when used as identifiers.
 _PG_RESERVED: frozenset[str] = frozenset({
@@ -34,7 +32,7 @@ def _quote_reserved(field: str) -> str:
     return field
 
 
-def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
+def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
     """Convert an OData-like formula to a SQL WHERE clause + params.
 
     Returns:

@@ -6,13 +6,11 @@ generic pipeline runner in isolation. No real niche modules are imported.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pytest
-
 from genlab_core.exceptions import NicheConfigError
 from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,7 +18,7 @@ from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
 class _PassStage:
     """Stage that succeeds and records its name."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         context.setdefault("executed", []).append(self.__class__.__name__)
         return context
 
@@ -40,7 +38,7 @@ class StageC(_PassStage):
 class _FailStage:
     """Stage that raises an error."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("boom")
 
 
@@ -48,12 +46,12 @@ class StageFail(_FailStage):
     pass
 
 
-def _make_config(*stage_classes: type, parallel_groups: dict | None = None) -> Dict[str, Any]:
+def _make_config(*stage_classes: type, parallel_groups: dict | None = None) -> dict[str, Any]:
     """Build a minimal niche config with pipeline.stages declarations."""
     groups = parallel_groups or {}
     stages = []
     for cls in stage_classes:
-        decl: Dict[str, Any] = {
+        decl: dict[str, Any] = {
             "class": f"{cls.__module__}.{cls.__name__}",
             "enabled": True,
         }
@@ -67,7 +65,7 @@ DUMMY_ROOT = Path("/tmp/genlab-test-runner")
 DUMMY_GENLAB = Path("/tmp/genlab-test")
 
 
-def _make_runner(config: Dict[str, Any], niche_id: str = "test") -> GenericPipelineRunner:
+def _make_runner(config: dict[str, Any], niche_id: str = "test") -> GenericPipelineRunner:
     """Create a runner with patched niche_loader returning *config*."""
     return GenericPipelineRunner(
         niche_roots={niche_id: DUMMY_ROOT},

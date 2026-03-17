@@ -34,7 +34,8 @@ import functools
 import logging
 import threading
 import time
-from typing import Any, Callable, Tuple, Type
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ def resilient(
     max_attempts: int = 3,
     backoff: float = 2.0,
     initial_delay: float = 1.0,
-    exceptions: Tuple[Type[BaseException], ...] = (Exception,),
+    exceptions: tuple[type[BaseException], ...] = (Exception,),
 ):
     """Decorator combining retry-with-backoff and circuit breaker.
 

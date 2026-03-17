@@ -43,13 +43,12 @@ import os
 import re
 import threading
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
 import urllib.request
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -60,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 # Quota tracking — reset per pipeline run, logs total units consumed.
 # Protected by _QUOTA_LOCK so concurrent niche pipelines don't corrupt counts.
-QUOTA_TRACKER: Dict[str, int] = {"units_used": 0, "rss_fetches": 0}
+QUOTA_TRACKER: dict[str, int] = {"units_used": 0, "rss_fetches": 0}
 _QUOTA_LOCK = threading.Lock()
 
 
@@ -79,7 +78,7 @@ def reset_quota_tracker() -> None:
         QUOTA_TRACKER["rss_fetches"] = 0
 
 # YouTube video category IDs
-YOUTUBE_CATEGORIES: Dict[str, str] = {
+YOUTUBE_CATEGORIES: dict[str, str] = {
     "gaming": "20",
     "sports": "17",
     "movies": "1",           # Film & Animation
@@ -88,7 +87,7 @@ YOUTUBE_CATEGORIES: Dict[str, str] = {
 }
 
 # Keyword sets for YouTube search per niche
-NICHE_SEARCH_KEYWORDS: Dict[str, List[str]] = {
+NICHE_SEARCH_KEYWORDS: dict[str, list[str]] = {
     "gaming": [
         "gaming highlights 2026",
         "viral gaming moment",
@@ -128,7 +127,7 @@ NICHE_SEARCH_KEYWORDS: Dict[str, List[str]] = {
 }
 
 # View velocity thresholds — minimum views/hour to be considered "trending"
-MIN_VIEW_VELOCITY: Dict[str, float] = {
+MIN_VIEW_VELOCITY: dict[str, float] = {
     "gaming": 500,
     "sports": 800,
     "movies": 300,
@@ -164,10 +163,10 @@ class TrendingVideo:
 
     @property
     def age_hours(self) -> float:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pub = self.published_at
         if pub.tzinfo is None:
-            pub = pub.replace(tzinfo=timezone.utc)
+            pub = pub.replace(tzinfo=UTC)
         return max(0.1, (now - pub).total_seconds() / 3600)
 
     def to_dict(self) -> dict:
@@ -191,7 +190,7 @@ class TrendingVideo:
             "description_snippet": self.description_snippet,
         }
 
-    def to_story(self) -> Dict[str, Any]:
+    def to_story(self) -> dict[str, Any]:
         """Convert to a story dict compatible with the pipeline context.
 
         This is the key bridge: a TrendingVideo becomes a "story" that
@@ -200,7 +199,7 @@ class TrendingVideo:
         from genlab_core.cache.stable_ids import generate_story_id
 
         sid = generate_story_id(self.download_url, self.published_at.isoformat())
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         return {
             "story_id": sid,
             "title": self.title,
@@ -250,9 +249,9 @@ class TrendingVideoFetcher:
         niche_id: str,
         limit: int = 10,
         max_age_hours: int = 48,
-        min_velocity: Optional[float] = None,
-        extra_keywords: Optional[List[str]] = None,
-        subscribed_channels: Optional[List[Dict[str, Any]]] = None,
+        min_velocity: float | None = None,
+        extra_keywords: list[str] | None = None,
+        subscribed_channels: list[dict[str, Any]] | None = None,
         allow_keyword_search: bool = False,
     ) -> list[TrendingVideo]:
         """Fetch trending videos for a niche (quota-optimized).
@@ -283,7 +282,7 @@ class TrendingVideoFetcher:
             min_velocity = MIN_VIEW_VELOCITY.get(niche_id, 200)
 
         candidates: dict[str, TrendingVideo] = {}
-        published_after = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        published_after = datetime.now(UTC) - timedelta(hours=max_age_hours)
 
         # Strategy 1: Category trending chart (1 unit)
         category_id = YOUTUBE_CATEGORIES.get(niche_id)
@@ -402,7 +401,7 @@ class TrendingVideoFetcher:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _extract_channel_id(rss_url: str) -> Optional[str]:
+    def _extract_channel_id(rss_url: str) -> str | None:
         """Extract channel_id from a YouTube RSS feed URL."""
         try:
             parsed = urlparse(rss_url)
@@ -517,7 +516,7 @@ class TrendingVideoFetcher:
 
     def _fetch_from_channels(
         self,
-        channels: List[Dict[str, Any]],
+        channels: list[dict[str, Any]],
         niche_id: str,
         published_after: datetime,
     ) -> list[TrendingVideo]:
@@ -608,7 +607,7 @@ class TrendingVideoFetcher:
                 try:
                     pub = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
                 except (ValueError, TypeError, AttributeError):
-                    pub = datetime.now(timezone.utc) - timedelta(hours=12)
+                    pub = datetime.now(UTC) - timedelta(hours=12)
                 # Estimate velocity from channel weight: high-weight channels
                 # (NBA, NFL, Premier League) get higher estimated velocity.
                 channel_weight = meta.get("channel_weight", 0.5)
@@ -670,7 +669,7 @@ class TrendingVideoFetcher:
                 pub_str = snippet.get("publishedAt", "")
                 published_at = (
                     datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                    if pub_str else datetime.now(timezone.utc)
+                    if pub_str else datetime.now(UTC)
                 )
                 thumb = snippet.get("thumbnails", {})
                 thumb_url = (
@@ -738,7 +737,7 @@ class TrendingVideoFetcher:
                 logger.error("Video details fetch failed: %s", e)
         return results
 
-    def _parse_video(self, item: dict, source: str) -> Optional[TrendingVideo]:
+    def _parse_video(self, item: dict, source: str) -> TrendingVideo | None:
         """Parse a YouTube API video item into a TrendingVideo."""
         try:
             vid_id = item["id"] if isinstance(item["id"], str) else item["id"].get("videoId", "")
@@ -754,11 +753,11 @@ class TrendingVideoFetcher:
             pub_str = snippet.get("publishedAt", "")
             published_at = (
                 datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                if pub_str else datetime.now(timezone.utc)
+                if pub_str else datetime.now(UTC)
             )
 
             view_count = int(stats.get("viewCount", 0))
-            age_hours = max(0.1, (datetime.now(timezone.utc) - published_at).total_seconds() / 3600)
+            age_hours = max(0.1, (datetime.now(UTC) - published_at).total_seconds() / 3600)
             view_velocity = view_count / age_hours
 
             channel_title = snippet.get("channelTitle", "")
@@ -856,7 +855,7 @@ class FetchTrendingVideos:
         """Load sources.yaml for the given niche."""
         from genlab_core.settings import _PROJECT_ROOT
 
-        sources_paths: Dict[str, Path] = {
+        sources_paths: dict[str, Path] = {
             "gaming": _PROJECT_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "sources.yaml",
             "sports": _PROJECT_ROOT / "ClutchWire" / "config" / "sources.yaml",
             "movies": _PROJECT_ROOT / "SpliceReel" / "config" / "sources.yaml",
@@ -873,7 +872,7 @@ class FetchTrendingVideos:
                 logger.warning("[FetchTrendingVideos] Failed to load %s: %s", path, e)
         return {}
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         config = context.get("niche_config", {})
         vs_config = config.get("video_sourcing", {})
@@ -901,7 +900,7 @@ class FetchTrendingVideos:
             )
 
         # Optionally enrich keywords with Google Trends
-        extra_keywords: List[str] = []
+        extra_keywords: list[str] = []
         if vs_config.get("use_google_trends", False):
             try:
                 from genlab_core.intel.google_trends import GoogleTrendsIntel
@@ -962,7 +961,7 @@ class FetchTrendingVideos:
         )
 
         # Build per-video trend multipliers from Google Trends (if available)
-        trend_multipliers: Dict[str, float] = {}
+        trend_multipliers: dict[str, float] = {}
         if extra_keywords and vs_config.get("use_google_trends", False):
             try:
                 from genlab_core.intel.google_trends import GoogleTrendsIntel
@@ -1022,6 +1021,6 @@ class FetchTrendingVideos:
 
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         """Alias for execute()."""
         return self.execute(context)

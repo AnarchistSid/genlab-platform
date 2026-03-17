@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +52,7 @@ class PipelineLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             entry = {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "level": record.levelname,
                 "logger": record.name,
                 "message": self.format(record),
@@ -107,7 +107,7 @@ def install_log_handler(
     # Write a run-start sentinel
     with open(log_path, "a", encoding="utf-8") as f:
         sentinel = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "level": "INFO",
             "logger": "pipeline",
             "message": f"=== Pipeline run started: {run_id} ===",
@@ -155,7 +155,7 @@ def read_recent_logs(
 
     lines: list[str] = []
     try:
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             # Read last `limit * 2` lines (buffer for filtering)
             all_lines = f.readlines()
             lines = all_lines[-(limit * 2):]
@@ -183,7 +183,7 @@ def _truncate_if_needed(log_path: Path) -> None:
     if not log_path.exists():
         return
     try:
-        with open(log_path, "r", encoding="utf-8") as f:
+        with open(log_path, encoding="utf-8") as f:
             lines = f.readlines()
         if len(lines) > MAX_LOG_LINES:
             with open(log_path, "w", encoding="utf-8") as f:

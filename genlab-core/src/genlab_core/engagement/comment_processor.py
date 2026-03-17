@@ -21,12 +21,12 @@ import time
 from pathlib import Path
 from typing import Literal
 
-from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.persona_engine import PersonaEngine
-from genlab_core.engagement.toxicity_gate import ToxicityGate
+from genlab_core.engagement.persona_schema import NichePersona
+from genlab_core.engagement.rate_limiter import EngagementRateLimiter
 from genlab_core.engagement.spam_filter import is_spam
 from genlab_core.engagement.timing import human_delay
-from genlab_core.engagement.rate_limiter import EngagementRateLimiter
+from genlab_core.engagement.toxicity_gate import ToxicityGate
 from genlab_core.utils.env import get_agent_root
 
 logger = logging.getLogger(__name__)

@@ -5,8 +5,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-
-from genlab_core.cost.model_router import get_model, _load_routing_config
+from genlab_core.cost.model_router import _load_routing_config, get_model
 
 
 @pytest.fixture(autouse=True)

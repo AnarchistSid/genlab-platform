@@ -1,13 +1,12 @@
 """Tests for PendingFeedbackStore CRUD operations."""
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-
-from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
 from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
+from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
 
 
 @pytest.fixture
@@ -36,7 +35,7 @@ def _make_task(**overrides) -> PendingFeedbackTask:
         "content_id": "story_001",
         "platform": "instagram",
         "niche_id": "gaming",
-        "published_at": datetime.now(timezone.utc) - timedelta(hours=50),
+        "published_at": datetime.now(UTC) - timedelta(hours=50),
         "platform_post_id": "ig_12345",
         "bandit_arm": "carousel_hook_v2",
         "bandit_context": {"hook_type": "question", "duration": "short"},
@@ -85,7 +84,7 @@ class TestGetPending:
                 "PostID": "ig_123",
                 "Platform": "instagram",
                 "NicheId": "gaming",
-                "PublishedAt": (datetime.now(timezone.utc) - timedelta(hours=10)).isoformat(),
+                "PublishedAt": (datetime.now(UTC) - timedelta(hours=10)).isoformat(),
                 "PostContentType": "reel",
                 "HookType": "",
                 "Status": "awaiting_6h",
@@ -100,9 +99,9 @@ class TestGetPending:
     def test_get_pending_filters_by_niche(self, store, mock_proxy):
         items = [
             {"id": "1", "fields": {"PostID": "ig_1", "Platform": "instagram", "NicheId": "gaming",
-                                    "PublishedAt": datetime.now(timezone.utc).isoformat(), "Status": "awaiting_6h"}},
+                                    "PublishedAt": datetime.now(UTC).isoformat(), "Status": "awaiting_6h"}},
             {"id": "2", "fields": {"PostID": "ig_2", "Platform": "instagram", "NicheId": "ai_creators",
-                                    "PublishedAt": datetime.now(timezone.utc).isoformat(), "Status": "awaiting_6h"}},
+                                    "PublishedAt": datetime.now(UTC).isoformat(), "Status": "awaiting_6h"}},
         ]
         mock_proxy.all.return_value = items
         tasks = store.get_pending(niche_id="ai_creators")
@@ -112,14 +111,14 @@ class TestGetPending:
 class TestNextCollectionWindow:
     def test_returns_6h_when_old_enough(self, store):
         task = _make_task(
-            published_at=datetime.now(timezone.utc) - timedelta(hours=7),
+            published_at=datetime.now(UTC) - timedelta(hours=7),
         )
         window = store.next_collection_window(task)
         assert window == "6h"
 
     def test_returns_48h_when_6h_and_24h_collected(self, store):
         task = _make_task(
-            published_at=datetime.now(timezone.utc) - timedelta(hours=50),
+            published_at=datetime.now(UTC) - timedelta(hours=50),
             completed_windows=["6h", "24h"],
         )
         window = store.next_collection_window(task)
@@ -134,7 +133,7 @@ class TestNextCollectionWindow:
 
     def test_returns_none_when_too_young_for_next_window(self, store):
         task = _make_task(
-            published_at=datetime.now(timezone.utc) - timedelta(hours=3),
+            published_at=datetime.now(UTC) - timedelta(hours=3),
         )
         window = store.next_collection_window(task)
         assert window is None

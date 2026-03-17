@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import UTC
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -107,10 +108,10 @@ def _poll_once(
             started = run.get("start_time") or run.get("expected_start_time")
             elapsed = 0.0
             if started:
-                from datetime import datetime, timezone
+                from datetime import datetime
                 try:
                     s = datetime.fromisoformat(started.replace("Z", "+00:00"))
-                    elapsed = (datetime.now(timezone.utc) - s).total_seconds()
+                    elapsed = (datetime.now(UTC) - s).total_seconds()
                 except (ValueError, TypeError):
                     pass
 

@@ -5,8 +5,7 @@ import threading
 import time
 
 import pytest
-
-from genlab_core.ratelimit.token_bucket import TokenBucket, RateLimiterRegistry
+from genlab_core.ratelimit.token_bucket import RateLimiterRegistry, TokenBucket
 
 
 class TestTokenBucketBurst:

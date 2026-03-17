@@ -14,7 +14,7 @@ Non-fatal: failures are logged and annotated but never crash the pipeline.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class QCGates:
     DEFAULT_MAX_DURATION = 90
     SCORE_PENALTY = 0.3
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         blueprints = context.get("blueprints", [])
         if not blueprints:
             logger.info("[QCGates] No blueprints to validate")
@@ -87,12 +87,12 @@ class QCGates:
 
     def _validate(
         self,
-        bp: Dict[str, Any],
+        bp: dict[str, Any],
         max_slides: int,
         max_words: int,
         max_duration: int,
-    ) -> Dict[str, Any]:
-        issues: List[str] = []
+    ) -> dict[str, Any]:
+        issues: list[str] = []
 
         # Gate 1: Claim coverage
         claims_passed = self._check_claims(bp, issues)
@@ -114,7 +114,7 @@ class QCGates:
         }
 
     @staticmethod
-    def _check_claims(bp: Dict[str, Any], issues: List[str]) -> bool:
+    def _check_claims(bp: dict[str, Any], issues: list[str]) -> bool:
         """Every must_cite claim needs ≥1 source URL."""
         claims = bp.get("claims", [])
         sources = bp.get("sources", bp.get("source_urls", []))
@@ -131,11 +131,11 @@ class QCGates:
 
     @staticmethod
     def _check_constraints(
-        bp: Dict[str, Any],
+        bp: dict[str, Any],
         max_slides: int,
         max_words: int,
         max_duration: int,
-        issues: List[str],
+        issues: list[str],
     ) -> bool:
         ok = True
         fmt = bp.get("format", "")
@@ -163,7 +163,7 @@ class QCGates:
         return ok
 
     @staticmethod
-    def _check_completeness(bp: Dict[str, Any], issues: List[str]) -> bool:
+    def _check_completeness(bp: dict[str, Any], issues: list[str]) -> bool:
         ok = True
         required = ["hook", "body"]
 

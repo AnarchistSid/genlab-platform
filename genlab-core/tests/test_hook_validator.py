@@ -1,10 +1,9 @@
 """Tests for genlab_core.intelligence.hook_validator."""
 import pytest
-
 from genlab_core.intelligence.hook_validator import (
     HookFailure,
-    HookValidator,
     HookValidationResult,
+    HookValidator,
 )
 
 

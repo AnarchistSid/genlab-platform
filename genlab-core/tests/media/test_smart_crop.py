@@ -8,16 +8,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.smart_crop import (
     CropRegion,
     CropStrategy,
     SmartCropper,
-    smart_crop_available,
     _clamp_offset,
     _no_crop,
+    smart_crop_available,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
 """Tests for the FetchInsights pipeline stage."""
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 from genlab_core.pipeline.stages.fetch_insights import FetchInsights
 
 
 def _make_pub_record(post_id, platform, niche_id, hours_ago=12, metrics_fetched=""):
-    pub_dt = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    pub_dt = datetime.now(UTC) - timedelta(hours=hours_ago)
     return {
         "id": f"rec_{post_id}",
         "fields": {
@@ -157,7 +157,7 @@ class TestFetchInsightsSharePoint:
     def test_skips_records_without_post_id(self):
         """Records missing post_id should be skipped."""
         mock_client = MagicMock()
-        pub_dt = datetime.now(timezone.utc) - timedelta(hours=12)
+        pub_dt = datetime.now(UTC) - timedelta(hours=12)
         mock_client.publishing_analytics.all.return_value = [
             {
                 "id": "rec_no_post",

@@ -67,9 +67,9 @@ class TestFullReplyPipeline:
         mock_time, mock_delay, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
-            process_reply_event,
             _has_replied,
             _rate_limiter,
+            process_reply_event,
         )
         from genlab_core.platforms.protocols import Engageable
 
@@ -122,8 +122,8 @@ class TestFullReplyPipeline:
         mock_time, mock_delay, agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
-            process_reply_event,
             _rate_limiter,
+            process_reply_event,
         )
         from genlab_core.platforms.protocols import Engageable
 
