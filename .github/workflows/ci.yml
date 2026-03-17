@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.x"
+      - run: uv run ruff check .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - genlab-core
+          - BlackboxBrief
+          - CriticalRush
+          - ClutchWire
+          - SpliceReel
+          - FrameDrift
+        include:
+          - package: genlab-core
+            uv_name: genlab-core
+          - package: BlackboxBrief
+            uv_name: blackbox-brief
+          - package: CriticalRush
+            uv_name: criticalrush
+          - package: ClutchWire
+            uv_name: clutchwire
+          - package: SpliceReel
+            uv_name: splicereel
+          - package: FrameDrift
+            uv_name: framedrift
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.10.x"
+      - name: Run tests
+        run: uv run --package ${{ matrix.uv_name }} pytest ${{ matrix.package }}/tests/ -x --tb=short -q
+        env:
+          TEST_MODE: "true"
+          ANTHROPIC_API_KEY: "sk-test-placeholder"
+          YOUTUBE_API_KEY: "test-placeholder"
