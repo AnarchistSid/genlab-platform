@@ -1,31 +1,24 @@
 #!/usr/bin/env python3
 """Engagement comment poller — polls YouTube and X/Twitter for new comments.
 
-Runs as a long-lived daemon via launchd. Polls YouTube every 5 minutes
+Runs as a long-lived daemon via launchd. Polls YouTube every 30 minutes
 and X/Twitter every 15 minutes.
+
+Supports both single-niche and multi-niche modes:
+    --niche gaming --platform youtube --channel-id UC_xxx   (single)
+    --niche all --platform youtube                          (all niches from config)
+    --niche all --platform all                              (all niches × all platforms)
 
 When ENGAGEMENT_DISPATCH=true, new comments are dispatched to the Dramatiq
 engagement queue for automated reply generation.
 
 When ENGAGEMENT_DISPATCH=false (observe mode), comments are polled and logged
-but NOT dispatched. This allows manual review of captured comments before
-enabling automated replies.
-
-Usage:
-    python scripts/run_engagement_poller.py --niche gaming --platform youtube --channel-id UC_xxx
-    python scripts/run_engagement_poller.py --niche gaming --platform twitter --user-id 12345
+but NOT dispatched.
 
 Environment:
     ENGAGEMENT_DISPATCH=true|false  Controls reply dispatch (default: false = observe mode)
     REDIS_HOST=localhost            Dramatiq broker host (default: localhost)
     REDIS_PORT=6379                 Dramatiq broker port (default: 6379)
-    YOUTUBE_CLIENT_ID               YouTube OAuth (for youtube platform)
-    YOUTUBE_CLIENT_SECRET            YouTube OAuth
-    YOUTUBE_REFRESH_TOKEN            YouTube OAuth
-    X_API_KEY                       X/Twitter OAuth 1.0a (for twitter platform)
-    X_API_SECRET
-    X_ACCESS_TOKEN
-    X_ACCESS_SECRET
 """
 from __future__ import annotations
 
@@ -35,10 +28,15 @@ import logging
 import os
 import sys
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(name)s %(levelname)s %(message)s",
-)
+try:
+    from genlab_core.observability.logging import configure_logging
+    _is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
+    configure_logging(json_output=_is_json, level=logging.INFO)
+except ImportError:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
 logger = logging.getLogger("engagement.poller")
 
 
@@ -141,19 +139,70 @@ async def _poll_loop_twitter(niche_id: str, user_id: str) -> None:
         await asyncio.sleep(TWITTER_POLL_INTERVAL)
 
 
+def _load_poller_config() -> dict:
+    """Load engagement poller config from YAML."""
+    from pathlib import Path
+
+    import yaml
+
+    config_path = Path(__file__).resolve().parent.parent / "config" / "engagement_pollers.yaml"
+    if not config_path.exists():
+        logger.warning("Poller config not found at %s", config_path)
+        return {}
+    with open(config_path) as f:
+        return yaml.safe_load(f).get("pollers", {})
+
+
+async def _run_all_pollers(platform: str) -> None:
+    """Run pollers for all niches concurrently."""
+    config = _load_poller_config()
+    if not config:
+        logger.error("No poller configuration found")
+        sys.exit(1)
+
+    tasks = []
+    for niche_id, platforms in config.items():
+        if platform in ("all", "youtube") and "youtube" in platforms:
+            channel_id = platforms["youtube"].get("channel_id", "")
+            if channel_id:
+                tasks.append(_poll_loop_youtube(niche_id, channel_id))
+                logger.info("Queued YouTube poller for %s", niche_id)
+
+        if platform in ("all", "twitter") and "twitter" in platforms:
+            user_id = str(platforms["twitter"].get("user_id", ""))
+            # Skip placeholder IDs
+            if user_id and not user_id.endswith("_TWITTER_USER_ID"):
+                tasks.append(_poll_loop_twitter(niche_id, user_id))
+                logger.info("Queued Twitter poller for %s", niche_id)
+
+    if not tasks:
+        logger.error("No valid pollers configured for platform=%s", platform)
+        sys.exit(1)
+
+    logger.info("Starting %d poller tasks concurrently", len(tasks))
+    await asyncio.gather(*tasks)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Engagement comment poller")
-    parser.add_argument("--niche", required=True, help="Niche ID (e.g., gaming, ai_creators)")
-    parser.add_argument("--platform", required=True, choices=["youtube", "twitter"],
-                       help="Platform to poll")
-    parser.add_argument("--channel-id", default="", help="YouTube channel ID (required for youtube)")
-    parser.add_argument("--user-id", default="", help="X/Twitter user ID (required for twitter)")
+    parser.add_argument("--niche", required=True,
+                       help="Niche ID (e.g., gaming, ai_creators) or 'all'")
+    parser.add_argument("--platform", required=True, choices=["youtube", "twitter", "all"],
+                       help="Platform to poll (or 'all')")
+    parser.add_argument("--channel-id", default="", help="YouTube channel ID (single-niche mode)")
+    parser.add_argument("--user-id", default="", help="X/Twitter user ID (single-niche mode)")
     args = parser.parse_args()
 
     mode = "DISPATCH" if _is_dispatch_enabled() else "OBSERVE"
     logger.info("Engagement poller starting — mode=%s niche=%s platform=%s",
                 mode, args.niche, args.platform)
 
+    # Multi-niche mode
+    if args.niche == "all":
+        asyncio.run(_run_all_pollers(args.platform))
+        return
+
+    # Single-niche mode (backward compatible)
     if args.platform == "youtube":
         if not args.channel_id:
             logger.error("--channel-id is required for youtube platform")

@@ -1,0 +1,33 @@
+# Engagement poller configuration — all niches × platforms
+# Used by scripts/run_engagement_poller.py --niche all
+
+pollers:
+  ai_creators:
+    youtube:
+      channel_id: UC3GCipF_BTgjaxu-iSuBZ-g
+    twitter:
+      user_id: "632788275"
+
+  gaming:
+    youtube:
+      channel_id: UCW20NL2FiCO5F90IuCGwtTw
+    twitter:
+      user_id: "2029218265801846784"
+
+  sports:
+    youtube:
+      channel_id: UC9QhmCY9PnWW5i4H8LgtJUg
+    twitter:
+      user_id: CLUTCHWIRE_TWITTER_USER_ID  # placeholder until provisioned
+
+  movies:
+    youtube:
+      channel_id: UCdqiuSQOiSp-t3IFzhbcvzQ
+    twitter:
+      user_id: SPLICEREEL_TWITTER_USER_ID  # placeholder until provisioned
+
+  anime:
+    youtube:
+      channel_id: UCt7vXV-dzsgofLyZRAFbvIA
+    twitter:
+      user_id: FRAMEDRIFT_TWITTER_USER_ID  # placeholder until provisioned

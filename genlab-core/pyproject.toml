@@ -55,4 +55,5 @@ addopts = "-m 'not integration'"
 [dependency-groups]
 dev = [
     "hypothesis>=6.151.9",
+    "pytest>=9.0.2",
 ]
