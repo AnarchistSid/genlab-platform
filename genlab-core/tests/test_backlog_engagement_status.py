@@ -1,7 +1,7 @@
 """Tests for BacklogClient.update_engagement_status (Sprint 24 — engagement dispatch).
 
 Validates status updates on PendingEngagement items without requiring
-Azure credentials by mocking the GraphTableProxy.
+Azure credentials by mocking the storage backend layer.
 """
 from __future__ import annotations
 
@@ -73,17 +73,31 @@ def _make_client(mock_config):
         return BacklogClient(config_path=mock_config)
 
 
+def _make_client_with_backend(mock_config):
+    """Instantiate BacklogClient and replace _backend with a mock.
+
+    Returns (client, mock_backend) where mock_backend is the object
+    returned by client._backend("PendingEngagement").
+    """
+    client = _make_client(mock_config)
+    mock_backend = MagicMock()
+    client._backend = MagicMock(return_value=mock_backend)
+    return client, mock_backend
+
+
 class TestUpdateEngagementStatus:
     def test_update_engagement_status_replied(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         client.update_engagement_status(
             "item-42", "replied", reply_text="Thanks for watching!"
         )
 
-        client.pending_engagement.update.assert_called_once()
-        call_args = client.pending_engagement.update.call_args[0]
-        item_id = call_args[0]
-        fields = call_args[1]
+        mock_backend.update.assert_called_once()
+        call_args = mock_backend.update.call_args[0]
+        table_name = call_args[0]
+        item_id = call_args[1]
+        fields = call_args[2]
+        assert table_name == "PendingEngagement"
         assert item_id == "item-42"
         assert fields["Status"] == "replied"
         assert "ProcessedAt" in fields
@@ -92,43 +106,43 @@ class TestUpdateEngagementStatus:
         assert fields["ReplyText"] == "Thanks for watching!"
 
     def test_update_engagement_status_failed_with_error(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         client.update_engagement_status(
             "item-99", "failed", error_msg="Rate limit exceeded"
         )
 
-        call_args = client.pending_engagement.update.call_args[0]
-        fields = call_args[1]
+        call_args = mock_backend.update.call_args[0]
+        fields = call_args[2]
         assert fields["Status"] == "failed"
         assert fields["ErrorMessage"] == "Rate limit exceeded"
 
     def test_update_engagement_status_truncates_reply(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         long_reply = "x" * 5000
         client.update_engagement_status(
             "item-1", "replied", reply_text=long_reply
         )
 
-        call_args = client.pending_engagement.update.call_args[0]
-        fields = call_args[1]
+        call_args = mock_backend.update.call_args[0]
+        fields = call_args[2]
         assert len(fields["ReplyText"]) == 2000
 
     def test_update_engagement_status_truncates_error(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         long_error = "e" * 1000
         client.update_engagement_status(
             "item-2", "failed", error_msg=long_error
         )
 
-        call_args = client.pending_engagement.update.call_args[0]
-        fields = call_args[1]
+        call_args = mock_backend.update.call_args[0]
+        fields = call_args[2]
         assert len(fields["ErrorMessage"]) == 500
 
     def test_update_engagement_status_invalid_status(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         client.update_engagement_status("item-3", "bogus_status")
 
-        client.pending_engagement.update.assert_not_called()
+        mock_backend.update.assert_not_called()
 
     def test_update_engagement_status_no_proxy(self, mock_config):
         client = _make_client(mock_config)
@@ -138,8 +152,8 @@ class TestUpdateEngagementStatus:
         client.update_engagement_status("item-4", "replied")
 
     def test_update_engagement_status_api_error(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.update.side_effect = RuntimeError("Graph API down")
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.update.side_effect = RuntimeError("Graph API down")
 
         # Should not raise — catches and logs
         client.update_engagement_status("item-5", "liked")

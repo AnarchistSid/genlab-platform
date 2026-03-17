@@ -79,6 +79,9 @@ class YouTubeClient:
         client_id: str | None = None,
         client_secret: str | None = None,
         refresh_token: str | None = None,
+        *,
+        expected_channel_id: str | None = None,
+        enable_quota_gate: bool = True,
     ) -> None:
         self._client_id: str = client_id or os.environ.get("YOUTUBE_CLIENT_ID", "")
         self._client_secret: str = client_secret or os.environ.get(
@@ -90,6 +93,19 @@ class YouTubeClient:
         self._access_token: str | None = None
         self._token_refreshed_at: float = 0.0
         self._TOKEN_TTL_SECONDS: int = _TOKEN_TTL_SECONDS
+
+        # Cross-channel guard: expected channel ID for verification
+        self._expected_channel_id: str = expected_channel_id or ""
+
+        # Quota gate (conditional import — graceful if monitoring module unavailable)
+        self._quota_tracker: Any = None
+        if enable_quota_gate:
+            try:
+                from genlab_core.monitoring.youtube_quota import YouTubeQuotaTracker
+
+                self._quota_tracker = YouTubeQuotaTracker()
+            except (ImportError, Exception) as exc:
+                logger.debug("YouTube quota tracker unavailable: %s", exc)
 
         # Cached googleapiclient service objects
         self._data_service: Any = None
@@ -175,6 +191,53 @@ class YouTubeClient:
         return None
 
     # ------------------------------------------------------------------
+    # Channel verification (cross-channel guard)
+    # ------------------------------------------------------------------
+
+    def verify_channel(self) -> bool:
+        """Verify the OAuth token resolves to the expected brand channel.
+
+        When ``expected_channel_id`` is set (from the constructor or
+        ``{PREFIX}_YT_CHANNEL_ID`` env var), this confirms the refresh token
+        is bound to the correct channel.  Prevents cross-publishing when
+        tokens are misconfigured.
+
+        Returns:
+            ``True`` if verified (or if no expected channel is configured).
+            ``False`` if the token resolves to a different channel.
+        """
+        if not self._expected_channel_id:
+            return True  # No expectation set — skip verification
+
+        try:
+            token = self._get_access_token()
+        except Exception as exc:
+            logger.error(
+                "YouTube: channel verification failed — cannot get access token: %s",
+                exc,
+            )
+            return False
+
+        actual = self._get_channel_id(token)
+        if not actual:
+            logger.error(
+                "YouTube: channel verification failed — could not resolve channel ID"
+            )
+            return False
+
+        if actual != self._expected_channel_id:
+            logger.error(
+                "YouTube: CHANNEL MISMATCH — token resolves to %s but expected %s. "
+                "Refusing to publish to wrong channel.",
+                actual,
+                self._expected_channel_id,
+            )
+            return False
+
+        logger.info("YouTube: channel verified — %s", actual)
+        return True
+
+    # ------------------------------------------------------------------
     # Publisher protocol
     # ------------------------------------------------------------------
 
@@ -239,6 +302,22 @@ class YouTubeClient:
         if "Shorts" not in tags:
             tags.append("Shorts")
 
+        # Quota gate — refuse upload if near daily limit
+        if self._quota_tracker is not None:
+            if not self._quota_tracker.can_upload():
+                qs = self._quota_tracker.status()
+                logger.error(
+                    "YouTube quota gate blocked upload: %d/%d units (%d uploads today)",
+                    qs["used"],
+                    10_000,
+                    qs["upload_count"],
+                )
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=f"YouTube quota near limit ({qs['used']}/10000 units)",
+                )
+
         try:
             video_id = self._upload_video(
                 video_path=str(video_path),
@@ -262,6 +341,13 @@ class YouTubeClient:
                 success=False,
                 error="YouTube upload returned no video ID",
             )
+
+        # Record quota usage after successful upload
+        if self._quota_tracker is not None:
+            try:
+                self._quota_tracker.record("upload")
+            except Exception as exc:
+                logger.warning("YouTube quota recording failed (non-fatal): %s", exc)
 
         return PublishResult(
             platform=self.platform_id,
@@ -312,11 +398,27 @@ class YouTubeClient:
             media_body=media,
         )
 
-        # Resumable upload loop (capped to avoid infinite loops)
+        # Resumable upload loop with per-chunk retry (3 attempts, exponential backoff)
         MAX_CHUNKS = 200
+        CHUNK_RETRIES = 3
         response = None
-        for _ in range(MAX_CHUNKS):
-            status, response = request.next_chunk()
+        for _chunk_num in range(MAX_CHUNKS):
+            for chunk_attempt in range(CHUNK_RETRIES):
+                try:
+                    status, response = request.next_chunk()
+                    break  # chunk succeeded
+                except Exception as chunk_exc:
+                    if chunk_attempt == CHUNK_RETRIES - 1:
+                        raise  # exhausted retries — propagate
+                    wait = 2 ** chunk_attempt
+                    logger.warning(
+                        "YouTube chunk upload retry %d/%d in %ds: %s",
+                        chunk_attempt + 1,
+                        CHUNK_RETRIES,
+                        wait,
+                        chunk_exc,
+                    )
+                    time.sleep(wait)
             if response is not None:
                 break
             if status:
@@ -380,6 +482,54 @@ class YouTubeClient:
                 "YouTube: failed to post reply to comment %s: %s", parent_id, exc
             )
             return False
+
+    def post_comment(self, video_id: str, text: str) -> str | None:
+        """Post a top-level comment on a YouTube video.
+
+        This uses the ``commentThreads.insert`` endpoint (different from
+        ``post_reply`` which uses ``comments.insert``).  Useful for posting
+        first-reply comments with links or pinned engagement questions.
+
+        Args:
+            video_id: YouTube video ID to comment on.
+            text: Comment text.
+
+        Returns:
+            Comment thread ID on success, ``None`` on failure.
+        """
+        try:
+            token = self._get_access_token()
+            resp = requests.post(
+                f"{_API_BASE}/commentThreads",
+                params={"part": "snippet"},
+                json={
+                    "snippet": {
+                        "videoId": video_id,
+                        "topLevelComment": {
+                            "snippet": {"textOriginal": text},
+                        },
+                    }
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            comment_id = data.get("id", "")
+            logger.info(
+                "YouTube: top-level comment posted on %s (thread id=%s)",
+                video_id,
+                comment_id,
+            )
+            return comment_id
+        except Exception as exc:
+            logger.warning(
+                "YouTube: failed to post comment on video %s: %s", video_id, exc
+            )
+            return None
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
         """No-op: YouTube Data API does not support liking comments programmatically.
@@ -485,6 +635,78 @@ class YouTubeClient:
         except Exception as exc:
             logger.warning(
                 "YouTube: failed to fetch metrics for %s: %s", video_id, exc
+            )
+            return None
+
+    # ------------------------------------------------------------------
+    # Video metadata management
+    # ------------------------------------------------------------------
+
+    def update_video_metadata(
+        self,
+        video_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Update the title and/or description of an existing video.
+
+        Fetches the current snippet first to preserve fields that are not
+        being changed, then issues a ``videos.update`` PUT request.
+
+        Args:
+            video_id: YouTube video ID.
+            title: New title (max 100 chars).  ``None`` = no change.
+            description: New description (max 5000 chars).  ``None`` = no change.
+
+        Returns:
+            Dict with ``video_id`` and ``title`` on success, ``None`` on failure.
+        """
+        if title is None and description is None:
+            logger.warning("YouTube: update_video_metadata called with no changes")
+            return None
+
+        try:
+            token = self._get_access_token()
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+
+            # Fetch current snippet to preserve unchanged fields
+            get_resp = requests.get(
+                f"{_API_BASE}/videos",
+                params={"part": "snippet", "id": video_id},
+                headers=headers,
+                timeout=30,
+            )
+            get_resp.raise_for_status()
+            items = get_resp.json().get("items", [])
+            if not items:
+                logger.warning(
+                    "YouTube: video %s not found for metadata update", video_id
+                )
+                return None
+
+            snippet = items[0]["snippet"]
+            if title is not None:
+                snippet["title"] = title[:_TITLE_MAX_LEN]
+            if description is not None:
+                snippet["description"] = description[:5000]
+
+            update_resp = requests.put(
+                f"{_API_BASE}/videos",
+                params={"part": "snippet"},
+                json={"id": video_id, "snippet": snippet},
+                headers=headers,
+                timeout=30,
+            )
+            update_resp.raise_for_status()
+            logger.info("YouTube: video %s metadata updated", video_id)
+            return {"video_id": video_id, "title": snippet["title"]}
+        except Exception as exc:
+            logger.warning(
+                "YouTube: metadata update failed for %s: %s", video_id, exc
             )
             return None
 

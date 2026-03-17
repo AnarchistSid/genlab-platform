@@ -1,7 +1,7 @@
 """Tests for BacklogClient engagement methods (Sprint 23 — observe-only layer).
 
 Validates write_pending_engagement and list_pending_engagement without
-requiring Azure credentials by mocking the GraphTableProxy.
+requiring Azure credentials by mocking the storage backend layer.
 """
 from __future__ import annotations
 
@@ -73,6 +73,18 @@ def _make_client(mock_config):
         return BacklogClient(config_path=mock_config)
 
 
+def _make_client_with_backend(mock_config):
+    """Instantiate BacklogClient and replace _backend with a mock.
+
+    Returns (client, mock_backend) where mock_backend is the object
+    returned by client._backend("PendingEngagement").
+    """
+    client = _make_client(mock_config)
+    mock_backend = MagicMock()
+    client._backend = MagicMock(return_value=mock_backend)
+    return client, mock_backend
+
+
 SAMPLE_EVENT = {
     "comment_id": "cmt_abc123",
     "platform": "instagram",
@@ -86,11 +98,16 @@ SAMPLE_EVENT = {
 
 class TestWritePendingEngagement:
     def test_calls_create_with_correct_fields(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.return_value = {"id": "sp-item-1", "fields": {}}
+
         client.write_pending_engagement(SAMPLE_EVENT)
 
-        client.pending_engagement.create.assert_called_once()
-        call_fields = client.pending_engagement.create.call_args[0][0]
+        mock_backend.create.assert_called_once()
+        call_args = mock_backend.create.call_args[0]
+        table_name = call_args[0]
+        call_fields = call_args[1]
+        assert table_name == "PendingEngagement"
         assert call_fields["Title"] == "cmt_abc123"
         assert call_fields["Platform"] == "instagram"
         assert call_fields["PostId"] == "post_xyz"
@@ -101,34 +118,40 @@ class TestWritePendingEngagement:
         assert call_fields["Status"] == "pending"
 
     def test_truncates_long_comment_text(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.return_value = {"id": "sp-item-1", "fields": {}}
+
         long_text = "x" * 5000
         event = {**SAMPLE_EVENT, "text": long_text}
         client.write_pending_engagement(event)
 
-        call_fields = client.pending_engagement.create.call_args[0][0]
+        call_fields = mock_backend.create.call_args[0][1]
         assert len(call_fields["CommentText"]) == 2000
 
     def test_handles_none_text(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.return_value = {"id": "sp-item-1", "fields": {}}
+
         event = {**SAMPLE_EVENT, "text": None}
         client.write_pending_engagement(event)
 
-        call_fields = client.pending_engagement.create.call_args[0][0]
+        call_fields = mock_backend.create.call_args[0][1]
         assert call_fields["CommentText"] == ""
 
     def test_handles_missing_fields_gracefully(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.return_value = {"id": "sp-item-1", "fields": {}}
+
         client.write_pending_engagement({})
 
-        call_fields = client.pending_engagement.create.call_args[0][0]
+        call_fields = mock_backend.create.call_args[0][1]
         assert call_fields["Title"] == ""
         assert call_fields["Platform"] == ""
         assert call_fields["Status"] == "pending"
 
     def test_fails_silently_on_error(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.create.side_effect = RuntimeError("Graph API down")
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.side_effect = RuntimeError("Graph API down")
 
         # Should not raise, returns None
         result = client.write_pending_engagement(SAMPLE_EVENT)
@@ -143,8 +166,8 @@ class TestWritePendingEngagement:
         assert result is None
 
     def test_returns_item_id_on_success(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.create.return_value = {"id": "sp-item-42", "fields": {}}
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.create.return_value = {"id": "sp-item-42", "fields": {}}
 
         result = client.write_pending_engagement(SAMPLE_EVENT)
         assert result == "sp-item-42"
@@ -152,59 +175,59 @@ class TestWritePendingEngagement:
 
 class TestListPendingEngagement:
     def test_applies_status_filter(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.all.return_value = []
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.find.return_value = []
 
         client.list_pending_engagement(status="reviewed")
 
-        call_kwargs = client.pending_engagement.all.call_args[1]
+        call_kwargs = mock_backend.find.call_args[1]
         assert "reviewed" in call_kwargs["formula"]
         assert "NicheId" not in call_kwargs["formula"]
 
     def test_applies_niche_filter(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.all.return_value = []
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.find.return_value = []
 
         client.list_pending_engagement(niche_id="gaming", status="pending")
 
-        call_kwargs = client.pending_engagement.all.call_args[1]
+        call_kwargs = mock_backend.find.call_args[1]
         formula = call_kwargs["formula"]
         assert "gaming" in formula
         assert "pending" in formula
         assert formula.startswith("AND(")
 
     def test_default_status_is_pending(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.all.return_value = []
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.find.return_value = []
 
         client.list_pending_engagement()
 
-        call_kwargs = client.pending_engagement.all.call_args[1]
+        call_kwargs = mock_backend.find.call_args[1]
         assert "pending" in call_kwargs["formula"]
 
     def test_respects_limit(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.all.return_value = []
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.find.return_value = []
 
         client.list_pending_engagement(limit=10)
 
-        call_kwargs = client.pending_engagement.all.call_args[1]
+        call_kwargs = mock_backend.find.call_args[1]
         assert call_kwargs["max_records"] == 10
 
     def test_returns_empty_on_error(self, mock_config):
-        client = _make_client(mock_config)
-        client.pending_engagement.all.side_effect = RuntimeError("Graph API down")
+        client, mock_backend = _make_client_with_backend(mock_config)
+        mock_backend.find.side_effect = RuntimeError("Graph API down")
 
         result = client.list_pending_engagement()
         assert result == []
 
     def test_returns_records(self, mock_config):
-        client = _make_client(mock_config)
+        client, mock_backend = _make_client_with_backend(mock_config)
         mock_records = [
             {"id": "rec1", "fields": {"Title": "cmt_1", "Status": "pending"}},
             {"id": "rec2", "fields": {"Title": "cmt_2", "Status": "pending"}},
         ]
-        client.pending_engagement.all.return_value = mock_records
+        mock_backend.find.return_value = mock_records
 
         result = client.list_pending_engagement()
         assert len(result) == 2

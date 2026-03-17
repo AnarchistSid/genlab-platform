@@ -345,3 +345,73 @@ class TestInit:
             api_version="v22.0",
         )
         assert "v22.0" in client._base_url
+
+    def test_max_poll_seconds_default(self):
+        """Default poll timeout is 120 seconds."""
+        from genlab_core.platforms.instagram import InstagramClient
+        client = InstagramClient(access_token="t", ig_user_id="u")
+        assert client._max_poll_seconds == 120
+
+    def test_max_poll_seconds_custom(self):
+        """Custom poll timeout is stored on the instance."""
+        from genlab_core.platforms.instagram import InstagramClient
+        client = InstagramClient(
+            access_token="t", ig_user_id="u", max_poll_seconds=600
+        )
+        assert client._max_poll_seconds == 600
+
+
+class TestVerifyChannel:
+    def test_verify_channel_success(self, ig_client):
+        """verify_channel returns True when the IG account is accessible."""
+        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+            mock_req.get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"id": "17841448019867838", "username": "blackboxbrief"},
+            )
+            ok = ig_client.verify_channel()
+        assert ok is True
+
+    def test_verify_channel_failure_invalid_account(self, ig_client):
+        """verify_channel returns False when the API returns an error."""
+        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+            mock_req.get.return_value = MagicMock(
+                status_code=400,
+                json=lambda: {"error": {"message": "Object does not exist"}},
+            )
+            ok = ig_client.verify_channel()
+        assert ok is False
+
+    def test_verify_channel_exception(self, ig_client):
+        """verify_channel returns False on network exception."""
+        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+            mock_req.get.side_effect = Exception("Connection timeout")
+            ok = ig_client.verify_channel()
+        assert ok is False
+
+    def test_verify_channel_uses_graph_facebook_url(self, ig_client):
+        """verify_channel must use graph.facebook.com."""
+        captured = []
+        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+            def cap(url, *a, **kw):
+                captured.append(url)
+                return MagicMock(status_code=200, json=lambda: {"id": "123"})
+            mock_req.get.side_effect = cap
+            ig_client.verify_channel()
+
+        assert any("graph.facebook.com" in u for u in captured)
+        assert not any("graph.instagram.com" in u for u in captured)
+
+    def test_verify_channel_requests_id_and_username(self, ig_client):
+        """verify_channel requests fields=id,username."""
+        with patch("genlab_core.platforms.instagram.requests") as mock_req:
+            mock_req.get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"id": "17841448019867838", "username": "bb"},
+            )
+            ig_client.verify_channel()
+
+        call_kwargs = mock_req.get.call_args
+        params = call_kwargs[1].get("params") or call_kwargs[0][1]
+        assert "id" in params.get("fields", "")
+        assert "username" in params.get("fields", "")

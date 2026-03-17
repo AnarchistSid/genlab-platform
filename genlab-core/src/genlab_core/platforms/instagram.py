@@ -41,6 +41,8 @@ class InstagramClient:
         ig_user_id: Instagram Business Account ID (FB-scoped).
                     Defaults to ``META_IG_USER_ID`` env var.
         api_version: Graph API version string, e.g. ``"v21.0"``.
+        max_poll_seconds: Maximum seconds to wait for container processing.
+                          BB uses 600; default is 120.
     """
 
     platform_id = "instagram"
@@ -50,11 +52,13 @@ class InstagramClient:
         access_token: str | None = None,
         ig_user_id: str | None = None,
         api_version: str = "v21.0",
+        max_poll_seconds: int = _DEFAULT_MAX_POLL_SECONDS,
     ) -> None:
         self._access_token: str = access_token or os.environ.get("META_ACCESS_TOKEN", "")
         self._ig_user_id: str = ig_user_id or os.environ.get("META_IG_USER_ID", "")
         self._api_version = api_version
         self._base_url = f"https://graph.facebook.com/{api_version}"
+        self._max_poll_seconds = max_poll_seconds
 
     # ------------------------------------------------------------------
     # Publisher protocol
@@ -109,6 +113,7 @@ class InstagramClient:
             caption=caption,
             share_to_feed=share_to_feed,
             cover_url=cover_url,
+            max_poll_seconds=self._max_poll_seconds,
         )
 
         if post_id is None:
@@ -227,6 +232,51 @@ class InstagramClient:
                 needs_refresh=False,
                 message=f"Token check exception: {exc}",
             )
+
+    # ------------------------------------------------------------------
+    # Channel verification
+    # ------------------------------------------------------------------
+
+    def verify_channel(self) -> bool:
+        """Verify the IG Business Account exists and is accessible.
+
+        Makes a lightweight GET to ``/{ig_user_id}?fields=id,username`` to
+        confirm the token + account ID combination is valid.  Useful as a
+        pre-flight check before attempting a publish.
+
+        Returns:
+            ``True`` if the account is accessible, ``False`` otherwise.
+        """
+        url = f"{self._base_url}/{self._ig_user_id}"
+        try:
+            resp = requests.get(
+                url,
+                params={
+                    "fields": "id,username",
+                    "access_token": self._access_token,
+                },
+                timeout=15,
+            )
+            data = _safe_json(resp)
+            if resp.status_code == 200 and "id" in data:
+                username = data.get("username", "")
+                logger.info(
+                    "Instagram: channel verified — id=%s username=%s",
+                    data["id"],
+                    username,
+                )
+                return True
+            error_msg = (
+                data.get("error", {}).get("message", "")
+                or f"HTTP {resp.status_code}"
+            )
+            logger.error(
+                "Instagram: channel verification failed: %s", error_msg
+            )
+            return False
+        except Exception as exc:
+            logger.error("Instagram: channel verification exception: %s", exc)
+            return False
 
     # ------------------------------------------------------------------
     # Internal helpers

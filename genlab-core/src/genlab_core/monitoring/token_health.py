@@ -243,21 +243,44 @@ def check_threads() -> dict:
 
 
 def check_backlog() -> dict:
-    """Test Microsoft Lists (backlog) connection."""
+    """Test data storage connection (PostgreSQL or Microsoft Lists)."""
+    use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
+    dsn = os.getenv("DATABASE_URL", "")
+
+    if use_postgres and dsn:
+        # Postgres health check — simple SELECT 1
+        try:
+            from genlab_core.storage.postgres import PostgresBackend
+            pg = PostgresBackend(dsn=dsn)
+            rows = pg.find("blueprints", max_records=1)
+            return {
+                "platform": "database",
+                "status": "healthy",
+                "message": f"PostgreSQL connected ({len(rows)} test row)",
+            }
+        except Exception as e:
+            return {"platform": "database", "status": "error", "message": str(e)[:200]}
+
+    # SharePoint health check (legacy)
     tenant_id = (os.getenv("AZURE_TENANT_ID") or "").strip()
     client_id = (os.getenv("AZURE_CLIENT_ID") or "").strip()
     if not tenant_id or not client_id:
-        return {"platform": "microsoft_lists", "status": "missing", "message": "AZURE_TENANT_ID / AZURE_CLIENT_ID not set"}
+        return {
+            "platform": "database",
+            "status": "missing",
+            "message": "No database configured. Set GENLAB_USE_POSTGRES=true + DATABASE_URL, "
+                       "or AZURE_TENANT_ID + AZURE_CLIENT_ID for SharePoint.",
+        }
 
     try:
         from genlab_core.http.backlog_client import BacklogClient
         client = BacklogClient()
         ok = client.health_check()
         if ok:
-            return {"platform": "microsoft_lists", "status": "healthy", "message": "Microsoft Lists connected"}
-        return {"platform": "microsoft_lists", "status": "error", "message": "Health check returned False"}
+            return {"platform": "database", "status": "healthy", "message": "Microsoft Lists connected"}
+        return {"platform": "database", "status": "error", "message": "Health check returned False"}
     except Exception as e:
-        return {"platform": "microsoft_lists", "status": "error", "message": str(e)[:200]}
+        return {"platform": "database", "status": "error", "message": str(e)[:200]}
 
 
 # ══════════════════════════════════════════════════════════════
