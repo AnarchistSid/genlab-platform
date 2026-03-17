@@ -62,11 +62,11 @@ EAA Page Tokens are permanent — never call `ig_refresh_token`.
 
 ## Shared Configs
 
-`genlab-core/config/` holds shared configs (moved from Content Scraper in Sprint 62):
+`genlab-core/config/` holds shared configs (moved from BlackboxBrief in Sprint 62):
 - `lists_config.yaml` — SharePoint list IDs
 - `platform_caps.yaml` — daily post caps per platform
 - `disk_quota.yaml` — disk usage quotas
-Symlinks in `Content Scraper/config/` for backward compat.
+Symlinks in `BlackboxBrief/config/` for backward compat.
 
 ## Frame Compositor (Sprint 62 redesign)
 

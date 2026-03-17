@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eliminate cross-channel contamination — move shared credentials to a root `.env`, move shared configs to `genlab-core/config/`, remove all `sys.path` hacks and hardcoded "Content Scraper" paths, update all 40 launchd plists.
+**Goal:** Eliminate cross-channel contamination — move shared credentials to a root `.env`, move shared configs to `genlab-core/config/`, remove all `sys.path` hacks and hardcoded "BlackboxBrief" paths, update all 40 launchd plists.
 
-**Architecture:** Create `GenLab/.env` as the single shared env file. Each niche keeps ONLY its own prefixed credentials in `{Niche}/.env`. Move `lists_config.yaml`, `platform_caps.yaml`, `disk_quota.yaml` from Content Scraper to `genlab-core/config/`. Update all Python code that references Content Scraper paths to use `genlab_core.settings` resolution. Update all plists.
+**Architecture:** Create `GenLab/.env` as the single shared env file. Each niche keeps ONLY its own prefixed credentials in `{Niche}/.env`. Move `lists_config.yaml`, `platform_caps.yaml`, `disk_quota.yaml` from BlackboxBrief to `genlab-core/config/`. Update all Python code that references BlackboxBrief paths to use `genlab_core.settings` resolution. Update all plists.
 
 **Tech Stack:** Python, YAML, launchd plists, dotenv
 
@@ -16,46 +16,46 @@
 
 | What | From | To |
 |---|---|---|
-| 48 cross-channel env vars | `Content Scraper/.env` | `GenLab/.env` (shared) + per-niche `.env` |
-| `lists_config.yaml` | `Content Scraper/config/` | `genlab-core/config/` |
-| `platform_caps.yaml` | `Content Scraper/config/` | `genlab-core/config/` |
-| `disk_quota.yaml` | `Content Scraper/config/` | `genlab-core/config/` |
-| `execution/check_token_health.py` | `Content Scraper/execution/` | `genlab-core/src/genlab_core/monitoring/` |
-| `execution/utils/youtube_client.py` | `Content Scraper/execution/` | `genlab-core/src/genlab_core/platforms/` |
+| 48 cross-channel env vars | `BlackboxBrief/.env` | `GenLab/.env` (shared) + per-niche `.env` |
+| `lists_config.yaml` | `BlackboxBrief/config/` | `genlab-core/config/` |
+| `platform_caps.yaml` | `BlackboxBrief/config/` | `genlab-core/config/` |
+| `disk_quota.yaml` | `BlackboxBrief/config/` | `genlab-core/config/` |
+| `execution/check_token_health.py` | `BlackboxBrief/execution/` | `genlab-core/src/genlab_core/monitoring/` |
+| `execution/utils/youtube_client.py` | `BlackboxBrief/execution/` | `genlab-core/src/genlab_core/platforms/` |
 
 ### What needs path updates
 
 | File | Current reference | Fix |
 |---|---|---|
-| `daily_cap.py:31` | `Content Scraper/config/platform_caps.yaml` | `genlab-core/config/platform_caps.yaml` |
-| `quota_daemon.py:44` | `Content Scraper/config/disk_quota.yaml` | `genlab-core/config/disk_quota.yaml` |
-| `trending_video_fetcher.py:825-826` | `Content Scraper/config/sources.yaml` | niche_root resolution |
-| `run_monetisation_tracker.py:16` | `Content Scraper` .env loading | root .env |
-| `review_server.py:33` | `Content Scraper` sys.path | genlab_core imports |
+| `daily_cap.py:31` | `BlackboxBrief/config/platform_caps.yaml` | `genlab-core/config/platform_caps.yaml` |
+| `quota_daemon.py:44` | `BlackboxBrief/config/disk_quota.yaml` | `genlab-core/config/disk_quota.yaml` |
+| `trending_video_fetcher.py:825-826` | `BlackboxBrief/config/sources.yaml` | niche_root resolution |
+| `run_monetisation_tracker.py:16` | `BlackboxBrief` .env loading | root .env |
+| `review_server.py:33` | `BlackboxBrief` sys.path | genlab_core imports |
 | `token_health.py:148,161` | `from execution.check_token_health` | `from genlab_core.monitoring` |
-| `blueprints.py:26` | `Content Scraper` media path | niche_root resolution |
-| `schedule.py:23` | `Content Scraper` | niche_root resolution |
-| `config_routes.py:55` | `Content Scraper/config/` | `genlab-core/config/` |
-| `engagement.py:112` | `Content Scraper` | genlab_core |
+| `blueprints.py:26` | `BlackboxBrief` media path | niche_root resolution |
+| `schedule.py:23` | `BlackboxBrief` | niche_root resolution |
+| `config_routes.py:55` | `BlackboxBrief/config/` | `genlab-core/config/` |
+| `engagement.py:112` | `BlackboxBrief` | genlab_core |
 
 ### 21 launchd plists to update
-All plists with `BACKLOG_CONFIG_PATH` pointing to `Content Scraper/config/lists_config.yaml` → change to `genlab-core/config/lists_config.yaml`.
+All plists with `BACKLOG_CONFIG_PATH` pointing to `BlackboxBrief/config/lists_config.yaml` → change to `genlab-core/config/lists_config.yaml`.
 
 ### 7 scripts with sys.path hacks
-`social_analytics.py`, `viral_detector.py`, `content_memory.py`, `token_health.py`, `backfill_*.py`, `seed_bandit_arms.py` — all need `sys.path.insert(Content Scraper)` removed, replaced with proper uv workspace imports.
+`social_analytics.py`, `viral_detector.py`, `content_memory.py`, `token_health.py`, `backfill_*.py`, `seed_bandit_arms.py` — all need `sys.path.insert(BlackboxBrief)` removed, replaced with proper uv workspace imports.
 
 ---
 
-## Chunk 1: Create root .env and split Content Scraper/.env
+## Chunk 1: Create root .env and split BlackboxBrief/.env
 
 ### Task 1: Create GenLab/.env with shared credentials
 
 **Files:**
 - Create: `GenLab/.env`
-- Modify: `Content Scraper/.env`
+- Modify: `BlackboxBrief/.env`
 - Modify: `.gitignore` (ensure `.env` is listed)
 
-- [ ] **Step 1: Identify shared vs BB-only vars in Content Scraper/.env**
+- [ ] **Step 1: Identify shared vs BB-only vars in BlackboxBrief/.env**
 Shared: `AZURE_*`, `SHAREPOINT_*`, `YOUTUBE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.
 BB-only: `META_ACCESS_TOKEN`, `META_IG_USER_ID`, `META_IG_APP_ID`, `META_IG_APP_SECRET`, `FB_PAGE_ACCESS_TOKEN`, `META_FB_PAGE_ID`
 Cross-channel (move to root): All `CRITICALRUSH_*`, `CLUTCHWIRE_*`, `SPLICEREEL_*`, `FRAMEDRIFT_*` vars
@@ -68,7 +68,7 @@ Copy shared vars + all per-niche prefixed vars to `GenLab/.env`. Add header comm
 # BB (ai_creators) uses unprefixed vars as the legacy default
 ```
 
-- [ ] **Step 3: Strip cross-channel vars from Content Scraper/.env**
+- [ ] **Step 3: Strip cross-channel vars from BlackboxBrief/.env**
 Remove all `CRITICALRUSH_*`, `CLUTCHWIRE_*`, `SPLICEREEL_*`, `FRAMEDRIFT_*` lines.
 Keep only BB's own vars + shared vars that BB needs.
 
@@ -99,14 +99,14 @@ These should already be partially done from the FB token fix earlier. Verify all
 ### Task 3: Move lists_config.yaml, platform_caps.yaml, disk_quota.yaml
 
 **Files:**
-- Create: `genlab-core/config/lists_config.yaml` (copy from Content Scraper)
-- Create: `genlab-core/config/platform_caps.yaml` (copy from Content Scraper)
-- Create: `genlab-core/config/disk_quota.yaml` (copy from Content Scraper)
+- Create: `genlab-core/config/lists_config.yaml` (copy from BlackboxBrief)
+- Create: `genlab-core/config/platform_caps.yaml` (copy from BlackboxBrief)
+- Create: `genlab-core/config/disk_quota.yaml` (copy from BlackboxBrief)
 - Keep originals as symlinks for backward compatibility
 
 - [ ] **Step 1: Copy configs**
-- [ ] **Step 2: Create symlinks in Content Scraper/config/ pointing to genlab-core/config/**
-- [ ] **Step 3: Update all Python files that hardcode Content Scraper paths** (6 files listed above)
+- [ ] **Step 2: Create symlinks in BlackboxBrief/config/ pointing to genlab-core/config/**
+- [ ] **Step 3: Update all Python files that hardcode BlackboxBrief paths** (6 files listed above)
 - [ ] **Step 4: Run tests**
 - [ ] **Step 5: Commit**
 
@@ -119,8 +119,8 @@ These should already be partially done from the FB token fix earlier. Verify all
 - [ ] **Step 1: sed replace across all plists**
 ```bash
 for plist in ~/Library/LaunchAgents/com.genlab.*.plist; do
-  sed -i '' 's|Content Scraper/config/lists_config.yaml|genlab-core/config/lists_config.yaml|g' "$plist"
-  sed -i '' 's|Content Scraper/config/disk_quota.yaml|genlab-core/config/disk_quota.yaml|g' "$plist"
+  sed -i '' 's|BlackboxBrief/config/lists_config.yaml|genlab-core/config/lists_config.yaml|g' "$plist"
+  sed -i '' 's|BlackboxBrief/config/disk_quota.yaml|genlab-core/config/disk_quota.yaml|g' "$plist"
 done
 ```
 
@@ -137,11 +137,11 @@ done
 - Modify: `scripts/social_analytics.py`, `scripts/viral_detector.py`, `scripts/content_memory.py`, `scripts/token_health.py`, `scripts/backfill_*.py`, `scripts/seed_bandit_arms.py`
 
 - [ ] **Step 1: Replace sys.path hacks with proper imports**
-All these scripts should be run via `uv run --package genlab-core` which puts genlab_core on the path automatically. Remove `sys.path.insert(0, '/Users/anarchistsid/GenLab/Content Scraper')` lines.
+All these scripts should be run via `uv run --package genlab-core` which puts genlab_core on the path automatically. Remove `sys.path.insert(0, '/Users/anarchistsid/GenLab/BlackboxBrief')` lines.
 
 - [ ] **Step 2: For scripts that import `execution.*`**, either:
   - Move the needed function to genlab_core (preferred)
-  - Or use `uv run --project "Content Scraper"` for BB-specific scripts
+  - Or use `uv run --project "BlackboxBrief"` for BB-specific scripts
 
 - [ ] **Step 3: Run each script with --help or dry-run to verify**
 - [ ] **Step 4: Commit**
@@ -157,13 +157,13 @@ All these scripts should be run via `uv run --package genlab-core` which puts ge
 - Modify: `dashboard/server/api/engagement.py`
 
 - [ ] **Step 1: Move check_token_health to genlab_core.monitoring**
-Copy `Content Scraper/execution/check_token_health.py` → `genlab-core/src/genlab_core/monitoring/check_token_health.py`. Update imports in dashboard.
+Copy `BlackboxBrief/execution/check_token_health.py` → `genlab-core/src/genlab_core/monitoring/check_token_health.py`. Update imports in dashboard.
 
 - [ ] **Step 2: Remove sys.path.insert from review_server.py**
 Replace `from execution.*` imports with `from genlab_core.*` equivalents.
 
 - [ ] **Step 3: Update media path resolution**
-Replace hardcoded `Content Scraper` media paths with `settings.get_project_root()` resolution using niche_root mapping.
+Replace hardcoded `BlackboxBrief` media paths with `settings.get_project_root()` resolution using niche_root mapping.
 
 - [ ] **Step 4: Run dashboard tests**
 - [ ] **Step 5: Commit**
@@ -176,4 +176,4 @@ Replace hardcoded `Content Scraper` media paths with `settings.get_project_root(
 - [ ] Run each pipeline: `uv run python ClutchWire/run_pipeline.py --dry-run`
 - [ ] Verify all 40 launchd services start: `launchctl list | grep genlab`
 - [ ] Verify dashboard serves: `curl http://localhost:5151/api/v1/health`
-- [ ] Grep for remaining "Content Scraper" references outside Content Scraper itself
+- [ ] Grep for remaining "BlackboxBrief" references outside BlackboxBrief itself

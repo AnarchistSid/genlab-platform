@@ -208,7 +208,7 @@ Each client:
 
 ### 1.6 Postiz Integration (Issue #8)
 
-**PostizClient** remains as an alternative publishing path, NOT replaced by native platform clients. CriticalRush uses Postiz as its primary publisher. Content Scraper uses it in shadow mode.
+**PostizClient** remains as an alternative publishing path, NOT replaced by native platform clients. CriticalRush uses Postiz as its primary publisher. BlackboxBrief uses it in shadow mode.
 
 The relationship:
 - **Native platform clients** (`InstagramClient`, `YouTubeClient`, etc.) — direct API calls, full control
@@ -216,7 +216,7 @@ The relationship:
 
 Both implement `Publisher` protocol. The orchestrator can use either:
 ```python
-# Direct native (Content Scraper default)
+# Direct native (BlackboxBrief default)
 client = get_client("instagram")
 
 # Via Postiz (CriticalRush default)
@@ -245,14 +245,14 @@ ShadowPublisher continues to work unchanged — it publishes via Postiz in paral
 
 ### 1.9 What Gets Deleted After Migration
 
-- `Content Scraper/execution/publish_to_instagram.py`
-- `Content Scraper/execution/publish_youtube.py`
-- `Content Scraper/execution/publish_twitter.py`
-- `Content Scraper/execution/publish_facebook.py`
-- `Content Scraper/execution/publish_threads.py`
-- `Content Scraper/execution/publish_single.py` (Issue #4 — depends on old orchestrator)
-- `Content Scraper/execution/utils/twitter_client.py`
-- `Content Scraper/execution/utils/youtube_client.py`
+- `BlackboxBrief/execution/publish_to_instagram.py`
+- `BlackboxBrief/execution/publish_youtube.py`
+- `BlackboxBrief/execution/publish_twitter.py`
+- `BlackboxBrief/execution/publish_facebook.py`
+- `BlackboxBrief/execution/publish_threads.py`
+- `BlackboxBrief/execution/publish_single.py` (Issue #4 — depends on old orchestrator)
+- `BlackboxBrief/execution/utils/twitter_client.py`
+- `BlackboxBrief/execution/utils/youtube_client.py`
 - `genlab-core/src/genlab_core/engagement/platform_clients/youtube.py`
 - `genlab-core/src/genlab_core/engagement/platform_clients/instagram.py`
 - `genlab-core/src/genlab_core/engagement/platform_clients/x_twitter.py`

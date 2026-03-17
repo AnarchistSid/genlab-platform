@@ -81,20 +81,28 @@ class MonetisationTracker:
         self._proxy = None
 
     def _get_proxy(self):
-        """Lazy-init the SP list proxy for MonetisationProgress."""
+        """Lazy-init the proxy for MonetisationProgress via BacklogClient."""
         if self._proxy is None:
-            from genlab_core.http.graph_proxy import GraphTableProxy
-
-            site_id = os.environ.get("SHAREPOINT_SITE_ID", "").strip()
-            graph = getattr(self._client, "_graph", None) or getattr(self._client, "_graph_client", None)
-            if graph is None:
-                raise RuntimeError("BacklogClient has no _graph or _graph_client attribute")
-            self._proxy = GraphTableProxy(
-                graph,
-                site_id,
-                self._sp_list_id,
-                "GenLab_MonetisationProgress",
-            )
+            proxy = getattr(self._client, "monetisation_progress", None)
+            if proxy is not None:
+                self._proxy = proxy
+            else:
+                # Fallback: try Postgres, then SharePoint
+                dsn = os.environ.get("DATABASE_URL", "")
+                use_pg = os.environ.get("GENLAB_USE_POSTGRES", "").lower() == "true"
+                if dsn and use_pg:
+                    from genlab_core.storage.postgres import PostgresBackend, PostgresTableProxy
+                    pg = PostgresBackend(dsn=dsn)
+                    self._proxy = PostgresTableProxy(pg, "monetisation_progress")
+                else:
+                    from genlab_core.http.graph_proxy import GraphTableProxy
+                    site_id = os.environ.get("SHAREPOINT_SITE_ID", "").strip()
+                    graph = getattr(self._client, "_graph", None) or getattr(self._client, "_graph_client", None)
+                    if graph is None:
+                        raise RuntimeError("BacklogClient has no _graph or _graph_client attribute")
+                    self._proxy = GraphTableProxy(
+                        graph, site_id, self._sp_list_id, "GenLab_MonetisationProgress",
+                    )
         return self._proxy
 
     def run(

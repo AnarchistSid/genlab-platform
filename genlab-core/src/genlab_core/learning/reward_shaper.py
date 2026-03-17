@@ -21,7 +21,6 @@ Thresholds (verified against platform docs, March 2026):
 from __future__ import annotations
 
 import logging
-import os
 import time as _time
 from dataclasses import dataclass
 from pathlib import Path
@@ -565,25 +564,11 @@ class MonetisationMultiplierProvider:
                 client = BacklogClient()
                 self._client = client
 
-            from genlab_core.http.graph_proxy import GraphTableProxy
-
-            # Load list_id from targets config
-            try:
-                with open(_get_targets_path()) as f:
-                    cfg = yaml.safe_load(f) or {}
-                list_id = cfg.get("sharepoint", {}).get("list_id", "")
-            except Exception:
-                list_id = ""
-
-            if not list_id:
-                logger.warning("MonetisationMultiplierProvider: no SP list_id configured")
+            proxy = getattr(client, "monetisation_progress", None)
+            if proxy is None:
+                logger.warning("MonetisationMultiplierProvider: no monetisation_progress proxy on BacklogClient")
                 return
 
-            site_id = os.environ.get("SHAREPOINT_SITE_ID", "").strip()
-            proxy = GraphTableProxy(
-                client._graph_client, site_id, list_id,
-                "GenLab_MonetisationProgress",
-            )
             records = proxy.all()
 
             new_cache: dict[str, dict] = {}

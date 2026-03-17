@@ -86,14 +86,14 @@ Layer 3 — niches/*/config/    NICHE CONFIGURATION (pure YAML)
 
 ### ⚠️ KNOWN ARCHITECTURE DEBT
 
-**Content Scraper** (Blackbox Brief's directory) and **CriticalRush** currently house
+**BlackboxBrief** (Blackbox Brief's directory) and **CriticalRush** currently house
 shared infrastructure that all other channels depend on. This is wrong. Migration plan:
-1. Identify all code in `Content Scraper/pipeline/` that is imported by other channels
+1. Identify all code in `BlackboxBrief/pipeline/` that is imported by other channels
 2. Move to `genlab-core/src/genlab_core/`
 3. Update all imports
-4. Content Scraper directory becomes a pure niche directory (Layer 2+3 only)
+4. BlackboxBrief directory becomes a pure niche directory (Layer 2+3 only)
 
-Do NOT add new shared code to Content Scraper or CriticalRush. Always add to genlab-core.
+Do NOT add new shared code to BlackboxBrief or CriticalRush. Always add to genlab-core.
 
 ---
 
@@ -323,7 +323,7 @@ YouTube poll interval is 30 minutes (not 5) to conserve 10K daily API quota.
 ## WHAT NOT TO DO
 
 1. **Never add text-only renders** — not now, not as a fallback, not for any reason
-2. **Never add new shared code to Content Scraper or CriticalRush** — use genlab-core
+2. **Never add new shared code to BlackboxBrief or CriticalRush** — use genlab-core
 3. **Never modify core pipeline base classes** without explicit discussion
 4. **Never hardcode credentials** — all secrets in .env files, never in code or YAML
 5. **Never silent-fail** a platform publish — log warnings and write SKIPPED records
@@ -349,7 +349,7 @@ Every decision should consider multi-tenancy:
 
 | Channel | niche_id | Accent Color | Logo |
 |---|---|---|---|
-| Blackbox Brief | ai_news | #00D4FF | Content Scraper/assets/logo.png |
+| Blackbox Brief | ai_creators | #00D4FF | BlackboxBrief/assets/logo.png |
 | CriticalRush | gaming | #f97316 | CriticalRush/assets/logo.png |
 | ClutchWire | sports | #FF2040 | ClutchWire/assets/logo.png |
 | SpliceReel | movies | #C9A84C | SpliceReel/assets/logo.png |
@@ -363,7 +363,7 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 | # | Action | Blocker for |
 |---|---|---|
-| H1 | ElevenLabs API key → Content Scraper/.env | TTS quality |
+| H1 | ElevenLabs API key → BlackboxBrief/.env | TTS quality |
 | H3 | YouTube quota increase (Google Cloud Console) | Multi-channel YT publishing |
 | H5 | Per-niche X/Twitter + Threads credentials (CW, SR, FD, CR) | X/Threads publishing |
 | H6 | SpliceReel FB page origin investigation (8,507 followers) | SR Facebook publishing |

@@ -4,7 +4,7 @@
 
 **Goal:** Clean project organization — extract shared dashboard to GenLab root, fix analytics accuracy, consolidate shared scripts into genlab-core.
 
-**Architecture:** The dashboard (React frontend + Flask server + REST API) currently lives in Content Scraper but serves both niches. We extract it to `GenLab/dashboard/` as a uv workspace member. Shared engagement/token scripts move to genlab-core. Import paths update throughout.
+**Architecture:** The dashboard (React frontend + Flask server + REST API) currently lives in BlackboxBrief but serves both niches. We extract it to `GenLab/dashboard/` as a uv workspace member. Shared engagement/token scripts move to genlab-core. Import paths update throughout.
 
 **Tech Stack:** Python 3.13, Flask, React 19, TypeScript, Vite, uv workspace, launchd, genlab-core (hatchling)
 
@@ -17,7 +17,7 @@
 ### Task 1: Surface data quality in analytics API
 
 **Files:**
-- Modify: `/Users/anarchistsid/GenLab/Content Scraper/execution/api/analytics.py`
+- Modify: `/Users/anarchistsid/GenLab/BlackboxBrief/execution/api/analytics.py`
 
 **Step 1: Add platform data availability tracking**
 
@@ -70,7 +70,7 @@ Expected: `data_status` fields per platform. X/Twitter and Facebook should show 
 ### Task 2: Dashboard shows "No API data" badge for unavailable platforms
 
 **Files:**
-- Modify: `/Users/anarchistsid/GenLab/Content Scraper/dashboard/src/api/types.ts`
+- Modify: `/Users/anarchistsid/GenLab/BlackboxBrief/dashboard/src/api/types.ts`
 - Modify: Analytics view that renders platform breakdown (find via grep for `Platform Breakdown`)
 
 **Step 1: Add data_status to PlatformMetrics type**
@@ -153,7 +153,7 @@ Update `/Users/anarchistsid/GenLab/pyproject.toml`:
 members = [
     "genlab-core",
     "CriticalRush",
-    "Content Scraper",
+    "BlackboxBrief",
     "dashboard",
 ]
 ```
@@ -170,7 +170,7 @@ Expected: No resolution errors.
 **Step 1: Move React app**
 
 ```bash
-mv "/Users/anarchistsid/GenLab/Content Scraper/dashboard" "/Users/anarchistsid/GenLab/dashboard/frontend"
+mv "/Users/anarchistsid/GenLab/BlackboxBrief/dashboard" "/Users/anarchistsid/GenLab/dashboard/frontend"
 ```
 
 **Step 2: Verify build still works**
@@ -188,7 +188,7 @@ Expected: Clean build (no source changes needed — the frontend is self-contain
 **Step 1: Copy API files**
 
 ```bash
-cp -r "/Users/anarchistsid/GenLab/Content Scraper/execution/api/"*.py "/Users/anarchistsid/GenLab/dashboard/server/api/"
+cp -r "/Users/anarchistsid/GenLab/BlackboxBrief/execution/api/"*.py "/Users/anarchistsid/GenLab/dashboard/server/api/"
 ```
 
 **Step 2: Update imports in every API file**
@@ -229,7 +229,7 @@ Replace all occurrences across the API files:
 **Step 3: Move core/publishing_queue.py**
 
 ```bash
-cp "/Users/anarchistsid/GenLab/Content Scraper/core/publishing_queue.py" "/Users/anarchistsid/GenLab/dashboard/server/core/publishing_queue.py"
+cp "/Users/anarchistsid/GenLab/BlackboxBrief/core/publishing_queue.py" "/Users/anarchistsid/GenLab/dashboard/server/core/publishing_queue.py"
 ```
 
 ---
@@ -239,7 +239,7 @@ cp "/Users/anarchistsid/GenLab/Content Scraper/core/publishing_queue.py" "/Users
 **Step 1: Copy review_server.py**
 
 ```bash
-cp "/Users/anarchistsid/GenLab/Content Scraper/execution/review_server.py" "/Users/anarchistsid/GenLab/dashboard/server/review_server.py"
+cp "/Users/anarchistsid/GenLab/BlackboxBrief/execution/review_server.py" "/Users/anarchistsid/GenLab/dashboard/server/review_server.py"
 ```
 
 **Step 2: Update imports in review_server.py**
@@ -275,9 +275,9 @@ DASHBOARD_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 **Step 4: Update PROJECT_ROOT resolution**
 
-The server resolves PROJECT_ROOT for media/cache access. It needs to point to the Content Scraper directory for media files. Make this configurable:
+The server resolves PROJECT_ROOT for media/cache access. It needs to point to the BlackboxBrief directory for media files. Make this configurable:
 ```python
-PROJECT_ROOT = Path(os.environ.get("GENLAB_PROJECT_ROOT", Path(__file__).resolve().parent.parent.parent / "Content Scraper"))
+PROJECT_ROOT = Path(os.environ.get("GENLAB_PROJECT_ROOT", Path(__file__).resolve().parent.parent.parent / "BlackboxBrief"))
 ```
 
 ---
@@ -296,9 +296,9 @@ set -euo pipefail
 
 DASHBOARD_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GENLAB_ROOT="$(cd "$DASHBOARD_ROOT/.." && pwd)"
-PROJECT_ROOT="$GENLAB_ROOT/Content Scraper"
+PROJECT_ROOT="$GENLAB_ROOT/BlackboxBrief"
 
-# Load environment from Content Scraper .env
+# Load environment from BlackboxBrief .env
 if [ -f "$PROJECT_ROOT/.env" ]; then
     while IFS='=' read -r key value; do
         [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
@@ -354,7 +354,7 @@ Update ProgramArguments and WorkingDirectory:
 Update log paths:
 ```xml
 <key>StandardOutPath</key>
-<string>/Users/anarchistsid/GenLab/Content Scraper/.tmp/logs/review_server_stdout.log</string>
+<string>/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/logs/review_server_stdout.log</string>
 ```
 
 **Step 3: Reload launchd**
@@ -375,24 +375,24 @@ Expected: `{"status": "ok"}` or similar.
 
 ---
 
-### Task 8: Clean up Content Scraper (remove moved files)
+### Task 8: Clean up BlackboxBrief (remove moved files)
 
-**Step 1: Remove moved files from Content Scraper**
+**Step 1: Remove moved files from BlackboxBrief**
 
 ```bash
-rm -rf "/Users/anarchistsid/GenLab/Content Scraper/dashboard"
-rm -rf "/Users/anarchistsid/GenLab/Content Scraper/execution/api"
-rm "/Users/anarchistsid/GenLab/Content Scraper/execution/review_server.py"
-rm "/Users/anarchistsid/GenLab/Content Scraper/core/publishing_queue.py"
-rm "/Users/anarchistsid/GenLab/Content Scraper/runbooks/review_server_wrapper.sh"
+rm -rf "/Users/anarchistsid/GenLab/BlackboxBrief/dashboard"
+rm -rf "/Users/anarchistsid/GenLab/BlackboxBrief/execution/api"
+rm "/Users/anarchistsid/GenLab/BlackboxBrief/execution/review_server.py"
+rm "/Users/anarchistsid/GenLab/BlackboxBrief/core/publishing_queue.py"
+rm "/Users/anarchistsid/GenLab/BlackboxBrief/runbooks/review_server_wrapper.sh"
 ```
 
-**Step 2: Verify Content Scraper daily pipeline still works**
+**Step 2: Verify BlackboxBrief daily pipeline still works**
 
 The daily pipeline scripts (fetch_ai_creators.py, etc.) should NOT import from execution/api/ or review_server. Verify:
 
 ```bash
-grep -rn "from execution.api\|from execution.review_server\|import execution.api\|import execution.review_server" "/Users/anarchistsid/GenLab/Content Scraper/execution/"*.py 2>/dev/null | grep -v __pycache__
+grep -rn "from execution.api\|from execution.review_server\|import execution.api\|import execution.review_server" "/Users/anarchistsid/GenLab/BlackboxBrief/execution/"*.py 2>/dev/null | grep -v __pycache__
 ```
 
 Expected: Only hits in files that were already moved (none remaining).
@@ -417,7 +417,7 @@ Expected: Real reach number (e.g., 18673).
 
 **Step 1: Extract core functions from check_token_health.py**
 
-Read `/Users/anarchistsid/GenLab/Content Scraper/execution/check_token_health.py` and extract:
+Read `/Users/anarchistsid/GenLab/BlackboxBrief/execution/check_token_health.py` and extract:
 - `check_meta_token()` — Instagram/Facebook token validation
 - `check_youtube()` — YouTube OAuth token validation
 - `check_facebook()` — Facebook page token validation
@@ -454,7 +454,7 @@ Expected: 474+ tests pass (1 pre-existing fail allowed).
 
 **Step 1: Extract platform-agnostic fetching logic**
 
-From `/Users/anarchistsid/GenLab/Content Scraper/execution/fetch_insights.py`, extract:
+From `/Users/anarchistsid/GenLab/BlackboxBrief/execution/fetch_insights.py`, extract:
 - Instagram insights fetching (Graph API)
 - YouTube statistics fetching (Data API v3)
 - X/Twitter public_metrics fetching (API v2)
@@ -464,7 +464,7 @@ From `/Users/anarchistsid/GenLab/Content Scraper/execution/fetch_insights.py`, e
 
 Parameterize by `niche_id` so CriticalRush can import and use it.
 
-**Step 2: Create thin wrapper in Content Scraper**
+**Step 2: Create thin wrapper in BlackboxBrief**
 
 Replace `fetch_insights.py` content with:
 ```python
@@ -477,7 +477,7 @@ if __name__ == "__main__":
 **Step 3: Verify fetch_insights still works**
 
 ```bash
-cd "/Users/anarchistsid/GenLab/Content Scraper" && ~/.local/bin/uv run python execution/fetch_insights.py --dry-run
+cd "/Users/anarchistsid/GenLab/BlackboxBrief" && ~/.local/bin/uv run python execution/fetch_insights.py --dry-run
 ```
 
 Expected: Dry run completes without errors.
@@ -496,11 +496,11 @@ Same pattern as Task 10 — extract from `fetch_audience_metrics.py`, parameteri
 ### Task 12: Update CLAUDE.md and workspace docs
 
 **Files:**
-- Modify: `/Users/anarchistsid/GenLab/Content Scraper/CLAUDE.md` — remove dashboard/review_server references, update directory structure
+- Modify: `/Users/anarchistsid/GenLab/BlackboxBrief/CLAUDE.md` — remove dashboard/review_server references, update directory structure
 - Create: `/Users/anarchistsid/GenLab/dashboard/CLAUDE.md` — document the dashboard package
 - Modify: `/Users/anarchistsid/.claude/projects/-Users-anarchistsid-GenLab/memory/MEMORY.md` — update project structure
 
-**Step 1: Update Content Scraper CLAUDE.md directory structure**
+**Step 1: Update BlackboxBrief CLAUDE.md directory structure**
 
 Remove `dashboard/`, `execution/api/`, `execution/review_server.py` from the tree.
 Add note: "Dashboard lives at `GenLab/dashboard/` (shared workspace member)."
@@ -521,7 +521,7 @@ Update the "Project Structure" section to include the new dashboard member.
 - [ ] Dashboard loads in browser, all pages work (Mission Control, Analytics, Focus Review, Publishing Queue, Channel Health)
 - [ ] Analytics shows `data_status` per platform (no misleading zeros)
 - [ ] Channel Health shows 4/4 platforms (100% when all operational, no Postiz)
-- [ ] Content Scraper daily pipeline runs without import errors
+- [ ] BlackboxBrief daily pipeline runs without import errors
 - [ ] genlab-core tests pass (474+)
 - [ ] Dashboard frontend builds cleanly
 - [ ] `uv sync` resolves all workspace members

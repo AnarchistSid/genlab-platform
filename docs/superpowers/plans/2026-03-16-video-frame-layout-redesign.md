@@ -203,7 +203,7 @@ git commit -m "fix(rendering): skip text overlay when frame_compositor already b
 - Modify: `ClutchWire/config/visuals.yaml`
 - Modify: `SpliceReel/config/visuals.yaml`
 - Modify: `FrameDrift/config/visuals.yaml`
-- Also check: `CriticalRush/niches/gaming/config/visuals.yaml`, `Content Scraper/config/visuals.yaml`
+- Also check: `CriticalRush/niches/gaming/config/visuals.yaml`, `BlackboxBrief/config/visuals.yaml`
 
 - [ ] **Step 1: Update frame_layout section in all 5 configs**
 Update `top_bar.height`, `top_bar.logo_y`, `hook_text.font_size`, `layout_cases.native_portrait` to remove `fill_canvas`, update `hook_y` values. Match the new constants.

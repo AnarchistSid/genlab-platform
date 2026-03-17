@@ -1,6 +1,6 @@
 # Sprint 3: Single Canonical Publisher
 
-**Goal**: One publisher in genlab-core, used by all 5 niches via clean launchd plists. Content Scraper's publisher retired.
+**Goal**: One publisher in genlab-core, used by all 5 niches via clean launchd plists. BlackboxBrief's publisher retired.
 
 **Architecture**: ~300 LOC orchestrator that delegates to existing genlab-core infrastructure: `PublishGatekeeper` (gates), `get_client()` (platform registry), `DailyCapEnforcer` (caps), `niche_credentials` (per-niche tokens), `BacklogClient` (data access via StorageBackend).
 
@@ -77,7 +77,7 @@ Reads blueprint fields and constructs `PublishPayload` + platform-specific confi
 
 ## What Gets Retired
 
-`Content Scraper/execution/publish_all_platforms.py` (2,407 LOC) → moved to `DEPRECATED/`
+`BlackboxBrief/execution/publish_all_platforms.py` (2,407 LOC) → moved to `DEPRECATED/`
 
 ## 5 Canonical Plists
 
@@ -95,6 +95,6 @@ StartCalendarInterval: 06:30 UTC (12:00 IST)
 |---|---|
 | `genlab-core/src/genlab_core/publishing/publish_all_platforms.py` | NEW — canonical publisher |
 | `~/Library/LaunchAgents/com.genlab.{niche}-publisher.plist` × 5 | NEW — clean plists |
-| `Content Scraper/execution/publish_all_platforms.py` | DEPRECATED |
+| `BlackboxBrief/execution/publish_all_platforms.py` | DEPRECATED |
 | Old publisher plists | DEPRECATED |
 | `genlab-core/tests/publishing/test_publish_all_platforms.py` | NEW — tests |

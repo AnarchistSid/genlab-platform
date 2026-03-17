@@ -714,7 +714,7 @@ git commit -m "refactor(platforms): migrate postiz_client + platform_rules into 
 - Create: `genlab-core/src/genlab_core/platforms/instagram.py`
 - Test: `genlab-core/tests/platforms/test_instagram.py`
 
-**Reference:** Port logic from `Content Scraper/execution/publish_to_instagram.py` and `genlab-core/src/genlab_core/engagement/platform_clients/instagram.py`.
+**Reference:** Port logic from `BlackboxBrief/execution/publish_to_instagram.py` and `genlab-core/src/genlab_core/engagement/platform_clients/instagram.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -838,7 +838,7 @@ Expected: FAIL
 - [ ] **Step 3: Implement InstagramClient**
 
 Create `genlab-core/src/genlab_core/platforms/instagram.py`. Port logic from:
-- `Content Scraper/execution/publish_to_instagram.py` (reel + carousel publish)
+- `BlackboxBrief/execution/publish_to_instagram.py` (reel + carousel publish)
 - `genlab-core/src/genlab_core/engagement/platform_clients/instagram.py` (reply + like)
 
 Key implementation notes:
@@ -870,7 +870,7 @@ git commit -m "feat(platforms): add InstagramClient (publish, reply, like, healt
 - Create: `genlab-core/src/genlab_core/platforms/youtube.py`
 - Test: `genlab-core/tests/platforms/test_youtube.py`
 
-**Reference:** Port from `Content Scraper/execution/publish_youtube.py`, `execution/utils/youtube_client.py`, `engagement/platform_clients/youtube.py`, `analytics/youtube_analytics_client.py`.
+**Reference:** Port from `BlackboxBrief/execution/publish_youtube.py`, `execution/utils/youtube_client.py`, `engagement/platform_clients/youtube.py`, `analytics/youtube_analytics_client.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -910,7 +910,7 @@ git commit -m "feat(platforms): add YouTubeClient (publish, reply, like, metrics
 - Create: `genlab-core/src/genlab_core/platforms/x_twitter.py`
 - Test: `genlab-core/tests/platforms/test_x_twitter.py`
 
-**Reference:** Port from `Content Scraper/execution/publish_twitter.py`, `execution/utils/twitter_client.py`, `engagement/platform_clients/x_twitter.py`.
+**Reference:** Port from `BlackboxBrief/execution/publish_twitter.py`, `execution/utils/twitter_client.py`, `engagement/platform_clients/x_twitter.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -946,7 +946,7 @@ git commit -m "feat(platforms): add XTwitterClient (publish, reply, like, metric
 - Create: `genlab-core/src/genlab_core/platforms/facebook.py`
 - Test: `genlab-core/tests/platforms/test_facebook.py`
 
-**Reference:** Port from `Content Scraper/execution/publish_facebook.py`, `engagement/platform_clients/facebook.py`.
+**Reference:** Port from `BlackboxBrief/execution/publish_facebook.py`, `engagement/platform_clients/facebook.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -971,7 +971,7 @@ git commit -m "feat(platforms): add FacebookClient (publish, reply, metrics, hea
 - Create: `genlab-core/src/genlab_core/platforms/threads.py`
 - Test: `genlab-core/tests/platforms/test_threads.py`
 
-**Reference:** Port from `Content Scraper/execution/publish_threads.py`, `engagement/platform_clients/threads.py`.
+**Reference:** Port from `BlackboxBrief/execution/publish_threads.py`, `engagement/platform_clients/threads.py`.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -1945,8 +1945,8 @@ git commit -m "feat(dashboard): add scheduler API endpoints (status, pause, resu
 ### Task 20: Extend workflow state machine
 
 **Files:**
-- Modify: `Content Scraper/execution/utils/workflow_state_machine.py`
-- Test: `Content Scraper/tests/test_workflow_state_machine.py` (or write inline)
+- Modify: `BlackboxBrief/execution/utils/workflow_state_machine.py`
+- Test: `BlackboxBrief/tests/test_workflow_state_machine.py` (or write inline)
 
 - [ ] **Step 1: Write failing test**
 
@@ -1963,7 +1963,7 @@ def test_publishing_state_transitions():
 - [ ] **Step 2: Run test to verify it fails**
 - [ ] **Step 3: Add new states to ALLOWED_TRANSITIONS**
 
-Read `Content Scraper/execution/utils/workflow_state_machine.py`. Add:
+Read `BlackboxBrief/execution/utils/workflow_state_machine.py`. Add:
 
 ```python
 "SCHEDULED": {"PUBLISHING", "DELETED"},
@@ -1987,7 +1987,7 @@ git commit -m "feat(workflow): add PUBLISHING + PUBLISH_FAILED states to state m
 ### Task 21: Wire orchestrator to new platform clients + gatekeeper
 
 **Files:**
-- Modify: `Content Scraper/execution/publish_all_platforms.py`
+- Modify: `BlackboxBrief/execution/publish_all_platforms.py`
 
 This is the core swap. The 2006-line file gets significantly simplified:
 1. Import `PublishGatekeeper`, `dispatch_many`, `build_payload` from `genlab_core.platforms`
@@ -2024,9 +2024,9 @@ def build_payload(blueprint: dict, platform: str) -> PublishPayload:
     # Return PublishPayload with correct PlatformSpecific subtype
 ```
 
-- [ ] **Step 4: Run Content Scraper test suite**
+- [ ] **Step 4: Run BlackboxBrief test suite**
 
-Run: `uv run --package content-scraper pytest "Content Scraper/tests/" -x -q`
+Run: `uv run --package content-scraper pytest "BlackboxBrief/tests/" -x -q`
 Expected: All 1323 tests pass
 
 - [ ] **Step 5: Commit**
@@ -2081,7 +2081,7 @@ git commit -m "feat(engagement): wire comment_processor to unified platform clie
 ### Task 23: Wire token_health to HealthCheckable clients
 
 **Files:**
-- Modify: `scripts/token_health.py` (or `Content Scraper/execution/check_token_health.py`)
+- Modify: `scripts/token_health.py` (or `BlackboxBrief/execution/check_token_health.py`)
 
 - [ ] **Step 1: Add new path that iterates all HealthCheckable clients**
 
@@ -2126,7 +2126,7 @@ git commit -m "feat(token-health): wire to HealthCheckable platform clients"
 
 ```bash
 uv run --package genlab-core pytest genlab-core/tests/ -x -q &
-uv run --package content-scraper pytest "Content Scraper/tests/" -x -q &
+uv run --package content-scraper pytest "BlackboxBrief/tests/" -x -q &
 uv run --package criticalrush pytest CriticalRush/tests/ -x -q &
 uv run --package dashboard pytest dashboard/tests/ -x -q &
 wait
@@ -2148,17 +2148,17 @@ git commit -m "refactor: remove USE_NATIVE_CLIENTS feature flag, new platform cl
 
 **Files to delete** (per spec Section 1.9):
 
-- [ ] **Step 1: Delete old Content Scraper publisher files**
+- [ ] **Step 1: Delete old BlackboxBrief publisher files**
 
 ```bash
-git rm "Content Scraper/execution/publish_to_instagram.py"
-git rm "Content Scraper/execution/publish_youtube.py"
-git rm "Content Scraper/execution/publish_twitter.py"
-git rm "Content Scraper/execution/publish_facebook.py"
-git rm "Content Scraper/execution/publish_threads.py"
-git rm "Content Scraper/execution/publish_single.py"
-git rm "Content Scraper/execution/utils/twitter_client.py"
-git rm "Content Scraper/execution/utils/youtube_client.py"
+git rm "BlackboxBrief/execution/publish_to_instagram.py"
+git rm "BlackboxBrief/execution/publish_youtube.py"
+git rm "BlackboxBrief/execution/publish_twitter.py"
+git rm "BlackboxBrief/execution/publish_facebook.py"
+git rm "BlackboxBrief/execution/publish_threads.py"
+git rm "BlackboxBrief/execution/publish_single.py"
+git rm "BlackboxBrief/execution/utils/twitter_client.py"
+git rm "BlackboxBrief/execution/utils/youtube_client.py"
 ```
 
 - [ ] **Step 2: Delete old engagement platform_clients**
@@ -2213,7 +2213,7 @@ launchctl unload ~/Library/LaunchAgents/com.genlab.token-refresh.plist
 
 ```bash
 mkdir -p runbooks/deprecated
-mv "Content Scraper/runbooks/"*.plist runbooks/deprecated/
+mv "BlackboxBrief/runbooks/"*.plist runbooks/deprecated/
 mv genlab-core/runbooks/*.plist runbooks/deprecated/
 mv CriticalRush/runbooks/*.plist runbooks/deprecated/
 # Keep in git — rollback fallback
