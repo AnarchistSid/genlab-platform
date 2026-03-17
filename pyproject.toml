@@ -2,6 +2,11 @@
 members = [
     "genlab-core",
     "dashboard",
+    "BlackboxBrief",
+    "CriticalRush",
+    "ClutchWire",
+    "SpliceReel",
+    "FrameDrift",
 ]
 
 [tool.ruff]
