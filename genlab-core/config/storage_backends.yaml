@@ -6,7 +6,7 @@
 default_backend: sharepoint
 
 table_backends:
-  blueprints: sharepoint
+  blueprints: postgres
   stories: sharepoint
   assets: sharepoint
   templates: sharepoint
