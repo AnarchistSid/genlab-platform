@@ -444,7 +444,7 @@ class FrameCompositor:
                 # Source video scaled to fit canvas width (maintain AR), top-aligned
                 # so video is flush below the accent line — no gap between branding and content
                 f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 # Place video at y=656
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
                 # Logo scaled to 60px
@@ -468,7 +468,7 @@ class FrameCompositor:
             filtergraph = (
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
                 f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
                 f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
@@ -640,7 +640,7 @@ class FrameCompositor:
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
                 # Source video scaled to fit 1080x1080 (maintain AR), top-aligned
                 f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 # Place video below header (same y as landscape)
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
                 # Logo
@@ -662,7 +662,7 @@ class FrameCompositor:
             filtergraph = (
                 f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
                 f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
                 f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
                 f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
                 f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
