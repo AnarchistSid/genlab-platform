@@ -13,6 +13,12 @@ from genlab_core.pipeline.log_streamer import (
     remove_log_handler,
     read_recent_logs,
 )
+from genlab_core.pipeline.cli import (
+    run_pipeline,
+    run_multi,
+    VALID_NICHE_IDS,
+    NICHE_DIR_NAMES,
+)
 
 __all__ = [
     "GenericPipelineRunner",
@@ -26,4 +32,8 @@ __all__ = [
     "install_log_handler",
     "remove_log_handler",
     "read_recent_logs",
+    "run_pipeline",
+    "run_multi",
+    "VALID_NICHE_IDS",
+    "NICHE_DIR_NAMES",
 ]
