@@ -1,6 +1,7 @@
 [tool.uv.workspace]
 members = [
     "genlab-core",
+    "dashboard",
 ]
 
 [tool.ruff]
