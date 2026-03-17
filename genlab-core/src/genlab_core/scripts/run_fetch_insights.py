@@ -41,7 +41,7 @@ logger = logging.getLogger("genlab.fetch_insights")
 
 # Niche-to-env mapping — each channel's .env has platform credentials
 NICHE_ENV_DIRS: Dict[str, str] = {
-    "ai_creators": "Content Scraper",
+    "ai_creators": "Content Scraper"  # legacy folder name,
     "gaming": "CriticalRush",
     "sports": "ClutchWire",
     "movies": "SpliceReel",

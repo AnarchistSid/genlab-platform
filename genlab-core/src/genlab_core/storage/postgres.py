@@ -183,8 +183,13 @@ class PostgresBackend:
         password: str = "",
         min_size: int = 2,
         max_size: int = 10,
+        *,
+        dsn: str | None = None,
     ) -> None:
-        self._dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+        if dsn:
+            self._dsn = dsn
+        else:
+            self._dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
         self._min_size = min_size
         self._max_size = max_size
         self._pool = None
@@ -254,7 +259,7 @@ class PostgresBackend:
 
     # ── CREATE ──────────────────────────────────────────────────────
 
-    def create(self, table: str, record: Dict[str, Any]) -> str:
+    def create(self, table: str, record: Dict[str, Any], *, typecast: bool = False) -> str:
         """Create a record. Returns the new UUID record ID."""
         record_id = str(uuid.uuid4())
         cols, extra = self._split_fields(table, record)
@@ -311,6 +316,7 @@ class PostgresBackend:
         *,
         formula: str = "",
         niche_id: str = "",
+        max_records: int | None = None,
     ) -> List[Dict[str, Any]]:
         """Find records matching a formula filter with RLS niche isolation."""
         from genlab_core.storage.formula_sql import formula_to_sql
@@ -321,9 +327,6 @@ class PostgresBackend:
             pool = self._get_pool()
             async with pool.acquire() as conn:
                 async with conn.transaction():
-                    # Set niche_id for RLS policy evaluation.
-                    # SET LOCAL doesn't support parameterized queries,
-                    # so we use set_config() which is SQL-injection safe.
                     await conn.execute(
                         "SELECT set_config('app.niche_id', $1, true)",
                         niche_id or "",
@@ -332,10 +335,25 @@ class PostgresBackend:
                     if where_clause:
                         sql += f" WHERE {where_clause}"
                     sql += " ORDER BY created_at DESC"
+                    if max_records:
+                        sql += f" LIMIT {int(max_records)}"
                     rows = await conn.fetch(sql, *params)
                     return [self._row_to_record(dict(r)) for r in rows]
 
         return self._run(_do())
+
+    def all(
+        self,
+        table: str | None = None,
+        *,
+        formula: str = "",
+        niche_id: str = "",
+        max_records: int | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Alias for find() — matches GraphTableProxy.all() interface."""
+        if table is None:
+            raise ValueError("table is required for PostgresBackend.all()")
+        return self.find(table, formula=formula, niche_id=niche_id, max_records=max_records)
 
     # ── UPDATE ──────────────────────────────────────────────────────
 
@@ -344,6 +362,8 @@ class PostgresBackend:
         table: str,
         record_id: str,
         fields: Dict[str, Any],
+        *,
+        typecast: bool = False,
     ) -> None:
         """Update fields on an existing record."""
         cols, extra = self._split_fields(table, fields)
