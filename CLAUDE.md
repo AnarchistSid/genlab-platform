@@ -1,6 +1,6 @@
 # CLAUDE.md — Gen Lab
 # Authoritative context for every Claude Code session in this project.
-# Last updated: 2026-03-17 (Sprint 64 — architecture refactor)
+# Last updated: 2026-03-17 (Sprint 65 — upgrade sweep)
 
 ## MISSION — READ THIS FIRST
 
@@ -288,7 +288,19 @@ YouTube poll interval is 30 minutes (not 5) to conserve 10K daily API quota.
 
 ## KEY INFRASTRUCTURE
 
-### SharePoint Lists (Site: 4020953b-b622-4a33-a0ea-763386c6af24)
+### PostgreSQL (primary data store — Sprint 65)
+
+Local PostgreSQL database `genlab` with psycopg3 (`psycopg[binary,pool]>=3.2`).
+- **ConnectionPool** from `psycopg_pool` (replaces psycopg2 ThreadedConnectionPool)
+- **dict_row** factory (replaces RealDictCursor)
+- **Pipeline mode** for batch_create (30-50% faster bulk inserts)
+- 55 indexes across all tables
+- Alembic migrations in `genlab-core/migrations/`
+- `GENLAB_USE_POSTGRES=true` + `DATABASE_URL` in `.env`
+- RLS niche isolation via `SET LOCAL app.niche_id`
+
+### SharePoint Lists (LEGACY — kept as fallback, not actively used)
+### SharePoint Site: 4020953b-b622-4a33-a0ea-763386c6af24
 
 | List | ID | Purpose |
 |---|---|---|
@@ -383,9 +395,22 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 ## CURRENT SPRINT STATUS (as of 2026-03-17)
 
-Completed: Sprints 1–64
+Completed: Sprints 1–65
 - Sprint 62: Dashboard overhaul, FrameCompositor video layout, schedule board
 - Sprint 63: Audit remediation, engagement reply clients, credential prefixes, SaaS tools
 - Sprint 64: Architecture refactor — base strategies, unified pipeline CLI, BB client migration
+- Sprint 65: Upgrade sweep — psycopg3, dep cleanup, CI, plist consolidation, BB extraction
 
-Test baseline: CW 136, SR 134, FD 143, Dashboard 238, genlab-core 1,875+ — all green
+Sprint 65 highlights:
+- **psycopg2 → psycopg3**: ConnectionPool, dict_row, pipeline mode for batch ops
+- **17 packages dropped** from lockfile (asyncpg, sqlalchemy, msgraph-sdk, azure-identity)
+- **LaunchAgents 57 → 33** (insights 20→4, engagement pollers 10→2)
+- **GitHub Actions CI**: lint + test on push/PR
+- **BB extraction**: 4,750 lines removed (3 platform shims + 12 orphan scripts)
+- **Pre-commit hooks**: ruff lint/format + standard checks
+- **Prefect flows**: daily-pipeline, publish-all, collect-insights, token-health
+- **Docker Compose**: postgres + redis + dashboard
+- **Structured logging**: configure_logging() wired into pipeline CLI + dashboard + pollers
+- **Log aggregator**: `make logs`, `make logs-errors`, `make logs-stats`
+
+Test baseline: genlab-core 1,981, BB 1,361, CW 136, SR 134, FD 143, Dashboard 235 — all green
