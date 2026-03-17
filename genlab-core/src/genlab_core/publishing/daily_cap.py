@@ -158,7 +158,9 @@ class DailyCapEnforcer:
         counts: dict[str, int] = {}
 
         try:
-            items = self._client.publishing_analytics.all()
+            items = self._client.publishing_analytics.all(
+                formula=f"{{published_at}}>='{today_str}T00:00:00Z'"
+            )
 
             for item in items:
                 fields = item.get("fields", item)

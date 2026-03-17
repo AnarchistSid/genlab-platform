@@ -95,10 +95,12 @@ class PerformanceLearner:
                 load_all_arms_extended,
                 save_arm,
             )
-            from genlab_core.learning.reward_shaper import compute_reward
+            from genlab_core.learning.reward_shaper import RewardShaper
         except ImportError:
             logger.warning("[PerformanceLearner] Learning modules unavailable, skipping")
             return context
+
+        reward_shaper = RewardShaper()
 
         # Check if this niche has bandit infrastructure
         list_name = BANDIT_LIST_NAMES.get(niche_id)
@@ -148,7 +150,17 @@ class PerformanceLearner:
             # Compute rewards and update arms
             for story in with_engagement:
                 try:
-                    reward = compute_reward(story, niche_config)
+                    # Extract per-platform metrics and compute reward
+                    # RewardShaper.compute_reward(platform, metrics)
+                    engagement = story.get("engagement", {})
+                    _platform = ""
+                    _metrics: dict = {}
+                    for plat, plat_data in engagement.items():
+                        if isinstance(plat_data, dict) and plat_data.get("metrics"):
+                            _platform = plat
+                            _metrics = plat_data["metrics"]
+                            break
+                    reward = reward_shaper.compute_reward(_platform, _metrics)
                     arm_ids = self._extract_arm_ids(story)
 
                     # Build context vector for LinUCB (once per story)
@@ -256,10 +268,17 @@ class PerformanceLearner:
 
     @staticmethod
     def _get_proxy(niche_id: str, list_name: str):
-        """Get a GraphTableProxy for the bandit arms list."""
+        """Get a GraphTableProxy for the bandit arms list via BacklogClient."""
         try:
-            from genlab_core.http.graph_proxy import GraphTableProxy
-            return GraphTableProxy(list_name=list_name)
+            from genlab_core.http.backlog_client import BacklogClient
+            client = BacklogClient()
+            proxy = client.bandit_arms
+            if proxy is None:
+                logger.error(
+                    "[PerformanceLearner] BacklogClient has no bandit_arms proxy"
+                )
+                return None
+            return proxy
         except Exception:
             logger.exception("[PerformanceLearner] Proxy creation failed")
             return None

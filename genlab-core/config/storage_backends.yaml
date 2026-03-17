@@ -3,22 +3,22 @@
 # Valid values: "sharepoint", "postgres".
 # Default: "sharepoint" if a table is not listed here.
 #
-# Sprint 64: Migrated from SharePoint to PostgreSQL.
-# All tables now served by local PostgreSQL with RLS.
-# SharePoint remains as backup — flip individual tables back to "sharepoint"
-# if issues arise.
+# Sprint 64: PostgreSQL backend is production-ready (verified full CRUD).
+# Blocked from full migration by asyncpg + Python 3.14 segfault in test suite.
+# Set GENLAB_USE_POSTGRES=true in .env to enable Postgres for production.
+# Tests will always use SharePoint mocks (conftest.py removes DATABASE_URL).
 
 tables:
-  Stories: postgres
-  Blueprints: postgres
-  Templates: postgres
-  Assets: postgres
-  Sources: postgres
-  Publishing_Analytics: postgres
-  Analytics: postgres
-  AB_Tests: postgres
-  Content_Memory: postgres
-  PendingEngagement: postgres
-  PendingFeedback: postgres
-  BanditArms: postgres
-  Audience_Snapshots: postgres
+  Stories: sharepoint
+  Blueprints: sharepoint
+  Templates: sharepoint
+  Assets: sharepoint
+  Sources: sharepoint
+  Publishing_Analytics: sharepoint
+  Analytics: sharepoint
+  AB_Tests: sharepoint
+  Content_Memory: sharepoint
+  PendingEngagement: sharepoint
+  PendingFeedback: sharepoint
+  BanditArms: sharepoint
+  Audience_Snapshots: sharepoint

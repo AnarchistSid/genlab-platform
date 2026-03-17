@@ -103,20 +103,32 @@ class PidLock:
         self.path = base / f"publisher-{niche_id}.lock"
 
     def acquire(self) -> bool:
-        if self.path.exists():
+        try:
+            fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            # Lock file exists — check if holder is still alive
             try:
                 pid = int(self.path.read_text().strip())
                 os.kill(pid, 0)  # signal 0 = check if alive
                 return False  # process is alive — lock held
             except (ValueError, ProcessLookupError, PermissionError):
-                # Stale lock or unreadable — remove and acquire
+                # Stale lock or unreadable — remove and retry once
                 logger.info("Removing stale lock file: %s", self.path)
                 self.path.unlink(missing_ok=True)
             except OSError:
                 # Other OS errors — treat as stale
                 self.path.unlink(missing_ok=True)
-        self.path.write_text(str(os.getpid()))
-        return True
+            # Retry atomic create after removing stale lock
+            try:
+                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return True
+            except FileExistsError:
+                return False  # Another process won the race
 
     def release(self) -> None:
         self.path.unlink(missing_ok=True)

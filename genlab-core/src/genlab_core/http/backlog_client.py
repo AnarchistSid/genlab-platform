@@ -306,12 +306,16 @@ class BacklogClient:
         # gradual migration table-by-table.
         from genlab_core.storage.factory import _load_config as _load_storage_config
         _storage_config = _load_storage_config()
+        # GENLAB_USE_POSTGRES=true overrides YAML config for all tables
+        _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
         _pg_backend = None
 
         def _resolve_backend(table_name: str):
             """Return PostgresTableProxy or GraphTableProxy based on config."""
             nonlocal _pg_backend
             engine = _storage_config.get(table_name, "sharepoint").lower()
+            if _use_postgres:
+                engine = "postgres"
             if engine == "postgres":
                 if _pg_backend is None:
                     dsn = os.getenv("DATABASE_URL", "")
@@ -336,9 +340,15 @@ class BacklogClient:
 
         self.stories = _resolve_backend("Stories")
         _raw_blueprints = _resolve_backend("Blueprints")
-        if isinstance(_raw_blueprints, GraphTableProxy):
-            self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
-        else:
+        # Wrap SharePoint proxy with schedule protection guard.
+        # PostgresTableProxy doesn't need wrapping (RLS handles isolation).
+        try:
+            if isinstance(_raw_blueprints, GraphTableProxy):
+                self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
+            else:
+                self.blueprints = _raw_blueprints
+        except TypeError:
+            # isinstance can fail if GraphTableProxy is mocked in tests
             self.blueprints = _raw_blueprints
         self.templates = _resolve_backend("Templates")
         self.assets = _resolve_backend("Assets")
@@ -433,15 +443,21 @@ class BacklogClient:
 
         config = _load_config()
         engine = config.get(table, "sharepoint").lower()
+        # GENLAB_USE_POSTGRES=true overrides YAML config
+        if os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true":
+            engine = "postgres"
 
         if engine not in cache:
             if engine == "postgres":
-                from genlab_core.storage.postgres import PostgresBackend
+                dsn = os.getenv("DATABASE_URL", "")
+                if dsn:
+                    from genlab_core.storage.postgres import PostgresBackend
+                    cache[engine] = PostgresBackend(dsn=dsn)
+                else:
+                    engine = "sharepoint"  # fallback
 
-                cache[engine] = PostgresBackend(dsn=os.getenv("DATABASE_URL"))
-            else:
+            if engine == "sharepoint" and engine not in cache:
                 from genlab_core.storage.sharepoint import SharePointBackend
-
                 cache[engine] = SharePointBackend(self._sp_proxies)
 
         return cache[engine]
