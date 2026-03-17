@@ -1,0 +1,55 @@
+{
+  "items": [
+    {
+      "id": "dQw4w9WgXcQ",
+      "snippet": {
+        "title": "OpenAI just released GPT-5 and it changes everything",
+        "channelTitle": "AI Creator Hub",
+        "publishedAt": "2026-03-16T14:00:00Z",
+        "description": "The biggest AI launch of 2026 is here. GPT-5 can reason, code, and create videos. Full breakdown of everything announced at the OpenAI event."
+      },
+      "statistics": {
+        "viewCount": "2500000",
+        "likeCount": "120000",
+        "commentCount": "8500"
+      },
+      "contentDetails": {
+        "duration": "PT2M30S"
+      }
+    },
+    {
+      "id": "abc123XYZ99",
+      "snippet": {
+        "title": "Epic clutch play wins championship in overtime",
+        "channelTitle": "Sports Highlights Daily",
+        "publishedAt": "2026-03-16T18:30:00Z",
+        "description": "The most incredible buzzer-beater of the year. Down by 3 with 2 seconds left, this player hit the shot of a lifetime."
+      },
+      "statistics": {
+        "viewCount": "1800000",
+        "likeCount": "95000",
+        "commentCount": "6200"
+      },
+      "contentDetails": {
+        "duration": "PT1M45S"
+      }
+    },
+    {
+      "id": "def456GHI88",
+      "snippet": {
+        "title": "New anime trailer drops — fans are losing it",
+        "channelTitle": "Anime Trending",
+        "publishedAt": "2026-03-16T09:15:00Z",
+        "description": "MAPPA just dropped the most stunning trailer of 2026. This new season looks absolutely incredible with ufotable-level animation quality."
+      },
+      "statistics": {
+        "viewCount": "3200000",
+        "likeCount": "210000",
+        "commentCount": "15000"
+      },
+      "contentDetails": {
+        "duration": "PT3M10S"
+      }
+    }
+  ]
+}
