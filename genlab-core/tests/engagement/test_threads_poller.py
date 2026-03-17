@@ -15,9 +15,10 @@ class TestThreadsPollingConstant:
     def test_threads_poll_interval_is_10_minutes(self):
         assert THREADS_POLL_INTERVAL == 600
 
-    def test_threads_polls_less_frequently_than_youtube(self):
+    def test_youtube_polls_less_frequently_than_threads(self):
         from genlab_core.engagement.poller import YOUTUBE_POLL_INTERVAL
-        assert THREADS_POLL_INTERVAL > YOUTUBE_POLL_INTERVAL
+        # YouTube polls less often (30min) to conserve quota
+        assert YOUTUBE_POLL_INTERVAL > THREADS_POLL_INTERVAL
 
 
 class TestThreadsPollerFiltersOwnReplies:

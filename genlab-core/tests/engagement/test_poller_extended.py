@@ -47,14 +47,15 @@ def _set_api_key(monkeypatch):
 
 
 class TestPollingConstants:
-    def test_youtube_poll_interval_is_5_minutes(self):
-        assert YOUTUBE_POLL_INTERVAL == 300
+    def test_youtube_poll_interval_is_30_minutes(self):
+        assert YOUTUBE_POLL_INTERVAL == 1800  # Reduced from 300 to save quota
 
     def test_twitter_poll_interval_is_15_minutes(self):
         assert TWITTER_POLL_INTERVAL == 900
 
-    def test_twitter_polls_less_frequently_than_youtube(self):
-        assert TWITTER_POLL_INTERVAL > YOUTUBE_POLL_INTERVAL
+    def test_youtube_polls_less_frequently_than_twitter(self):
+        # YouTube polls less often to conserve 10K daily quota
+        assert YOUTUBE_POLL_INTERVAL > TWITTER_POLL_INTERVAL
 
 
 class TestYouTubePollerParams:
