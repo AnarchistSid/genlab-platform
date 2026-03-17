@@ -805,3 +805,105 @@ def reencode_for_cdn(
         current_kbps = max(int(current_kbps / overshoot * 0.85), MIN_BITRATE_KBPS)
 
     return str(out_path)
+
+
+# ── Compilation shims (used by CriticalRush gaming render) ──────────────────
+
+
+def normalize_clip(
+    input_path: str,
+    output_path: str,
+    start: float = 0,
+    end: float | None = None,
+    target_width: int = 1080,
+    target_height: int = 1920,
+    target_fps: int = 30,
+    mode: str = "pillarbox",
+) -> bool:
+    """Normalize a clip to target resolution/fps with optional trim.
+
+    Used by CriticalRush's compilation renderer. Wraps trim + reencode.
+    """
+    from genlab_core.media.ffmpeg import get_ffmpeg_binary
+
+    ffmpeg = get_ffmpeg_binary()
+    cmd = [ffmpeg, "-y"]
+    if start > 0:
+        cmd += ["-ss", str(start)]
+    cmd += ["-i", input_path]
+    if end is not None and end > start:
+        cmd += ["-t", str(end - start)]
+
+    # Scale to fit target, pad with black (pillarbox/letterbox)
+    vf = (
+        f"scale={target_width}:{target_height}"
+        f":force_original_aspect_ratio=decrease,"
+        f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
+    )
+    cmd += [
+        "-vf", vf,
+        "-r", str(target_fps),
+        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def concat_with_transitions(
+    clip_paths: list[str],
+    output_path: str,
+    transitions: list[dict] | None = None,
+    temp_dir: str | None = None,
+) -> bool:
+    """Concatenate clips with optional transitions. Falls back to simple concat."""
+    # For now, ignore transitions and do a simple concat
+    return concat(clip_paths, output_path, temp_dir=temp_dir)
+
+
+def add_text_overlay(
+    input_path: str,
+    output_path: str,
+    overlays: list[dict] | None = None,
+) -> bool:
+    """Burn text overlays onto a video. Used by compilation renderer."""
+    if not overlays:
+        import shutil
+        shutil.copy2(input_path, output_path)
+        return True
+
+    from genlab_core.media.ffmpeg import get_ffmpeg_binary
+
+    ffmpeg = get_ffmpeg_binary()
+    # Build drawtext filter chain
+    filters = []
+    for i, ov in enumerate(overlays):
+        text = escape_drawtext(ov.get("text", ""))
+        x = ov.get("x", "(w-text_w)/2")
+        y = ov.get("y", 50)
+        size = ov.get("fontsize", 36)
+        filters.append(
+            f"drawtext=text='{text}':fontsize={size}:fontcolor=white"
+            f":x={x}:y={y}:enable='between(t,{ov.get('start', 0)},{ov.get('end', 9999)})'"
+            f":shadowcolor=black@0.5:shadowx=2:shadowy=2"
+        )
+
+    vf = ",".join(filters) if filters else "null"
+    cmd = [
+        ffmpeg, "-y", "-i", input_path,
+        "-vf", vf,
+        "-c:a", "copy",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
