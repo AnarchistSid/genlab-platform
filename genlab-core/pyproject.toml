@@ -12,6 +12,8 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pyyaml>=6.0",
     "structlog>=24.1",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
