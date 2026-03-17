@@ -93,7 +93,13 @@ class BaseHookStrategy(HookStrategy):
         last_space = truncated.rfind(" ")
         if last_space > max_chars // 2:
             truncated = truncated[:last_space]
-        return truncated.rstrip(" .,!?-:")
+        result = truncated.rstrip(" .,!?-:")
+        # Strip trailing conjunctions/prepositions that create incomplete sentences
+        for suffix in (" and", " or", " but", " the", " a", " an", " is", " are", " in", " of", " to", " for", " with"):
+            if result.lower().endswith(suffix):
+                result = result[: -len(suffix)].rstrip(" .,!?-:")
+                break
+        return result
 
     def _generate_hook(self, story: dict, used_hooks: set[str] | None = None) -> str:
         """Generate a hook for a single story.
