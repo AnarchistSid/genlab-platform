@@ -48,10 +48,10 @@ Upgrade to Basic ($200/mo) and:
 
 ## Files to Modify (if disabling)
 
-1. `Content Scraper/config/publishing.yaml` — remove "twitter" from enabled_platforms
+1. `BlackboxBrief/config/publishing.yaml` — remove "twitter" from enabled_platforms
 2. `CriticalRush/niches/gaming/config/publishing.yaml` — same
 3. `genlab-core/tools/credential_check.py` — move X to OPTIONAL_PLATFORMS
 4. `genlab-core/engagement/poller.py` — remove `poll_twitter_mentions()`
-5. Tests: `Content Scraper/tests/test_publish_twitter.py` — mark @skip
+5. Tests: `BlackboxBrief/tests/test_publish_twitter.py` — mark @skip
 
 **Status: DISABLED (Sprint 30) — decision committed**

@@ -26,13 +26,13 @@
 
 | Source | Destination |
 |--------|-------------|
-| `Content Scraper/dashboard/` | `GenLab/dashboard/frontend/` |
-| `Content Scraper/execution/review_server.py` | `GenLab/dashboard/server/review_server.py` |
-| `Content Scraper/execution/api/` | `GenLab/dashboard/server/api/` |
-| `Content Scraper/core/publishing_queue.py` | `GenLab/dashboard/server/core/publishing_queue.py` |
-| `Content Scraper/runbooks/review_server_wrapper.sh` | `GenLab/dashboard/runbooks/review_server_wrapper.sh` |
+| `BlackboxBrief/dashboard/` | `GenLab/dashboard/frontend/` |
+| `BlackboxBrief/execution/review_server.py` | `GenLab/dashboard/server/review_server.py` |
+| `BlackboxBrief/execution/api/` | `GenLab/dashboard/server/api/` |
+| `BlackboxBrief/core/publishing_queue.py` | `GenLab/dashboard/server/core/publishing_queue.py` |
+| `BlackboxBrief/runbooks/review_server_wrapper.sh` | `GenLab/dashboard/runbooks/review_server_wrapper.sh` |
 
-### What Stays in Content Scraper
+### What Stays in BlackboxBrief
 - All 60 execution scripts (fetch, rank, compose, render, publish)
 - All utils, configs, directives, schemas, assets, inspo_library
 - Channel-specific runbooks (daily_intel.sh, orchestrator.sh, publisher_wrapper.sh)
@@ -51,22 +51,22 @@
 ### New Modules
 
 #### `genlab_core.engagement.analytics_poller`
-Extracted from `Content Scraper/execution/fetch_insights.py` (500 LOC).
+Extracted from `BlackboxBrief/execution/fetch_insights.py` (500 LOC).
 Multi-platform engagement fetching (IG Graph API, YT Data API, X API v2, FB Graph API).
 Multi-window strategy: FRESH (6-48h), WARM (2-7d), COLD (7-30d).
 Parameterized by niche_id. Writes to Analytics Microsoft Lists table.
 **Unblocks CriticalRush self-learning loop.**
 
 #### `genlab_core.engagement.audience_poller`
-Extracted from `Content Scraper/execution/fetch_audience_metrics.py` (200 LOC).
+Extracted from `BlackboxBrief/execution/fetch_audience_metrics.py` (200 LOC).
 Daily follower/audience snapshots per platform.
 
 #### `genlab_core.platform.token_health`
-Extracted from `Content Scraper/execution/check_token_health.py` (300 LOC).
+Extracted from `BlackboxBrief/execution/check_token_health.py` (300 LOC).
 Pre-flight token validation for all platforms.
 Fail-fast behavior for cron pipelines.
 
-### Adoption of Existing genlab-core Modules by Content Scraper
+### Adoption of Existing genlab-core Modules by BlackboxBrief
 - `genlab_core.platform.platform_rules` — replace hardcoded rules in adapt_for_platforms.py
 - `genlab_core.learning.reward_shaper` — replace custom reward computation
 
@@ -76,7 +76,7 @@ Fail-fast behavior for cron pipelines.
 
 ```
 GenLab/
-  pyproject.toml              # workspace root (members: genlab-core, dashboard, Content Scraper, CriticalRush)
+  pyproject.toml              # workspace root (members: genlab-core, dashboard, BlackboxBrief, CriticalRush)
   genlab-core/                # shared library
     src/genlab_core/
       engagement/             # NEW
@@ -97,7 +97,7 @@ GenLab/
     runbooks/
       review_server_wrapper.sh
     pyproject.toml
-  Content Scraper/            # Blackbox Brief channel ONLY
+  BlackboxBrief/            # Blackbox Brief channel ONLY
     execution/                # BB-specific scripts
     config/
     directives/

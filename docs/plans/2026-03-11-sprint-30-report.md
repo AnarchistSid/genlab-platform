@@ -95,7 +95,7 @@ Current architecture is production-ready for **single user/organization** but re
 
 | Hash | Repo | Description |
 |------|------|-------------|
-| `0a2ef72` | Content Scraper | fix: stale-file filter uses `_has_local_video_file()` |
+| `0a2ef72` | BlackboxBrief | fix: stale-file filter uses `_has_local_video_file()` |
 | `b82987b` | Dashboard | fix: replace async Graph SDK with sync REST API for queue |
 
 ## What's Next (Sprint 31)

@@ -56,7 +56,7 @@ Go to: https://developers.facebook.com/apps/2203397347132949/settings/basic/
 
 1. Copy "App Secret" from: Settings > Basic > App Secret (click Show)
 
-2. Add to Content Scraper `.env`:
+2. Add to BlackboxBrief `.env`:
    ```
    META_APP_SECRET=<your-app-secret>
    ```

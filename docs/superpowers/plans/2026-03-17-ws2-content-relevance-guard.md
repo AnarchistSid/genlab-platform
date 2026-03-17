@@ -185,7 +185,7 @@ keywords. Configurable threshold per niche via sources.yaml content_filter."
 - Modify: `ClutchWire/config/sources.yaml`
 - Modify: `SpliceReel/config/sources.yaml`
 - Modify: `CriticalRush/niches/gaming/config/sources.yaml`
-- Modify: `Content Scraper/config/sources.yaml`
+- Modify: `BlackboxBrief/config/sources.yaml`
 
 - [ ] **Step 1: Wire RelevanceFilter into TrendingVideoFetcher**
 
@@ -358,7 +358,7 @@ content_filter:
     - asmr eating
 ```
 
-Content Scraper (ai_creators):
+BlackboxBrief (ai_creators):
 ```yaml
 content_filter:
   relevance_threshold: 0.20
@@ -397,7 +397,7 @@ cd /Users/anarchistsid/GenLab && uv run --package genlab-core pytest genlab-core
 git add genlab-core/src/genlab_core/media/trending_video_fetcher.py \
   FrameDrift/config/sources.yaml ClutchWire/config/sources.yaml \
   SpliceReel/config/sources.yaml CriticalRush/niches/gaming/config/sources.yaml \
-  "Content Scraper/config/sources.yaml"
+  "BlackboxBrief/config/sources.yaml"
 git commit -m "feat(quality): wire RelevanceFilter into TrendingVideoFetcher + add niche configs
 
 Each niche now has content_filter in sources.yaml with positive/negative

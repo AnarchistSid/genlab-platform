@@ -386,6 +386,11 @@ class BacklogClient:
         except (ValueError, KeyError):
             self.content_memory = None
 
+        try:
+            self.monetisation_progress = _resolve_backend("MonetisationProgress")
+        except (ValueError, KeyError):
+            self.monetisation_progress = None
+
         # ── Storage backend routing ──────────────────────────────────
         # Build proxy mapping for SharePointBackend.  Use the
         # ScheduleGuardedProxy for Blueprints so schedule protection
@@ -406,6 +411,7 @@ class BacklogClient:
             ("PendingFeedback", self.pending_feedback),
             ("BanditArms", self.bandit_arms),
             ("Content_Memory", self.content_memory),
+            ("MonetisationProgress", self.monetisation_progress),
         ]:
             if attr is not None:
                 self._sp_proxies[name] = attr

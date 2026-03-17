@@ -9,7 +9,7 @@
 ## Track Results
 
 ### Track A: Commit Hygiene — COMPLETE
-- Committed 539 files across 9 repos (Content Scraper, CriticalRush, genlab-core, dashboard, ClutchWire, SpliceReel, FrameDrift, scripts, root)
+- Committed 539 files across 9 repos (BlackboxBrief, CriticalRush, genlab-core, dashboard, ClutchWire, SpliceReel, FrameDrift, scripts, root)
 - All repos verified clean (0 uncommitted)
 
 ### Track B: BB 0 Blueprints — COMPLETE
@@ -23,7 +23,7 @@
 - **Movies (SpliceReel):** Same pattern — dedup + 60-char cap + cross-category fallback
 - **Anime (FrameDrift):** Same pattern + updated test assertion for ellipsis
 - **Gaming (CriticalRush):** Tightened `MAX_HOOK_LENGTH` from 150→60, updated LLM prompt (max 8 words/60 chars), added post-LLM 60-char cap + cross-story dedup
-- **BB (Content Scraper):** Added cross-story dedup to `BBHookStrategy` (BB already had per-variant dedup but not cross-story)
+- **BB (BlackboxBrief):** Added cross-story dedup to `BBHookStrategy` (BB already had per-variant dedup but not cross-story)
 - **Tests:** 9 new dedup tests across 3 channels (3 per channel), all passing
 
 ### Track D: Publishing_Analytics Writes — ALREADY WIRED
@@ -31,7 +31,7 @@
 - No code changes needed
 
 ### Track E: BanditArms List ID — COMPLETE
-- Added `BanditArms` entry to `Content Scraper/config/lists_config.yaml` with list_id `b361467c-876d-427e-becd-8718f476fcc6`
+- Added `BanditArms` entry to `BlackboxBrief/config/lists_config.yaml` with list_id `b361467c-876d-427e-becd-8718f476fcc6`
 
 ### Track F: Fix Test Failures — COMPLETE
 - **hypothesis dependency:** Added to genlab-core `dependency-groups/dev`. 16 property-based tests now pass.
@@ -72,7 +72,7 @@
 | ClutchWire | 99 | 3 | Pre-existing: publishing_windows config (3) |
 | SpliceReel | 107 | 0 | Clean |
 | FrameDrift | 111 | 0 | Clean (was 1, fixed in Track C) |
-| Content Scraper | 1400 | 0 | Clean |
+| BlackboxBrief | 1400 | 0 | Clean |
 | Dashboard | 203 | 1 | Pre-existing: YouTube chunk retry (1) |
 | **Total** | **3313** | **9** | All 9 failures pre-existing |
 
@@ -82,15 +82,15 @@
 
 | Repo | Commit | Track | Message |
 |------|--------|-------|---------|
-| Content Scraper | 174a0e0 | B | fix(config): enable company_demo_reels in content_mix.yaml |
+| BlackboxBrief | 174a0e0 | B | fix(config): enable company_demo_reels in content_mix.yaml |
 | ClutchWire | f921c3c | C | fix(hooks): add cross-story dedup, 60-char cap, cross-category fallback |
 | SpliceReel | ceb58cd | C | fix(hooks): add cross-story dedup, 60-char cap, cross-category fallback |
 | FrameDrift | b4cff38 | C | fix(hooks): add cross-story dedup, 60-char cap, cross-category fallback |
 | CriticalRush | c59f3cd | C | fix(hooks): tighten gaming hook cap to 60 chars, add cross-story dedup |
-| Content Scraper | e75233d | C | fix(hooks): add cross-story dedup to BB hook strategy |
-| Content Scraper | fb7f2f8 | E | feat(config): add BanditArms list_id to lists_config.yaml |
+| BlackboxBrief | e75233d | C | fix(hooks): add cross-story dedup to BB hook strategy |
+| BlackboxBrief | fb7f2f8 | E | feat(config): add BanditArms list_id to lists_config.yaml |
 | Dashboard | 7b299fa | F | fix(tests): patch SyncBacklogClient instead of BacklogClient in tests |
 | genlab-core | 851ef45 | F | fix(deps): add hypothesis to dev dependency group |
 | Root | 9cf4757 | F | chore: update uv.lock after adding hypothesis |
-| Content Scraper | 989445f | G | fix(video): re-tag SVM output from bt470bg to bt709 color space |
-| Content Scraper | 829ea15 | J | feat(cost): add llm_cost_usd to run reports |
+| BlackboxBrief | 989445f | G | fix(video): re-tag SVM output from bt470bg to bt709 color space |
+| BlackboxBrief | 829ea15 | J | feat(cost): add llm_cost_usd to run reports |

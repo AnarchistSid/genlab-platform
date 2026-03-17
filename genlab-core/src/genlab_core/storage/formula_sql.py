@@ -72,10 +72,29 @@ def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
         quoted_field = _quote_reserved(field)
         return f"{quoted_field} = ${param_idx[0]}"
 
+    def _replace_comparison(match: re.Match) -> str:
+        """Handle {field}>=, {field}<=, {field}>, {field}< operators."""
+        field = match.group(1)
+        op = match.group(2)
+        value = match.group(3)
+        param_idx[0] += 1
+        params.append(value)
+        quoted_field = _quote_reserved(field)
+        return f"{quoted_field} {op} ${param_idx[0]}"
+
     def _replace_blank(match: re.Match) -> str:
         field = match.group(1)
         quoted_field = _quote_reserved(field)
         return f"({quoted_field} IS NULL OR {quoted_field} = '')"
+
+    def _replace_search(match: re.Match) -> str:
+        """SEARCH('needle', {field}) → field LIKE '%needle%'"""
+        needle = match.group(1)
+        field = match.group(2)
+        param_idx[0] += 1
+        params.append(f"%{needle}%")
+        quoted_field = _quote_reserved(field)
+        return f"{quoted_field} LIKE ${param_idx[0]}"
 
     def _replace_datestr(match: re.Match) -> str:
         """DATESTR({field})='2026-03-17' → field::date = '2026-03-17'"""
@@ -86,11 +105,17 @@ def formula_to_sql(formula: Optional[str]) -> tuple[str, list[str]]:
         quoted_field = _quote_reserved(field)
         return f"{quoted_field}::date = ${param_idx[0]}::date"
 
+    # Handle SEARCH('needle', {field}) — translate to LIKE
+    result = re.sub(r"SEARCH\('([^']*)',\s*\{(\w+)\}\)", _replace_search, formula)
+
     # Handle DATESTR({field})='value' before general field='value'
-    result = re.sub(r"DATESTR\(\{(\w+)\}\)='([^']*)'", _replace_datestr, formula)
+    result = re.sub(r"DATESTR\(\{(\w+)\}\)='([^']*)'", _replace_datestr, result)
 
     # Handle {field}=BLANK()
     result = re.sub(r"\{(\w+)\}=BLANK\(\)", _replace_blank, result)
+
+    # Handle {field}>=, <=, >, < comparisons (before = to avoid partial match)
+    result = re.sub(r"\{(\w+)\}(>=|<=|>|<)'([^']*)'", _replace_comparison, result)
 
     # Replace all {field}='value' patterns with parameterized expressions
     result = re.sub(r"\{(\w+)\}='([^']*)'", _replace_expr, result)

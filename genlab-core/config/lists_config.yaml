@@ -34,3 +34,6 @@ PendingEngagement:
 PendingFeedback:
   column_count: 16
   list_id: 95b41fc0-36e2-4d1d-a870-21f46c75d423
+MonetisationProgress:
+  column_count: 12
+  list_id: 1a464f5e-fc95-4597-84ab-3fe6e7f4274a

@@ -123,7 +123,7 @@ Add `rejected_videos` list to run_report.json with title, score, and rejection r
 | `ClutchWire/config/sources.yaml` | Add content_filter section |
 | `SpliceReel/config/sources.yaml` | Add content_filter section |
 | `CriticalRush/niches/gaming/config/sources.yaml` | Add content_filter section |
-| `Content Scraper/config/sources.yaml` | Add content_filter section |
+| `BlackboxBrief/config/sources.yaml` | Add content_filter section |
 | `genlab-core/tests/media/test_relevance_filter.py` | NEW — unit tests |
 
 ## Validation

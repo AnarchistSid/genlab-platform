@@ -1,11 +1,11 @@
 # R6: sys.path Cleanup
 
-**Goal**: Eliminate 133 `sys.path.insert` hacks in Content Scraper by using proper package imports.
+**Goal**: Eliminate 133 `sys.path.insert` hacks in BlackboxBrief by using proper package imports.
 **Effort**: ~4h
 
 ## Problem
 
-133 `sys.path.insert(0, ...)` calls in Content Scraper. These cause:
+133 `sys.path.insert(0, ...)` calls in BlackboxBrief. These cause:
 - Import order bugs (wrong module loaded)
 - Fragile test discovery
 - "Module not found" errors that disappear on retry
@@ -13,7 +13,7 @@
 
 ## Approach
 
-Content Scraper is already a uv workspace member. The issue is that `execution/` scripts use `sys.path.insert(0, PROJECT_ROOT)` to import sibling modules instead of using the package structure.
+BlackboxBrief is already a uv workspace member. The issue is that `execution/` scripts use `sys.path.insert(0, PROJECT_ROOT)` to import sibling modules instead of using the package structure.
 
 ### Fix Strategy
 
@@ -42,7 +42,7 @@ For each file:
 
 | File | Change |
 |---|---|
-| `Content Scraper/execution/__init__.py` | Ensure exists |
-| `Content Scraper/execution/utils/__init__.py` | Ensure exists |
+| `BlackboxBrief/execution/__init__.py` | Ensure exists |
+| `BlackboxBrief/execution/utils/__init__.py` | Ensure exists |
 | ~40 Python files in execution/, scripts/, setup/ | Remove sys.path.insert, fix imports |
-| `Content Scraper/tests/` | Verify all tests still pass after each wave |
+| `BlackboxBrief/tests/` | Verify all tests still pass after each wave |

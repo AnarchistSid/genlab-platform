@@ -42,7 +42,7 @@ Zero new test failures introduced. One real bug found and fixed during Track G t
 - **F2:** CriticalRush gaming stages retrofitted to strategy ABCs (ContentResearchStrategy, WritingStrategy, VisualRenderStrategy, PlatformAdaptationStrategy)
 - **F3:** Dashboard accent color standardized — ai_creators `#3B82F6` → `#6366f1`
 - **F4:** FrameDrift fashion→anime rename — 6 strategies, __init__, niche.yaml, 6 test files
-- **F6:** Hygiene — removed Content Scraper `requirements.txt`, moved pytest to dev deps
+- **F6:** Hygiene — removed BlackboxBrief `requirements.txt`, moved pytest to dev deps
 
 ### Track G: Test Coverage Gaps
 - **G1:** 46 new dashboard smoke tests covering 9 previously untested API modules (34 routes)
@@ -59,7 +59,7 @@ Zero new test failures introduced. One real bug found and fixed during Track G t
 |---------|--------|--------|---------|-------|
 | genlab-core | 1283 | 5 | 3 | Pre-existing: sandbox egress (3), litellm cost (2) |
 | CriticalRush | 492 | 0 | 1 | |
-| Content Scraper | 1390 | 0 | 19 | |
+| BlackboxBrief | 1390 | 0 | 19 | |
 | Dashboard | 201 | 3 | 0 | Pre-existing: YouTube chunk retry (3) |
 | Scripts | 22 | 0 | 0 | **NEW** |
 | **Total** | **3388** | **8** | **23** | All failures pre-existing |
@@ -92,7 +92,7 @@ Zero new test failures introduced. One real bug found and fixed during Track G t
 All commits follow conventional commit format with track prefix.
 Each repo has its own git history — commits are in the respective repos:
 - `genlab-core/` — Track A, D1
-- `Content Scraper/` — Track B, D2, F6
+- `BlackboxBrief/` — Track B, D2, F6
 - `CriticalRush/` — Track A (whisper), B, C, F1, F2
 - `FrameDrift/` — Track F4
 - `dashboard/` — Track B, E, F3, G1

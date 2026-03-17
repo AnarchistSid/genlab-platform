@@ -722,13 +722,13 @@ Pulls ctranslate2 + torch. Only needed on render machines."
 ## Task 4: Enhance `WordByWordAnimator` with Whisper timing path
 
 **Files:**
-- Modify: `Content Scraper/execution/utils/word_by_word_animator.py` (lines 198-261, 501-592)
-- Test: `Content Scraper/tests/test_word_by_word_whisper.py`
+- Modify: `BlackboxBrief/execution/utils/word_by_word_animator.py` (lines 198-261, 501-592)
+- Test: `BlackboxBrief/tests/test_word_by_word_whisper.py`
 
 **Step 1: Write the failing tests**
 
 ```python
-# Content Scraper/tests/test_word_by_word_whisper.py
+# BlackboxBrief/tests/test_word_by_word_whisper.py
 """Tests for Whisper-synced timing path in WordByWordAnimator."""
 import pytest
 
@@ -873,7 +873,7 @@ class TestBuildAnimatedFiltersWhisper:
 
 **Step 2: Run tests to verify they fail**
 
-Run: `cd "/Users/anarchistsid/GenLab/Content Scraper" && uv run --package content-scraper pytest tests/test_word_by_word_whisper.py -v`
+Run: `cd "/Users/anarchistsid/GenLab/BlackboxBrief" && uv run --package content-scraper pytest tests/test_word_by_word_whisper.py -v`
 Expected: FAIL with `AttributeError: 'WordByWordAnimator' object has no attribute 'calculate_word_timings_from_whisper'`
 
 **Step 3: Implement the Whisper timing path**
@@ -986,18 +986,18 @@ Then change the timing calculation block (currently lines 569-571) to branch on 
 
 **Step 4: Run tests to verify they pass**
 
-Run: `cd "/Users/anarchistsid/GenLab/Content Scraper" && uv run --package content-scraper pytest tests/test_word_by_word_whisper.py -v`
+Run: `cd "/Users/anarchistsid/GenLab/BlackboxBrief" && uv run --package content-scraper pytest tests/test_word_by_word_whisper.py -v`
 Expected: 8 PASS
 
 **Step 5: Run existing tests to verify no regression**
 
-Run: `cd "/Users/anarchistsid/GenLab/Content Scraper" && uv run --package content-scraper pytest tests/ -v --tb=short 2>&1 | tail -5`
+Run: `cd "/Users/anarchistsid/GenLab/BlackboxBrief" && uv run --package content-scraper pytest tests/ -v --tb=short 2>&1 | tail -5`
 Expected: All existing tests still pass (1323+)
 
 **Step 6: Commit**
 
 ```bash
-cd "/Users/anarchistsid/GenLab/Content Scraper"
+cd "/Users/anarchistsid/GenLab/BlackboxBrief"
 git add execution/utils/word_by_word_animator.py tests/test_word_by_word_whisper.py
 git commit -m "feat(animator): add Whisper-synced timing path to WordByWordAnimator
 
@@ -1575,9 +1575,9 @@ already built into shared module."
 Run: `cd /Users/anarchistsid/GenLab && uv run --package genlab-core pytest genlab-core/tests/ --tb=short 2>&1 | tail -3`
 Expected: 700+ passed (695 existing + new audio_probe + whisper_timing tests)
 
-**Step 2: Run Content Scraper tests**
+**Step 2: Run BlackboxBrief tests**
 
-Run: `cd "/Users/anarchistsid/GenLab/Content Scraper" && uv run --package content-scraper pytest tests/ --tb=short 2>&1 | tail -3`
+Run: `cd "/Users/anarchistsid/GenLab/BlackboxBrief" && uv run --package content-scraper pytest tests/ --tb=short 2>&1 | tail -3`
 Expected: 1325+ passed
 
 **Step 3: Run CriticalRush tests**
@@ -1609,7 +1609,7 @@ Expected: 103+ passed
 | 1 | genlab-core | `audio_probe.py` — audio detection + extraction | 7 |
 | 2 | genlab-core | `whisper_timing.py` — word timestamps + alignment | 8 |
 | 3 | genlab-core | pyproject.toml whisper optional dep | 0 |
-| 4 | Content Scraper | WordByWordAnimator Whisper path | 8 |
+| 4 | BlackboxBrief | WordByWordAnimator Whisper path | 8 |
 | 5 | genlab-core | `__init__.py` exports | 0 |
 | 6 | CW/SR/FD | Config YAML whisper_sync block | 0 |
 | 7 | ClutchWire | `prepare_whisper_words()` in visual render | 3 |

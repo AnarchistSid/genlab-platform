@@ -45,7 +45,7 @@ Both paths converge at: Whisper word timestamps → WordByWordAnimator → FFmpe
 
 ### WordByWordAnimator Enhancement
 
-New method on existing class (Content Scraper/execution/utils/word_by_word_animator.py):
+New method on existing class (BlackboxBrief/execution/utils/word_by_word_animator.py):
 
 ```python
 def calculate_word_timings_from_whisper(
@@ -115,7 +115,7 @@ Whisper on existing audio. No TTS for most clips.
 **FrameDrift (Anime):** Mixed — some clips have dialogue (subbed/dubbed), some are
 silent sakuga. Audio probe detects per-clip. Path A for dialogue clips, Path B for silent.
 
-**BB/Content Scraper:** Excluded from this sprint. No changes.
+**BB/BlackboxBrief:** Excluded from this sprint. No changes.
 
 ## Configuration
 
