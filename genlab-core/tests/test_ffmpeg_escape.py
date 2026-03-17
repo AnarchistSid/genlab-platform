@@ -8,10 +8,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.media.ffmpeg_utils import escape_drawtext
-
 
 # ── escape_drawtext tests ────────────────────────────────────────
 
@@ -130,7 +127,6 @@ class TestSmartQuoteInHookNormalized:
         import importlib
         import sys
 
-        from genlab_core.writing.llm_hook_generator import generate_hook
 
         mock_response = MagicMock()
         mock_response.content = [

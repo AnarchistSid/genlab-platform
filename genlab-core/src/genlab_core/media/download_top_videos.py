@@ -21,14 +21,14 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Niche → YouTube search keywords
 # ---------------------------------------------------------------------------
-_NICHE_KEYWORDS: Dict[str, List[str]] = {
+_NICHE_KEYWORDS: dict[str, list[str]] = {
     "ai_creators": ["AI", "artificial intelligence", "machine learning"],
     "anime": ["anime", "manga", "otaku"],
     "movies": ["movie", "film", "cinema", "trailer"],
@@ -47,7 +47,7 @@ _DOWNLOAD_TIMEOUT = 120
 # Download helpers
 # ---------------------------------------------------------------------------
 
-def _download_video(url: str, output_path: str) -> Dict[str, Any]:
+def _download_video(url: str, output_path: str) -> dict[str, Any]:
     """Download a video using yt-dlp subprocess.
 
     Returns:
@@ -146,7 +146,7 @@ def _has_video_stream(path: str) -> bool:
         return False
 
 
-def _validate_download(path: str) -> Dict[str, Any]:
+def _validate_download(path: str) -> dict[str, Any]:
     """Validate a downloaded video file.
 
     Checks:
@@ -178,12 +178,12 @@ def _validate_download(path: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def download_videos_for_stories(
-    stories: List[Dict[str, Any]],
+    stories: list[dict[str, Any]],
     run_dir: str | Path,
     niche_id: str,
     max_stories: int = 10,
     youtube_api_key: str | None = None,
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     """Download videos for top-N ranked stories.
 
     Args:
@@ -220,7 +220,7 @@ def download_videos_for_stories(
         youtube_api_key=youtube_api_key,
     )
 
-    entries: Dict[str, Dict[str, Any]] = {}
+    entries: dict[str, dict[str, Any]] = {}
 
     for i, story in enumerate(top_stories, 1):
         story_id = str(story.get("story_id", "")).strip()
@@ -349,7 +349,7 @@ def download_videos_for_stories(
     return entries
 
 
-def _find_downloaded_file(expected_path: str) -> Optional[str]:
+def _find_downloaded_file(expected_path: str) -> str | None:
     """Find the actual downloaded file, handling yt-dlp extension variations.
 
     yt-dlp sometimes appends format suffixes or uses different extensions.
@@ -384,8 +384,8 @@ def _find_downloaded_file(expected_path: str) -> Optional[str]:
 
 def build_clip_index(
     run_id: str,
-    entries: Dict[str, Dict[str, Any]],
-) -> Dict[str, Any]:
+    entries: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
     """Build a clip_index.json structure.
 
     Args:
@@ -428,7 +428,7 @@ class DownloadTopVideos:
             - class: genlab_core.media.download_top_videos.DownloadTopVideos
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         """Download videos for top-N ranked stories.
 
         Reads from context:
@@ -493,7 +493,7 @@ class DownloadTopVideos:
 
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         """Alias for execute() — provided for callers using 'run' convention."""
         return self.execute(context)
 

@@ -1,8 +1,7 @@
 """Tests for video_content_writer."""
-import pytest
 from unittest.mock import MagicMock
 
-from genlab_core.writing.video_content_writer import write_video_content, NICHE_VOICE
+from genlab_core.writing.video_content_writer import NICHE_VOICE, write_video_content
 
 
 def _make_video(title="Bam Adebayo drops 83 points", channel="ESPN"):

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import yaml
 
@@ -23,14 +23,14 @@ logger = logging.getLogger(__name__)
 # Calling get_backend_for_table() with different sharepoint_proxies or
 # postgres_dsn will invalidate and replace the cached backend for that engine.
 # Use reset_backends() in tests to clear all cached state.
-_config: Optional[Dict[str, str]] = None
-_sharepoint_backend: Optional[Any] = None
-_sharepoint_proxies_id: Optional[int] = None  # id() of the proxies dict used to create _sharepoint_backend
-_postgres_backend: Optional[Any] = None
-_postgres_dsn_used: Optional[str] = None  # DSN used to create _postgres_backend
+_config: dict[str, str] | None = None
+_sharepoint_backend: Any | None = None
+_sharepoint_proxies_id: int | None = None  # id() of the proxies dict used to create _sharepoint_backend
+_postgres_backend: Any | None = None
+_postgres_dsn_used: str | None = None  # DSN used to create _postgres_backend
 
 
-def _load_config() -> Dict[str, str]:
+def _load_config() -> dict[str, str]:
     """Load and cache the storage_backends.yaml mapping."""
     global _config
     if _config is not None:
@@ -67,7 +67,7 @@ def _load_config() -> Dict[str, str]:
 def get_backend_for_table(
     table: str,
     *,
-    sharepoint_proxies: Optional[Dict] = None,
+    sharepoint_proxies: dict | None = None,
     postgres_dsn: str | None = None,
 ):
     """Return the correct StorageBackend for the given table.

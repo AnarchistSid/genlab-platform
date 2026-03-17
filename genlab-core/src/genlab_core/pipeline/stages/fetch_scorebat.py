@@ -8,8 +8,8 @@ No auth required. Free API.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -57,7 +57,7 @@ class FetchScoreBatHighlights:
     clip_url is None — VideoGate handles this correctly.
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         if niche_id != "sports":
             return context
@@ -76,7 +76,7 @@ class FetchScoreBatHighlights:
         if highlights:
             from genlab_core.cache.stable_ids import generate_story_id
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             new_stories = []
             for h in highlights:
                 sid = generate_story_id(h["url"] or h["title"], now_iso)
@@ -104,5 +104,5 @@ class FetchScoreBatHighlights:
         run_stats["scorebat_highlights_found"] = len(highlights)
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         return self.execute(context)

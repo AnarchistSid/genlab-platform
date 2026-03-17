@@ -36,8 +36,8 @@ import math
 import os
 import subprocess
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -57,11 +57,11 @@ class TikTokClient:
 
     def __init__(
         self,
-        client_key: Optional[str] = None,
-        client_secret: Optional[str] = None,
-        access_token: Optional[str] = None,
-        refresh_token: Optional[str] = None,
-        audit_approved: Optional[bool] = None,
+        client_key: str | None = None,
+        client_secret: str | None = None,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        audit_approved: bool | None = None,
     ):
         self._client_key = client_key or getattr(settings, "tiktok_client_key", None)
         self._client_secret = client_secret or getattr(settings, "tiktok_client_secret", None)
@@ -84,7 +84,7 @@ class TikTokClient:
     def _privacy_level(self) -> str:
         return "PUBLIC_TO_EVERYONE" if self._audit_approved else "SELF_ONLY"
 
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self._access_token}",
             "Content-Type": "application/json; charset=UTF-8",
@@ -98,7 +98,7 @@ class TikTokClient:
         disable_duet: bool = False,
         disable_stitch: bool = False,
         disable_comment: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Upload and publish a video to TikTok.
 
         Returns {"publish_id": str, "status": str}.
@@ -259,9 +259,9 @@ class TikTokClient:
             return
 
         if issued_at.tzinfo is None:
-            issued_at = issued_at.replace(tzinfo=timezone.utc)
+            issued_at = issued_at.replace(tzinfo=UTC)
 
-        age_hours = (datetime.now(timezone.utc) - issued_at).total_seconds() / 3600
+        age_hours = (datetime.now(UTC) - issued_at).total_seconds() / 3600
         if age_hours >= 23:
             logger.info("[TIKTOK] Access token is %.1f hours old — refreshing", age_hours)
             self._refresh_access_token()
@@ -308,7 +308,7 @@ class TikTokClient:
 
         logger.info("[TIKTOK] Access token refreshed successfully")
 
-    def _query_max_duration(self) -> Optional[int]:
+    def _query_max_duration(self) -> int | None:
         """Query creator info for max video post duration."""
         try:
             resp = requests.post(
@@ -328,7 +328,7 @@ class TikTokClient:
             logger.warning("[TIKTOK] Failed to query creator info: %s", e)
             return None
 
-    def _get_video_duration(self, video_path: str) -> Optional[float]:
+    def _get_video_duration(self, video_path: str) -> float | None:
         """Get video duration in seconds using ffprobe."""
         try:
             result = subprocess.run(
@@ -352,7 +352,7 @@ class TikTokClient:
             logger.warning("[TIKTOK] ffprobe failed: %s", e)
             return None
 
-    def get_video_insights(self, video_id: str) -> Dict[str, Any]:
+    def get_video_insights(self, video_id: str) -> dict[str, Any]:
         """Fetch performance metrics for a published video."""
         resp = requests.get(
             f"{TIKTOK_BASE_URL}/video/query/",

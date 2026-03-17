@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,6 @@ from genlab_core.learning.config_writer import (
 )
 from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -85,7 +84,7 @@ def compute_optimal_hours(
             continue
         pub_utc = t.published_at
         if pub_utc.tzinfo is None:
-            pub_utc = pub_utc.replace(tzinfo=timezone.utc)
+            pub_utc = pub_utc.replace(tzinfo=UTC)
         pub_ist = pub_utc + _IST_OFFSET
         pub_hour = pub_ist.hour
         hour_rewards[t.platform][pub_hour].append(t.reward_48h)
@@ -157,7 +156,7 @@ def compute_arm_posteriors(
 @task(name="fetch_completed_tasks", **_TASK_DEFAULTS)
 def fetch_completed_tasks(
     backlog_client: Any,
-    niche_id: Optional[str] = None,
+    niche_id: str | None = None,
     lookback_days: int = LOOKBACK_DAYS,
 ) -> list[PendingFeedbackTask]:
     """Fetch completed PendingFeedbackTasks from the last N days.
@@ -166,7 +165,7 @@ def fetch_completed_tasks(
     that have 48h rewards and were published within the lookback window.
     """
     store = PendingFeedbackStore(backlog_client)
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=lookback_days)
+    cutoff = datetime.now(tz=UTC) - timedelta(days=lookback_days)
 
     try:
         # Query completed items via the store's proxy
@@ -182,7 +181,7 @@ def fetch_completed_tasks(
             if niche_id and task_obj.niche_id != niche_id:
                 continue
             if task_obj.published_at.tzinfo is None:
-                pub = task_obj.published_at.replace(tzinfo=timezone.utc)
+                pub = task_obj.published_at.replace(tzinfo=UTC)
             else:
                 pub = task_obj.published_at
             if pub < cutoff:
@@ -206,7 +205,7 @@ def fetch_completed_tasks(
 @flow(name="weekly_config_update")
 def weekly_config_update(
     config_dir: Path | str | None = None,
-    niche_id: Optional[str] = None,
+    niche_id: str | None = None,
     backlog_client: Any = None,
     dry_run: bool = False,
 ) -> dict[str, bool]:

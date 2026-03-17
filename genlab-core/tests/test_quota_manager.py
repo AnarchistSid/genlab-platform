@@ -5,9 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-
 from genlab_core.media.quota_manager import QuotaManager, QuotaStatus, VideoWorkspace
-
 
 # ---------------------------------------------------------------------------
 # Helpers

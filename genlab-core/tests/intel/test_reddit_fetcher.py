@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from genlab_core.intel.reddit_fetcher import fetch_reddit_videos, _get_access_token
+from genlab_core.intel.reddit_fetcher import _get_access_token, fetch_reddit_videos
 
 
 class TestAccessToken:

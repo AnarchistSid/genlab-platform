@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 import yaml
-
 from genlab_core.learning.reward_shaper import MonetisationMultiplierProvider
 
 

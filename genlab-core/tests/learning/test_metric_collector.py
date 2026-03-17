@@ -1,10 +1,8 @@
 """Tests for genlab_core.learning.metric_collector."""
 from __future__ import annotations
 
-import inspect
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-
 
 from genlab_core.learning.metric_collector import (
     _fetch_x,
@@ -14,7 +12,6 @@ from genlab_core.learning.metric_collector import (
     process_pending_task,
 )
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +28,7 @@ def _make_task(
         content_id="cand_abc",
         platform=platform,
         niche_id="ai_creators",
-        published_at=datetime.now(timezone.utc) - timedelta(hours=published_hours_ago),
+        published_at=datetime.now(UTC) - timedelta(hours=published_hours_ago),
         platform_post_id=post_id,
         content_type="reel",
         collection_status=status,

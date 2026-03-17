@@ -6,9 +6,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from genlab_core.learning.arm_loader import BANDIT_LIST_NAMES, load_all_arms
-
 
 # ---------------------------------------------------------------------------
 # 1. load_all_arms returns {arm_id: (alpha, beta)} from proxy records

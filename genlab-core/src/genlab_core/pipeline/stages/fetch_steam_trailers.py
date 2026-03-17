@@ -7,10 +7,9 @@ No YouTube quota consumed. ~200 req/5 min rate limit.
 from __future__ import annotations
 
 import logging
-import os
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -68,7 +67,7 @@ class FetchSteamTrailers:
     Runs before DownloadTopVideos — provides video candidates without YouTube quota.
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         if niche_id != "gaming":
             return context
@@ -95,7 +94,7 @@ class FetchSteamTrailers:
         if all_trailers:
             from genlab_core.cache.stable_ids import generate_story_id
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             new_stories = []
             for t in all_trailers[:8]:  # Cap at 8 trailers
                 sid = generate_story_id(t["clip_url"], now_iso)
@@ -124,5 +123,5 @@ class FetchSteamTrailers:
         run_stats["steam_trailers_found"] = len(all_trailers)
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         return self.execute(context)

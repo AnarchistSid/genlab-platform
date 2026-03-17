@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from genlab_core.monitoring.youtube_quota import (
     DAILY_QUOTA,
     PACIFIC,

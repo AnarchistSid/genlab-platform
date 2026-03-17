@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ _MIN_CLIP_SIZE_BYTES = 100 * 1024  # 100 KB default
 class VideoGate:
     """Mark stories without a downloaded video clip so Writing can skip them."""
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         clip_index = context.get("clip_index", {})
         clips = clip_index.get("clips", {})
         stories = context.get("stories", [])

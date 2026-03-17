@@ -22,9 +22,9 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB, CircuitOpenError
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
@@ -96,11 +96,11 @@ class ScheduleGuardedProxy:
     def update(
         self,
         record_id: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         typecast: bool = False,
         *,
         force: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if not force and not _schedule_guard_forced():
             self._guard_update(record_id, fields)
         return self._proxy.update(record_id, fields, typecast)
@@ -112,11 +112,11 @@ class ScheduleGuardedProxy:
 
     def batch_update(
         self,
-        records: List[Dict[str, Any]],
+        records: list[dict[str, Any]],
         *,
         force: bool = False,
         **kwargs,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if not force and not _schedule_guard_forced():
             for rec in records:
                 rec_id = rec.get("id", "")
@@ -125,7 +125,7 @@ class ScheduleGuardedProxy:
                     self._guard_update(str(rec_id), rec_fields)
         return self._proxy.batch_update(records, **kwargs)
 
-    def _guard_update(self, record_id: str, fields: Dict[str, Any]) -> None:
+    def _guard_update(self, record_id: str, fields: dict[str, Any]) -> None:
         touched = self._GUARDED_FIELDS & set(fields.keys())
         if not touched:
             return
@@ -292,6 +292,7 @@ class BacklogClient:
         # ── SharePoint path (legacy / fallback) ──────────────────
         from azure.identity import ClientSecretCredential
         from msgraph import GraphServiceClient
+
         from genlab_core.settings import settings
 
         tenant = (tenant_id or settings.azure_tenant_id or "").strip()
@@ -384,11 +385,11 @@ class BacklogClient:
             if attr is not None:
                 self._sp_proxies[name] = attr
 
-        self._backend_cache: Dict[str, Any] = {}
+        self._backend_cache: dict[str, Any] = {}
 
         # Per-client backend cache — avoids module-level singleton issues
         # when multiple BacklogClient instances exist (e.g. in tests).
-        self._backend_cache: Dict[str, Any] = {}
+        self._backend_cache: dict[str, Any] = {}
 
     # ── Circuit breaker helper ───────────────────────────────────────
 
@@ -440,7 +441,7 @@ class BacklogClient:
 
     # ── Private helpers ──────────────────────────────────────────────
 
-    def _resolve_source(self, story: Dict) -> str:
+    def _resolve_source(self, story: dict) -> str:
         if story.get("source") and story["source"] != "Other":
             return story["source"]
         domain = story.get("domain", "")
@@ -450,7 +451,7 @@ class BacklogClient:
         return "Other"
 
     def _normalize_asset_source_type(
-        self, raw_source: Optional[str], asset_type: str
+        self, raw_source: str | None, asset_type: str
     ) -> str:
         raw = (raw_source or "").strip().lower()
         atype = (asset_type or "").strip().lower()
@@ -475,7 +476,7 @@ class BacklogClient:
         except ValueError:
             return False
 
-    def assert_not_scheduled(self, blueprint: Dict, new_status: str) -> None:
+    def assert_not_scheduled(self, blueprint: dict, new_status: str) -> None:
         fields = blueprint.get("fields", blueprint)
         old_status = fields.get("status", "")
         if not self._is_demotion(old_status, new_status):
@@ -490,7 +491,7 @@ class BacklogClient:
 
     # ===== STORIES =====
 
-    def create_story(self, story: Dict) -> str:
+    def create_story(self, story: dict) -> str:
         scores = story.get("scores", {})
         fields = {
             "story_id": story["story_id"],
@@ -514,7 +515,7 @@ class BacklogClient:
         )
         return record["id"]
 
-    def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
+    def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> dict | None:
         formula = f"{{story_id}}='{_esc(story_id)}'"
         records = self._sp_call(
             self._backend("Stories").find, "Stories",
@@ -531,7 +532,7 @@ class BacklogClient:
             story["id"], {"status": status, **kwargs},
         )
 
-    def batch_create_stories(self, stories: List[Dict]) -> List[str]:
+    def batch_create_stories(self, stories: list[dict]) -> list[str]:
         records = []
         for story in stories:
             scores = story.get("scores", {})
@@ -555,8 +556,8 @@ class BacklogClient:
     # ===== BLUEPRINTS =====
 
     def create_blueprint(
-        self, blueprint: Dict, story_record: Optional[Dict] = None,
-        template_record: Optional[Dict] = None,
+        self, blueprint: dict, story_record: dict | None = None,
+        template_record: dict | None = None,
     ) -> str:
         story = story_record or self.find_story_by_story_id(blueprint["story_id"])
         if not story:
@@ -625,7 +626,7 @@ class BacklogClient:
                 raise
         return record["id"]
 
-    def find_blueprint_by_candidate_id(self, candidate_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
+    def find_blueprint_by_candidate_id(self, candidate_id: str, *, niche_id: str | None = None) -> dict | None:
         formula = f"{{candidate_id}}='{_esc(candidate_id)}'"
         records = self._sp_call(
             self._backend("Blueprints").find, "Blueprints",
@@ -648,7 +649,7 @@ class BacklogClient:
 
     def get_blueprints_safe_to_cleanup(
         self, status: str, *, niche_id: str | None = None, max_priority: float = 1.0
-    ) -> List[Dict]:
+    ) -> list[dict]:
         all_bps = self.get_blueprints_by_status(status, niche_id=niche_id)
         safe = []
         for bp in all_bps:
@@ -660,16 +661,16 @@ class BacklogClient:
                 safe.append(bp)
         return safe
 
-    def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> List[Dict]:
+    def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> list[dict]:
         formula = f"{{status}}='{_esc(status)}'"
         return self._sp_call(
             self._backend("Blueprints").find, "Blueprints",
             formula=formula, niche_id=niche_id,
         )
 
-    def batch_create_blueprints(self, blueprints: List[Dict]) -> List[str]:
-        story_cache: Dict[str, Optional[Dict]] = {}
-        template_cache: Dict[str, Optional[Dict]] = {}
+    def batch_create_blueprints(self, blueprints: list[dict]) -> list[str]:
+        story_cache: dict[str, dict | None] = {}
+        template_cache: dict[str, dict | None] = {}
         for bp in blueprints:
             sid = bp["story_id"]
             if sid not in story_cache:
@@ -711,7 +712,7 @@ class BacklogClient:
 
     # ===== TEMPLATES =====
 
-    def create_template(self, template: Dict) -> str:
+    def create_template(self, template: dict) -> str:
         constraints = template.get("constraints", {})
         record = self._backend("Templates").create(
             "Templates",
@@ -733,7 +734,7 @@ class BacklogClient:
         )
         return record["id"]
 
-    def find_template_by_template_id(self, template_id: str) -> Optional[Dict]:
+    def find_template_by_template_id(self, template_id: str) -> dict | None:
         records = self._backend("Templates").find(
             "Templates",
             formula=f"{{template_id}}='{_esc(template_id)}'",
@@ -741,7 +742,7 @@ class BacklogClient:
         )
         return records[0] if records else None
 
-    def get_active_templates(self, *, niche_id: str | None = None) -> List[Dict]:
+    def get_active_templates(self, *, niche_id: str | None = None) -> list[dict]:
         return self._backend("Templates").find(
             "Templates",
             formula="{status}='active'",
@@ -750,7 +751,7 @@ class BacklogClient:
 
     # ===== ASSETS =====
 
-    def create_asset(self, asset: Dict) -> str:
+    def create_asset(self, asset: dict) -> str:
         fields = {
             "asset_id": asset["asset_id"],
             "type": asset["type"],
@@ -801,14 +802,14 @@ class BacklogClient:
         record = be.create("Assets", fields, typecast=True)
         return record["id"]
 
-    def find_asset_by_asset_id(self, asset_id: str, *, niche_id: str | None = None) -> Optional[Dict]:
+    def find_asset_by_asset_id(self, asset_id: str, *, niche_id: str | None = None) -> dict | None:
         formula = f"{{asset_id}}='{_esc(asset_id)}'"
         records = self._backend("Assets").find(
             "Assets", formula=formula, niche_id=niche_id, max_records=1,
         )
         return records[0] if records else None
 
-    def find_asset_by_url(self, url: str, *, niche_id: str | None = None) -> Optional[Dict]:
+    def find_asset_by_url(self, url: str, *, niche_id: str | None = None) -> dict | None:
         escaped = url.replace("'", "\\'")
         formula = f"{{url}}='{escaped}'"
         records = self._backend("Assets").find(
@@ -816,7 +817,7 @@ class BacklogClient:
         )
         return records[0] if records else None
 
-    def find_assets_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> List[Dict]:
+    def find_assets_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> list[dict]:
         story = self.find_story_by_story_id(story_id, niche_id=niche_id)
         if not story:
             return []
@@ -836,7 +837,7 @@ class BacklogClient:
             "Assets", records[0]["id"], {"status": status, **kwargs},
         )
 
-    def batch_create_assets(self, assets: List[Dict]) -> List[str]:
+    def batch_create_assets(self, assets: list[dict]) -> list[str]:
         created_ids = []
         for asset in assets:
             existing = self.find_asset_by_asset_id(asset["asset_id"])
@@ -851,7 +852,7 @@ class BacklogClient:
 
     # ===== SOURCES =====
 
-    def create_source(self, source: Dict) -> str:
+    def create_source(self, source: dict) -> str:
         record = self._backend("Sources").create("Sources", {
             "source_id": source["source_id"],
             "domain": source["domain"],
@@ -876,12 +877,12 @@ class BacklogClient:
             "Sources",
             records[0]["id"],
             {
-                "last_fetch_at": datetime.now(timezone.utc).isoformat(),
+                "last_fetch_at": datetime.now(UTC).isoformat(),
                 "last_fetch_status": status,
             },
         )
 
-    def get_enabled_sources(self, *, niche_id: str | None = None) -> List[Dict]:
+    def get_enabled_sources(self, *, niche_id: str | None = None) -> list[dict]:
         return self._backend("Sources").find(
             "Sources",
             formula="{enabled}=TRUE()",
@@ -896,7 +897,7 @@ class BacklogClient:
         field_name: str,
         file_path: Path,
         content_type: str = "image/png",
-    ) -> Optional[Dict]:
+    ) -> dict | None:
         file_path = Path(file_path)
         if not file_path.exists():
             logger.warning("File not found for upload: %s", file_path)
@@ -924,7 +925,7 @@ class BacklogClient:
         file_size_bytes: int = 0,
         blueprint_record_id: str = "",
         niche_id: str = "",
-    ) -> Optional[str]:
+    ) -> str | None:
         raw = f"{candidate_id}:{platform}"
         analytics_id = hashlib.sha256(raw.encode()).hexdigest()
 
@@ -946,7 +947,7 @@ class BacklogClient:
         if file_size_bytes > 0:
             fields["file_size_bytes"] = file_size_bytes
         if status == "SUCCESS":
-            fields["published_at"] = datetime.now(timezone.utc).isoformat()
+            fields["published_at"] = datetime.now(UTC).isoformat()
         if blueprint_record_id:
             fields["blueprint_link"] = str(blueprint_record_id)
         if niche_id:
@@ -981,12 +982,12 @@ class BacklogClient:
 
     def get_publishing_analytics(
         self,
-        platform: Optional[str] = None,
-        status: Optional[str] = None,
+        platform: str | None = None,
+        status: str | None = None,
         *,
         niche_id: str | None = None,
         limit: int = 100,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         parts = []
         if platform:
             parts.append(f"{{platform}}='{_esc(platform)}'")
@@ -1004,16 +1005,16 @@ class BacklogClient:
         self,
         post_id: str,
         platform: str,
-        insights: Dict,
+        insights: dict,
         blueprint_record_id: str = "",
         candidate_id: str = "",
         published_at: str = "",
         content_format: str = "",
         fetch_window: str = "",
         story_title: str = "",
-        viral_score: Optional[float] = None,
+        viral_score: float | None = None,
         niche_id: str = "",
-    ) -> Optional[str]:
+    ) -> str | None:
         composite_id = f"{platform}:{post_id}"
 
         reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
@@ -1055,7 +1056,7 @@ class BacklogClient:
             "save_rate": save_rate,
             "share_rate": share_rate,
             "play_rate": play_rate,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "fetched_at": datetime.now(UTC).isoformat(),
         }
         if blueprint_record_id:
             fields["blueprint_link"] = str(blueprint_record_id)
@@ -1112,7 +1113,7 @@ class BacklogClient:
 
     # ===== A/B TESTING =====
 
-    def create_ab_test(self, test: Dict) -> Optional[str]:
+    def create_ab_test(self, test: dict) -> str | None:
         if not self.ab_tests:
             logger.warning("AB_Tests table not configured")
             return None
@@ -1125,7 +1126,7 @@ class BacklogClient:
             logger.warning("Failed to create AB test: %s", exc)
             return None
 
-    def get_ab_tests(self, status: Optional[str] = None, *, niche_id: str | None = None) -> List[Dict]:
+    def get_ab_tests(self, status: str | None = None, *, niche_id: str | None = None) -> list[dict]:
         if not self.ab_tests:
             return []
         formula = f"{{status}}='{_esc(status)}'" if status else None
@@ -1133,7 +1134,7 @@ class BacklogClient:
             "AB_Tests", formula=formula, niche_id=niche_id, max_records=50,
         )
 
-    def update_ab_test(self, test_id: str, fields: Dict):
+    def update_ab_test(self, test_id: str, fields: dict):
         if not self.ab_tests:
             return
         records = self._backend("AB_Tests").find(
@@ -1228,7 +1229,7 @@ class BacklogClient:
 
         fields: dict[str, str] = {
             "Status": status,
-            "ProcessedAt": datetime.now(timezone.utc).isoformat(),
+            "ProcessedAt": datetime.now(UTC).isoformat(),
         }
         if reply_text:
             fields["ReplyText"] = reply_text[:2000]
@@ -1245,7 +1246,7 @@ class BacklogClient:
 
     # ===== NICHE REGISTRY =====
 
-    def list_niches(self) -> List[Dict]:
+    def list_niches(self) -> list[dict]:
         """Return all registered niches from YAML registry.
 
         Falls back to hardcoded registry if file not found.
@@ -1256,7 +1257,7 @@ class BacklogClient:
         for search_dir in [Path.cwd()] + list(Path.cwd().parents):
             candidate = search_dir / "configs" / "niches_registry.yaml"
             if candidate.exists():
-                with open(candidate, "r") as f:
+                with open(candidate) as f:
                     data = yaml.safe_load(f) or {}
                 return data.get("niches", [])
 

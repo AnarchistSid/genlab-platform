@@ -9,7 +9,8 @@ from genlab_core.intelligence.score_normalizer import (
 )
 
 try:
-    from hypothesis import given, settings as hyp_settings
+    from hypothesis import given
+    from hypothesis import settings as hyp_settings
     from hypothesis import strategies as st
 
     HAS_HYPOTHESIS = True

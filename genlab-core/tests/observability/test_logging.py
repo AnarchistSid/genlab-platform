@@ -6,7 +6,6 @@ import json
 import logging
 
 import pytest
-
 from genlab_core.observability.logging import configure_logging
 
 

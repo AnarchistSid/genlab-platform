@@ -23,7 +23,6 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Dict, Optional
 
 import yaml
 
@@ -38,7 +37,7 @@ class TokenBucket:
         burst: Maximum burst capacity (bucket size). Defaults to rate * 2.
     """
 
-    def __init__(self, rate: float, burst: Optional[float] = None) -> None:
+    def __init__(self, rate: float, burst: float | None = None) -> None:
         if rate <= 0:
             raise ValueError(f"rate must be positive, got {rate}")
         self._rate = rate
@@ -143,11 +142,11 @@ class RateLimiterRegistry:
     }
 
     def __init__(self) -> None:
-        self._limiters: Dict[str, TokenBucket] = {}
+        self._limiters: dict[str, TokenBucket] = {}
         self._lock = threading.Lock()
 
     @classmethod
-    def from_yaml(cls, path: str) -> "RateLimiterRegistry":
+    def from_yaml(cls, path: str) -> RateLimiterRegistry:
         """Load rate limiter configs from a YAML file.
 
         Args:

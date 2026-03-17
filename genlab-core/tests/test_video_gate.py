@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from genlab_core.pipeline.stages.video_gate import VideoGate, _MIN_CLIP_SIZE_BYTES
+from genlab_core.pipeline.stages.video_gate import VideoGate
 
 
 def _make_context(stories, clip_index=None):

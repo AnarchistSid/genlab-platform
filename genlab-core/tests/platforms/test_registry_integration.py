@@ -4,9 +4,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.platforms.registry import get_client, list_platforms
-
 
 MOCK_ENV = {
     "META_ACCESS_TOKEN": "EAA_TEST",

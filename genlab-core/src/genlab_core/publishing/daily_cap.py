@@ -9,9 +9,8 @@ publishing in the same process run don't race on the same cap.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -23,7 +22,7 @@ _DEFAULT_CAPS: dict[str, int] = {
 }
 
 
-def _load_caps(config_path: Optional[Path] = None) -> dict[str, int]:
+def _load_caps(config_path: Path | None = None) -> dict[str, int]:
     """Load daily post caps from config/platform_caps.yaml. Falls back to 2/platform."""
     if config_path is None:
         # Walk up from this file to genlab-core root, then config/ subdir
@@ -71,12 +70,12 @@ class DailyCapEnforcer:
                 enforcer.record_publish(platform)
     """
 
-    def __init__(self, backlog_client, niche_id: str = "", config_path: Optional[Path] = None):
+    def __init__(self, backlog_client, niche_id: str = "", config_path: Path | None = None):
         self._client = backlog_client
         self._niche_id = niche_id
         self._caps = _load_caps(config_path)
         self._session_counts: dict[str, int] = {}
-        self._counts_loaded_for: Optional[date] = None
+        self._counts_loaded_for: date | None = None
 
     # ------------------------------------------------------------------
     # Public interface
@@ -140,7 +139,7 @@ class DailyCapEnforcer:
     # ------------------------------------------------------------------
 
     def _today_utc(self) -> date:
-        return datetime.now(timezone.utc).date()
+        return datetime.now(UTC).date()
 
     def _get_counts(self) -> dict[str, int]:
         today = self._today_utc()

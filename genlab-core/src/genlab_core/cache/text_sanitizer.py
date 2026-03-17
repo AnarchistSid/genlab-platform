@@ -5,7 +5,6 @@ All functions are pure, stateless, and use only stdlib (re).
 from __future__ import annotations
 
 import re
-from typing import List
 
 # Patterns that indicate potential prompt injection
 SUSPICIOUS_PATTERNS = [
@@ -72,7 +71,7 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
     return text.strip()
 
 
-def check_for_injection(text: str) -> List[str]:
+def check_for_injection(text: str) -> list[str]:
     """Check for suspicious patterns that may indicate prompt injection.
 
     Args:

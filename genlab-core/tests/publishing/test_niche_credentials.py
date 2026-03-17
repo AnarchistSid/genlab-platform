@@ -4,7 +4,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.publishing.niche_credentials import (
     NICHE_CREDENTIAL_PREFIXES,
     CrossChannelPublishError,
@@ -12,7 +11,6 @@ from genlab_core.publishing.niche_credentials import (
     resolve_niche_env,
     validate_niche_match,
 )
-
 
 # --- Existing tests (cross-channel guard) ---
 

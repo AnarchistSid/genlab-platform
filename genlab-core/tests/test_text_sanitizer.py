@@ -1,7 +1,6 @@
 """Tests for genlab_core.cache.text_sanitizer."""
 
 import pytest
-
 from genlab_core.cache.text_sanitizer import (
     check_for_injection,
     safe_extract,

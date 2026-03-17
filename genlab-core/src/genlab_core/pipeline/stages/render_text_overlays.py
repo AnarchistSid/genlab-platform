@@ -15,11 +15,9 @@ Non-fatal: overlay failures leave the video untouched.
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
 from genlab_core.media.ffmpeg_utils import escape_drawtext
@@ -41,7 +39,7 @@ class RenderTextOverlays:
             context['run_stats']['text_overlays']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[RenderTextOverlays] No stories to overlay")
@@ -116,7 +114,7 @@ class RenderTextOverlays:
         font_size: int,
         font_color: str,
         y_pos: int,
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Burn drawtext overlay onto video, return output path."""
         ffmpeg = get_ffmpeg_binary()
 

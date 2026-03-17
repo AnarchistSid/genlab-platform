@@ -2,7 +2,6 @@
 import importlib
 import sys
 
-
 from genlab_core.engagement.tasks import (
     like_comment,
     reply_to_comment_high,

@@ -1,7 +1,8 @@
 """Tests for genlab_core.learning.config_updater."""
 
-import yaml
+from datetime import UTC
 
+import yaml
 from genlab_core.learning.config_updater import (
     ConfigUpdater,
 )
@@ -15,14 +16,14 @@ def _make_records(
     platform: str = "youtube",
 ):
     """Create n PendingFeedbackTask objects with given hook_type and reward."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     return [
         PendingFeedbackTask(
             content_id=f"s{i}",
             platform=platform,
             niche_id="gaming",
-            published_at=datetime(2026, 3, i % 28 + 1, 12, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, i % 28 + 1, 12, 0, tzinfo=UTC),
             platform_post_id=f"post_{i}",
             hook_type=hook_type,
             content_type=hook_type,

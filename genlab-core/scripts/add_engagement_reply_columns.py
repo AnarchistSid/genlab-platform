@@ -6,9 +6,10 @@ Run once:
     uv run python scripts/add_engagement_reply_columns.py
 """
 from __future__ import annotations
+
 import asyncio
-import os
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -31,8 +32,8 @@ async def main():
     from azure.identity import ClientSecretCredential
     from msgraph import GraphServiceClient
     from msgraph.generated.models.column_definition import ColumnDefinition
-    from msgraph.generated.models.text_column import TextColumn
     from msgraph.generated.models.date_time_column import DateTimeColumn
+    from msgraph.generated.models.text_column import TextColumn
 
     credential = ClientSecretCredential(
         os.environ["AZURE_TENANT_ID"],

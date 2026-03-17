@@ -13,7 +13,7 @@ to the ``title`` field as defense-in-depth.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Characters above U+FFFF (non-BMP): emoji, obscure CJK extensions, etc.
 _NON_BMP_RE = re.compile(r"[\U00010000-\U0010FFFF]")
@@ -22,7 +22,7 @@ _NON_BMP_RE = re.compile(r"[\U00010000-\U0010FFFF]")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 # Curly / smart quotes and apostrophes that Graph rejects
-_SMART_QUOTES: Dict[str, str] = {
+_SMART_QUOTES: dict[str, str] = {
     "\u2018": "'",   # LEFT SINGLE QUOTATION MARK
     "\u2019": "'",   # RIGHT SINGLE QUOTATION MARK (curly apostrophe)
     "\u201C": '"',   # LEFT DOUBLE QUOTATION MARK
@@ -30,7 +30,7 @@ _SMART_QUOTES: Dict[str, str] = {
 }
 
 
-def sanitize_for_graph_api(text: Optional[str]) -> Optional[str]:
+def sanitize_for_graph_api(text: str | None) -> str | None:
     """Make a string safe for Microsoft Graph SharePoint field values.
 
     * Strips non-BMP Unicode (emoji, symbols above U+FFFF)
@@ -61,12 +61,12 @@ def sanitize_for_graph_api(text: Optional[str]) -> Optional[str]:
     return text
 
 
-def sanitize_fields_for_graph_api(fields: Dict[str, Any]) -> Dict[str, Any]:
+def sanitize_fields_for_graph_api(fields: dict[str, Any]) -> dict[str, Any]:
     """Sanitize all string values in a fields dict for Graph API.
 
     Non-string values (bool, int, float, None) pass through unchanged.
     """
-    sanitized: Dict[str, Any] = {}
+    sanitized: dict[str, Any] = {}
     for key, value in fields.items():
         if isinstance(value, str):
             sanitized[key] = sanitize_for_graph_api(value)

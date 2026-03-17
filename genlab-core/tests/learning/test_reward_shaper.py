@@ -1,7 +1,6 @@
 """Tests for genlab_core.learning.reward_shaper — monetisation-aware rewards."""
 
 import pytest
-
 from genlab_core.learning.reward_shaper import (
     BASE_WEIGHTS,
     RewardShaper,

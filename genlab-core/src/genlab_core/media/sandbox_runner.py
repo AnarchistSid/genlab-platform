@@ -79,7 +79,7 @@ def _build_network_policy(egress_allow: list[str] | None):
     return NetworkPolicy(defaultAction="deny", egress=rules or None)
 
 
-def _execution_to_result(execution) -> "SandboxRunResult":
+def _execution_to_result(execution) -> SandboxRunResult:
     """Convert an OpenSandbox Execution to SandboxRunResult.
 
     The Execution model doesn't expose exit_code directly — we infer it
@@ -174,7 +174,7 @@ class SandboxedFFmpegRunner:
         cmd: str | list[str],
         *,
         timeout: int = 300,
-    ) -> "SandboxRunResult":
+    ) -> SandboxRunResult:
         """Run an FFmpeg command synchronously inside the sandbox.
 
         If the sandbox isn't started yet, creates one for this single command
@@ -183,9 +183,10 @@ class SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox import SandboxSync
         from opensandbox.config import ConnectionConfigSync
-        from opensandbox.models import Volume, Host
+        from opensandbox.models import Host, Volume
+
+        from opensandbox import SandboxSync
 
         cmd_list = cmd if isinstance(cmd, list) else shlex.split(cmd)
         cmd_list = self.rewrite_ffmpeg_cmd(cmd_list)
@@ -226,13 +227,14 @@ class SandboxedFFmpegRunner:
 
     # ── Async context manager API ─────────────────────────────────────
 
-    async def __aenter__(self) -> "SandboxedFFmpegRunner":
+    async def __aenter__(self) -> SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox import Sandbox
         from opensandbox.config import ConnectionConfig
-        from opensandbox.models import Volume, Host
+        from opensandbox.models import Host, Volume
+
+        from opensandbox import Sandbox
 
         volume = Volume(
             name="genlab",
@@ -271,7 +273,7 @@ class SandboxedFFmpegRunner:
         cmd: str | list[str],
         *,
         timeout: int = 300,
-    ) -> "SandboxRunResult":
+    ) -> SandboxRunResult:
         """Run an FFmpeg command asynchronously inside the sandbox."""
         if not self._sandbox:
             raise RuntimeError("Sandbox not started. Use `async with` or call __aenter__.")
@@ -297,13 +299,14 @@ class SandboxedFFmpegRunner:
 
     # ── Sync context manager API ──────────────────────────────────────
 
-    def __enter__(self) -> "SandboxedFFmpegRunner":
+    def __enter__(self) -> SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox import SandboxSync
         from opensandbox.config import ConnectionConfigSync
-        from opensandbox.models import Volume, Host
+        from opensandbox.models import Host, Volume
+
+        from opensandbox import SandboxSync
 
         volume = Volume(
             name="genlab",

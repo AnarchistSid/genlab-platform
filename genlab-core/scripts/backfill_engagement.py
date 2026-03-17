@@ -15,9 +15,9 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Ensure genlab-core is on path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -55,7 +55,7 @@ POSTS = [
 ]
 
 
-def fetch_youtube_stats(video_id: str) -> Optional[Dict[str, Any]]:
+def fetch_youtube_stats(video_id: str) -> dict[str, Any] | None:
     """Fetch YouTube video statistics. Only needs YOUTUBE_API_KEY.
 
     Retries once on empty response (video may not be indexed yet).
@@ -92,7 +92,7 @@ def fetch_youtube_stats(video_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def fetch_instagram_insights(post_id: str) -> Optional[Dict[str, Any]]:
+def fetch_instagram_insights(post_id: str) -> dict[str, Any] | None:
     """Fetch IG media metrics + insights via graph.facebook.com."""
     token = os.getenv("META_ACCESS_TOKEN", "")
     if not token:
@@ -153,7 +153,7 @@ def main() -> None:
     from genlab_core.http.backlog_client import BacklogClient
 
     client = BacklogClient()
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     success = 0
     errors = 0
@@ -163,7 +163,7 @@ def main() -> None:
         niche = post["niche"]
         logger.info("=== Blueprint #%s [%s] ===", bp_id, niche)
 
-        fields: Dict[str, Any] = {}
+        fields: dict[str, Any] = {}
 
         # YouTube — write None explicitly on failure (not absent)
         yt_id = post["yt_video_id"]

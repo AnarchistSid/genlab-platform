@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.pipeline.cli import (
     NICHE_DIR_NAMES,
     VALID_NICHE_IDS,
@@ -25,10 +23,9 @@ from genlab_core.pipeline.cli import (
     _write_run_report,
     build_parser,
     main,
-    run_pipeline,
     run_multi,
+    run_pipeline,
 )
-
 
 # ── _parse_niche_arg tests ──────────────────────────────────────────────────
 

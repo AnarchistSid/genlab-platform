@@ -16,7 +16,7 @@ import logging
 import threading
 import uuid
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +127,8 @@ class PostgresBackend:
             with self._pool_lock:
                 if self._pool is None:
                     import psycopg2
-                    import psycopg2.pool
                     import psycopg2.extras
+                    import psycopg2.pool
                     self._pool = psycopg2.pool.ThreadedConnectionPool(
                         self._min_size, self._max_size, self._dsn,
                     )
@@ -173,7 +173,7 @@ class PostgresBackend:
 
     # ── CREATE ──────────────────────────────────────────────────────
 
-    def create(self, table: str, record: Dict[str, Any], *, typecast: bool = False) -> str:
+    def create(self, table: str, record: dict[str, Any], *, typecast: bool = False) -> str:
         """Create a record. Returns the new UUID record ID."""
         record_id = str(uuid.uuid4())
         cols, extra = self._split_fields(table, record)
@@ -204,7 +204,7 @@ class PostgresBackend:
 
     # ── GET ─────────────────────────────────────────────────────────
 
-    def get(self, table: str, record_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, table: str, record_id: str) -> dict[str, Any] | None:
         """Get a single record by ID (UUID or legacy SharePoint integer ID)."""
         record_id = str(record_id).strip()
 
@@ -240,7 +240,7 @@ class PostgresBackend:
         formula: str = "",
         niche_id: str = "",
         max_records: int | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Find records matching a formula filter with RLS niche isolation."""
         from genlab_core.storage.formula_sql import formula_to_sql
 
@@ -280,7 +280,7 @@ class PostgresBackend:
         formula: str = "",
         niche_id: str = "",
         max_records: int | None = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Alias for find()."""
         if table is None:
             raise ValueError("table is required for PostgresBackend.all()")
@@ -292,7 +292,7 @@ class PostgresBackend:
         self,
         table: str,
         record_id: str,
-        fields: Dict[str, Any],
+        fields: dict[str, Any],
         *,
         typecast: bool = False,
     ) -> None:
@@ -358,7 +358,7 @@ class PostgresBackend:
 
     # ── BATCH CREATE ────────────────────────────────────────────────
 
-    def batch_create(self, table: str, records: List[Dict[str, Any]]) -> List[str]:
+    def batch_create(self, table: str, records: list[dict[str, Any]]) -> list[str]:
         """Create multiple records. Returns list of new record IDs."""
         return [self.create(table, r) for r in records]
 

@@ -5,7 +5,6 @@ and the tiny-dataset fallback behavior.
 """
 from __future__ import annotations
 
-
 from genlab_core.learning.hook_training_data import (
     HookExample,
     compute_engagement_labels,

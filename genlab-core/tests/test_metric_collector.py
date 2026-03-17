@@ -5,9 +5,8 @@ All external dependencies (platform APIs, SharePoint store) are mocked.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-
 
 from genlab_core.learning.metric_collector import (
     _fetch_facebook,
@@ -278,7 +277,7 @@ def _make_task(
     completed_windows: list | None = None,
 ) -> PendingFeedbackTask:
     """Create a PendingFeedbackTask for testing."""
-    pub = datetime.now(timezone.utc) - timedelta(hours=published_hours_ago)
+    pub = datetime.now(UTC) - timedelta(hours=published_hours_ago)
     return PendingFeedbackTask(
         content_id="test_content_001",
         platform=platform,

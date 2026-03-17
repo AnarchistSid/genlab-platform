@@ -7,14 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.video_compositor import (
     LOGO_LEFT_MARGIN,
     VERTICAL_HEIGHT,
     VideoCompositor,
     VisualConfig,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

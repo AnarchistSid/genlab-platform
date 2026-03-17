@@ -21,7 +21,6 @@ import logging
 import shutil
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from genlab_core.settings import settings
 
@@ -35,8 +34,8 @@ class LocalCDNUpload:
 
     def __init__(
         self,
-        tunnel_url: Optional[str] = None,
-        serve_dir: Optional[Path] = None,
+        tunnel_url: str | None = None,
+        serve_dir: Path | None = None,
     ):
         self._tunnel_url = (
             tunnel_url

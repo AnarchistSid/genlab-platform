@@ -4,13 +4,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.storage.factory import (
     get_backend_for_table,
     reset_backends,
 )
-from genlab_core.storage.sharepoint import SharePointBackend
 from genlab_core.storage.postgres import PostgresBackend
+from genlab_core.storage.sharepoint import SharePointBackend
 
 
 @pytest.fixture(autouse=True)

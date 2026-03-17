@@ -15,10 +15,9 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import threading
-from typing import Optional
 
-_LOOP: Optional[asyncio.AbstractEventLoop] = None
-_LOOP_THREAD: Optional[threading.Thread] = None
+_LOOP: asyncio.AbstractEventLoop | None = None
+_LOOP_THREAD: threading.Thread | None = None
 _LOOP_LOCK = threading.Lock()
 
 

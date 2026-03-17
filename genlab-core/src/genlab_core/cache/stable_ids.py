@@ -6,7 +6,6 @@ This ensures idempotent upserts and deduplication.
 
 import hashlib
 from datetime import datetime
-from typing import List
 from urllib.parse import parse_qs, urlencode, urlparse
 
 # Common tracking parameters to strip during URL normalization
@@ -109,7 +108,7 @@ def generate_asset_id(story_id: str, source_url: str, asset_type: str) -> str:
     return f"AST_{hash_full[:16].upper()}"
 
 
-def generate_cluster_id(story_ids: List[str]) -> str:
+def generate_cluster_id(story_ids: list[str]) -> str:
     """Generate deterministic cluster ID from sorted member story_ids.
 
     Stable: same set of story_ids always produces the same cluster_id,

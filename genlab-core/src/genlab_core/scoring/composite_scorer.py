@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # A video's view_velocity is normalised against this baseline.
 # These are intentionally higher than the fetch-stage MIN_VIEW_VELOCITY
 # thresholds — fetch casts a wide net, this gate narrows to publishable.
-DEFAULT_VELOCITY_THRESHOLDS: Dict[str, float] = {
+DEFAULT_VELOCITY_THRESHOLDS: dict[str, float] = {
     "gaming": 1500.0,
     "sports": 2000.0,
     "movies": 800.0,
@@ -43,7 +43,7 @@ DEFAULT_VELOCITY_THRESHOLDS: Dict[str, float] = {
 
 # Minimum composite score to pass the quality gate.
 # Videos below this are filtered out of score_and_rank().
-DEFAULT_MIN_COMPOSITE: Dict[str, float] = {
+DEFAULT_MIN_COMPOSITE: dict[str, float] = {
     "gaming": 0.35,
     "sports": 0.35,
     "movies": 0.30,
@@ -65,7 +65,7 @@ class VideoScore:
     composite: float
     passed: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "video_id": self.video_id,
             "title": self.title,
@@ -92,8 +92,8 @@ class CompositeScorer:
     def __init__(
         self,
         niche_id: str,
-        velocity_threshold: Optional[float] = None,
-        min_composite: Optional[float] = None,
+        velocity_threshold: float | None = None,
+        min_composite: float | None = None,
     ):
         self.niche_id = niche_id
         self.velocity_threshold = (
@@ -109,7 +109,7 @@ class CompositeScorer:
 
     def score(
         self,
-        video: Dict[str, Any],
+        video: dict[str, Any],
         trend_multiplier: float = 1.0,
         niche_relevance: float = 1.0,
     ) -> VideoScore:
@@ -146,10 +146,10 @@ class CompositeScorer:
 
     def score_and_rank(
         self,
-        videos: List[Dict[str, Any]],
-        trend_multipliers: Optional[Dict[str, float]] = None,
-        niche_relevances: Optional[Dict[str, float]] = None,
-    ) -> List[VideoScore]:
+        videos: list[dict[str, Any]],
+        trend_multipliers: dict[str, float] | None = None,
+        niche_relevances: dict[str, float] | None = None,
+    ) -> list[VideoScore]:
         """Score all videos, filter by threshold, return sorted DESC by composite.
 
         Args:
@@ -166,7 +166,7 @@ class CompositeScorer:
         trend_map = trend_multipliers or {}
         relevance_map = niche_relevances or {}
 
-        scored: List[VideoScore] = []
+        scored: list[VideoScore] = []
         for video in videos:
             vid = str(video.get("video_id", ""))
             vs = self.score(
@@ -211,7 +211,7 @@ _ZERO_VISUAL_PATTERNS = [
     "web novels", "buying guide", "best of 20",
 ]
 
-_STRONG_VISUAL_SIGNALS: Dict[str, List[str]] = {
+_STRONG_VISUAL_SIGNALS: dict[str, list[str]] = {
     "sports": ["highlights", "scored", "dunk", "play", "win", "loss",
                "record", "comeback", "ejected", "clutch", "game winner"],
     "gaming": ["gameplay", "clip", "stream", "tournament", "patch",

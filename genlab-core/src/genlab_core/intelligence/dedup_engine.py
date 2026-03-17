@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 logger = logging.getLogger(__name__)
 

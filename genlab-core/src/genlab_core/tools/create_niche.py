@@ -122,7 +122,7 @@ def scaffold_niche(
     print(f"\nNiche '{niche_id}' scaffolded at {output_dir}")
     print("\nNext steps:")
     print(f"  1. Add to pipeline_runner.NICHE_ROOTS: '{niche_id}': '{output_dir}'")
-    print(f"  2. Add to dashboard/configs/niches_registry.yaml")
+    print("  2. Add to dashboard/configs/niches_registry.yaml")
     print(f"  3. Add platform credentials to .env ({brand_clean.upper()}_* vars)")
     print(f"  4. Run: uv run python -m genlab_core.tools.validate_configs --niche-dir {output_dir}")
 

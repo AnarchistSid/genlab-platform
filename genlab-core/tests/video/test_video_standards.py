@@ -4,7 +4,6 @@ from genlab_core.media.ffmpeg import Platform as FFmpegPlatform
 from genlab_core.media.video_compositor import VisualConfig
 from genlab_core.video.standards import LayoutStandard, Platform, all_standards, get_standard
 
-
 # ── C2: Core standard assertions ─────────────────────────────────────────────
 
 

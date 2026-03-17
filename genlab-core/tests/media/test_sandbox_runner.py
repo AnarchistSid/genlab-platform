@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.media.sandbox_runner import (
     SandboxedFFmpegRunner,
     SandboxRunResult,

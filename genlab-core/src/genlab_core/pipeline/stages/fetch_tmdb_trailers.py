@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
@@ -85,7 +85,7 @@ class FetchTMDBTrailers:
     Requires TMDB_API_KEY in environment.
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         if niche_id != "movies":
             return context
@@ -112,7 +112,7 @@ class FetchTMDBTrailers:
         if trailers:
             from genlab_core.cache.stable_ids import generate_story_id
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             new_stories = []
             for t in trailers:
                 sid = generate_story_id(t["url"], now_iso)
@@ -142,5 +142,5 @@ class FetchTMDBTrailers:
         run_stats["tmdb_trailers_found"] = len(trailers)
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         return self.execute(context)

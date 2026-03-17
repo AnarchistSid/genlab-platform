@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 import unicodedata
 
-
 # Regex for common superlative patterns
 _SUPERLATIVE_RE = re.compile(
     r"\b(most|best|worst|biggest|smallest|fastest|slowest|largest|"

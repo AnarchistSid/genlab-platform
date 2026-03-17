@@ -18,7 +18,6 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
 
 from genlab_core.interfaces.tts import TTSResult
 
@@ -69,7 +68,7 @@ class ElevenLabsTTS:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         voice_id: str = "ErXwobaYiN019PkySvjV",
         model: str = "eleven_multilingual_v2",
         stability: float = 0.85,
@@ -114,8 +113,8 @@ class ElevenLabsTTS:
 
         start = time.time()
         try:
-            from elevenlabs.client import ElevenLabs
             from elevenlabs import VoiceSettings, save
+            from elevenlabs.client import ElevenLabs
 
             client = ElevenLabs(api_key=self._api_key)
             audio = client.generate(
@@ -180,7 +179,7 @@ class OpenAITTS:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         voice: str = "onyx",
         model: str = "tts-1-hd",
         speed: float = 1.0,

@@ -4,7 +4,7 @@ Provides is_due() for checking schedule readiness and build_caption()
 for assembling platform-safe captions with hashtags.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def is_due(
@@ -32,7 +32,7 @@ def is_due(
         tz = ZoneInfo(timezone_str)
         scheduled_dt = scheduled_dt.replace(tzinfo=tz)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now >= scheduled_dt
 
 

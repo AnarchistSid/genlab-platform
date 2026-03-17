@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -561,9 +561,9 @@ class YouTubeClient:
         Returns:
             :class:`~genlab_core.platforms.models.PlatformMetrics` or ``None``.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pub_utc = (
-            published_at.replace(tzinfo=timezone.utc)
+            published_at.replace(tzinfo=UTC)
             if published_at.tzinfo is None
             else published_at
         )

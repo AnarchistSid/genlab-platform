@@ -244,8 +244,8 @@ class TestScheduleGuardedProxy:
 
     def test_blocks_status_demotion_on_scheduled(self):
         from genlab_core.http.backlog_client import (
-            ScheduleGuardedProxy,
             ScheduledPostProtectionError,
+            ScheduleGuardedProxy,
         )
 
         inner = MagicMock()
@@ -279,8 +279,8 @@ class TestScheduleGuardedProxy:
 
     def test_blocks_delete_on_scheduled(self):
         from genlab_core.http.backlog_client import (
-            ScheduleGuardedProxy,
             ScheduledPostProtectionError,
+            ScheduleGuardedProxy,
         )
 
         inner = MagicMock()
@@ -327,8 +327,8 @@ class TestScheduleGuardedProxy:
 
     def test_blocks_clearing_visual_paths(self):
         from genlab_core.http.backlog_client import (
-            ScheduleGuardedProxy,
             ScheduledPostProtectionError,
+            ScheduleGuardedProxy,
         )
 
         inner = MagicMock()

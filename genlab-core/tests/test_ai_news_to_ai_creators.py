@@ -2,17 +2,17 @@
 
 ai_creators is the only canonical key. ai_news must NOT appear in any lookup dict.
 """
-from genlab_core.media.video_sourcer import NICHE_SUBREDDITS
-from genlab_core.media.trending_video_fetcher import (
-    YOUTUBE_CATEGORIES,
-    NICHE_SEARCH_KEYWORDS,
-    MIN_VIEW_VELOCITY,
-)
+from genlab_core.intel.google_trends import NICHE_SEED_KEYWORDS, TRENDS_CATEGORIES
 from genlab_core.media.download_top_videos import _NICHE_KEYWORDS
-from genlab_core.intel.google_trends import TRENDS_CATEGORIES, NICHE_SEED_KEYWORDS
+from genlab_core.media.trending_video_fetcher import (
+    MIN_VIEW_VELOCITY,
+    NICHE_SEARCH_KEYWORDS,
+    YOUTUBE_CATEGORIES,
+)
+from genlab_core.media.video_sourcer import NICHE_SUBREDDITS
 from genlab_core.scoring.composite_scorer import (
-    DEFAULT_VELOCITY_THRESHOLDS,
     DEFAULT_MIN_COMPOSITE,
+    DEFAULT_VELOCITY_THRESHOLDS,
 )
 
 

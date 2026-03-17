@@ -26,7 +26,7 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 from genlab_core.media.video_validator import check_vmaf
@@ -64,7 +64,7 @@ class ValidateVideos:
             context['run_stats']['video_validation']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[ValidateVideos] No stories to validate")
@@ -160,7 +160,7 @@ class ValidateVideos:
 
         return context
 
-    def _run_vmaf_gate(self, media: Dict[str, Any], video_path: str) -> str:
+    def _run_vmaf_gate(self, media: dict[str, Any], video_path: str) -> str:
         """Run VMAF check with one re-encode attempt on failure.
 
         Returns: "pass", "reencoded", or "fail".
@@ -201,7 +201,7 @@ class ValidateVideos:
         return "fail"
 
     @staticmethod
-    def _probe(path: Path) -> Optional[Dict[str, Any]]:
+    def _probe(path: Path) -> dict[str, Any] | None:
         """Probe video with ffprobe, return metadata dict."""
         ffprobe = get_ffprobe_binary()
         cmd = [
@@ -219,9 +219,9 @@ class ValidateVideos:
             return None
 
     @staticmethod
-    def _check(probe: Dict[str, Any]) -> List[str]:
+    def _check(probe: dict[str, Any]) -> list[str]:
         """Check probe data against spec, return list of issues."""
-        issues: List[str] = []
+        issues: list[str] = []
 
         # Find video stream
         video_stream = None
@@ -292,7 +292,7 @@ class ValidateVideos:
         return issues
 
     @staticmethod
-    def _can_fix(issues: List[str]) -> bool:
+    def _can_fix(issues: list[str]) -> bool:
         """Determine if issues are auto-fixable via re-encoding."""
         fixable = {
             "wrong_codec", "wrong_pix_fmt", "wrong_color_space",
@@ -306,9 +306,9 @@ class ValidateVideos:
     @staticmethod
     def _fix(
         path: Path,
-        probe: Dict[str, Any],
-        issues: List[str],
-    ) -> Optional[Path]:
+        probe: dict[str, Any],
+        issues: list[str],
+    ) -> Path | None:
         """Re-encode to fix codec/pix_fmt/color_space/audio issues."""
         ffmpeg = get_ffmpeg_binary()
         out = path.with_stem(f"{path.stem}_fixed")
@@ -340,7 +340,7 @@ class ValidateVideos:
     def _vmaf_reencode(
         path: Path,
         current_crf: int = _DEFAULT_CRF,
-    ) -> Optional[Path]:
+    ) -> Path | None:
         """Re-encode at CRF - _CRF_STEP (minimum _MIN_REENCODE_CRF) to improve VMAF.
 
         Returns the path to the re-encoded file, or None if FFmpeg fails.

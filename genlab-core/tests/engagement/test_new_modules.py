@@ -4,7 +4,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 
-
 class TestToxicityGateResult:
     """Verify the new check_inbound returns a ToxicityResult with full info."""
 

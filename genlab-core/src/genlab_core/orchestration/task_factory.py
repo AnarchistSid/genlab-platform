@@ -18,18 +18,19 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, Dict, Type
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 def make_stage_task(
-    stage_cls: Type[Any],
+    stage_cls: type[Any],
     *,
     retries: int = 0,
     retry_delay_seconds: int = 30,
     tags: list[str] | None = None,
-) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """Create a Prefect @task from a pipeline stage class.
 
     Args:
@@ -51,7 +52,7 @@ def make_stage_task(
         retry_delay_seconds=retry_delay_seconds,
         tags=tags or [],
     )
-    def run_stage(context: Dict[str, Any]) -> Dict[str, Any]:
+    def run_stage(context: dict[str, Any]) -> dict[str, Any]:
         stage = stage_cls()
         t0 = time.monotonic()
         logger.info("[Prefect] Stage %s starting", stage_name)

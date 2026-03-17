@@ -10,14 +10,10 @@ Covers:
 """
 
 import pytest
-
 from genlab_core.scoring.composite_scorer import (
     CompositeScorer,
     VideoScore,
-    DEFAULT_MIN_COMPOSITE,
-    DEFAULT_VELOCITY_THRESHOLDS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

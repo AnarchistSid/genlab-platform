@@ -5,13 +5,11 @@ regression anchors for the scoring math infrastructure.
 """
 
 import pytest
-
 from genlab_core.intelligence.score_normalizer import (
     WelfordNormalizer,
-    temporal_decay,
     stouffer_composite,
+    temporal_decay,
 )
-
 
 # ---------------------------------------------------------------------------
 # WelfordNormalizer — concrete examples

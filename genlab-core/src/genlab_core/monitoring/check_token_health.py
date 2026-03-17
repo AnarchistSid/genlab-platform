@@ -28,6 +28,8 @@ from typing import Any
 import requests
 
 from genlab_core.monitoring.token_health import (  # noqa: F401 — re-export
+    _run_native_platform_checks,
+    _token_status_to_dict,
     check_anthropic,
     check_backlog,
     check_meta_token,
@@ -37,8 +39,6 @@ from genlab_core.monitoring.token_health import (  # noqa: F401 — re-export
     main,
     refresh_meta_token,
     run_all_checks,
-    _run_native_platform_checks,
-    _token_status_to_dict,
 )
 
 logger = logging.getLogger(__name__)

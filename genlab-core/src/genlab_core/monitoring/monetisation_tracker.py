@@ -18,9 +18,9 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import requests
 import yaml
@@ -38,7 +38,7 @@ from genlab_core.publishing.niche_credentials import NICHE_CREDENTIAL_PREFIXES
 _NICHE_ENV_PREFIX: dict[str, str] = {**NICHE_CREDENTIAL_PREFIXES, "ai_creators": "META"}
 
 
-def _load_targets(config_path: Optional[Path] = None) -> dict:
+def _load_targets(config_path: Path | None = None) -> dict:
     """Load monetisation targets from YAML config."""
     if config_path is None:
         config_path = _CONFIG_ROOT / "monetisation_targets.yaml"
@@ -50,7 +50,7 @@ def _load_targets(config_path: Optional[Path] = None) -> dict:
         return {}
 
 
-def _get_target(targets: dict, platform: str, metric_name: str) -> Optional[float]:
+def _get_target(targets: dict, platform: str, metric_name: str) -> float | None:
     """Extract a target value from the nested targets config."""
     plat = targets.get(platform, {})
     # Direct top-level metric (facebook.followers, instagram.followers)
@@ -71,7 +71,7 @@ class MonetisationTracker:
     def __init__(
         self,
         backlog_client: Any,
-        config_path: Optional[Path] = None,
+        config_path: Path | None = None,
     ) -> None:
         self._client = backlog_client
         self._targets = _load_targets(config_path)
@@ -108,7 +108,7 @@ class MonetisationTracker:
     def run(
         self,
         dry_run: bool = False,
-        niche_filter: Optional[str] = None,
+        niche_filter: str | None = None,
     ) -> dict[str, Any]:
         """Run tracker for all niches. Returns summary dict."""
         niches = [niche_filter] if niche_filter else NICHES
@@ -184,8 +184,8 @@ class MonetisationTracker:
 
         # Watch hours (12mo) via YouTube Analytics
         try:
-            yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-            year_ago = (datetime.now(timezone.utc) - timedelta(days=365)).strftime("%Y-%m-%d")
+            yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+            year_ago = (datetime.now(UTC) - timedelta(days=365)).strftime("%Y-%m-%d")
             r = requests.get(
                 "https://youtubeanalytics.googleapis.com/v2/reports",
                 params={
@@ -210,7 +210,7 @@ class MonetisationTracker:
 
         # Shorts views (90d)
         try:
-            ninety_ago = (datetime.now(timezone.utc) - timedelta(days=90)).strftime("%Y-%m-%d")
+            ninety_ago = (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
             r = requests.get(
                 "https://youtubeanalytics.googleapis.com/v2/reports",
                 params={
@@ -235,7 +235,7 @@ class MonetisationTracker:
 
         return result
 
-    def _get_youtube_creds(self, niche_id: str) -> Optional[dict]:
+    def _get_youtube_creds(self, niche_id: str) -> dict | None:
         """Get YouTube OAuth credentials using per-niche prefix resolution."""
         prefix = _NICHE_ENV_PREFIX.get(niche_id, niche_id.upper())
         # Per-niche client_id/secret (fall back to global)
@@ -254,7 +254,7 @@ class MonetisationTracker:
             "refresh_token": refresh_token,
         }
 
-    def _get_youtube_access_token(self, creds: dict) -> Optional[str]:
+    def _get_youtube_access_token(self, creds: dict) -> str | None:
         """Exchange refresh token for access token."""
         try:
             r = requests.post(
@@ -396,7 +396,7 @@ class MonetisationTracker:
             )
             if r.status_code == 200:
                 media_items = r.json().get("data", [])
-                seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+                seven_days_ago = datetime.now(UTC) - timedelta(days=7)
                 total_shares = 0
                 for media in media_items:
                     ts = media.get("timestamp", "")
@@ -442,7 +442,7 @@ class MonetisationTracker:
         platform: str,
         metric_name: str,
         current_value: float,
-        previous_value: Optional[float],
+        previous_value: float | None,
         dry_run: bool,
         data_source: str = "api",
         error_log: str = "",
@@ -467,7 +467,7 @@ class MonetisationTracker:
             "platform": platform,
             "metric_name": metric_name,
             "current_value": current_value,
-            "as_of_date": datetime.now(timezone.utc).isoformat(),
+            "as_of_date": datetime.now(UTC).isoformat(),
             "data_source": data_source,
         }
         if target is not None:

@@ -1,13 +1,11 @@
 """Tests for YouTubeClient — mocks all HTTP and Google API calls."""
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.platforms.models import PublishPayload, YouTubeSpecific
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -399,10 +397,10 @@ class TestLike:
 
 class TestGetMetrics:
     def _old_published_at(self, hours_ago: float = 72) -> datetime:
-        return datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+        return datetime.now(UTC) - timedelta(hours=hours_ago)
 
     def _recent_published_at(self, hours_ago: float = 12) -> datetime:
-        return datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+        return datetime.now(UTC) - timedelta(hours=hours_ago)
 
     def test_get_metrics_returns_none_for_recent_video(self, yt_client):
         """Videos published < 48h ago return None (data lag guard)."""
@@ -1138,8 +1136,8 @@ class TestPerChunkRetry:
 
 class TestProtocolCompliance:
     def test_implements_publisher_protocol(self):
-        from genlab_core.platforms.youtube import YouTubeClient
         from genlab_core.platforms.protocols import Publisher
+        from genlab_core.platforms.youtube import YouTubeClient
 
         client = YouTubeClient(
             client_id="id",
@@ -1149,8 +1147,8 @@ class TestProtocolCompliance:
         assert isinstance(client, Publisher)
 
     def test_implements_engageable_protocol(self):
-        from genlab_core.platforms.youtube import YouTubeClient
         from genlab_core.platforms.protocols import Engageable
+        from genlab_core.platforms.youtube import YouTubeClient
 
         client = YouTubeClient(
             client_id="id",
@@ -1160,8 +1158,8 @@ class TestProtocolCompliance:
         assert isinstance(client, Engageable)
 
     def test_implements_trackable_protocol(self):
-        from genlab_core.platforms.youtube import YouTubeClient
         from genlab_core.platforms.protocols import Trackable
+        from genlab_core.platforms.youtube import YouTubeClient
 
         client = YouTubeClient(
             client_id="id",
@@ -1171,8 +1169,8 @@ class TestProtocolCompliance:
         assert isinstance(client, Trackable)
 
     def test_implements_health_checkable_protocol(self):
-        from genlab_core.platforms.youtube import YouTubeClient
         from genlab_core.platforms.protocols import HealthCheckable
+        from genlab_core.platforms.youtube import YouTubeClient
 
         client = YouTubeClient(
             client_id="id",

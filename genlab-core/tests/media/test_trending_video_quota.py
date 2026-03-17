@@ -1,14 +1,12 @@
 """Tests for Sprint 64 YouTube quota optimization in trending_video_fetcher."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, mock_open
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.trending_video_fetcher import (
     QUOTA_TRACKER,
     TrendingVideoFetcher,
-    FetchTrendingVideos,
     reset_quota_tracker,
 )
 
@@ -167,7 +165,7 @@ class TestFetchFromChannels:
             mock_urlopen.return_value = mock_resp
             mock_playlist.return_value = []
 
-            published_after = datetime.now(timezone.utc) - timedelta(hours=48)
+            published_after = datetime.now(UTC) - timedelta(hours=48)
             fetcher._fetch_from_channels(channels, "sports", published_after)
 
         mock_playlist.assert_called_once_with("UCtest")
@@ -226,7 +224,7 @@ class TestQuotaTracker:
             mock_resp.raise_for_status = MagicMock()
             mock_session.get.return_value = mock_resp
 
-            published_after = datetime.now(timezone.utc) - timedelta(hours=48)
+            published_after = datetime.now(UTC) - timedelta(hours=48)
             fetcher._fetch_most_popular("20", published_after)
 
         assert QUOTA_TRACKER["units_used"] == 1

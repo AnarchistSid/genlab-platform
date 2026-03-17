@@ -1,11 +1,11 @@
 """Tests for persona configuration loading and system prompt building."""
 from __future__ import annotations
 
-import pytest
-import yaml
 from pathlib import Path
 
-from genlab_core.engagement.persona_schema import NichePersona, VoiceConfig, ReplyConstraints
+import pytest
+import yaml
+from genlab_core.engagement.persona_schema import NichePersona, ReplyConstraints, VoiceConfig
 
 
 class TestPersonaLoadFromYaml:

@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from genlab_core.learning.pending_feedback_task import (
-    PendingFeedbackTask,
     CollectionStatus,
     CollectionWindow,
+    PendingFeedbackTask,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,10 +108,10 @@ class PendingFeedbackStore:
         now: datetime | None = None,
     ) -> CollectionWindow | None:
         """Return next uncollected window that is old enough, or None."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         pub = task.published_at
         if pub.tzinfo is None:
-            pub = pub.replace(tzinfo=timezone.utc)
+            pub = pub.replace(tzinfo=UTC)
         age_hours = (now - pub).total_seconds() / 3600
 
         for window in task.pending_windows:
@@ -186,11 +186,11 @@ class PendingFeedbackStore:
 
         raw_pub = fields.get("PublishedAt")
         if isinstance(raw_pub, datetime):
-            published_at = raw_pub if raw_pub.tzinfo else raw_pub.replace(tzinfo=timezone.utc)
+            published_at = raw_pub if raw_pub.tzinfo else raw_pub.replace(tzinfo=UTC)
         elif isinstance(raw_pub, str) and raw_pub.strip():
             published_at = datetime.fromisoformat(raw_pub.replace("Z", "+00:00"))
         else:
-            published_at = datetime.now(timezone.utc)
+            published_at = datetime.now(UTC)
 
         return PendingFeedbackTask(
             content_id=fields.get("PostID", ""),

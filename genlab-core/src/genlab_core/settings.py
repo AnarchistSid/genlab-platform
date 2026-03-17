@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 from pydantic import Field
@@ -48,7 +47,7 @@ if _root_env.is_file():
 # root directory, either in the virtualenv's activate script, in a .env file,
 # or in its launch configuration. This ensures settings.py finds the correct
 # .env file for that agent.
-NICHE_REQUIREMENTS: Dict[str, List[str]] = {
+NICHE_REQUIREMENTS: dict[str, list[str]] = {
     "ai_creators": [
         # Backlog
         "azure_tenant_id", "azure_client_id", "azure_client_secret",
@@ -87,137 +86,137 @@ class Settings(BaseSettings):
     )
 
     # ── Microsoft Graph / SharePoint ──────────────────────────
-    azure_tenant_id: Optional[str] = Field(
+    azure_tenant_id: str | None = Field(
         default=None,
         validation_alias="AZURE_TENANT_ID",
     )
-    azure_client_id: Optional[str] = Field(
+    azure_client_id: str | None = Field(
         default=None,
         validation_alias="AZURE_CLIENT_ID",
     )
-    azure_client_secret: Optional[str] = Field(
+    azure_client_secret: str | None = Field(
         default=None,
         validation_alias="AZURE_CLIENT_SECRET",
     )
-    sharepoint_site_id: Optional[str] = Field(
+    sharepoint_site_id: str | None = Field(
         default=None,
         validation_alias="SHAREPOINT_SITE_ID",
     )
 
     # ── Anthropic (primary LLM) ───────────────────────────────
-    anthropic_api_key: Optional[str] = Field(
+    anthropic_api_key: str | None = Field(
         default=None,
         validation_alias="ANTHROPIC_API_KEY",
     )
 
     # ── OpenAI (secondary LLM + image gen) ────────────────────
-    openai_api_key: Optional[str] = Field(
+    openai_api_key: str | None = Field(
         default=None,
         validation_alias="OPENAI_API_KEY",
     )
 
     # ── Meta / Instagram ──────────────────────────────────────
-    meta_access_token: Optional[str] = Field(
+    meta_access_token: str | None = Field(
         default=None,
         validation_alias="META_ACCESS_TOKEN",
     )
-    meta_ig_user_id: Optional[str] = Field(
+    meta_ig_user_id: str | None = Field(
         default=None,
         validation_alias="META_IG_USER_ID",
     )
-    meta_ig_app_id: Optional[str] = Field(
+    meta_ig_app_id: str | None = Field(
         default=None,
         validation_alias="META_IG_APP_ID",
     )
-    meta_ig_app_secret: Optional[str] = Field(
+    meta_ig_app_secret: str | None = Field(
         default=None,
         validation_alias="META_IG_APP_SECRET",
     )
 
     # ── Meta / Facebook ───────────────────────────────────────
-    fb_page_access_token: Optional[str] = Field(
+    fb_page_access_token: str | None = Field(
         default=None,
         validation_alias="FB_PAGE_ACCESS_TOKEN",
     )
-    meta_fb_page_id: Optional[str] = Field(
+    meta_fb_page_id: str | None = Field(
         default=None,
         validation_alias="META_FB_PAGE_ID",
     )
-    fb_app_id: Optional[str] = Field(
+    fb_app_id: str | None = Field(
         default=None,
         validation_alias="FB_APP_ID",
     )
-    fb_app_secret: Optional[str] = Field(
+    fb_app_secret: str | None = Field(
         default=None,
         validation_alias="FB_APP_SECRET",
     )
 
     # ── YouTube (Data API v3 + OAuth2) ────────────────────────
-    youtube_client_id: Optional[str] = Field(
+    youtube_client_id: str | None = Field(
         default=None,
         validation_alias="YOUTUBE_CLIENT_ID",
     )
-    youtube_client_secret: Optional[str] = Field(
+    youtube_client_secret: str | None = Field(
         default=None,
         validation_alias="YOUTUBE_CLIENT_SECRET",
     )
-    youtube_refresh_token: Optional[str] = Field(
+    youtube_refresh_token: str | None = Field(
         default=None,
         validation_alias="YOUTUBE_REFRESH_TOKEN",
     )
 
     # ── X / Twitter (API v2) ──────────────────────────────────
-    x_api_key: Optional[str] = Field(
+    x_api_key: str | None = Field(
         default=None,
         validation_alias="X_API_KEY",
     )
-    x_api_secret: Optional[str] = Field(
+    x_api_secret: str | None = Field(
         default=None,
         validation_alias="X_API_SECRET",
     )
-    x_access_token: Optional[str] = Field(
+    x_access_token: str | None = Field(
         default=None,
         validation_alias="X_ACCESS_TOKEN",
     )
-    x_access_secret: Optional[str] = Field(
+    x_access_secret: str | None = Field(
         default=None,
         validation_alias="X_ACCESS_SECRET",
     )
-    x_bearer_token: Optional[str] = Field(
+    x_bearer_token: str | None = Field(
         default=None,
         validation_alias="X_BEARER_TOKEN",
     )
 
     # ── Pexels (stock media) ──────────────────────────────────
-    pexels_api_key: Optional[str] = Field(
+    pexels_api_key: str | None = Field(
         default=None,
         validation_alias="PEXELS_API_KEY",
     )
 
     # ── Pixabay (stock media) ─────────────────────────────────
-    pixabay_api_key: Optional[str] = Field(
+    pixabay_api_key: str | None = Field(
         default=None,
         validation_alias="PIXABAY_API_KEY",
     )
 
     # ── Unsplash (stock images) ───────────────────────────────
-    unsplash_access_key: Optional[str] = Field(
+    unsplash_access_key: str | None = Field(
         default=None,
         validation_alias="UNSPLASH_ACCESS_KEY",
     )
 
     # ── Twitch / IGDB ─────────────────────────────────────────
-    twitch_client_id: Optional[str] = Field(
+    twitch_client_id: str | None = Field(
         default=None,
         validation_alias="TWITCH_CLIENT_ID",
     )
-    twitch_client_secret: Optional[str] = Field(
+    twitch_client_secret: str | None = Field(
         default=None,
         validation_alias="TWITCH_CLIENT_SECRET",
     )
 
     # ── ElevenLabs (TTS) ──────────────────────────────────────
-    elevenlabs_api_key: Optional[str] = Field(
+    elevenlabs_api_key: str | None = Field(
         default=None,
         validation_alias="ELEVENLABS_API_KEY",
     )
@@ -229,61 +228,61 @@ class Settings(BaseSettings):
     )
 
     # ── Review dashboard ──────────────────────────────────────
-    flask_secret_key: Optional[str] = Field(
+    flask_secret_key: str | None = Field(
         default=None,
         validation_alias="FLASK_SECRET_KEY",
     )
-    review_auth_user: Optional[str] = Field(
+    review_auth_user: str | None = Field(
         default=None,
         validation_alias="REVIEW_AUTH_USER",
     )
-    review_auth_pass: Optional[str] = Field(
+    review_auth_pass: str | None = Field(
         default=None,
         validation_alias="REVIEW_AUTH_PASS",
     )
 
     # ── Threads (Meta Threads API v1) ──────────────────────────
-    threads_access_token: Optional[str] = Field(
+    threads_access_token: str | None = Field(
         default=None,
         validation_alias="THREADS_ACCESS_TOKEN",
     )
-    threads_user_id: Optional[str] = Field(
+    threads_user_id: str | None = Field(
         default=None,
         validation_alias="THREADS_USER_ID",
     )
-    threads_token_issued_at: Optional[str] = Field(
+    threads_token_issued_at: str | None = Field(
         default=None,
         validation_alias="THREADS_TOKEN_ISSUED_AT",
     )
 
     # ── TikTok (Content Posting API v2) ─────────────────────
-    tiktok_client_key: Optional[str] = Field(
+    tiktok_client_key: str | None = Field(
         default=None,
         validation_alias="TIKTOK_CLIENT_KEY",
     )
-    tiktok_client_secret: Optional[str] = Field(
+    tiktok_client_secret: str | None = Field(
         default=None,
         validation_alias="TIKTOK_CLIENT_SECRET",
     )
-    tiktok_access_token: Optional[str] = Field(
+    tiktok_access_token: str | None = Field(
         default=None,
         validation_alias="TIKTOK_ACCESS_TOKEN",
     )
-    tiktok_refresh_token: Optional[str] = Field(
+    tiktok_refresh_token: str | None = Field(
         default=None,
         validation_alias="TIKTOK_REFRESH_TOKEN",
     )
-    tiktok_token_issued_at: Optional[str] = Field(
+    tiktok_token_issued_at: str | None = Field(
         default=None,
         validation_alias="TIKTOK_TOKEN_ISSUED_AT",
     )
-    tiktok_audit_approved: Optional[str] = Field(
+    tiktok_audit_approved: str | None = Field(
         default="false",
         validation_alias="TIKTOK_AUDIT_APPROVED",
     )
 
     # ── Cloudflare Tunnel (public URL for local CDN) ────────────
-    cloudflare_tunnel_url: Optional[str] = Field(
+    cloudflare_tunnel_url: str | None = Field(
         default=None,
         validation_alias="CLOUDFLARE_TUNNEL_URL",
     )
@@ -309,7 +308,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Niche validation
     # ------------------------------------------------------------------
-    def validate_for_niche(self, niche_id: str) -> List[str]:
+    def validate_for_niche(self, niche_id: str) -> list[str]:
         """Check which credentials are missing for *niche_id*.
 
         Logs a warning per missing field but never raises.
@@ -318,7 +317,7 @@ class Settings(BaseSettings):
         requirements = NICHE_REQUIREMENTS.get(
             niche_id, NICHE_REQUIREMENTS["default"]
         )
-        missing: List[str] = []
+        missing: list[str] = []
         for field_name in requirements:
             value = getattr(self, field_name, None)
             if not value:

@@ -137,7 +137,7 @@ class TestIdempotencyOnFailure:
         mock_engine_cls, mock_delay, agent_root,
     ):
         """When platform client returns False (failure), _mark_replied must NOT run."""
-        from genlab_core.engagement.comment_processor import process_reply_event, _has_replied
+        from genlab_core.engagement.comment_processor import _has_replied, process_reply_event
 
         mock_rl.acquire.return_value = True
 

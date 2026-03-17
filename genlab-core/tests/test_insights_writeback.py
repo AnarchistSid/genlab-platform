@@ -61,6 +61,7 @@ class TestWriteBackToBlueprint(unittest.TestCase):
     def test_nonfatal_caller_catches_exception(self):
         """Verify the call site in fetch_insights_for_window wraps in try/except."""
         import inspect
+
         from genlab_core.scripts import run_fetch_insights as mod
         source = inspect.getsource(mod.fetch_insights_for_window)
         self.assertIn("_write_back_to_blueprint", source)

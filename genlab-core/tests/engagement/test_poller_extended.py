@@ -4,12 +4,11 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
-
 from genlab_core.engagement.poller import (
-    poll_youtube_comments,
-    poll_twitter_mentions,
-    YOUTUBE_POLL_INTERVAL,
     TWITTER_POLL_INTERVAL,
+    YOUTUBE_POLL_INTERVAL,
+    poll_twitter_mentions,
+    poll_youtube_comments,
 )
 
 

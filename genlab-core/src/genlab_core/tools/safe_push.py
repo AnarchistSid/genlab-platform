@@ -13,7 +13,6 @@ import argparse
 import subprocess
 import sys
 
-
 PROTECTED_BRANCHES = {"main", "master"}
 
 

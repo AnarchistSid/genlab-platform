@@ -14,9 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_id
 from genlab_core.http.backlog_client import BacklogClient
@@ -36,7 +36,7 @@ class PushToBacklog:
     def __init__(self) -> None:
         self._client: BacklogClient | None = None
 
-    def _get_client(self, context: Dict[str, Any]) -> BacklogClient:
+    def _get_client(self, context: dict[str, Any]) -> BacklogClient:
         """Lazy-initialize BacklogClient.
 
         Config path resolution (in priority order):
@@ -65,7 +65,7 @@ class PushToBacklog:
                 self._client = BacklogClient()
         return self._client
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:  # noqa: C901
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
         niche_id = context.get("niche_id")
         if not niche_id:
             raise ValueError(
@@ -111,7 +111,7 @@ class PushToBacklog:
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
-            published_at = story.get("published_at", datetime.now(timezone.utc).isoformat())
+            published_at = story.get("published_at", datetime.now(UTC).isoformat())
             story_id = generate_story_id(source_url, published_at)
 
             # Upsert story
@@ -210,7 +210,7 @@ class PushToBacklog:
                         logger.debug("[PUSH] Blueprint '%s' already exists (%s), updated niche_id", title, existing_status)
                 else:
                     story_record_id = story_record["id"]
-                    fields: Dict[str, Any] = {
+                    fields: dict[str, Any] = {
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
                         "story_id": story_id,
@@ -239,10 +239,10 @@ class PushToBacklog:
                         # Auto-schedule for next available 06:30 UTC = 12:00 IST
                         # publish window.  Use today's slot if it hasn't passed yet,
                         # otherwise fall back to tomorrow.
-                        now_utc = datetime.now(timezone.utc)
+                        now_utc = datetime.now(UTC)
                         today_slot = datetime(
                             now_utc.year, now_utc.month, now_utc.day,
-                            6, 30, tzinfo=timezone.utc,
+                            6, 30, tzinfo=UTC,
                         )
                         if today_slot > now_utc:
                             publish_time = today_slot
@@ -250,7 +250,7 @@ class PushToBacklog:
                             next_day = now_utc.date() + timedelta(days=1)
                             publish_time = datetime(
                                 next_day.year, next_day.month, next_day.day,
-                                6, 30, tzinfo=timezone.utc,
+                                6, 30, tzinfo=UTC,
                             )
                         fields["scheduled_for"] = publish_time.isoformat()
                     # clip_url and thumbnail_url intentionally omitted — not SharePoint columns

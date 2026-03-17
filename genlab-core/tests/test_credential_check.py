@@ -6,14 +6,12 @@ and present env vars, with proper exit codes.
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.tools.credential_check import (
     OPTIONAL_PLATFORMS,
     REQUIRED_PLATFORMS,
     check_credentials,
     main,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

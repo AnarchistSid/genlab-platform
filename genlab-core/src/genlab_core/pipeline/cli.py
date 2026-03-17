@@ -21,10 +21,10 @@ import argparse
 import json
 import logging
 import os
-import sys
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 from genlab_core.context import PipelineContext
 from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
@@ -46,7 +46,7 @@ VALID_NICHE_IDS = frozenset({
 # Each niche_id maps to the directory name under GENLAB_ROOT that contains
 # its config/, strategies/, and pipeline stages.
 
-NICHE_DIR_NAMES: Dict[str, str] = {
+NICHE_DIR_NAMES: dict[str, str] = {
     "ai_creators": "BlackboxBrief",
     "gaming": "CriticalRush",
     "sports": "ClutchWire",
@@ -86,7 +86,7 @@ def _resolve_genlab_root() -> Path:
 def _build_niche_roots(
     genlab_root: Path,
     niche_ids: Sequence[str],
-) -> Dict[str, Path]:
+) -> dict[str, Path]:
     """Build the niche_roots mapping for the requested niches.
 
     Args:
@@ -99,7 +99,7 @@ def _build_niche_roots(
     Raises:
         FileNotFoundError: If a channel directory does not exist.
     """
-    roots: Dict[str, Path] = {}
+    roots: dict[str, Path] = {}
     for niche_id in niche_ids:
         dir_name = NICHE_DIR_NAMES.get(niche_id)
         if dir_name is None:
@@ -124,7 +124,7 @@ def _pre_run_check(niche_id: str, config: dict) -> None:
         logger.warning("Missing credentials for '%s': %s", niche_id, missing)
 
 
-def _parse_niche_arg(niche_arg: str) -> List[str]:
+def _parse_niche_arg(niche_arg: str) -> list[str]:
     """Parse the --niche argument into a list of niche IDs.
 
     Accepts:
@@ -153,7 +153,7 @@ def _parse_niche_arg(niche_arg: str) -> List[str]:
 
     # Deduplicate while preserving order
     seen: set[str] = set()
-    unique: List[str] = []
+    unique: list[str] = []
     for nid in niche_ids:
         if nid not in seen:
             seen.add(nid)
@@ -164,7 +164,7 @@ def _parse_niche_arg(niche_arg: str) -> List[str]:
 def _write_run_report(
     genlab_root: Path,
     run_id: str,
-    results: Dict[str, Dict[str, Any]],
+    results: dict[str, dict[str, Any]],
 ) -> Path:
     """Write a JSON run report summarizing all niche executions.
 
@@ -182,7 +182,7 @@ def _write_run_report(
 
     report = {
         "run_id": run_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "niches": results,
     }
     report_path.write_text(json.dumps(report, indent=2, default=str))
@@ -196,7 +196,7 @@ def run_pipeline(
     dry_run: bool = False,
     verbose: bool = False,
     force_publish: bool = False,
-    stages: Optional[List[str]] = None,
+    stages: list[str] | None = None,
 ) -> PipelineContext:
     """Run the pipeline for a single niche.
 
@@ -233,13 +233,13 @@ def run_pipeline(
 
 
 def run_multi(
-    niche_ids: List[str],
+    niche_ids: list[str],
     *,
     dry_run: bool = False,
     verbose: bool = False,
     force_publish: bool = False,
-    stages: Optional[List[str]] = None,
-) -> Dict[str, PipelineContext]:
+    stages: list[str] | None = None,
+) -> dict[str, PipelineContext]:
     """Run the pipeline for multiple niches sequentially.
 
     Args:
@@ -259,7 +259,7 @@ def run_multi(
     genlab_root = _resolve_genlab_root()
     niche_roots = _build_niche_roots(genlab_root, niche_ids)
 
-    results: Dict[str, PipelineContext] = {}
+    results: dict[str, PipelineContext] = {}
 
     for niche_id in niche_ids:
         logger.info(
@@ -297,7 +297,7 @@ def run_multi(
     return results
 
 
-def _print_summary(results: Dict[str, PipelineContext]) -> None:
+def _print_summary(results: dict[str, PipelineContext]) -> None:
     """Print a human-readable summary of all niche executions."""
     print(f"\n{'=' * 60}")
     print("  PIPELINE RUN SUMMARY")
@@ -365,7 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point.
 
     Args:
@@ -383,7 +383,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         parser.error(str(e))
         return 1  # unreachable, but keeps type checkers happy
 
-    stages_filter: Optional[List[str]] = None
+    stages_filter: list[str] | None = None
     if args.stages:
         stages_filter = [s.strip() for s in args.stages.split(",") if s.strip()]
 
@@ -423,8 +423,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Write unified run report
     genlab_root = _resolve_genlab_root()
-    unified_run_id = f"multi_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-    report_data: Dict[str, Dict[str, Any]] = {}
+    unified_run_id = f"multi_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+    report_data: dict[str, dict[str, Any]] = {}
     for niche_id, ctx in results.items():
         report_data[niche_id] = {
             "run_id": ctx.run_id,

@@ -12,7 +12,7 @@ Quota: 10,000 units/day. Each query = 1 unit.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from genlab_core.ratelimit.token_bucket import TokenBucket
@@ -85,8 +85,8 @@ class YouTubeAnalyticsClient:
 
         Returns None if video < 48h old, API fails, or no data returned.
         """
-        now = datetime.now(timezone.utc)
-        pub_utc = published_at.replace(tzinfo=timezone.utc) if published_at.tzinfo is None else published_at
+        now = datetime.now(UTC)
+        pub_utc = published_at.replace(tzinfo=UTC) if published_at.tzinfo is None else published_at
         age_hours = (now - pub_utc).total_seconds() / 3600
 
         if age_hours < self.MIN_AGE_HOURS:

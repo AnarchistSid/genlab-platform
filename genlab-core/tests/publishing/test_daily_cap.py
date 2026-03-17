@@ -1,6 +1,6 @@
 """Tests for DailyCapEnforcer."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from genlab_core.publishing.daily_cap import DailyCapEnforcer, _load_caps
@@ -20,7 +20,7 @@ def make_enforcer(published_today: dict[str, int]) -> DailyCapEnforcer:
     }
     enforcer._session_counts = dict(published_today)
     # Must use UTC date to match _today_utc() in the enforcer
-    enforcer._counts_loaded_for = datetime.now(timezone.utc).date()
+    enforcer._counts_loaded_for = datetime.now(UTC).date()
     return enforcer
 
 

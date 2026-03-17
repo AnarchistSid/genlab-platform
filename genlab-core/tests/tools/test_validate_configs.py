@@ -2,7 +2,7 @@
 import tempfile
 from pathlib import Path
 
-from genlab_core.tools.validate_configs import validate_niche_dir, ValidationResult
+from genlab_core.tools.validate_configs import ValidationResult, validate_niche_dir
 
 
 class TestValidateConfigs:

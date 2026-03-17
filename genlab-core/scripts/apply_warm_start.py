@@ -27,10 +27,9 @@ logger = logging.getLogger(__name__)
 
 def _build_proxy(list_name: str):
     """Build a GraphTableProxy for a bandit arms list by display name."""
+    from azure.identity import ClientSecretCredential
     from genlab_core.http.async_bridge import run_async
     from genlab_core.settings import settings
-
-    from azure.identity import ClientSecretCredential
     from msgraph import GraphServiceClient
 
     credential = ClientSecretCredential(

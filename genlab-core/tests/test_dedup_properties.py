@@ -1,8 +1,7 @@
 """Property-based tests for DedupEngine and jaccard_similarity."""
-from hypothesis import given, assume, settings
+from genlab_core.intelligence.dedup_engine import DedupEngine, _char_ngrams, jaccard_similarity
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-
-from genlab_core.intelligence.dedup_engine import jaccard_similarity, DedupEngine, _char_ngrams
 
 text_strategy = st.text(
     alphabet=st.characters(blacklist_categories=("Cs",)),

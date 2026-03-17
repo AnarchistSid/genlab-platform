@@ -12,22 +12,23 @@ Usage (unchanged)::
 
 from __future__ import annotations
 
-# --- Abstract interfaces (backward-compatible re-exports) ------------------
-from .interfaces import (
-    ContentResearchStrategy,
-    HookStrategy,
-    PlatformAdaptationStrategy,
-    PerformanceLearner,
-    ScoringStrategy,
-    VisualRenderStrategy,
-    WritingStrategy,
-)
+from .base_content_research import BaseContentResearchStrategy
+from .base_hooks import BaseHookStrategy
 
 # --- Base implementations with shared logic --------------------------------
 from .base_platform_adaptation import BasePlatformAdaptationStrategy
 from .base_writing import BaseWritingStrategy
-from .base_hooks import BaseHookStrategy
-from .base_content_research import BaseContentResearchStrategy
+
+# --- Abstract interfaces (backward-compatible re-exports) ------------------
+from .interfaces import (
+    ContentResearchStrategy,
+    HookStrategy,
+    PerformanceLearner,
+    PlatformAdaptationStrategy,
+    ScoringStrategy,
+    VisualRenderStrategy,
+    WritingStrategy,
+)
 
 __all__ = [
     # Abstract interfaces

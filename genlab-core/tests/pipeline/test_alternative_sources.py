@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestFetchAnimePromos:
     """Tests for Jikan + AniList anime promo fetcher."""

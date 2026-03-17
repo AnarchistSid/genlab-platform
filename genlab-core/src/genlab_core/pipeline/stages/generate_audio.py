@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class GenerateAudio:
             context['run_stats']['audio']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         blueprints = context.get("blueprints", [])
         if not blueprints:
             logger.info("[GenerateAudio] No blueprints for audio generation")
@@ -108,7 +108,7 @@ class GenerateAudio:
         return context
 
     @staticmethod
-    def _build_script(bp: Dict[str, Any]) -> str:
+    def _build_script(bp: dict[str, Any]) -> str:
         """Build TTS script from hook + body text."""
         hook = bp.get("hook", "")
         body = bp.get("body", bp.get("caption", ""))
@@ -118,7 +118,7 @@ class GenerateAudio:
         return script if len(script) > 10 else ""
 
     @staticmethod
-    def _get_run_dir(context: Dict[str, Any]) -> Path:
+    def _get_run_dir(context: dict[str, Any]) -> Path:
         """Resolve or create run directory for audio artifacts."""
         niche_config = context.get("niche_config", {})
         niche_id = niche_config.get("niche_id", "unknown")

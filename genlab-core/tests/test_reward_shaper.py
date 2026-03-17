@@ -6,14 +6,12 @@ No external dependencies — all channel metrics are injected directly.
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.learning.reward_shaper import (
     BASE_WEIGHTS,
     RewardShaper,
     _normalise_metric,
     _normalise_weights,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. Instagram dm_send_rate has higher weight than views (base weights)

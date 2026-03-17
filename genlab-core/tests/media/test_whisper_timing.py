@@ -8,13 +8,11 @@ All tests are mock-based -- no real faster-whisper model required.
 
 from unittest.mock import MagicMock, patch
 
-
 from genlab_core.media.whisper_timing import (
     _flatten_whisper_words,
     align_words,
     transcribe_words,
 )
-
 
 # ── Helper to build mock Word objects ────────────────────────────────────────
 

@@ -1,6 +1,5 @@
 """Tests for genlab_core.intelligence.budget_guard."""
 import pytest
-
 from genlab_core.intelligence.budget_guard import BudgetGuard
 from genlab_core.intelligence.cost_accumulator import (
     CostAccumulator,

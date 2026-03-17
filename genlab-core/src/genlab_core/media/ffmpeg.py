@@ -37,7 +37,6 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -78,11 +77,11 @@ class RenderSpec(BaseModel):
     audio_codec: str = "aac"
     audio_bitrate: str = "256k"
     audio_sample_rate: int = 48000
-    crf: Optional[int] = Field(default=18, ge=0, le=63)  # None for lossless
-    preset: Optional[str] = "medium"
+    crf: int | None = Field(default=18, ge=0, le=63)  # None for lossless
+    preset: str | None = "medium"
     # H.264/H.265 specific
-    maxrate: Optional[str] = None  # e.g. "12M" for TikTok ceiling
-    bufsize: Optional[str] = None  # e.g. "24M" paired with maxrate
+    maxrate: str | None = None  # e.g. "12M" for TikTok ceiling
+    bufsize: str | None = None  # e.g. "24M" paired with maxrate
     # Color space -- always force bt709 for web delivery
     colorspace: str = "bt709"
     color_primaries: str = "bt709"

@@ -4,32 +4,27 @@ Three layout paths: landscape, portrait, square.
 These tests document and enforce the locked frame spec.
 """
 
-import os
-import re
-from unittest.mock import MagicMock, patch
 
-import pytest
 
 from genlab_core.media.frame_compositor import (
     CANVAS_H,
     CANVAS_W,
     HOOK_MAX_CHARS,
-    LANDSCAPE_THRESHOLD,
-    PORTRAIT_THRESHOLD,
+    L_BOTTOM_H,
     L_VIDEO_H,
     L_VIDEO_Y,
-    L_BOTTOM_H,
-    S_VIDEO_Y,
-    S_VIDEO_H,
-    S_BOTTOM_H,
-    P_OVERLAY_H,
-    P_LOGO_Y,
+    LANDSCAPE_THRESHOLD,
     P_HOOK_Y,
+    P_LOGO_Y,
+    P_OVERLAY_H,
+    PORTRAIT_THRESHOLD,
+    S_BOTTOM_H,
+    S_VIDEO_H,
+    S_VIDEO_Y,
     ChannelBranding,
     FrameCompositor,
     VideoInfo,
 )
-
 
 # --- ChannelBranding ------------------------------------------------
 

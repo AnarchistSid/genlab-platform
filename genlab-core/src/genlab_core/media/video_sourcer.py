@@ -10,8 +10,8 @@ import logging
 import math
 import os
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -141,11 +141,11 @@ def _freshness_score(
     """Exponential decay with 48-hour half-life relative to story publish."""
     if video_published is None:
         return 0.5  # unknown → neutral
-    ref = story_published or datetime.now(tz=timezone.utc)
+    ref = story_published or datetime.now(tz=UTC)
     if video_published.tzinfo is None:
-        video_published = video_published.replace(tzinfo=timezone.utc)
+        video_published = video_published.replace(tzinfo=UTC)
     if ref.tzinfo is None:
-        ref = ref.replace(tzinfo=timezone.utc)
+        ref = ref.replace(tzinfo=UTC)
     delta_h = abs((ref - video_published).total_seconds()) / 3600.0
     return math.exp(-math.log(2) * delta_h / _FRESHNESS_HALF_LIFE_H)
 
@@ -416,7 +416,7 @@ class VideoSourcer:
                     if post.get("created_utc"):
                         try:
                             pub = datetime.fromtimestamp(
-                                post["created_utc"], tz=timezone.utc
+                                post["created_utc"], tz=UTC
                             )
                         except (ValueError, TypeError, OSError):
                             pass
@@ -498,7 +498,7 @@ class VideoSourcer:
                         try:
                             pub = datetime.fromisoformat(
                                 movie["release_date"]
-                            ).replace(tzinfo=timezone.utc)
+                            ).replace(tzinfo=UTC)
                         except (ValueError, TypeError):
                             pass
                     results.append(

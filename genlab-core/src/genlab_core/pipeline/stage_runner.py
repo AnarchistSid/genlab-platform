@@ -30,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Tuple, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from genlab_core.observability.metrics_writer import PipelineMetrics
@@ -64,7 +64,7 @@ class StageRunner(Protocol):
     def run_stage(
         self,
         stage: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         pipeline_ctx: Any,
     ) -> StageResult:
         """Execute a stage, returning a StageResult.
@@ -94,7 +94,7 @@ class LocalStageRunner:
     def run_stage(
         self,
         stage: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         pipeline_ctx: Any,
     ) -> StageResult:
         stage_name = stage.__class__.__name__
@@ -168,7 +168,7 @@ class SandboxAwareStageRunner:
     def run_stage(
         self,
         stage: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         pipeline_ctx: Any,
     ) -> StageResult:
         from genlab_core.media.sandbox_runner import (
@@ -286,11 +286,11 @@ class StageRunnerFactory:
 
     def run(
         self,
-        declaration: Dict[str, Any],
+        declaration: dict[str, Any],
         stage: Any,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         pipeline_ctx: Any,
-    ) -> "StageResult":
+    ) -> StageResult:
         """Select runner, set log filter stage, execute, clear filter."""
         stage_name = stage.__class__.__name__
         if self._stage_log_filter is not None:
@@ -304,10 +304,10 @@ class StageRunnerFactory:
 
     def run_parallel(
         self,
-        batch: List[Tuple[Dict[str, Any], Any]],
-        context: Dict[str, Any],
+        batch: list[tuple[dict[str, Any], Any]],
+        context: dict[str, Any],
         pipeline_ctx: Any,
-    ) -> List["StageResult"]:
+    ) -> list[StageResult]:
         """Execute a batch of stages concurrently.
 
         Each entry in *batch* is a ``(declaration, stage_instance)`` pair.
@@ -325,7 +325,7 @@ class StageRunnerFactory:
         )
 
         t0 = time.monotonic()
-        results: Dict[int, StageResult] = {}
+        results: dict[int, StageResult] = {}
 
         with ThreadPoolExecutor(max_workers=len(batch)) as pool:
             future_to_idx = {}
@@ -362,7 +362,7 @@ class StageRunnerFactory:
 
         return [results[i] for i in range(len(batch))]
 
-    def get_runner(self, declaration: Dict[str, Any]) -> StageRunner:
+    def get_runner(self, declaration: dict[str, Any]) -> StageRunner:
         """Return the StageRunner for a given stage declaration."""
         sandbox_cfg = declaration.get("sandbox")
 

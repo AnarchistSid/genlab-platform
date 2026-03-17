@@ -6,7 +6,6 @@ import random
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from genlab_core.pipeline.stages.render_whisper_captions import RenderWhisperCaptions
 
 

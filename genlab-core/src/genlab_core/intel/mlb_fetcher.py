@@ -10,7 +10,7 @@ MP4 URLs at mediadownloads.mlb.com — prefer 2500K bitrate.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -30,7 +30,7 @@ def fetch_mlb_highlights(
     Returns story dicts with ``video_url`` pointing to CDN MP4.
     No API key required.
     """
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     try:
         resp = requests.get(

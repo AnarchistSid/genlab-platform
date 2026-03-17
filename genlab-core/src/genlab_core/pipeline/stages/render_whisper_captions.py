@@ -20,7 +20,7 @@ import random
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_audio
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
@@ -41,7 +41,7 @@ class RenderWhisperCaptions:
       animation.word_by_word.whisper_sync.enabled = true|false
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         config = context.get("config", {})
 

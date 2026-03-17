@@ -8,12 +8,10 @@ FFmpeg/ffprobe execution required.
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-
 from genlab_core.media.audio_probe import (
     extract_audio_track,
     has_meaningful_audio,
 )
-
 
 # ── has_meaningful_audio ─────────────────────────────────────────────────────
 

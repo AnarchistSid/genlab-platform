@@ -105,7 +105,7 @@ def _dispatch_to_dramatiq(comments: list[dict], niche_id: str) -> int:
 
 async def _poll_loop_youtube(niche_id: str, channel_id: str) -> None:
     """Poll YouTube comments in a loop."""
-    from genlab_core.engagement.poller import poll_youtube_comments, YOUTUBE_POLL_INTERVAL
+    from genlab_core.engagement.poller import YOUTUBE_POLL_INTERVAL, poll_youtube_comments
 
     logger.info("Starting YouTube poller for niche=%s channel=%s interval=%ds",
                 niche_id, channel_id, YOUTUBE_POLL_INTERVAL)
@@ -124,7 +124,7 @@ async def _poll_loop_youtube(niche_id: str, channel_id: str) -> None:
 
 async def _poll_loop_twitter(niche_id: str, user_id: str) -> None:
     """Poll X/Twitter mentions in a loop."""
-    from genlab_core.engagement.poller import poll_twitter_mentions, TWITTER_POLL_INTERVAL
+    from genlab_core.engagement.poller import TWITTER_POLL_INTERVAL, poll_twitter_mentions
 
     logger.info("Starting X/Twitter poller for niche=%s user=%s interval=%ds",
                 niche_id, user_id, TWITTER_POLL_INTERVAL)

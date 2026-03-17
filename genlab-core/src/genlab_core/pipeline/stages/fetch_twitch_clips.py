@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import requests
 
@@ -57,7 +57,7 @@ def _fetch_clips_for_game(
     lookback_days: int = 7,
 ) -> list[dict]:
     """Fetch top clips for a game from Twitch Clips API."""
-    started_at = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    started_at = (datetime.now(UTC) - timedelta(days=lookback_days)).isoformat()
     try:
         r = requests.get(
             "https://api.twitch.tv/helix/clips",
@@ -108,7 +108,7 @@ class FetchTwitchClips:
     Clips are added as stories with pre-filled clip_url for DownloadTopVideos.
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         if niche_id != "gaming":
             return context
@@ -155,7 +155,7 @@ class FetchTwitchClips:
         if all_clips:
             from genlab_core.cache.stable_ids import generate_story_id
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             new_stories = []
             for clip in all_clips[:10]:  # Cap at 10 clips
                 clip_url = clip["clip_url"]
@@ -192,5 +192,5 @@ class FetchTwitchClips:
         run_stats["twitch_clips_found"] = len(all_clips)
         return context
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:
         return self.execute(context)

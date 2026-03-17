@@ -6,7 +6,7 @@ so cross-channel dashboard queries and DailyCapEnforcer work correctly.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def record_publish(
         published_at: ISO timestamp. Defaults to now.
     """
     if not published_at:
-        published_at = datetime.now(timezone.utc).isoformat()
+        published_at = datetime.now(UTC).isoformat()
 
     fields = {
         "Title": f"{niche_id}:{platform}:{published_at[:10]}",

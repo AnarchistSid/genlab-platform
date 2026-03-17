@@ -4,8 +4,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
-
-
 # ---------------------------------------------------------------------------
 # poll_youtube_comments
 # ---------------------------------------------------------------------------

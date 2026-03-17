@@ -256,8 +256,8 @@ class BaseWritingStrategy(WritingStrategy):
         llm_client = None
         extra_instructions = ""
         if use_llm:
-            from genlab_core.writing.llm_client import AnthropicLLMClient
             from genlab_core.cost.model_router import get_model
+            from genlab_core.writing.llm_client import AnthropicLLMClient
 
             model = get_model(self._model_route_key())
             llm_client = AnthropicLLMClient(api_key=api_key, model=model)

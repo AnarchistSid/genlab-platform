@@ -1,11 +1,10 @@
 """Tests for YouTube Analytics API client."""
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.analytics.youtube_analytics_client import (
     YouTubeAnalyticsClient,
 )
@@ -23,12 +22,12 @@ def client(mock_service):
 
 class TestYouTubeAnalyticsClient:
     def test_skips_videos_published_less_than_48h_ago(self, client):
-        recent = datetime.now(timezone.utc) - timedelta(hours=10)
+        recent = datetime.now(UTC) - timedelta(hours=10)
         result = client.fetch_video_metrics("vid123", published_at=recent)
         assert result is None
 
     def test_parses_metrics_from_api_response(self, client, mock_service):
-        old = datetime.now(timezone.utc) - timedelta(hours=72)
+        old = datetime.now(UTC) - timedelta(hours=72)
         mock_service.reports().query().execute.return_value = {
             "columnHeaders": [
                 {"name": "video"},
@@ -54,14 +53,14 @@ class TestYouTubeAnalyticsClient:
         assert result.window_label == "72h"
 
     def test_returns_none_on_api_error(self, client, mock_service):
-        old = datetime.now(timezone.utc) - timedelta(hours=72)
+        old = datetime.now(UTC) - timedelta(hours=72)
         mock_service.reports().query().execute.side_effect = Exception("API error")
 
         result = client.fetch_video_metrics("vid123", published_at=old)
         assert result is None
 
     def test_returns_none_when_no_rows_in_response(self, client, mock_service):
-        old = datetime.now(timezone.utc) - timedelta(hours=72)
+        old = datetime.now(UTC) - timedelta(hours=72)
         mock_service.reports().query().execute.return_value = {
             "columnHeaders": [],
             "rows": [],
@@ -71,7 +70,7 @@ class TestYouTubeAnalyticsClient:
         assert result is None
 
     def test_handles_missing_metric_fields_gracefully(self, client, mock_service):
-        old = datetime.now(timezone.utc) - timedelta(hours=72)
+        old = datetime.now(UTC) - timedelta(hours=72)
         mock_service.reports().query().execute.return_value = {
             "columnHeaders": [{"name": "video"}, {"name": "views"}],
             "rows": [["vid123", 100]],

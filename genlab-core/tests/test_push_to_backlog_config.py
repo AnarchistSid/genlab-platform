@@ -153,6 +153,7 @@ class TestPipelineRunnerNicheRoot(unittest.TestCase):
     ):
         """A stage receives niche_root in its context dict."""
         import tempfile
+
         from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
 
         # Create a fake stage class path

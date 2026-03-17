@@ -4,8 +4,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
-from genlab_core.feedback.hook_analyzer import get_hook_training_data, MIN_EXAMPLES
+from genlab_core.feedback.hook_analyzer import MIN_EXAMPLES, get_hook_training_data
 
 
 @pytest.fixture

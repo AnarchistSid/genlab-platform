@@ -12,9 +12,9 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class Cache:
             return False
         return True
 
-    def get(self, key: str, ttl_hours: int = 24) -> Optional[Any]:
+    def get(self, key: str, ttl_hours: int = 24) -> Any | None:
         """Get cached value if not expired.
 
         Returns None on cache miss, expiry, or corruption.
@@ -66,9 +66,9 @@ class Cache:
                 cached = json.load(f)
 
             cached_at = datetime.fromisoformat(cached['timestamp'])
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if cached_at.tzinfo is None:
-                cached_at = cached_at.replace(tzinfo=timezone.utc)
+                cached_at = cached_at.replace(tzinfo=UTC)
             if now - cached_at > timedelta(hours=ttl_hours):
                 try:
                     cache_file.unlink()
@@ -99,7 +99,7 @@ class Cache:
         try:
             with open(cache_file, 'w') as f:
                 json.dump({
-                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'timestamp': datetime.now(UTC).isoformat(),
                     'data': value
                 }, f)
         except OSError as exc:

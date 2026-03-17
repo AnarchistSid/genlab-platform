@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.http.backlog_client import BacklogClient
 from genlab_core.storage.factory import reset_backends
 

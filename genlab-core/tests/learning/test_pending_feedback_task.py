@@ -1,7 +1,6 @@
 """Tests for PendingFeedbackTask model."""
 
-from datetime import datetime, timezone
-
+from datetime import UTC, datetime
 
 from genlab_core.learning.pending_feedback_task import (
     PendingFeedbackTask,
@@ -14,7 +13,7 @@ class TestPendingFeedbackTask:
             content_id="story_123",
             platform="youtube",
             niche_id="gaming",
-            published_at=datetime(2026, 3, 7, 12, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 7, 12, 0, tzinfo=UTC),
             platform_post_id="vid_abc",
             content_type="game_launch_hype",
             hook_type="What just happened to Elden Ring?",
@@ -32,7 +31,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="instagram",
-            published_at=datetime.now(tz=timezone.utc),
+            published_at=datetime.now(tz=UTC),
             platform_post_id="ig_1",
             completed_windows=["6h", "24h"],
         )
@@ -44,7 +43,7 @@ class TestPendingFeedbackTask:
             task = PendingFeedbackTask(
                 content_id="s1",
                 platform="youtube",
-                published_at=datetime.now(tz=timezone.utc),
+                published_at=datetime.now(tz=UTC),
                 platform_post_id="yt_1",
                 collection_status=status,
             )
@@ -54,7 +53,7 @@ class TestPendingFeedbackTask:
             task = PendingFeedbackTask(
                 content_id="s1",
                 platform="youtube",
-                published_at=datetime.now(tz=timezone.utc),
+                published_at=datetime.now(tz=UTC),
                 platform_post_id="yt_1",
                 collection_status=status,
             )
@@ -65,7 +64,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="youtube",
-            published_at=datetime.now(tz=timezone.utc),
+            published_at=datetime.now(tz=UTC),
             platform_post_id="yt_1",
             bandit_arm=None,
             bandit_context=None,
@@ -81,7 +80,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="instagram",
-            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
             platform_post_id="ig_123",
             content_type="viral_moment",
             hook_type="You won't believe this play",
@@ -104,7 +103,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="instagram",
-            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
             platform_post_id="ig_456",
             hook_text="You won't believe this AI breakthrough",
             hook_type="reaction",
@@ -117,7 +116,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="instagram",
-            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=timezone.utc),
+            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
             platform_post_id="ig_789",
         )
         fields = task.to_sharepoint_fields()
@@ -127,7 +126,7 @@ class TestPendingFeedbackTask:
         task = PendingFeedbackTask(
             content_id="s1",
             platform="youtube",
-            published_at=datetime.now(tz=timezone.utc),
+            published_at=datetime.now(tz=UTC),
             platform_post_id="yt_1",
             sharepoint_id="sp_abc123",
         )

@@ -19,10 +19,12 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +98,13 @@ class PipelineMetrics:
         **kwargs:
             Arbitrary extra fields (e.g. ``items=12``, ``error_msg="..."``).
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         entry = StageMetric(
             stage=stage,
             duration_ms=duration_ms,
             status=status,
-            timestamp_iso=datetime.now(timezone.utc).isoformat(),
+            timestamp_iso=datetime.now(UTC).isoformat(),
             extra=kwargs,
         )
         self._entries.append(entry)

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +84,14 @@ class ExpressLane:
             context['run_stats']['express_lane']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[ExpressLane] No stories to classify")
             return context
 
         express_count = 0
-        level_counts: Dict[str, int] = {}
+        level_counts: dict[str, int] = {}
 
         for story in stories:
             try:
@@ -135,13 +135,13 @@ class ExpressLane:
         return context
 
     @staticmethod
-    def _classify(story: Dict[str, Any]) -> Dict[str, Any]:
+    def _classify(story: dict[str, Any]) -> dict[str, Any]:
         """Classify a single story's urgency."""
         title = story.get("title", "")
         summary = story.get("summary", story.get("body", ""))
         text = f"{title} {summary}"
 
-        signals: List[str] = []
+        signals: list[str] = []
         score = 0.0
 
         # CRITICAL signals

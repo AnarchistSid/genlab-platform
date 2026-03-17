@@ -1,8 +1,6 @@
 """Tests for OData formula -> SQL WHERE translation."""
 from __future__ import annotations
 
-import pytest
-
 from genlab_core.storage.formula_sql import formula_to_sql
 
 

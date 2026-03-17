@@ -28,7 +28,7 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
 from genlab_core.platforms.models import (
@@ -64,7 +64,7 @@ _VALID_NICHE_IDS = frozenset({
 })
 
 # Maps legacy platform names to registry IDs
-_PLATFORM_ID_MAP: Dict[str, str] = {"twitter": "x_twitter"}
+_PLATFORM_ID_MAP: dict[str, str] = {"twitter": "x_twitter"}
 
 
 def _to_registry_id(platform: str) -> str:
@@ -139,7 +139,7 @@ class PidLock:
 # ---------------------------------------------------------------------------
 
 
-def build_payload(fields: Dict[str, Any], platform: str) -> PublishPayload:
+def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     """Convert raw blueprint fields dict into a typed PublishPayload.
 
     Args:
@@ -194,7 +194,7 @@ def build_payload(fields: Dict[str, Any], platform: str) -> PublishPayload:
 
 
 def _build_platform_specific(
-    fields: Dict[str, Any], platform: str, caption: str, hook: str
+    fields: dict[str, Any], platform: str, caption: str, hook: str
 ):
     """Build the platform-specific config from blueprint fields."""
     if platform == "instagram":
@@ -239,7 +239,7 @@ def _build_platform_specific(
     return None
 
 
-def _parse_visual_paths(fields: Dict[str, Any]) -> list:
+def _parse_visual_paths(fields: dict[str, Any]) -> list:
     raw = fields.get("visual_paths", "[]")
     try:
         return json.loads(raw) if isinstance(raw, str) else (raw or [])
@@ -403,7 +403,7 @@ def run_publish(
         logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
     # 6. Publish to each platform
-    platform_status: Dict[str, str] = {}
+    platform_status: dict[str, str] = {}
     any_success = False
 
     def _publish_one(platform: str) -> tuple[str, PublishResult]:

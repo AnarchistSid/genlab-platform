@@ -5,13 +5,11 @@ pipeline and the make_content_id utility.
 """
 import hashlib
 
-
 from genlab_core.intelligence.dedup_engine import (
     DedupEngine,
     jaccard_similarity,
     make_content_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # make_content_id

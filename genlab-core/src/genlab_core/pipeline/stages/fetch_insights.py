@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from genlab_core.http.circuit_breaker import (
     CircuitOpenError,
@@ -43,7 +43,7 @@ class FetchInsights:
     Writes: context['run_stats']['insights']
     """
 
-    def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
         client = context.get("backlog_client")
         config = context.get("niche_config", {})
@@ -52,11 +52,11 @@ class FetchInsights:
             logger.info("[FetchInsights] No backlog_client — skipping")
             return context
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         fetched = 0
         skipped = 0
         errors = 0
-        platform_stats: Dict[str, Dict[str, int]] = {}
+        platform_stats: dict[str, dict[str, int]] = {}
 
         # Query Publishing_Analytics for posts in this niche
         try:
@@ -153,8 +153,8 @@ class FetchInsights:
         self,
         platform: str,
         post_id: str,
-        config: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
+        config: dict[str, Any],
+    ) -> dict[str, Any] | None:
         """Dispatch to platform-specific fetcher through circuit breaker."""
         fetchers = {
             "instagram": self._fetch_instagram,
@@ -181,7 +181,7 @@ class FetchInsights:
         return fetcher(post_id, config)
 
     @staticmethod
-    def _fetch_instagram(post_id: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_instagram(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch IG metrics via graph.facebook.com."""
         token = os.getenv("META_ACCESS_TOKEN", "")
         if not token:
@@ -227,7 +227,7 @@ class FetchInsights:
             return None
 
     @staticmethod
-    def _fetch_youtube(post_id: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_youtube(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch YT metrics via Data API v3."""
         api_key = os.getenv("YOUTUBE_API_KEY", "")
         if not api_key:
@@ -258,7 +258,7 @@ class FetchInsights:
             return None
 
     @staticmethod
-    def _fetch_facebook(post_id: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_facebook(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch FB metrics via Graph API."""
         token = os.getenv("META_ACCESS_TOKEN", "")
         if not token:
@@ -285,7 +285,7 @@ class FetchInsights:
             return None
 
     @staticmethod
-    def _fetch_twitter(post_id: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def _fetch_twitter(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch X metrics via API v2."""
         bearer = os.getenv("X_BEARER_TOKEN", "")
         if not bearer:

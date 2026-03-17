@@ -1,11 +1,10 @@
 """Tests for PublishGatekeeper — each gate tested in isolation."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
 
 
@@ -49,12 +48,12 @@ class TestScoreFloorGate:
 
 class TestScheduleGate:
     def test_due_now_passes(self, gatekeeper):
-        bp = {"scheduled_for": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()}
+        bp = {"scheduled_for": (datetime.now(UTC) - timedelta(minutes=5)).isoformat()}
         result = gatekeeper._schedule_gate(bp, "instagram")
         assert result.allowed is True
 
     def test_future_blocks(self, gatekeeper):
-        bp = {"scheduled_for": (datetime.now(timezone.utc) + timedelta(hours=5)).isoformat()}
+        bp = {"scheduled_for": (datetime.now(UTC) + timedelta(hours=5)).isoformat()}
         result = gatekeeper._schedule_gate(bp, "instagram")
         assert result.allowed is False
 
@@ -77,7 +76,7 @@ class TestEvaluateChain:
         bp = {
             "action_taken": "approved",
             "format": "reel",
-            "scheduled_for": datetime.now(timezone.utc).isoformat(),
+            "scheduled_for": datetime.now(UTC).isoformat(),
             "priority_score": 0.8,
             "visual_paths": '["/tmp/video.mp4"]',
         }

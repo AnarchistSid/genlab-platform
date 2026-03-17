@@ -52,7 +52,6 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -144,7 +143,7 @@ class ChannelBranding:
             self.ffmpeg = FFmpegConfig()
 
     @classmethod
-    def from_visuals_yaml(cls, path: str) -> "ChannelBranding":
+    def from_visuals_yaml(cls, path: str) -> ChannelBranding:
         """Load branding from a channel's visuals.yaml."""
         yaml_path = Path(path).resolve()
         niche_root = yaml_path.parent.parent  # config/ -> niche_root/
@@ -290,7 +289,7 @@ class FrameCompositor:
         self.branding = branding
 
     @classmethod
-    def from_visuals_yaml(cls, visuals_yaml_path: str) -> "FrameCompositor":
+    def from_visuals_yaml(cls, visuals_yaml_path: str) -> FrameCompositor:
         branding = ChannelBranding.from_visuals_yaml(visuals_yaml_path)
         return cls(branding)
 
@@ -299,10 +298,10 @@ class FrameCompositor:
         source_video_path: str,
         hook_text: str,
         output_path: str,
-        duration_seconds: Optional[float] = None,
+        duration_seconds: float | None = None,
         trim_start: float = 0.0,
         crf: int = 15,
-        preset: Optional[str] = None,
+        preset: str | None = None,
         force_fps: int = 30,
     ) -> str:
         """Render a reel with the canonical frame layout.
@@ -707,7 +706,7 @@ class FrameCompositor:
         )
 
     @staticmethod
-    def _duration_flags(duration: Optional[float]) -> list[str]:
+    def _duration_flags(duration: float | None) -> list[str]:
         if duration is not None and duration > 0:
             return ["-t", str(duration)]
         return []

@@ -5,18 +5,17 @@ All external HTTP calls are mocked. No real API calls.
 
 from __future__ import annotations
 
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-
 from genlab_core.publishing.threads_client import (
     THREADS_MAX_CAPTION,
     THREADS_PROCESSING_WAIT,
     ThreadsClient,
     ThreadsTokenManager,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -292,8 +291,8 @@ class TestThreadsTokenManager:
 
     @patch("genlab_core.publishing.threads_client.settings")
     def test_ok_when_fresh(self, mock_settings):
-        from datetime import datetime, timezone
-        mock_settings.threads_token_issued_at = datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+        mock_settings.threads_token_issued_at = datetime.now(UTC).isoformat()
         manager = ThreadsTokenManager()
         result = manager.check_and_refresh()
         assert result["status"] == "ok"

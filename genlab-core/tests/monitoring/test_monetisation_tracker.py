@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
-
 from genlab_core.monitoring.monetisation_tracker import (
     MonetisationTracker,
     _get_target,
