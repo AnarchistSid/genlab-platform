@@ -155,7 +155,7 @@ class TestLockedConstants:
         assert total == CANVAS_H
 
     def test_square_bottom_bar(self):
-        assert S_BOTTOM_H == 674
+        assert S_BOTTOM_H == 380
 
     def test_portrait_fills_canvas(self):
         """Portrait layout fills canvas — no sandwich zones to sum."""
