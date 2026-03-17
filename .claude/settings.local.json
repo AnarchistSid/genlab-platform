@@ -491,7 +491,11 @@
       "Bash(python3 -c \":*)",
       "Bash(AUTH=\"admin:***REMOVED***\"\n\necho \"=== Focus Review queue ===\"\ncurl -s -u $AUTH \"http://localhost:5151/api/v1/blueprints/review-queue\" | python3 -c \"\nimport json, sys\n\nd = json.load\\(sys.stdin\\)['data']\nitems = d.get\\('data', {}\\).get\\('data', []\\) if isinstance\\(d.get\\('data'\\), dict\\) else d.get\\('data', []\\)\nmeta = d.get\\('data', {}\\).get\\('meta', d.get\\('meta', {}\\)\\) if isinstance\\(d.get\\('data'\\), dict\\) else {}\n\nprint\\(f'Total items: {meta.get\\(\\\\\"total\\\\\", len\\(items\\)\\)}'\\)\nprint\\(f'Fallback mode: {meta.get\\(\\\\\"fallback\\\\\", False\\)}'\\)\nprint\\(f'Niche: {meta.get\\(\\\\\"niche_id\\\\\", \\\\\"?\\\\\"\\)}'\\)\nprint\\(\\)\n\nfor item in items[:10]:\n    vp = item.get\\('visual_paths', ''\\)\n    is_video = vp and \\('.mp4' in vp or '.mov' in vp or '.webm' in vp\\)\n    thumb = item.get\\('thumbnail_url', ''\\)\n    status = item.get\\('status', '?'\\)\n    action = item.get\\('action_taken', ''\\)\n    hook = \\(item.get\\('hook_text'\\) or ''\\)[:45]\n    print\\(f'id={item.get\\(\\\\\"id\\\\\"\\)} [{status}] action={action} video={is_video} thumb={bool\\(thumb\\)}'\\)\n    print\\(f'  \\\\\"{hook}\\\\\"'\\)\n    print\\(f'  visual_paths={vp[:80] if vp else \\\\\"None\\\\\"}'\\)\n    print\\(\\)\n\")",
       "Bash(AUTH=\"admin:***REMOVED***\"\ncurl -s -u $AUTH \"http://localhost:5151/api/v1/blueprints?status=VISUAL_READY&per_page=100\" | python3 -c \"\nimport json, sys\nd = json.load\\(sys.stdin\\)['data']\nbps = d['data']\nrenders = sum\\(1 for bp in bps if '.mp4' in \\(bp.get\\('visual_paths',''\\) or ''\\)\\)\nyt_only = sum\\(1 for bp in bps if 'ytimg' in \\(bp.get\\('visual_paths',''\\) or ''\\)\\)\nnothing = len\\(bps\\) - renders - yt_only\nprint\\(f'VISUAL_READY: {len\\(bps\\)} total'\\)\nprint\\(f'  Video renders: {renders} \\({renders*100//len\\(bps\\)}%\\)'\\)\nprint\\(f'  YouTube thumb only: {yt_only}'\\)\nprint\\(f'  Nothing: {nothing}'\\)\n\")",
-      "Bash(/Users/anarchistsid/.local/bin/uv run --package genlab-core python3 -c \":*)"
+      "Bash(/Users/anarchistsid/.local/bin/uv run --package genlab-core python3 -c \":*)",
+      "Bash(__NEW_LINE_40da5111cb4d3c67__ echo:*)",
+      "Bash(psql:*)",
+      "Bash(__NEW_LINE_280cd7adb33aa29b__ python3:*)",
+      "Bash(__NEW_LINE_280cd7adb33aa29b__ echo:*)"
     ]
   }
 }

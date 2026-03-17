@@ -4,7 +4,7 @@ Provides typed CRUD operations for all shared tables:
   Stories, Blueprints, Templates, Assets, Sources,
   Publishing_Analytics, Analytics, AB_Tests.
 
-Both Content Scraper and CriticalRush use the same SharePoint Lists,
+Both BlackboxBrief and CriticalRush use the same SharePoint Lists,
 differentiating content via the niche_id column.
 
 Requires AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
@@ -300,42 +300,79 @@ class BacklogClient:
                 raise ValueError(f"List ID for '{name}' not found in {config_path}")
             return GraphTableProxy(self._graph, self._site_id, list_id, name)
 
-        self.stories = _proxy("Stories")
-        _raw_blueprints = _proxy("Blueprints")
-        self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
-        self.templates = _proxy("Templates")
-        self.assets = _proxy("Assets")
-        self.sources = _proxy("Sources")
-        self.publishing_analytics = _proxy("Publishing_Analytics")
-        self.analytics = _proxy("Analytics")
+        # ── Resolve storage backend per table ──────────────────────
+        # If storage_backends.yaml routes a table to "postgres", use
+        # PostgresBackend instead of GraphTableProxy.  This allows
+        # gradual migration table-by-table.
+        from genlab_core.storage.factory import _load_config as _load_storage_config
+        _storage_config = _load_storage_config()
+        _pg_backend = None
+
+        def _resolve_backend(table_name: str):
+            """Return PostgresTableProxy or GraphTableProxy based on config."""
+            nonlocal _pg_backend
+            engine = _storage_config.get(table_name, "sharepoint").lower()
+            if engine == "postgres":
+                if _pg_backend is None:
+                    dsn = os.getenv("DATABASE_URL", "")
+                    if not dsn:
+                        logger.debug(
+                            "Table %s configured for postgres but DATABASE_URL not set — "
+                            "falling back to SharePoint", table_name,
+                        )
+                        return _proxy(table_name)
+                    try:
+                        from genlab_core.storage.postgres import PostgresBackend
+                        _pg_backend = PostgresBackend(dsn=dsn)
+                    except Exception as exc:
+                        logger.warning(
+                            "PostgresBackend init failed for %s (%s) — falling back to SharePoint",
+                            table_name, exc,
+                        )
+                        return _proxy(table_name)
+                from genlab_core.storage.postgres import PostgresTableProxy
+                return PostgresTableProxy(_pg_backend, table_name)
+            return _proxy(table_name)
+
+        self.stories = _resolve_backend("Stories")
+        _raw_blueprints = _resolve_backend("Blueprints")
+        if isinstance(_raw_blueprints, GraphTableProxy):
+            self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
+        else:
+            self.blueprints = _raw_blueprints
+        self.templates = _resolve_backend("Templates")
+        self.assets = _resolve_backend("Assets")
+        self.sources = _resolve_backend("Sources")
+        self.publishing_analytics = _resolve_backend("Publishing_Analytics")
+        self.analytics = _resolve_backend("Analytics")
 
         try:
-            self.ab_tests = _proxy("AB_Tests")
+            self.ab_tests = _resolve_backend("AB_Tests")
         except (ValueError, KeyError):
             self.ab_tests = None
 
         try:
-            self.audience_snapshots = _proxy("Audience_Snapshots")
+            self.audience_snapshots = _resolve_backend("Audience_Snapshots")
         except (ValueError, KeyError):
             self.audience_snapshots = None
 
         try:
-            self.pending_engagement = _proxy("PendingEngagement")
+            self.pending_engagement = _resolve_backend("PendingEngagement")
         except (ValueError, KeyError):
             self.pending_engagement = None
 
         try:
-            self.pending_feedback = _proxy("PendingFeedback")
+            self.pending_feedback = _resolve_backend("PendingFeedback")
         except (ValueError, KeyError):
             self.pending_feedback = None
 
         try:
-            self.bandit_arms = _proxy("BanditArms")
+            self.bandit_arms = _resolve_backend("BanditArms")
         except (ValueError, KeyError):
             self.bandit_arms = None
 
         try:
-            self.content_memory = _proxy("Content_Memory")
+            self.content_memory = _resolve_backend("Content_Memory")
         except (ValueError, KeyError):
             self.content_memory = None
 

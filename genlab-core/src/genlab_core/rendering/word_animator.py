@@ -1,7 +1,7 @@
 """Word-by-word reveal animation engine for FFmpeg drawtext filters.
 
 Canonical location: genlab_core.rendering.word_animator
-(Moved from Content Scraper/execution/utils/word_by_word_animator.py)
+(Moved from BlackboxBrief/execution/utils/word_by_word_animator.py)
 
 Classes:
     WordTiming          — Timing + position dataclass for a single animated word
@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # ── Text optimizer import ─────────────────────────────────────
-# Optional: try Content Scraper's text_optimizer first (runtime sys.path injection),
+# Optional: try BlackboxBrief's text_optimizer first (runtime sys.path injection),
 # then fall back to hardcoded safe-zone constants.
 try:
     from execution.utils.text_optimizer import (
@@ -49,14 +49,14 @@ def get_wbw_config() -> Dict:
     Missing keys are filled with sensible defaults so callers never
     need to handle missing values.
 
-    Looks for config/instagram_specs.yaml relative to the Content Scraper
+    Looks for config/instagram_specs.yaml relative to the BlackboxBrief
     root (if available at runtime). Falls back to hardcoded defaults.
     """
     # Try to find instagram_specs.yaml in known locations
     candidates = [
-        # Content Scraper root (when sys.path includes it)
+        # BlackboxBrief root (when sys.path includes it)
         Path(__file__).resolve().parent.parent.parent.parent.parent
-        / "Content Scraper" / "config" / "instagram_specs.yaml",
+        / "BlackboxBrief" / "config" / "instagram_specs.yaml",
     ]
     wbw: Dict = {}
     for specs_path in candidates:

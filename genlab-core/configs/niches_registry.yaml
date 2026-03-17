@@ -6,7 +6,7 @@ niches:
     status: active
     color: "#6366F1"
     vertical: ai_creators
-    folder: "Content Scraper"  # legacy directory name — will be renamed to BlackboxBrief
+    folder: "BlackboxBrief"
 
   - id: gaming
     display_name: "CriticalRush"

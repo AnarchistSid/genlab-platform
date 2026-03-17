@@ -6,7 +6,7 @@
 
 agents:
   content_scraper:
-    runs_dir: "/Users/anarchistsid/GenLab/Content Scraper/.tmp/runs"
+    runs_dir: "/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/runs"
     quota_gb: 80
     warn_pct: 75
     evict_pct: 90

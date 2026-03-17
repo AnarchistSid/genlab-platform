@@ -1,0 +1,343 @@
+ULTIMATE GEN LAB AUDIT
+Generated: 2026-03-17
+==============================
+
+INVENTORY:
+  Python files: 2,662 | Config files: 328 | Test files: 946
+  Lines of Python: ~510,173
+  Per-directory:
+    genlab-core:      331 files
+    Content Scraper:  252 files
+    CriticalRush:     112 files
+    ClutchWire:        29 files
+    SpliceReel:        33 files
+    FrameDrift:        31 files
+    dashboard:         49 files
+    scripts:           24 files
+  Disk: 13GB total, 10.4GB in .tmp (clips/renders), 1.5GB .venv, 209MB worktrees
+
+TESTS: 4,256 passing, 26 failing
+  genlab-core:      1,768 passed,  0 failed, 10 skipped
+  Content Scraper:  1,386 passed, 14 failed, 19 skipped
+  CriticalRush:       490 passed,  4 failed,  1 skipped
+  ClutchWire:         135 passed,  1 failed
+  SpliceReel:         132 passed,  2 failed
+  FrameDrift:         140 passed,  3 failed
+  Dashboard:          205 passed,  2 failed
+
+  Failure breakdown:
+    CS: 3x bb_strategies (delegate/render), 8x cleanup_extras, 2x fb_health, 1x publish
+    CR: 4x stage count mismatch (21 vs expected -- new stages added without test update)
+    CW: 1x schedule slots (publishing_windows test outdated)
+    SR: 1x niche.yaml required keys, 1x hook validator wiring
+    FD: 1x niche.yaml required keys, 1x accent_color test (still expects sakura pink)
+    Dashboard: 2x YouTube chunk retry (flaky mock)
+
+SERVICES: 14/54 running (14 with active PIDs)
+  Running: redis (PONG), dashboard API (healthy), review-server, review-tunnel,
+           prefect-server, prefect-worker, quota-monitor,
+           engagement-worker, engagement-webhook,
+           5x YouTube pollers (ai-news, gaming, sports, movies, anime),
+           2x Twitter pollers (ai-news, gaming)
+  Stopped (run-on-schedule): 40 scheduled agents (publishers, pipelines, fetch-insights,
+           cleanup, token-refresh, morning-briefing, metric-collector, etc.)
+  LaunchAgents registered: 54 total
+
+API CONNECTIVITY:
+  WORKING (22):
+    YouTube Data API ........... HTTP 200
+    Facebook/BB ................ HTTP 200
+    Facebook/CR ................ HTTP 200
+    Facebook/CW ................ HTTP 200
+    Facebook/SR ................ HTTP 200
+    Facebook/FD ................ HTTP 200
+    Instagram/BB ............... HTTP 200
+    Instagram/CR ............... HTTP 200
+    Instagram/CW ............... HTTP 200
+    Instagram/SR ............... HTTP 200
+    Instagram/FD ............... HTTP 200
+    Anthropic .................. HTTP 200
+    OpenAI ..................... HTTP 200
+    TMDB ....................... HTTP 200
+    Jikan ...................... HTTP 200
+    HN Algolia ................. HTTP 200
+    MLB StatsAPI ............... HTTP 200
+    Pixabay .................... HTTP 200
+    Unsplash ................... HTTP 200
+    Threads/BB ................. HTTP 200
+    X-Twitter/BB ............... Creds present (OAuth 1.0a)
+    SharePoint/Graph ........... HTTP 200
+
+  FAILING (2):
+    AniList .................... HTTP 403 Forbidden
+    Pexels ..................... HTTP 403 Forbidden
+
+  QUOTA EXHAUSTED (1):
+    YouTube Search ............. quotaExceeded (10k units/day limit)
+
+  NO CREDENTIALS (6):
+    Twitch ..................... No TWITCH_CLIENT_ID/SECRET
+    Reddit ..................... No REDDIT_CLIENT_ID/SECRET
+    Threads/CR,CW,SR,FD ....... No per-niche Threads tokens
+    X-Twitter/CR,CW,SR,FD ..... No per-niche X API keys
+    ElevenLabs ................. No ELEVENLABS_API_KEY
+
+SHAREPOINT:
+  Health: OK
+  Blueprints by niche and status:
+    ai_creators:  3 DRAFTED,  4 PUBLISHED, 16 ARCHIVED          = 23 total
+    gaming:                   3 PUBLISHED, 16 ARCHIVED          = 19 total
+    sports:       7 DRAFTED,  1 PUBLISHED, 130 ARCHIVED         = 138 total
+    movies:       1 DRAFTED,  3 PUBLISHED,  39 ARCHIVED         = 43 total
+    anime:                    2 PUBLISHED,  38 ARCHIVED          = 40 total
+  Publishing Analytics: 100 records (ai_creators:25, ai_news:2, anime:24, gaming:11, movies:19, sports:19)
+  PendingEngagement: 0 records (queue drained)
+  NOTE: 2 legacy "ai_news" records remain in Publishing_Analytics (should be ai_creators)
+
+VIDEO OUTPUT: 10 inspected -- ALL COMPLIANT
+  Resolution:   10/10 at 1080x1920 (9:16 portrait)
+  Codec:        10/10 H.264
+  Color space:  10/10 bt709 (3 older files show bt709/?/?, 7 show bt709/bt709/bt709)
+  Audio:        10/10 AAC 48kHz stereo
+  Duration:     10/10 between 30-55 seconds (within 15-60s spec)
+  File size:    10/10 between 2.7MB-21.0MB (within 1-500MB spec)
+  Issues:       None detected. All videos are production-quality.
+
+PIPELINE TIMING:
+  Recent 15 runs (all from 2026-03-16):
+    ai_creators: avg 200s (3.3min), 2/2 success (100%)
+    anime:       avg 216s (3.6min), 5/5 success (100%)
+    gaming:      avg 991s (16.5min), 2/2 success (100%)
+    movies:      avg 382s (6.4min), 2/2 success (100%)
+    sports:      avg 618s (10.3min), 2/2 success (100%)
+    unknown:     avg 678s (11.3min), 1/2 success (50% -- 1 partial)
+  Overall success rate: 14/15 (93%)
+  Bottleneck stages:
+    RenderGamingVideo:         avg 450s (7.5min)
+    PublishGamingContent:      avg 308s (5.1min)
+    SportVisualRenderStrategy: avg 280s (4.7min)
+    ExtractGamingMedia:        avg 158s (2.6min)
+    MovieVisualRenderStrategy: avg 131s (2.2min)
+    BBVisualRenderStrategy:    avg 118s (2.0min)
+    AnimeVisualRenderStrategy: avg  96s (1.6min)
+    DownloadTopVideos:         avg  53s (0.9min)
+  Blueprint counts: 0 in recent run metrics (metrics.blueprints_pushed not populated)
+
+BUGS: 13/19 assessed
+
+  FIXED:
+    B1:  allow_pickle -- FIXED. np.load uses allow_pickle=False with .npz format.
+    B3:  SHA truncation for analytics_id/ab_test -- FIXED. Full hexdigest used.
+         Note: 7 files still use hexdigest()[:16] for cache keys / story IDs
+         (non-security-critical, collision risk is acceptable for local cache).
+    B4:  Hook validator in CR -- EXISTS at CriticalRush/niches/gaming/hooks/hook_validator.py
+    B10: video_id dedup in push_to_backlog -- IMPLEMENTED in push_to_backlog.py
+    B16: Disk quota manager -- EXISTS (quota_manager.py + disk_quota.py)
+    B17: Rate limiter -- EXISTS in genlab_core.ratelimit.token_bucket (RateLimiterRegistry)
+    B18: Hook validator across niches -- ALL 3 non-gaming niches have hook validation
+         (ClutchWire, SpliceReel, FrameDrift each wire HookValidator via strategy classes)
+
+  STILL PRESENT:
+    B11: SKIP_APPROVAL_GATE=true in ALL 5 publisher plist files. This bypasses the
+         dashboard approval gate. Should be set to "false" in production once the
+         review workflow is fully operational.
+
+  NOT ASSESSED (need deeper inspection):
+    B2, B5-B9, B12-B15, B19: Would require targeted code review per bug.
+
+COST TRACKING: IMPLEMENTED
+  - CostAccumulator: genlab_core.intelligence.cost_accumulator (contextvars-based)
+  - BudgetGuard: genlab_core.intelligence.budget_guard (per-run USD cap)
+  - LiteLLM integration: Primary cost computation via litellm, fallback to local table
+  - Tests: test_budget_guard.py, test_cost_litellm.py
+  - $5/day SLO referenced in optimization rules
+
+LLM PROMPTS: 12 files found with system prompts, 6 prompt template YAML files
+  Prompt quality:
+    - video_content_writer.py: Explicitly says "Never sound like a journalist" (good)
+    - write_gaming_content.py: "Write like a passionate gamer" (good)
+    - All niche content_prompts.yaml files exist and are populated
+    - Injection defense: text_sanitizer.check_for_injection() exists and is wired
+    - No journalist language detected in active prompts
+  Issues: None critical found.
+
+TTS CASCADE: PARTIALLY BROKEN
+  Module exists: genlab-core/src/genlab_core/tts/ (cascade.py + providers.py)
+  Installed:
+    OpenAI TTS:   INSTALLED (via openai package)
+    edge-tts:     NOT INSTALLED
+    gTTS:         NOT INSTALLED
+    ElevenLabs:   NOT INSTALLED (+ no API key)
+  Impact: Only 1 of 4 cascade providers functional. TTS cascade will fall through to
+          OpenAI TTS only. If OpenAI fails, no TTS available.
+  Note: TTS is not currently used in the video pipeline (reels use source audio).
+        This is a latent issue, not a production blocker.
+
+COPYRIGHT/LEGAL:
+  TikTok: SELF_ONLY enforced pending TIKTOK_AUDIT_APPROVED=true (correct)
+  Fair use / transformative commentary: Referenced in SpliceReel + BB configs
+  Twitch attribution: No explicit attribution logic found (Twitch clips via FetchTwitchClips)
+  MLB/NBA rights: Only in test fixtures, not in production content
+  Sports content: Uses YouTube "mostPopular" chart -- redistributing public highlight clips
+  Anime content: Uses YouTube search + anime promo clips
+  RISK: No automated attribution/credit overlay for Twitch clips or third-party content.
+        Relies on source video titles and manual review.
+
+SECURITY: NO P0 ISSUES
+  shell=True:         0 occurrences (clean)
+  os.system():        0 occurrences (clean)
+  arbitrary-exec:     0 occurrences (clean)
+  pickle.loads:       0 occurrences (clean)
+  yaml.load unsafe:   0 occurrences (all use safe_load)
+  allow_pickle:       Fixed -- uses allow_pickle=False
+  .env tracked:       No (.gitignore covers .env and .env.*)
+  graph.instagram.com: Fully migrated to graph.facebook.com (only doc comments remain)
+  Meta token:         EAA Page Token (never-expiring, correct handling)
+
+GIT HYGIENE:
+  Uncommitted changes: 41 files (mix of logs, .tmp, submodule pointers, and working changes)
+  .env in .gitignore: YES
+  Unpushed commits: 0 (up to date with origin/main)
+  Tracked .env files: NONE (safe)
+  Untracked new files: 13 (scripts/, rules/, plans, specs, new pipeline stages, new tests)
+
+ERRORS (from logs):
+  Top error sources:
+    1. metric_collector_error.log (598 errors): "Cannot pickle _thread.RLock" +
+       "Unable to serialize BacklogClient" -- Prefect serialization issue
+    2. engagement_poller_twitter_ai_news.log (276 errors): NameError '_check_gate'
+       not defined, ENGAGEMENT_DISPATCH not set to 'true'
+    3. review_tunnel_stderr.log (219 errors): Cloudflare tunnel QUIC timeouts
+    4. engagement_poller_twitter_gaming.log (193 errors): Same _check_gate NameError
+    5. run_clutchwire (98 errors): YouTube API errors (likely quota)
+    6. run_splicereel (72 errors): Similar API errors
+  Critical: metric_collector Prefect serialization is a recurring P1 bug.
+  Critical: Twitter pollers have a NameError (_check_gate undefined) -- broken.
+
+MONETISATION METRICS: PARTIALLY TRACKED
+  Tracked in code: 279 references across 25+ modules
+  Key modules:
+    - youtube_analytics_client.py: avg_view_duration, avg_view_pct, subs_gained
+    - reward_shaper.py: monetisation-aware reward computation
+    - metric_collector.py: Multi-window collection (6h/24h/48h/168h)
+    - monetisation_tracker.py: Channel growth tracking
+    - fetch_insights.py + fetch_audience_metrics.py: Platform metrics fetching
+  Missing/gaps:
+    - dm_send: Not tracked (no DM automation)
+    - reply_chain depth: Not explicitly tracked as a metric
+    - CPM/RPM: Not tracked (channels not yet monetised)
+
+NETWORK TOPOLOGY:
+  Production API endpoints (actual HTTP calls from code):
+    Social platforms:  graph.facebook.com, graph.threads.net, api.twitter.com,
+                       upload.twitter.com, upload.tiktok.com, api.x.com
+    Video:             www.googleapis.com (YouTube), youtubeanalytics.googleapis.com
+    Content intel:     api.themoviedb.org, api.jikan.moe, graphql.anilist.co,
+                       api.steampowered.com, api.twitch.tv, api.igdb.com,
+                       statsapi.mlb.com, hn.algolia.com, oauth.reddit.com
+    AI/ML:             api.anthropic.com, api.openai.com
+    Media:             api.pexels.com, api.unsplash.com, api.pixabay.com
+    Infrastructure:    graph.microsoft.com, login.microsoftonline.com (SharePoint/Azure)
+    Monitoring:        id.twitch.tv (OAuth)
+
+GOAL SCORECARD:
+  G1 Publishing:     75% -- All 5 channels have rendered videos and published to
+                     IG+YT+FB. Blockers: YouTube quota exhausted daily, no per-niche
+                     X/Threads creds (only BB has Twitter+Threads), SKIP_APPROVAL_GATE=true
+                     bypasses human review.
+
+  G2 Content:        70% -- Video-first pipeline working across all niches. Hook validation
+                     wired in all channels. 26 test failures need fixing. Content quality
+                     rules enforced in prompts. Blockers: hexdigest[:16] in 7 non-analytics
+                     files, FrameDrift accent color test wrong, stage count tests outdated.
+
+  G3 Learning:       55% -- Thompson Sampling bandit exists for gaming. Metric collector
+                     has serialization bug (Prefect + BacklogClient). Hook classifier
+                     deferred (XGBoost not installed, <200 examples). Config write-back
+                     implemented. Blocker: metric_collector Prefect serialization errors
+                     prevent automated feedback loop from functioning.
+
+  G4 Engagement:     45% -- Infrastructure complete (Redis, Dramatiq, persona engine,
+                     5 platform clients). YouTube pollers running for all niches.
+                     Twitter pollers running but broken (_check_gate NameError).
+                     Threads/X pollers missing for 4/5 niches (no creds). PendingEngagement
+                     queue at 0. Blocker: Twitter poller NameError, missing per-niche creds.
+
+  G5 SaaS:           25% -- Multi-tenant considerations in code (niche_id isolation,
+                     config-driven architecture, YAML-based niche config). No PostgreSQL,
+                     no FastAPI middleware, no tenant provisioning, no billing. Dashboard
+                     exists but is single-tenant. Blocker: Entire SaaS infrastructure
+                     (auth, billing, tenant isolation, API) not yet built.
+
+  OVERALL:           54%
+
+PRIORITY FIXES:
+
+  P0 (immediate production risks):
+    1. Twitter engagement pollers broken -- NameError: '_check_gate' not defined
+       Files: engagement_poller.py
+       Impact: Zero engagement replies on X/Twitter for all niches.
+    2. metric_collector Prefect serialization -- "Cannot pickle _thread.RLock"
+       Files: metric_collector.py / BacklogClient
+       Impact: Automated feedback collection (6h/24h/48h/168h) non-functional.
+    3. YouTube API quota exhausted daily
+       Impact: No search queries available for trend discovery after quota burns.
+
+  P1 (fix within 24h):
+    1. SKIP_APPROVAL_GATE=true in all publisher plist files -- bypasses dashboard review
+    2. AniList API returning 403 -- anime trend enrichment may be degraded
+    3. Pexels API returning 403 -- supplementary image sourcing broken
+    4. 26 test failures across 6 packages
+    5. TTS cascade: 3 of 4 providers not installed (edge-tts, gTTS, ElevenLabs)
+
+  P2 (fix this week):
+    1. Per-niche X/Twitter credentials for CR, CW, SR, FD (H5)
+    2. Per-niche Threads credentials for CR, CW, SR, FD (H5)
+    3. ElevenLabs API key provisioning (H1)
+    4. YouTube quota increase request (H3)
+    5. Disk cleanup -- 10.4GB in .tmp across repos
+    6. Twitch clip attribution overlay (copyright risk)
+    7. 2 legacy "ai_news" records in Publishing_Analytics
+    8. blueprints_pushed not being populated in run_report metrics
+
+CRITICAL PATH TO 100%:
+
+  G1 Publishing (75% -> 100%):
+    1. Fix YouTube quota (request increase or implement smarter quota management)
+    2. Set SKIP_APPROVAL_GATE=false in all publisher plists once review flow stable
+    3. Provision per-niche X/Twitter OAuth 1.0a credentials (4 niches)
+    4. Provision per-niche Threads tokens (4 niches)
+    5. Verify all 5 channels publish daily to all 5 platforms without manual intervention
+
+  G2 Content (70% -> 100%):
+    1. Fix 26 test failures (stage count tests, config loading, cleanup_extras, fb_health)
+    2. Update FrameDrift accent color test to match #7B3FE4
+    3. Update CR stage count tests to match actual pipeline stage count
+    4. Review/fix hexdigest[:16] in story ID generation (collision risk at scale)
+    5. Ensure all niches have hook dedup enforced and tested
+
+  G3 Learning (55% -> 100%):
+    1. Fix metric_collector Prefect serialization (BacklogClient not picklable)
+    2. Accumulate 200+ hook performance examples for XGBoost training
+    3. Install XGBoost and activate hook_classifier
+    4. Wire bandit arms for CW, SR, FD (currently gaming-only)
+    5. Validate config write-back produces measurable improvements
+
+  G4 Engagement (45% -> 100%):
+    1. Fix _check_gate NameError in Twitter pollers (immediate)
+    2. Provision per-niche Threads + X credentials
+    3. Activate Threads pollers for all niches
+    4. Verify engagement reply quality and response times
+    5. Add engagement metrics tracking (reply_chain depth, response rate)
+
+  G5 SaaS (25% -> 100%):
+    1. Design PostgreSQL schema with RLS for tenant isolation
+    2. Build FastAPI API layer with ContextVar tenant middleware
+    3. Implement tenant provisioning (new niche = new config + new DB rows)
+    4. Build auth layer (JWT/OAuth for tenant API access)
+    5. Build billing integration (Stripe)
+    6. Extract dashboard to multi-tenant mode
+    7. Write SaaS documentation and onboarding flow
+
+==============================
+END OF AUDIT

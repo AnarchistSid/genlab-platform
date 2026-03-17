@@ -1,0 +1,261 @@
+DUPLICATE AUDIT FINDINGS
+Date: 2026-03-16
+Auditor: Claude Code (read-only diagnostic)
+
+===============================================================================
+[PROBLEM A -- Same video clip used in multiple blueprints with different hooks]
+===============================================================================
+
+  Root cause: NO VIDEO-LEVEL DEDUP EXISTS AT ANY LAYER.
+
+  Detailed breakdown:
+
+  1. DedupEngine (genlab-core/src/genlab_core/intelligence/dedup_engine.py)
+     - Deduplicates on URL (Pass 1) and title text (Passes 2+3).
+     - Does NOT track video_id at all. The url_field defaults to "url" (story source URL),
+       NOT the YouTube video URL. Two stories with different RSS source URLs but the same
+       YouTube video_id pass all 3 dedup passes.
+
+  2. PushToBacklog (genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py)
+     - Dedup key: candidate_id = SHA256(story_id + template_id + hook_text)  [line 152-154]
+     - story_id = SHA256(source_url + published_date)  [stable_ids.py:66-81]
+     - Neither candidate_id nor story_id incorporate video_id.
+     - The blueprint duplicate check (line 165-171) only queries by candidate_id.
+     - There is NO query like "does a blueprint already exist for YouTube video X?"
+     - video_id is not stored as a SharePoint column (line 206: "clip_url and thumbnail_url
+       intentionally omitted -- not SharePoint columns").
+
+  3. TrendingVideoFetcher (genlab-core/src/genlab_core/media/trending_video_fetcher.py)
+     - Within a SINGLE run, video_id is used as dict key to deduplicate (line 286, 295, 318).
+     - ACROSS runs, there is no persistence. Same trending video is fetched again next run.
+
+  4. Content_Memory (scripts/content_memory.py)
+     - Tracks published content for topic-level similarity.
+     - Does NOT store video_id or YouTube URL.
+     - Not consulted by the pipeline at blueprint creation time.
+
+  5. clip_index.json evidence -- CONFIRMED DUPLICATES:
+     - anime_20260316_040002 and anime_20260316_101016 share:
+       * YouTube video rc26AwBXlUE (story_id 1a2e61844fdebe4e...)
+       * YouTube video kAncxuwCPZg (story_id 14514114f4c79a64...)
+     - Same story_ids = same source URL + date = PushToBacklog upserts (no new blueprint).
+       BUT if the hook differs between runs (LLM non-determinism), candidate_id changes,
+       and a NEW blueprint is created for the SAME video with a different hook.
+
+  Where it breaks:
+     - push_to_backlog.py:152-154 -- candidate_id includes hook text, so same video +
+       different hook = different candidate_id = new blueprint created.
+     - push_to_backlog.py:165-171 -- duplicate check is on candidate_id only, not video_id.
+
+  Is video_id checked before blueprint creation? NO
+  Is Content_Memory used for video-level dedup? NO
+
+  Impact: Same YouTube clip published multiple times with slightly different hooks.
+  The hook is part of the dedup key, so LLM non-determinism defeats the dedup.
+
+===============================================================================
+[PROBLEM B -- Same post published twice to same platform]
+===============================================================================
+
+  Root cause: DAILY CAP IS NOT NICHE-AWARE + 6 PUBLISHER PLISTS CAN RACE.
+
+  Detailed breakdown:
+
+  1. Publisher plist count: 5 niche-specific publisher plists exist:
+     - com.genlab.instagram-publisher.plist   (ai_creators, 12:00 IST)
+     - com.genlab.criticalrush-publisher.plist (gaming, 12:40 IST)
+     - com.genlab.clutchwire-publisher.plist   (sports, 12:10 IST)
+     - com.genlab.splicereel-publisher.plist   (movies, 12:20 IST)
+     - com.genlab.framedrift-publisher.plist   (anime, 12:30 IST)
+
+     All 5 plists call the SAME publish_all_platforms.py code (via orchestrator.sh publish).
+     They are staggered by 10 minutes but run the same Content Scraper codebase.
+
+  2. SKIP_APPROVAL_GATE is set to "true" in ALL publisher plists:
+     - com.genlab.instagram-publisher.plist:57    SKIP_APPROVAL_GATE=true
+     - com.genlab.criticalrush-publisher.plist:43 SKIP_APPROVAL_GATE=true
+     - com.genlab.clutchwire-publisher.plist:43   SKIP_APPROVAL_GATE=true
+     - com.genlab.splicereel-publisher.plist:43   SKIP_APPROVAL_GATE=true
+     - com.genlab.framedrift-publisher.plist:43   SKIP_APPROVAL_GATE=true
+     - Also in .env:97 and Content Scraper/.env:123
+
+     With SKIP_APPROVAL_GATE=true, ANY VISUAL_READY blueprint is eligible for publishing
+     without human review (gatekeeper.py:50-51). This means all VISUAL_READY items from
+     Problem A (duplicate video blueprints) are auto-published.
+
+  3. DailyCapEnforcer (genlab-core/src/genlab_core/publishing/daily_cap.py):
+     - Counts ALL SUCCESS records from Publishing_Analytics for today (line 157-174).
+     - NOT niche-filtered: counts are global across all 5 channels.
+     - Each plist runs in a SEPARATE process, so in-memory session counters (line 74)
+       are process-local and don't see other processes' publishes.
+     - The _load_today_counts queries Publishing_Analytics.all() which returns ALL niches.
+     - Default cap is 1 per platform per day -- GLOBAL, not per-niche.
+     - If ai_creators publishes to Instagram at 12:00, the gaming publisher at 12:40
+       queries Publishing_Analytics and sees the ai_creators publish, so it hits the cap
+       and is BLOCKED even though gaming hasn't published yet.
+     - ALTERNATIVELY: if the ai_creators publish hasn't propagated to SharePoint yet
+       (Graph API eventual consistency), the gaming publisher sees 0 and publishes again.
+
+  4. File lock (publish_all_platforms.py:1583-1601):
+     - Per-niche lock file: "publisher-{niche}.lock" (line 1586).
+     - This prevents same-niche concurrent runs but does NOT prevent cross-niche races.
+     - The lock is correct for preventing the SAME plist from double-running.
+
+  5. Blueprint status update to PUBLISHED:
+     - YES, status is updated to PUBLISHED after successful publish (line 2291-2292).
+     - The publisher queries ONLY VISUAL_READY blueprints (line 1666).
+     - Once PUBLISHED, a blueprint won't be fetched again (correct).
+     - BUT: the race window is between process A starting (querying VISUAL_READY)
+       and process A updating to PUBLISHED. If process B queries in between,
+       it sees the same blueprint as VISUAL_READY.
+
+  6. State machine (workflow_state_machine.py):
+     - PUBLISHED is correctly a near-terminal state: PUBLISHED -> {PUBLISHED, ANALYZED} only.
+     - VISUAL_READY -> PUBLISHED is allowed (line 26).
+     - PUBLISHED cannot go back to VISUAL_READY (correct).
+
+  Does publisher filter out PUBLISHED status? YES (queries VISUAL_READY only)
+  Is status updated to PUBLISHED after publish? YES
+  Daily cap enforcer: PARTIALLY BROKEN (not niche-aware, cross-process race)
+  SKIP_APPROVAL_GATE value: true (all 5 plists + both .env files)
+
+  Impact: The 10-minute stagger between plists is the only protection against cross-niche
+  double-publish of the same blueprint. If a blueprint has no niche_id set, or if the
+  DailyCapEnforcer's global counting blocks legitimate niche publishes, the system misbehaves.
+
+===============================================================================
+[PROBLEM C -- Old published posts being republished days later]
+===============================================================================
+
+  Root cause: PIPELINE RERUNS CREATE NEW BLUEPRINTS FOR SAME VIDEO (Problem A),
+              AND SKIP_APPROVAL_GATE=true AUTO-PUBLISHES THEM.
+
+  Detailed breakdown:
+
+  1. Publisher query (publish_all_platforms.py:1666):
+     - Queries: client.get_blueprints_by_status("VISUAL_READY", niche_id=niche_filter)
+     - This correctly excludes PUBLISHED blueprints.
+     - Once a blueprint reaches PUBLISHED, it is never re-queried.
+
+  2. Can status reset from PUBLISHED to VISUAL_READY?
+     - State machine (line 30): PUBLISHED -> {PUBLISHED, ANALYZED} only.
+     - NEEDS_REVIEW can transition to VISUAL_READY (line 36).
+     - So the path: PUBLISHED -> (manual state corruption) is blocked by code.
+     - BUT: The dashboard review_server and bulk_approve scripts can update status
+       directly via client.blueprints.update() -- no state machine check in those paths.
+     - No evidence of automated status resets found.
+
+  3. The REAL mechanism for old posts reappearing:
+     - Day 1: Pipeline fetches YouTube trending video X. Creates story S1, blueprint B1.
+       B1 is rendered (VISUAL_READY), published (PUBLISHED). Done.
+     - Day 3: Pipeline runs again. YouTube video X is still trending.
+       TrendingVideoFetcher fetches it again (no cross-run dedup).
+       PushToBacklog creates story S1 again -- upserts (no duplicate, same story_id).
+       BUT: the LLM generates a DIFFERENT hook for the same video.
+       generate_candidate_id(story_id, template_id, NEW_hook) -> NEW candidate_id C2.
+       PushToBacklog queries candidate_id=C2 -- not found -- creates NEW blueprint B2.
+       B2 has rendered_path -> status=VISUAL_READY, scheduled_for=tomorrow.
+       SKIP_APPROVAL_GATE=true -> B2 is auto-eligible.
+       Publisher runs -> publishes B2 (same video, different hook).
+       User sees the SAME video clip posted again days later.
+
+  4. candidate_id dedup in push_to_backlog.py:
+     - Line 152-154: candidate_id = generate_candidate_id(story_id, template_id, hook)
+     - Line 165-170: checks if blueprint with this candidate_id exists.
+     - If hook changed (common with LLM-generated content), candidate_id differs,
+       and the check passes -> new blueprint created.
+     - The dedup is NOT on story_id or video_id -- it's on the full candidate identity
+       which includes the LLM-generated hook text.
+
+  5. What field does dedup key on?
+     - candidate_id = SHA256(story_id + "{niche_id}_default" + hook_text)
+     - story_id = SHA256(normalized_source_url + published_date)
+     - No video_id in either hash.
+
+  Does query exclude PUBLISHED blueprints? YES (VISUAL_READY filter)
+  Can status reset from PUBLISHED to VISUAL_READY? NO (state machine blocks it)
+  What field does dedup key on? candidate_id (story_id + template_id + hook)
+  Does dedup check against PUBLISHED items? NO (only checks if candidate_id already
+    exists as a blueprint, regardless of status -- but a different hook = different
+    candidate_id = new blueprint)
+
+  Impact: Videos that remain trending for multiple days generate new blueprints
+  every pipeline run because the LLM produces different hooks. Combined with
+  SKIP_APPROVAL_GATE=true, these are auto-published, causing old content to reappear.
+
+===============================================================================
+[ROOT CAUSE CHAIN]
+===============================================================================
+
+  All three problems share a common root:
+
+    1. No video_id column in SharePoint Blueprints.
+    2. No video_id in the candidate_id hash.
+    3. No cross-run video_id dedup.
+    4. LLM-generated hook is part of the dedup key.
+    5. SKIP_APPROVAL_GATE=true bypasses the only human safety net.
+    6. DailyCapEnforcer is not niche-aware.
+
+  The chain: Trending video persists -> pipeline re-ingests it -> LLM generates new
+  hook -> new candidate_id -> new blueprint -> auto-scheduled -> SKIP_APPROVAL_GATE
+  bypasses review -> DailyCapEnforcer doesn't block (wrong niche counting) -> published
+  again -> duplicate post on platform.
+
+===============================================================================
+[PRIORITY]
+===============================================================================
+
+  P0: SKIP_APPROVAL_GATE=true in all publisher plists
+      - This is the most immediate lever. Setting it to false would require human
+        approval before any publish, preventing auto-publish of duplicate blueprints.
+      - However, this blocks ALL publishing until the dashboard review flow is used.
+
+  P1: Add video_id to blueprint dedup (fix within 24h)
+      - Add a "source_video_id" field to SharePoint Blueprints.
+      - In PushToBacklog, before creating a blueprint, query:
+        "Does a VISUAL_READY or PUBLISHED blueprint already exist for this video_id
+        in this niche?" If yes, skip.
+      - This is the structural fix that prevents Problems A and C.
+
+  P1: Make DailyCapEnforcer niche-aware (fix within 24h)
+      - _load_today_counts should filter by niche_id, not count all niches globally.
+      - Each publisher process publishes for one niche (NICHE_ID env var).
+      - Cap should be "1 per platform per niche per day", not "1 per platform per day globally".
+
+  P2: Remove hook from candidate_id hash (fix this week)
+      - candidate_id should be SHA256(story_id + template_id) -- no hook.
+      - Or add a separate "video dedup" pass that runs BEFORE LLM content generation.
+      - This prevents LLM non-determinism from defeating the dedup.
+
+  P2: Add Content_Memory video_id tracking (fix this week)
+      - When a blueprint is published, record its source video_id in Content_Memory.
+      - Pipeline ingestion should consult Content_Memory before creating stories
+        for videos that were already published.
+
+===============================================================================
+[FILES EXAMINED]
+===============================================================================
+
+  genlab-core/src/genlab_core/intelligence/dedup_engine.py
+  genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py
+  genlab-core/src/genlab_core/cache/stable_ids.py
+  genlab-core/src/genlab_core/publishing/daily_cap.py
+  genlab-core/src/genlab_core/platforms/gatekeeper.py
+  genlab-core/src/genlab_core/platforms/dispatcher.py
+  genlab-core/src/genlab_core/http/backlog_client.py
+  genlab-core/src/genlab_core/media/trending_video_fetcher.py
+  Content Scraper/execution/publish_all_platforms.py
+  Content Scraper/execution/utils/workflow_state_machine.py
+  Content Scraper/runbooks/orchestrator.sh
+  scripts/publish.sh
+  scripts/content_memory.py
+  ~/Library/LaunchAgents/com.genlab.instagram-publisher.plist
+  ~/Library/LaunchAgents/com.genlab.criticalrush-publisher.plist
+  ~/Library/LaunchAgents/com.genlab.clutchwire-publisher.plist
+  ~/Library/LaunchAgents/com.genlab.splicereel-publisher.plist
+  ~/Library/LaunchAgents/com.genlab.framedrift-publisher.plist
+  .tmp/runs/anime_20260316_040002/clip_index.json
+  .tmp/runs/anime_20260316_101016/clip_index.json
+  .tmp/runs/anime_20260316_104816/clip_index.json
+  .tmp/runs/sports_20260316_033450/clip_index.json
+  .tmp/runs/sports_20260316_104634/clip_index.json

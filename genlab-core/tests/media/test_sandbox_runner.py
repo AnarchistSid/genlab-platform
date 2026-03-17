@@ -55,9 +55,9 @@ class TestPathRewriting:
         self.runner = SandboxedFFmpegRunner(genlab_root=GENLAB_ROOT)
 
     def test_host_to_sandbox(self):
-        host = "/Users/anarchistsid/GenLab/Content Scraper/.tmp/runs/clip.mp4"
+        host = "/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/runs/clip.mp4"
         sandbox = self.runner.host_to_sandbox_path(host)
-        assert sandbox == "/workspace/Content Scraper/.tmp/runs/clip.mp4"
+        assert sandbox == "/workspace/BlackboxBrief/.tmp/runs/clip.mp4"
 
     def test_sandbox_to_host(self):
         sandbox = "/workspace/CriticalRush/output/reel.mp4"
@@ -73,16 +73,16 @@ class TestPathRewriting:
     def test_rewrite_ffmpeg_cmd(self):
         cmd = [
             "/opt/homebrew/bin/ffmpeg", "-y",
-            "-i", f"{GENLAB_ROOT}/Content Scraper/.tmp/clip.mp4",
+            "-i", f"{GENLAB_ROOT}/BlackboxBrief/.tmp/clip.mp4",
             "-c:v", "libx264",
-            f"{GENLAB_ROOT}/Content Scraper/.tmp/out.mp4",
+            f"{GENLAB_ROOT}/BlackboxBrief/.tmp/out.mp4",
         ]
         rewritten = self.runner.rewrite_ffmpeg_cmd(cmd)
         joined = " ".join(rewritten)
         assert str(GENLAB_ROOT) not in joined
         assert rewritten[0] == "ffmpeg"  # host binary → bare name
-        assert "/workspace/Content Scraper/.tmp/clip.mp4" in joined
-        assert "/workspace/Content Scraper/.tmp/out.mp4" in joined
+        assert "/workspace/BlackboxBrief/.tmp/clip.mp4" in joined
+        assert "/workspace/BlackboxBrief/.tmp/out.mp4" in joined
 
     def test_rewrite_preserves_non_ffmpeg_binary(self):
         cmd = ["/usr/bin/custom_tool", "-i", f"{GENLAB_ROOT}/file.mp4"]
@@ -175,7 +175,7 @@ class TestSandboxedFFmpegRunnerIntegration:
             # GenLab directories should be visible
             assert any(
                 name in result.stdout
-                for name in ["CriticalRush", "genlab-core", "Content Scraper"]
+                for name in ["CriticalRush", "genlab-core", "BlackboxBrief"]
             )
 
     def test_volume_mount_visible(self):

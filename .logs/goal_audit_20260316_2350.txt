@@ -1,0 +1,519 @@
+================================================================================
+  GEN LAB — GOAL-EVALUATION AUDIT
+  Date: 2026-03-16
+  Auditor: Claude Sonnet 4.6 (READ-ONLY — no files modified)
+================================================================================
+
+SYSTEM STATUS AT AUDIT TIME
+────────────────────────────
+Redis:          PONG (running)
+Prefect worker: PID 3250 (exit code 1 — crashed or restarting)
+Engagement webhook: PID 1146 (running, uvicorn on port 8765)
+Engagement worker: PID 1136 (registered but ENGAGEMENT_DISPATCH not set)
+Review server:  PID 18538 (running)
+Review tunnel:  PID 97964 (running)
+Quota monitor:  PID 97908 (running)
+
+Pipeline runs today (2026-03-16):
+  ai_creators: 2 runs (last: 173029)
+  gaming:      4 runs (last: gaming_20260316_165319)
+  anime:       4 runs (last: anime_20260316_163522)
+  movies:      3 runs (last: movies_20260316_163933)
+  sports:      2 runs (last: sports_20260316_164305)
+  (no BB run via publisher daemon — ran via plist separately at 2233)
+
+genlab-core test suite: 1,675 passed, 10 skipped, 0 failed (34.57s)
+
+================================================================================
+G1: ALL 5 CHANNELS PUBLISHING DAILY, EVERY PLATFORM, EVERY DAY — RELIABLY
+================================================================================
+
+FINDINGS:
+
+[G1-01] ALL 5 PIPELINE RUNNERS EXIST AND LOADED CORRECTLY
+  - GenericPipelineRunner in genlab-core/pipeline/pipeline_runner.py ✓
+  - All 5 niches registered: ai_creators, gaming, sports, movies, anime ✓
+  - Stage loading is config-driven via niche.yaml pipeline.stages ✓
+  - Run reports today confirm all 5 niches completed successfully ✓
+
+[G1-02] DAILY CAP ENFORCEMENT
+  - DailyCapEnforcer exists (genlab-core/publishing/daily_cap.py) ✓
+  - Cap is niche-scoped: gaming IG cap is independent of BB IG cap ✓
+  - platform_caps.yaml: 5 posts/platform/day (1 per niche) ✓
+  - Fail-open: if SharePoint query fails, starts from 0 (risk: could double-post) ⚠
+  - _cooldown_gate is a placeholder pass-through (not implemented) ⚠
+
+[G1-03] PUBLISHER PLISTS (launchd services)
+  - com.genlab.criticalrush-publisher: PID="-" (not running — exit 0) ⚠
+  - com.genlab.clutchwire-publisher: PID="-" (not running) ⚠
+  - com.genlab.splicereel-publisher: PID="-" (not running) ⚠
+  - com.genlab.framedrift-publisher: PID="-" (not running) ⚠
+  - com.genlab.instagram-publisher: PID="-" (not running) ⚠
+  These non-BB publisher plists all show exit code 0 and PID "-". This means
+  they either ran once and exited normally (KeepAlive=false pattern), or they
+  are scheduled to run at specific times and are currently dormant.
+
+[G1-04] PLATFORM FAILURE ISOLATION
+  - publish_all_platforms.py uses ThreadPoolExecutor for concurrent publishing ✓
+  - "best_effort" strategy: PUBLISHED if ANY platform succeeds ✓
+  - Per-platform SKIPPED records written when credentials missing ✓
+  - _require_niche_id() validates niche at entry point ✓
+  - Cross-channel guard prevents BB tokens from publishing to CW ✓
+
+[G1-05] PLATFORM COVERAGE GAPS
+  - TikTok: STUB — always fails (TIKTOK_AUDIT_APPROVED never set) ✗
+    The tiktok.py client returns a hardcoded error even when enabled=true
+    in niche.yaml. The actual publish logic is "not yet implemented."
+  - Threads + X/Twitter: per-niche credentials (H5) not provisioned for
+    CW, SR, FD, CR — only BB has these. These platforms will SKIPPED for
+    4/5 niches per credential guard.
+  - YouTube: quota exhaustion (uploadLimitExceeded) was noted previously.
+    Gaming run today shows 2 blueprints rendered but video_validation skipped=2.
+
+[G1-06] SKIP_APPROVAL_GATE
+  - Gatekeeper checks SKIP_APPROVAL_GATE env var ✓
+  - Not set in launchd plists → approval gate is ACTIVE (human must approve) ✓
+  - Dashboard review server running (port 18538) ✓
+
+[G1-07] SLO VIOLATIONS
+  - Gaming pipeline: 1,531s (exceeds 600s P95 target) — render takes 600s alone ⚠
+  - Other channels: within SLO (129-392s)
+
+SUMMARY G1:
+  + All 5 channels produce blueprints daily (confirmed by run reports)
+  + Pipeline infrastructure is production-grade (niche isolation, niche IDs, guards)
+  + Video validation, daily cap, approval gate all wired
+  - TikTok is a complete stub (0% coverage for 1 platform across all channels)
+  - Threads + X/Twitter only provisioned for BB (4/5 channels missing creds)
+  - Publisher plists for non-BB channels show as exited (status unclear without auth)
+  - Daily cap fail-open is a double-post risk
+  - Cooldown gate is unimplemented (placeholder)
+  Effective platform reach per channel:
+    BB: IG + YT + FB + X (4 platforms active — Threads token may be expired at 60d)
+    Gaming/Sports/Movies/Anime: IG + FB at best (YT quota risk, X/Threads blocked)
+
+SCORE: 52/100
+STATUS: Degraded — running but with significant coverage gaps on TikTok and
+        X/Threads for 4 of 5 channels.
+TOP BLOCKER: TikTok is stub-only; X/Threads credentials not provisioned for CR/CW/SR/FD.
+
+================================================================================
+G2: CONTENT QUALITY — RIGHT VIDEO, FAN VOICE, CORRECT HOOK, EVERY POST
+================================================================================
+
+FINDINGS:
+
+[G2-01] VIDEO-FIRST ARCHITECTURE (CONFIRMED WORKING)
+  - TrendingVideoFetcher: 3-tier strategy (RSS → playlistItems → videos.list) ✓
+  - Quota-optimized: ~3 units used in sports run (down from ~1,500) ✓
+  - Google Trends enrichment active for all niches in sports run ✓
+  - DownloadTopVideos stage runs for all non-BB channels ✓
+  - VideoGate enforces video_gate: require (no text-only fallback) ✓
+  - Pexels disabled: "no Pexels fallback" confirmed in gaming log ✓
+  - BROLL_NICHES effectively empty — no stock video fallback ✓
+
+[G2-02] FRAME COMPOSITOR — SPEC COMPLIANCE
+  - FrameCompositor: locked 1080×1920 canvas, 3 layout paths ✓
+  - bt709 enforced in FFmpeg filter and ValidateVideos check ✓
+  - Logo overlay: 60px, positioned at x=45 (landscape/square) ✓
+  - Accent line: 6px at channel accent color ✓
+  - Hook text zone: 80px, 44px bold white ✓
+  - No overlays on video region (ZERO overlays on video section) ✓
+  - Tests exist and pass (test_frame_compositor.py) ✓
+
+[G2-03] VIDEO VALIDATION SPEC
+  - ValidateVideos checks: 1080×1920, H.264, yuv420p, bt709, AAC 48kHz stereo,
+    15-60s, <100MB ✓
+  - Auto-fix via re-encode for codec/pix_fmt/color_space mismatches ✓
+  - 6 validation tests added (confirmed by git log) ✓
+  - Gaming run today: video_validation skipped=2 (no rendered paths in context)
+    This is a gap — ValidateVideos only validates stories with rendered_path
+    set in context['stories'], but gaming pushes paths via different key ⚠
+
+[G2-04] NICHE VOICE — FAN-NATIVE
+  - NICHE_VOICE dict in video_content_writer.py covers all 5 niches ✓
+  - Gaming: Twitch streamer voice (goated, no cap, W, L, clutch) ✓
+  - Sports: group-chat passionate fan voice ✓
+  - Movies: film-obsessed friend voice ✓
+  - Anime: most invested Discord member voice ✓
+  - AI creators: tech-savvy genuinely shocked voice ✓
+  - All voices: "React to the moment FIRST, explain second" ✓
+  - No journalist/press-release framing ✓
+
+[G2-05] HOOK QUALITY GATES
+  - HookValidator: 9 universal rules (too short/long, markdown, excessive punct, etc.) ✓
+  - 60-char limit enforced by HookValidationResult ✓
+  - Forbidden hook patterns in templates.yaml per niche ✓
+  - FrameDrift forbidden: "BREAKING:", "JUST IN:", "announces", "reveals", etc. ✓
+  - Dedup enforced by dedup_engine.py ✓
+  - XGBoost classifier: degrades gracefully (returns 0.5 neutral) when not trained ⚠
+    MIN_EXAMPLES=200 not yet reached — no real quality signal from ML yet
+
+[G2-06] SOURCE REJECT PATTERNS
+  - Gaming: reject_title_patterns in filter_gaming_stories ✓
+  - Duration gate: rejects clips >300s (confirmed: 2365s and 1572s rejected) ✓
+  - Sports: "Final/In Progress only" for live games ✓
+  - FrameDrift: anime keyword match required ✓
+  - BB: creator_only mode — 28/31 sources retained, video_only=True ✓
+
+[G2-07] CONTENT GAPS
+  - BB run today: warning "meta_access_token missing" for ai_creators niche ⚠
+    This means publishing will SKIPPED for IG/FB until credential is set.
+  - Gaming run: text_overlays skipped=2 — overlay stage has no paths to render ⚠
+  - Hook formulas in FrameDrift templates.yaml still contain template strings
+    like "{title} just hit different" — if video title is generic, hooks will
+    be generic. This depends on LLM substitution quality.
+
+SUMMARY G2:
+  + Video-first architecture fully implemented and producing real videos
+  + FrameCompositor locked to spec (1080×1920, bt709, logo, accent line)
+  + Fan-native voice per niche in video_content_writer
+  + Hook validation with 9 universal rules
+  + No stock video / text-only fallback (Pexels disabled)
+  - ValidateVideos skipped for gaming channel (path key mismatch in context)
+  - XGBoost hook classifier not trained (neutral scores only)
+  - BB missing meta_access_token credential (IG/FB won't publish today)
+
+SCORE: 68/100
+STATUS: Mostly working — video pipeline is solid, voice is correct,
+        validation is spec-compliant. Key gaps: gaming validate skipped,
+        ML classifier untrained.
+TOP BLOCKER: Gaming ValidateVideos skips all videos (skipped=2/2) due to
+             rendered_path not being set in context['stories'].
+
+================================================================================
+G3: LEARNING LOOP — BANDIT RECEIVES REAL SIGNAL, CONTENT IMPROVES OVER TIME
+================================================================================
+
+FINDINGS:
+
+[G3-01] BANDIT ARM LOADER
+  - arm_loader.save_arm(): UPSERT by Title (checks existing before create) ✓
+  - Five niche bandit lists registered in BANDIT_LIST_NAMES ✓
+  - load_all_arms() with graceful failure on SharePoint errors ✓
+
+[G3-02] PERFORMANCE LEARNER (PIPELINE STAGE)
+  - PerformanceLearner stage wired into all 5 niche pipelines ✓
+  - Reads context['stories'] for engagement data ✓
+  - Computes rewards via reward_shaper.compute_reward() ✓
+  - Updates Alpha/Beta posteriors in SharePoint ✓
+  - Non-fatal: errors logged, never block publishing ✓
+  CRITICAL GAP: In all 5 run reports today, PerformanceLearner took
+  ~0.0001s — essentially instant. This means it always skips due to
+  "0 stories with engagement (need 1)". The pipeline runs and publishes,
+  but FetchInsights also skipped=N for all stories (fetched=0, skipped=N).
+  The bandit receives ZERO real signal per run. ⚠⚠
+
+[G3-03] FETCH_INSIGHTS — ENGAGEMENT COLLECTION
+  - FetchInsights stage wired but always shows fetched=0, skipped=N
+  - The MIN_DELAY_HOURS=6 guard is correct (don't fetch before 6h post-publish)
+  - But the SEPARATE fetch-insights plists (com.genlab.fetch-insights-*-6h,
+    24h) ALL show PID="-" (not running as daemons today)
+  - com.genlab.metric-collector: PID="-" (not running)
+  So the FetchInsights stage in the pipeline can't collect (blueprints just
+  published). The separate plists SHOULD collect at 6h/24h, but they show
+  as exited. Without a running collection mechanism, no engagement data
+  ever reaches the bandit. ⚠⚠
+
+[G3-04] METRIC_COLLECTOR
+  - metric_collector.py uses per-niche credentials (niche_id param passed to
+    fetch_platform_metrics) ✓
+  - Four collection windows: 6h, 24h, 48h, 168h ✓
+  - RewardShaper at 48h window ✓
+  - metric_collector.log is empty (1 line) — never successfully ran ⚠
+
+[G3-05] CONFIG UPDATE FLOW
+  - config_update_flow.py: weekly Prefect flow ✓
+  - Uses PendingFeedbackStore API (correct interface) ✓
+  - MIN_PLATFORM_OBS=50 before trusting schedule data ✓
+  - Prefect worker: PID 3250 exit_code=1 (crashed) ⚠
+  - No deployments verified as active
+
+[G3-06] REWARD SHAPER
+  - RewardShaper is monetisation-aware with threshold proximity boost ✓
+  - Thresholds match stated goals (YT 4000h/1000subs, TikTok 10K/100K, etc.) ✓
+  - Boost factors correct (watch_hours 3x, subscriber 2x, TikTok share 2x) ✓
+  - Platform channel-level metrics (watch_hours_total, subscriber_count) need
+    real data from YouTube Analytics API — no data flowing today ⚠
+
+[G3-07] HOOK CLASSIFIER
+  - XGBoost returns neutral 0.5 (xgboost not installed) ✓ (graceful)
+  - MIN_EXAMPLES=200 not reached — no training data yet ✓ (expected)
+  - Will self-activate when data accumulates ✓
+
+[G3-08] PENDING FEEDBACK STORE
+  - PendingFeedbackStore exists and is wired into BB publish ✓
+  - Wired: BB publish_all_platforms.py creates PendingFeedbackTask ✓
+  - Not verified for CR/CW/SR/FD pipelines (likely not wired) ⚠
+
+SUMMARY G3:
+  + All infrastructure exists: bandit, reward shaper, metric collector,
+    config update flow, pending feedback store
+  + arm_loader correctly upserts (won't create duplicate rows)
+  + Reward formula is monetisation-aware
+  - The bandit receives ZERO real engagement signal (skipped=N in all runs)
+  - Fetch-insights plists not running as persistent daemons
+  - Prefect worker crashed (config_update_flow won't run automatically)
+  - PendingFeedbackTask not wired for 4 of 5 channels
+
+SCORE: 28/100
+STATUS: Architecture complete, data pipeline broken. The learning loop exists
+        but no real signal flows through it. This is the highest-risk gap
+        for monetisation trajectory.
+TOP BLOCKER: Engagement data never reaches the bandit — FetchInsights always
+             skipped, metric-collector launchd plist not running persistently.
+
+================================================================================
+G4: ENGAGEMENT ENGINE — AUTOMATED FIRST-HOUR REPLIES, ALL 5 CHANNELS
+================================================================================
+
+FINDINGS:
+
+[G4-01] POLLER INFRASTRUCTURE
+  - Active pollers (launchd, running):
+    com.genlab.engagement.poller.youtube.ai-news  PID=57393 ✓
+    com.genlab.engagement.poller.twitter.ai-news  PID=1134  ✓
+    com.genlab.engagement.poller.youtube.gaming   PID=57400 ✓
+    com.genlab.engagement.poller.twitter.gaming   PID=1132  ✓
+  - Missing pollers for: sports, movies, anime (3 of 5 channels) ✗
+  - Existing pollers polling YouTube: 0 comments returned for gaming ⚠
+    (Either no comments yet, or channel IDs producing empty playlists)
+
+[G4-02] ENGAGEMENT_DISPATCH DISABLED
+  - All poller logs show "ENGAGEMENT_DISPATCH is not set to 'true'"
+  - Comments are captured in OBSERVE mode but NOT dispatched to Dramatiq ⚠
+  - This means no automated replies are being posted even for gaming/ai_news
+  - Poller script had a NameError (_check_gate not defined) that was
+    subsequently fixed (later logs show clean starts) ✓
+
+[G4-03] COMMENT PROCESSOR — 8-STEP PIPELINE
+  - All 8 steps implemented in comment_processor.py ✓
+  - Step 1: Idempotency via JSONL file (fcntl locking) ✓
+  - Step 2: Spam filter (is_spam regex) ✓
+  - Step 3: Inbound toxicity gate (Detoxify) ✓
+  - Step 4: Rate limit check (token bucket per platform) ✓
+  - Step 5: Persona reply gen (LLM + outbound toxicity) ✓
+  - Step 6: Timing jitter (log-normal human delay) ✓
+  - Step 7: Platform API call ✓
+  - Step 8: Mark replied ✓
+  CRITICAL BUG: Worker fails on EVERY message with FileNotFoundError:
+    "No persona.yaml found for niche 'ai_news'"
+    The worker uses niche_id='ai_news' (old name), but the personas
+    directory contains 'ai_news.yaml' (which should match).
+    Root cause: comment_processor._load_persona() searches:
+      1. {AGENT_ROOT}/config/persona.yaml (CriticalRush/config — doesn't have it)
+      2. engagement/personas/{niche_id}.yaml (ai_news.yaml EXISTS here)
+    The file EXISTS but the path resolution is failing. The AGENT_ROOT for the
+    gaming worker is CriticalRush/ and the poller sends niche_id='ai_news'
+    (old naming). The gaming poller sets niche='gaming' correctly, but the
+    ai_news poller still uses the pre-rename niche_id. ⚠⚠
+
+[G4-04] PERSONA ENGINE
+  - PersonaEngine: LLM system prompt generation with retry logic ✓
+  - 5 persona YAML files exist (gaming, ai_news, sports, movies, anime) ✓
+  - Outbound toxicity gate enforced ✓
+
+[G4-05] TOXICITY GATE
+  - ToxicityGate: Detoxify model loaded (confirmed in worker log) ✓
+  - Fail-open for inbound (won't crash if model unavailable) ✓
+  - Fail-closed for outbound (blocks toxic AI-generated replies) ✓
+  - HuggingFace download works (unauthenticated, no HF_TOKEN set) ⚠
+
+[G4-06] RATE LIMITER
+  - Per-platform caps: IG 20/hr, YT 10/hr, X 4/hr, Threads 3/hr ✓
+  - TokenBucket implementation (sync) ✓
+
+[G4-07] DRAMATIQ WORKER
+  - PID 1136 (com.genlab.engagement.worker) running ✓
+  - Redis broker connected (PONG) ✓
+  - Three queue tiers: engagement_high, engagement_normal, engagement_low ✓
+  - Worker processing fails on every message (persona FileNotFoundError) ✗
+  - Messages retry 3x then DLQ ✗
+
+[G4-08] PLATFORM CLIENTS FOR REPLIES
+  - Instagram, YouTube, Facebook, X, Threads clients all implemented ✓
+  - No separate platform_clients/ subdirectory — replies go through
+    the main platform clients in genlab_core/platforms/ ✓
+  - Webhook running (uvicorn on 8765) ✓
+
+SUMMARY G4:
+  + Infrastructure is production-grade: Dramatiq, Redis, 3-tier queues,
+    toxicity gate, persona engine, 8-step pipeline, idempotency
+  + Pollers running for gaming and ai_news (YouTube + Twitter)
+  - ENGAGEMENT_DISPATCH=false — no replies being posted (observe-only mode)
+  - Worker fails on EVERY message (ai_news persona path resolution bug)
+  - Only 2 of 5 channels have pollers (sports/movies/anime unpolled)
+  - No Instagram or Facebook polling (webhook only — but webhook has no IG handler)
+
+SCORE: 32/100
+STATUS: Infrastructure built, system not active. Pollers running but in
+        observe-only mode. Worker crashes on every message.
+TOP BLOCKER: ENGAGEMENT_DISPATCH=false — set to 'true' in plist to activate
+             replies. Then fix the ai_news persona FileNotFoundError (the YAML
+             exists but path resolution is wrong in the gaming AGENT_ROOT context).
+
+================================================================================
+G5: SAAS — NEW BRAND = YAML CONFIG, NOT NEW CODE
+================================================================================
+
+FINDINGS:
+
+[G5-01] CONFIG-DRIVEN PIPELINE
+  - GenericPipelineRunner: loads stages from niche.yaml pipeline.stages ✓
+  - Each niche is a directory with config/ (niche.yaml, sources.yaml,
+    scoring.yaml, visuals.yaml, scheduling.yaml, templates.yaml) ✓
+  - New niche = new directory + YAML config + strategy implementations ✓
+  - No hardcoded niche names in genlab-core ✓
+
+[G5-02] BASE STRATEGY INTERFACES
+  All 6 interfaces defined in genlab_core/strategies.py:
+  - ContentResearchStrategy ✓
+  - ScoringStrategy ✓
+  - WritingStrategy ✓
+  - HookStrategy ✓
+  - VisualRenderStrategy ✓
+  - PlatformAdaptationStrategy ✓
+  - PerformanceLearner ✓ (7th, bonus)
+
+[G5-03] NICHE_ID ISOLATION ON SHAREPOINT QUERIES
+  - BacklogClient: niche_id on all writes ✓
+  - DailyCapEnforcer: niche-scoped cap queries ✓
+  - PendingFeedbackStore: niche_id on all records ✓
+  - publish_all_platforms.py: _require_niche_id() at entry ✓
+  - niche_credentials.py: per-niche credential resolution ✓
+
+[G5-04] NICHE TEMPLATE DIRECTORY
+  - No niches/_template/ exists ✗
+  - No documented "how to add a new niche" runbook
+  - New niche requires: directory, 6+ YAML files, 6 strategy classes,
+    plist configuration, SharePoint list creation for bandit arms.
+  - This is significant manual work, but the code pattern is consistent ⚠
+
+[G5-05] HARDCODED NICHE NAMES IN GENLAB-CORE
+  - video_sourcer.py: NICHE_SUBREDDITS hardcodes all 5 niche names ⚠
+    New niche requires code edit (not just YAML).
+  - download_top_videos.py: _NICHE_KEYWORDS hardcodes all 5 ⚠
+  - trending_video_fetcher.py: category mappings per niche ⚠
+  These should be config-driven but are in code.
+
+[G5-06] POSTGRESQL / RLS
+  - Not implemented (not expected per roadmap) ✓ (acknowledged debt)
+  - SharePoint is the current data store — multi-tenancy via niche_id field ✓
+  - "Future: PostgreSQL RLS" acknowledged in CLAUDE.md ✓
+
+[G5-07] CONFIG-DRIVEN vs CODE REQUIRED
+  Things that ARE config-only:
+  - Pipeline stage order (niche.yaml) ✓
+  - Scoring weights (scoring_weights.yaml) ✓
+  - Hook formulas and forbidden styles (templates.yaml) ✓
+  - Platform enablement (niche.yaml feature_flags) ✓
+  - Accent colors, logos (visuals.yaml) ✓
+  - Source URLs (sources.yaml) ✓
+
+  Things that STILL require new code:
+  - ContentResearch strategy (niche-specific fetch logic) ✗
+  - Scoring strategy (niche-specific scoring) ✗
+  - Writing strategy (niche-specific prompts) ✗
+  - Video subreddits in video_sourcer.py ✗
+  - Niche keywords in download_top_videos.py ✗
+  Verdict: ~60% config-driven, ~40% requires new strategy code.
+  This is appropriate for Phase 1 but is not yet "new brand = YAML only."
+
+SUMMARY G5:
+  + Pipeline runner is config-driven (stages from YAML)
+  + 6 strategy interfaces defined and enforced
+  + niche_id isolation on all SharePoint operations
+  + Per-niche credential guard fully wired
+  - No niches/_template/ directory or onboarding runbook
+  - 3 modules hardcode niche names (video_sourcer, download_top_videos, trending_video_fetcher)
+  - New channel still requires writing 6 strategy classes (~600-800 lines of code)
+  - No PostgreSQL/RLS (expected, acknowledged)
+
+SCORE: 58/100
+STATUS: Architecture is on the right track. The framework is solid — 5
+        niches all follow identical patterns with YAML configs. But "new brand
+        = YAML only" is not yet true; new code is still needed for content
+        research, scoring, and writing strategies.
+TOP BLOCKER: 3 genlab-core modules with hardcoded niche names prevent clean
+             config-only onboarding for a 6th channel.
+
+================================================================================
+CROSS-CUTTING ISSUES
+================================================================================
+
+[X1] ENGAGEMENT_DISPATCH NOT ENABLED
+  Every engagement poller log shows this. The system is built and tested
+  but 0 automated replies have ever been posted. This is a deliberate gate
+  (observe mode) but it means G4 is entirely non-functional commercially.
+
+[X2] METRIC COLLECTOR NEVER RUNS
+  metric_collector.log is 1 line (empty/never ran). com.genlab.metric-collector
+  plist shows PID="-". Without engagement data, the entire learning loop
+  (G3) has no signal. This is the single most impactful gap for monetisation.
+
+[X3] PREFECT WORKER CRASHED
+  com.genlab.prefect-worker: PID 3250, exit_code=1. The config_update_flow
+  (weekly bandit → YAML write-back) will never run automatically.
+
+[X4] GAMING VALIDATE_VIDEOS SKIPPED
+  gaming run today: video_validation skipped=2 (for both blueprints).
+  The ValidateVideos stage reads context['stories'][*]['media']['rendered_path']
+  but RenderGamingVideo writes to a different context key. Gaming videos may
+  be publishing with unchecked specs.
+
+[X5] AI_NEWS vs AI_CREATORS NICHE_ID MISMATCH
+  Engagement pollers for ai_news use niche_id='ai_news'. The persona file
+  is named ai_news.yaml and exists. But the comment_processor _load_persona()
+  fails because AGENT_ROOT is set to CriticalRush/ (gaming context), and
+  the first search path (CriticalRush/config/persona.yaml) doesn't exist.
+  The worker then tries engagement/personas/ai_news.yaml — which DOES exist
+  in genlab-core — but this path is constructed relative to __file__ in
+  comment_processor.py, not relative to CriticalRush/. The AGENT_ROOT
+  resolution is correct but the second path is hardcoded to the package
+  directory. This IS found... but the FileNotFoundError persists. Need
+  to verify: is the plist for engagement worker pointing to the right
+  package that has the personas/ directory in its built tree?
+
+[X6] TIKTOK PLATFORM NOT IMPLEMENTED
+  TikTokClient.publish() returns "not yet implemented" even when audit
+  is approved. The stub exists for gating purposes but the actual
+  TikTok Content Posting API integration is missing. TikTok has
+  10K follower monetisation threshold — this gap delays that goal.
+
+================================================================================
+FINAL SCORECARD
+================================================================================
+
+Goal                          Score   Status              Top Blocker
+─────────────────────────────────────────────────────────────────────────────────
+G1: Publishing daily          52%     Degraded            TikTok stub + X/Threads
+                                                          creds missing for 4 niches
+G2: Content quality           68%     Mostly working      Gaming ValidateVideos
+                                                          skipping all videos
+G3: Learning loop             28%     Architecture only   Metric collector never
+                                                          runs; bandit gets 0 signal
+G4: Engagement engine         32%     Not active          ENGAGEMENT_DISPATCH=false;
+                                                          worker crashes on every msg
+G5: SaaS architecture         58%     Partially achieved  3 modules hardcode niches;
+                                                          no template directory
+─────────────────────────────────────────────────────────────────────────────────
+OVERALL:                      48%     Pre-production      Two systemic gaps:
+                                                          learning loop dead,
+                                                          engagement never activated
+─────────────────────────────────────────────────────────────────────────────────
+
+MONETISATION IMPACT RANKING (highest priority first):
+  1. Fix metric collector (G3) — without engagement data, bandit is static
+  2. Enable ENGAGEMENT_DISPATCH=true (G4) — first-hour replies drive DM rate
+  3. Fix ai_news persona path in gaming engagement worker (G4)
+  4. Provision X/Threads credentials for CR/CW/SR/FD (G1)
+  5. Implement TikTok posting (G1/G5) — TikTok has lowest monetisation bar
+  6. Fix gaming ValidateVideos context key mismatch (G2)
+  7. Move niche subreddits/keywords to YAML (G5)
+  8. Create niches/_template/ directory with onboarding runbook (G5)
+  9. Fix Prefect worker crash (G3)
+  10. Wire PendingFeedbackTask for all 5 channels (G3)
+
+================================================================================
+END OF AUDIT — 2026-03-16
+================================================================================

@@ -1,6 +1,6 @@
 """Shared FFmpeg utility functions — probe, trim, concat, encode, filter builders.
 
-Lower-level operations that both Content Scraper and CriticalRush use.
+Lower-level operations that both BlackboxBrief and CriticalRush use.
 For platform-specific rendering (RenderSpec, transcode_for_platforms),
 see genlab_core.media.ffmpeg.
 

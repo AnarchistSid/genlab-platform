@@ -455,3 +455,76 @@ class PostgresBackend:
         fields.update(extra)
 
         return {"id": record_id, "fields": fields}
+
+
+class PostgresTableProxy:
+    """Binds a PostgresBackend to a specific table name.
+
+    This allows using PostgresBackend as a drop-in for GraphTableProxy
+    in BacklogClient attribute slots (client.stories, client.blueprints, etc.)
+    where callers expect table-bound methods.
+
+    Usage:
+        proxy = PostgresTableProxy(backend, "blueprints")
+        proxy.find("Blueprints", formula="{status}='PUBLISHED'")
+        proxy.all(formula="{status}='PUBLISHED'")  # table auto-inferred
+        proxy.get("record-uuid")  # table auto-inferred
+    """
+
+    def __init__(self, backend: PostgresBackend, table: str) -> None:
+        self._backend = backend
+        self._table = table.lower()
+
+    def find(self, table: str | None = None, *, formula: str = "",
+             niche_id: str = "", max_records: int | None = None) -> list:
+        return self._backend.find(
+            table or self._table, formula=formula,
+            niche_id=niche_id, max_records=max_records,
+        )
+
+    def all(self, table: str | None = None, *, formula: str = "",
+            niche_id: str = "", max_records: int | None = None) -> list:
+        return self._backend.find(
+            table or self._table, formula=formula,
+            niche_id=niche_id, max_records=max_records,
+        )
+
+    def get(self, record_id_or_table: str, record_id: str | None = None):
+        if record_id is not None:
+            # Called as get("Blueprints", "uuid") — table explicit
+            return self._backend.get(record_id_or_table, record_id)
+        # Called as get("uuid") — table inferred
+        return self._backend.get(self._table, record_id_or_table)
+
+    def create(self, table: str | None = None, fields: dict | None = None,
+               *, typecast: bool = False, **kwargs):
+        if fields is None and isinstance(table, dict):
+            # Called as create({"field": "value"})
+            fields = table
+            table = None
+        return self._backend.create(table or self._table, fields or {}, typecast=typecast)
+
+    def update(self, record_id_or_table: str, record_id_or_fields=None,
+               fields: dict | None = None, *, typecast: bool = False):
+        if isinstance(record_id_or_fields, dict):
+            # Called as update("uuid", {"field": "value"})
+            return self._backend.update(
+                self._table, record_id_or_table, record_id_or_fields, typecast=typecast,
+            )
+        if fields is not None:
+            # Called as update("Table", "uuid", {"field": "value"})
+            return self._backend.update(
+                record_id_or_table, record_id_or_fields, fields, typecast=typecast,
+            )
+        raise ValueError("update() requires fields dict")
+
+    def delete(self, record_id_or_table: str, record_id: str | None = None):
+        if record_id is not None:
+            return self._backend.delete(record_id_or_table, record_id)
+        return self._backend.delete(self._table, record_id_or_table)
+
+    def batch_create(self, table: str | None = None, records: list | None = None):
+        if records is None and isinstance(table, list):
+            records = table
+            table = None
+        return self._backend.batch_create(table or self._table, records or [])

@@ -87,7 +87,7 @@ def enforce_platform_rules(
     """
     Enforce all universal platform rules for a given platform.
 
-    Rules extracted from Content Scraper's adapt_for_platforms.py:
+    Rules extracted from BlackboxBrief's adapt_for_platforms.py:
 
     YOUTUBE:
       - Title must be question format for Shorts shelf eligibility
