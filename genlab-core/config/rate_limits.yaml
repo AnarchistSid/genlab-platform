@@ -1,0 +1,19 @@
+# Per-domain rate limits — Shared defaults for all niches
+# Override per-niche by placing a rate_limits.yaml in the channel's config/ dir.
+
+version: "1.0"
+
+default_delay_seconds: 1.0
+
+domain_delays:
+  # Reddit
+  www.reddit.com: 2.0
+  reddit.com: 2.0
+  i.redd.it: 1.0
+
+  # YouTube (not rate-limited by HTTP, but by API quota)
+  www.youtube.com: 0.5
+
+  # General news sources
+  news.ycombinator.com: 1.0
+  blog.google: 1.0

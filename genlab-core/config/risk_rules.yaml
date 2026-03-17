@@ -1,0 +1,43 @@
+# Risk Classification Rules — Shared defaults for all niches
+# Override per-niche by placing a risk_rules.yaml in the channel's config/ dir.
+
+version: "1.0"
+
+high_risk_keywords:
+  - "medical advice"
+  - "legal advice"
+  - "financial advice"
+  - "investment"
+  - "health claim"
+  - "cure"
+  - "guaranteed"
+  - "deepfake"
+  - "synthetic media"
+  - "election"
+  - "disinformation"
+  - "terrorism"
+  - "bioweapon"
+  - "weapon"
+  - "violence"
+
+critical_risk_keywords:
+  - "child"
+  - "minor"
+  - "suicide"
+  - "self-harm"
+
+claim_risk_defaults:
+  fact: "low"
+  estimate: "medium"
+  prediction: "medium"
+  opinion: "low"
+  rumor: "high"
+
+mitigations:
+  rumor: "Reports suggest [claim], though this remains unconfirmed."
+  prediction: "Experts predict [claim], though outcomes may vary."
+  estimate: "Estimated at [claim], based on available data."
+
+allow_high_risk: false
+allow_critical_risk: false
+require_mitigation: true
