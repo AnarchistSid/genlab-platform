@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: genlab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-genlab_dev}
+      POSTGRES_DB: genlab
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genlab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "5151:5151"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      GENLAB_USE_POSTGRES: "true"
+      DATABASE_URL: postgresql://genlab:${POSTGRES_PASSWORD:-genlab_dev}@postgres:5432/genlab
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      GENLAB_PROJECT_ROOT: /app
+      BACKLOG_CONFIG_PATH: /app/genlab-core/config/lists_config.yaml
+    volumes:
+      - ./.tmp:/app/.tmp
+      - ./.media:/app/.media
+    working_dir: /app
+
+volumes:
+  pgdata:
