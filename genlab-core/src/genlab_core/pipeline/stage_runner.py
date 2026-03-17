@@ -30,7 +30,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Protocol, Tuple, runtime_checkable
+from typing import TYPE_CHECKING, Any, Dict, List, Protocol, Tuple, runtime_checkable
+
+if TYPE_CHECKING:
+    from genlab_core.observability.metrics_writer import PipelineMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +83,13 @@ class LocalStageRunner:
 
     This is the default runner — equivalent to the original bare
     ``stage.execute(context)`` call but with timing and error recording.
+
+    When a ``metrics`` instance is provided, each stage execution is
+    automatically recorded with timing and status.
     """
+
+    def __init__(self, *, metrics: PipelineMetrics | None = None) -> None:
+        self._metrics = metrics
 
     def run_stage(
         self,
@@ -101,6 +110,10 @@ class LocalStageRunner:
             logger.info(
                 "[Pipeline] Stage %s completed in %.1fs", stage_name, elapsed,
             )
+            if self._metrics is not None:
+                self._metrics.record_stage(
+                    stage_name, duration_ms=elapsed * 1000.0, status="ok",
+                )
             return StageResult(
                 stage_name=stage_name, success=True, elapsed_seconds=elapsed,
             )
@@ -111,6 +124,13 @@ class LocalStageRunner:
                 "[Pipeline] Stage %s failed after %.1fs: %s",
                 stage_name, elapsed, e,
             )
+            if self._metrics is not None:
+                self._metrics.record_stage(
+                    stage_name,
+                    duration_ms=elapsed * 1000.0,
+                    status="error",
+                    error_msg=str(e),
+                )
             return StageResult(
                 stage_name=stage_name,
                 success=False,
@@ -139,9 +159,11 @@ class SandboxAwareStageRunner:
         genlab_root: Path,
         *,
         egress_allow: list[str] | None = None,
+        metrics: PipelineMetrics | None = None,
     ) -> None:
         self._genlab_root = genlab_root
         self._egress_allow = egress_allow
+        self._metrics = metrics
 
     def run_stage(
         self,
@@ -162,7 +184,9 @@ class SandboxAwareStageRunner:
                 "[Pipeline] Sandbox not enabled — running %s locally",
                 stage_name,
             )
-            return LocalStageRunner().run_stage(stage, context, pipeline_ctx)
+            return LocalStageRunner(metrics=self._metrics).run_stage(
+                stage, context, pipeline_ctx,
+            )
 
         logger.info("[Pipeline] Running stage: %s (sandboxed)", stage_name)
         runner = SandboxedFFmpegRunner(
@@ -186,6 +210,10 @@ class SandboxAwareStageRunner:
                 "[Pipeline] Stage %s completed in %.1fs (sandboxed)",
                 stage_name, elapsed,
             )
+            if self._metrics is not None:
+                self._metrics.record_stage(
+                    stage_name, duration_ms=elapsed * 1000.0, status="ok",
+                )
             return StageResult(
                 stage_name=stage_name, success=True, elapsed_seconds=elapsed,
             )
@@ -196,6 +224,13 @@ class SandboxAwareStageRunner:
                 "[Pipeline] Stage %s failed after %.1fs (sandboxed): %s",
                 stage_name, elapsed, e,
             )
+            if self._metrics is not None:
+                self._metrics.record_stage(
+                    stage_name,
+                    duration_ms=elapsed * 1000.0,
+                    status="error",
+                    error_msg=str(e),
+                )
             return StageResult(
                 stage_name=stage_name,
                 success=False,
@@ -242,9 +277,11 @@ class StageRunnerFactory:
         genlab_root: Path,
         *,
         stage_log_filter: Any | None = None,
+        metrics: PipelineMetrics | None = None,
     ) -> None:
         self._genlab_root = genlab_root
-        self._local = LocalStageRunner()
+        self._metrics = metrics
+        self._local = LocalStageRunner(metrics=metrics)
         self._stage_log_filter = stage_log_filter
 
     def run(
@@ -334,12 +371,16 @@ class StageRunnerFactory:
 
         if sandbox_cfg is True:
             # Simple flag — deny-all egress (render stages)
-            return SandboxAwareStageRunner(genlab_root=self._genlab_root)
+            return SandboxAwareStageRunner(
+                genlab_root=self._genlab_root, metrics=self._metrics,
+            )
 
         if isinstance(sandbox_cfg, dict):
             egress = sandbox_cfg.get("egress", [])
             return SandboxAwareStageRunner(
-                genlab_root=self._genlab_root, egress_allow=egress,
+                genlab_root=self._genlab_root,
+                egress_allow=egress,
+                metrics=self._metrics,
             )
 
         return self._local
