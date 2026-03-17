@@ -1,4 +1,4 @@
-.PHONY: test test-core test-bb test-cr test-cw test-sr test-fd test-dash lint fix clean plist-status plist-list health
+.PHONY: test test-core test-bb test-cr test-cw test-sr test-fd test-dash lint fix clean plist-status plist-list health logs logs-errors logs-stats
 
 UV := ~/.local/bin/uv
 
@@ -55,6 +55,16 @@ plist-list:
 # Health check
 health:
 	$(UV) run --package genlab-core python -m genlab_core.monitoring.token_health
+
+# Log aggregation
+logs:
+	python3 scripts/log_aggregator.py -n 100
+
+logs-errors:
+	python3 scripts/log_aggregator.py --errors -n 50
+
+logs-stats:
+	python3 scripts/log_aggregator.py --stats
 
 # Clean ephemeral artifacts
 clean:
