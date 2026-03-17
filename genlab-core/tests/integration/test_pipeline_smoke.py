@@ -53,7 +53,7 @@ from integration.mock_stages import (  # noqa: E402
 SUPPORTED_NICHE_IDS = ["gaming", "sports", "movies", "anime", "ai_creators"]
 
 # Module path used in niche configs to reference mock stages.
-_MOCK_MODULE = "tests.integration.mock_stages"
+_MOCK_MODULE = "integration.mock_stages"
 
 
 # ── Config builder (local copy to avoid conftest import issues) ────────────
