@@ -1,0 +1,88 @@
+name: Test & Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.x"
+      - run: uv tool run ruff check .
+
+  test-core:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: genlab
+          POSTGRES_PASSWORD: genlab_test
+          POSTGRES_DB: genlab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --package genlab-core
+      - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q
+
+  test-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --package genlab-dashboard
+      - run: uv run --package genlab-dashboard pytest dashboard/tests/ --tb=short -q
+
+  test-channels:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [clutchwire, splicereel, framedrift]
+        include:
+          - package: clutchwire
+            test_path: ClutchWire/tests/
+          - package: splicereel
+            test_path: SpliceReel/tests/
+          - package: framedrift
+            test_path: FrameDrift/tests/
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.10.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --package ${{ matrix.package }}
+      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q
