@@ -22,6 +22,7 @@ def yt_client():
         client_id="test_client_id",
         client_secret="test_client_secret",
         refresh_token="test_refresh_token",
+        enable_quota_gate=False,
     )
 
 
@@ -692,6 +693,447 @@ class TestTokenCaching:
 # ---------------------------------------------------------------------------
 # TestProtocolCompliance
 # ---------------------------------------------------------------------------
+
+
+class TestVerifyChannel:
+    def test_verify_channel_no_expected_id(self, yt_client):
+        """verify_channel returns True when no expected_channel_id is configured."""
+        assert yt_client.verify_channel() is True
+
+    def test_verify_channel_match(self):
+        """verify_channel returns True when actual matches expected."""
+        from genlab_core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient(
+            client_id="id",
+            client_secret="secret",
+            refresh_token="token",
+            expected_channel_id="UC_expected_123",
+            enable_quota_gate=False,
+        )
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            # Token refresh
+            mock_req.post.return_value = _mock_token_response()
+            # Channel ID lookup
+            mock_req.get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"items": [{"id": "UC_expected_123"}]},
+            )
+            mock_req.get.return_value.raise_for_status = MagicMock()
+
+            ok = client.verify_channel()
+
+        assert ok is True
+
+    def test_verify_channel_mismatch(self):
+        """verify_channel returns False when actual does not match expected."""
+        from genlab_core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient(
+            client_id="id",
+            client_secret="secret",
+            refresh_token="token",
+            expected_channel_id="UC_expected_123",
+            enable_quota_gate=False,
+        )
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.return_value = _mock_token_response()
+            mock_req.get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"items": [{"id": "UC_wrong_456"}]},
+            )
+            mock_req.get.return_value.raise_for_status = MagicMock()
+
+            ok = client.verify_channel()
+
+        assert ok is False
+
+    def test_verify_channel_no_channel_found(self):
+        """verify_channel returns False when channel ID cannot be resolved."""
+        from genlab_core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient(
+            client_id="id",
+            client_secret="secret",
+            refresh_token="token",
+            expected_channel_id="UC_expected_123",
+            enable_quota_gate=False,
+        )
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.return_value = _mock_token_response()
+            mock_req.get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"items": []},
+            )
+            mock_req.get.return_value.raise_for_status = MagicMock()
+
+            ok = client.verify_channel()
+
+        assert ok is False
+
+
+# ---------------------------------------------------------------------------
+# TestPostComment
+# ---------------------------------------------------------------------------
+
+
+class TestPostComment:
+    def test_post_comment_success(self, yt_client):
+        """post_comment posts to /commentThreads and returns thread ID."""
+        def mock_post(url, *args, **kwargs):
+            resp = MagicMock(status_code=200)
+            resp.raise_for_status.return_value = None
+            if "token" in url:
+                resp.json.return_value = {"access_token": "tok_cmt"}
+            else:
+                resp.json.return_value = {"id": "thread_abc123"}
+            return resp
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = mock_post
+
+            thread_id = yt_client.post_comment(
+                video_id="vid_xyz",
+                text="Check out the link in the description!",
+            )
+
+        assert thread_id == "thread_abc123"
+
+    def test_post_comment_failure(self, yt_client):
+        """post_comment returns None on HTTP error."""
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            resp = MagicMock(status_code=403)
+            resp.raise_for_status.side_effect = Exception("403 Forbidden")
+            mock_req.post.return_value = resp
+
+            thread_id = yt_client.post_comment(video_id="vid_bad", text="Hello")
+
+        assert thread_id is None
+
+    def test_post_comment_calls_comment_threads_endpoint(self, yt_client):
+        """post_comment uses /commentThreads (not /comments)."""
+        captured_urls = []
+
+        def capture_post(url, *args, **kwargs):
+            captured_urls.append(url)
+            resp = MagicMock(status_code=200)
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = {"id": "t1", "access_token": "tok"}
+            return resp
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = capture_post
+            yt_client.post_comment(video_id="vid_test", text="First!")
+
+        assert any("commentThreads" in url for url in captured_urls)
+
+    def test_post_comment_includes_video_id_in_body(self, yt_client):
+        """post_comment body includes videoId."""
+        captured_body = {}
+
+        def capture_post(url, *args, **kwargs):
+            resp = MagicMock(status_code=200)
+            resp.raise_for_status.return_value = None
+            if "token" in url:
+                resp.json.return_value = {"access_token": "tok_body"}
+            else:
+                if "json" in kwargs:
+                    captured_body.update(kwargs["json"])
+                resp.json.return_value = {"id": "t1"}
+            return resp
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = capture_post
+            yt_client.post_comment(video_id="vid_check", text="Nice!")
+
+        snippet = captured_body.get("snippet", {})
+        assert snippet.get("videoId") == "vid_check"
+
+
+# ---------------------------------------------------------------------------
+# TestUpdateVideoMetadata
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateVideoMetadata:
+    def test_update_title_success(self, yt_client):
+        """update_video_metadata updates the title and returns result dict."""
+        def mock_http(method):
+            def handler(url, *args, **kwargs):
+                resp = MagicMock(status_code=200)
+                resp.raise_for_status.return_value = None
+                if "token" in url:
+                    resp.json.return_value = {"access_token": "tok_meta"}
+                elif method == "get":
+                    resp.json.return_value = {
+                        "items": [{"snippet": {"title": "Old Title", "description": "Desc"}}]
+                    }
+                else:
+                    resp.json.return_value = {"id": "vid_upd"}
+                return resp
+            return handler
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = mock_http("post")
+            mock_req.get.side_effect = mock_http("get")
+            mock_req.put.side_effect = mock_http("put")
+
+            result = yt_client.update_video_metadata(
+                "vid_upd", title="New Title"
+            )
+
+        assert result is not None
+        assert result["video_id"] == "vid_upd"
+        assert result["title"] == "New Title"
+
+    def test_update_description_success(self, yt_client):
+        """update_video_metadata can update description only."""
+        def mock_http(method):
+            def handler(url, *args, **kwargs):
+                resp = MagicMock(status_code=200)
+                resp.raise_for_status.return_value = None
+                if "token" in url:
+                    resp.json.return_value = {"access_token": "tok_desc"}
+                elif method == "get":
+                    resp.json.return_value = {
+                        "items": [{"snippet": {"title": "Keep Title", "description": "Old"}}]
+                    }
+                else:
+                    resp.json.return_value = {"id": "vid_desc"}
+                return resp
+            return handler
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = mock_http("post")
+            mock_req.get.side_effect = mock_http("get")
+            mock_req.put.side_effect = mock_http("put")
+
+            result = yt_client.update_video_metadata(
+                "vid_desc", description="New description"
+            )
+
+        assert result is not None
+        assert result["title"] == "Keep Title"
+
+    def test_update_no_changes_returns_none(self, yt_client):
+        """update_video_metadata returns None if neither title nor description given."""
+        result = yt_client.update_video_metadata("vid_none")
+        assert result is None
+
+    def test_update_video_not_found(self, yt_client):
+        """update_video_metadata returns None if video does not exist."""
+        def mock_http(method):
+            def handler(url, *args, **kwargs):
+                resp = MagicMock(status_code=200)
+                resp.raise_for_status.return_value = None
+                if "token" in url:
+                    resp.json.return_value = {"access_token": "tok_nf"}
+                else:
+                    resp.json.return_value = {"items": []}
+                return resp
+            return handler
+
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            mock_req.post.side_effect = mock_http("post")
+            mock_req.get.side_effect = mock_http("get")
+
+            result = yt_client.update_video_metadata(
+                "vid_notfound", title="New"
+            )
+
+        assert result is None
+
+    def test_update_api_error_returns_none(self, yt_client):
+        """update_video_metadata returns None on API exception."""
+        with patch("genlab_core.platforms.youtube.requests") as mock_req:
+            resp = MagicMock()
+            resp.raise_for_status.side_effect = Exception("500 Internal")
+            mock_req.post.return_value = resp
+
+            result = yt_client.update_video_metadata(
+                "vid_err", title="Fail"
+            )
+
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# TestQuotaGate
+# ---------------------------------------------------------------------------
+
+
+class TestQuotaGate:
+    def test_publish_blocked_by_quota_gate(self, tmp_path):
+        """publish() returns failure when quota tracker blocks upload."""
+        from genlab_core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient(
+            client_id="id",
+            client_secret="secret",
+            refresh_token="token",
+            enable_quota_gate=False,
+        )
+
+        # Manually inject a mock quota tracker
+        mock_qt = MagicMock()
+        mock_qt.can_upload.return_value = False
+        mock_qt.status.return_value = {"used": 9500, "upload_count": 5}
+        client._quota_tracker = mock_qt
+
+        mp4 = tmp_path / "v.mp4"
+        mp4.write_bytes(b"\x00" * 64)
+        payload = PublishPayload(
+            caption="Quota test",
+            media_paths=[mp4],
+            media_type="video",
+            hashtags=["#AI"],
+            hook="Test",
+            niche_id="ai_creators",
+            platform_specific=YouTubeSpecific(shorts_title="Test #Shorts"),
+        )
+
+        result = client.publish(payload)
+
+        assert result.success is False
+        assert "quota" in result.error.lower()
+
+    def test_publish_records_quota_on_success(self, tmp_path):
+        """Successful publish records upload in quota tracker."""
+        from genlab_core.platforms.youtube import YouTubeClient
+
+        client = YouTubeClient(
+            client_id="id",
+            client_secret="secret",
+            refresh_token="token",
+            enable_quota_gate=False,
+        )
+
+        mock_qt = MagicMock()
+        mock_qt.can_upload.return_value = True
+        client._quota_tracker = mock_qt
+
+        mp4 = tmp_path / "v.mp4"
+        mp4.write_bytes(b"\x00" * 64)
+        payload = PublishPayload(
+            caption="Record test",
+            media_paths=[mp4],
+            media_type="video",
+            hashtags=["#AI"],
+            hook="Test",
+            niche_id="ai_creators",
+            platform_specific=YouTubeSpecific(shorts_title="Test #Shorts"),
+        )
+
+        with (
+            patch("genlab_core.platforms.youtube.requests") as mock_req,
+            patch("genlab_core.platforms.youtube.Credentials"),
+            patch("genlab_core.platforms.youtube.build") as mock_build,
+            patch("genlab_core.platforms.youtube.MediaFileUpload"),
+        ):
+            mock_req.post.return_value = _mock_token_response()
+            mock_build.return_value = _mock_upload_service()
+
+            result = client.publish(payload)
+
+        assert result.success is True
+        mock_qt.record.assert_called_once_with("upload")
+
+
+# ---------------------------------------------------------------------------
+# TestPerChunkRetry
+# ---------------------------------------------------------------------------
+
+
+class TestPerChunkRetry:
+    def test_chunk_retry_succeeds_after_transient_failure(self, yt_client, tmp_path):
+        """Upload recovers from a transient chunk failure with retry."""
+        mp4 = tmp_path / "retry.mp4"
+        mp4.write_bytes(b"\x00" * 64)
+        payload = PublishPayload(
+            caption="Retry test",
+            media_paths=[mp4],
+            media_type="video",
+            hashtags=["#AI"],
+            hook="Test",
+            niche_id="ai_creators",
+            platform_specific=YouTubeSpecific(shorts_title="Retry #Shorts"),
+        )
+
+        mock_request = MagicMock()
+        # First attempt: fail. Second attempt: succeed (in-progress).
+        # Third call: final chunk with response.
+        call_count = {"n": 0}
+        def next_chunk_with_retry():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise Exception("Transient network error")
+            if call_count["n"] == 2:
+                return (MagicMock(progress=lambda: 0.5), None)
+            return (None, {"id": "vid_retry_ok"})
+
+        mock_request.next_chunk.side_effect = next_chunk_with_retry
+
+        mock_service = MagicMock()
+        mock_service.videos.return_value.insert.return_value = mock_request
+
+        with (
+            patch("genlab_core.platforms.youtube.requests") as mock_req,
+            patch("genlab_core.platforms.youtube.Credentials"),
+            patch("genlab_core.platforms.youtube.build") as mock_build,
+            patch("genlab_core.platforms.youtube.MediaFileUpload"),
+            patch("genlab_core.platforms.youtube.time") as mock_time,
+        ):
+            mock_time.monotonic.return_value = 1000.0
+            mock_time.sleep = MagicMock()
+            mock_req.post.return_value = _mock_token_response()
+            mock_build.return_value = mock_service
+
+            result = yt_client.publish(payload)
+
+        assert result.success is True
+        assert result.post_id == "vid_retry_ok"
+        # time.sleep should have been called for the retry backoff
+        mock_time.sleep.assert_called()
+
+    def test_chunk_retry_exhausted_raises(self, yt_client, tmp_path):
+        """Upload fails after exhausting all chunk retries."""
+        mp4 = tmp_path / "fail.mp4"
+        mp4.write_bytes(b"\x00" * 64)
+        payload = PublishPayload(
+            caption="Fail test",
+            media_paths=[mp4],
+            media_type="video",
+            hashtags=["#AI"],
+            hook="Test",
+            niche_id="ai_creators",
+            platform_specific=YouTubeSpecific(shorts_title="Fail #Shorts"),
+        )
+
+        mock_request = MagicMock()
+        mock_request.next_chunk.side_effect = Exception("Persistent error")
+
+        mock_service = MagicMock()
+        mock_service.videos.return_value.insert.return_value = mock_request
+
+        with (
+            patch("genlab_core.platforms.youtube.requests") as mock_req,
+            patch("genlab_core.platforms.youtube.Credentials"),
+            patch("genlab_core.platforms.youtube.build") as mock_build,
+            patch("genlab_core.platforms.youtube.MediaFileUpload"),
+            patch("genlab_core.platforms.youtube.time") as mock_time,
+        ):
+            mock_time.monotonic.return_value = 1000.0
+            mock_time.sleep = MagicMock()
+            mock_req.post.return_value = _mock_token_response()
+            mock_build.return_value = mock_service
+
+            result = yt_client.publish(payload)
+
+        assert result.success is False
+        assert "Persistent error" in result.error
 
 
 class TestProtocolCompliance:

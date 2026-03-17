@@ -248,23 +248,65 @@ class BacklogClient:
         site_id: str | None = None,
     ):
         import yaml
+
+        _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
+        _dsn = os.getenv("DATABASE_URL", "")
+
+        # ── Postgres-only path: skip Graph SDK entirely ──────────
+        if _use_postgres and _dsn:
+            from genlab_core.storage.postgres import PostgresBackend, PostgresTableProxy
+
+            self._graph = None
+            self._site_id = ""
+            _pg = PostgresBackend(dsn=_dsn)
+
+            ALL_TABLES = [
+                "Stories", "Blueprints", "Templates", "Assets", "Sources",
+                "Publishing_Analytics", "Analytics", "AB_Tests",
+                "Audience_Snapshots", "PendingEngagement", "PendingFeedback",
+                "BanditArms", "Content_Memory", "MonetisationProgress",
+            ]
+
+            for table in ALL_TABLES:
+                attr = table.lower()
+                # Normalize attribute names to match existing API
+                attr_map = {
+                    "publishing_analytics": "publishing_analytics",
+                    "ab_tests": "ab_tests",
+                    "audience_snapshots": "audience_snapshots",
+                    "pendingengagement": "pending_engagement",
+                    "pendingfeedback": "pending_feedback",
+                    "banditarms": "bandit_arms",
+                    "content_memory": "content_memory",
+                    "monetisationprogress": "monetisation_progress",
+                }
+                attr = attr_map.get(attr, attr)
+                setattr(self, attr, PostgresTableProxy(_pg, table.lower()))
+
+            self._sp_proxies = {t: getattr(self, t.lower().replace("_", "_"), None) for t in ALL_TABLES}
+            self._backend_cache = {"postgres": _pg}
+
+            logger.info("[BacklogClient] Postgres-only mode — no SharePoint connection")
+            return
+
+        # ── SharePoint path (legacy / fallback) ──────────────────
         from azure.identity import ClientSecretCredential
         from msgraph import GraphServiceClient
-
         from genlab_core.settings import settings
 
         tenant = (tenant_id or settings.azure_tenant_id or "").strip()
-        client_id = (client_id or settings.azure_client_id or "").strip()
+        client_id_val = (client_id or settings.azure_client_id or "").strip()
         secret = (client_secret or settings.azure_client_secret or "").strip()
         self._site_id = (site_id or settings.sharepoint_site_id or "").strip()
 
-        if not all([tenant, client_id, secret, self._site_id]):
+        if not all([tenant, client_id_val, secret, self._site_id]):
             raise ValueError(
                 "AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, "
-                "and SHAREPOINT_SITE_ID must be set in .env"
+                "and SHAREPOINT_SITE_ID must be set in .env "
+                "(or set GENLAB_USE_POSTGRES=true + DATABASE_URL to skip SharePoint)"
             )
 
-        cred = ClientSecretCredential(tenant, client_id, secret)
+        cred = ClientSecretCredential(tenant, client_id_val, secret)
         self._graph = GraphServiceClient(
             cred, scopes=["https://graph.microsoft.com/.default"]
         )
@@ -277,7 +319,6 @@ class BacklogClient:
             if env_path:
                 config_path = Path(env_path)
             else:
-                # Auto-detect: look for config/lists_config.yaml in CWD parents
                 for parent in [Path.cwd()] + list(Path.cwd().parents):
                     candidate = parent / "config" / "lists_config.yaml"
                     if candidate.exists():
@@ -300,101 +341,28 @@ class BacklogClient:
                 raise ValueError(f"List ID for '{name}' not found in {config_path}")
             return GraphTableProxy(self._graph, self._site_id, list_id, name)
 
-        # ── Resolve storage backend per table ──────────────────────
-        # If storage_backends.yaml routes a table to "postgres", use
-        # PostgresBackend instead of GraphTableProxy.  This allows
-        # gradual migration table-by-table.
-        from genlab_core.storage.factory import _load_config as _load_storage_config
-        _storage_config = _load_storage_config()
-        # GENLAB_USE_POSTGRES=true overrides YAML config for all tables
-        _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
-        _pg_backend = None
+        self.stories = _proxy("Stories")
+        self.blueprints = ScheduleGuardedProxy(_proxy("Blueprints"))
+        self.templates = _proxy("Templates")
+        self.assets = _proxy("Assets")
+        self.sources = _proxy("Sources")
+        self.publishing_analytics = _proxy("Publishing_Analytics")
+        self.analytics = _proxy("Analytics")
 
-        def _resolve_backend(table_name: str):
-            """Return PostgresTableProxy or GraphTableProxy based on config."""
-            nonlocal _pg_backend
-            engine = _storage_config.get(table_name, "sharepoint").lower()
-            if _use_postgres:
-                engine = "postgres"
-            if engine == "postgres":
-                if _pg_backend is None:
-                    dsn = os.getenv("DATABASE_URL", "")
-                    if not dsn:
-                        logger.debug(
-                            "Table %s configured for postgres but DATABASE_URL not set — "
-                            "falling back to SharePoint", table_name,
-                        )
-                        return _proxy(table_name)
-                    try:
-                        from genlab_core.storage.postgres import PostgresBackend
-                        _pg_backend = PostgresBackend(dsn=dsn)
-                    except Exception as exc:
-                        logger.warning(
-                            "PostgresBackend init failed for %s (%s) — falling back to SharePoint",
-                            table_name, exc,
-                        )
-                        return _proxy(table_name)
-                from genlab_core.storage.postgres import PostgresTableProxy
-                return PostgresTableProxy(_pg_backend, table_name)
-            return _proxy(table_name)
+        for name, attr_name in [
+            ("AB_Tests", "ab_tests"),
+            ("Audience_Snapshots", "audience_snapshots"),
+            ("PendingEngagement", "pending_engagement"),
+            ("PendingFeedback", "pending_feedback"),
+            ("BanditArms", "bandit_arms"),
+            ("Content_Memory", "content_memory"),
+            ("MonetisationProgress", "monetisation_progress"),
+        ]:
+            try:
+                setattr(self, attr_name, _proxy(name))
+            except (ValueError, KeyError):
+                setattr(self, attr_name, None)
 
-        self.stories = _resolve_backend("Stories")
-        _raw_blueprints = _resolve_backend("Blueprints")
-        # Wrap SharePoint proxy with schedule protection guard.
-        # PostgresTableProxy doesn't need wrapping (RLS handles isolation).
-        try:
-            if isinstance(_raw_blueprints, GraphTableProxy):
-                self.blueprints = ScheduleGuardedProxy(_raw_blueprints)
-            else:
-                self.blueprints = _raw_blueprints
-        except TypeError:
-            # isinstance can fail if GraphTableProxy is mocked in tests
-            self.blueprints = _raw_blueprints
-        self.templates = _resolve_backend("Templates")
-        self.assets = _resolve_backend("Assets")
-        self.sources = _resolve_backend("Sources")
-        self.publishing_analytics = _resolve_backend("Publishing_Analytics")
-        self.analytics = _resolve_backend("Analytics")
-
-        try:
-            self.ab_tests = _resolve_backend("AB_Tests")
-        except (ValueError, KeyError):
-            self.ab_tests = None
-
-        try:
-            self.audience_snapshots = _resolve_backend("Audience_Snapshots")
-        except (ValueError, KeyError):
-            self.audience_snapshots = None
-
-        try:
-            self.pending_engagement = _resolve_backend("PendingEngagement")
-        except (ValueError, KeyError):
-            self.pending_engagement = None
-
-        try:
-            self.pending_feedback = _resolve_backend("PendingFeedback")
-        except (ValueError, KeyError):
-            self.pending_feedback = None
-
-        try:
-            self.bandit_arms = _resolve_backend("BanditArms")
-        except (ValueError, KeyError):
-            self.bandit_arms = None
-
-        try:
-            self.content_memory = _resolve_backend("Content_Memory")
-        except (ValueError, KeyError):
-            self.content_memory = None
-
-        try:
-            self.monetisation_progress = _resolve_backend("MonetisationProgress")
-        except (ValueError, KeyError):
-            self.monetisation_progress = None
-
-        # ── Storage backend routing ──────────────────────────────────
-        # Build proxy mapping for SharePointBackend.  Use the
-        # ScheduleGuardedProxy for Blueprints so schedule protection
-        # is enforced even through the backend layer.
         self._sp_proxies = {
             "Stories": self.stories,
             "Blueprints": self.blueprints,
@@ -415,6 +383,8 @@ class BacklogClient:
         ]:
             if attr is not None:
                 self._sp_proxies[name] = attr
+
+        self._backend_cache: Dict[str, Any] = {}
 
         # Per-client backend cache — avoids module-level singleton issues
         # when multiple BacklogClient instances exist (e.g. in tests).
