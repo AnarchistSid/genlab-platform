@@ -292,16 +292,6 @@ class Settings(BaseSettings):
         validation_alias="LOCAL_CDN_PORT",
     )
 
-    # ── Postiz (self-hosted social publishing) ─────────────────
-    postiz_url: str = Field(
-        default="http://localhost:5000",
-        validation_alias="POSTIZ_URL",
-    )
-    postiz_api_key: Optional[str] = Field(
-        default=None,
-        validation_alias="POSTIZ_API_KEY",
-    )
-
     # ── Runtime config (non-secret) ───────────────────────────
     log_level: str = Field(
         default="INFO",

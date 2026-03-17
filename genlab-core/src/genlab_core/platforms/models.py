@@ -76,10 +76,7 @@ class PublishPayload:
 
 @dataclass
 class PublishResult:
-    """Result from a single-platform publish attempt.
-
-    Backward-compatible with existing postiz_client.PublishResult fields.
-    """
+    """Result from a single-platform publish attempt."""
 
     platform: str
     success: bool
