@@ -440,11 +440,17 @@ class TestGetMetrics:
             mock_analytics_response
         )
 
+        mock_channel_resp = MagicMock()
+        mock_channel_resp.json.return_value = {"items": [{"id": "UC_test"}]}
+        mock_channel_resp.raise_for_status = MagicMock()
+
         with (
             patch("genlab_core.platforms.youtube.requests") as mock_req,
             patch("genlab_core.platforms.youtube.build") as mock_build,
+            patch("genlab_core.platforms.youtube.Credentials"),
         ):
             mock_req.post.return_value = _mock_token_response()
+            mock_req.get.return_value = mock_channel_resp
             mock_build.return_value = mock_service
 
             result = yt_client.get_metrics(
@@ -524,11 +530,17 @@ class TestGetMetrics:
             mock_analytics_response
         )
 
+        mock_channel_resp = MagicMock()
+        mock_channel_resp.json.return_value = {"items": [{"id": "UC_test"}]}
+        mock_channel_resp.raise_for_status = MagicMock()
+
         with (
             patch("genlab_core.platforms.youtube.requests") as mock_req,
             patch("genlab_core.platforms.youtube.build") as mock_build,
+            patch("genlab_core.platforms.youtube.Credentials"),
         ):
             mock_req.post.return_value = _mock_token_response()
+            mock_req.get.return_value = mock_channel_resp
             mock_build.return_value = mock_service
 
             result = yt_client.get_metrics(

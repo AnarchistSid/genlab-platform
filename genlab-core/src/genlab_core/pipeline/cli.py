@@ -387,12 +387,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.stages:
         stages_filter = [s.strip() for s in args.stages.split(",") if s.strip()]
 
-    # Configure root logging early for multi-niche banner output
+    # Configure structured logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    try:
+        from genlab_core.observability.logging import configure_logging
+        is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
+        configure_logging(json_output=is_json, level=log_level)
+    except ImportError:
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
     for noisy in ("httpx", "httpcore", "hpack", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 

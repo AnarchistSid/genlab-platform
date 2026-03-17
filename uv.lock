@@ -1493,6 +1493,7 @@ whisper = [
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
+    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -1534,7 +1535,10 @@ requires-dist = [
 provides-extras = ["tts", "tts-elevenlabs", "tts-openai", "tts-edge", "tts-gtts", "http", "publishing", "engagement", "bandit", "smart-crop", "whisper", "orchestration", "cost", "dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "hypothesis", specifier = ">=6.151.9" }]
+dev = [
+    { name = "hypothesis", specifier = ">=6.151.9" },
+    { name = "pytest", specifier = ">=9.0.2" },
+]
 
 [[package]]
 name = "genlab-dashboard"
