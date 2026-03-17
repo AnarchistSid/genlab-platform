@@ -80,19 +80,27 @@ def resolve_threads_credentials(niche_id: str) -> tuple:
 
 
 def resolve_youtube_credentials(niche_id: str) -> dict[str, str]:
-    """Resolve YouTube OAuth credentials for a niche."""
+    """Resolve YouTube OAuth credentials for a niche.
+
+    client_id/secret are shared (same OAuth app) — always use global.
+    Only refresh_token is per-niche.
+    """
     return {
-        "client_id": resolve_niche_env(niche_id, "YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_ID"),
-        "client_secret": resolve_niche_env(niche_id, "YOUTUBE_CLIENT_SECRET", "YOUTUBE_CLIENT_SECRET"),
+        "client_id": os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
+        "client_secret": os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
         "refresh_token": resolve_niche_env(niche_id, "YOUTUBE_REFRESH_TOKEN", "YOUTUBE_REFRESH_TOKEN"),
     }
 
 
 def resolve_twitter_credentials(niche_id: str) -> dict[str, str]:
-    """Resolve X/Twitter OAuth 1.0a credentials for a niche."""
+    """Resolve X/Twitter OAuth 1.0a credentials for a niche.
+
+    api_key/secret are shared (same app) — always use global.
+    Only access_token/secret are per-niche.
+    """
     return {
-        "api_key": resolve_niche_env(niche_id, "X_API_KEY", "X_API_KEY"),
-        "api_secret": resolve_niche_env(niche_id, "X_API_SECRET", "X_API_SECRET"),
+        "api_key": os.getenv("X_API_KEY", "").strip(),
+        "api_secret": os.getenv("X_API_SECRET", "").strip(),
         "access_token": resolve_niche_env(niche_id, "X_ACCESS_TOKEN", "X_ACCESS_TOKEN"),
         "access_secret": resolve_niche_env(niche_id, "X_ACCESS_SECRET", "X_ACCESS_SECRET"),
     }
