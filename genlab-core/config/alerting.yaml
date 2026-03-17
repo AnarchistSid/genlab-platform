@@ -1,0 +1,22 @@
+# Alerting threshold definitions for Gen Lab pipeline observability.
+#
+# These thresholds are consumed by monitoring / health-check code to
+# determine when to fire alerts.  Values are intentionally conservative
+# for the current 5-channel setup and should be tightened as the system
+# stabilises.
+
+thresholds:
+  # Maximum acceptable p95 pipeline duration (seconds).
+  # Pipelines consistently above this indicate a performance regression.
+  pipeline_duration_p95_seconds: 600
+
+  # Maximum 24-hour error rate (percent of pipeline runs that fail).
+  error_rate_24h_pct: 10
+
+  # Disk usage percentage on the pipeline host.
+  # At 80 % the quota manager should already be evicting old runs.
+  disk_usage_pct: 80
+
+  # Minimum engagement replies processed in a 1-hour window.
+  # Alert if no replies are processed (indicates poller or worker down).
+  engagement_reply_rate_1h: 0
