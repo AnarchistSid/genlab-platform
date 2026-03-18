@@ -89,10 +89,21 @@ class InstagramClient:
                 error="No media paths provided — video is required for Instagram Reels",
             )
 
-        # Resolve the video URL.  In production the caller passes a public
-        # CDN URL; in tests it is often a local path or a plain string.
+        # Resolve the video URL. Instagram requires a public HTTPS URL.
+        # If the path is a local file, upload to temp CDN first.
         first_path = payload.media_paths[0]
         video_url = str(first_path)
+
+        if not video_url.startswith("http"):
+            from genlab_core.platforms.cdn_upload import upload_to_cdn
+            cdn_url = upload_to_cdn(video_url)
+            if not cdn_url:
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error="Failed to upload video to CDN for Instagram",
+                )
+            video_url = cdn_url
 
         # Build caption with hashtags
         hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
