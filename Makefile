@@ -66,6 +66,14 @@ logs-errors:
 logs-stats:
 	python3 scripts/log_aggregator.py --stats
 
+# Publish now (manual trigger)
+publish:
+	$(UV) run --package genlab-core python -m genlab_core.publishing.publish_all_platforms --niche all
+
+publish-niche:
+	@test -n "$(NICHE)" || (echo "Usage: make publish-niche NICHE=gaming" && exit 1)
+	$(UV) run --package genlab-core python -m genlab_core.publishing.publish_all_platforms --niche $(NICHE)
+
 # Database maintenance
 db-stats:
 	@PGPASSWORD=genlab_dev psql -h localhost -p 5432 -U genlab -d genlab -c "SELECT relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size, n_live_tup AS rows FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC;"
