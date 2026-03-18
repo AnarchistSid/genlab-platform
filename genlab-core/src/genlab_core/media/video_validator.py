@@ -138,13 +138,20 @@ def check_color_space(path: Path, platform: str) -> bool:
     try:
         data = json.loads(stdout)
         streams = data.get("streams", [])
+        # Tags that are explicitly wrong (non-bt709). Empty/unknown tags are
+        # acceptable — most players and platforms default to bt709 for H.264.
+        _BAD_COLORSPACES = {"bt470bg", "smpte170m", "smpte240m", "bt2020nc", "bt2020c"}
+
         for stream in streams:
             primaries = stream.get("color_primaries", "")
             transfer = stream.get("color_transfer", "")
             colorspace = stream.get("color_space", "")
-            if not all(
-                v == "bt709" for v in [primaries, transfer, colorspace]
-            ):
+
+            bad = [
+                v for v in [primaries, transfer, colorspace]
+                if v and v != "bt709" and v != "unknown" and v in _BAD_COLORSPACES
+            ]
+            if bad:
                 logger.warning(
                     "[COLOR] %s has non-bt709 color space: primaries=%s "
                     "transfer=%s space=%s -- may appear washed out",
