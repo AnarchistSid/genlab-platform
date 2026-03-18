@@ -35,9 +35,27 @@ class VideoGate:
                 and clip_entry.get("clip_path")
             )
 
-            # Also check if clip file exists and is large enough
+            # Fallback: check story-level media (gaming ExtractGamingMedia style)
+            if not has_valid_clip:
+                local_path = story.get("local_path", "")
+                media_clip = (story.get("media") or {}).get("clip")
+                if local_path and Path(local_path).exists():
+                    has_valid_clip = True
+                    logger.debug("VideoGate: found clip via story.local_path for '%s'", story_id[:16])
+                elif media_clip and media_clip.get("file_path"):
+                    clip_file = media_clip["file_path"]
+                    if Path(clip_file).exists():
+                        has_valid_clip = True
+                        story["local_path"] = clip_file
+                        logger.debug("VideoGate: found clip via story.media.clip for '%s'", story_id[:16])
+
+            # Check if clip file exists and is large enough
             if has_valid_clip:
-                clip_path = clip_entry.get("clip_path", "")
+                clip_path = (
+                    clip_entry.get("clip_path")
+                    or story.get("local_path", "")
+                    or (story.get("media") or {}).get("clip", {}).get("file_path", "")
+                )
                 if clip_path:
                     p = Path(clip_path)
                     if p.exists() and p.stat().st_size < _MIN_CLIP_SIZE_BYTES:
