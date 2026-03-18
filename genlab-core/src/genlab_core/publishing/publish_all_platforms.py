@@ -501,49 +501,53 @@ def main() -> int:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    # Multi-niche mode
-    if args.niche == "all":
-        all_niches = ["ai_creators", "gaming", "sports", "movies", "anime"]
-        total_exit = 0
-        for nid in all_niches:
-            logger.info("=" * 60)
-            logger.info("Publishing for niche: %s", nid)
-            logger.info("=" * 60)
-            exit_code = run_publish(niche_id=nid, platforms=args.platforms)
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+
+    from genlab_core.http.backlog_client import BacklogClient
+    from genlab_core.publishing.daily_cap import DailyCapEnforcer
+
+    enabled = args.platforms or [
+        "instagram", "youtube", "facebook", "twitter", "threads",
+    ]
+
+    niches = (
+        ["ai_creators", "gaming", "sports", "movies", "anime"]
+        if args.niche == "all"
+        else [_validate_niche(args.niche)]
+    )
+
+    total_exit = 0
+    for nid in niches:
+        nid = _validate_niche(nid)
+        logger.info("=" * 60)
+        logger.info("Publishing for niche: %s", nid)
+        logger.info("=" * 60)
+
+        lock = PidLock(nid)
+        if not lock.acquire():
+            logger.warning("[publish] Lock held for niche=%s — skipping", nid)
+            continue
+
+        try:
+            client = BacklogClient()
+            enforcer = DailyCapEnforcer(backlog_client=client, niche_id=nid)
+            enforcer.log_headroom()
+
+            exit_code = run_publish(
+                niche_id=nid,
+                backlog_client=client,
+                daily_cap=enforcer,
+                enabled_platforms=enabled,
+            )
             total_exit = max(total_exit, exit_code)
-        return total_exit
+        except Exception as exc:
+            logger.error("[publish] Failed for %s: %s", nid, exc)
+            total_exit = 1
+        finally:
+            lock.release()
 
-    niche_id = _validate_niche(args.niche)
-
-    # PID lock
-    lock = PidLock(niche_id)
-    if not lock.acquire():
-        logger.warning("[publish] Lock held for niche=%s — another instance running", niche_id)
-        return EXIT_LOCK_HELD
-
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(override=True)
-
-        from genlab_core.http.backlog_client import BacklogClient
-        from genlab_core.publishing.daily_cap import DailyCapEnforcer
-
-        client = BacklogClient()
-        enforcer = DailyCapEnforcer(backlog_client=client, niche_id=niche_id)
-        enforcer.log_headroom()
-
-        enabled = args.platforms or [
-            "instagram", "youtube", "facebook", "twitter", "threads",
-        ]
-
-        return run_publish(
-            niche_id=niche_id,
-            backlog_client=client,
-            daily_cap=enforcer,
-            enabled_platforms=enabled,
-        )
-    finally:
-        lock.release()
+    return total_exit
 
 
 if __name__ == "__main__":
