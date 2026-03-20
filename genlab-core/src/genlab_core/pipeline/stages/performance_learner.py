@@ -91,7 +91,6 @@ class PerformanceLearner:
         try:
             from genlab_core.learning.arm_loader import (
                 BANDIT_LIST_NAMES,
-                load_all_arms,
                 load_all_arms_extended,
                 save_arm,
             )
@@ -289,20 +288,27 @@ class PerformanceLearner:
 
         Arms correspond to strategy dimensions used when creating
         this story's blueprint (hook formula, template, time slot, etc.).
+        The new arm_id field (set by PushToBacklog._classify_arm) is
+        the primary source — falls back to legacy hook_formula/template_id.
         """
         arm_ids = []
 
-        # Hook formula arm
+        # New: direct arm_id from content classification
+        arm_id = story.get("arm_id", "")
+        if arm_id:
+            arm_ids.append(arm_id)
+
+        # Legacy: Hook formula arm
         hook_formula = story.get("hook_formula", "")
         if hook_formula:
             arm_ids.append(f"hook:{hook_formula}")
 
-        # Template arm
+        # Legacy: Template arm
         template_id = story.get("template_id", "")
         if template_id:
             arm_ids.append(f"template:{template_id}")
 
-        # Time slot arm
+        # Legacy: Time slot arm
         time_slot = story.get("scheduled_slot", "")
         if time_slot:
             arm_ids.append(f"slot:{time_slot}")
