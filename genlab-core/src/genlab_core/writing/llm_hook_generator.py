@@ -14,8 +14,12 @@ logger = logging.getLogger(__name__)
 
 _BANNED_PHRASES = [
     "this changes everything",
+    "changed everything",
     "nobody saw this coming",
+    "nobody expected",
+    "nobody saw them",
     "the community is going wild",
+    "community is losing it",
     "players need to see this",
     "making waves right now",
     "something big happened",
@@ -28,6 +32,13 @@ _BANNED_PHRASES = [
     "the internet is losing it",
     "fans are not ready",
     "just broke the internet",
+    "we just witnessed",
+    "about to blow up",
+    "the moment this player",
+    "the rivalry continues",
+    "the trade that changes",
+    "a record that might never",
+    "how did they even film",
 ]
 
 NICHE_STYLE = {
