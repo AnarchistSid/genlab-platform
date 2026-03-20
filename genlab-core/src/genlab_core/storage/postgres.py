@@ -101,10 +101,11 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
     "pending_feedback": {
         "niche_id", "task_id", "post_id", "platform", "arm_id",
         "bandit_context", "collection_status", "reward_48h",
+        "publish_time",
     },
     "templates": {
-        "niche_id", "template_id", "name", "format", "max_slides",
-        "max_duration_seconds", "status",
+        "niche_id", "template_id", "name", "category",
+        "max_duration", "status",
     },
     "sources": {
         "niche_id", "source_id", "name", "url", "source_type",
