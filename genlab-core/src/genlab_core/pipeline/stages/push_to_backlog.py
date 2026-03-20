@@ -25,6 +25,55 @@ from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
 logger = logging.getLogger(__name__)
 
+# Default arm mapping per niche — maps content signals to bandit arm IDs.
+# These must match the arm_id values in the bandit_arms table.
+_NICHE_ARM_DEFAULTS: dict[str, str] = {
+    "gaming": "gameplay_clip",
+    "sports": "highlight_play",
+    "movies": "trailer_drop",
+    "anime": "episode_moment",
+    "ai_creators": "tool_demo",
+}
+
+_ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
+    "gaming": [
+        ("esports_highlight", ["esports", "tournament", "championship", "league", "competitive"]),
+        ("trailer_reaction", ["trailer", "reveal", "announcement", "launch", "release"]),
+        ("patch_news", ["patch", "update", "nerf", "buff", "season", "hotfix"]),
+    ],
+    "sports": [
+        ("breaking_trade", ["trade", "transfer", "sign", "contract", "deal", "free agent"]),
+        ("record_milestone", ["record", "milestone", "history", "first ever", "youngest", "oldest"]),
+        ("upset_reaction", ["upset", "shock", "underdog", "eliminated", "comeback"]),
+    ],
+    "movies": [
+        ("scene_reaction", ["scene", "moment", "clip", "reaction", "watch"]),
+        ("box_office_update", ["box office", "opening weekend", "gross", "million", "billion"]),
+        ("cast_reveal", ["cast", "role", "playing", "starring", "joins", "reveal"]),
+    ],
+    "anime": [
+        ("season_announcement", ["season", "announced", "confirmed", "adaptation", "premiere"]),
+        ("fight_scene", ["fight", "battle", "vs", "clash", "power", "epic"]),
+        ("adaptation_news", ["manga", "light novel", "adaptation", "studio", "animated"]),
+    ],
+    "ai_creators": [
+        ("model_release", ["release", "launched", "model", "gpt", "claude", "gemini", "llm"]),
+        ("creative_showcase", ["created", "made", "generated", "art", "music", "video", "film"]),
+        ("comparison_test", ["vs", "compared", "better", "benchmark", "test", "which"]),
+    ],
+}
+
+
+def _classify_arm(niche_id: str, story: dict, content: dict) -> str:
+    """Classify content into a bandit arm_id based on keyword matching."""
+    text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
+
+    for arm_id, keywords in _ARM_KEYWORDS.get(niche_id, []):
+        if any(kw in text for kw in keywords):
+            return arm_id
+
+    return _NICHE_ARM_DEFAULTS.get(niche_id, "default")
+
 
 class PushToBacklog:
     """Push stories and blueprints to the shared SharePoint backlog.
@@ -237,6 +286,9 @@ class PushToBacklog:
             story["candidate_id"] = candidate_id
             hook = content.get("hook", "")
 
+            # Classify content into a bandit arm_id for the learning loop
+            arm_id = _classify_arm(niche_id, story, content)
+
             # Cross-run hook dedup: reject exact duplicate hooks
             if hook and hook.strip().lower() in existing_hooks:
                 logger.info(
@@ -295,6 +347,7 @@ class PushToBacklog:
                         "status": "VISUAL_READY" if rendered_path else "DRAFTED",
                         "format": "reel",
                         "niche_id": niche_id,
+                        "arm_id": arm_id,
                         "topic": story.get("source", niche_id),
                         "angle": (story.get("summary") or title)[:200],
                     }
