@@ -259,6 +259,7 @@ class BacklogClient:
             self._graph = None
             self._site_id = ""
             _pg = PostgresBackend(dsn=_dsn)
+            self._pg = _pg
 
             ALL_TABLES = [
                 "Stories", "Blueprints", "Templates", "Assets", "Sources",
@@ -400,6 +401,12 @@ class BacklogClient:
         # Per-client backend cache — avoids module-level singleton issues
         # when multiple BacklogClient instances exist (e.g. in tests).
         self._backend_cache: dict[str, Any] = {}
+
+    def close(self) -> None:
+        """Close the underlying PostgreSQL connection pool."""
+        pg = getattr(self, "_pg", None)
+        if pg and hasattr(pg, "close"):
+            pg.close()
 
     # ── Circuit breaker helper ───────────────────────────────────────
 

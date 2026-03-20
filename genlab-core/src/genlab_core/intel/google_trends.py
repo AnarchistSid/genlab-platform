@@ -32,11 +32,21 @@ TRENDS_CATEGORIES = {
 }
 
 NICHE_SEED_KEYWORDS = {
-    "gaming": ["gaming", "video games", "esports"],
-    "sports": ["sports", "NBA", "NFL", "soccer"],
-    "movies": ["movies", "film", "cinema", "trailer"],
-    "anime": ["anime", "manga", "crunchyroll"],
-    "ai_creators": ["artificial intelligence", "AI", "machine learning"],
+    "gaming": ["gaming", "video games", "esports", "playstation", "xbox",
+               "nintendo", "steam", "twitch", "fortnite", "valorant",
+               "minecraft", "call of duty", "gta", "elden ring"],
+    "sports": ["sports", "NBA", "NFL", "soccer", "premier league",
+               "MLB", "NHL", "UFC", "tennis", "cricket", "march madness",
+               "champions league", "world cup"],
+    "movies": ["movies", "film", "cinema", "trailer", "box office",
+               "oscar", "marvel", "disney", "netflix", "streaming",
+               "director", "actor", "sequel"],
+    "anime": ["anime", "manga", "crunchyroll", "one piece", "dragon ball",
+              "naruto", "jujutsu kaisen", "demon slayer", "my hero academia",
+              "studio ghibli", "isekai"],
+    "ai_creators": ["artificial intelligence", "AI", "machine learning",
+                    "chatgpt", "openai", "claude", "gemini", "llm",
+                    "deep learning", "neural network", "midjourney", "sora"],
 }
 
 
@@ -164,11 +174,43 @@ class GoogleTrendsIntel:
         """Fetch daily trending Google searches via official RSS feed.
 
         Zero cost, no auth, no rate limiting. Returns top 20 topics.
-        Replaces pytrends which was archived/broken by Google in 2025.
+        Uses Google Trends category parameter for niche-specific results
+        when available, then falls back to general trends with keyword filtering.
         """
         import urllib.request
         import xml.etree.ElementTree as ET
 
+        # Google Trends RSS category IDs (different from YouTube categories)
+        _RSS_CATEGORIES = {
+            "gaming": "8",       # Games
+            "sports": "20",      # Sports
+            "movies": "34",      # Movies
+            "ai_creators": "5",  # Computers & Electronics
+            # anime: no direct category — use general + keyword filter
+        }
+
+        topics: list[str] = []
+
+        # Try niche-specific RSS first
+        cat_id = _RSS_CATEGORIES.get(niche_id)
+        if cat_id:
+            try:
+                cat_url = f"https://trends.google.com/trending/rss?geo={self.geo}&cat={cat_id}"
+                req = urllib.request.Request(cat_url, headers={"User-Agent": "GenLab/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = resp.read()
+                root = ET.fromstring(data)
+                for item in root.iter("item"):
+                    title_el = item.find("title")
+                    if title_el is not None and title_el.text:
+                        topics.append(title_el.text.strip())
+                if topics:
+                    logger.info("[%s] Trends RSS category %s: %d topics", niche_id, cat_id, len(topics))
+                    return topics[:20]
+            except Exception as e:
+                logger.debug("[%s] Category RSS failed (cat=%s): %s", niche_id, cat_id, e)
+
+        # Fall back to general RSS with keyword filtering
         rss_url = f"https://trends.google.com/trending/rss?geo={self.geo}"
         req = urllib.request.Request(
             rss_url,
@@ -178,7 +220,6 @@ class GoogleTrendsIntel:
             data = resp.read()
 
         root = ET.fromstring(data)
-        topics = []
         for item in root.iter("item"):
             title_el = item.find("title")
             if title_el is not None and title_el.text:
