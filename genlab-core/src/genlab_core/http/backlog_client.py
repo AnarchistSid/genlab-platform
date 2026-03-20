@@ -1127,7 +1127,8 @@ class BacklogClient:
                         record = be.create("Analytics", fields, typecast=True)
                     else:
                         raise
-                return record["id"]
+                # Postgres create() returns a UUID string; SharePoint returns dict
+                return record["id"] if isinstance(record, dict) else str(record)
         except Exception as exc:
             logger.warning("Analytics upsert failed for %s: %s", composite_id, exc)
             return None
