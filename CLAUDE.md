@@ -393,24 +393,40 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 ---
 
-## CURRENT SPRINT STATUS (as of 2026-03-17)
+## CURRENT SPRINT STATUS (as of 2026-03-20)
 
-Completed: Sprints 1–65
+Completed: Sprints 1–66
 - Sprint 62: Dashboard overhaul, FrameCompositor video layout, schedule board
 - Sprint 63: Audit remediation, engagement reply clients, credential prefixes, SaaS tools
 - Sprint 64: Architecture refactor — base strategies, unified pipeline CLI, BB client migration
 - Sprint 65: Upgrade sweep — psycopg3, dep cleanup, CI, plist consolidation, BB extraction
+- Sprint 66: Comprehensive system remediation — 47 issues across all subsystems
 
-Sprint 65 highlights:
-- **psycopg2 → psycopg3**: ConnectionPool, dict_row, pipeline mode for batch ops
-- **17 packages dropped** from lockfile (asyncpg, sqlalchemy, msgraph-sdk, azure-identity)
-- **LaunchAgents 57 → 33** (insights 20→4, engagement pollers 10→2)
-- **GitHub Actions CI**: lint + test on push/PR
-- **BB extraction**: 4,750 lines removed (3 platform shims + 12 orphan scripts)
-- **Pre-commit hooks**: ruff lint/format + standard checks
-- **Prefect flows**: daily-pipeline, publish-all, collect-insights, token-health
-- **Docker Compose**: postgres + redis + dashboard
-- **Structured logging**: configure_logging() wired into pipeline CLI + dashboard + pollers
-- **Log aggregator**: `make logs`, `make logs-errors`, `make logs-stats`
+Sprint 66 highlights (system-wide fix sprint):
+- **Table name mapping fix**: `PendingFeedback→pending_feedback`, `BanditArms→bandit_arms`,
+  `PendingEngagement→pending_engagement` (all 3 were querying non-existent tables)
+- **PushToBacklog field alignment**: `hook`, `title`, `video_id`, `video_url` now written
+  as promoted SQL columns (were going to `extra` JSONB, leaving promoted cols NULL)
+- **517 blueprint backfill**: all hooks/titles populated from JSONB
+- **Banned phrase enforcement**: programmatic post-check (not just LLM prompt instruction)
+- **Candidate ID stability**: hash uses `(story_id, niche_id, video_id)` not hook text
+- **Hook dedup across runs**: loads 50 recent hooks per niche, rejects exact dupes
+- **Content memory persistence**: URL-level dedup via `content_memory` table
+- **CDN upload redesign**: Cloudflare tunnel primary (100% reliable), litterbox/tmpfiles fallback
+- **Network readiness**: launch_wrapper.sh waits up to 60s for connectivity
+- **Google Trends caching**: 6h TTL + stale-cache fallback (no more seed keyword degradation)
+- **PendingFeedbackStore**: dual CamelCase/snake_case key lookup for Postgres compat
+- **Analytics writer**: populates `metric_type`, `value`, `collected_at`, `window`
+- **Dashboard pool cleanup**: `PostgresBackend.close()` via atexit (eliminates __del__ errors)
+- **Dashboard webhook forwarding**: Meta comment events forwarded to engagement server
+- **Health API**: PostgreSQL check + LaunchAgent status endpoint
+- **SQL injection prevention**: `_validate_table()` allowlist on all CRUD methods
+- **Negative keywords**: SpliceReel (roblox, minecraft), ClutchWire (anime, manga)
+- **Velocity thresholds**: ClutchWire lowered 2000→1000 (new channel growth-appropriate)
+- **FrameDrift threshold**: relevance raised 0.20→0.30
+- **Video dedup index**: `idx_bp_video_niche`, `idx_bp_hook_niche`
+- **Log rotation script**: `scripts/rotate_logs.sh` (10MB max, 7-day retention)
+- **Stale branch cleanup**: 15 worktree-agent branches deleted
+- **Test data cleanup**: rls_test/test records purged from 5 production tables
 
-Test baseline: genlab-core 1,981, BB 1,361, CW 136, SR 134, FD 143, Dashboard 235 — all green
+Test baseline: genlab-core 1,976, BB 1,361, CW 136, SR 134, FD 143, Dashboard 235 — all green
