@@ -193,10 +193,10 @@ class TestUpdateScheduleFromBandit:
         assert config["youtube"]["schedule_slots"] == ["20:00"]
 
     def test_skips_platform_without_schedule_slots(self, tmp_path: Path) -> None:
-        """Platforms like CR gaming (Postiz) with no schedule_slots are skipped."""
+        """Platforms without schedule_slots are skipped."""
         pub = tmp_path / "publishing.yaml"
         _write_yaml(pub, {
-            "postiz": {"enabled": True},
+            "tiktok": {"enabled": False},
             "instagram": {"video_aspect_ratio": "9:16"},
         })
 

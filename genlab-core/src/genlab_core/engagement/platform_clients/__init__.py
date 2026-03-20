@@ -5,7 +5,7 @@ Registry provides get_reply_client(platform) for lazy lookup.
 """
 from __future__ import annotations
 
-from typing import Optional, Protocol
+from typing import Protocol
 
 
 class ReplyClient(Protocol):
