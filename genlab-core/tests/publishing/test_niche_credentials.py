@@ -86,17 +86,24 @@ def test_resolve_meta_for_gaming():
         assert creds["fb_page_id"] == "67890"
 
 
-def test_ai_creators_does_not_fall_through_to_global():
-    """With prefix registered, missing niche vars must return '' — not global BB vars."""
+def test_ai_creators_falls_through_to_global():
+    """BB (ai_creators) falls through to global vars — its globals ARE its own tokens."""
     env = {
-        "META_ACCESS_TOKEN": "global_token_should_not_use",
-    }
-    # Clear any existing BLACKBOXBRIEF_ vars to simulate missing
-    cleared = {
+        "META_ACCESS_TOKEN": "bb_global_token",
         "BLACKBOXBRIEF_META_ACCESS_TOKEN": "",
     }
-    with patch.dict(os.environ, {**env, **cleared}, clear=False):
+    with patch.dict(os.environ, env, clear=False):
         val = resolve_niche_env("ai_creators", "META_ACCESS_TOKEN", "META_ACCESS_TOKEN")
-        # Should return "" because BLACKBOXBRIEF_META_ACCESS_TOKEN is empty,
-        # NOT fall through to the global META_ACCESS_TOKEN
+        # BB intentionally falls through to global when prefixed var is empty
+        assert val == "bb_global_token"
+
+
+def test_gaming_does_not_fall_through_to_global():
+    """Non-BB niches must NOT fall through to global vars — prevents cross-channel leakage."""
+    env = {
+        "META_ACCESS_TOKEN": "global_token_should_not_use",
+        "CRITICALRUSH_META_ACCESS_TOKEN": "",
+    }
+    with patch.dict(os.environ, env, clear=False):
+        val = resolve_niche_env("gaming", "META_ACCESS_TOKEN", "META_ACCESS_TOKEN")
         assert val == ""
