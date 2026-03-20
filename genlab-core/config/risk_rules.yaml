@@ -1,8 +1,8 @@
-# Risk Classification Rules — Shared defaults for all niches
-# Override per-niche by placing a risk_rules.yaml in the channel's config/ dir.
+# Risk Classification Rules (Phase 2)
 
 version: "1.0"
 
+# Automatic risk triggers
 high_risk_keywords:
   - "medical advice"
   - "legal advice"
@@ -26,6 +26,7 @@ critical_risk_keywords:
   - "suicide"
   - "self-harm"
 
+# Claim type risk levels
 claim_risk_defaults:
   fact: "low"
   estimate: "medium"
@@ -33,11 +34,13 @@ claim_risk_defaults:
   opinion: "low"
   rumor: "high"
 
+# Mitigation templates
 mitigations:
   rumor: "Reports suggest [claim], though this remains unconfirmed."
   prediction: "Experts predict [claim], though outcomes may vary."
   estimate: "Estimated at [claim], based on available data."
 
+# QC gate thresholds
 allow_high_risk: false
 allow_critical_risk: false
 require_mitigation: true
