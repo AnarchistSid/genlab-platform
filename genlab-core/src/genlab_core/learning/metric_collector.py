@@ -484,6 +484,16 @@ def collect_metrics(
             )
 
     logger.info("[metric_collector] Processed %d / %d tasks", processed, len(pending))
+
+    # Health check: warn if no tasks have been processed and pending list is large
+    if processed == 0 and len(pending) > 10:
+        logger.warning(
+            "[metric_collector] HEALTH CHECK: 0/%d tasks processed — "
+            "learning loop may be stalled. Check publish_time values "
+            "and next_collection_window eligibility.",
+            len(pending),
+        )
+
     return processed
 
 
