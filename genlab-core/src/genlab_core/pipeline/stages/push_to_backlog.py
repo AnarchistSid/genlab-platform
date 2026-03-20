@@ -352,6 +352,19 @@ class PushToBacklog:
                         "angle": (story.get("summary") or title)[:200],
                     }
 
+                    # Affiliate fields (if matched by AffiliateMatch stage)
+                    for af_key in (
+                        "affiliate_product", "affiliate_url", "affiliate_network",
+                        "affiliate_commission_pct", "affiliate_cta",
+                    ):
+                        if story.get(af_key):
+                            fields[af_key] = story[af_key]
+
+                    # Inject platform-specific CTAs into captions
+                    if story.get("affiliate_product"):
+                        from genlab_core.monetization.cta_engine import inject_cta
+                        fields = inject_cta(fields, story)
+
                     if rendered_path:
                         fields["visual_paths"] = json.dumps([rendered_path])
                         # Auto-schedule for next available 06:30 UTC = 12:00 IST
