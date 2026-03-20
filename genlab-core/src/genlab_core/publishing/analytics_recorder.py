@@ -43,16 +43,29 @@ def record_publish(
     if not published_at:
         published_at = datetime.now(UTC).isoformat()
 
+    # Derive post_id from post_url (platform-specific ID extraction)
+    post_id = ""
+    if post_url:
+        if "youtube.com" in post_url:
+            post_id = post_url.rstrip("/").split("/")[-1]
+        elif "instagram.com" in post_url:
+            post_id = post_url.rstrip("/").split("/")[-1]
+        elif "facebook.com" in post_url:
+            post_id = post_url.rstrip("/").split("/")[-1]
+        else:
+            post_id = post_url.rstrip("/").split("/")[-1]
+
     fields = {
         "Title": f"{niche_id}:{platform}:{published_at[:10]}",
         "niche_id": niche_id,
+        "post_id": f"{platform}:{post_id}" if post_id else "",
         "platform": platform,
         "status": status,
+        "published_at": published_at,
         "post_url": post_url,
         "blueprint_id": blueprint_id,
         "candidate_id": candidate_id,
         "error_message": error_message,
-        "published_at": published_at,
     }
 
     try:
