@@ -50,7 +50,7 @@ _VALID_TABLES: frozenset[str] = frozenset({
     "blueprints", "stories", "assets", "publishing_analytics", "analytics",
     "content_memory", "bandit_arms", "pending_engagement", "pending_feedback",
     "templates", "sources", "monetisationprogress", "ab_tests",
-    "audience_snapshots",
+    "audience_snapshots", "affiliate_clicks",
 })
 
 
@@ -116,6 +116,10 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "target_value", "pct_complete", "delta_7d",
         "days_to_threshold_est", "is_threshold_met", "data_source",
         "as_of_date", "error_log",
+    },
+    "affiliate_clicks": {
+        "niche_id", "product_id", "network", "affiliate_url",
+        "referrer", "country", "platform_source",
     },
 }
 
