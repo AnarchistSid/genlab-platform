@@ -321,14 +321,124 @@ Each card:
 
 ---
 
+## World-Class Polish (applies to all views)
+
+### 1. Micro-Animations & Transitions
+- KPI numbers count up on mount (existing `useCountUp` hook, apply everywhere)
+- Cards stagger-fade in (Framer Motion `staggerChildren: 0.05`)
+- Sparklines draw themselves (SVG `stroke-dashoffset` animation)
+- Progress bars animate to their width (CSS transition on width)
+- KPI deltas pulse green briefly on positive change
+- Hover states: `scale(1.01)` + border luminance increase
+- Page transitions: `AnimatePresence` with slide + fade
+
+### 2. Real-Time Pulse
+- Socket.IO already in place — extend to emit:
+  - `engagement_new` — new like/comment (update feed + KPI counter)
+  - `publish_complete` — post published (update timeline + KPI)
+  - `pipeline_stage` — stage progress (update pipeline view)
+  - `learning_update` — bandit reward computed (update learning card)
+- Breathing pulse dot in sidebar logo (CSS animation, green when connected, amber when reconnecting)
+- New engagement feed items slide in with a 2s subtle glow border
+
+### 3. Depth & Layering
+- Cards: `border: 1px solid var(--border)` → on hover add `box-shadow: inset 0 1px 0 rgba(255,255,255,0.04)`
+- AI Insight card: animated gradient border using `@keyframes` rotating `conic-gradient`
+- Active nav item: pill background with `box-shadow: 0 0 12px rgba(var(--niche-color), 0.15)`
+- Popovers/dropdowns: `backdrop-filter: blur(12px)` + slightly transparent background
+- Modal overlays: `backdrop-filter: blur(4px)` on backdrop
+
+### 4. Premium Data Visualization
+- Replace ASCII sparklines with Recharts `<AreaChart>` mini components (no axes, just the shape)
+- Animated gradient fills using `<defs><linearGradient>` with niche accent colors
+- Platform breakdown: `<PieChart>` donut with platform brand colors
+- Posting heatmap: 7×24 grid (day × hour) with opacity-mapped cells
+- Niche radar chart: 5-axis comparison (reach, engagement, growth, quality, consistency)
+- Every data point has a tooltip on hover
+
+### 5. Command Palette Power
+- Already uses cmdk — extend with:
+  - Search posts by hook text (fuzzy match)
+  - `approve [niche]` — quick-approve all VISUAL_READY for a niche
+  - `goto learning` / `goto analytics` — navigation
+  - `show top posts` — jump to analytics top posts tab
+  - Recent actions section (last 5 approvals/rejects)
+  - `export analytics csv` — trigger download
+
+### 6. Keyboard-First Navigation
+- Already has keyboard shortcuts — extend:
+  - `G M` Mission Control, `G L` Learning, `G E` Engagement, `G C` Content Review
+  - `J/K` navigate lists (blueprints, comments, posts)
+  - `A` approve, `R` reject, `S` schedule (context-aware)
+  - `Space` preview/expand selected item
+  - `Esc` close any overlay
+  - `?` show keyboard shortcut overlay
+  - Shortcut hints shown as `<kbd>` tags next to actions
+
+### 7. Contextual Quick Actions
+- Right-click context menu (Radix `<ContextMenu>`) on:
+  - Channel cards → "View analytics", "Run pipeline now", "Open IG profile", "Open YT channel"
+  - Post cards → "View on platform", "Copy hook", "See engagement", "Archive"
+  - KPI cards → "View detailed breakdown", "Export"
+- Hover any KPI number → tooltip with per-platform breakdown
+- Click any niche dot → filter entire dashboard to that niche
+
+### 8. Dark Mode Polish
+- Add CSS noise texture overlay on `body::before` (PNG, `opacity: 0.02`)
+- Greeting section: subtle radial gradient mesh (`radial-gradient` with niche color at 3% opacity)
+- Platform icons: use full-color SVG icons (Instagram gradient, YouTube red play button, etc.)
+- Channel cards: niche accent color as subtle background tint (`rgba(accent, 0.03)`) not just left border
+- Selected/active states: colored ring (`box-shadow: 0 0 0 2px var(--accent)`)
+- Focus rings: match niche accent color
+
+### 9. Responsive & Mobile
+- Sidebar: collapsible to icon-only on tablet (`<768px`), hidden on mobile (`<640px`)
+- Mobile: bottom tab bar with 5 primary views (Mission, Content, Analytics, Learning, Settings)
+- KPI hero: horizontal scrollable strip on mobile
+- Card grids: stack to single column
+- Channel strip: horizontal scroll on mobile
+- Swipe gestures on content review cards (right=approve, left=reject)
+- PWA manifest + service worker for offline shell
+- `<meta name="apple-mobile-web-app-capable">` for iOS home screen
+
+### 10. Empty States & Onboarding
+- Every card has a meaningful empty state:
+  - Engagement: "No comments yet — engagement typically appears 2-6 hours after publishing"
+  - Learning: "The bandit needs 50 observations to activate LinUCB — currently at 4/50"
+  - Analytics: "Metrics are collected every 6 hours — first data point expected at [time]"
+- Skeleton loading: shimmer animation matching card dimensions (existing pattern, apply consistently)
+- First-time tooltip tour (optional, dismissable, persisted in localStorage)
+
+### 11. Export & Sharing
+- Screenshot card as PNG: `html2canvas` on any card via context menu
+- Export analytics as CSV: download button in Analytics view header
+- Weekly report: auto-generated markdown/PDF with KPI summary, top posts, learning progress
+- Copy KPI summary: "617K reach · 36.9K likes · 5/5 published" → clipboard
+- Share link: read-only URL with auth token (future — not MVP)
+
+### 12. Sound Design
+- Subtle UI sounds (opt-in, muted by default, toggle in Settings):
+  - `approve.mp3` — soft click on approve action
+  - `reject.mp3` — lower tone on reject
+  - `publish.mp3` — achievement chime when post publishes
+  - `viral.mp3` — celebratory tone when post exceeds 1K likes
+  - `notification.mp3` — gentle ping for new comments
+- Use Web Audio API for low-latency playback
+- Respect `prefers-reduced-motion` and mute preference
+
+---
+
 ## Implementation Priority
 
-| Phase | Views | Effort |
+| Phase | Scope | Effort |
 |-------|-------|--------|
-| 1 | Mission Control redesign | 2-3 days |
+| 1 | Mission Control redesign + micro-animations + dark polish | 3-4 days |
 | 2 | Learning Intelligence (new) + Engagement (new) | 2-3 days |
-| 3 | Content Review (merge 3 views) | 1-2 days |
-| 4 | Analytics + System Health upgrades | 1-2 days |
-| 5 | Pipeline + Schedule + Monetisation + Settings upgrades | 1-2 days |
+| 3 | Content Review (merge 3 views) + keyboard nav + contextual actions | 2-3 days |
+| 4 | Analytics upgrade + premium data viz | 2-3 days |
+| 5 | System Health + Pipeline + Schedule + Monetisation upgrades | 2-3 days |
+| 6 | Real-time pulse (WebSocket events) + command palette extensions | 1-2 days |
+| 7 | Responsive/mobile + PWA + empty states | 2-3 days |
+| 8 | Export/sharing + sound design + final polish | 1-2 days |
 
-**Total estimated effort:** 7-12 days of focused frontend work.
+**Total estimated effort:** 15-23 days of focused frontend work.
