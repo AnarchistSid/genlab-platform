@@ -146,8 +146,8 @@ class TestUpdateWindow:
         assert "6h" in task.completed_windows
         assert task.collection_status == "awaiting_24h"
         mock_proxy.update.assert_called_once_with("sp_001", {
-            "Status": "awaiting_24h",
-            "EarlyStop": False,
+            "collection_status": "awaiting_24h",
+            "early_stop": False,
         })
 
     def test_update_48h_sets_reward(self, store, mock_proxy):
@@ -160,7 +160,7 @@ class TestUpdateWindow:
         assert task.reward_48h == 0.73
         assert task.collection_status == "awaiting_168h"
         call_fields = mock_proxy.update.call_args[0][1]
-        assert call_fields["Reward48h"] == 0.73
+        assert call_fields["reward_48h"] == 0.73
 
     def test_update_168h_completes(self, store, mock_proxy):
         task = _make_task(

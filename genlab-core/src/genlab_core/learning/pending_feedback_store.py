@@ -78,14 +78,13 @@ class PendingFeedbackStore:
     ) -> list[PendingFeedbackTask]:
         """Fetch tasks not yet complete."""
         try:
-            # OData filter: Status not in terminal states
+            # Postgres uses collection_status; SharePoint uses Status
             items = self._proxy.all(
-                formula="{Status}='awaiting_6h'",
+                formula="{collection_status}='awaiting_6h'",
             )
-            # Also fetch other non-terminal statuses
             for status in ("awaiting_24h", "awaiting_48h", "awaiting_168h"):
                 items.extend(
-                    self._proxy.all(formula=f"{{Status}}='{status}'")
+                    self._proxy.all(formula=f"{{collection_status}}='{status}'")
                 )
 
             tasks = []
@@ -148,7 +147,7 @@ class PendingFeedbackStore:
                 title = f"{task.platform}__{task.platform_post_id}"
                 logger.debug("[feedback] no sharepoint_id, finding by Title=%s", title)
                 matches = self._proxy.all(
-                    formula=f"{{Title}}='{title}'",
+                    formula=f"{{post_id}}='{task.platform_post_id}'",
                     max_records=1,
                 )
                 if matches:
