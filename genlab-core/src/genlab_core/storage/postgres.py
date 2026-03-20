@@ -45,6 +45,23 @@ def _quote_col(col: str) -> str:
     return col
 
 
+# Valid table names — prevents SQL injection via table name interpolation.
+_VALID_TABLES: frozenset[str] = frozenset({
+    "blueprints", "stories", "assets", "publishing_analytics", "analytics",
+    "content_memory", "bandit_arms", "pending_engagement", "pending_feedback",
+    "templates", "sources", "monetisationprogress", "ab_tests",
+    "audience_snapshots",
+})
+
+
+def _validate_table(table: str) -> str:
+    """Validate table name against allowlist. Raises ValueError on invalid."""
+    t = table.lower()
+    if t not in _VALID_TABLES:
+        raise ValueError(f"Invalid table name: {table!r}")
+    return t
+
+
 # Columns that are promoted to proper SQL columns (not in extra JSONB).
 PROMOTED_COLUMNS: dict[str, set[str]] = {
     "blueprints": {
@@ -141,6 +158,20 @@ class PostgresBackend:
                     )
         return self._pool
 
+    def close(self) -> None:
+        """Close the connection pool cleanly.
+
+        Call this during application teardown to prevent
+        ConnectionPool.__del__ errors on garbage collection.
+        """
+        with self._pool_lock:
+            if self._pool is not None:
+                try:
+                    self._pool.close()
+                except Exception:
+                    pass
+                self._pool = None
+
     @staticmethod
     def _coerce_value(value: Any) -> Any:
         """Coerce ISO datetime strings to Python datetime objects."""
@@ -177,6 +208,7 @@ class PostgresBackend:
 
     def create(self, table: str, record: dict[str, Any], *, typecast: bool = False) -> str:
         """Create a record. Returns the new UUID record ID."""
+        table = _validate_table(table)
         record_id = str(uuid.uuid4())
         cols, extra = self._split_fields(table, record)
         cols["extra"] = json.dumps(extra) if extra else "{}"
@@ -203,6 +235,7 @@ class PostgresBackend:
 
     def get(self, table: str, record_id: str) -> dict[str, Any] | None:
         """Get a single record by ID (UUID or legacy SharePoint integer ID)."""
+        table = _validate_table(table)
         from psycopg.rows import dict_row
 
         record_id = str(record_id).strip()
@@ -233,8 +266,10 @@ class PostgresBackend:
         formula: str = "",
         niche_id: str = "",
         max_records: int | None = None,
+        _skip_validation: bool = False,
     ) -> list[dict[str, Any]]:
         """Find records matching a formula filter with RLS niche isolation."""
+        table = _validate_table(table)
         from psycopg.rows import dict_row
 
         from genlab_core.storage.formula_sql import formula_to_sql
@@ -286,6 +321,7 @@ class PostgresBackend:
         typecast: bool = False,
     ) -> None:
         """Update fields on an existing record."""
+        table = _validate_table(table)
         cols, extra = self._split_fields(table, fields)
         record_id = str(record_id).strip()
 
@@ -320,6 +356,7 @@ class PostgresBackend:
 
     def delete(self, table: str, record_id: str) -> None:
         """Delete a record by ID."""
+        table = _validate_table(table)
         record_id = str(record_id).strip()
 
         pool = self._get_pool()
@@ -339,6 +376,7 @@ class PostgresBackend:
 
     def batch_create(self, table: str, records: list[dict[str, Any]]) -> list[str]:
         """Create multiple records using pipeline mode for performance."""
+        table = _validate_table(table)
         if not records:
             return []
 

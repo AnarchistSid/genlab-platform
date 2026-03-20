@@ -136,11 +136,11 @@ class PendingFeedbackStore:
                 task.reward_48h = reward_48h
 
             update_fields: dict[str, Any] = {
-                "Status": task.collection_status,
-                "EarlyStop": task.early_stop,
+                "collection_status": task.collection_status,
+                "early_stop": task.early_stop,
             }
             if reward_48h is not None:
-                update_fields["Reward48h"] = reward_48h
+                update_fields["reward_48h"] = reward_48h
 
             # Use sharepoint_id if available, otherwise find by title
             record_id = task.sharepoint_id
@@ -165,16 +165,30 @@ class PendingFeedbackStore:
             logger.warning("[feedback] update_window failed: %s", e)
 
     @staticmethod
+    def _f(fields: dict, *keys: str, default: Any = "") -> Any:
+        """Get a field by trying CamelCase then snake_case key variants."""
+        for k in keys:
+            val = fields.get(k)
+            if val is not None:
+                return val
+        return default
+
+    @staticmethod
     def _from_sharepoint_item(item: dict) -> PendingFeedbackTask:
-        """Parse SharePoint item into PendingFeedbackTask."""
+        """Parse SharePoint/Postgres item into PendingFeedbackTask.
+
+        Handles both CamelCase (SharePoint) and snake_case (Postgres) column names
+        by trying each variant via _f().
+        """
         fields = item.get("fields", item)
-        bandit_ctx_raw = fields.get("BanditContext", "")
+        _f = PendingFeedbackStore._f
+
+        bandit_ctx_raw = _f(fields, "BanditContext", "bandit_context", default="")
         bandit_ctx = json.loads(bandit_ctx_raw) if bandit_ctx_raw else None
 
-        status = fields.get("Status", "awaiting_6h")
+        status = _f(fields, "Status", "status", "collection_status", default="awaiting_6h")
 
         # Derive completed_windows from Status since they aren't persisted.
-        # A task at awaiting_24h has already completed 6h, etc.
         _STATUS_TO_COMPLETED: dict[str, list[CollectionWindow]] = {
             "awaiting_6h": [],
             "awaiting_24h": ["6h"],
@@ -184,7 +198,7 @@ class PendingFeedbackStore:
         }
         completed = _STATUS_TO_COMPLETED.get(status, [])
 
-        raw_pub = fields.get("PublishedAt")
+        raw_pub = _f(fields, "PublishedAt", "published_at", default=None)
         if isinstance(raw_pub, datetime):
             published_at = raw_pub if raw_pub.tzinfo else raw_pub.replace(tzinfo=UTC)
         elif isinstance(raw_pub, str) and raw_pub.strip():
@@ -192,20 +206,22 @@ class PendingFeedbackStore:
         else:
             published_at = datetime.now(UTC)
 
+        post_id = _f(fields, "PostID", "post_id", default="")
+
         return PendingFeedbackTask(
-            content_id=fields.get("PostID", ""),
-            platform=fields.get("Platform", ""),
-            niche_id=fields.get("NicheId", "gaming"),
+            content_id=post_id,
+            platform=_f(fields, "Platform", "platform", default=""),
+            niche_id=_f(fields, "NicheId", "niche_id", default="gaming"),
             published_at=published_at,
-            platform_post_id=fields.get("PostID", ""),
-            content_type=fields.get("PostContentType", "unknown"),
-            hook_type=fields.get("HookType", ""),
-            hook_text=fields.get("HookText", ""),
-            hook_length=int(fields.get("HookLength", 0) or 0),
+            platform_post_id=post_id,
+            content_type=_f(fields, "PostContentType", "post_content_type", default="unknown"),
+            hook_type=_f(fields, "HookType", "hook_type", default=""),
+            hook_text=_f(fields, "HookText", "hook_text", default=""),
+            hook_length=int(_f(fields, "HookLength", "hook_length", default=0) or 0),
             sharepoint_id=item.get("id"),
-            bandit_arm=fields.get("BanditArm") or None,
+            bandit_arm=_f(fields, "BanditArm", "bandit_arm", "arm_id", default=None),
             bandit_context=bandit_ctx,
             collection_status=status,
             completed_windows=list(completed),
-            early_stop=bool(fields.get("EarlyStop", False)),
+            early_stop=bool(_f(fields, "EarlyStop", "early_stop", default=False)),
         )

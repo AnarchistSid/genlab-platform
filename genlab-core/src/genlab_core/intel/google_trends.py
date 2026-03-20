@@ -14,7 +14,11 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import time
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +40,53 @@ NICHE_SEED_KEYWORDS = {
 }
 
 
+_CACHE_DIR = Path(os.environ.get("GENLAB_PROJECT_ROOT", ".")) / ".tmp" / "cache"
+_CACHE_TTL_HOURS = 6
+
+
+def _read_cache(niche_id: str) -> list[str] | None:
+    """Read cached trends if fresh (< TTL hours old)."""
+    cache_file = _CACHE_DIR / f"trends_{niche_id}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        age_hours = (time.time() - cache_file.stat().st_mtime) / 3600
+        if age_hours > _CACHE_TTL_HOURS:
+            return None
+        data = json.loads(cache_file.read_text())
+        return data if isinstance(data, list) and data else None
+    except Exception:
+        return None
+
+
+def _write_cache(niche_id: str, topics: list[str]) -> None:
+    """Write trends to cache file."""
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_file = _CACHE_DIR / f"trends_{niche_id}.json"
+        cache_file.write_text(json.dumps(topics))
+    except Exception:
+        pass
+
+
+def _read_stale_cache(niche_id: str) -> list[str] | None:
+    """Read cached trends even if expired — better than seed keywords."""
+    cache_file = _CACHE_DIR / f"trends_{niche_id}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        data = json.loads(cache_file.read_text())
+        return data if isinstance(data, list) and data else None
+    except Exception:
+        return None
+
+
 class GoogleTrendsIntel:
-    """Fetches trending topics from Google Trends per niche."""
+    """Fetches trending topics from Google Trends per niche.
+
+    Results are cached to .tmp/cache/trends_{niche}.json with a 6-hour TTL.
+    On failure, stale cache is used as a fallback (better than seed keywords).
+    """
 
     def __init__(self, geo: str = "US", tz: int = 330):
         self.geo = geo
@@ -60,13 +109,20 @@ class GoogleTrendsIntel:
     ) -> list[str]:
         """Get top trending topics for a niche right now.
 
-        Falls back gracefully: RSS feed → pytrends → seed keywords.
-        RSS is preferred because pytrends is unreliable (rate-limited by Google).
+        Falls back gracefully: cache → RSS → pytrends → stale cache → seeds.
+        Results are cached for 6 hours to avoid repeated failures.
         """
+        # Tier 0: Fresh cache (< 6 hours old)
+        cached = _read_cache(niche_id)
+        if cached:
+            logger.info("[%s] Google Trends (cached): %s", niche_id, cached[:3])
+            return cached[:top_n]
+
         # Tier 1: Google Trends RSS (zero cost, no auth)
         try:
             rss_topics = self._get_rss_trending(niche_id)
             if rss_topics:
+                _write_cache(niche_id, rss_topics)
                 logger.info("[%s] Google Trends RSS: %s", niche_id, rss_topics[:3])
                 return rss_topics[:top_n]
         except Exception as e:
@@ -77,6 +133,7 @@ class GoogleTrendsIntel:
             realtime = self._get_realtime_trending(niche_id)
             realtime = [t for t in realtime if t and t.strip()] if realtime else []
             if realtime:
+                _write_cache(niche_id, realtime)
                 logger.info("[%s] Google Trends real-time: %s", niche_id, realtime[:3])
                 return realtime[:top_n]
         except Exception as e:
@@ -87,10 +144,17 @@ class GoogleTrendsIntel:
             daily = self._get_daily_trending(niche_id)
             daily = [t for t in daily if t and t.strip()] if daily else []
             if daily:
+                _write_cache(niche_id, daily)
                 logger.info("[%s] Google Trends daily: %s", niche_id, daily[:3])
                 return daily[:top_n]
         except Exception as e:
             logger.warning("[%s] Daily trends failed: %s", niche_id, e)
+
+        # Tier 4: Stale cache (expired but better than nothing)
+        stale = _read_stale_cache(niche_id)
+        if stale:
+            logger.warning("[%s] Google Trends unavailable — using stale cache (%d topics)", niche_id, len(stale))
+            return stale[:top_n]
 
         seeds = NICHE_SEED_KEYWORDS.get(niche_id, ["trending", niche_id])
         logger.warning("[%s] Google Trends unavailable — using seed keywords: %s", niche_id, seeds)
