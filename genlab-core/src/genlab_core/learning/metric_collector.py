@@ -63,10 +63,13 @@ def fetch_platform_metrics(
     Uses per-niche credentials via niche_credentials to avoid cross-channel
     token leakage (e.g. fetching CriticalRush metrics with BB tokens).
     """
+    # Strip platform prefix from composite IDs (e.g., "instagram:123" → "123")
+    raw_id = post_id.split(":", 1)[1] if ":" in post_id else post_id
+
     # Instagram Reels: use specialised 6h fetcher for early skip-rate signal
     if platform == "instagram" and window == "6h":
         try:
-            return _fetch_instagram_reels_6h(post_id, niche_id=niche_id)
+            return _fetch_instagram_reels_6h(raw_id, niche_id=niche_id)
         except Exception as exc:
             logger.warning("[metric_collector] instagram reels 6h fetch failed for %s: %s", post_id, exc)
             return {}
@@ -85,7 +88,7 @@ def fetch_platform_metrics(
         logger.warning("[metric_collector] no fetcher for platform '%s'", platform)
         return {}
     try:
-        return fn(post_id, niche_id=niche_id)
+        return fn(raw_id, niche_id=niche_id)
     except Exception as exc:
         logger.warning("[metric_collector] %s fetch failed for %s: %s", platform, post_id, exc)
         return {}

@@ -197,7 +197,7 @@ class PendingFeedbackStore:
         }
         completed = _STATUS_TO_COMPLETED.get(status, [])
 
-        raw_pub = _f(fields, "PublishedAt", "published_at", default=None)
+        raw_pub = _f(fields, "PublishedAt", "published_at", "publish_time", default=None)
         if isinstance(raw_pub, datetime):
             published_at = raw_pub if raw_pub.tzinfo else raw_pub.replace(tzinfo=UTC)
         elif isinstance(raw_pub, str) and raw_pub.strip():
