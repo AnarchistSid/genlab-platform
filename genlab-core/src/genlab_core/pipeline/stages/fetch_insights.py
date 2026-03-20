@@ -111,9 +111,25 @@ class FetchInsights:
                 platform, {"fetched": 0, "errors": 0},
             )
             try:
-                metrics = self._fetch_platform(platform, post_id, config)
+                fetch_config = {**config, "niche_id": niche_id}
+                metrics = self._fetch_platform(platform, post_id, fetch_config)
                 if metrics:
-                    # Mark as fetched in SharePoint
+                    # Write metrics to analytics table (strip platform prefix for clean ID)
+                    clean_id = post_id.split(":", 1)[1] if ":" in post_id else post_id
+                    try:
+                        client.upsert_analytics(
+                            post_id=clean_id,
+                            platform=platform,
+                            insights=metrics,
+                            niche_id=niche_id,
+                            fetch_window="pipeline",
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[FetchInsights] Analytics upsert failed for %s",
+                            post_id,
+                        )
+                    # Mark as fetched in publishing_analytics
                     try:
                         client.publishing_analytics.update(
                             record["id"],
@@ -168,22 +184,31 @@ class FetchInsights:
             logger.debug("[FetchInsights] No fetcher for platform: %s", platform)
             return None
 
+        # Strip platform prefix from composite post_id (e.g. "instagram:123" → "123")
+        raw_id = post_id
+        if ":" in post_id:
+            raw_id = post_id.split(":", 1)[1]
+
         cb = get_circuit_breaker(platform)
         if cb is not None:
             try:
-                return cb.call(fetcher, post_id, config)
+                return cb.call(fetcher, raw_id, config)
             except CircuitOpenError:
                 logger.warning(
                     "[FetchInsights] %s circuit open — skipping %s",
                     platform, post_id,
                 )
                 return None
-        return fetcher(post_id, config)
+        return fetcher(raw_id, config)
 
     @staticmethod
     def _fetch_instagram(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch IG metrics via graph.facebook.com."""
-        token = os.getenv("META_ACCESS_TOKEN", "")
+        # Try per-niche token first, then global fallback
+        niche_id = config.get("niche_id", "")
+        from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+        creds = resolve_meta_credentials(niche_id)
+        token = creds.get("ig_access_token") or os.getenv("META_ACCESS_TOKEN", "")
         if not token:
             return None
 
