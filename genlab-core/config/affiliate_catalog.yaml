@@ -1,0 +1,164 @@
+# Affiliate Product Catalog — GenLab Revenue Engine
+# Each niche has curated products with multi-network affiliate URLs.
+# The AffiliateMatch pipeline stage matches content keywords to products
+# and selects the network with the highest commission.
+#
+# To add a product: add an entry under the niche's products list.
+# To update an affiliate URL: change the url under the relevant network.
+# placeholder URLs below — replace with real affiliate links.
+
+settings:
+  max_affiliate_posts_per_day: 3    # out of 5 daily posts, max 3 get affiliate links
+  default_network_priority:
+    - earnkaro
+    - cuelinks
+    - vcommission
+    - amazon
+  disclosure_text:
+    instagram: "#affiliate"
+    youtube: "This description contains affiliate links — we may earn a small commission at no extra cost to you."
+    facebook: "#affiliate"
+    twitter: ""
+    threads: ""
+
+niches:
+  gaming:
+    products:
+      - name: "PS5 Console"
+        keywords: [playstation, ps5, sony, dualsense, ps5 pro, playstation 5]
+        category: hardware
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/ps5", commission_pct: 3.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/ps5", commission_pct: 6.5 }
+        image_url: "https://m.media-amazon.com/images/I/61SUj2aKoEL._SL1500_.jpg"
+        price_inr: 49990
+
+      - name: "Xbox Game Pass Ultimate"
+        keywords: [xbox, game pass, microsoft, series x, series s, halo, forza, starfield]
+        category: subscription
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/gamepass", commission_pct: 2.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/gamepass", commission_pct: 5.0 }
+        image_url: "https://m.media-amazon.com/images/I/81nKfnSgb0L._SL1500_.jpg"
+        price_inr: 699
+
+      - name: "Razer Gaming Headset"
+        keywords: [headset, razer, gaming audio, surround sound, blackshark, kraken]
+        category: peripheral
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/razer-headset", commission_pct: 4.0 }
+          cuelinks: { url: "https://example.com/affiliate/cuelinks/razer-headset", commission_pct: 7.0 }
+        image_url: "https://m.media-amazon.com/images/I/61CGHv6kmWL._SL1000_.jpg"
+        price_inr: 5999
+
+  sports:
+    products:
+      - name: "NBA League Pass"
+        keywords: [nba, basketball, league pass, playoffs, lakers, celtics, finals]
+        category: subscription
+        networks:
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/nba-lp", commission_pct: 8.0 }
+        image_url: "https://example.com/images/nba-league-pass.jpg"
+        price_inr: 1499
+
+      - name: "Nike Running Shoes"
+        keywords: [nike, running, shoes, sneakers, air max, jordan, athletics]
+        category: gear
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/nike-shoes", commission_pct: 5.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/nike-shoes", commission_pct: 9.0 }
+          cuelinks: { url: "https://example.com/affiliate/cuelinks/nike-shoes", commission_pct: 7.5 }
+        image_url: "https://m.media-amazon.com/images/I/71jeoX0cMBL._SL1500_.jpg"
+        price_inr: 7995
+
+      - name: "ESPN+ Subscription"
+        keywords: [espn, streaming, sports streaming, live sports, premier league, ufc, mma]
+        category: subscription
+        networks:
+          cuelinks: { url: "https://example.com/affiliate/cuelinks/espn-plus", commission_pct: 10.0 }
+        image_url: "https://example.com/images/espn-plus.jpg"
+        price_inr: 999
+
+  movies:
+    products:
+      - name: "Netflix Premium"
+        keywords: [netflix, streaming, series, binge, original, netflix original]
+        category: subscription
+        networks:
+          cuelinks: { url: "https://example.com/affiliate/cuelinks/netflix", commission_pct: 10.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/netflix", commission_pct: 8.0 }
+        image_url: "https://example.com/images/netflix.jpg"
+        price_inr: 649
+
+      - name: "Amazon Prime Video"
+        keywords: [prime video, amazon prime, prime original, prime exclusive]
+        category: subscription
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/prime-video", commission_pct: 4.0 }
+        image_url: "https://example.com/images/prime-video.jpg"
+        price_inr: 1499
+
+      - name: "JBL Cinema Soundbar"
+        keywords: [soundbar, cinema, home theater, surround, dolby, atmos, imax, audio]
+        category: hardware
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/jbl-soundbar", commission_pct: 5.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/jbl-soundbar", commission_pct: 7.0 }
+        image_url: "https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg"
+        price_inr: 24999
+
+  anime:
+    products:
+      - name: "Crunchyroll Premium"
+        keywords: [crunchyroll, anime streaming, subbed, dubbed, simulcast, seasonal anime]
+        category: subscription
+        networks:
+          cuelinks: { url: "https://example.com/affiliate/cuelinks/crunchyroll", commission_pct: 8.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/crunchyroll", commission_pct: 6.0 }
+        image_url: "https://example.com/images/crunchyroll.jpg"
+        price_inr: 79
+
+      - name: "One Piece Manga Box Set"
+        keywords: [one piece, manga, box set, luffy, pirate, oda, shonen jump]
+        category: merchandise
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/one-piece-manga", commission_pct: 5.0 }
+        image_url: "https://m.media-amazon.com/images/I/81QbDnFJDhL._SL1500_.jpg"
+        price_inr: 4999
+
+      - name: "Anime Figure Collection"
+        keywords: [figure, figurine, statue, collectible, nendoroid, banpresto, prize figure]
+        category: merchandise
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/anime-figure", commission_pct: 4.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/anime-figure", commission_pct: 6.5 }
+        image_url: "https://m.media-amazon.com/images/I/71jjidm8IwL._SL1500_.jpg"
+        price_inr: 2499
+
+  ai_creators:
+    products:
+      - name: "ChatGPT Plus"
+        keywords: [chatgpt, openai, gpt, gpt-4, gpt-5, ai chat, ai assistant]
+        category: tool
+        networks:
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/chatgpt-plus", commission_pct: 5.0 }
+        image_url: "https://example.com/images/chatgpt.jpg"
+        price_inr: 1680
+
+      - name: "Midjourney Subscription"
+        keywords: [midjourney, ai art, ai image, text to image, ai generation, diffusion]
+        category: tool
+        networks:
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/midjourney", commission_pct: 5.0 }
+          vcommission: { url: "https://example.com/affiliate/vcommission/midjourney", commission_pct: 7.0 }
+        image_url: "https://example.com/images/midjourney.jpg"
+        price_inr: 800
+
+      - name: "NVIDIA RTX 4090"
+        keywords: [nvidia, rtx, gpu, graphics card, 4090, 4080, cuda, ai training, deep learning]
+        category: hardware
+        networks:
+          amazon: { url: "https://example.com/affiliate/amazon/rtx-4090", commission_pct: 3.0 }
+          earnkaro: { url: "https://example.com/affiliate/earnkaro/rtx-4090", commission_pct: 5.5 }
+        image_url: "https://m.media-amazon.com/images/I/81StP9t0gvL._SL1500_.jpg"
+        price_inr: 159900
