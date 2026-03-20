@@ -110,11 +110,51 @@ class PushToBacklog:
         video_dedup_skipped = 0
         errors: list[str] = []
 
+        # Load recent hooks for this niche to prevent cross-run duplicates
+        existing_hooks: set[str] = set()
+        try:
+            recent_bps = client.blueprints.all(
+                formula=f"{{niche_id}}='{niche_id}'",
+                max_records=50,
+            )
+            for bp in recent_bps:
+                h = (bp.get("fields", bp).get("hook") or "").strip().lower()
+                if h:
+                    existing_hooks.add(h)
+            if existing_hooks:
+                logger.info("[PUSH] Loaded %d existing hooks for dedup", len(existing_hooks))
+        except Exception as e:
+            logger.debug("[PUSH] Could not load existing hooks: %s", e)
+        context["existing_hooks"] = existing_hooks
+
+        # Load content_memory hashes for URL-level dedup
+        seen_urls: set[str] = set()
+        try:
+            cm_proxy = getattr(client, "content_memory", None)
+            if cm_proxy:
+                cm_records = cm_proxy.all(
+                    formula=f"{{niche_id}}='{niche_id}'",
+                    max_records=200,
+                )
+                for rec in cm_records:
+                    h = (rec.get("fields", rec).get("content_hash") or "").strip()
+                    if h:
+                        seen_urls.add(h)
+                if seen_urls:
+                    logger.info("[PUSH] Loaded %d content_memory hashes for URL dedup", len(seen_urls))
+        except Exception as e:
+            logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
+
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
             published_at = story.get("published_at", datetime.now(UTC).isoformat())
             story_id = generate_story_id(source_url, published_at)
+
+            # URL-level dedup via content_memory
+            if story_id in seen_urls:
+                logger.debug("[PUSH] URL already in content_memory: %s", title[:60])
+                continue
 
             # Upsert story
             try:
@@ -192,10 +232,20 @@ class PushToBacklog:
                     logger.warning("[PUSH] Video dedup check failed: %s — allowing through", e)
 
             candidate_id = generate_candidate_id(
-                story_id, f"{niche_id}_default", content.get("hook", title),
+                story_id, niche_id, video_id or title,
             )
             story["candidate_id"] = candidate_id
             hook = content.get("hook", "")
+
+            # Cross-run hook dedup: reject exact duplicate hooks
+            if hook and hook.strip().lower() in existing_hooks:
+                logger.info(
+                    "[PUSH] Hook already used in niche %s, skipping: '%s'",
+                    niche_id, hook[:60],
+                )
+                continue
+            if hook:
+                existing_hooks.add(hook.strip().lower())
             ig = content.get("instagram", {})
             yt = content.get("youtube", {})
             tw = content.get("x_twitter", {})
@@ -227,9 +277,11 @@ class PushToBacklog:
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
                         "story_id": story_id,
-                        # video_id omitted — column not yet in SharePoint Blueprints list.
-                        # Video dedup uses client-side check above (lines 162-178).
+                        "video_id": video_id,
+                        "video_url": story.get("source_url", ""),
+                        "hook": hook,
                         "hook_text": hook,
+                        "title": title,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
                         "youtube_content": f"{yt.get('title', '')}\n\n{yt.get('description', '')}",
@@ -274,6 +326,21 @@ class PushToBacklog:
                         "[PUSH] Created blueprint '%s' (status=%s)",
                         title, fields["status"],
                     )
+                    # Record in content_memory for persistent URL-level dedup
+                    try:
+                        cm = getattr(client, "content_memory", None)
+                        if cm and story_id not in seen_urls:
+                            cm.create({
+                                "content_hash": story_id,
+                                "title": title[:200],
+                                "url": source_url,
+                                "niche_id": niche_id,
+                                "first_seen": datetime.now(UTC).isoformat(),
+                                "last_seen": datetime.now(UTC).isoformat(),
+                            })
+                            seen_urls.add(story_id)
+                    except Exception:
+                        pass  # non-critical — other dedup layers cover it
             except Exception as e:
                 logger.warning("[PUSH] Blueprint '%s' failed: %s", title, e)
                 errors.append(f"blueprint:{title}: {e}")

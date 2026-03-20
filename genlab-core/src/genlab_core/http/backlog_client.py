@@ -267,6 +267,15 @@ class BacklogClient:
                 "BanditArms", "Content_Memory", "MonetisationProgress",
             ]
 
+            # Map CamelCase list names to actual PostgreSQL table names.
+            # Lists like "PendingFeedback" become "pendingfeedback" via .lower()
+            # but the actual DB table is "pending_feedback" (snake_case).
+            _SQL_TABLE_MAP = {
+                "pendingfeedback": "pending_feedback",
+                "pendingengagement": "pending_engagement",
+                "banditarms": "bandit_arms",
+            }
+
             for table in ALL_TABLES:
                 attr = table.lower()
                 # Normalize attribute names to match existing API
@@ -281,7 +290,8 @@ class BacklogClient:
                     "monetisationprogress": "monetisation_progress",
                 }
                 attr = attr_map.get(attr, attr)
-                setattr(self, attr, PostgresTableProxy(_pg, table.lower()))
+                sql_table = _SQL_TABLE_MAP.get(table.lower(), table.lower())
+                setattr(self, attr, PostgresTableProxy(_pg, sql_table))
 
             self._sp_proxies = {t: getattr(self, t.lower().replace("_", "_"), None) for t in ALL_TABLES}
             self._backend_cache = {"postgres": _pg}
@@ -1043,6 +1053,10 @@ class BacklogClient:
         fields = {
             "post_id": composite_id,
             "platform": platform,
+            "metric_type": "composite",
+            "value": float(plays or reach or engagement or 0),
+            "collected_at": datetime.now(UTC).isoformat(),
+            "window": fetch_window or "adhoc",
             "impressions": impressions,
             "reach": reach,
             "engagement": engagement,

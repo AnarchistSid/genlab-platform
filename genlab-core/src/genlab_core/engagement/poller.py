@@ -199,12 +199,18 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                 expansions=["author_id"],
             )
         except tweepy.Unauthorized:
-            logger.error(
-                "[POLLER] X/Twitter 401 Unauthorized for %s — OAuth tokens may be "
-                "expired or revoked. Regenerate at developer.twitter.com and update "
-                "X_ACCESS_TOKEN / X_ACCESS_SECRET in .env",
-                niche_id,
-            )
+            # Track consecutive 401s — suppress logging after 5 to avoid log spam
+            _twitter_401_key = f"_twitter_401_{niche_id}"
+            _count = getattr(poll_twitter_mentions, _twitter_401_key, 0) + 1
+            setattr(poll_twitter_mentions, _twitter_401_key, _count)
+            if _count <= 5:
+                logger.error(
+                    "[POLLER] X/Twitter 401 Unauthorized for %s (attempt %d) — "
+                    "OAuth tokens may be expired or revoked. Regenerate at "
+                    "developer.twitter.com and update X_ACCESS_TOKEN / X_ACCESS_SECRET "
+                    "in .env. Suppressing further 401 logs after 5 consecutive failures.",
+                    niche_id, _count,
+                )
             return []
         except tweepy.Forbidden:
             logger.warning(
