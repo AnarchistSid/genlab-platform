@@ -309,6 +309,11 @@ _PLATFORM_PRIMARY_METRICS: dict[str, str] = {
 class MonetisationRewardShaper:
     """Compute rewards with monetisation proximity boosting.
 
+    .. deprecated::
+        This class is not used in production. The simpler ``RewardShaper``
+        above handles threshold proximity via ``MonetisationMultiplierProvider``.
+        Kept for reference — remove if not adopted by Sprint 72.
+
     The core insight: reward the bandit not just for engagement, but for
     PROGRESS TOWARD MONETISATION THRESHOLDS. The same 1,000 views means
     different things depending on whether your YouTube channel has 200 or
