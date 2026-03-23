@@ -558,3 +558,44 @@ async def _verify_output(path: Path) -> bool:
     except Exception as e:
         logger.warning("Output verification failed for %s: %s", path, e)
         return False
+
+
+# ── Sync wrappers ─────────────────────────────────────────────────────
+# The async functions above use asyncio.create_subprocess_exec for parallel
+# FFmpeg execution. These sync wrappers handle the event loop safely,
+# avoiding conflicts with async_bridge's persistent loop.
+
+
+def render_master_sync(source: Path, output: Path) -> Path:
+    """Sync wrapper for render_master — safe to call from pipeline stages."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop is not None:
+        # Already in an async context — use run_coroutine_threadsafe
+        import concurrent.futures
+        future = asyncio.run_coroutine_threadsafe(render_master(source, output), loop)
+        return future.result(timeout=600)
+    else:
+        return asyncio.run(render_master(source, output))
+
+
+def transcode_for_platforms_sync(
+    master: Path, output_dir: Path, platforms: list[Platform] | None = None,
+) -> dict[str, Path]:
+    """Sync wrapper for transcode_for_platforms — safe to call from pipeline stages."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop is not None:
+        import concurrent.futures
+        future = asyncio.run_coroutine_threadsafe(
+            transcode_for_platforms(master, output_dir, platforms), loop,
+        )
+        return future.result(timeout=600)
+    else:
+        return asyncio.run(transcode_for_platforms(master, output_dir, platforms))

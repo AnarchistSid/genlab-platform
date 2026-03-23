@@ -20,7 +20,8 @@ import yaml
 
 log = logging.getLogger(__name__)
 
-_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[3] / "configs" / "model_routing.yaml"
+# model_router.py → cost/ → genlab_core/ → src/ → genlab-core/ → configs/
+_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "configs" / "model_routing.yaml"
 
 
 @lru_cache(maxsize=1)
