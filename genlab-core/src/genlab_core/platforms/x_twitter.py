@@ -35,6 +35,11 @@ except ImportError:
 _RATE_LIMIT_COOLDOWN = 3600  # seconds — 1 hour matches free-tier cadence
 _VIDEO_EXTS = {".mp4", ".mov", ".gif"}
 
+# Module-level rate-limit state — shared across instances so cooldown
+# persists when publisher creates new XTwitterClient per niche (P10 fix)
+_module_rate_limited: bool = False
+_module_rate_limited_at: float = 0.0
+
 
 class XTwitterClient:
     """X/Twitter API v2 client.
@@ -60,9 +65,8 @@ class XTwitterClient:
         self._access_token: str = access_token or os.environ.get("X_ACCESS_TOKEN", "")
         self._access_secret: str = access_secret or os.environ.get("X_ACCESS_SECRET", "")
 
-        # Rate-limit state (thread-unsafe by design — same pattern as legacy TwitterClient)
-        self._rate_limited: bool = False
-        self._rate_limited_at: float = 0.0
+        # Rate-limit state uses module-level globals so cooldown persists
+        # across client instances (publisher creates new client per niche)
 
     # ------------------------------------------------------------------
     # Internal factory helpers — one fresh client per call (not thread-safe
@@ -144,15 +148,16 @@ class XTwitterClient:
 
     def _is_currently_rate_limited(self) -> bool:
         """Return True if we are in an active rate-limit cooldown window."""
-        if not self._rate_limited:
+        global _module_rate_limited, _module_rate_limited_at
+        if not _module_rate_limited:
             return False
-        elapsed = time.monotonic() - self._rate_limited_at
+        elapsed = time.monotonic() - _module_rate_limited_at
         if elapsed > _RATE_LIMIT_COOLDOWN:
             logger.info(
                 "X/Twitter: rate-limit cooldown expired (%.0fs elapsed) — resuming",
                 elapsed,
             )
-            self._rate_limited = False
+            _module_rate_limited = False
             return False
         remaining = int(_RATE_LIMIT_COOLDOWN - elapsed)
         logger.warning(
@@ -163,13 +168,14 @@ class XTwitterClient:
 
     def _handle_rate_limit(self, exc: BaseException) -> None:
         """Record rate-limit state after a 429."""
+        global _module_rate_limited, _module_rate_limited_at
         logger.warning(
             "X/Twitter: 429 Too Many Requests — entering %ds cooldown: %s",
             _RATE_LIMIT_COOLDOWN,
             exc,
         )
-        self._rate_limited = True
-        self._rate_limited_at = time.monotonic()
+        _module_rate_limited = True
+        _module_rate_limited_at = time.monotonic()
 
     # ------------------------------------------------------------------
     # Publisher protocol
