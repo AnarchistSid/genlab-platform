@@ -23,7 +23,11 @@ logger = logging.getLogger(__name__)
 # ── constants ──────────────────────────────────────────────────────────
 DAILY_QUOTA: int = 10_000
 UPLOAD_COST: int = 1_600
-HARD_STOP_PCT: float = 0.90
+# 5 channels × 1600 units/upload = 8000 minimum. 90% of 10000 = 9000 only
+# fits 5 uploads. Raised to 98% to allow all 5 channels + some headroom
+# for search/analytics queries. Apply for YouTube quota increase (100K/day)
+# to remove this constraint entirely.
+HARD_STOP_PCT: float = 0.98
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
