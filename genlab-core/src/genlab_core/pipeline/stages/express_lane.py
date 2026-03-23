@@ -192,10 +192,10 @@ class ExpressLane:
             num = float(large_match.group(1))
             suffix = large_match.group(2).upper()
             if suffix == "B" and num >= 1:
-                signals.append(f"large_number_${num}{suffix}")
+                signals.append(f"large_number_{num}{suffix}")
                 score += 0.2
             elif suffix == "T":
-                signals.append(f"large_number_${num}{suffix}")
+                signals.append(f"large_number_{num}{suffix}")
                 score += 0.3
 
         # Multi-signal boost

@@ -65,8 +65,15 @@ _VALID_NICHE_IDS = frozenset({
     "ai_creators", "gaming", "sports", "movies", "anime",
 })
 
-# Maps legacy platform names to registry IDs
-_PLATFORM_ID_MAP: dict[str, str] = {"twitter": "x_twitter"}
+# Maps legacy/alternate platform names to canonical registry IDs
+_PLATFORM_ID_MAP: dict[str, str] = {
+    "twitter": "x_twitter",
+    "x": "x_twitter",
+    "ig": "instagram",
+    "yt": "youtube",
+    "fb": "facebook",
+    "tt": "tiktok",
+}
 
 
 def _to_registry_id(platform: str) -> str:

@@ -48,7 +48,7 @@ class PipelineContext:
 
     # ── Stage data (populated progressively) ──────────────────
     stories: list[dict[str, Any]] = field(default_factory=list)
-    blueprints: list[dict[str, Any]] = field(default_factory=list)
+    blueprints: list[dict[str, Any]] = field(default_factory=list)  # Legacy — stages use context['stories']
 
     # ── Accumulated metrics per stage ─────────────────────────
     run_stats: dict[str, Any] = field(default_factory=dict)
