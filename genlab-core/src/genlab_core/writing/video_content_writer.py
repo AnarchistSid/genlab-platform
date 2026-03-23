@@ -19,9 +19,18 @@ from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
 
 logger = logging.getLogger(__name__)
 
+# Channel handles — keyed by niche_id. Overridable via niche_config.channel_handle.
+_NICHE_HANDLES: dict[str, str] = {
+    "gaming": "@CriticalRush",
+    "sports": "@ClutchWire",
+    "movies": "@SpliceReel",
+    "anime": "@FrameDrift",
+    "ai_creators": "@BlackboxBrief",
+}
+
 NICHE_VOICE: dict[str, dict[str, Any]] = {
     "gaming": {
-        "account": "@CriticalRush",
+        "account": _NICHE_HANDLES["gaming"],
         "style": (
             "You sound like a Twitch streamer reacting live. High energy, "
             "niche slang (goated, no cap, W, L, clutch, broken). React to "
@@ -36,7 +45,7 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         "hashtags": ["#Gaming", "#Gamer", "#GamingClips", "#VideoGames"],
     },
     "sports": {
-        "account": "@ClutchWire",
+        "account": _NICHE_HANDLES["sports"],
         "style": (
             "You sound like the most passionate sports fan in the group chat. "
             "Short, punchy, trash-talk energy. React to the moment, use specific "
@@ -51,7 +60,7 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         "hashtags": ["#Sports", "#SportsHighlights", "#Clutch"],
     },
     "movies": {
-        "account": "@SpliceReel",
+        "account": _NICHE_HANDLES["movies"],
         "style": (
             "You sound like a film-obsessed friend texting at midnight. "
             "Hot takes, genuine excitement or outrage, reference specific "
@@ -66,7 +75,7 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         "hashtags": ["#Movies", "#Film", "#Cinema", "#Trailer"],
     },
     "anime": {
-        "account": "@FrameDrift",
+        "account": _NICHE_HANDLES["anime"],
         "style": (
             "You sound like the most invested person in the anime Discord. "
             "Peak/mid/goated vocabulary, emotional reaction first. Debate "
@@ -82,7 +91,7 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeFan"],
     },
     "ai_creators": {
-        "account": "@BlackboxBrief",
+        "account": _NICHE_HANDLES["ai_creators"],
         "style": (
             "You sound like a tech-savvy person genuinely shocked by what AI "
             "can do. Accessible, slightly conspiratorial, urgent. Reference "

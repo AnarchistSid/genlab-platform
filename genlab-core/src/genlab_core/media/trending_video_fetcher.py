@@ -87,9 +87,10 @@ YOUTUBE_CATEGORIES: dict[str, str] = {
 }
 
 # Keyword sets for YouTube search per niche
+# Uses "today"/"new"/"trending" instead of hardcoded years to stay evergreen
 NICHE_SEARCH_KEYWORDS: dict[str, list[str]] = {
     "gaming": [
-        "gaming highlights 2026",
+        "gaming highlights today",
         "viral gaming moment",
         "best gaming clip today",
         "esports highlight",
@@ -97,28 +98,28 @@ NICHE_SEARCH_KEYWORDS: dict[str, list[str]] = {
     ],
     "sports": [
         "sports highlights today",
-        "best sports moment 2026",
+        "best sports moment today",
         "nba highlights today",
         "nfl play of the day",
         "soccer goal today",
         "viral sports clip",
     ],
     "movies": [
-        "movie trailer 2026",
+        "new movie trailer",
         "official trailer new",
         "film clip viral",
         "movie scene trending",
-        "box office 2026",
+        "box office this week",
     ],
     "anime": [
-        "anime fight scene 2026",
+        "anime fight scene new",
         "anime clip viral",
         "anime moment trending",
         "anime episode reaction",
-        "anime opening 2026",
+        "new anime opening",
     ],
     "ai_creators": [
-        "AI demo 2026",
+        "AI demo new",
         "artificial intelligence explained",
         "AI tool tutorial",
         "LLM explained",
@@ -220,8 +221,8 @@ class TrendingVideo:
             "video_source": "trending",
             "video_id": self.video_id,
             "is_official_channel": self.is_official_channel,
-            # Trending videos already have proven engagement
-            "source_mention_count": 3,
+            # Trending videos already have proven engagement — scale with velocity
+            "source_mention_count": min(5, max(1, int(self.view_velocity / 500))),
             # Pre-filled clip info so DownloadTopVideos can skip re-sourcing
             "_trending_video": True,
         }

@@ -21,6 +21,11 @@ THREADS_POLL_INTERVAL = 600    # 10 minutes
 async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
     """Fetch new comments on recent YouTube videos via Data API v3.
 
+    Note: This function is ``async def`` for compatibility with the
+    ``run_engagement_poller.py`` asyncio runner, but internally uses
+    synchronous ``requests`` calls. A future refactor should migrate
+    to ``httpx.AsyncClient`` for true async I/O.
+
     Uses per-video polling (videoId) instead of channel-wide polling
     (allThreadsRelatedToChannelId) which requires channel-owner OAuth scope.
 

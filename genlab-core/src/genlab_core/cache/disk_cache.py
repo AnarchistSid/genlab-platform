@@ -18,7 +18,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_SAFE_KEY = re.compile(r'^[a-zA-Z0-9_\-]{1,256}$')
+_SAFE_KEY = re.compile(r'^[a-zA-Z0-9_.\-]{1,256}$')
 _DEFAULT_MAX_ENTRIES = 10000
 
 

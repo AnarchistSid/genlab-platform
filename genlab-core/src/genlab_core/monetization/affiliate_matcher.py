@@ -86,31 +86,15 @@ def _llm_match_product(
     )
 
     try:
-        import httpx
+        from genlab_core.writing.llm_client import AnthropicLLMClient
 
-        resp = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2024-10-22",
-                "content-type": "application/json",
-            },
-            json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 20,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=10.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        # Extract the text response
-        answer = ""
-        for block in data.get("content", []):
-            if block.get("type") == "text":
-                answer = block.get("text", "").strip().lower()
-                break
+        client = AnthropicLLMClient(api_key=api_key, model="claude-haiku-4-5-20251001")
+        answer = client.complete(
+            system="You are a product matcher. Reply with ONLY a product index number or 'none'.",
+            user=prompt,
+            max_tokens=20,
+            temperature=0.0,
+        ).strip().lower()
 
         if answer == "none" or not answer:
             logger.debug("[AffiliateMatch] LLM returned 'none' — no contextual match")
