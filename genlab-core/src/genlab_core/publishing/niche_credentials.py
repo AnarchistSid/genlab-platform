@@ -41,6 +41,16 @@ def resolve_niche_env(niche_id: str, global_var: str, niche_suffix: str) -> str:
     """
     prefix = NICHE_CREDENTIAL_PREFIXES.get(niche_id, "")
 
+    if not prefix and niche_id:
+        # Unknown niche_id — block fallback to global credentials to prevent
+        # accidentally publishing to BB's accounts with a typo'd niche_id
+        logger.warning(
+            "Unknown niche_id '%s' — no credential prefix registered. "
+            "Refusing to fall back to global credentials.",
+            niche_id,
+        )
+        return ""
+
     if prefix:
         val = os.getenv(f"{prefix}_{niche_suffix}", "").strip()
         if val:

@@ -516,6 +516,11 @@ class PushToBacklog:
                         "angle": (story.get("summary") or title)[:200],
                     }
 
+                    # Persist urgency classification for express lane publishing
+                    urgency = story.get("urgency_classification", {})
+                    if urgency:
+                        fields["urgency_classification"] = json.dumps(urgency)
+
                     # Affiliate fields (if matched by AffiliateMatch stage)
                     for af_key in (
                         "affiliate_product", "affiliate_url", "affiliate_network",

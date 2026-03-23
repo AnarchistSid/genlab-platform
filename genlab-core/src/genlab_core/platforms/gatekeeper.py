@@ -49,7 +49,14 @@ class PublishGatekeeper:
         if bp.get("action_taken") == "approved":
             return GateResult(allowed=True, reason="approved", gate_name="approval_gate")
         # Express lane bypass: CRITICAL/HIGH urgency stories skip approval
-        urgency = (bp.get("urgency_classification") or {}).get("urgency", "")
+        urgency_raw = bp.get("urgency_classification") or {}
+        if isinstance(urgency_raw, str):
+            try:
+                import json
+                urgency_raw = json.loads(urgency_raw)
+            except (json.JSONDecodeError, TypeError):
+                urgency_raw = {}
+        urgency = urgency_raw.get("urgency", "") if isinstance(urgency_raw, dict) else ""
         if urgency in ("CRITICAL", "HIGH"):
             return GateResult(
                 allowed=True,
