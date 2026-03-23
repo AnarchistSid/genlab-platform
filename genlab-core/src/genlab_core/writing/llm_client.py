@@ -59,4 +59,18 @@ class AnthropicLLMClient:
             system=system,
             messages=[{"role": "user", "content": user}],
         )
+
+        # Track cost if accumulator is available in current context
+        try:
+            from genlab_core.intelligence.cost_accumulator import get_accumulator
+            acc = get_accumulator()
+            if acc is not None:
+                acc.record_llm(
+                    model=self._model,
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                )
+        except Exception:
+            pass  # cost tracking is non-critical
+
         return response.content[0].text

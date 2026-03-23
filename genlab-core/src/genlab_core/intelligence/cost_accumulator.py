@@ -19,7 +19,7 @@ MODEL_COSTS: dict[str, dict[str, float]] = {
     # OpenAI
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-image-1": {"per_image": 0.02},
+    "gpt-image-1": {"per_image": 0.04},  # varies by quality/size; 0.04 is mid estimate
 }
 
 CATEGORIES = ("llm", "tts", "image", "compute", "media", "bandwidth")

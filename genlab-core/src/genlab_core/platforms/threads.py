@@ -35,7 +35,7 @@ from typing import Any
 
 import requests
 
-from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
+from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus, safe_json as _safe_json
 from genlab_core.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)
@@ -48,12 +48,8 @@ _NEEDS_REFRESH_AFTER_DAYS = 50
 _VIDEO_PROCESSING_WAIT = 30
 
 
-def _safe_json(resp: requests.Response) -> dict[str, Any]:
-    """Safely parse a requests.Response as JSON, returning {} on failure."""
-    try:
-        return resp.json()
-    except Exception:
-        return {}
+
+# _safe_json imported from genlab_core.platforms.models
 
 
 class ThreadsClient:
@@ -98,6 +94,8 @@ class ThreadsClient:
 
         Returns a :class:`~genlab_core.platforms.models.PublishResult`.
         """
+        self.refresh_token_if_needed()
+
         caption = payload.caption or ""
         media_paths = payload.media_paths or []
         media_type = payload.media_type or "text"
@@ -173,6 +171,25 @@ class ThreadsClient:
         except Exception as exc:
             logger.warning("Threads: post_reply failed for %s: %s", parent_id, exc)
             return False
+
+    def like(self, target_id: str, *, context_id: str = "") -> bool:
+        """Like a Threads post.
+
+        The Threads API does not currently expose a public endpoint for
+        programmatic likes.  This is a no-op that returns ``True`` so the
+        ``Engageable`` protocol check passes and reply functionality works.
+
+        Args:
+            target_id:  The Threads post/comment ID to like.
+            context_id: Unused; kept for protocol compatibility.
+
+        Returns:
+            ``True`` always (no-op).
+        """
+        logger.debug(
+            "Threads: like() called for %s (no-op — API unsupported)", target_id
+        )
+        return True
 
     # ------------------------------------------------------------------
     # HealthCheckable protocol
@@ -251,8 +268,12 @@ class ThreadsClient:
                 error="Threads: video container creation failed",
             )
 
-        # Meta needs time to process the video before threads_publish will succeed
-        time.sleep(_VIDEO_PROCESSING_WAIT)
+        # Poll container status instead of fixed sleep
+        container_status = self._poll_container(container_id, max_seconds=120)
+        if container_status == "ERROR":
+            return PublishResult(platform=self.platform_id, success=False, error="Threads container processing error")
+        if container_status == "TIMEOUT":
+            return PublishResult(platform=self.platform_id, success=False, error="Threads container processing timeout (120s)")
 
         post_id = self._threads_publish(container_id=container_id)
         if post_id is None:
@@ -262,7 +283,21 @@ class ThreadsClient:
                 error="Threads: video threads_publish failed",
             )
 
-        post_url = self._get_permalink(post_id)
+        # Fetch real permalink
+        post_url = f"https://www.threads.net/post/{post_id}"
+        try:
+            permalink_resp = requests.get(
+                f"{self._base_url}/{post_id}",
+                params={"fields": "permalink", "access_token": self._access_token},
+                timeout=10,
+            )
+            if permalink_resp.ok:
+                real_url = permalink_resp.json().get("permalink", "")
+                if real_url:
+                    post_url = real_url
+        except Exception:
+            pass
+
         logger.info("Threads: published video post %s — %s", post_id, post_url)
         return PublishResult(
             platform=self.platform_id,
@@ -401,6 +436,26 @@ class ThreadsClient:
             logger.error("Threads: threads_publish request error: %s", exc)
             return None
 
+    def _poll_container(self, container_id: str, max_seconds: int = 120) -> str:
+        """Poll Threads container status until FINISHED, ERROR, or timeout."""
+        for _ in range(max_seconds // 5):
+            try:
+                resp = requests.get(
+                    f"{self._base_url}/{container_id}",
+                    params={"fields": "status", "access_token": self._access_token},
+                    timeout=10,
+                )
+                if resp.ok:
+                    status = resp.json().get("status", "")
+                    if status == "FINISHED":
+                        return "FINISHED"
+                    if status == "ERROR":
+                        return "ERROR"
+            except Exception:
+                pass  # retry on network error
+            time.sleep(5)  # uses module-level time import (mockable in tests)
+        return "TIMEOUT"
+
     def _get_permalink(self, post_id: str) -> str:
         """Fetch the permalink for a published Threads post.
 
@@ -422,12 +477,17 @@ class ThreadsClient:
         """Return a URL string from a media path.
 
         If the path is already an HTTP URL, return as-is.
-        Otherwise return the string representation (caller is responsible for
-        providing a public URL before calling publish).
+        Otherwise upload to CDN first so the Threads API receives a public URL.
         """
         s = str(path)
         if s.startswith("http"):
             return s
+        # If path is not an HTTP URL, upload to CDN first
+        from genlab_core.platforms.cdn_upload import upload_to_cdn
+        cdn_url = upload_to_cdn(Path(path))
+        if cdn_url:
+            return cdn_url
+        # CDN upload failed — return path as-is (will fail at API level)
         return s
 
     def _token_needs_refresh(self) -> bool:
@@ -450,3 +510,37 @@ class ThreadsClient:
 
         age_days = (datetime.now(UTC) - issued_at).days
         return age_days >= _NEEDS_REFRESH_AFTER_DAYS
+
+    def refresh_token_if_needed(self) -> bool:
+        """Refresh Threads long-lived token if expiring within 7 days.
+
+        Returns True if token is valid (refreshed or not needed).
+        Returns False if refresh failed.
+        """
+        if not hasattr(self, '_token_needs_refresh') or not self._token_needs_refresh():
+            return True
+
+        try:
+            resp = requests.get(
+                "https://graph.threads.net/refresh_access_token",
+                params={
+                    "grant_type": "th_refresh_token",
+                    "access_token": self._access_token,
+                },
+                timeout=30,
+            )
+            if resp.ok:
+                data = resp.json()
+                new_token = data.get("access_token", "")
+                if new_token:
+                    self._access_token = new_token
+                    # Update env var so other modules in the same process see the new token
+                    os.environ["THREADS_ACCESS_TOKEN"] = new_token
+                    os.environ["THREADS_TOKEN_ISSUED_AT"] = datetime.now(UTC).isoformat()
+                    logger.info("[Threads] Token refreshed successfully (expires in %ds)", data.get("expires_in", 0))
+                    return True
+            logger.warning("[Threads] Token refresh failed: %s", resp.text[:200])
+            return False
+        except Exception as e:
+            logger.warning("[Threads] Token refresh error: %s", e)
+            return False

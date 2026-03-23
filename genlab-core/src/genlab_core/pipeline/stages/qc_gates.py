@@ -39,6 +39,31 @@ class QCGates:
             return context
 
         config = context.get("niche_config", {})
+
+        # Pre-validation: 3-pass dedup to remove near-duplicate stories
+        dedup_cfg = config.get("dedup", {})
+        if dedup_cfg.get("enabled", True) and len(blueprints) > 1:
+            try:
+                from genlab_core.intelligence.dedup_engine import DedupEngine
+                engine = DedupEngine(
+                    jaccard_threshold=dedup_cfg.get("jaccard_threshold", 0.85),
+                    tfidf_threshold=dedup_cfg.get("tfidf_threshold", 0.80),
+                    url_field="source_url",
+                    text_field="title",
+                )
+                result = engine.run(blueprints)
+                if result.pass1_removed + result.pass2_removed + result.pass3_removed > 0:
+                    logger.info(
+                        "[QCGates] Dedup: removed %d/%d stories (url=%d, jaccard=%d, tfidf=%d)",
+                        len(blueprints) - len(result.unique),
+                        len(blueprints),
+                        result.pass1_removed, result.pass2_removed, result.pass3_removed,
+                    )
+                    blueprints = result.unique
+                    context["stories"] = blueprints
+            except Exception as exc:
+                logger.debug("[QCGates] Dedup skipped: %s", exc)
+
         templates_cfg = config.get("templates", {})
         max_slides = templates_cfg.get("max_slides", self.DEFAULT_MAX_SLIDES)
         max_words = templates_cfg.get("max_words", self.DEFAULT_MAX_WORDS)
