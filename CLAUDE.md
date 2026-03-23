@@ -197,7 +197,13 @@ Other channels: try hard to find a clip; only skip if truly none exists.
 - FB tokens are permanent EAA Page Tokens (expires_at=0) via Aspire Publisher app
 - **Never run env consolidation AFTER token provisioning** — stale values overwrite fresh ones
 
-## PIPELINE SCHEDULE (Sprint 62)
+## PIPELINE SCHEDULE (Sprint 62, timezone fix Sprint 68)
+
+**CRITICAL: launchd `StartCalendarInterval` uses LOCAL TIME (IST), NOT UTC.**
+All plist Hour/Minute values must be in IST. After any plist change, run:
+```bash
+bash scripts/verify_launchd_schedules.sh
+```
 
 | Channel | IST | UTC | Plist |
 |---------|-----|-----|-------|
@@ -206,8 +212,32 @@ Other channels: try hard to find a clip; only skip if truly none exists.
 | FD (anime) | 11:30 | 06:00 | com.genlab.framedrift |
 | SR (movies) | 13:30 | 08:00 | com.genlab.splicereel |
 | CW (sports) | 15:30 | 10:00 | com.genlab.clutchwire |
+| Publisher | 12:05 | 06:35 | com.genlab.publisher |
+| Insights | 12:15+18:00 | 06:45+12:30 | com.genlab.insights-collector |
 
 Publish window: 06:30 UTC (12:00 IST) — PushToBacklog schedules at this time.
+Publisher runs at 12:05 IST (5 min buffer after posts become due).
+
+### Additional LaunchAgents (23 total)
+
+| Service | Plist | Purpose |
+|---------|-------|---------|
+| Review server | com.genlab.review-server | Dashboard (KeepAlive) |
+| Review tunnel | com.genlab.review-tunnel | Cloudflare tunnel for dashboard |
+| Engagement poller | com.genlab.engagement-poller | YouTube/Twitter/Threads comment polling |
+| Engagement webhook | com.genlab.engagement.webhook | Meta webhook receiver |
+| Engagement worker | com.genlab.engagement.worker | Dramatiq reply workers |
+| Metric collector | com.genlab.metric-collector | Post-publish metric collection |
+| Feedback collector | com.genlab.feedback-collector | Learning loop feedback |
+| Cleanup | com.genlab.cleanup | Log/artifact rotation |
+| DB maintenance | com.genlab.db-maintenance | VACUUM ANALYZE |
+| Quota monitor | com.genlab.quota-monitor | YouTube API quota tracking |
+| Token refresh | com.genlab.token-refresh | Threads/Meta token refresh |
+| Affiliate link check | com.genlab.affiliate-link-check | Affiliate URL health monitor |
+| Daily verify | com.genlab.daily-verify | Post-pipeline verification |
+| Morning briefing | com.genlab.morning-briefing | Daily status summary |
+| Spike detector | com.genlab.spike-detector | Engagement spike alerts |
+| Viral detector | com.genlab.viral-detector | Viral content detection |
 
 ## DEDUP ARCHITECTURE (Sprint 62)
 
@@ -265,8 +295,10 @@ Hybrid auto-reply system:
 - **review** (conf ≥0.5, tox <0.3) → queue for dashboard approval
 - **discard** (low conf or high tox) → log and drop
 
-5 platform reply clients in `engagement/platform_clients/`.
-Pollers: YouTube (30min), Twitter (15min), Threads (10min), Facebook, Instagram (webhook).
+Reply functionality lives in platform clients (`platforms/instagram.py:post_reply`,
+`platforms/youtube.py:post_reply`, etc.) — not in separate engagement clients.
+Pollers: YouTube (30min), Twitter (15min), Threads (10min) via `run_engagement_poller.py`.
+Facebook + Instagram: handled via Meta webhooks (`webhook_receiver.py`).
 All 5 niches covered. Detoxify toxicity gate, Dramatiq priority queues, lognormal jitter.
 
 YouTube poll interval is 30 minutes (not 5) to conserve 10K daily API quota.
@@ -372,11 +404,11 @@ Every decision should consider multi-tenancy:
 
 | Channel | niche_id | Accent Color | Logo |
 |---|---|---|---|
-| Blackbox Brief | ai_creators | #00D4FF | BlackboxBrief/assets/logo.png |
-| CriticalRush | gaming | #f97316 | CriticalRush/assets/logo.png |
-| ClutchWire | sports | #FF2040 | ClutchWire/assets/logo.png |
-| SpliceReel | movies | #C9A84C | SpliceReel/assets/logo.png |
-| FrameDrift | anime | #7B3FE4 | FrameDrift/assets/logo.png |
+| Blackbox Brief | ai_creators | #00D4FF | BlackboxBrief/assets/logos/blackbox_brief.png |
+| CriticalRush | gaming | #f97316 | CriticalRush/niches/gaming/assets/criticalrush_logo.png |
+| ClutchWire | sports | #FF2040 | ClutchWire/assets/logos/ClutchWire-Logo.png |
+| SpliceReel | movies | #C9A84C | SpliceReel/assets/logos/SpliceReel-Logo.png |
+| FrameDrift | anime | #7B3FE4 | FrameDrift/assets/logos/FrameDrift-Logo.png |
 
 FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in Sprint 47).
 
@@ -393,14 +425,24 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 ---
 
-## CURRENT SPRINT STATUS (as of 2026-03-20)
+## CURRENT SPRINT STATUS (as of 2026-03-21)
 
-Completed: Sprints 1–66
+Completed: Sprints 1–67
 - Sprint 62: Dashboard overhaul, FrameCompositor video layout, schedule board
 - Sprint 63: Audit remediation, engagement reply clients, credential prefixes, SaaS tools
 - Sprint 64: Architecture refactor — base strategies, unified pipeline CLI, BB client migration
 - Sprint 65: Upgrade sweep — psycopg3, dep cleanup, CI, plist consolidation, BB extraction
 - Sprint 66: Comprehensive system remediation — 47 issues across all subsystems
+- Sprint 67: Affiliate monetization engine + pipeline debugging + BB v5.0 migration
+
+Sprint 67 highlights (affiliate monetization + pipeline fix):
+- **Affiliate monetization engine**: 16/16 v2 features built (50 products, 4 networks, 2 markets, geo-routing, CTA A/B bandit, seasonal rotation, revenue attribution, deep linking, email capture, retargeting pixels, link health monitoring, coupon display, revenue prediction, network registry, PA-API client stub, commission sync)
+- **JSONB null clobbering fix**: `_row_to_record()` was overwriting promoted column values with null from extra JSONB → gatekeeper blocked all approved blueprints → zero publishing
+- **yt-dlp fix**: Updated yt-dlp + switched from broken deno to node.js runtime for YouTube challenge solving → video downloads restored for all channels
+- **BB daily_intel.sh v4→v5 migration**: 600-line broken shell script (11 archived file references) → 60-line unified pipeline wrapper
+- **Env var fixes**: Added GENLAB_USE_POSTGRES + DATABASE_URL to all channel .env files
+- **147 new tests, 11 new Python modules in genlab_core/monetization/**
+- **23 posts published, 41 blueprints queued for coming days**
 
 Sprint 66 highlights (system-wide fix sprint):
 - **Table name mapping fix**: `PendingFeedback→pending_feedback`, `BanditArms→bandit_arms`,

@@ -336,21 +336,3 @@ class PerformanceLearner:
                     "[PerformanceLearner] Failed to update arm %s", arm_id,
                 )
 
-    @staticmethod
-    def _write_arms(proxy, arms: dict[str, tuple]) -> None:
-        """Write updated arm posteriors back to SharePoint.
-
-        Legacy method kept for backward compatibility. Prefer
-        _write_arms_extended for new code.
-        """
-        for arm_id, (alpha, beta) in arms.items():
-            try:
-                proxy.update(
-                    filter_key="Title",
-                    filter_value=arm_id,
-                    fields={"Alpha": alpha, "Beta": beta},
-                )
-            except Exception as exc:
-                logger.exception(
-                    "[PerformanceLearner] Failed to update arm %s", arm_id,
-                )
