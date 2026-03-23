@@ -128,8 +128,7 @@ def write_video_content(
 
     Returns:
         Dict with: hook, instagram_caption, twitter_content,
-                   youtube_content, facebook_content, tiktok_content,
-                   threads_content
+                   youtube_content, facebook_content, threads_content
     """
     voice = NICHE_VOICE.get(niche_id, NICHE_VOICE["gaming"])
     existing_hooks_text = "\n".join(f"  - {h}" for h in (existing_hooks or [])[-5:])

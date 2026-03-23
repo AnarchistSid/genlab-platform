@@ -62,7 +62,7 @@ class FetchInsights:
         try:
             formula = f"AND({{niche_id}}='{niche_id}')"
             records = client.publishing_analytics.all(formula=formula)
-        except Exception:
+        except Exception as exc:
             logger.exception("[FetchInsights] Failed to query Publishing_Analytics")
             context.setdefault("run_stats", {})["insights"] = {
                 "fetched": 0, "skipped": 0, "errors": 1, "platforms": {},
@@ -124,7 +124,7 @@ class FetchInsights:
                             niche_id=niche_id,
                             fetch_window="pipeline",
                         )
-                    except Exception:
+                    except Exception as exc:
                         logger.warning(
                             "[FetchInsights] Analytics upsert failed for %s",
                             post_id,
@@ -135,7 +135,7 @@ class FetchInsights:
                             record["id"],
                             {"metrics_fetched": now.isoformat()},
                         )
-                    except Exception:
+                    except Exception as exc:
                         logger.warning(
                             "[FetchInsights] Failed to mark %s as fetched",
                             post_id,
@@ -144,7 +144,7 @@ class FetchInsights:
                     fetched += 1
                 else:
                     skipped += 1
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[FetchInsights] %s fetch failed for post %s",
                     platform, post_id,
@@ -247,7 +247,7 @@ class FetchInsights:
                 "saved": insights.get("saved", 0),
                 "shares": insights.get("shares", 0),
             }
-        except Exception:
+        except Exception as exc:
             logger.exception("[FetchInsights] IG fetch error for %s", post_id)
             return None
 
@@ -278,7 +278,7 @@ class FetchInsights:
                 "likes": int(stats.get("likeCount", 0)),
                 "comments": int(stats.get("commentCount", 0)),
             }
-        except Exception:
+        except Exception as exc:
             logger.exception("[FetchInsights] YT fetch error for %s", post_id)
             return None
 
@@ -307,7 +307,7 @@ class FetchInsights:
                 "reactions": data.get("reactions", {}).get("summary", {}).get("total_count", 0),
                 "comments": data.get("comments", {}).get("summary", {}).get("total_count", 0),
             }
-        except Exception:
+        except Exception as exc:
             logger.exception("[FetchInsights] FB fetch error for %s", post_id)
             return None
 
@@ -333,6 +333,6 @@ class FetchInsights:
                 "replies": metrics.get("reply_count", 0),
                 "impressions": metrics.get("impression_count", 0),
             }
-        except Exception:
+        except Exception as exc:
             logger.exception("[FetchInsights] X fetch error for %s", post_id)
             return None
