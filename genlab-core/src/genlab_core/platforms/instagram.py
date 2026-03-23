@@ -149,8 +149,8 @@ class InstagramClient:
                 error=self._last_error or "Instagram Reel publish failed — unknown error",
             )
 
-        # Fetch the real permalink (numeric Graph ID doesn't work as URL)
-        real_url = f"https://www.instagram.com/p/{post_id}/"
+        # Fetch the real permalink (numeric Graph IDs don't resolve as /p/ URLs)
+        real_url = f"https://www.instagram.com/reel/{post_id}/"
         try:
             permalink_resp = self._graph_get(f"/{post_id}", params={"fields": "permalink"})
             if permalink_resp and "permalink" in permalink_resp:

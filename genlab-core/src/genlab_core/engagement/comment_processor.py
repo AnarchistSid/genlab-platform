@@ -96,6 +96,9 @@ RATE_CAPS: dict[str, int] = {
 
 _rate_limiter = EngagementRateLimiter(RATE_CAPS)
 
+# Module-level singleton — avoids re-loading the Detoxify model on every call
+_toxicity_gate = ToxicityGate()
+
 
 _backlog_client_singleton = None
 
@@ -123,19 +126,66 @@ def _replied_set_path() -> Path:
 
 
 def _load_replied_set() -> set:
-    """Load all replied (comment_id, platform) pairs from the JSONL file.
+    """Load replied (comment_id, platform) pairs from the JSONL file.
 
-    Returns a set of JSON strings for O(1) membership checks.
-    Called once at the start of a batch to avoid re-scanning per comment.
+    Returns a set of ``json.dumps({"c": ..., "p": ...})`` strings for O(1)
+    membership checks. Only loads records from the last 30 days to prevent
+    unbounded growth. Triggers rotation when file exceeds 50K lines.
     """
+    from datetime import UTC, datetime as _dt, timedelta
+
     path = _replied_set_path()
     if not path.exists():
         return set()
     try:
+        result: set[str] = set()
+        cutoff = (_dt.now(UTC) - timedelta(days=30)).isoformat()
+        total_lines = 0
         with open(path) as f:
-            return {line.strip() for line in f if line.strip()}
+            for line in f:
+                total_lines += 1
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                    # Skip records older than 30 days
+                    ts = rec.get("ts", "")
+                    if ts and ts < cutoff:
+                        continue
+                    result.add(json.dumps({"c": rec["c"], "p": rec["p"]}))
+                except (json.JSONDecodeError, KeyError):
+                    result.add(line)
+
+        # Rotate file if it exceeds 50K lines
+        if total_lines > 50_000:
+            _rotate_replied_file(path, cutoff)
+
+        return result
     except OSError:
         return set()
+
+
+def _rotate_replied_file(path: Path, cutoff_iso: str) -> None:
+    """Rewrite the replied JSONL file keeping only records newer than cutoff."""
+    try:
+        kept: list[str] = []
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                    if rec.get("ts", "") >= cutoff_iso:
+                        kept.append(line)
+                except (json.JSONDecodeError, KeyError):
+                    pass
+        with open(path, "w") as f:
+            f.write("\n".join(kept) + "\n" if kept else "")
+        logger.info("[Engagement] Rotated replied file: kept %d records", len(kept))
+    except OSError as e:
+        logger.warning("[Engagement] Replied file rotation failed: %s", e)
 
 
 # Module-level cache — populated once per batch via _ensure_replied_set_loaded()
@@ -168,12 +218,17 @@ def _has_replied(comment_id: str, platform: str) -> bool:
 
 def _mark_replied(comment_id: str, platform: str) -> None:
     """Append an idempotency record. Uses file-level locking for safety."""
+    from datetime import UTC, datetime as _dt
+
     path = _replied_set_path()
-    record_str = json.dumps({"c": comment_id, "p": platform})
+    # Cache key uses only (c, p) for O(1) lookup compatibility with _has_replied
+    cache_key = json.dumps({"c": comment_id, "p": platform})
+    # File record includes ISO timestamp so the dashboard can filter by date
+    record_str = json.dumps({"c": comment_id, "p": platform, "ts": _dt.now(UTC).isoformat()})
     record = record_str + "\n"
     # Update in-memory cache so subsequent checks within the same batch see it
     cache = _ensure_replied_set_loaded()
-    cache.add(record_str)
+    cache.add(cache_key)
     try:
         with open(path, "a") as f:
             fcntl.flock(f, fcntl.LOCK_EX)
@@ -211,6 +266,63 @@ def _load_persona(niche_id: str) -> NichePersona:
         f"No persona.yaml found for niche '{niche_id}'. "
         f"Searched: {[str(p) for p in candidate_paths]}"
     )
+
+
+def _queue_for_review(
+    *,
+    comment_id: str,
+    platform: str,
+    niche_id: str,
+    comment_text: str,
+    reply_text: str,
+    author: str = "unknown",
+    confidence: float = 0.0,
+    tox_score: float = 0.0,
+) -> None:
+    """Write a pending reply to the dashboard's pending_replies.json file.
+
+    Uses the same format as the dashboard's engagement API so the review
+    UI can display and approve/reject these entries.
+    """
+    import uuid
+    from datetime import UTC, datetime
+
+    pending_file = _get_agent_root() / ".tmp" / "pending_replies.json"
+    pending_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing entries
+    entries: list[dict] = []
+    if pending_file.is_file():
+        try:
+            with open(pending_file) as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                entries = data
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Engagement: could not load pending_replies.json: %s", exc)
+
+    # Append new entry in the dashboard's expected format
+    entry = {
+        "id": str(uuid.uuid4()),
+        "comment_id": comment_id,
+        "platform": platform,
+        "niche_id": niche_id,
+        "comment_text": comment_text,
+        "reply_text": reply_text,
+        "author": author,
+        "status": "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+        "reviewed_at": None,
+        "confidence": round(confidence, 3),
+        "tox_score": round(tox_score, 3),
+    }
+    entries.append(entry)
+
+    try:
+        with open(pending_file, "w") as f:
+            json.dump(entries, f, indent=2)
+    except OSError as exc:
+        logger.error("Engagement: could not write pending_replies.json: %s", exc)
 
 
 def process_reply_event(event: dict) -> None:
@@ -268,8 +380,7 @@ def process_reply_event(event: dict) -> None:
         return
 
     # 3. Inbound toxicity gate
-    toxicity = ToxicityGate()
-    result = toxicity.check_inbound(comment_text)
+    result = _toxicity_gate.check_inbound(comment_text)
     if result.is_toxic:
         logger.info(
             "Engagement: skipping toxic comment %s (%s=%.2f)",
@@ -288,7 +399,7 @@ def process_reply_event(event: dict) -> None:
 
     # 5. Generate reply
     persona = _load_persona(niche_id)
-    engine = PersonaEngine(persona=persona, toxicity_gate=toxicity)
+    engine = PersonaEngine(persona=persona, toxicity_gate=_toxicity_gate)
     reply = engine.generate_reply(
         comment=comment_text,
         platform=platform,
@@ -300,6 +411,48 @@ def process_reply_event(event: dict) -> None:
             bl.update_engagement_status(sp_item_id, "failed", error_msg="Reply generation failed")
         return
 
+    # 5b. Confidence heuristic (PersonaEngine doesn't return a score)
+    is_question = bool(re.search(r"\?", comment_text))
+    tox_score = result.max_score  # from step 3 inbound toxicity check
+    confidence = 0.9  # base high confidence
+    if len(comment_text) > 200:
+        confidence -= 0.2  # long comments need more care
+    if is_question:
+        confidence -= 0.15  # questions need careful answers
+    if tox_score > 0.1:
+        confidence -= 0.2  # borderline toxicity
+    confidence = max(0.0, min(1.0, confidence))
+
+    # 5c. Route: auto / review / discard
+    action = classify_reply_action(reply_text=reply, confidence=confidence, toxicity=tox_score)
+    logger.info(
+        "Engagement: classify %s → %s (confidence=%.2f, tox=%.2f, len=%d, question=%s)",
+        comment_id, action, confidence, tox_score, len(comment_text), is_question,
+    )
+
+    if action == "discard":
+        logger.info("Engagement: discarding reply for %s (low confidence or borderline toxicity)", comment_id)
+        if bl and sp_item_id:
+            bl.update_engagement_status(sp_item_id, "skipped")
+        return
+
+    if action == "review":
+        _queue_for_review(
+            comment_id=comment_id,
+            platform=platform,
+            niche_id=niche_id,
+            comment_text=comment_text,
+            reply_text=reply,
+            author=event.get("author_name", "unknown"),
+            confidence=confidence,
+            tox_score=tox_score,
+        )
+        logger.info("Engagement: queued reply for %s to human review", comment_id)
+        if bl and sp_item_id:
+            bl.update_engagement_status(sp_item_id, "pending_review", reply_text=reply)
+        return
+
+    # action == "auto" — post immediately
     # 6. Human-like timing delay
     delay = human_delay()
     logger.debug("Engagement: sleeping %.1fs before posting reply", delay)

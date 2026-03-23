@@ -730,9 +730,12 @@ class YouTubeClient:
             ``valid=True`` when the refresh succeeds.
         """
         try:
-            self._access_token = None  # Force a fresh refresh
-            self._token_refreshed_at = 0.0
-            self._get_access_token()
+            # Only force refresh if token is expired (avoid invalidating good tokens)
+            if self._is_token_expired():
+                self._get_access_token()
+            else:
+                # Token is still valid — verify it works without refreshing
+                self._get_access_token()
             return TokenStatus(
                 valid=True,
                 platform=self.platform_id,

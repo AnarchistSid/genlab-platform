@@ -146,8 +146,6 @@ def write_video_content(
         "- twitter_content: ≤280 chars. Punchy, conversational. NO external links.\n"
         "- youtube_content: Question format, ≤40 characters total.\n"
         "- facebook_content: 200-300 chars. Ask an engaging question.\n"
-        "- tiktok_content: ≤2200 chars. Hook MUST be in the first line. Sound-on assumed,\n"
-        "  emotionally punchy, direct reaction style. Include 3-5 hashtags inline.\n"
         "- threads_content: 150-300 chars. Text-first, conversational, opinion-forward.\n"
         "  No hashtags needed. Write like a hot take in a group chat.\n\n"
         + (
@@ -167,7 +165,7 @@ def write_video_content(
         f"Tags: {', '.join(video.get('tags', [])[:8])}\n"
         f"Description: {video.get('description_snippet', '')}\n\n"
         "Write content for this specific video. Return JSON with keys:\n"
-        "hook, instagram_caption, twitter_content, youtube_content, facebook_content, tiktok_content, threads_content"
+        "hook, instagram_caption, twitter_content, youtube_content, facebook_content, threads_content"
     )
 
     try:
@@ -256,12 +254,6 @@ def write_video_content(
             fb = fb[:297].rsplit(" ", 1)[0] + "..."
             content["facebook_content"] = fb
 
-        # ── Enforce TikTok ≤2200 chars ─────────────────────
-        tk = content.get("tiktok_content", "")
-        if tk and len(tk) > 2200:
-            tk = tk[:2197].rsplit(" ", 1)[0] + "..."
-            content["tiktok_content"] = tk
-
         # ── Enforce Threads 150-300 chars ──────────────────
         th = content.get("threads_content", "")
         if th and len(th) > 300:
@@ -278,8 +270,6 @@ def write_video_content(
             content["youtube_content"] = (title[:37] + "?") if len(title) > 37 else title
         if not content.get("facebook_content"):
             content["facebook_content"] = f"{title[:200]} What do you think?"
-        if not content.get("tiktok_content"):
-            content["tiktok_content"] = content.get("instagram_caption", title[:2200])
         if not content.get("threads_content"):
             content["threads_content"] = (title[:297] + "...") if len(title) > 300 else title
 
@@ -298,6 +288,5 @@ def write_video_content(
             "twitter_content": title[:280],
             "youtube_content": title[:40],
             "facebook_content": f"{title} — what do you think?",
-            "tiktok_content": f"{title}\n\n{' '.join(voice['hashtags'][:3])}",
             "threads_content": title[:300],
         }

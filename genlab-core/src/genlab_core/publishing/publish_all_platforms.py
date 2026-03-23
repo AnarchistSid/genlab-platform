@@ -62,7 +62,7 @@ EXIT_DAILY_CAP = 3
 EXIT_LOCK_HELD = 4
 
 _VALID_NICHE_IDS = frozenset({
-    "ai_creators", "ai_tech", "gaming", "sports", "movies", "anime",
+    "ai_creators", "gaming", "sports", "movies", "anime",
 })
 
 # Maps legacy platform names to registry IDs
