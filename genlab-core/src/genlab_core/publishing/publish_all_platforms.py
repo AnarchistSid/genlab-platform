@@ -27,6 +27,7 @@ import logging
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +43,7 @@ from genlab_core.platforms.models import (
 )
 from genlab_core.platforms.registry import get_client
 from genlab_core.publishing.analytics_recorder import record_publish
+from genlab_core.publishing.error_classifier import classify, should_retry, retry_delay_seconds
 from genlab_core.publishing.niche_credentials import (
     resolve_fb_credentials,
     resolve_meta_credentials,
@@ -73,7 +75,7 @@ def _to_registry_id(platform: str) -> str:
 
 def _normalize_niche(niche_id: str) -> str:
     niche_id = niche_id.strip()
-    if niche_id == "ai_tech":
+    if niche_id in ("ai_tech", "ai_news"):
         return "ai_creators"
     return niche_id
 
@@ -160,6 +162,12 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         vp_list = []
     media_paths = [Path(p) for p in vp_list if p]
 
+    # Verify media files exist on disk before attempting publish
+    missing = [p for p in media_paths if not p.exists()]
+    if missing:
+        logger.warning("[publish] Missing media files: %s", [str(m) for m in missing])
+        media_paths = [p for p in media_paths if p.exists()]
+
     # Media type
     fmt = (fields.get("format", "") or "").strip().lower()
     has_mp4 = any(str(p).lower().endswith(".mp4") for p in media_paths)
@@ -172,10 +180,10 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     caption = (fields.get("caption", "") or "").strip()
     hashtags_raw = fields.get("hashtags", "") or ""
     if isinstance(hashtags_raw, list):
-        hashtags = [str(h).strip().lstrip("#") for h in hashtags_raw if h]
+        hashtags = [t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in (str(h) for h in hashtags_raw if h) if t.strip()]
     else:
         hashtags = [
-            t.strip().lstrip("#") for t in str(hashtags_raw).split() if t.strip()
+            t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in str(hashtags_raw).split() if t.strip()
         ]
     hook = (fields.get("hook", "") or fields.get("hook_text", "") or "").strip()
 
@@ -224,9 +232,11 @@ def _build_platform_specific(
         routing = str(
             tw_content.get("routing", tw_content.get("strategy", "single"))
         ).strip().lower()
+        tweet_text = str(tw_content.get("tweet_text", "") or caption).strip()
+        tweet_text = tweet_text[:280]
         return TwitterSpecific(
             routing=routing if routing in ("single", "thread") else "single",
-            tweet_text=str(tw_content.get("tweet_text", "") or caption).strip(),
+            tweet_text=tweet_text,
             thread_tweets=tw_content.get("thread_tweets", []),
         )
 
@@ -326,6 +336,50 @@ def run_publish(
     """
     niche_id = _validate_niche(niche_id)
     logger.info("[publish] niche=%s platforms=%s", niche_id, enabled_platforms)
+
+    # Recover blueprints stuck in PUBLISHING status (crash recovery)
+    try:
+        stuck = backlog_client.get_blueprints_by_status("PUBLISHING", niche_id=niche_id)
+        for bp in stuck:
+            fields = bp.get("fields", bp)
+            updated_at = fields.get("updated_at", "")
+            # If stuck for >30 minutes, reset to VISUAL_READY
+            if updated_at:
+
+                try:
+                    dt = datetime.fromisoformat(updated_at)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=UTC)
+                    if datetime.now(UTC) - dt > timedelta(minutes=30):
+                        backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
+                        logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s (>30min)", bp["id"][:8])
+                except (ValueError, TypeError):
+                    pass
+    except Exception as e:
+        logger.debug("[publish] PUBLISHING recovery check failed: %s", e)
+
+    # Auto-recover PUBLISH_FAILED blueprints after 24h cooldown
+    try:
+        from datetime import datetime, UTC, timedelta
+        failed = backlog_client.get_blueprints_by_status("PUBLISH_FAILED", niche_id=niche_id)
+        for bp in failed:
+            fields = bp.get("fields", bp)
+            updated_at = fields.get("updated_at", "")
+            if updated_at:
+                try:
+                    dt = datetime.fromisoformat(updated_at)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=UTC)
+                    if datetime.now(UTC) - dt > timedelta(hours=24):
+                        backlog_client.blueprints.update(bp["id"], {
+                            "status": "VISUAL_READY",
+                            "publish_attempts": "0",
+                        })
+                        logger.info("[publish] Auto-recovered PUBLISH_FAILED blueprint %s after 24h cooldown", bp["id"][:8])
+                except (ValueError, TypeError):
+                    pass
+    except Exception as e:
+        logger.debug("[publish] PUBLISH_FAILED recovery check failed: %s", e)
 
     # 1. Query VISUAL_READY blueprints for this niche
     all_blueprints = backlog_client.get_blueprints_by_status(
@@ -431,6 +485,7 @@ def run_publish(
         for future in futures:
             platform, result = future.result()
             registry_id = _to_registry_id(platform)
+            error_class = ""
             if result.success:
                 any_success = True
                 platform_status[platform] = "PUBLISHED"
@@ -441,15 +496,33 @@ def run_publish(
                     platform, result.post_id, result.post_url,
                 )
             else:
-                platform_status[platform] = "FAILED"
+                error_class = classify(result.error, platform)
+                attempt_data = platform_status.get(platform, {})
+                if isinstance(attempt_data, dict):
+                    prev_attempts = attempt_data.get("attempts", 0)
+                else:
+                    prev_attempts = 0
+                platform_status[platform] = {
+                    "status": "FAILED",
+                    "attempts": prev_attempts + 1,
+                    "last_error": result.error[:200],
+                    "error_class": error_class,
+                }
                 logger.error("[publish] %s: FAILED error=%s", platform, result.error)
 
             # Record to Publishing_Analytics
+            # Use SKIPPED for credential failures (not retryable, not a real failure)
+            if result.success:
+                analytics_status = "SUCCESS"
+            elif error_class == "CREDENTIAL":
+                analytics_status = "SKIPPED"
+            else:
+                analytics_status = "FAILED"
             record_publish(
                 client=backlog_client,
                 niche_id=niche_id,
                 platform=platform,
-                status="SUCCESS" if result.success else "FAILED",
+                status=analytics_status,
                 post_url=result.post_url,
                 blueprint_id=record_id,
                 candidate_id=candidate_id,
@@ -457,19 +530,170 @@ def run_publish(
             )
 
     # 7. Update blueprint final status
-    final_status = "PUBLISHED" if any_success else "VISUAL_READY"
+    # Track publish attempts
+    attempt_count = int(fields.get("publish_attempts", 0) or 0) + 1
+    if not any_success and attempt_count >= 3:
+        final_status = "PUBLISH_FAILED"
+        logger.error("[publish] Blueprint %s failed %d times — marking PUBLISH_FAILED", record_id, attempt_count)
+    elif any_success:
+        final_status = "PUBLISHED"
+    else:
+        final_status = "VISUAL_READY"
     try:
         backlog_client.blueprints.update(
             record_id,
             {
                 "status": final_status,
                 "platform_publish_status": json.dumps(platform_status),
+                "publish_attempts": attempt_count,
             },
             typecast=True,
         )
         logger.info("[publish] Blueprint %s -> %s (%s)", record_id[:16], final_status, platform_status)
     except Exception as exc:
         logger.error("[publish] Failed to update final status: %s", exc)
+
+    # 8. Register PendingFeedback for the learning loop (bandit updates)
+    if any_success:
+        try:
+            from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
+            from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
+
+            fb_store = PendingFeedbackStore(backlog_client)
+            for plat, pstatus in platform_status.items():
+                if pstatus == "PUBLISHED" or (isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"):
+                    # Find the post_id from the publish results
+                    post_id_for_plat = ""
+                    for future in futures:
+                        try:
+                            fp, fr = future.result()
+                            if fp == plat and fr.success:
+                                post_id_for_plat = fr.post_id or ""
+                                break
+                        except Exception:
+                            pass
+
+                    task = PendingFeedbackTask(
+                        content_id=candidate_id or record_id[:16],
+                        platform=plat,
+                        niche_id=niche_id,
+                        published_at=datetime.now(UTC),
+                        platform_post_id=post_id_for_plat,
+                        content_type="video",
+                        hook_text=fields.get("hook", "")[:100],
+                        hook_length=len(fields.get("hook", "")),
+                        bandit_arm=fields.get("arm_id", ""),
+                    )
+                    fb_store.create(task)
+        except Exception as e:
+            logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
+
+    # ── Retry pass: check PUBLISHED blueprints for failed platforms ──
+    try:
+        from datetime import datetime, UTC, timedelta
+        published_bps = backlog_client.get_blueprints_by_status("PUBLISHED", niche_id=niche_id)
+        for bp in published_bps:
+            fields = bp.get("fields", bp)
+            pps_raw = fields.get("platform_publish_status", "{}")
+            if isinstance(pps_raw, str):
+                try:
+                    pps = json.loads(pps_raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            else:
+                pps = pps_raw or {}
+
+            # Find platforms that failed and are eligible for retry
+            retry_platforms = []
+            for plat, status_data in pps.items():
+                if isinstance(status_data, dict) and status_data.get("status") == "FAILED":
+                    error_class = status_data.get("error_class", "TRANSIENT")
+                    attempts = status_data.get("attempts", 0)
+                    if not should_retry(error_class) or attempts >= 3:
+                        continue
+                    # Check backoff timing
+                    next_retry = status_data.get("next_retry_after", "")
+                    if next_retry:
+                        try:
+                            retry_dt = datetime.fromisoformat(next_retry)
+                            if retry_dt.tzinfo is None:
+                                retry_dt = retry_dt.replace(tzinfo=UTC)
+                            if retry_dt > datetime.now(UTC):
+                                continue  # Not yet time to retry
+                        except (ValueError, TypeError):
+                            pass
+                    retry_platforms.append(plat)
+
+            if not retry_platforms:
+                continue
+
+            # Skip retry if media files are gone (cleaned up)
+            vp_raw = fields.get("visual_paths", "[]")
+            try:
+                vp_list = json.loads(vp_raw) if isinstance(vp_raw, str) else (vp_raw or [])
+            except (json.JSONDecodeError, TypeError):
+                vp_list = []
+            if vp_list and not any(Path(p).exists() for p in vp_list if p):
+                logger.info("[publish] Skipping retry for %s — media files deleted", bp["id"][:8])
+                continue
+
+            logger.info("[publish] Retrying %d failed platform(s) for blueprint %s: %s",
+                        len(retry_platforms), bp["id"][:8], retry_platforms)
+
+            # Retry each failed platform with its own payload
+            try:
+                record_id = bp["id"]
+
+                for plat in retry_platforms:
+                    payload = build_payload(fields, plat)
+                    registry_id = _to_registry_id(plat)
+                    kwargs = _resolve_client_kwargs(registry_id, niche_id)
+                    if not kwargs:
+                        continue
+
+                    try:
+                        client_instance = get_client(registry_id, **kwargs)
+                        result = client_instance.publish(payload)
+
+                        if result.success:
+                            pps[plat] = "PUBLISHED"
+                            logger.info("[publish] Retry SUCCESS: %s/%s post_id=%s", niche_id, plat, result.post_id)
+                        else:
+                            ec = classify(result.error, plat)
+                            prev = pps[plat] if isinstance(pps[plat], dict) else {}
+                            attempts = (prev.get("attempts", 0) if isinstance(prev, dict) else 0) + 1
+                            delay = retry_delay_seconds(ec, attempts)
+                            pps[plat] = {
+                                "status": "FAILED",
+                                "attempts": attempts,
+                                "last_error": result.error[:200],
+                                "error_class": ec,
+                                "next_retry_after": (datetime.now(UTC) + timedelta(seconds=delay)).isoformat(),
+                            }
+                            logger.warning("[publish] Retry FAILED: %s/%s (%s): %s", niche_id, plat, ec, result.error[:100])
+
+                        # Record to analytics
+                        record_publish(
+                            client=backlog_client,
+                            niche_id=niche_id,
+                            platform=plat,
+                            status="SUCCESS" if result.success else "FAILED",
+                            post_url=result.post_url,
+                            blueprint_id=record_id,
+                            error_message=result.error if not result.success else "",
+                        )
+                    except Exception as e:
+                        logger.warning("[publish] Retry exception for %s/%s: %s", niche_id, plat, e)
+
+                # Update platform_publish_status
+                backlog_client.blueprints.update(record_id, {
+                    "platform_publish_status": json.dumps(pps),
+                })
+            except Exception as e:
+                logger.warning("[publish] Retry processing failed for blueprint %s: %s", bp["id"][:8], e)
+
+    except Exception as e:
+        logger.debug("[publish] Retry pass failed: %s", e)
 
     return EXIT_SUCCESS if any_success else EXIT_ALL_FAILED
 

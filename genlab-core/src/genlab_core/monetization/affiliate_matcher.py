@@ -3,6 +3,13 @@
 Scans story content for keyword matches against the affiliate catalog and
 selects the best network (highest commission) for each match.
 
+Two matching strategies:
+1. **Keyword matching** (fast, free) — regex word-boundary matching against product keywords
+2. **LLM matching** (Claude Haiku fallback) — contextual understanding when keywords fail
+
+The LLM matcher is only invoked when keyword matching returns zero hits, keeping
+costs minimal (~$0.00005 per LLM call at ~200 input tokens).
+
 Usage:
     stage = AffiliateMatch()
     context = stage.execute(context)
@@ -10,17 +17,128 @@ Usage:
 
 from __future__ import annotations
 
+import json as _json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from genlab_core.monetization.seasonal import load_seasonal_config, get_seasonal_products
 
 logger = logging.getLogger(__name__)
 
 # Absolute path to the shared affiliate catalog.
 # Path: affiliate_matcher.py → monetization/ → genlab_core/ → src/ → genlab-core/
 _CATALOG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "affiliate_catalog.yaml"
+
+
+# ── LLM-powered contextual matching ──────────────────────────────────────────
+
+def _build_llm_product_list(products: list[dict[str, Any]]) -> str:
+    """Build a compact product list string for the LLM prompt."""
+    lines = []
+    for i, p in enumerate(products):
+        name = p.get("name", "")
+        category = p.get("category", "")
+        keywords = ", ".join(str(k) for k in (p.get("keywords") or [])[:5])
+        lines.append(f"{i}: {name} [{category}] (keywords: {keywords})")
+    return "\n".join(lines)
+
+
+def _llm_match_product(
+    text: str,
+    niche_id: str,
+    products: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Use Claude Haiku to contextually match content to a product.
+
+    Only called when keyword matching fails. Returns the best product or None.
+
+    Cost: ~200 input tokens + ~20 output tokens = ~$0.00005 per call
+    at Claude Haiku pricing ($0.25/M input, $1.25/M output).
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        logger.debug("[AffiliateMatch] No ANTHROPIC_API_KEY — skipping LLM match")
+        return None
+
+    # Filter to enabled products only
+    enabled = [p for p in products if p.get("enabled", True)]
+    if not enabled:
+        return None
+
+    product_list = _build_llm_product_list(enabled)
+
+    # Truncate content to keep token count low (~150 tokens max)
+    content_truncated = text[:500]
+
+    prompt = (
+        f"You are a product matcher for a {niche_id} content channel.\n\n"
+        f"Content:\n\"{content_truncated}\"\n\n"
+        f"Products:\n{product_list}\n\n"
+        "Which product (if any) is most relevant to this content? "
+        "Reply with ONLY the product index number (e.g. '3') or 'none' if no product fits. "
+        "A product fits if the content topic naturally relates to it — "
+        "the viewer of this content would plausibly be interested in the product."
+    )
+
+    try:
+        import httpx
+
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2024-10-22",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 20,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extract the text response
+        answer = ""
+        for block in data.get("content", []):
+            if block.get("type") == "text":
+                answer = block.get("text", "").strip().lower()
+                break
+
+        if answer == "none" or not answer:
+            logger.debug("[AffiliateMatch] LLM returned 'none' — no contextual match")
+            return None
+
+        # Parse the index
+        # Handle responses like "3" or "3 - PS5 Console" or "Product 3"
+        idx_match = re.search(r"\d+", answer)
+        if not idx_match:
+            logger.debug("[AffiliateMatch] LLM response not parseable: %s", answer)
+            return None
+
+        idx = int(idx_match.group())
+        if 0 <= idx < len(enabled):
+            product = enabled[idx]
+            logger.info(
+                "[AffiliateMatch] LLM contextual match: '%s' (index=%d)",
+                product.get("name", ""),
+                idx,
+            )
+            return product
+
+        logger.debug("[AffiliateMatch] LLM returned out-of-range index: %d", idx)
+        return None
+
+    except Exception as e:
+        logger.warning("[AffiliateMatch] LLM match failed: %s", e)
+        return None
 
 
 def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
@@ -30,31 +148,124 @@ def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
         return yaml.safe_load(fh)
 
 
+def _keyword_hits(keywords: list, text_lower: str, *, return_matched: bool = False) -> int | tuple[int, list[str]]:
+    """Count keyword matches using word-boundary regex.
+
+    Uses ``\\b`` word boundaries instead of substring containment to prevent
+    false positives like ``"mat"`` matching ``"post-match"`` or ``"led"``
+    matching ``"called"``.  Casts each keyword to ``str`` to handle YAML
+    auto-parsed integers (e.g. ``4090``).  Skips empty/None keywords.
+
+    If *return_matched* is True, returns ``(hits, matched_keywords)`` instead
+    of just *hits*.
+    """
+    hits = 0
+    matched: list[str] = []
+    for kw in keywords:
+        kw_str = str(kw).lower().strip() if kw else ""
+        if not kw_str:
+            continue
+        if re.search(r"\b" + re.escape(kw_str) + r"\b", text_lower):
+            hits += 1
+            if return_matched:
+                matched.append(kw_str)
+    if return_matched:
+        return hits, matched
+    return hits
+
+
 def match_product(
     text: str,
     niche_id: str,
     catalog: dict[str, Any],
+    seasonal_config: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Scan text for keyword matches against niche products.
 
-    Returns the product dict with the most keyword hits, or None if no match.
+    Checks seasonal products first (if any active events), then falls back
+    to static catalog. Returns the product with the most keyword hits, or None.
+    Uses word-boundary matching to prevent substring false positives.
     """
+    # Strip hashtags and existing affiliate CTAs from search text to prevent
+    # self-referencing circular matches and hashtag keyword pollution.
+    clean_text = re.sub(r"#\w+", "", text)  # Remove hashtags
+    clean_text = re.sub(r"🔗.*?link in bio", "", clean_text, flags=re.IGNORECASE)
+    text_lower = clean_text.lower()
+
+    logger.debug("[AffiliateMatch] Search text (%d chars): %s...", len(text_lower), text_lower[:100])
+
+    best_product: dict[str, Any] | None = None
+    best_hits = 0
+    best_matched_keywords: list[str] = []
+
+    # 1. Check seasonal products first (highest priority during events)
+    if seasonal_config is None:
+        try:
+            seasonal_config = load_seasonal_config()
+        except Exception:
+            seasonal_config = {}
+
+    seasonal_products = get_seasonal_products(seasonal_config)
+    for product in seasonal_products:
+        # Only match seasonal products for their target niche (or all if unspecified)
+        product_niche = product.get("niche_id", "")
+        if product_niche and product_niche != niche_id:
+            continue
+        keywords = product.get("keywords", [])
+        hits, matched_kws = _keyword_hits(keywords, text_lower, return_matched=True)
+        if hits > best_hits:
+            best_hits = hits
+            best_product = product
+            best_matched_keywords = matched_kws
+
+    # If seasonal match found with 2+ keyword hits, return it
+    if best_product is not None and best_hits >= 2:
+        logger.info(
+            "[AffiliateMatch] Seasonal match: '%s' (%d hits, keywords=%s, event: %s)",
+            best_product.get("name", ""),
+            best_hits,
+            best_matched_keywords,
+            best_product.get("_seasonal_event", ""),
+        )
+        return best_product
+
+    # Reset if seasonal had only 1 weak hit — let static catalog try
+    if best_hits < 2:
+        best_product = None
+        best_hits = 0
+        best_matched_keywords = []
+
+    # 2. Fall back to static catalog
     niche_products = (catalog.get("niches") or {}).get(niche_id, {}).get("products", [])
     if not niche_products:
         return None
 
-    text_lower = text.lower()
-    best_product: dict[str, Any] | None = None
-    best_hits = 0
-
     for product in niche_products:
         keywords = product.get("keywords") or []
-        hits = sum(1 for kw in keywords if kw.lower() in text_lower)
+        hits, matched_kws = _keyword_hits(keywords, text_lower, return_matched=True)
         if hits > best_hits:
             best_hits = hits
             best_product = product
+            best_matched_keywords = matched_kws
 
-    return best_product if best_hits > 0 else None
+    if best_product is not None and best_hits > 0:
+        logger.debug(
+            "[AffiliateMatch] Static match: '%s' (%d hits, keywords=%s)",
+            best_product.get("name", ""),
+            best_hits,
+            best_matched_keywords,
+        )
+        return best_product
+
+    # 3. LLM contextual fallback — only when keyword matching failed entirely
+    if not niche_products:
+        return None
+
+    llm_result = _llm_match_product(text, niche_id, niche_products)
+    if llm_result is not None:
+        return llm_result
+
+    return None
 
 
 def select_best_network(product: dict[str, Any]) -> tuple[str, str, float]:
@@ -71,11 +282,15 @@ def select_best_network(product: dict[str, Any]) -> tuple[str, str, float]:
     best_commission = -1.0
 
     for name, info in networks.items():
+        url = info.get("url", "")
+        # Skip placeholder URLs that haven't been replaced with real affiliate links
+        if not url or "example.com" in url:
+            continue
         commission = float(info.get("commission_pct", 0.0))
         if commission > best_commission:
             best_commission = commission
             best_name = name
-            best_url = info.get("url", "")
+            best_url = url
 
     return (best_name, best_url, best_commission)
 
@@ -88,8 +303,13 @@ class AffiliateMatch:
     affiliate fields. Non-fatal: stories without a match are left unchanged.
     """
 
-    def __init__(self, catalog_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        catalog_path: Path | None = None,
+        seasonal_config_path: Path | None = None,
+    ) -> None:
         self._catalog_path = catalog_path
+        self._seasonal_config_path = seasonal_config_path
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories: list[dict[str, Any]] = context.get("stories", [])
@@ -113,6 +333,13 @@ class AffiliateMatch:
             }
             return context
 
+        # Load seasonal config once for the whole run
+        try:
+            seasonal_config = load_seasonal_config(self._seasonal_config_path)
+        except Exception as exc:
+            logger.warning("[AffiliateMatch] Could not load seasonal config: %s — using empty", exc)
+            seasonal_config = {}
+
         catalog_settings: dict[str, Any] = catalog.get("settings") or {}
         max_per_day: int = int(catalog_settings.get("max_affiliate_posts_per_day", 3))
         disclosure_map: dict[str, str] = catalog_settings.get("disclosure_text") or {}
@@ -135,8 +362,8 @@ class AffiliateMatch:
             # Build search text from hook + caption + title
             content = story.get("content") or {}
             if isinstance(content, str):
-                import json
                 try:
+                    import json
                     content = json.loads(content)
                 except (json.JSONDecodeError, TypeError):
                     content = {}
@@ -146,7 +373,7 @@ class AffiliateMatch:
             title = story.get("title", "")
             search_text = f"{hook} {ig_caption} {title}"
 
-            product = match_product(search_text, niche_id, catalog)
+            product = match_product(search_text, niche_id, catalog, seasonal_config)
             if product is None:
                 skipped += 1
                 logger.debug(

@@ -44,7 +44,7 @@ def _get_config() -> dict[str, Any]:
 def get_model(task_type: str, budget_ratio: float = 0.0) -> str:
     """Return the model string for a pipeline task type. Never raises."""
     cfg = _get_config()
-    default = cfg.get("default_model", "gpt-4o-mini")
+    default = cfg.get("default_model", "claude-haiku-4-5-20251001")
 
     if budget_ratio >= 0.25:
         return cfg.get("budget_fallbacks", {}).get("mid_to_cheapest", default)

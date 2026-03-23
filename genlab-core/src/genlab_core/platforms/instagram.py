@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -19,6 +20,7 @@ from genlab_core.platforms.models import (
     PublishPayload,
     PublishResult,
     TokenStatus,
+    safe_json as _safe_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,7 @@ class InstagramClient:
         self._api_version = api_version
         self._base_url = f"https://graph.facebook.com/{api_version}"
         self._max_poll_seconds = max_poll_seconds
+        self._last_error: str = ""  # Captures detailed error from internal methods
 
     # ------------------------------------------------------------------
     # Publisher protocol
@@ -98,18 +101,29 @@ class InstagramClient:
             from genlab_core.platforms.cdn_upload import upload_to_cdn
             cdn_url = upload_to_cdn(video_url)
             if not cdn_url:
+                tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
+                from pathlib import Path as _Path
+                exists = _Path(video_url).exists() if video_url else False
                 return PublishResult(
                     platform=self.platform_id,
                     success=False,
-                    error="Failed to upload video to CDN for Instagram",
+                    error=(
+                        f"CDN upload failed for Instagram"
+                        f" (file_exists={exists}, tunnel={'set' if tunnel else 'unset'},"
+                        f" path={video_url[-60:]})"
+                    ),
                 )
             video_url = cdn_url
 
-        # Build caption with hashtags
-        hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
+        # Build caption with hashtags (avoid duplication — caption may already
+        # contain inline hashtags from the writing stage)
         caption = payload.caption
-        if hashtags_str:
-            caption = f"{caption}\n\n{hashtags_str}"
+        if payload.hashtags:
+            existing_tags = set(t.lower() for t in re.findall(r"#\w+", caption))
+            new_tags = [t for t in payload.hashtags if t.lower() not in existing_tags]
+            if new_tags:
+                caption = f"{caption}\n\n{' '.join(new_tags)}"
+        caption = caption[:2200]
 
         # Platform-specific options
         ig_specific = payload.platform_specific
@@ -119,6 +133,7 @@ class InstagramClient:
             share_to_feed = ig_specific.share_to_feed
             cover_url = ig_specific.cover_url
 
+        self._last_error = ""
         post_id = self._publish_reel(
             video_url=video_url,
             caption=caption,
@@ -131,14 +146,23 @@ class InstagramClient:
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
-                error="Instagram Reel publish failed — see logs for details",
+                error=self._last_error or "Instagram Reel publish failed — unknown error",
             )
+
+        # Fetch the real permalink (numeric Graph ID doesn't work as URL)
+        real_url = f"https://www.instagram.com/p/{post_id}/"
+        try:
+            permalink_resp = self._graph_get(f"/{post_id}", params={"fields": "permalink"})
+            if permalink_resp and "permalink" in permalink_resp:
+                real_url = permalink_resp["permalink"]
+        except Exception:
+            pass  # fall back to numeric ID URL
 
         return PublishResult(
             platform=self.platform_id,
             success=True,
             post_id=post_id,
-            post_url=f"https://www.instagram.com/p/{post_id}/",
+            post_url=real_url,
         )
 
     # ------------------------------------------------------------------
@@ -360,9 +384,11 @@ class InstagramClient:
                 logger.info("Reel container created: %s", payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
+            self._last_error = f"Container creation failed: {error_msg}"
             logger.error("Reel container creation failed: %s", error_msg)
             return None
         except Exception as exc:
+            self._last_error = f"Container request error: {exc}"
             logger.error("Reel container request error: %s", exc)
             return None
 
@@ -390,6 +416,7 @@ class InstagramClient:
         while True:
             elapsed = time.time() - poll_start
             if elapsed > max_poll_seconds:
+                self._last_error = f"Container polling timed out after {max_poll_seconds}s"
                 logger.error(
                     "Reel container polling timed out after %ds (container=%s)",
                     max_poll_seconds,
@@ -416,6 +443,7 @@ class InstagramClient:
                 if status_code == "ERROR":
                     # status field contains human-readable error detail
                     error_detail = data.get("status", "")
+                    self._last_error = f"Container processing error: {error_detail or data}"
                     logger.error(
                         "Reel container processing error: %s (detail: %s)",
                         data, error_detail,
@@ -450,21 +478,29 @@ class InstagramClient:
                 logger.info("Reel published — post ID: %s", payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
+            self._last_error = f"media_publish failed: {error_msg}"
             logger.error("Reel media_publish failed: %s", error_msg)
             return None
         except Exception as exc:
+            self._last_error = f"media_publish request error: {exc}"
             logger.error("Reel media_publish request error: %s", exc)
             return None
+
+    def _graph_get(self, path: str, params: dict | None = None) -> dict:
+        """GET request to the Graph API. Returns parsed JSON or empty dict."""
+        url = f"{self._base_url}{path}"
+        all_params = {"access_token": self._access_token}
+        if params:
+            all_params.update(params)
+        try:
+            resp = requests.get(url, params=all_params, timeout=15)
+            return _safe_json(resp)
+        except Exception:
+            return {}
 
 
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
 
-
-def _safe_json(resp: requests.Response) -> dict[str, Any]:
-    """Safely parse a requests Response as JSON, returning {} on failure."""
-    try:
-        return resp.json()
-    except Exception:
-        return {}
+# _safe_json imported from genlab_core.platforms.models

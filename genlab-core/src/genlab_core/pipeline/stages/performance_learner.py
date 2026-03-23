@@ -167,7 +167,7 @@ class PerformanceLearner:
                     if linucb_available:
                         try:
                             context_vector = build_content_context(story, niche_id)
-                        except Exception:
+                        except Exception as exc:
                             logger.debug(
                                 "[PerformanceLearner] Context build failed for %s",
                                 story.get("story_id", "unknown"),
@@ -187,7 +187,7 @@ class PerformanceLearner:
                         if linucb_available and linucb_state is not None:
                             try:
                                 linucb_arm = LinUCBArm.from_dict(linucb_state)
-                            except Exception:
+                            except Exception as exc:
                                 logger.debug(
                                     "[PerformanceLearner] Failed to restore LinUCB "
                                     "state for %s, using Thompson",
@@ -234,7 +234,7 @@ class PerformanceLearner:
 
                         updates_made += 1
 
-                except Exception:
+                except Exception as exc:
                     logger.exception(
                         "[PerformanceLearner] Reward computation failed for %s",
                         story.get("story_id", "unknown"),
@@ -245,7 +245,7 @@ class PerformanceLearner:
             if updates_made > 0:
                 self._write_arms_extended(proxy, arms_extended, save_arm)
 
-        except Exception:
+        except Exception as exc:
             logger.exception("[PerformanceLearner] Failed to update bandits for %s", niche_id)
             errors += 1
 
@@ -278,7 +278,7 @@ class PerformanceLearner:
                 )
                 return None
             return proxy
-        except Exception:
+        except Exception as exc:
             logger.exception("[PerformanceLearner] Proxy creation failed")
             return None
 
@@ -331,7 +331,7 @@ class PerformanceLearner:
                     beta=arm_data["beta"],
                     linucb_state=arm_data.get("linucb_state"),
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[PerformanceLearner] Failed to update arm %s", arm_id,
                 )
@@ -350,7 +350,7 @@ class PerformanceLearner:
                     filter_value=arm_id,
                     fields={"Alpha": alpha, "Beta": beta},
                 )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[PerformanceLearner] Failed to update arm %s", arm_id,
                 )

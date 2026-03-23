@@ -53,16 +53,16 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 
 
 class ViralityScoring:
-    """Score blueprints for viral potential using deterministic text features.
+    """Score stories for viral potential using deterministic text features.
 
-    Reads: context['blueprints'], context['niche_config']
-    Writes: context['blueprints'][*]['virality_score'], context['blueprints'][*]['virality_features']
+    Reads: context['stories'], context['niche_config']
+    Writes: context['stories'][*]['virality_score'], context['stories'][*]['virality_features']
     """
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
-        blueprints = context.get("blueprints", [])
+        blueprints = context.get("stories", [])
         if not blueprints:
-            logger.info("[ViralityScoring] No blueprints to score")
+            logger.info("[ViralityScoring] No stories to score")
             return context
 
         config = context.get("niche_config", {})

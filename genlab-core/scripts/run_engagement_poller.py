@@ -139,6 +139,25 @@ async def _poll_loop_twitter(niche_id: str, user_id: str) -> None:
         await asyncio.sleep(TWITTER_POLL_INTERVAL)
 
 
+async def _poll_loop_threads(niche_id: str, user_id: str) -> None:
+    """Poll Threads replies in a loop."""
+    from genlab_core.engagement.poller import THREADS_POLL_INTERVAL, poll_threads_comments
+
+    logger.info("Starting Threads poller for niche=%s user=%s interval=%ds",
+                niche_id, user_id, THREADS_POLL_INTERVAL)
+
+    while True:
+        try:
+            comments = await poll_threads_comments(niche_id, user_id)
+            if comments:
+                count = _dispatch_to_dramatiq(comments, niche_id)
+                logger.info("Threads: dispatched %d comments to Dramatiq", count)
+        except Exception as e:
+            logger.error("Threads poll error: %s", e, exc_info=True)
+
+        await asyncio.sleep(THREADS_POLL_INTERVAL)
+
+
 def _load_poller_config() -> dict:
     """Load engagement poller config from YAML."""
     from pathlib import Path
@@ -170,10 +189,15 @@ async def _run_all_pollers(platform: str) -> None:
 
         if platform in ("all", "twitter") and "twitter" in platforms:
             user_id = str(platforms["twitter"].get("user_id", ""))
-            # Skip placeholder IDs
-            if user_id and not user_id.endswith("_TWITTER_USER_ID"):
+            if user_id and user_id not in ("", "0"):
                 tasks.append(_poll_loop_twitter(niche_id, user_id))
                 logger.info("Queued Twitter poller for %s", niche_id)
+
+        if platform in ("all", "threads") and "threads" in platforms:
+            threads_user_id = str(platforms["threads"].get("user_id", ""))
+            if threads_user_id and threads_user_id not in ("", "0"):
+                tasks.append(_poll_loop_threads(niche_id, threads_user_id))
+                logger.info("Queued Threads poller for %s", niche_id)
 
     if not tasks:
         logger.error("No valid pollers configured for platform=%s", platform)
@@ -187,7 +211,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Engagement comment poller")
     parser.add_argument("--niche", required=True,
                        help="Niche ID (e.g., gaming, ai_creators) or 'all'")
-    parser.add_argument("--platform", required=True, choices=["youtube", "twitter", "all"],
+    parser.add_argument("--platform", required=True, choices=["youtube", "twitter", "threads", "all"],
                        help="Platform to poll (or 'all')")
     parser.add_argument("--channel-id", default="", help="YouTube channel ID (single-niche mode)")
     parser.add_argument("--user-id", default="", help="X/Twitter user ID (single-niche mode)")

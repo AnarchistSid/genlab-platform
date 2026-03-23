@@ -138,7 +138,7 @@ class ValidateVideos:
                     media["video_validation"] = {"valid": False, "issues": issues}
                     failed += 1
 
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[ValidateVideos] Error validating %s",
                     story.get("story_id", "unknown"),

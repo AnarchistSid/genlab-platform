@@ -11,8 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 from typing import Any
+
+from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +29,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "gamers aged 16-30",
         "ctas": [
-            "drop your take below", "who else saw this?",
-            "tag a gamer who needs to see this", "save this 💀",
+            "drop your take below 👇", "who else caught this?",
+            "tag someone who mains this", "thoughts? 💀",
+            "agree or disagree?", "name a better play 🎮",
         ],
         "hashtags": ["#Gaming", "#Gamer", "#GamingClips", "#VideoGames"],
     },
@@ -40,8 +44,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "sports fans aged 18-35",
         "ctas": [
-            "comment your hot take 👇", "who saw this coming?",
-            "save this", "share with someone who needs to see this",
+            "Comment your hot take 👇", "Did you see this live?",
+            "Who's your pick?", "Rate this play 1-10",
+            "Agree or nah?", "Would you start them?",
         ],
         "hashtags": ["#Sports", "#SportsHighlights", "#Clutch"],
     },
@@ -54,8 +59,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "movie fans aged 18-40",
         "ctas": [
-            "have you seen this yet?", "watch or skip?",
-            "save this for your watchlist", "what do you think 👇",
+            "Have you seen this yet?", "Watch or skip?",
+            "Best film of the year?", "What do you think 👇",
+            "Rate this trailer 1-10", "Overhyped or underrated?",
         ],
         "hashtags": ["#Movies", "#Film", "#Cinema", "#Trailer"],
     },
@@ -69,8 +75,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "anime fans aged 16-30",
         "ctas": [
-            "are you watching this?", "W take or L take? 👇",
-            "tag your anime friend", "save this for later",
+            "Are you watching this?", "W or L take? 👇",
+            "Peak or mid?", "Rate this season so far",
+            "Caught up yet?", "Sub or dub?",
         ],
         "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeFan"],
     },
@@ -83,8 +90,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "tech-curious people aged 22-45",
         "ctas": [
-            "what do you think?", "save for later",
-            "follow for more AI updates", "share this 👀",
+            "What do you think?", "Would you use this?",
+            "Better than the original?", "Share your results 👀",
+            "Try this yourself", "Thoughts? 👇",
         ],
         "hashtags": ["#AI", "#ArtificialIntelligence", "#Tech", "#MachineLearning"],
     },
@@ -111,7 +119,8 @@ def write_video_content(
 
     Returns:
         Dict with: hook, instagram_caption, twitter_content,
-                   youtube_content, facebook_content
+                   youtube_content, facebook_content, tiktok_content,
+                   threads_content
     """
     voice = NICHE_VOICE.get(niche_id, NICHE_VOICE["gaming"])
     existing_hooks_text = "\n".join(f"  - {h}" for h in (existing_hooks or [])[-5:])
@@ -136,7 +145,11 @@ def write_video_content(
         "  then EXACTLY 3-5 relevant hashtags. Total must be under 200 chars.\n"
         "- twitter_content: ≤280 chars. Punchy, conversational. NO external links.\n"
         "- youtube_content: Question format, ≤40 characters total.\n"
-        "- facebook_content: 200-300 chars. Ask an engaging question.\n\n"
+        "- facebook_content: 200-300 chars. Ask an engaging question.\n"
+        "- tiktok_content: ≤2200 chars. Hook MUST be in the first line. Sound-on assumed,\n"
+        "  emotionally punchy, direct reaction style. Include 3-5 hashtags inline.\n"
+        "- threads_content: 150-300 chars. Text-first, conversational, opinion-forward.\n"
+        "  No hashtags needed. Write like a hot take in a group chat.\n\n"
         + (
             "These hooks are already used — DO NOT duplicate:\n"
             f"{existing_hooks_text}\n\n"
@@ -154,14 +167,14 @@ def write_video_content(
         f"Tags: {', '.join(video.get('tags', [])[:8])}\n"
         f"Description: {video.get('description_snippet', '')}\n\n"
         "Write content for this specific video. Return JSON with keys:\n"
-        "hook, instagram_caption, twitter_content, youtube_content, facebook_content"
+        "hook, instagram_caption, twitter_content, youtube_content, facebook_content, tiktok_content, threads_content"
     )
 
     try:
         response = llm_client.complete(
             system=system,
             user=user,
-            max_tokens=600,
+            max_tokens=800,
             temperature=0.8,
         )
 
@@ -181,7 +194,6 @@ def write_video_content(
             content["hook"] = hook
 
         # Reject hooks containing banned generic phrases
-        from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
         hook_lower = hook.lower()
         if any(phrase in hook_lower for phrase in _BANNED_PHRASES):
             logger.warning(
@@ -209,13 +221,12 @@ def write_video_content(
             # Ensure CTA
             ctas = voice.get("ctas", [])
             has_cta = any(cta.lower() in body.lower() for cta in ctas)
-            import random
             cta_text = "" if has_cta else random.choice(ctas[:3]).capitalize() if ctas else ""
 
             # Calculate space budget: 200 total - hashtags - CTA - newlines
             tags_str = " ".join(all_tags)
             overhead = len(tags_str) + len(cta_text) + 4  # 4 = two "\n\n" separators
-            body_budget = 200 - overhead
+            body_budget = max(20, 200 - overhead)
             if len(body) > body_budget:
                 body = body[:body_budget - 3].rsplit(" ", 1)[0] + "..."
 
@@ -245,6 +256,33 @@ def write_video_content(
             fb = fb[:297].rsplit(" ", 1)[0] + "..."
             content["facebook_content"] = fb
 
+        # ── Enforce TikTok ≤2200 chars ─────────────────────
+        tk = content.get("tiktok_content", "")
+        if tk and len(tk) > 2200:
+            tk = tk[:2197].rsplit(" ", 1)[0] + "..."
+            content["tiktok_content"] = tk
+
+        # ── Enforce Threads 150-300 chars ──────────────────
+        th = content.get("threads_content", "")
+        if th and len(th) > 300:
+            th = th[:297].rsplit(" ", 1)[0] + "..."
+            content["threads_content"] = th
+
+        # ── Fill missing fields from fallback ────────────────
+        title = video.get("title", "")
+        if not content.get("instagram_caption"):
+            content["instagram_caption"] = f"{title[:150]}\n\n{voice['hashtags'][0]} {voice['hashtags'][1]}"
+        if not content.get("twitter_content"):
+            content["twitter_content"] = title[:280]
+        if not content.get("youtube_content"):
+            content["youtube_content"] = (title[:37] + "?") if len(title) > 37 else title
+        if not content.get("facebook_content"):
+            content["facebook_content"] = f"{title[:200]} What do you think?"
+        if not content.get("tiktok_content"):
+            content["tiktok_content"] = content.get("instagram_caption", title[:2200])
+        if not content.get("threads_content"):
+            content["threads_content"] = (title[:297] + "...") if len(title) > 300 else title
+
         return content
 
     except Exception as e:
@@ -260,4 +298,6 @@ def write_video_content(
             "twitter_content": title[:280],
             "youtube_content": title[:40],
             "facebook_content": f"{title} — what do you think?",
+            "tiktok_content": f"{title}\n\n{' '.join(voice['hashtags'][:3])}",
+            "threads_content": title[:300],
         }

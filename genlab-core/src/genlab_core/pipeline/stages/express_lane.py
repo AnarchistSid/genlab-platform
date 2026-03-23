@@ -33,10 +33,18 @@ EXPRESS_LEVELS = {URGENCY_CRITICAL, URGENCY_HIGH}
 
 # ── Signal patterns (compiled once) ──────────────────────────
 
-# Major launches (CRITICAL)
+# Major launches (CRITICAL) — AI, gaming, entertainment
 _MAJOR_LAUNCHES = re.compile(
     r"\b(gpt[- ]?[5-9]|claude[- ]?[4-9]|gemini[- ]?[2-9]|llama[- ]?[4-9]|"
-    r"sora[- ]?2|dall[- ]?e[- ]?[4-9]|o[3-9]|grok[- ]?[3-9])\b",
+    r"sora[- ]?2|dall[- ]?e[- ]?[4-9]|o[3-9]|grok[- ]?[3-9]|"
+    # Sports majors
+    r"super\s*bowl|world\s*cup|world\s*series|nba\s*finals|stanley\s*cup|"
+    r"champions\s*league\s*final|"
+    # Entertainment majors
+    r"oscar|academy\s*award|emmy|grammy|golden\s*globe|"
+    # Gaming majors
+    r"e3|game\s*awards|gamescom|tga|playstation\s*showcase|"
+    r"nintendo\s*direct|xbox\s*showcase)\b",
     re.IGNORECASE,
 )
 
@@ -50,14 +58,25 @@ _COMPANY_EVENTS = re.compile(
 # Breaking signals (HIGH)
 _BREAKING = re.compile(
     r"\b(breaking|just\s+announced|just\s+released|just\s+launched|"
-    r"just\s+dropped|embargo\s+lift|exclusive|first\s+look)\b",
+    r"just\s+dropped|embargo\s+lift|exclusive|first\s+look|"
+    # Sports breaking
+    r"traded|injured|suspended|fired|hired|signed|buzzer\s*beater|"
+    r"walk[- ]?off|hat[- ]?trick|no[- ]?hitter|perfect\s*game|"
+    # Entertainment breaking
+    r"trailer\s+dropped|teaser\s+dropped|confirmed|cancelled|renewed)\b",
     re.IGNORECASE,
 )
 
 # Time-sensitive (MEDIUM)
 _TIME_SENSITIVE = re.compile(
     r"\b(keynote|earnings|conference|summit|live\s+demo|today|"
-    r"right\s+now|happening\s+now)\b",
+    r"right\s+now|happening\s+now|"
+    # Sports live
+    r"halftime|overtime|game\s+\d|match\s+day|fight\s+night|"
+    # Entertainment events
+    r"premiere|opening\s+night|red\s+carpet|"
+    # Anime seasonal
+    r"season\s+premiere|episode\s+\d+|final\s+episode)\b",
     re.IGNORECASE,
 )
 

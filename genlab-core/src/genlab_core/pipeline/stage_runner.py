@@ -84,12 +84,23 @@ class LocalStageRunner:
     This is the default runner — equivalent to the original bare
     ``stage.execute(context)`` call but with timing and error recording.
 
+    Supports retry via ``max_retries`` and ``retry_delay`` parameters
+    (read from the stage declaration in niche.yaml).
+
     When a ``metrics`` instance is provided, each stage execution is
     automatically recorded with timing and status.
     """
 
-    def __init__(self, *, metrics: PipelineMetrics | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        metrics: PipelineMetrics | None = None,
+        max_retries: int = 0,
+        retry_delay: float = 0.0,
+    ) -> None:
         self._metrics = metrics
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
 
     def run_stage(
         self,
@@ -98,45 +109,70 @@ class LocalStageRunner:
         pipeline_ctx: Any,
     ) -> StageResult:
         stage_name = stage.__class__.__name__
-        logger.info("[Pipeline] Running stage: %s", stage_name)
+        last_error: Exception | None = None
 
-        t0 = time.monotonic()
-        try:
-            result_ctx = stage.execute(context)
-            # Stages should return the same dict, but some return a new one
-            if result_ctx is not context:
-                context.update(result_ctx)
-            elapsed = time.monotonic() - t0
-            logger.info(
-                "[Pipeline] Stage %s completed in %.1fs", stage_name, elapsed,
-            )
-            if self._metrics is not None:
-                self._metrics.record_stage(
-                    stage_name, duration_ms=elapsed * 1000.0, status="ok",
+        for attempt in range(1 + self._max_retries):
+            if attempt > 0:
+                logger.info(
+                    "[Pipeline] Retrying stage %s (attempt %d/%d) after %.0fs",
+                    stage_name, attempt + 1, 1 + self._max_retries, self._retry_delay,
                 )
-            return StageResult(
-                stage_name=stage_name, success=True, elapsed_seconds=elapsed,
-            )
-        except Exception as e:
-            elapsed = time.monotonic() - t0
-            pipeline_ctx.record_error(stage_name, e, fatal=False)
-            logger.error(
-                "[Pipeline] Stage %s failed after %.1fs: %s",
-                stage_name, elapsed, e,
-            )
-            if self._metrics is not None:
-                self._metrics.record_stage(
-                    stage_name,
-                    duration_ms=elapsed * 1000.0,
-                    status="error",
-                    error_msg=str(e),
+                if self._retry_delay > 0:
+                    time.sleep(self._retry_delay)
+
+            t0 = time.monotonic()
+            try:
+                result_ctx = stage.execute(context)
+                # Stages should return the same dict, but some return a new one
+                if result_ctx is not context:
+                    context.update(result_ctx)
+                elapsed = time.monotonic() - t0
+                logger.info(
+                    "[Pipeline] Stage %s completed in %.1fs%s",
+                    stage_name, elapsed,
+                    f" (attempt {attempt + 1})" if attempt > 0 else "",
                 )
-            return StageResult(
-                stage_name=stage_name,
-                success=False,
-                elapsed_seconds=elapsed,
-                error=e,
-            )
+                if self._metrics is not None:
+                    self._metrics.record_stage(
+                        stage_name, duration_ms=elapsed * 1000.0, status="ok",
+                    )
+                return StageResult(
+                    stage_name=stage_name, success=True, elapsed_seconds=elapsed,
+                )
+            except Exception as e:
+                last_error = e
+                elapsed = time.monotonic() - t0
+                if attempt < self._max_retries:
+                    logger.warning(
+                        "[Pipeline] Stage %s failed (attempt %d/%d, %.1fs): %s — will retry",
+                        stage_name, attempt + 1, 1 + self._max_retries, elapsed, e,
+                    )
+                    continue
+                # Final attempt failed
+                pipeline_ctx.record_error(stage_name, e, fatal=False)
+                logger.error(
+                    "[Pipeline] Stage %s failed after %d attempt(s) (%.1fs): %s",
+                    stage_name, attempt + 1, elapsed, e,
+                )
+                if self._metrics is not None:
+                    self._metrics.record_stage(
+                        stage_name,
+                        duration_ms=elapsed * 1000.0,
+                        status="error",
+                        error_msg=str(e),
+                    )
+                return StageResult(
+                    stage_name=stage_name,
+                    success=False,
+                    elapsed_seconds=elapsed,
+                    error=e,
+                )
+
+        # Should not reach here, but safety fallback
+        return StageResult(
+            stage_name=stage_name, success=False,
+            elapsed_seconds=0.0, error=last_error,
+        )
 
 
 # ── Sandbox-aware runner ─────────────────────────────────────────────────────
@@ -363,10 +399,22 @@ class StageRunnerFactory:
         return [results[i] for i in range(len(batch))]
 
     def get_runner(self, declaration: dict[str, Any]) -> StageRunner:
-        """Return the StageRunner for a given stage declaration."""
+        """Return the StageRunner for a given stage declaration.
+
+        Reads ``retries`` and ``retry_delay_seconds`` from the declaration
+        to configure retry behavior on the returned runner.
+        """
+        max_retries = int(declaration.get("retries", 0))
+        retry_delay = float(declaration.get("retry_delay_seconds", 0))
         sandbox_cfg = declaration.get("sandbox")
 
         if not sandbox_cfg:
+            if max_retries > 0:
+                return LocalStageRunner(
+                    metrics=self._metrics,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                )
             return self._local
 
         if sandbox_cfg is True:

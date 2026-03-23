@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import time
+import time as _time
 from pathlib import Path
 
 import requests
@@ -28,8 +28,43 @@ _LITTERBOX_API = "https://litterbox.catbox.moe/resources/internals/api.php"
 _TMPFILES_API = "https://tmpfiles.org/api/v1/upload"
 _UPLOAD_TIMEOUT = 600
 
-# Shared directory for media files served by the dashboard's /api/media/ route.
-_MEDIA_SHARE_DIR = Path(os.environ.get("GENLAB_PROJECT_ROOT", "")) / ".media" / "cdn"
+
+def _get_media_share_dir() -> Path:
+    """Compute CDN share directory at runtime (not import time)."""
+    root = os.environ.get("GENLAB_PROJECT_ROOT", "")
+    if not root:
+        root = str(Path(__file__).parent.parent.parent.parent.parent)  # genlab-core -> GenLab
+    return Path(root) / ".media" / "cdn"
+
+
+class _CircuitBreaker:
+    """Simple circuit breaker for CDN providers."""
+    def __init__(self, name: str, threshold: int = 3, reset_seconds: int = 3600):
+        self.name = name
+        self._failures = 0
+        self._threshold = threshold
+        self._reset_seconds = reset_seconds
+        self._opened_at: float = 0
+
+    def can_attempt(self) -> bool:
+        if self._failures < self._threshold:
+            return True
+        if _time.time() - self._opened_at > self._reset_seconds:
+            self._failures = 0
+            return True
+        return False
+
+    def record_success(self):
+        self._failures = 0
+
+    def record_failure(self):
+        self._failures += 1
+        if self._failures >= self._threshold:
+            self._opened_at = _time.time()
+            logger.warning("[CDN] Circuit breaker OPEN for %s after %d failures", self.name, self._failures)
+
+_litterbox_cb = _CircuitBreaker("litterbox")
+_tmpfiles_cb = _CircuitBreaker("tmpfiles")
 
 
 def _serve_via_tunnel(file_path: Path) -> str | None:
@@ -44,16 +79,22 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
         return None
 
     try:
-        share_dir = _MEDIA_SHARE_DIR
+        share_dir = _get_media_share_dir()
         share_dir.mkdir(parents=True, exist_ok=True)
 
-        # Use a unique name to avoid collisions
-        dest = share_dir / file_path.name
+        # Use hash prefix to avoid collisions between niches
+        import hashlib
+        file_hash = hashlib.sha256(str(file_path).encode()).hexdigest()[:8]
+        dest = share_dir / f"{file_hash}_{file_path.name}"
         if not dest.exists() or dest.stat().st_size != file_path.stat().st_size:
             shutil.copy2(file_path, dest)
 
         # The dashboard serves files from PROJECT_ROOT via /api/media/<path>
-        relative = dest.relative_to(Path(os.environ.get("GENLAB_PROJECT_ROOT", "")))
+        project_root = os.environ.get("GENLAB_PROJECT_ROOT", "")
+        if not project_root:
+            logger.warning("CDN tunnel: GENLAB_PROJECT_ROOT not set — cannot compute relative path")
+            return None
+        relative = dest.relative_to(Path(project_root))
         public_url = f"{tunnel_url}/api/media/{relative}"
 
         # Verify the URL is reachable (quick HEAD check)
@@ -81,6 +122,15 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
 
 def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str | None:
     """Upload to litterbox.catbox.moe (free, best-effort)."""
+    if not _litterbox_cb.can_attempt():
+        logger.info("[CDN] Circuit breaker open for litterbox, skipping")
+        return None
+
+    file_size = file_path.stat().st_size
+    if file_size > 200 * 1024 * 1024:  # 200MB litterbox limit
+        logger.info("[CDN] File too large for litterbox (%d MB), skipping", file_size // (1024 * 1024))
+        return None
+
     for attempt in range(max_attempts):
         try:
             with open(file_path, "rb") as f:
@@ -94,21 +144,33 @@ def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str
                 url = resp.text.strip()
                 if url.startswith("https://litter.catbox.moe/"):
                     logger.info("CDN litterbox: %s → %s", file_path.name, url)
+                    _litterbox_cb.record_success()
                     return url
         except requests.Timeout:
             logger.warning("CDN litterbox: attempt %d/%d timed out", attempt + 1, max_attempts)
+            _litterbox_cb.record_failure()
         except requests.RequestException as exc:
             logger.warning("CDN litterbox: attempt %d/%d failed: %s", attempt + 1, max_attempts, exc)
+            _litterbox_cb.record_failure()
 
         if attempt < max_attempts - 1:
             delay = min(2 * (2 ** attempt), 30)
-            time.sleep(delay)
+            _time.sleep(delay)
 
     return None
 
 
 def _upload_to_tmpfiles(file_path: Path) -> str | None:
     """Fallback: tmpfiles.org (up to 100 MB)."""
+    if not _tmpfiles_cb.can_attempt():
+        logger.info("[CDN] Circuit breaker open for tmpfiles, skipping")
+        return None
+
+    file_size = file_path.stat().st_size
+    if file_size > 100 * 1024 * 1024:  # 100MB tmpfiles limit
+        logger.info("[CDN] File too large for tmpfiles (%d MB), skipping", file_size // (1024 * 1024))
+        return None
+
     try:
         with open(file_path, "rb") as f:
             resp = requests.post(
@@ -118,16 +180,20 @@ def _upload_to_tmpfiles(file_path: Path) -> str | None:
             )
         if resp.status_code != 200:
             logger.warning("tmpfiles: HTTP %d", resp.status_code)
+            _tmpfiles_cb.record_failure()
             return None
         data = resp.json()
         if data.get("status") != "success":
+            _tmpfiles_cb.record_failure()
             return None
         page_url = data.get("data", {}).get("url", "")
         dl_url = page_url.replace("http://tmpfiles.org/", "https://tmpfiles.org/dl/")
         logger.info("tmpfiles: %s → %s", file_path.name, dl_url)
+        _tmpfiles_cb.record_success()
         return dl_url
     except Exception as exc:
         logger.warning("tmpfiles failed: %s", exc)
+        _tmpfiles_cb.record_failure()
         return None
 
 

@@ -64,6 +64,102 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 }
 
 
+_TOPIC_MAP = {
+    # Normalize raw source names to clean categories
+    "anilist": "anilist",
+    "jikan_promos": "jikan",
+    "rss_anime_news_network": "anime_news",
+    "rss_screen_rant": "screen_rant",
+    "rss_ign_movies": "ign",
+    "rss_ign": "ign",
+    "rss_indiewire": "indiewire",
+    "rss_deadline_hollywood": "deadline",
+    "rss_variety": "variety",
+    "rss_hollywood_reporter": "hollywood_reporter",
+    "rss_collider": "collider",
+    "rss_espn": "espn",
+    "espn_news": "espn_news",
+    "espn_scoreboard": "espn_live",
+    "tmdb_trailer": "tmdb_trailer",
+    "youtube_trending": "youtube_trending",
+    "youtube_rss": "youtube_channel",
+    "youtube_content": "youtube_content",
+    "twitch_trending": "twitch_trending",
+    "twitch_clip": "twitch_clip",
+    "scorebat": "scorebat",
+    "steam_trailer": "steam",
+    "rss_fallback": "rss_fallback",
+    "channel_subscription": "youtube_channel",
+    "rss": "rss",
+}
+
+
+def _normalize_topic(raw_source: str) -> str:
+    """Normalize raw source identifiers to clean topic categories."""
+    if not raw_source:
+        return "unknown"
+    low = raw_source.lower().strip()
+    # Check direct mapping
+    if low in _TOPIC_MAP:
+        return _TOPIC_MAP[low]
+    # Check prefix matching
+    for prefix, topic in _TOPIC_MAP.items():
+        if low.startswith(prefix):
+            return topic
+    # If it's a long string (raw video title), truncate to a label
+    if len(raw_source) > 30:
+        return "youtube_content"
+    return low
+
+
+def _get_arm_boost(client, niche_id: str) -> dict[str, float]:
+    """Query recent engagement data and return boost multipliers per arm_id.
+
+    Arms with above-average engagement get a 1.1-1.3x boost.
+    Arms with below-average get 0.8-0.9x.
+    Unknown arms get 1.0 (neutral).
+    """
+    try:
+        # Get recently published blueprints with engagement data
+        records = client.blueprints.all(
+            formula=f"AND({{niche_id}}='{niche_id}',{{status}}='PUBLISHED')",
+            max_records=50,
+        )
+        arm_scores: dict[str, list[float]] = {}
+        for rec in records:
+            fields = rec.get("fields", rec)
+            arm = fields.get("arm_id") or "default"
+            score = float(fields.get("priority_score", 0) or 0)
+            if score > 0:
+                arm_scores.setdefault(arm, []).append(score)
+
+        if not arm_scores:
+            return {}
+
+        # Calculate average score per arm
+        arm_avgs = {arm: sum(scores) / len(scores) for arm, scores in arm_scores.items()}
+        overall_avg = sum(arm_avgs.values()) / len(arm_avgs) if arm_avgs else 0.5
+
+        # Generate boost multipliers
+        boosts = {}
+        for arm, avg in arm_avgs.items():
+            if overall_avg > 0:
+                ratio = avg / overall_avg
+                boosts[arm] = max(0.8, min(1.3, ratio))  # clamp to 0.8-1.3
+            else:
+                boosts[arm] = 1.0
+
+        return boosts
+    except Exception:
+        return {}
+
+
+def _apply_engagement_boost(base_score: float, arm_id: str, boosts: dict[str, float]) -> float:
+    """Apply engagement-based boost to priority score."""
+    multiplier = boosts.get(arm_id, 1.0)
+    return round(base_score * multiplier, 4)
+
+
 def _classify_arm(niche_id: str, story: dict, content: dict) -> str:
     """Classify content into a bandit arm_id based on keyword matching."""
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
@@ -164,7 +260,7 @@ class PushToBacklog:
         try:
             recent_bps = client.blueprints.all(
                 formula=f"{{niche_id}}='{niche_id}'",
-                max_records=50,
+                max_records=500,
             )
             for bp in recent_bps:
                 h = (bp.get("fields", bp).get("hook") or "").strip().lower()
@@ -176,21 +272,42 @@ class PushToBacklog:
             logger.debug("[PUSH] Could not load existing hooks: %s", e)
         context["existing_hooks"] = existing_hooks
 
-        # Load content_memory hashes for URL-level dedup
+        # Load engagement-based arm boost multipliers
+        arm_boosts = _get_arm_boost(client, niche_id)
+        if arm_boosts:
+            logger.info("[PUSH] Loaded engagement boosts for %d arms: %s",
+                        len(arm_boosts), {k: f"{v:.2f}" for k, v in arm_boosts.items()})
+
+        # Load content_memory hashes + existing story URLs for cross-run dedup
         seen_urls: set[str] = set()
+        try:
+            # Load URL hashes from existing stories (catches recurring sources)
+            from hashlib import sha256 as _sha256
+            existing_stories = client.stories.all(
+                formula=f"{{niche_id}}='{niche_id}'",
+                max_records=500,
+            )
+            for s in existing_stories:
+                url = (s.get("fields", s).get("url") or "").strip()
+                if url:
+                    seen_urls.add(_sha256(url.encode()).hexdigest()[:16])
+            if existing_stories:
+                logger.info("[PUSH] Loaded %d existing story URL hashes for cross-run dedup", len(seen_urls))
+        except Exception as e:
+            logger.debug("[PUSH] Could not load existing story URLs: %s", e)
+
         try:
             cm_proxy = getattr(client, "content_memory", None)
             if cm_proxy:
                 cm_records = cm_proxy.all(
                     formula=f"{{niche_id}}='{niche_id}'",
-                    max_records=200,
+                    max_records=500,
                 )
                 for rec in cm_records:
                     h = (rec.get("fields", rec).get("content_hash") or "").strip()
                     if h:
                         seen_urls.add(h)
-                if seen_urls:
-                    logger.info("[PUSH] Loaded %d content_memory hashes for URL dedup", len(seen_urls))
+                logger.info("[PUSH] Total dedup hashes: %d", len(seen_urls))
         except Exception as e:
             logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
 
@@ -198,12 +315,25 @@ class PushToBacklog:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
             published_at = story.get("published_at", datetime.now(UTC).isoformat())
+
+            # URL-only dedup FIRST — catches recurring sources (AniList, Jikan)
+            # that return the same URL with different timestamps each fetch.
+            from hashlib import sha256
+            url_hash = sha256(source_url.encode()).hexdigest()[:16] if source_url else ""
+            if url_hash and url_hash in seen_urls:
+                logger.debug("[PUSH] URL already seen (url_hash dedup): %s", title[:60])
+                continue
+
             story_id = generate_story_id(source_url, published_at)
 
-            # URL-level dedup via content_memory
+            # Also check story_id-based dedup (backward compat)
             if story_id in seen_urls:
                 logger.debug("[PUSH] URL already in content_memory: %s", title[:60])
                 continue
+
+            # Track URL hash so future stories with same URL are skipped
+            if url_hash:
+                seen_urls.add(url_hash)
 
             # Upsert story
             try:
@@ -240,6 +370,20 @@ class PushToBacklog:
                 errors.append(f"story:{title}: {e}")
                 continue
 
+            # Freshness gate: skip stories older than 7 days
+            story_published = story.get("published_at", "")
+            if story_published:
+                try:
+                    pub_dt = datetime.fromisoformat(story_published)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=UTC)
+                    age_days = (datetime.now(UTC) - pub_dt).days
+                    if age_days > 7:
+                        logger.debug("[PUSH] Story too old (%d days): %s", age_days, title[:40])
+                        continue
+                except (ValueError, TypeError):
+                    pass  # unparseable date — allow through
+
             # Create blueprint from content
             content = story.get("content", {})
             if not content:
@@ -265,11 +409,11 @@ class PushToBacklog:
             # Video-level dedup: same clip must not create multiple blueprints
             if video_id:
                 try:
-                    existing_by_video = [
-                        bp for bp in client.blueprints.all(max_records=200)
-                        if (bp.get("fields", bp).get("video_id", "") == video_id
-                            and bp.get("fields", bp).get("niche_id", "") == niche_id)
-                    ]
+                    existing_by_video = client.blueprints.all(
+                        formula=f"{{video_id}}='{video_id}'",
+                        niche_id=niche_id,
+                        max_records=1,
+                    )
                     if existing_by_video:
                         logger.info(
                             "[PUSH] Video already blueprinted: video_id=%s niche=%s — skipping",
@@ -289,15 +433,34 @@ class PushToBacklog:
             # Classify content into a bandit arm_id for the learning loop
             arm_id = _classify_arm(niche_id, story, content)
 
-            # Cross-run hook dedup: reject exact duplicate hooks
-            if hook and hook.strip().lower() in existing_hooks:
-                logger.info(
-                    "[PUSH] Hook already used in niche %s, skipping: '%s'",
-                    niche_id, hook[:60],
-                )
-                continue
+            # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
             if hook:
-                existing_hooks.add(hook.strip().lower())
+                hook_lower = hook.strip().lower()
+                hook_words = set(hook_lower.split())
+
+                # Exact match
+                if hook_lower in existing_hooks:
+                    logger.info("[PUSH] Exact hook dupe, skipping: '%s'", hook[:60])
+                    continue
+
+                # Fuzzy match — Jaccard similarity against recent hooks
+                is_near_dupe = False
+                for existing in existing_hooks:
+                    existing_words = set(existing.split())
+                    if len(hook_words) > 2 and len(existing_words) > 2:
+                        intersection = len(hook_words & existing_words)
+                        union = len(hook_words | existing_words)
+                        if union > 0 and intersection / union > 0.6:
+                            logger.info(
+                                "[PUSH] Near-dupe hook (%.0f%% similar), skipping: '%s' ≈ '%s'",
+                                100 * intersection / union, hook[:40], existing[:40],
+                            )
+                            is_near_dupe = True
+                            break
+                if is_near_dupe:
+                    continue
+
+                existing_hooks.add(hook_lower)
             ig = content.get("instagram", {})
             yt = content.get("youtube", {})
             tw = content.get("x_twitter", {})
@@ -336,19 +499,20 @@ class PushToBacklog:
                         "title": title,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
-                        "youtube_content": f"{yt.get('title', '')}\n\n{yt.get('description', '')}",
-                        "twitter_content": tw.get("tweet", ""),
+                        "youtube_content": json.dumps({"title": yt.get("title", ""), "description": yt.get("description", "")}),
+                        "twitter_content": json.dumps({"tweet_text": tw.get("tweet", tw.get("tweet_text", "")), "routing": tw.get("routing", "single")}),
                         "facebook_content": fb.get("caption", ""),
-                        "priority_score": (
+                        "priority_score": _apply_engagement_boost(
                             story.get("final_score") if story.get("final_score") is not None
                             else story.get("composite_score") if story.get("composite_score") is not None
-                            else story.get("score", 0.5)
+                            else story.get("score", 0.5),
+                            arm_id, arm_boosts,
                         ),
                         "status": "VISUAL_READY" if rendered_path else "DRAFTED",
                         "format": "reel",
                         "niche_id": niche_id,
                         "arm_id": arm_id,
-                        "topic": story.get("source", niche_id),
+                        "topic": _normalize_topic(story.get("source", niche_id)),
                         "angle": (story.get("summary") or title)[:200],
                     }
 

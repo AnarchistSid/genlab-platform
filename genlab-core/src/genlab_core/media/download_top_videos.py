@@ -61,9 +61,8 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
-        # YouTube bot detection bypass: use browser cookies + JS challenge solver
-        "--cookies-from-browser", "chrome",
-        "--remote-components", "ejs:github",
+        # YouTube JS challenge solver: use node.js runtime (deno is broken as of 2026-03)
+        "--extractor-args", 'youtube:jsc_config={"runtimes":["node"]}',
         url,
     ]
     t0 = time.monotonic()
@@ -361,7 +360,7 @@ def _find_downloaded_file(expected_path: str) -> str | None:
     # Check common yt-dlp output variations
     parent = p.parent
     stem = p.stem
-    for ext in (".mp4", ".mkv", ".webm", ".mp4.part"):
+    for ext in (".mp4", ".mkv", ".webm"):
         candidate = parent / f"{stem}{ext}"
         if candidate.exists():
             return str(candidate)

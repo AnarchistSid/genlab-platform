@@ -1,5 +1,9 @@
 # Engagement poller configuration — all niches × platforms
 # Used by scripts/run_engagement_poller.py --niche all
+#
+# YouTube + Twitter: polled via run_engagement_poller.py
+# Facebook + Instagram: handled via Meta webhooks (webhook_receiver.py)
+# Threads: polled when access tokens are provisioned
 
 pollers:
   ai_creators:
@@ -7,27 +11,37 @@ pollers:
       channel_id: UC3GCipF_BTgjaxu-iSuBZ-g
     twitter:
       user_id: "632788275"
+    threads:
+      user_id: ""  # Set when Threads access token is provisioned
 
   gaming:
     youtube:
       channel_id: UCW20NL2FiCO5F90IuCGwtTw
     twitter:
       user_id: "2029218265801846784"
+    threads:
+      user_id: ""  # Set when Threads access token is provisioned
 
   sports:
     youtube:
       channel_id: UC9QhmCY9PnWW5i4H8LgtJUg
     twitter:
-      user_id: CLUTCHWIRE_TWITTER_USER_ID  # placeholder until provisioned
+      user_id: ""  # placeholder until X developer app provisioned
+    threads:
+      user_id: ""  # placeholder
 
   movies:
     youtube:
       channel_id: UCdqiuSQOiSp-t3IFzhbcvzQ
     twitter:
-      user_id: SPLICEREEL_TWITTER_USER_ID  # placeholder until provisioned
+      user_id: ""  # placeholder until X developer app provisioned
+    threads:
+      user_id: ""  # placeholder
 
   anime:
     youtube:
       channel_id: UCt7vXV-dzsgofLyZRAFbvIA
     twitter:
-      user_id: FRAMEDRIFT_TWITTER_USER_ID  # placeholder until provisioned
+      user_id: ""  # placeholder until X developer app provisioned
+    threads:
+      user_id: ""  # placeholder

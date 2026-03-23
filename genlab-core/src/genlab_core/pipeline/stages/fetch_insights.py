@@ -208,7 +208,7 @@ class FetchInsights:
         niche_id = config.get("niche_id", "")
         from genlab_core.publishing.niche_credentials import resolve_meta_credentials
         creds = resolve_meta_credentials(niche_id)
-        token = creds.get("ig_access_token") or os.getenv("META_ACCESS_TOKEN", "")
+        token = creds.get("ig_access_token", "")
         if not token:
             return None
 
@@ -285,7 +285,9 @@ class FetchInsights:
     @staticmethod
     def _fetch_facebook(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
         """Fetch FB metrics via Graph API."""
-        token = os.getenv("META_ACCESS_TOKEN", "")
+        niche_id = config.get("niche_id", "")
+        from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+        token, _page_id = resolve_fb_credentials(niche_id)
         if not token:
             return None
 

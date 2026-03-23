@@ -125,7 +125,7 @@ class RunReport:
             report_path.write_text(json.dumps(report, indent=2, default=str))
             run_stats["report_path"] = str(report_path)
             logger.info("[RunReport] Written: %s", report_path)
-        except Exception:
+        except Exception as exc:
             logger.exception("[RunReport] Failed to write report")
 
         # Log summary
@@ -152,6 +152,6 @@ class RunReport:
         try:
             root = settings.get_project_root()
             return root / ".tmp" / "runs" / run_id
-        except Exception:
+        except Exception as exc:
             # Fallback to /tmp
             return Path("/tmp") / "genlab_runs" / run_id
