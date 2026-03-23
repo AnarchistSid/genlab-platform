@@ -25,6 +25,7 @@ class PersonaEngine:
     ) -> None:
         self._persona = persona
         self._toxicity_gate = toxicity_gate
+        self._client = None  # Lazy-initialized Anthropic client
 
     def _build_system_prompt(self) -> str:
         p = self._persona
@@ -78,9 +79,10 @@ class PersonaEngine:
         Retries if the generated reply fails outbound toxicity.
         Returns None if all retries fail.
         """
-        import anthropic
-
-        client = anthropic.Anthropic()
+        if self._client is None:
+            import anthropic
+            self._client = anthropic.Anthropic()
+        client = self._client
         system = self._build_system_prompt()
 
         user_content = f'Comment on {platform}:\n"{comment}"'

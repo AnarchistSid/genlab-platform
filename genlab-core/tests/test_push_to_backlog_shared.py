@@ -8,6 +8,7 @@ stories and blueprints on the BacklogClient.
 from __future__ import annotations
 
 import unittest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 
@@ -19,10 +20,12 @@ class TestPushToBacklogShared(unittest.TestCase):
         return PushToBacklog()
 
     def _make_story(self, title="Test Story", source_url="https://example.com/story1"):
+        # Use a recent date to stay within the 7-day freshness gate
+        recent = (datetime.now(UTC) - timedelta(hours=6)).isoformat()
         return {
             "title": title,
             "source_url": source_url,
-            "published_at": "2026-03-15T12:00:00+00:00",
+            "published_at": recent,
             "source": "test_source",
             "summary": "A test story summary",
             "score": 0.8,

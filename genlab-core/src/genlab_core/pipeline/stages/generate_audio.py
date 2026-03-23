@@ -25,17 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 class GenerateAudio:
-    """Generate voiceover audio for blueprints using TTS cascade.
+    """Generate voiceover audio for stories using TTS cascade.
 
-    Reads: context['blueprints'], context['niche_config']
-    Writes: context['blueprints'][*]['media']['audio_path'],
+    Reads: context['stories'], context['niche_config']
+    Writes: context['stories'][*]['media']['audio_path'],
             context['run_stats']['audio']
     """
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
-        blueprints = context.get("blueprints", [])
+        blueprints = context.get("stories", [])
         if not blueprints:
-            logger.info("[GenerateAudio] No blueprints for audio generation")
+            logger.info("[GenerateAudio] No stories for audio generation")
             return context
 
         config = context.get("niche_config", {})

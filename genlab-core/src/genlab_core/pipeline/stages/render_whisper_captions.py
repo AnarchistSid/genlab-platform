@@ -285,10 +285,11 @@ class RenderWhisperCaptions:
     @staticmethod
     def _find_font(config: dict) -> str | None:
         """Find a suitable font for captions."""
-        # Check common font locations
+        from genlab_core.settings import _PROJECT_ROOT
+
         candidates = [
-            Path("/Users/anarchistsid/GenLab/assets/fonts/Inter-Bold.ttf"),
-            Path("/Users/anarchistsid/GenLab/assets/fonts/Montserrat-ExtraBold.ttf"),
+            _PROJECT_ROOT / "assets" / "fonts" / "Inter-Bold.ttf",
+            _PROJECT_ROOT / "assets" / "fonts" / "Montserrat-ExtraBold.ttf",
             Path("/System/Library/Fonts/Helvetica.ttc"),
         ]
         for p in candidates:

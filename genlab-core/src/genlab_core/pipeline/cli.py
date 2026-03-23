@@ -229,7 +229,10 @@ def run_pipeline(
         genlab_root=genlab_root,
         pre_run_hook=_pre_run_check,
     )
-    return runner.run(niche_id, dry_run=dry_run, verbose=verbose)
+    return runner.run(
+        niche_id, dry_run=dry_run, verbose=verbose,
+        stages_filter=stages,
+    )
 
 
 def run_multi(
@@ -277,7 +280,10 @@ def run_multi(
         )
 
         try:
-            ctx = runner.run(niche_id, dry_run=dry_run, verbose=verbose)
+            ctx = runner.run(
+                niche_id, dry_run=dry_run, verbose=verbose,
+                stages_filter=stages,
+            )
             results[niche_id] = ctx
             status = "ABORTED" if ctx.is_aborted else "OK"
             logger.info(

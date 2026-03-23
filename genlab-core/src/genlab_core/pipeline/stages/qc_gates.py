@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 class QCGates:
     """Pre-render quality gate stage.
 
-    Reads: context['blueprints'], context['niche_config']
-    Writes: context['blueprints'][*]['validation_status'], context['run_stats']['qc']
+    Reads: context['stories'], context['niche_config']
+    Writes: context['stories'][*]['validation_status'], context['run_stats']['qc']
     """
 
     # Default constraints (overridden by niche_config.templates if present)
@@ -33,9 +33,9 @@ class QCGates:
     SCORE_PENALTY = 0.3
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
-        blueprints = context.get("blueprints", [])
+        blueprints = context.get("stories", [])
         if not blueprints:
-            logger.info("[QCGates] No blueprints to validate")
+            logger.info("[QCGates] No stories to validate")
             return context
 
         config = context.get("niche_config", {})
@@ -61,7 +61,7 @@ class QCGates:
                         bp["priority_score"] = max(
                             0, bp["priority_score"] - self.SCORE_PENALTY
                         )
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[QCGates] Error validating blueprint %s",
                     bp.get("candidate_id", "unknown"),
@@ -165,19 +165,31 @@ class QCGates:
     @staticmethod
     def _check_completeness(bp: dict[str, Any], issues: list[str]) -> bool:
         ok = True
-        required = ["hook", "body"]
 
-        for field_name in required:
-            val = bp.get(field_name, bp.get("caption", ""))
-            if not val:
-                alt = bp.get("caption", "") if field_name == "body" else ""
-                if not alt:
-                    issues.append(f"Missing required field: {field_name}")
-                    ok = False
+        # Hook is required
+        content = bp.get("content", {})
+        hook = (
+            bp.get("hook", "")
+            or (content.get("hook", "") if isinstance(content, dict) else "")
+        )
+        if not hook:
+            issues.append("Missing required field: hook")
+            ok = False
 
-        # At least one source
+        # Caption or body text required
+        body = (
+            bp.get("caption", "")
+            or bp.get("body", "")
+            or (content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else "")
+        )
+        if not body:
+            issues.append("Missing required field: caption/body")
+            ok = False
+
+        # Source URL required
+        source_url = bp.get("source_url", "") or bp.get("canonical_url", "")
         sources = bp.get("sources", bp.get("source_urls", []))
-        if not sources:
+        if not source_url and not sources:
             issues.append("No source URLs")
             ok = False
 

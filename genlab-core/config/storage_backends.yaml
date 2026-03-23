@@ -3,22 +3,22 @@
 # Valid values: "sharepoint", "postgres".
 # Default: "sharepoint" if a table is not listed here.
 #
-# Sprint 64: PostgreSQL backend is production-ready (verified full CRUD).
-# Blocked from full migration by asyncpg + Python 3.14 segfault in test suite.
-# Set GENLAB_USE_POSTGRES=true in .env to enable Postgres for production.
-# Tests will always use SharePoint mocks (conftest.py removes DATABASE_URL).
+# Sprint 68: PostgreSQL is the production backend (GENLAB_USE_POSTGRES=true).
+# When GENLAB_USE_POSTGRES=true is set in .env, BacklogClient overrides
+# this config and routes ALL tables to PostgreSQL regardless of what's here.
+# This YAML serves as the canonical routing config and documentation.
 
 tables:
-  Stories: sharepoint
-  Blueprints: sharepoint
-  Templates: sharepoint
-  Assets: sharepoint
-  Sources: sharepoint
-  Publishing_Analytics: sharepoint
-  Analytics: sharepoint
-  AB_Tests: sharepoint
-  Content_Memory: sharepoint
-  PendingEngagement: sharepoint
-  PendingFeedback: sharepoint
-  BanditArms: sharepoint
-  Audience_Snapshots: sharepoint
+  Stories: postgres
+  Blueprints: postgres
+  Templates: postgres
+  Assets: postgres
+  Sources: postgres
+  Publishing_Analytics: postgres
+  Analytics: postgres
+  AB_Tests: postgres
+  Content_Memory: postgres
+  PendingEngagement: postgres
+  PendingFeedback: postgres
+  BanditArms: postgres
+  Audience_Snapshots: postgres

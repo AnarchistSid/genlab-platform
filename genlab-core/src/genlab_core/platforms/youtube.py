@@ -260,16 +260,25 @@ class YouTubeClient:
 
         video_path = payload.media_paths[0]
 
+        # Niche → YouTube category mapping
+        _NICHE_CATEGORIES: dict[str, str] = {
+            "gaming": "20",
+            "sports": "17",
+            "movies": "1",
+            "anime": "1",
+            "ai_creators": "28",
+        }
+
         # Build title: prefer YouTubeSpecific.shorts_title > hook > caption
         yt_specific = payload.platform_specific
         title = ""
-        category_id = "28"
+        category_id = _NICHE_CATEGORIES.get(payload.niche_id, "28")
         privacy = "public"
         extra_tags: list[str] = []
 
         if isinstance(yt_specific, YouTubeSpecific):
             title = yt_specific.shorts_title.strip()
-            category_id = yt_specific.category_id or "28"
+            category_id = yt_specific.category_id or category_id
             privacy = yt_specific.privacy_status or "public"
             extra_tags = list(yt_specific.tags)
 
@@ -282,10 +291,9 @@ class YouTubeClient:
 
         # Ensure #Shorts tag for algorithm classification
         if "#shorts" not in title.lower():
-            title = f"{title} #Shorts"
-
-        # Truncate to YouTube's 100-char limit
-        title = title[:_TITLE_MAX_LEN]
+            title = title[:92] + " #Shorts"  # Reserve 8 chars for " #Shorts"
+        else:
+            title = title[:100]
 
         # Build description from caption + hashtags
         hashtags_str = " ".join(payload.hashtags) if payload.hashtags else ""
@@ -297,7 +305,7 @@ class YouTubeClient:
         description = "\n\n".join(description_parts)[:5000]
 
         # Tags from hashtags field
-        tags = [h.lstrip("#") for h in payload.hashtags if h.startswith("#")]
+        tags = [h.lstrip("#") for h in payload.hashtags if h]
         tags.extend(extra_tags)
         if "Shorts" not in tags:
             tags.append("Shorts")

@@ -1,6 +1,6 @@
 """Polling fallback for comment sources that lack webhook push.
 
-YouTube: poll every 5 minutes (1 API unit per poll -- cheap).
+YouTube: poll every 30 minutes (1800s, 1 API unit per poll -- cheap).
 X/Twitter: poll every 15 minutes (180 req/15min budget).
 Threads: poll every 10 minutes (Threads API rate limit: 200 req/hr).
 
@@ -234,7 +234,7 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                     skipped_self += 1
                     continue
                 mentions.append({
-                    "platform": "twitter",
+                    "platform": "x_twitter",
                     "post_id": str(tweet.id),
                     "comment_id": str(tweet.id),
                     "author_id": str(tweet.author_id),
@@ -263,22 +263,35 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
       1. GET /{user_id}/threads → recent media IDs
       2. GET /{media_id}/replies → replies per post (paginated)
     """
-    import os
-
     logger.debug("[POLLER] Threads poll for %s (user=%s)", niche_id, user_id)
 
-    token = os.environ.get(
-        "THREADS_ACCESS_TOKEN",
-        os.environ.get("META_ACCESS_TOKEN", ""),
-    )
+    from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+    token, resolved_user_id = resolve_threads_credentials(niche_id)
     if not token:
-        logger.warning("[POLLER] Threads credentials not set — skipping poll")
+        logger.warning("[POLLER] Threads credentials not set for %s — skipping poll", niche_id)
         return []
+    # Use resolved user_id if caller didn't provide one
+    if resolved_user_id and not user_id:
+        user_id = resolved_user_id
 
     try:
         import requests as _requests
 
         base = "https://graph.threads.net/v1.0"
+
+        # Step 0: Resolve our own username for self-reply filtering
+        # (user_id is numeric but replies contain usernames)
+        own_username = ""
+        try:
+            me_resp = _requests.get(
+                f"{base}/me",
+                params={"fields": "username", "access_token": token},
+                timeout=10,
+            )
+            if me_resp.ok:
+                own_username = me_resp.json().get("username", "")
+        except Exception:
+            pass  # fall back to empty — self-replies won't be filtered
 
         # Step 1: Fetch recent posts
         media_resp = _requests.get(
@@ -318,8 +331,8 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
 
             for reply in replies_resp.json().get("data", []):
                 reply_username = reply.get("username", "")
-                # Filter out own replies (compare against user_id as username)
-                if reply_username == user_id:
+                # Filter out own replies (compare username to username)
+                if own_username and reply_username == own_username:
                     skipped_self += 1
                     continue
                 comments.append({

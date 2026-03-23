@@ -1,4 +1,4 @@
-"""Prefect flow for collecting post-publish metrics at timed windows.
+"""Collect post-publish metrics at timed windows.
 
 Reads pending feedback tasks from PendingFeedbackStore, checks which
 collection windows are due, fetches platform metrics, and updates the
@@ -6,9 +6,6 @@ store. At the 48h window, computes a shaped reward via RewardShaper.
 
 Run standalone:
     python -m genlab_core.learning.metric_collector
-
-Or as a Prefect deployment:
-    prefect deployment build genlab_core/learning/metric_collector.py:collect_metrics
 """
 from __future__ import annotations
 
@@ -22,23 +19,11 @@ BanditUpdater = Callable[[str, str, str, float], None]
 
 logger = logging.getLogger(__name__)
 
-try:
-    from prefect import flow, task
-    from prefect.cache_policies import NO_CACHE
+def flow(fn=None, **kwargs):  # type: ignore[misc]
+    return fn if fn else lambda f: f
 
-    _TASK_DEFAULTS = {"cache_policy": NO_CACHE}
-except ImportError:  # pragma: no cover — Prefect is optional
-    _TASK_DEFAULTS = {}
-
-    def flow(fn=None, **kwargs):  # type: ignore[misc]
-        if fn is not None:
-            return fn
-        return lambda f: f
-
-    def task(fn=None, **kwargs):  # type: ignore[misc]
-        if fn is not None:
-            return fn
-        return lambda f: f
+def task(fn=None, **kwargs):  # type: ignore[misc]
+    return fn if fn else lambda f: f
 
 from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
 from genlab_core.learning.pending_feedback_task import (
@@ -51,7 +36,7 @@ from genlab_core.learning.reward_shaper import RewardShaper
 # Platform metric fetching (delegates to lightweight HTTP calls)
 # ---------------------------------------------------------------------------
 
-@task(name="fetch_platform_metrics", retries=1, **_TASK_DEFAULTS)
+@task(name="fetch_platform_metrics", retries=1)
 def fetch_platform_metrics(
     platform: str,
     post_id: str,
@@ -94,8 +79,15 @@ def fetch_platform_metrics(
         return {}
 
 
+# Module-level YouTube token cache (avoids re-refreshing on every metric call)
+_yt_token_cache: dict[str, Any] = {"token": "", "niche": "", "ts": 0.0}
+_YT_TOKEN_TTL = 2400.0  # 40 minutes (tokens last ~60 min)
+
+
 def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
     """YouTube Data API v3 basic stats (per-niche credentials)."""
+    import time as _time
+
     import requests
 
     from genlab_core.publishing.niche_credentials import resolve_youtube_credentials
@@ -107,18 +99,30 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
     if not all([client_id, client_secret, refresh_token]):
         return {}
 
-    token_resp = requests.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=15,
-    )
-    token_resp.raise_for_status()
-    access_token = token_resp.json()["access_token"]
+    # Reuse cached token if same niche and not expired
+    now = _time.monotonic()
+    if (
+        _yt_token_cache["token"]
+        and _yt_token_cache["niche"] == niche_id
+        and (now - _yt_token_cache["ts"]) < _YT_TOKEN_TTL
+    ):
+        access_token = _yt_token_cache["token"]
+    else:
+        token_resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=15,
+        )
+        token_resp.raise_for_status()
+        access_token = token_resp.json()["access_token"]
+        _yt_token_cache["token"] = access_token
+        _yt_token_cache["niche"] = niche_id
+        _yt_token_cache["ts"] = now
 
     resp = requests.get(
         "https://www.googleapis.com/youtube/v3/videos",
@@ -330,7 +334,7 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 # Core flow
 # ---------------------------------------------------------------------------
 
-@task(name="compute_reward", **_TASK_DEFAULTS)
+@task(name="compute_reward")
 def compute_reward(
     metrics: dict[str, Any],
     platform: str,
@@ -340,7 +344,7 @@ def compute_reward(
     return shaper.compute_reward(platform=platform, metrics=metrics)
 
 
-@task(name="process_pending_task", persist_result=False, **_TASK_DEFAULTS)
+@task(name="process_pending_task")
 def process_pending_task(
     task_record: PendingFeedbackTask,
     store: PendingFeedbackStore,
@@ -436,7 +440,7 @@ def collect_metrics(
     backlog_client: Any = None,
     bandit_updater: BanditUpdater | None = None,
 ) -> int:
-    """Main Prefect flow: collect metrics for all pending feedback tasks.
+    """Collect metrics for all pending feedback tasks.
 
     Args:
         niche_id: Optional filter to process only tasks for a specific niche.

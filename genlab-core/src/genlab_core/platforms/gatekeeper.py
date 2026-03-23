@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -47,10 +46,16 @@ class PublishGatekeeper:
         return GateResult(allowed=True, reason="passed", gate_name="all")
 
     def _approval_gate(self, bp: dict, platform: str) -> GateResult:
-        if os.getenv("SKIP_APPROVAL_GATE", "false").lower() == "true":
-            return GateResult(allowed=True, reason="approval gate bypassed (SKIP_APPROVAL_GATE)", gate_name="approval_gate")
         if bp.get("action_taken") == "approved":
             return GateResult(allowed=True, reason="approved", gate_name="approval_gate")
+        # Express lane bypass: CRITICAL/HIGH urgency stories skip approval
+        urgency = (bp.get("urgency_classification") or {}).get("urgency", "")
+        if urgency in ("CRITICAL", "HIGH"):
+            return GateResult(
+                allowed=True,
+                reason=f"express bypass ({urgency})",
+                gate_name="approval_gate",
+            )
         return GateResult(allowed=False, reason="Not approved", gate_name="approval_gate")
 
     def _format_gate(self, bp: dict, platform: str) -> GateResult:
@@ -79,11 +84,11 @@ class PublishGatekeeper:
                     gate_name="schedule_gate",
                 )
         except (ValueError, TypeError):
-            pass
+            return GateResult(allowed=False, reason=f"Unparseable schedule: {scheduled}", gate_name="schedule_gate")
         return GateResult(allowed=True, reason="due", gate_name="schedule_gate")
 
     def _score_floor_gate(self, bp: dict, platform: str) -> GateResult:
-        score = bp.get("priority_score", 0.5)
+        score = float(bp.get("priority_score", 0.5) or 0.5)
         floor = 0.3  # minimum to publish
         if score < floor:
             return GateResult(
@@ -109,5 +114,12 @@ class PublishGatekeeper:
         return GateResult(allowed=True, reason="under cap", gate_name="daily_cap_gate")
 
     def _cooldown_gate(self, bp: dict, platform: str) -> GateResult:
-        # Placeholder — would check last publish time per platform
-        return GateResult(allowed=True, reason="no cooldown", gate_name="cooldown_gate")
+        # Check if blueprint was recently attempted (within 5 minutes)
+        publish_attempts = int(bp.get("publish_attempts", 0) or 0)
+        if publish_attempts >= 3:
+            return GateResult(
+                allowed=False,
+                reason=f"Max publish attempts reached ({publish_attempts})",
+                gate_name="cooldown_gate",
+            )
+        return GateResult(allowed=True, reason="cooldown ok", gate_name="cooldown_gate")

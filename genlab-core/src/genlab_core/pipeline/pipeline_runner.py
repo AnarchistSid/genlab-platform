@@ -78,6 +78,7 @@ class GenericPipelineRunner:
         niche_id: str,
         dry_run: bool = False,
         verbose: bool = False,
+        stages_filter: list[str] | None = None,
     ) -> PipelineContext:
         """Execute the full pipeline for a niche.
 
@@ -85,6 +86,8 @@ class GenericPipelineRunner:
             niche_id: Must be in ``niche_roots``.
             dry_run: If True, load config and stages but don't execute.
             verbose: If True, set root log level to DEBUG.
+            stages_filter: If provided, only run stages whose class name
+                matches one of these strings (case-insensitive).
 
         Returns:
             The PipelineContext with all accumulated state.
@@ -139,6 +142,24 @@ class GenericPipelineRunner:
 
         try:
             stages, declarations = self._load_stages(niche_id, config)
+
+            # Apply --stages filter if provided
+            if stages_filter:
+                filter_lower = [f.lower() for f in stages_filter]
+                filtered = [
+                    (s, d) for s, d in zip(stages, declarations)
+                    if s.__class__.__name__.lower() in filter_lower
+                ]
+                if filtered:
+                    stages, declarations = zip(*filtered)
+                    stages, declarations = list(stages), list(declarations)
+                else:
+                    logger.warning(
+                        "[Pipeline] --stages filter matched no stages: %s",
+                        stages_filter,
+                    )
+                    stages, declarations = [], []
+
             logger.info(
                 "[Pipeline] %s%d stages for '%s': %s",
                 "[DryRun] " if dry_run else "",
