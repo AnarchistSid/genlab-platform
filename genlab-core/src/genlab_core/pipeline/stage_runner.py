@@ -347,11 +347,9 @@ class StageRunnerFactory:
         """Execute a batch of stages concurrently.
 
         Each entry in *batch* is a ``(declaration, stage_instance)`` pair.
-        All stages share the same *context* dict — they must write to
-        non-overlapping keys to avoid races.
-
-        The log filter cycles through stage names as futures complete
-        (not during execution, since threads run concurrently).
+        Each stage receives a shallow copy of the context dict to prevent
+        write races. After all stages complete, new/modified keys from
+        each copy are merged back into the original context.
 
         Returns a list of StageResult in the same order as *batch*.
         """
@@ -362,12 +360,15 @@ class StageRunnerFactory:
 
         t0 = time.monotonic()
         results: dict[int, StageResult] = {}
+        ctx_copies: dict[int, dict[str, Any]] = {}
 
         with ThreadPoolExecutor(max_workers=len(batch)) as pool:
             future_to_idx = {}
             for idx, (decl, stage) in enumerate(batch):
                 runner = self.get_runner(decl)
-                future = pool.submit(runner.run_stage, stage, context, pipeline_ctx)
+                ctx_copy = dict(context)  # shallow copy for isolation
+                ctx_copies[idx] = ctx_copy
+                future = pool.submit(runner.run_stage, stage, ctx_copy, pipeline_ctx)
                 future_to_idx[future] = idx
 
             for future in as_completed(future_to_idx):
@@ -390,6 +391,13 @@ class StageRunnerFactory:
                     "[Pipeline] Parallel stage %s finished (%s, %.1fs)",
                     stage_name, status, result.elapsed_seconds,
                 )
+
+        # Merge new/modified keys from each copy back into original context
+        for idx in range(len(batch)):
+            copy = ctx_copies[idx]
+            for key, value in copy.items():
+                if key not in context or context[key] is not value:
+                    context[key] = value
 
         elapsed = time.monotonic() - t0
         logger.info(

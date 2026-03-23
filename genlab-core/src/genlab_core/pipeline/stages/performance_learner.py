@@ -59,8 +59,12 @@ class PerformanceLearner:
         # published posts with engagement data (collected by fetch_insights)
         if len(with_engagement) < MIN_STORIES_WITH_DATA:
             try:
-                from genlab_core.http.backlog_client import BacklogClient
-                client = BacklogClient()
+                # Reuse BacklogClient from context if available
+                client = context.get("_backlog_client")
+                if client is None:
+                    from genlab_core.http.backlog_client import BacklogClient
+                    client = BacklogClient()
+                    context["_backlog_client"] = client
                 analytics = client.analytics.all(max_records=50)
                 for a in analytics:
                     f = a.get("fields", a)

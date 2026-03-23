@@ -245,9 +245,11 @@ def match_product(
     if not niche_products:
         return None
 
-    llm_result = _llm_match_product(text, niche_id, niche_products)
-    if llm_result is not None:
-        return llm_result
+    # Only invoke LLM if the cleaned text has enough substance (>20 chars of content)
+    if len(text_lower.strip()) > 20:
+        llm_result = _llm_match_product(text_lower, niche_id, niche_products)
+        if llm_result is not None:
+            return llm_result
 
     return None
 
