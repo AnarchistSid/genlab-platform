@@ -1,5 +1,9 @@
 # genlab-core/src/genlab_core/platforms/dispatcher.py
-"""Concurrent multi-platform dispatch."""
+"""Concurrent multi-platform dispatch.
+
+Note: publish_all_platforms.py uses its own ThreadPoolExecutor directly.
+This module is available for callers that want a simpler dispatch API.
+"""
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor

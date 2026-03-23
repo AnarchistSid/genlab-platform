@@ -537,7 +537,7 @@ class TrendingVideoFetcher:
             if not channel_id and not rss_url:
                 continue
 
-            # Tier 1: RSS
+            # Tier 1: RSS (rate-limited to avoid throttling)
             items = []
             if rss_url:
                 items = self._fetch_channel_rss(rss_url)
@@ -545,6 +545,7 @@ class TrendingVideoFetcher:
                     "[%s] RSS %s: %d items (0 quota)",
                     niche_id, ch.get("name", channel_id or "?"), len(items),
                 )
+                time.sleep(0.1)  # 100ms between RSS fetches to avoid throttling
 
             # Tier 2: playlistItems fallback
             if len(items) < 3 and channel_id:

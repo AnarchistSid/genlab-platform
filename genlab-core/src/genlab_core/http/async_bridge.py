@@ -45,6 +45,16 @@ def _get_loop() -> asyncio.AbstractEventLoop:
         return _LOOP
 
 
+def _shutdown_loop() -> None:
+    """Stop the background event loop on process exit."""
+    if _LOOP is not None and _LOOP.is_running():
+        _LOOP.call_soon_threadsafe(_LOOP.stop)
+
+
+import atexit
+atexit.register(_shutdown_loop)
+
+
 def run_async(coro, timeout: float = 60.0):
     """Run an async coroutine synchronously via the persistent loop.
 

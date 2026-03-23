@@ -1,5 +1,7 @@
 """Sanitize text for Microsoft Graph API SharePoint field values.
 
+See also: ``genlab_core.cache.text_sanitizer`` for HTML stripping and prompt injection checks.
+
 Non-BMP Unicode characters (emoji, U+10000+) and curly apostrophes
 (U+2019) cause ``badArgument`` errors when writing to SharePoint via
 Microsoft Graph.  The functions here strip or replace those characters

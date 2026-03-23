@@ -1,6 +1,8 @@
 """Text sanitization to prevent prompt injection and clean external content.
 
 All functions are pure, stateless, and use only stdlib (re).
+
+See also: ``genlab_core.utils.text_sanitizer`` for Graph API field sanitization.
 """
 from __future__ import annotations
 

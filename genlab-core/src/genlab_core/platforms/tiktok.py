@@ -1,4 +1,8 @@
-"""TikTok client stub — disabled pending TIKTOK_AUDIT_APPROVED=true."""
+"""TikTok client stub — disabled pending TIKTOK_AUDIT_APPROVED=true.
+
+Full implementation with upload logic: ``genlab_core.publishing.tiktok_client``.
+When TikTok audit is approved, replace this stub with a delegation to that module.
+"""
 from __future__ import annotations
 
 import os
