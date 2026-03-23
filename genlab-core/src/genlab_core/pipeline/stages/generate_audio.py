@@ -87,7 +87,7 @@ class GenerateAudio:
                     generated += 1
                 else:
                     skipped += 1
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[GenerateAudio] TTS failed for %s",
                     bp.get("candidate_id", "unknown"),

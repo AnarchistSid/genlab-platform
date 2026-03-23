@@ -87,7 +87,7 @@ class RenderTextOverlays:
                     overlaid += 1
                 else:
                     skipped += 1
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[RenderTextOverlays] Failed for story %s",
                     story.get("story_id", "unknown"),

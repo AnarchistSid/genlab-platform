@@ -120,7 +120,7 @@ class ExpressLane:
                 level_counts[level] = level_counts.get(level, 0) + 1
                 if classification["express"]:
                     express_count += 1
-            except Exception:
+            except Exception as exc:
                 logger.exception(
                     "[ExpressLane] Classification failed for %s",
                     story.get("story_id", story.get("title", "unknown")[:40]),

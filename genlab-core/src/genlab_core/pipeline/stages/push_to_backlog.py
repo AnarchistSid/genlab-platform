@@ -150,7 +150,7 @@ def _get_arm_boost(client, niche_id: str) -> dict[str, float]:
                 boosts[arm] = 1.0
 
         return boosts
-    except Exception:
+    except Exception as exc:
         return {}
 
 
@@ -569,7 +569,7 @@ class PushToBacklog:
                                 "last_seen": datetime.now(UTC).isoformat(),
                             })
                             seen_urls.add(story_id)
-                    except Exception:
+                    except Exception as exc:
                         pass  # non-critical — other dedup layers cover it
             except Exception as e:
                 logger.warning("[PUSH] Blueprint '%s' failed: %s", title, e)
