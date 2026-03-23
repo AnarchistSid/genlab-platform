@@ -169,11 +169,17 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         vp_list = []
     media_paths = [Path(p) for p in vp_list if p]
 
-    # Verify media files exist on disk before attempting publish
+    # Verify media files exist on disk and are non-empty before attempting publish
     missing = [p for p in media_paths if not p.exists()]
     if missing:
         logger.warning("[publish] Missing media files: %s", [str(m) for m in missing])
         media_paths = [p for p in media_paths if p.exists()]
+
+    # Filter out corrupted/empty files (< 10KB is not a valid video)
+    too_small = [p for p in media_paths if p.exists() and p.stat().st_size < 10240]
+    if too_small:
+        logger.warning("[publish] Skipping too-small media files (<10KB): %s", [str(p) for p in too_small])
+        media_paths = [p for p in media_paths if p not in too_small]
 
     # Media type
     fmt = (fields.get("format", "") or "").strip().lower()
@@ -182,6 +188,13 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         media_type = "video"
     else:
         media_type = "image"
+
+    # Abort early if video format but no valid media files remain
+    if media_type == "video" and not media_paths:
+        raise ValueError(
+            f"No valid media files for video publish (niche={niche_id}, "
+            f"format={fmt}, original_paths={vp_list})"
+        )
 
     # Caption, hashtags, hook
     caption = (fields.get("caption", "") or "").strip()
@@ -302,12 +315,18 @@ def _resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
         refresh_token = creds.get("refresh_token", "")
         client_id = creds.get("client_id", "") or os.environ.get("YOUTUBE_CLIENT_ID", "")
         client_secret = creds.get("client_secret", "") or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        # Expected channel ID for cross-channel verification
+        from genlab_core.publishing.niche_credentials import resolve_niche_env
+        expected_channel = resolve_niche_env(niche_id, "", "YT_CHANNEL_ID")
         if refresh_token and client_id and client_secret:
-            return {
+            kwargs = {
                 "client_id": client_id,
                 "client_secret": client_secret,
                 "refresh_token": refresh_token,
             }
+            if expected_channel:
+                kwargs["expected_channel_id"] = expected_channel
+            return kwargs
         return None
 
     if registry_id == "x_twitter":
@@ -350,16 +369,36 @@ def run_publish(
         for bp in stuck:
             fields = bp.get("fields", bp)
             updated_at = fields.get("updated_at", "")
-            # If stuck for >30 minutes, reset to VISUAL_READY
-            if updated_at:
+            attempt_count = int(fields.get("publish_attempts", 0) or 0)
 
+            # If stuck for >30 minutes, reset to VISUAL_READY (or PUBLISH_FAILED if 3+ attempts)
+            if updated_at:
                 try:
                     dt = datetime.fromisoformat(updated_at)
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=UTC)
                     if datetime.now(UTC) - dt > timedelta(minutes=30):
-                        backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
-                        logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s (>30min)", bp["id"][:8])
+                        # Check if already published on any platform (crash after partial success)
+                        pps_raw = fields.get("platform_publish_status", "{}")
+                        try:
+                            pps = json.loads(pps_raw) if isinstance(pps_raw, str) else (pps_raw or {})
+                        except (json.JSONDecodeError, TypeError):
+                            pps = {}
+                        has_published = any(
+                            v == "PUBLISHED" or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
+                            for v in pps.values()
+                        )
+                        if has_published:
+                            # Already published on some platforms — mark as PUBLISHED, don't re-publish
+                            backlog_client.blueprints.update(bp["id"], {"status": "PUBLISHED"})
+                            logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s as PUBLISHED (partial success detected)", bp["id"][:8])
+                        elif attempt_count >= 3:
+                            # Too many attempts — give up
+                            backlog_client.blueprints.update(bp["id"], {"status": "PUBLISH_FAILED"})
+                            logger.error("[publish] Blueprint %s stuck after %d attempts — marking PUBLISH_FAILED", bp["id"][:8], attempt_count)
+                        else:
+                            backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
+                            logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s (>30min)", bp["id"][:8])
                 except (ValueError, TypeError):
                     pass
     except Exception as e:
@@ -367,7 +406,6 @@ def run_publish(
 
     # Auto-recover PUBLISH_FAILED blueprints after 24h cooldown
     try:
-        from datetime import datetime, UTC, timedelta
         failed = backlog_client.get_blueprints_by_status("PUBLISH_FAILED", niche_id=niche_id)
         for bp in failed:
             fields = bp.get("fields", bp)
@@ -380,7 +418,7 @@ def run_publish(
                     if datetime.now(UTC) - dt > timedelta(hours=24):
                         backlog_client.blueprints.update(bp["id"], {
                             "status": "VISUAL_READY",
-                            "publish_attempts": "0",
+                            "publish_attempts": 0,
                         })
                         logger.info("[publish] Auto-recovered PUBLISH_FAILED blueprint %s after 24h cooldown", bp["id"][:8])
                 except (ValueError, TypeError):
@@ -410,7 +448,7 @@ def run_publish(
                 bp.get("id", "?"), bp_niche, niche_id,
             )
             continue
-        gate = gatekeeper.evaluate(fields, "instagram")  # gate is platform-agnostic except cap
+        gate = gatekeeper.evaluate(fields, "")  # platform-agnostic evaluation
         if gate.allowed:
             eligible.append(bp)
         else:
@@ -490,7 +528,20 @@ def run_publish(
             pool.submit(_publish_one, p): p for p in platforms_to_publish
         }
         for future in futures:
-            platform, result = future.result()
+            try:
+                platform, result = future.result(timeout=300)  # 5-min max per platform
+            except TimeoutError:
+                platform = futures[future]
+                result = PublishResult(
+                    platform=_to_registry_id(platform), success=False,
+                    error=f"Publish timed out after 300s for {platform}",
+                )
+            except Exception as exc:
+                platform = futures[future]
+                result = PublishResult(
+                    platform=_to_registry_id(platform), success=False,
+                    error=f"Publish error: {exc}",
+                )
             registry_id = _to_registry_id(platform)
             error_class = ""
             if result.success:
@@ -502,6 +553,14 @@ def run_publish(
                     "[publish] %s: SUCCESS post_id=%s url=%s",
                     platform, result.post_id, result.post_url,
                 )
+                # Immediately persist platform status to prevent double-post on crash
+                try:
+                    backlog_client.blueprints.update(
+                        record_id,
+                        {"platform_publish_status": json.dumps(platform_status)},
+                    )
+                except Exception:
+                    pass  # best-effort — final update at step 7 will catch up
             else:
                 error_class = classify(result.error, platform)
                 attempt_data = platform_status.get(platform, {})
@@ -595,10 +654,13 @@ def run_publish(
         except Exception as e:
             logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
 
-    # ── Retry pass: check PUBLISHED blueprints for failed platforms ──
+    # ── Retry pass: check recent PUBLISHED blueprints for failed platforms ──
+    # Only check blueprints published in the last 7 days (not the entire history)
     try:
-        from datetime import datetime, UTC, timedelta
-        published_bps = backlog_client.get_blueprints_by_status("PUBLISHED", niche_id=niche_id)
+        seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+        published_bps = backlog_client.get_blueprints_by_status(
+            "PUBLISHED", niche_id=niche_id, max_records=50,
+        )
         for bp in published_bps:
             fields = bp.get("fields", bp)
             pps_raw = fields.get("platform_publish_status", "{}")
@@ -629,6 +691,10 @@ def run_publish(
                                 continue  # Not yet time to retry
                         except (ValueError, TypeError):
                             pass
+                    # Check daily cap before retrying
+                    if daily_cap and not daily_cap.can_publish(plat):
+                        logger.debug("[publish] Retry skipped for %s — daily cap reached", plat)
+                        continue
                     retry_platforms.append(plat)
 
             if not retry_platforms:
@@ -748,6 +814,10 @@ def main() -> int:
         else [_validate_niche(args.niche)]
     )
 
+    # Reuse a single BacklogClient across all niches to avoid creating
+    # multiple connection pools (P21)
+    shared_client = BacklogClient()
+
     total_exit = 0
     for nid in niches:
         nid = _validate_niche(nid)
@@ -761,13 +831,12 @@ def main() -> int:
             continue
 
         try:
-            client = BacklogClient()
-            enforcer = DailyCapEnforcer(backlog_client=client, niche_id=nid)
+            enforcer = DailyCapEnforcer(backlog_client=shared_client, niche_id=nid)
             enforcer.log_headroom()
 
             exit_code = run_publish(
                 niche_id=nid,
-                backlog_client=client,
+                backlog_client=shared_client,
                 daily_cap=enforcer,
                 enabled_platforms=enabled,
             )

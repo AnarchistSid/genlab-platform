@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
-PUBLISHING_ANALYTICS_LIST_ID = "ea0c759a-1d9c-4aea-84ee-45cd2b5deb42"
+# List ID resolved by BacklogClient from config — this constant is unused.
+_LEGACY_LIST_ID = "ea0c759a-1d9c-4aea-84ee-45cd2b5deb42"  # kept for reference
 
 
 def record_publish(

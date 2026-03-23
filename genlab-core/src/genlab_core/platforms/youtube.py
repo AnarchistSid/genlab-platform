@@ -287,7 +287,8 @@ class YouTubeClient:
         if not title:
             title = (payload.caption.split("\n")[0].strip() if payload.caption else "")
         if not title:
-            title = "YouTube Short"
+            # Last resort: use first 40 chars of caption as title
+            title = (payload.caption or "")[:37] + "?" if payload.caption else "New Video"
 
         # Ensure #Shorts tag for algorithm classification
         if "#shorts" not in title.lower():
