@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [clutchwire, splicereel, framedrift]
+        package: [clutchwire, splicereel, framedrift, blackbox-brief, criticalrush]
         include:
           - package: clutchwire
             test_path: ClutchWire/tests/
@@ -74,6 +74,10 @@ jobs:
             test_path: SpliceReel/tests/
           - package: framedrift
             test_path: FrameDrift/tests/
+          - package: blackbox-brief
+            test_path: BlackboxBrief/tests/
+          - package: criticalrush
+            test_path: CriticalRush/tests/
     steps:
       - uses: actions/checkout@v4
         with:
