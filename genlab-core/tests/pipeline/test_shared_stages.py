@@ -23,14 +23,14 @@ class TestQCGates:
 
     def test_empty_blueprints(self):
         stage = self._make()
-        ctx = {"blueprints": []}
+        ctx = {"stories": []}
         result = stage.execute(ctx)
         assert result is ctx
 
     def test_passing_blueprint(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {
                     "candidate_id": "test1",
                     "hook": "Breaking news",
@@ -43,27 +43,27 @@ class TestQCGates:
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        bp = result["blueprints"][0]
+        bp = result["stories"][0]
         assert bp["validation_status"]["all_passed"] is True
         assert result["run_stats"]["qc"]["passed"] == 1
 
     def test_failing_completeness(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {"candidate_id": "test2", "sources": []},
             ],
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        bp = result["blueprints"][0]
+        bp = result["stories"][0]
         assert bp["validation_status"]["all_passed"] is False
         assert "Missing required field" in str(bp["validation_status"]["issues"])
 
     def test_score_penalty_applied(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {
                     "candidate_id": "test3",
                     "priority_score": 0.8,
@@ -73,12 +73,12 @@ class TestQCGates:
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        assert result["blueprints"][0]["priority_score"] < 0.8
+        assert result["stories"][0]["priority_score"] < 0.8
 
     def test_constraint_check_max_slides(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {
                     "candidate_id": "test4",
                     "hook": "Test",
@@ -91,7 +91,7 @@ class TestQCGates:
             "niche_config": {"templates": {"max_slides": 10}},
         }
         result = stage.execute(ctx)
-        assert result["blueprints"][0]["validation_status"]["constraints_passed"] is False
+        assert result["stories"][0]["validation_status"]["constraints_passed"] is False
 
 
 # ── ViralityScoring ─────────────────────────────────────────────
@@ -103,20 +103,20 @@ class TestViralityScoring:
 
     def test_empty_blueprints(self):
         stage = self._make()
-        ctx = {"blueprints": []}
+        ctx = {"stories": []}
         result = stage.execute(ctx)
         assert result is ctx
 
     def test_scores_assigned(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {"hook": "How to use ChatGPT for coding", "body": "Tutorial guide"},
             ],
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        bp = result["blueprints"][0]
+        bp = result["stories"][0]
         assert "virality_score" in bp
         assert bp["virality_score"] > 0  # Should match tutorial + named_tool
         assert "tutorial_how_to" in bp["virality_features"]
@@ -125,36 +125,36 @@ class TestViralityScoring:
     def test_no_features_zero_score(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {"hook": "Plain text", "body": "Nothing special"},
             ],
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        assert result["blueprints"][0]["virality_score"] == 0.0
-        assert result["blueprints"][0]["virality_features"] == []
+        assert result["stories"][0]["virality_score"] == 0.0
+        assert result["stories"][0]["virality_features"] == []
 
     def test_question_hook(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {"hook": "Why is everyone talking about this?", "body": "Interesting."},
             ],
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        assert "hook_format_question" in result["blueprints"][0]["virality_features"]
+        assert "hook_format_question" in result["stories"][0]["virality_features"]
 
     def test_controversy(self):
         stage = self._make()
         ctx = {
-            "blueprints": [
+            "stories": [
                 {"hook": "This controversial move divided the community", "body": "Drama ensued."},
             ],
             "niche_config": {},
         }
         result = stage.execute(ctx)
-        assert "controversy_debate" in result["blueprints"][0]["virality_features"]
+        assert "controversy_debate" in result["stories"][0]["virality_features"]
 
 
 # ── ExpressLane ─────────────────────────────────────────────────
@@ -304,14 +304,14 @@ class TestGenerateAudio:
 
     def test_empty_blueprints(self):
         stage = self._make()
-        ctx = {"blueprints": []}
+        ctx = {"stories": []}
         result = stage.execute(ctx)
         assert result is ctx
 
     def test_disabled_in_config(self):
         stage = self._make()
         ctx = {
-            "blueprints": [{"hook": "Test", "body": "Content"}],
+            "stories": [{"hook": "Test", "body": "Content"}],
             "niche_config": {"audio": {"enabled": False}},
         }
         result = stage.execute(ctx)
@@ -323,7 +323,7 @@ class TestGenerateAudio:
         # Mock TTSCascade import to avoid real dependency
         with patch.dict("sys.modules", {"genlab_core.tts.cascade": MagicMock()}):
             ctx = {
-                "blueprints": [{"hook": "Hi", "body": ""}],
+                "stories": [{"hook": "Hi", "body": ""}],
                 "niche_config": {"audio": {"enabled": True}},
             }
             result = stage.execute(ctx)
@@ -659,7 +659,7 @@ class TestRunReport:
             ):
                 ctx = {
                     "stories": [{"title": "Test"}],
-                    "blueprints": [{"id": "bp1"}],
+                    "stories": [{"id": "bp1"}],
                     "run_stats": {"qc": {"passed": 1, "failed": 0, "total": 1, "pass_rate": "100.0%"}},
                     "niche_config": {"niche_id": "test"},
                 }
@@ -679,7 +679,7 @@ class TestRunReport:
             ):
                 ctx = {
                     "stories": [],
-                    "blueprints": [],
+                    "stories": [],
                     "run_stats": {},
                     "niche_config": {"niche_id": "test"},
                 }

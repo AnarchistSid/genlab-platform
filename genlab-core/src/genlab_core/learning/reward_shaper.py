@@ -130,31 +130,34 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
     },
 }
 
-# Default "good" metric values for logistic normalisation.
+# "Good" metric targets — scaled for early-stage channels (<5K followers).
+# These will be dynamically adjusted as channels grow.
+# Original targets (for mature channels with 50K+ followers) were 10-100x higher
+# and produced near-zero rewards for new channels (Break 4 fix).
 _METRIC_TARGETS: dict[str, dict[str, float]] = {
-    "views": {"youtube": 10000, "instagram": 5000, "tiktok": 50000,
-              "facebook": 3000, "twitter": 5000, "x": 5000},
-    "avg_view_duration": {"youtube": 60},
-    "saves": {"instagram": 200},
-    "dm_send_rate": {"instagram": 0.05},
-    "share_rate": {"tiktok": 0.02},
-    "reply_chain_rate": {"twitter": 0.01, "x": 0.01},
-    "completion_rate": {"facebook": 0.4},
-    "skip_rate": {"instagram": 0.3},
-    "subscriber_gained": {"youtube": 10},
-    "follower_gained": {"tiktok": 50},
-    "avg_watch_time": {"tiktok": 30},
-    "minutes_viewed": {"facebook": 500},
-    "shares": {"instagram": 50, "facebook": 30},
-    "impressions": {"twitter": 5000, "x": 5000},
-    "engagements": {"twitter": 200, "x": 200},
-    "profile_clicks": {"twitter": 50, "x": 50},
+    "views": {"youtube": 200, "instagram": 500, "tiktok": 5000,
+              "facebook": 300, "twitter": 500, "x": 500},
+    "avg_view_duration": {"youtube": 30},
+    "saves": {"instagram": 15},
+    "dm_send_rate": {"instagram": 0.02},
+    "share_rate": {"tiktok": 0.01},
+    "reply_chain_rate": {"twitter": 0.005, "x": 0.005},
+    "completion_rate": {"facebook": 0.3},
+    "skip_rate": {"instagram": 0.4},
+    "subscriber_gained": {"youtube": 2},
+    "follower_gained": {"tiktok": 10},
+    "avg_watch_time": {"tiktok": 15},
+    "minutes_viewed": {"facebook": 50},
+    "shares": {"instagram": 5, "facebook": 3},
+    "impressions": {"twitter": 500, "x": 500},
+    "engagements": {"twitter": 20, "x": 20},
+    "profile_clicks": {"twitter": 5, "x": 5},
     "like_rate": {"youtube": 0.04},
     "comment_rate": {"youtube": 0.01},
-    "reach": {"facebook": 1000},
-    "replies": {"threads": 20},
-    "reposts": {"threads": 10},
-    "discovery_share": {"threads": 0.1},
+    "reach": {"facebook": 100},
+    "replies": {"threads": 3},
+    "reposts": {"threads": 2},
+    "discovery_share": {"threads": 0.05},
 }
 
 
@@ -260,6 +263,17 @@ class RewardShaper:
             value = metrics.get(metric, 0.0)
             normalised = _normalise_metric(metric, value, platform)
             raw_reward += weight * normalised
+
+        # Monetization bonus: affiliate clicks boost reward (Break 13 fix)
+        affiliate_clicks = float(metrics.get("affiliate_clicks", 0))
+        if affiliate_clicks > 0:
+            # Each click is worth a 0.05 reward bonus, capped at 0.3
+            monetization_bonus = min(0.3, affiliate_clicks * 0.05)
+            raw_reward += monetization_bonus
+            logger.debug(
+                "[REWARD] Monetization bonus: %d clicks → +%.2f",
+                int(affiliate_clicks), monetization_bonus,
+            )
 
         return max(0.0, min(1.0, raw_reward))
 

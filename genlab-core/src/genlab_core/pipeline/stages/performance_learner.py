@@ -31,10 +31,13 @@ MIN_STORIES_WITH_DATA = 1
 
 
 class PerformanceLearner:
-    """Update bandit posteriors from engagement data.
+    """Log learning loop status to run_stats.
 
-    Uses LinUCB for arms with sufficient observations, Thompson Sampling
-    otherwise (cold-start protection).
+    NOTE: Bandit updates are now handled by metric_collector via the
+    _default_bandit_updater callback (Break 5/8/9 fix). This stage
+    only logs the current bandit state for observability — it no longer
+    directly updates bandit_arms. The metric_collector runs every 60min
+    and feeds rewards to bandits when 48h metrics arrive.
 
     Reads: context['stories'], context['niche_config'], context['run_stats']
     Writes: context['run_stats']['learning']

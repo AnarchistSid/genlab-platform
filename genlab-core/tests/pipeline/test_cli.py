@@ -209,7 +209,7 @@ class TestRunPipeline:
         call_kwargs = mock_runner_cls.call_args
         assert "gaming" in call_kwargs.kwargs.get("niche_roots", call_kwargs[1].get("niche_roots", {}))
         mock_runner_cls.return_value.run.assert_called_once_with(
-            "gaming", dry_run=True, verbose=False,
+            "gaming", dry_run=True, verbose=False, stages_filter=None,
         )
         assert ctx is mock_ctx
 

@@ -639,6 +639,21 @@ def run_publish(
                         except Exception:
                             pass
 
+                    # Build bandit_context with hook features for LinUCB (Break 11 fix)
+                    bandit_ctx = None
+                    try:
+                        from genlab_core.learning.hook_features import build_feature_vector
+                        from genlab_core.learning.linucb import build_content_context
+                        hook_txt = fields.get("hook", "")
+                        hook_feats = build_feature_vector(hook_txt) if hook_txt else {}
+                        linucb_ctx = build_content_context(fields, niche_id).tolist()
+                        bandit_ctx = {
+                            "hook_features": hook_feats,
+                            "linucb_context": linucb_ctx,
+                        }
+                    except Exception as ctx_exc:
+                        logger.debug("[publish] bandit_context build failed: %s", ctx_exc)
+
                     task = PendingFeedbackTask(
                         content_id=candidate_id or record_id[:16],
                         platform=plat,
@@ -649,6 +664,7 @@ def run_publish(
                         hook_text=fields.get("hook", "")[:100],
                         hook_length=len(fields.get("hook", "")),
                         bandit_arm=fields.get("arm_id", ""),
+                        bandit_context=bandit_ctx,
                     )
                     fb_store.create(task)
         except Exception as e:
