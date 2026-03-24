@@ -194,7 +194,8 @@ class TestYouTubeRules:
             title="This Changes Everything.",
             caption="",
         )
-        assert result.title == "This Changes Everything?"
+        # "This ..." titles get "Did" prefix for real question format
+        assert result.title == "Did this Changes Everything?"
         assert not result.title.endswith(".?")
 
     def test_warns_on_question_conversion(self):
