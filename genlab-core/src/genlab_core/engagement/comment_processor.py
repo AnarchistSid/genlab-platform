@@ -242,12 +242,23 @@ def _load_persona(niche_id: str) -> NichePersona:
     """Load persona YAML. Raises FileNotFoundError if absent."""
     import yaml
 
-    niche_aliases = [niche_id]
+    from genlab_core.pipeline.cli import NICHE_DIR_NAMES
 
     personas_dir = Path(__file__).parent / "personas"
-    candidate_paths = []
+    candidate_paths: list[Path] = []
 
-    # Try agent root first (niche-specific persona.yaml in channel config/)
+    # Resolve the correct channel directory for this niche_id
+    # (AGENT_ROOT may point to the wrong channel when the engagement
+    # worker processes comments across multiple niches)
+    try:
+        genlab_root = _get_agent_root().parent
+        channel_dir = NICHE_DIR_NAMES.get(niche_id)
+        if channel_dir:
+            candidate_paths.append(genlab_root / channel_dir / "config" / "persona.yaml")
+    except Exception:
+        pass
+
+    # Also try AGENT_ROOT directly (legacy fallback)
     try:
         agent_root = _get_agent_root()
         candidate_paths.append(agent_root / "config" / "persona.yaml")
@@ -255,8 +266,7 @@ def _load_persona(niche_id: str) -> NichePersona:
         pass
 
     # Then try package personas/ directory with alias resolution
-    for alias in niche_aliases:
-        candidate_paths.append(personas_dir / f"{alias}.yaml")
+    candidate_paths.append(personas_dir / f"{niche_id}.yaml")
 
     for path in candidate_paths:
         if path.exists():
