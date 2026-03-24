@@ -394,6 +394,20 @@ def process_pending_task(
         niche_id=task_record.niche_id,
     )
 
+    # Record lifecycle snapshot for content decay analysis
+    if metrics:
+        try:
+            from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
+            record_lifecycle_snapshot(
+                post_id=task_record.platform_post_id,
+                platform=task_record.platform,
+                niche_id=task_record.niche_id,
+                window=window,
+                metrics=metrics,
+            )
+        except Exception as exc:
+            logger.debug("[metric_collector] lifecycle snapshot failed: %s", exc)
+
     # Early-stop detection at 6h window (Break 14 fix)
     # If 6h views are far below niche floor, the post is bombing — skip to
     # negative reward immediately instead of waiting 48h for the inevitable.
