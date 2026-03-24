@@ -167,9 +167,12 @@ class BaseWritingStrategy(WritingStrategy):
         content["written"] = True
 
         title = story.get("title", "")
+        hook = content.get("hook", "")
         hashtags = re.findall(r"#\w+", caption)
         content["instagram"] = {"caption": caption, "hashtags": hashtags}
-        content["youtube"] = {"title": title[:40], "description": caption}
+        # Use hook as YouTube title (more engaging than raw headline)
+        yt_title = hook if hook else title[:40]
+        content["youtube"] = {"title": yt_title, "description": caption}
         content["x_twitter"] = {"tweet": caption[:280]}
         content["facebook"] = {"caption": caption[:300]}
         content["tiktok"] = {"caption": caption[:2200]}
@@ -215,14 +218,21 @@ class BaseWritingStrategy(WritingStrategy):
         ig_caption = result.get("instagram_caption", "")
         hashtags = re.findall(r"#\w+", ig_caption)
         content["instagram"] = {"caption": ig_caption, "hashtags": hashtags}
+        # Use hook as YouTube title (more engaging than raw headline)
+        hook = result.get("hook", "")
+        yt_title = hook if hook else result.get("youtube_content", "")[:40]
         content["youtube"] = {
-            "title": result.get("youtube_content", "")[:40],
+            "title": yt_title,
             "description": ig_caption,
         }
         content["x_twitter"] = {"tweet": result.get("twitter_content", "")[:280]}
         content["facebook"] = {"caption": result.get("facebook_content", "")[:300]}
-        content["tiktok"] = {"caption": ig_caption[:2200]}
-        content["threads"] = {"caption": ig_caption[:500]}
+        # Use LLM-generated TikTok/Threads content if available, else fall back to IG
+        tk_content = result.get("tiktok_content", "") or ig_caption
+        th_content = result.get("threads_content", "") or ig_caption
+        tk_hashtags = re.findall(r"#\w+", tk_content)
+        content["tiktok"] = {"caption": tk_content[:2200], "hashtags": tk_hashtags}
+        content["threads"] = {"caption": th_content[:500]}
 
         story["content"] = content
         return story

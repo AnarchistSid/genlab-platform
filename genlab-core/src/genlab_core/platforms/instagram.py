@@ -99,7 +99,24 @@ class InstagramClient:
 
         if not video_url.startswith("http"):
             from genlab_core.platforms.cdn_upload import upload_to_cdn
-            cdn_url = upload_to_cdn(video_url)
+            # Retry CDN upload once on failure (large files can timeout on first attempt)
+            cdn_url = None
+            _cdn_last_exc = None
+            for _cdn_attempt in range(2):
+                try:
+                    cdn_url = upload_to_cdn(video_url)
+                    if cdn_url:
+                        break
+                except Exception as _cdn_exc:
+                    _cdn_last_exc = _cdn_exc
+                    if _cdn_attempt == 0:
+                        logger.warning(
+                            "CDN upload failed (attempt 1), retrying: %s", _cdn_exc
+                        )
+                        continue
+                    raise
+                if _cdn_attempt == 0 and not cdn_url:
+                    logger.warning("CDN upload returned None (attempt 1), retrying")
             if not cdn_url:
                 tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
                 from pathlib import Path as _Path
@@ -108,7 +125,7 @@ class InstagramClient:
                     platform=self.platform_id,
                     success=False,
                     error=(
-                        f"CDN upload failed for Instagram"
+                        f"CDN upload failed for Instagram after 2 attempts"
                         f" (file_exists={exists}, tunnel={'set' if tunnel else 'unset'},"
                         f" path={video_url[-60:]})"
                     ),

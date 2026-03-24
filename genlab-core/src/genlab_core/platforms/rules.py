@@ -144,19 +144,31 @@ def _enforce_youtube_rules(adapted: AdaptedContent) -> None:
     if not title:
         return
 
-    # Enforce question format
+    # Convert to question format if not already a question
     if not title.rstrip().endswith("?"):
-        # Simple conversion: strip trailing punctuation and add ?
-        title = title.rstrip("?.!,").strip()
-        if title:
-            title = f"{title}?"
+        # Try to make it a real question by prepending question words
+        lower = title.lower()
+        if any(lower.startswith(w) for w in ("this ", "these ", "the ", "a ")):
+            # "This AI tool changed everything" -> "Did this AI tool just change everything?"
+            title = title.rstrip("?.!,").strip()
+            title = f"Did {title[0].lower()}{title[1:]}?"
+        elif any(lower.startswith(w) for w in ("just ", "already ")):
+            title = f"Did this {title.rstrip('?.!,').strip()}?"
+        else:
+            # Fallback: strip trailing punctuation and add ?
+            title = title.rstrip("?.!,").strip() + "?"
         adapted.warnings.append(
             "Title converted to question format for Shorts shelf eligibility"
         )
 
     # Enforce max length
     if len(title) > _YT_SHORTS_MAX_CHARS:
-        title = title[: _YT_SHORTS_MAX_CHARS - 1] + "?"
+        # Truncate smartly at word boundary
+        truncated = title[:_YT_SHORTS_MAX_CHARS - 1]
+        last_space = truncated.rfind(" ")
+        if last_space > 20:
+            truncated = truncated[:last_space]
+        title = truncated.rstrip("?.!,").strip() + "?"
         adapted.warnings.append(
             f"Title truncated to {_YT_SHORTS_MAX_CHARS} chars"
         )
