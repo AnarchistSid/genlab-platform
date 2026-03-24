@@ -220,7 +220,13 @@ def write_video_content(
             all_tags = re.findall(r"#\w+", " ".join(hash_parts) + " " + body)
             body = re.sub(r"\s*#\w+", "", body).strip()
             if len(all_tags) < 3:
-                all_tags = list(voice["hashtags"][:4])
+                # Dynamic topic-aware hashtags instead of static niche list
+                from genlab_core.writing.hashtag_generator import generate_hashtags
+                all_tags = generate_hashtags(
+                    {"title": video.get("title", ""), "summary": video.get("description_snippet", "")},
+                    niche_id,
+                    platform="instagram",
+                )
             elif len(all_tags) > 5:
                 all_tags = all_tags[:5]
 
@@ -288,10 +294,16 @@ def write_video_content(
         # Fallback using video title — NOT a generic template
         title = video.get("title", "")
         channel = video.get("channel_name", "")
+        from genlab_core.writing.hashtag_generator import generate_hashtags
+        fallback_tags = generate_hashtags(
+            {"title": title, "summary": video.get("description_snippet", "")},
+            niche_id,
+            platform="instagram",
+        )
         return {
             "hook": title[:57] + "..." if len(title) > 60 else title,
             "instagram_caption": (
-                f"{title}\n\nVia {channel}\n\n{' '.join(voice['hashtags'][:3])}"
+                f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"
             ),
             "twitter_content": title[:280],
             "youtube_content": title[:40],
