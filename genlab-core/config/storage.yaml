@@ -1,15 +1,4 @@
-# Per-agent disk quota configuration
-# Used by genlab_core.storage.disk_quota.DiskQuotaManager
-
 agents:
-  content_scraper:
-    # Set to the actual .tmp/runs path on your machine
-    runs_dir: null
-    quota_gb: 50
-    warn_pct: 80     # Log warning above this
-    evict_pct: 90    # Trigger eviction above this
-    protect_recent: 3  # Never evict N most recent runs
-
   criticalrush:
     runs_dir: null
     quota_gb: 10

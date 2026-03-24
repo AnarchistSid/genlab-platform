@@ -20,6 +20,10 @@ config.set_section_option(
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# target_metadata is intentionally None — GenLab uses hand-written migrations
+# rather than Alembic autogenerate.  Setting this to a SQLAlchemy Base.metadata
+# would enable `alembic revision --autogenerate`, but the project prefers
+# explicit migration scripts for tighter control over schema changes.
 target_metadata = None
 
 

@@ -74,75 +74,73 @@ def _make_client(mock_config):
 
 
 def _make_client_with_backend(mock_config):
-    """Instantiate BacklogClient and replace _backend with a mock.
+    """Instantiate BacklogClient and replace pending_engagement proxy with a mock.
 
-    Returns (client, mock_backend) where mock_backend is the object
-    returned by client._backend("PendingEngagement").
+    Returns (client, mock_proxy) where mock_proxy is the proxy object
+    used by engagement methods for create/find/update operations.
     """
     client = _make_client(mock_config)
-    mock_backend = MagicMock()
-    client._backend = MagicMock(return_value=mock_backend)
-    return client, mock_backend
+    mock_proxy = MagicMock()
+    client.pending_engagement = mock_proxy
+    return client, mock_proxy
 
 
 class TestUpdateEngagementStatus:
     def test_update_engagement_status_replied(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
+        client, mock_proxy = _make_client_with_backend(mock_config)
         client.update_engagement_status(
             "item-42", "replied", reply_text="Thanks for watching!"
         )
 
-        mock_backend.update.assert_called_once()
-        call_args = mock_backend.update.call_args[0]
-        table_name = call_args[0]
-        item_id = call_args[1]
-        fields = call_args[2]
-        assert table_name == "PendingEngagement"
+        mock_proxy.update.assert_called_once()
+        call_args = mock_proxy.update.call_args[0]
+        item_id = call_args[0]
+        fields = call_args[1]
         assert item_id == "item-42"
-        assert fields["Status"] == "replied"
-        assert "ProcessedAt" in fields
-        # ProcessedAt should be a valid ISO timestamp string
-        assert "T" in fields["ProcessedAt"]
-        assert fields["ReplyText"] == "Thanks for watching!"
+        assert fields["status"] == "replied"
+        assert "processed_at" in fields
+        # processed_at should be a valid ISO timestamp string
+        assert "T" in fields["processed_at"]
+        assert fields["reply_text"] == "Thanks for watching!"
 
     def test_update_engagement_status_failed_with_error(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
+        client, mock_proxy = _make_client_with_backend(mock_config)
         client.update_engagement_status(
             "item-99", "failed", error_msg="Rate limit exceeded"
         )
 
-        call_args = mock_backend.update.call_args[0]
-        fields = call_args[2]
-        assert fields["Status"] == "failed"
-        assert fields["ErrorMessage"] == "Rate limit exceeded"
+        call_args = mock_proxy.update.call_args[0]
+        fields = call_args[1]
+        assert fields["status"] == "failed"
+        assert fields["error_message"] == "Rate limit exceeded"
 
     def test_update_engagement_status_truncates_reply(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
+        client, mock_proxy = _make_client_with_backend(mock_config)
         long_reply = "x" * 5000
         client.update_engagement_status(
             "item-1", "replied", reply_text=long_reply
         )
 
-        call_args = mock_backend.update.call_args[0]
-        fields = call_args[2]
-        assert len(fields["ReplyText"]) == 2000
+        call_args = mock_proxy.update.call_args[0]
+        fields = call_args[1]
+        assert len(fields["reply_text"]) == 2000
 
     def test_update_engagement_status_truncates_error(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
+        client, mock_proxy = _make_client_with_backend(mock_config)
         long_error = "e" * 1000
         client.update_engagement_status(
             "item-2", "failed", error_msg=long_error
         )
 
-        call_args = mock_backend.update.call_args[0]
-        fields = call_args[2]
-        assert len(fields["ErrorMessage"]) == 500
+        call_args = mock_proxy.update.call_args[0]
+        fields = call_args[1]
+        assert len(fields["error_message"]) == 500
 
     def test_update_engagement_status_invalid_status(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
+        client, mock_proxy = _make_client_with_backend(mock_config)
         client.update_engagement_status("item-3", "bogus_status")
 
-        mock_backend.update.assert_not_called()
+        mock_proxy.update.assert_not_called()
 
     def test_update_engagement_status_no_proxy(self, mock_config):
         client = _make_client(mock_config)
@@ -152,8 +150,8 @@ class TestUpdateEngagementStatus:
         client.update_engagement_status("item-4", "replied")
 
     def test_update_engagement_status_api_error(self, mock_config):
-        client, mock_backend = _make_client_with_backend(mock_config)
-        mock_backend.update.side_effect = RuntimeError("Graph API down")
+        client, mock_proxy = _make_client_with_backend(mock_config)
+        mock_proxy.update.side_effect = RuntimeError("Graph API down")
 
         # Should not raise — catches and logs
         client.update_engagement_status("item-5", "liked")

@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Popular game IDs on Twitch (fallback if IGDB enrichment not available)
 _DEFAULT_GAME_IDS = [
-    "509658",   # Just Chatting (for gaming events/announcements)
+    # NOTE: "509658" (Just Chatting) REMOVED — it's an IRL category, not a game.
+    # It's always #1 on Twitch, causing 24% of gaming content to be non-gaming spam.
     "32982",    # Grand Theft Auto V
     "516575",   # Valorant
     "21779",    # League of Legends
@@ -28,6 +29,8 @@ _DEFAULT_GAME_IDS = [
     "263490",   # Rust
     "518203",   # Apex Legends
     "511224",   # Call of Duty: Warzone
+    "29595",    # Dota 2
+    "27471",    # Minecraft
 ]
 
 

@@ -1,40 +1,24 @@
-# Disk quota enforcement for media workspaces.
-# Consumed by genlab_core.storage.disk_quota.DiskQuotaManager.
-#
-# Two-pass eviction: clips/ subdirs first, then full run dirs.
-# Published runs and N most recent runs are protected.
-
 agents:
-  content_scraper:
-    runs_dir: "/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/runs"
-    quota_gb: 80
-    warn_pct: 75
-    evict_pct: 90
-    protect_recent: 3
-
   criticalrush:
-    runs_dir: "/Users/anarchistsid/GenLab/CriticalRush/.tmp/runs"
+    runs_dir: /Users/anarchistsid/GenLab/CriticalRush/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
-
   clutchwire:
-    runs_dir: "/Users/anarchistsid/GenLab/ClutchWire/.tmp/runs"
+    runs_dir: /Users/anarchistsid/GenLab/ClutchWire/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
-
   splicereel:
-    runs_dir: "/Users/anarchistsid/GenLab/SpliceReel/.tmp/runs"
+    runs_dir: /Users/anarchistsid/GenLab/SpliceReel/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
-
   framedrift:
-    runs_dir: "/Users/anarchistsid/GenLab/FrameDrift/.tmp/runs"
+    runs_dir: /Users/anarchistsid/GenLab/FrameDrift/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90

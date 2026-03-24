@@ -153,6 +153,9 @@ def _get_encode_args(platform: str = "instagram") -> list[str]:
     # Append pix_fmt (always yuv420p for web delivery) — not in RenderSpec
     args += ["-pix_fmt", "yuv420p"]
 
+    # bt709 color space tagging (web standard)
+    args += ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709"]
+
     # Append movflags for progressive download — not in RenderSpec
     args += ["-movflags", "+faststart"]
 

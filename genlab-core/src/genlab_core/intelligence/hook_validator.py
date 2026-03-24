@@ -325,3 +325,43 @@ class HookValidator:
 
         if caps_ratio > 0.3 and lower_ratio > 0.2:
             result.failures.append(HookFailure.MIXED_CAPS)
+
+
+# ------------------------------------------------------------------
+# Hook cleaning utilities — salvage hooks that failed validation
+# ------------------------------------------------------------------
+
+# Patterns to strip from hooks (ported from gaming GamingHookValidator.clean())
+_NEWS_PREFIXES_RE = re.compile(
+    r"^(BREAKING:\s*|JUST IN:\s*|ALERT:\s*|URGENT:\s*|EXCLUSIVE:\s*)",
+    re.IGNORECASE,
+)
+_WEAK_OPENERS_RE = re.compile(
+    r"^(So\s+|Well\s+|Basically\s+|Honestly\s+|Look\s+|Okay\s+|Right\s+)",
+    re.IGNORECASE,
+)
+_REDDIT_PHRASES_RE = re.compile(
+    r"\b(TIL|ELI5|IMO|IIRC|AFAIK)\b|\[OC\]|\[Spoiler\]|\[Discussion\]|r/\w+|/u/\w+",
+    re.IGNORECASE,
+)
+_FORMAL_OPENERS_RE = re.compile(
+    r"^(We are pleased|It has been announced|According to sources|"
+    r"In a recent development|Sources confirm|Reports indicate)",
+    re.IGNORECASE,
+)
+_MARKDOWN_RE = re.compile(r"\*\*|__|\*|`|^#+\s", re.MULTILINE)
+
+
+def clean_hook(hook: str) -> str:
+    """Strip common artifacts from a hook to salvage it.
+
+    Removes markdown, news prefixes, weak openers, formal openers,
+    and Reddit-specific phrases. Collapses whitespace.
+    """
+    cleaned = _MARKDOWN_RE.sub("", hook)
+    cleaned = _NEWS_PREFIXES_RE.sub("", cleaned)
+    cleaned = _WEAK_OPENERS_RE.sub("", cleaned)
+    cleaned = _FORMAL_OPENERS_RE.sub("", cleaned)
+    cleaned = _REDDIT_PHRASES_RE.sub("", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+    return cleaned

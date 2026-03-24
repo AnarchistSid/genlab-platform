@@ -18,6 +18,13 @@ def ig_client():
     )
 
 
+@pytest.fixture(autouse=True)
+def _mock_cdn_upload():
+    """All Instagram publish tests need CDN upload mocked (local paths don't exist)."""
+    with patch("genlab_core.platforms.cdn_upload.upload_to_cdn", return_value="https://cdn.test/clip.mp4"):
+        yield
+
+
 class TestPublish:
     def test_publish_video_reel(self, ig_client):
         """Reel publish: create container → poll → publish."""

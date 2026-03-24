@@ -134,7 +134,7 @@ class MonetisationTracker:
             from genlab_core.monitoring.youtube_quota import YouTubeQuotaTracker
 
             quota = YouTubeQuotaTracker()
-            if not quota.can_afford("channel_list"):
+            if quota.status()["remaining"] < 1:
                 result["status"] = "quota_exhausted"
                 logger.warning("[%s] YouTube quota exhausted — skipping", niche_id)
                 return result

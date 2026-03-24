@@ -294,7 +294,7 @@ class BacklogClient:
                 sql_table = _SQL_TABLE_MAP.get(table.lower(), table.lower())
                 setattr(self, attr, PostgresTableProxy(_pg, sql_table))
 
-            self._sp_proxies = {t: getattr(self, t.lower().replace("_", "_"), None) for t in ALL_TABLES}
+            self._sp_proxies = {t: getattr(self, attr_map.get(t.lower(), t.lower()), None) for t in ALL_TABLES}
             self._backend_cache = {"postgres": _pg}
 
             logger.info("[BacklogClient] Postgres-only mode — no SharePoint connection")
@@ -1178,26 +1178,26 @@ class BacklogClient:
         author_name, created_at (ISO string), niche_id.
         Status defaults to 'pending'.
 
-        Returns the SharePoint item ID on success, None on failure.
+        Returns the record ID on success, None on failure.
         """
         if not self.pending_engagement:
             logger.warning("[engagement] PendingEngagement table not configured")
             return None
+        # Promoted columns (snake_case) go to SQL columns;
+        # non-promoted fields go to extra JSONB.
         fields = {
-            "Title": event.get("comment_id", ""),
-            "Platform": event.get("platform", ""),
-            "PostId": event.get("post_id", ""),
-            "CommentText": (event.get("text") or "")[:2000],
-            "AuthorName": event.get("author_name", ""),
-            "CreatedAt": event.get("created_at", ""),
-            "NicheId": event.get("niche_id", ""),
-            "Status": "pending",
+            "platform": event.get("platform", ""),
+            "post_id": event.get("post_id", ""),
+            "niche_id": event.get("niche_id", ""),
+            "status": "pending",
+            # Non-promoted fields → extra JSONB
+            "comment_id": event.get("comment_id", ""),
+            "comment_text": (event.get("text") or "")[:2000],
+            "author_name": event.get("author_name", ""),
         }
         try:
-            result = self._backend("PendingEngagement").create(
-                "PendingEngagement", fields,
-            )
-            return str(result.get("id", "")) or None
+            result = self.pending_engagement.create(fields)
+            return str(result) if result else None
         except Exception as e:
             logger.warning("[engagement] write_pending_engagement failed: %s", e)
             return None
@@ -1212,12 +1212,11 @@ class BacklogClient:
         if not self.pending_engagement:
             logger.warning("[engagement] PendingEngagement table not configured")
             return []
-        formula = f"{{Status}}='{_esc(status)}'"
+        formula = f"{{status}}='{_esc(status)}'"
         if niche_id:
-            formula = f"AND({{Status}}='{_esc(status)}', {{NicheId}}='{_esc(niche_id)}')"
+            formula = f"AND({{status}}='{_esc(status)}', {{niche_id}}='{_esc(niche_id)}')"
         try:
-            return self._backend("PendingEngagement").find(
-                "PendingEngagement",
+            return self.pending_engagement.find(
                 formula=formula,
                 max_records=limit,
             )
@@ -1235,7 +1234,7 @@ class BacklogClient:
         """Update the status of a pending engagement item.
 
         Args:
-            item_id: SharePoint list item ID
+            item_id: Record ID (UUID or legacy SharePoint ID)
             status: New status (replied, liked, skipped, failed, rate_limited)
             reply_text: The reply that was posted (if status=replied)
             error_msg: Error message (if status=failed)
@@ -1249,19 +1248,19 @@ class BacklogClient:
             logger.warning("BacklogClient: invalid engagement status '%s'", status)
             return
 
+        # Promoted columns use snake_case to match SQL schema;
+        # non-promoted fields go to extra JSONB.
         fields: dict[str, str] = {
-            "Status": status,
-            "ProcessedAt": datetime.now(UTC).isoformat(),
+            "status": status,
+            "processed_at": datetime.now(UTC).isoformat(),
         }
         if reply_text:
-            fields["ReplyText"] = reply_text[:2000]
+            fields["reply_text"] = reply_text[:2000]
         if error_msg:
-            fields["ErrorMessage"] = error_msg[:500]
+            fields["error_message"] = error_msg[:500]
 
         try:
-            self._backend("PendingEngagement").update(
-                "PendingEngagement", item_id, fields,
-            )
+            self.pending_engagement.update(item_id, fields)
             logger.info("BacklogClient: engagement %s → %s", item_id, status)
         except Exception as e:
             logger.warning("BacklogClient: failed to update engagement %s: %s", item_id, e)

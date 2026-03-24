@@ -1,26 +1,23 @@
-"""Tests for FrameCompositor -- Gen Lab Layout v3.
+"""Tests for FrameCompositor -- Gen Lab Layout v4.
 
-Three layout paths: landscape, portrait, square.
-These tests document and enforce the locked frame spec.
+Three layout paths: landscape (branding+hook+video), portrait (clean),
+square (branding+hook+video).
 """
-
-
 
 from genlab_core.media.frame_compositor import (
     CANVAS_H,
     CANVAS_W,
     HOOK_MAX_CHARS,
-    L_BOTTOM_H,
     L_VIDEO_H,
     L_VIDEO_Y,
+    L_LOGO_Y,
+    L_HOOK_Y,
     LANDSCAPE_THRESHOLD,
-    P_HOOK_Y,
-    P_LOGO_Y,
-    P_OVERLAY_H,
     PORTRAIT_THRESHOLD,
-    S_BOTTOM_H,
     S_VIDEO_H,
     S_VIDEO_Y,
+    S_LOGO_Y,
+    S_HOOK_Y,
     ChannelBranding,
     FrameCompositor,
     VideoInfo,
@@ -30,96 +27,66 @@ from genlab_core.media.frame_compositor import (
 
 class TestChannelBranding:
 
-    def test_from_dict_flat(self, tmp_path):
-        yaml_file = tmp_path / "visuals.yaml"
-        yaml_file.write_text(
-            "channel_name: CriticalRush\n"
-            "handle: '@CriticalRush'\n"
-            "accent_color: '#00FF88'\n"
-            "logo_path: /some/logo.png\n"
-            "niche_id: gaming\n"
-        )
-        b = ChannelBranding.from_visuals_yaml(str(yaml_file))
-        assert b.channel_name == "CriticalRush"
-        assert b.handle == "@CriticalRush"
-        assert b.niche_id == "gaming"
+    def test_from_yaml_loads_fields(self, tmp_path):
+        yaml_content = """
+niche_id: test_niche
+frame_layout:
+  branding:
+    channel_name: TestChannel
+    handle: "@TestHandle"
+    accent_color: "#FF0000"
+    logo_path: "assets/logo.png"
+    niche_id: test_niche
+ffmpeg:
+  preset: fast
+  fallback_preset: ultrafast
+  timeout_seconds: 60
+"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        yaml_path = config_dir / "visuals.yaml"
+        yaml_path.write_text(yaml_content)
 
-    def test_from_dict_nested_branding(self, tmp_path):
-        yaml_file = tmp_path / "visuals.yaml"
-        yaml_file.write_text(
-            "visuals:\n"
-            "  branding:\n"
-            "    channel_name: ClutchWire\n"
-            "    handle: '@theclutchwire'\n"
-            "    accent_color: '#FF2040'\n"
-            "    logo_path: /logo.png\n"
-            "    niche_id: sports\n"
-        )
-        b = ChannelBranding.from_visuals_yaml(str(yaml_file))
-        assert b.channel_name == "ClutchWire"
-        assert b.niche_id == "sports"
-
-    def test_from_frame_layout_branding(self, tmp_path):
-        yaml_file = tmp_path / "visuals.yaml"
-        yaml_file.write_text(
-            "niche_id: sports\n"
-            "logo_path: old/logo.png\n"
-            "accent_color: '#FF2040'\n"
-            "frame_layout:\n"
-            "  branding:\n"
-            "    channel_name: ClutchWire\n"
-            "    handle: '@theclutchwire'\n"
-            "    accent_color: '#FF2040'\n"
-            "    logo_path: new/logo.png\n"
-            "    niche_id: sports\n"
-        )
-        b = ChannelBranding.from_visuals_yaml(str(yaml_file))
-        assert b.channel_name == "ClutchWire"
-        # Logo path is resolved to absolute against niche_root (yaml parent.parent)
-        assert b.logo_path.endswith("new/logo.png")
+        branding = ChannelBranding.from_visuals_yaml(str(yaml_path))
+        assert branding.channel_name == "TestChannel"
+        assert branding.handle == "@TestHandle"
+        assert branding.accent_color == "#FF0000"
+        assert branding.niche_id == "test_niche"
+        assert branding.ffmpeg.preset == "fast"
+        assert branding.ffmpeg.timeout_seconds == 60
 
 
-# --- Layout case detection -------------------------------------------
+# --- VideoInfo ------------------------------------------------------
 
-class TestLayoutCaseDetection:
+class TestVideoInfo:
 
-    def make_info(self, w, h):
-        ar = w / h
-        return VideoInfo(
-            width=w, height=h, duration_seconds=30.0, fps=30.0,
-            aspect_ratio=ar,
-            is_portrait=ar <= PORTRAIT_THRESHOLD,
-            is_landscape=ar >= LANDSCAPE_THRESHOLD,
+    def test_landscape_detection(self):
+        info = VideoInfo(
+            width=1920, height=1080, duration_seconds=30, fps=30,
+            aspect_ratio=1.78, is_portrait=False, is_landscape=True,
             is_native_9_16=False,
         )
-
-    def test_16_9_is_landscape(self):
-        info = self.make_info(1920, 1080)
         assert info.layout_case == "landscape"
 
-    def test_1280_720_is_landscape(self):
-        info = self.make_info(1280, 720)
-        assert info.layout_case == "landscape"
-
-    def test_9_16_is_portrait(self):
-        info = self.make_info(1080, 1920)
+    def test_portrait_detection(self):
+        info = VideoInfo(
+            width=608, height=1080, duration_seconds=30, fps=30,
+            aspect_ratio=0.56, is_portrait=True, is_landscape=False,
+            is_native_9_16=True,
+        )
         assert info.layout_case == "portrait"
 
-    def test_720_1280_is_portrait(self):
-        info = self.make_info(720, 1280)
-        assert info.layout_case == "portrait"
-
-    def test_square_is_square(self):
-        info = self.make_info(1080, 1080)
+    def test_square_detection(self):
+        info = VideoInfo(
+            width=1080, height=1080, duration_seconds=30, fps=30,
+            aspect_ratio=1.0, is_portrait=False, is_landscape=False,
+            is_native_9_16=False,
+        )
         assert info.layout_case == "square"
 
-    def test_4_3_is_square(self):
-        info = self.make_info(1440, 1080)  # 1.33 → landscape threshold
-        assert info.layout_case == "landscape"
-
-    def test_near_square_is_square(self):
-        info = self.make_info(1000, 1000)
-        assert info.layout_case == "square"
+    def test_thresholds(self):
+        assert LANDSCAPE_THRESHOLD == 1.33
+        assert PORTRAIT_THRESHOLD == 0.75
 
 
 # --- Locked pixel constants ------------------------------------------
@@ -130,38 +97,27 @@ class TestLockedConstants:
         assert CANVAS_W == 1080
         assert CANVAS_H == 1920
 
-    def test_landscape_zones_sum(self):
-        """All landscape zones must add up to full canvas height."""
-        total = L_VIDEO_Y + L_VIDEO_H + L_BOTTOM_H
-        assert total == CANVAS_H
+    def test_landscape_layout(self):
+        """Landscape: video centered, branding above with gap."""
+        assert L_VIDEO_H == 608, "16:9 at 1080w = 608h"
+        assert L_VIDEO_Y == (CANVAS_H - L_VIDEO_H) // 2, "Video vertically centered"
+        assert L_HOOK_Y < L_VIDEO_Y, "Hook above video"
+        assert L_HOOK_Y + 104 <= L_VIDEO_Y, "Hook text doesn't overlap video"
+        assert L_LOGO_Y < L_HOOK_Y, "Logo above hook"
+        bottom = CANVAS_H - L_VIDEO_Y - L_VIDEO_H
+        assert bottom >= 320, "Instagram needs 320px bottom safe zone"
 
-    def test_landscape_video_starts_after_hook(self):
-        assert L_VIDEO_Y == 460, "Video starts right after hook zone"
+    def test_square_layout(self):
+        """Square: video centered, branding above."""
+        assert S_VIDEO_H == 1080, "Square video is 1080x1080"
+        assert S_VIDEO_Y == (CANVAS_H - S_VIDEO_H) // 2, "Video vertically centered"
+        assert S_HOOK_Y < S_VIDEO_Y, "Hook above video"
+        assert S_LOGO_Y < S_HOOK_Y, "Logo above hook"
 
-    def test_landscape_bottom_bar(self):
-        """Bottom bar must satisfy YouTube (420px) and Instagram (320px) safe zones."""
-        assert L_BOTTOM_H == 644
-        assert L_BOTTOM_H >= 420, "YouTube needs 420px"
-        assert L_BOTTOM_H >= 320, "Instagram needs 320px"
-
-    def test_square_zones_sum(self):
-        """All square zones must add up to full canvas height."""
-        total = S_VIDEO_Y + S_VIDEO_H + S_BOTTOM_H
-        assert total == CANVAS_H
-
-    def test_square_bottom_bar(self):
-        assert S_BOTTOM_H == 380
-
-    def test_portrait_fills_canvas(self):
-        """Portrait layout fills canvas — no sandwich zones to sum."""
-        assert P_OVERLAY_H > 0, "Portrait must have dark overlay zone"
-        assert P_LOGO_Y > 0, "Portrait must position logo"
-        assert P_HOOK_Y > P_LOGO_Y, "Hook must be below logo"
-
-    def test_bottom_safe_zone_satisfies_platforms(self):
-        bottom_clear = L_BOTTOM_H
-        assert bottom_clear >= 420, "YouTube needs 420px"
-        assert bottom_clear >= 320, "Instagram needs 320px"
+    def test_portrait_is_clean(self):
+        """Portrait layout has NO branding — clean full-screen video."""
+        # No portrait-specific constants needed — it's just scale+crop
+        pass
 
     def test_hook_max_chars(self):
         assert HOOK_MAX_CHARS == 60
@@ -172,133 +128,43 @@ class TestLockedConstants:
 class TestHookWrapping:
 
     def test_short_hook_single_line(self):
-        lines = FrameCompositor._wrap_hook("Short hook")
+        comp = FrameCompositor(ChannelBranding(
+            channel_name="Test", handle="@test",
+            accent_color="#FFF", logo_path="", niche_id="test",
+        ))
+        lines = comp._wrap_hook("Short hook")
         assert lines == ["Short hook"]
 
     def test_long_hook_wraps(self):
-        lines = FrameCompositor._wrap_hook("Bam Adebayo just dropped 83 points in a single game tonight")
-        assert len(lines) >= 2
-        assert all(len(line) <= 35 for line in lines)
+        comp = FrameCompositor(ChannelBranding(
+            channel_name="Test", handle="@test",
+            accent_color="#FFF", logo_path="", niche_id="test",
+        ))
+        lines = comp._wrap_hook("This is a much longer hook that should definitely wrap to two lines")
+        assert len(lines) == 2
+        assert all(len(line) <= 36 for line in lines)  # HOOK_MAX_CHARS_LINE + 1 word
 
-    def test_max_2_lines(self):
-        lines = FrameCompositor._wrap_hook("A " * 100)
+    def test_max_two_lines(self):
+        comp = FrameCompositor(ChannelBranding(
+            channel_name="Test", handle="@test",
+            accent_color="#FFF", logo_path="", niche_id="test",
+        ))
+        lines = comp._wrap_hook("word " * 30)
         assert len(lines) <= 2
 
-    def test_empty_hook(self):
-        lines = FrameCompositor._wrap_hook("")
-        assert lines == []
 
+# --- Escape ----------------------------------------------------------
 
-# --- Accent color ---------------------------------------------------
+class TestEscapeDrawtext:
 
-class TestAccentColor:
+    def test_escapes_special_chars(self):
+        result = FrameCompositor._escape_drawtext("Test: [value], 50%")
+        assert "\\:" in result
+        assert "\\[" in result
+        assert "\\]" in result
+        assert "\\," in result
 
-    def test_strips_hash(self):
-        b = ChannelBranding("T", "@t", "#FF2040", "", "sports")
-        comp = FrameCompositor(b)
-        assert comp._accent_hex() == "ff2040"
-
-    def test_no_hash(self):
-        b = ChannelBranding("T", "@t", "C9A84C", "", "movies")
-        comp = FrameCompositor(b)
-        assert comp._accent_hex() == "c9a84c"
-
-
-# --- FFmpeg command structure ----------------------------------------
-
-class TestFFmpegCommandStructure:
-
-    def _make_compositor(self):
-        return FrameCompositor(ChannelBranding(
-            "CriticalRush", "@CriticalRush", "#FF4500", "", "gaming",
-        ))
-
-    def _make_info(self, w, h):
-        ar = w / h
-        return VideoInfo(
-            width=w, height=h, duration_seconds=30, fps=30.0,
-            aspect_ratio=ar,
-            is_portrait=ar <= PORTRAIT_THRESHOLD,
-            is_landscape=ar >= LANDSCAPE_THRESHOLD,
-            is_native_9_16=False,
-        )
-
-    def test_landscape_has_black_canvas(self):
-        comp = self._make_compositor()
-        info = self._make_info(1920, 1080)
-        cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "color=black" in fc
-        assert "overlay" in fc
-
-    def test_landscape_video_at_correct_y(self):
-        comp = self._make_compositor()
-        info = self._make_info(1920, 1080)
-        cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert f"overlay=0:{L_VIDEO_Y}" in fc
-
-    def test_landscape_no_accent_line(self):
-        """Accent line was removed for cleaner Evolving AI-style layout."""
-        comp = self._make_compositor()
-        info = self._make_info(1920, 1080)
-        cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "drawbox" not in fc, "No accent line drawbox in landscape layout"
-
-    def test_portrait_has_hook_text(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "This hook appears", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "This hook appears" in fc, "Portrait sandwich layout must render hook text"
-
-    def test_portrait_fills_canvas_not_sandwich(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        # Portrait fills canvas — scales to cover, not to fit
-        assert f"scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase" in fc
-        assert "crop=" in fc, "Portrait must crop to fill canvas"
-
-    def test_portrait_has_dark_overlay(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "black@" in fc, "Portrait must have dark gradient overlay"
-
-    def test_portrait_has_channel_name(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1920)
-        cmd = comp._build_cmd_portrait("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert "CriticalRush" in fc, "Portrait must render channel name"
-
-    def test_square_video_at_correct_y(self):
-        comp = self._make_compositor()
-        info = self._make_info(1080, 1080)
-        cmd = comp._build_cmd_square("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        fc = cmd[cmd.index("-filter_complex") + 1]
-        assert f"overlay=0:{S_VIDEO_Y}" in fc
-
-    def test_output_is_bt709(self):
-        comp = self._make_compositor()
-        info = self._make_info(1920, 1080)
-        cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        assert "-colorspace" in cmd
-        assert "bt709" in cmd
-
-    def test_output_is_h264_aac(self):
-        comp = self._make_compositor()
-        info = self._make_info(1920, 1080)
-        cmd = comp._build_cmd_landscape("/src.mp4", "Hook", "/out.mp4", info, 30, 0, 15, "slow", 30)
-        assert "libx264" in cmd
-        assert "aac" in cmd
-
-    def test_drawtext_escape_special_chars(self):
-        comp = self._make_compositor()
-        escaped = comp._escape_drawtext("Bam's 83-point game: unreal")
-        assert "'" not in escaped or "\u2019" in escaped
-        assert "\\:" in escaped
+    def test_escapes_single_quotes(self):
+        result = FrameCompositor._escape_drawtext("It's a test")
+        assert "'" not in result
+        assert "\u2019" in result

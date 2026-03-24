@@ -20,3 +20,25 @@ thresholds:
   # Minimum engagement replies processed in a 1-hour window.
   # Alert if no replies are processed (indicates poller or worker down).
   engagement_reply_rate_1h: 0
+
+affiliate:
+  zero_match_runs_alert: 3     # alert if 3+ consecutive runs have 0 matches
+  min_match_rate_pct: 5        # alert if match rate drops below 5%
+  placeholder_url_alert: true  # alert on example.com URLs in catalog
+  link_health_failures: 5      # alert if 5+ URLs are broken
+
+publishing:
+  # Alert if any niche fails to publish for N consecutive scheduled windows
+  consecutive_missed_publishes: 2
+  # Alert if platform success rate drops below this (30-day rolling window)
+  min_success_rate_pct: 60
+  # Alert if credential failure (SKIPPED) count exceeds this per day
+  max_credential_skips_per_day: 10
+  # Alert if YouTube quota usage exceeds this percentage
+  youtube_quota_usage_pct: 80
+  # Alert if CDN upload failures exceed this count per day
+  max_cdn_failures_per_day: 3
+  # Alert if PUBLISH_FAILED blueprints exceed this count
+  max_publish_failed_blueprints: 5
+  # Alert if gatekeeper blocks all blueprints for a niche N times in a row
+  gatekeeper_blocked_consecutive: 3

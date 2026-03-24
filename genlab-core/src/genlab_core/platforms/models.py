@@ -6,6 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Union
 
+import requests
+
+
+def safe_json(resp: requests.Response) -> dict[str, Any]:
+    """Safely parse a requests.Response as JSON, returning {} on failure."""
+    try:
+        return resp.json()
+    except Exception:
+        return {}
+
 # --- Platform-specific payload configs ---
 
 

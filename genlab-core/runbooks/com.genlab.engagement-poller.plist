@@ -6,32 +6,38 @@
     <string>com.genlab.engagement-poller</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/Users/anarchistsid/GenLab/scripts/launch_wrapper.sh</string>
         <string>/Users/anarchistsid/.local/bin/uv</string>
         <string>run</string>
         <string>--package</string>
         <string>genlab-core</string>
         <string>python</string>
-        <string>-m</string>
-        <string>genlab_core.engagement.poller</string>
+        <string>/Users/anarchistsid/GenLab/genlab-core/scripts/run_engagement_poller.py</string>
         <string>--niche</string>
-        <string>gaming</string>
+        <string>all</string>
+        <string>--platform</string>
+        <string>all</string>
     </array>
-    <key>RunAtLoad</key>
-    <false/>
+    <key>WorkingDirectory</key>
+    <string>/Users/anarchistsid/GenLab/genlab-core</string>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/anarchistsid/GenLab/.tmp/logs/engagement_poller.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/engagement_poller.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/anarchistsid/GenLab/.tmp/logs/engagement_poller_err.log</string>
+    <string>/Users/anarchistsid/GenLab/.logs/engagement_poller_error.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:/Users/anarchistsid/.local/bin</string>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
         <key>HOME</key>
         <string>/Users/anarchistsid</string>
+        <key>REDIS_HOST</key>
+        <string>127.0.0.1</string>
+        <key>REDIS_PORT</key>
+        <string>6379</string>
+        <key>ENGAGEMENT_DISPATCH</key>
+        <string>dramatiq</string>
     </dict>
-    <key>WorkingDirectory</key>
-    <string>/Users/anarchistsid/GenLab</string>
 </dict>
 </plist>

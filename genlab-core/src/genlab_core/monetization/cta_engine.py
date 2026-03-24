@@ -3,6 +3,10 @@
 Modifies blueprint fields dicts to inject platform-specific calls-to-action
 and disclosure text for affiliate products.
 
+The engine uses a Thompson Sampling bandit (CTABandit) to select the
+best-performing CTA variant for each platform, falling back to hardcoded
+defaults if the bandit is unavailable.
+
 Usage:
     from genlab_core.monetization.cta_engine import inject_cta
     fields = inject_cta(fields, story)
@@ -10,27 +14,139 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import re
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qs, urljoin
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+def append_utm_params(
+    url: str,
+    niche_id: str = "",
+    blueprint_id: str = "",
+    utm_source: str = "genlab",
+    utm_medium: str = "affiliate",
+) -> str:
+    """Append UTM tracking parameters to an affiliate URL.
+
+    Pattern: &utm_source=genlab&utm_medium=affiliate&utm_campaign={niche_id}&utm_content={blueprint_id}
+
+    Preserves existing query parameters. Skips if URL already has utm_source.
+    """
+    if not url:
+        return url
+    parsed = urlparse(url)
+    existing = parse_qs(parsed.query, keep_blank_values=True)
+
+    # Don't double-add UTM params
+    if "utm_source" in existing:
+        return url
+
+    utm = {
+        "utm_source": utm_source,
+        "utm_medium": utm_medium,
+    }
+    if niche_id:
+        utm["utm_campaign"] = niche_id
+    if blueprint_id:
+        utm["utm_content"] = blueprint_id
+
+    separator = "&" if parsed.query else "?"
+    utm_str = urlencode(utm)
+    return f"{url}{separator}{utm_str}"
+
+# ── Platform caption length limits ─────────────────────────────────────────────
+_PLATFORM_LIMITS: dict[str, int] = {
+    "instagram": 2200,
+    "youtube": 5000,
+    "facebook": 63206,
+}
+
+# ── Module-level bandit singleton ──────────────────────────────────────────────
+_bandit = None
+
+
+def _get_bandit():
+    """Lazy-initialize a module-level CTABandit singleton."""
+    global _bandit
+    if _bandit is not None:
+        return _bandit
+    try:
+        from genlab_core.monetization.cta_bandit import CTABandit
+        _bandit = CTABandit()
+        return _bandit
+    except Exception as e:
+        logger.warning("[CTAEngine] Failed to initialize CTABandit: %s", e)
+        return None
+
+
+def get_bandit():
+    """Public accessor for the module-level CTABandit singleton.
+
+    Used by the click tracker to update bandit state from reward signals.
+    """
+    return _get_bandit()
+
+
+def _enforce_length(content: str, platform: str, cta_len: int, disclosure_len: int) -> str:
+    """Truncate the original caption (not CTA/disclosure) if over platform limit.
+
+    Args:
+        content: The full content string (original + CTA + disclosure).
+        platform: Platform name for limit lookup.
+        cta_len: Length of the CTA + disclosure portion that must be preserved.
+        disclosure_len: Length of disclosure portion (subset of cta_len, for logging).
+
+    Returns:
+        The content, truncated if necessary.
+    """
+    limit = _PLATFORM_LIMITS.get(platform, 0)
+    if limit <= 0 or len(content) <= limit:
+        return content
+    # Calculate how much original text we can keep
+    overage = len(content) - limit
+    # Find where the original content ends (before CTA was appended)
+    original_len = len(content) - cta_len
+    if original_len <= 0:
+        return content  # CTA alone exceeds limit, nothing to truncate
+    new_original_len = max(0, original_len - overage)
+    # Rebuild: truncated original + preserved CTA/disclosure tail
+    truncated_original = content[:new_original_len]
+    cta_tail = content[original_len:]
+    logger.debug(
+        "[CTAEngine] Truncated %s caption from %d to %d chars (limit=%d)",
+        platform, len(content), len(truncated_original) + len(cta_tail), limit,
+    )
+    return truncated_original + cta_tail
 
 
 def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     """Inject platform-specific CTAs into blueprint fields.
 
+    Uses the CTABandit to select the best CTA variant via Thompson Sampling.
+    Falls back to hardcoded CTA formats if the bandit is unavailable.
+
     Modifies:
-    - ``caption``: append ``\\n\\n🔗 {product_name} — link in bio`` before hashtags,
-      then append Instagram disclosure.
-    - ``youtube_content``: prepend ``🔗 {product_name}: {url}\\n\\n``,
-      then append YouTube disclosure.
-    - ``facebook_content``: append ``\\n\\n🔗 Get {product_name}: {url}``,
-      then append Facebook disclosure.
+    - ``caption``: append CTA variant before hashtags, then append Instagram disclosure.
+    - ``youtube_content``: prepend CTA variant with URL, then append YouTube disclosure.
+    - ``facebook_content``: append CTA variant with URL, then append Facebook disclosure.
     - ``twitter_content``: left unchanged (link goes in reply thread).
+
+    Stores the selected variant arm_id as ``affiliate_cta_variant`` on the fields dict
+    for downstream attribution.
 
     Returns the modified fields dict (same object, mutated in-place for convenience,
     but also returned for composable usage).
     """
     product_name: str = story.get("affiliate_product", "")
-    url: str = story.get("affiliate_url", "")
+    raw_url: str = story.get("affiliate_url", "")
+
+    # Append UTM tracking parameters to affiliate URL
+    niche_id: str = story.get("niche_id", "") or fields.get("niche_id", "")
+    blueprint_id: str = story.get("blueprint_id", "") or fields.get("blueprint_id", "")
+    url = append_utm_params(raw_url, niche_id=niche_id, blueprint_id=blueprint_id)
 
     # Disclosure texts — pulled from the story if the AffiliateMatch stage stored them,
     # otherwise fall back to empty strings.
@@ -45,36 +161,97 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     if not product_name:
         return fields
 
+    bandit = _get_bandit()
+
+    # Track selected variant arm_ids per platform for attribution
+    selected_variants: list[str] = []
+
     # ── Instagram caption ──────────────────────────────────────────────────────
     caption: str = fields.get("caption", "") or ""
     if caption:
-        hashtag_match = re.search(r"((?:\s*#\w+)+\s*)$", caption)
-        cta_snippet = f"\n\n🔗 {product_name} — link in bio"
-        if hashtag_match:
-            insert_pos = hashtag_match.start()
-            caption = caption[:insert_pos] + cta_snippet + caption[insert_pos:]
+        # Check for existing affiliate CTA to avoid duplication
+        if "link in bio" in caption.lower():
+            pass  # CTA already present, skip injection
         else:
-            caption = caption + cta_snippet
-        if ig_disclosure:
-            caption = caption.rstrip() + f"\n{ig_disclosure}"
+            hashtag_match = re.search(r"((?:\s*#\w+)+\s*)$", caption)
+
+            # Select CTA variant via bandit, fallback to hardcoded format
+            ig_cta_text = f"🔗 {product_name} — link in bio"
+            if bandit:
+                try:
+                    variant = bandit.select(platform="instagram")
+                    ig_cta_text = variant.format(product_name=product_name)
+                    selected_variants.append(variant.arm_id)
+                except Exception as e:
+                    logger.debug("[CTAEngine] Bandit select failed for instagram: %s", e)
+
+            # Place disclosure BEFORE the CTA for FTC/ASCI compliance
+            cta_parts = []
+            if ig_disclosure:
+                cta_parts.append(ig_disclosure)
+            cta_parts.append(ig_cta_text)
+            cta_snippet = "\n\n" + "\n".join(cta_parts)
+            if hashtag_match:
+                insert_pos = hashtag_match.start()
+                caption = caption[:insert_pos] + cta_snippet + caption[insert_pos:]
+            else:
+                caption = caption + cta_snippet
+            # Enforce Instagram caption length limit
+            caption = _enforce_length(caption, "instagram", len(cta_snippet), len(ig_disclosure))
         fields["caption"] = caption
 
     # ── YouTube content ────────────────────────────────────────────────────────
     yt_content: str = fields.get("youtube_content", "") or ""
-    if yt_content or url:
-        prefix = f"🔗 {product_name}: {url}\n\n"
+    if url and (yt_content or product_name):
+        # Select CTA variant via bandit, fallback to hardcoded format
+        yt_cta_text = f"🔗 {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="youtube")
+                yt_cta_text = variant.format(product_name=product_name, url=url)
+                selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for youtube: %s", e)
+
+        prefix = f"{yt_cta_text}\n\n"
         yt_content = prefix + yt_content
         if yt_disclosure:
             yt_content = yt_content.rstrip() + f"\n\n{yt_disclosure}"
+        # Enforce YouTube description length limit
+        cta_added_len = len(prefix) + len(f"\n\n{yt_disclosure}") if yt_disclosure else len(prefix)
+        yt_content = _enforce_length(yt_content, "youtube", cta_added_len, len(yt_disclosure))
         fields["youtube_content"] = yt_content
 
     # ── Facebook content ───────────────────────────────────────────────────────
     fb_content: str = fields.get("facebook_content", "") or ""
-    if fb_content or url:
-        fb_content = fb_content.rstrip() + f"\n\n🔗 Get {product_name}: {url}"
+    if url and (fb_content or product_name):
+        # Select CTA variant via bandit, fallback to hardcoded format
+        fb_cta_text = f"🔗 Get {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="facebook")
+                fb_cta_text = variant.format(product_name=product_name, url=url)
+                selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for facebook: %s", e)
+
+        fb_cta_snippet = f"\n\n{fb_cta_text}"
+        fb_disclosure_snippet = f"\n{fb_disclosure}" if fb_disclosure else ""
+        fb_content = fb_content.rstrip() + fb_cta_snippet
         if fb_disclosure:
-            fb_content = fb_content.rstrip() + f"\n{fb_disclosure}"
+            fb_content = fb_content.rstrip() + fb_disclosure_snippet
+        # Enforce Facebook content length limit
+        fb_content = _enforce_length(
+            fb_content, "facebook",
+            len(fb_cta_snippet) + len(fb_disclosure_snippet),
+            len(fb_disclosure_snippet),
+        )
         fields["facebook_content"] = fb_content
 
     # Twitter: no modification — link goes in reply thread
+
+    # Store the selected variant arm_id for downstream attribution
+    if selected_variants:
+        fields["affiliate_cta_variant"] = ",".join(selected_variants)
+
     return fields

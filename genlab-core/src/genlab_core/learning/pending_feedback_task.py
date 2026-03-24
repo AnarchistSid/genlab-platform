@@ -66,25 +66,34 @@ class PendingFeedbackTask(BaseModel):
         return self.collection_status in ("complete", "error", "early_stopped")
 
     def to_sharepoint_fields(self) -> dict:
-        """Serialise to SharePoint list field format."""
+        """Serialise to storage fields (Postgres promoted columns + extra).
+
+        Uses lowercase keys matching Postgres promoted columns in
+        PROMOTED_COLUMNS["pending_feedback"].
+        """
+        import json as _json
+
         fields: dict = {
             "Title": f"{self.platform}__{self.platform_post_id}",
-            "Platform": self.platform,
-            "PostID": self.platform_post_id,
-            "NicheId": self.niche_id,
-            "PostContentType": self.content_type,
-            "HookType": self.hook_type,
-            "PublishedAt": self.published_at.isoformat(),
-            "Status": self.collection_status,
-            "BanditArm": self.bandit_arm or "",
-            "BanditContext": (
-                __import__("json").dumps(self.bandit_context)
+            # Postgres promoted columns (lowercase)
+            "niche_id": self.niche_id,
+            "task_id": self.content_id,
+            "post_id": self.platform_post_id,
+            "platform": self.platform,
+            "arm_id": self.bandit_arm or "",
+            "bandit_context": (
+                _json.dumps(self.bandit_context)
                 if self.bandit_context
                 else ""
             ),
-            "EarlyStop": self.early_stop,
+            "collection_status": self.collection_status,
+            "publish_time": self.published_at.isoformat(),
+            # Extra fields (go to JSONB)
+            "content_type": self.content_type,
+            "hook_type": self.hook_type,
+            "early_stop": self.early_stop,
         }
         if self.hook_text:
-            fields["HookText"] = self.hook_text[:500]
-            fields["HookLength"] = self.hook_length or len(self.hook_text)
+            fields["hook_text"] = self.hook_text[:500]
+            fields["hook_length"] = self.hook_length or len(self.hook_text)
         return fields

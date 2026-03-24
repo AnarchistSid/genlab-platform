@@ -1,0 +1,45 @@
+# CTA variant definitions for A/B testing via Thompson Sampling.
+# Each platform has multiple variants. The bandit learns which converts best.
+
+platforms:
+  instagram:
+    variants:
+      - arm_id: ig_link_in_bio
+        template: "{product_name} — link in bio"
+        emoji: "🔗"
+      - arm_id: ig_get_yours
+        template: "Get yours — link in bio"
+        emoji: "🔗"
+      - arm_id: ig_best_deal
+        template: "Best deal on {product_name} — link in bio"
+        emoji: "🔥"
+      - arm_id: ig_limited
+        template: "Limited time — {product_name} in bio"
+        emoji: "⏳"
+      - arm_id: ig_we_use
+        template: "Top pick for {product_name} — link in bio"
+        emoji: "💯"
+
+  youtube:
+    variants:
+      - arm_id: yt_get_here
+        template: "Get {product_name} here: {url}"
+        emoji: "🔗"
+      - arm_id: yt_best_price
+        template: "Best price on {product_name}: {url}"
+        emoji: "💰"
+      - arm_id: yt_recommended
+        template: "Our pick — {product_name}: {url}"
+        emoji: "⭐"
+
+  facebook:
+    variants:
+      - arm_id: fb_check_out
+        template: "Check out {product_name}: {url}"
+        emoji: "🔗"
+      - arm_id: fb_get_deal
+        template: "Get the best deal: {url}"
+        emoji: "🔥"
+      - arm_id: fb_must_have
+        template: "Must-have {product_name}: {url}"
+        emoji: "✨"

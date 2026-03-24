@@ -23,7 +23,7 @@ _DEFAULT_CAPS: dict[str, int] = {
 
 
 def _load_caps(config_path: Path | None = None) -> dict[str, int]:
-    """Load daily post caps from config/platform_caps.yaml. Falls back to 2/platform."""
+    """Load daily post caps from config/platform_caps.yaml. Falls back to 1/platform."""
     if config_path is None:
         # Walk up from this file to genlab-core root, then config/ subdir
         genlab_root = Path(__file__).resolve().parents[4]

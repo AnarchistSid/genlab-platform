@@ -111,8 +111,9 @@ class TestApplyWarmStartUpdatesCold:
         # viral_moment__youtube: alpha = 1 + 0.45*(8-1) + 0.5 = 1 + 3.15 + 0.5 = 4.65
         calls = mock_proxy.create.call_args_list
         fields_0 = calls[0][0][0]
-        assert fields_0["Title"] == "viral_moment__youtube"
-        assert abs(fields_0["Alpha"] - 4.65) < 1e-6
+        # save_arm writes lowercase keys for Postgres (Sprint 67)
+        assert (fields_0.get("arm_id") or fields_0.get("Title")) == "viral_moment__youtube"
+        assert abs(fields_0.get("alpha", fields_0.get("Alpha")) - 4.65) < 1e-6
 
 
 # ---------------------------------------------------------------------------

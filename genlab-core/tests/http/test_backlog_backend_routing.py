@@ -405,44 +405,46 @@ class TestABTestsBackendDelegation:
 
 
 class TestEngagementBackendDelegation:
-    def test_write_pending_engagement_goes_through_backend(self, mock_config):
+    def test_write_pending_engagement_goes_through_proxy(self, mock_config):
         client = _make_client(mock_config)
-        mock_backend = MagicMock()
-        mock_backend.create.return_value = {"id": "pe-1"}
-        client._backend = MagicMock(return_value=mock_backend)
+        mock_proxy = MagicMock()
+        mock_proxy.create.return_value = "pe-1"
+        client.pending_engagement = mock_proxy
 
         result = client.write_pending_engagement({
             "comment_id": "cmt_1", "platform": "instagram",
         })
 
         assert result == "pe-1"
-        client._backend.assert_called_with("PendingEngagement")
-        mock_backend.create.assert_called_once()
-        # First positional arg is the table name
-        assert mock_backend.create.call_args[0][0] == "PendingEngagement"
+        mock_proxy.create.assert_called_once()
+        # Fields should use snake_case
+        call_fields = mock_proxy.create.call_args[0][0]
+        assert call_fields["platform"] == "instagram"
 
-    def test_list_pending_engagement_goes_through_backend(self, mock_config):
+    def test_list_pending_engagement_goes_through_proxy(self, mock_config):
         client = _make_client(mock_config)
-        mock_backend = MagicMock()
-        mock_backend.find.return_value = []
-        client._backend = MagicMock(return_value=mock_backend)
+        mock_proxy = MagicMock()
+        mock_proxy.find.return_value = []
+        client.pending_engagement = mock_proxy
 
         client.list_pending_engagement(niche_id="gaming")
 
-        client._backend.assert_called_with("PendingEngagement")
-        mock_backend.find.assert_called_once()
-        kwargs = mock_backend.find.call_args[1]
+        mock_proxy.find.assert_called_once()
+        kwargs = mock_proxy.find.call_args[1]
         assert "gaming" in kwargs["formula"]
 
-    def test_update_engagement_status_goes_through_backend(self, mock_config):
+    def test_update_engagement_status_goes_through_proxy(self, mock_config):
         client = _make_client(mock_config)
-        mock_backend = MagicMock()
-        client._backend = MagicMock(return_value=mock_backend)
+        mock_proxy = MagicMock()
+        client.pending_engagement = mock_proxy
 
         client.update_engagement_status("item-1", "replied", reply_text="Thanks!")
 
-        client._backend.assert_called_with("PendingEngagement")
-        mock_backend.update.assert_called_once()
+        mock_proxy.update.assert_called_once()
+        call_args = mock_proxy.update.call_args[0]
+        assert call_args[0] == "item-1"
+        fields = call_args[1]
+        assert fields["status"] == "replied"
 
 
 class TestHealthCheckBackendDelegation:

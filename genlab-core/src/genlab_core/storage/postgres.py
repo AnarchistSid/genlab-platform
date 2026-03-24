@@ -50,7 +50,7 @@ _VALID_TABLES: frozenset[str] = frozenset({
     "blueprints", "stories", "assets", "publishing_analytics", "analytics",
     "content_memory", "bandit_arms", "pending_engagement", "pending_feedback",
     "templates", "sources", "monetisationprogress", "ab_tests",
-    "audience_snapshots", "affiliate_clicks",
+    "audience_snapshots", "affiliate_clicks", "email_subscribers",
 })
 
 
@@ -66,14 +66,16 @@ def _validate_table(table: str) -> str:
 PROMOTED_COLUMNS: dict[str, set[str]] = {
     "blueprints": {
         "niche_id", "candidate_id", "title", "status", "hook",
+        "hook_text", "caption", "format", "story_id", "topic", "arm_id",
         "scheduled_for", "platform_publish_status", "video_id",
-        "video_url", "source_url", "priority_score", "action_taken",
-        "reviewed_at",
+        "video_url", "priority_score", "action_taken",
+        "reviewed_at", "source", "summary", "error_message", "blueprint_id",
+        "affiliate_product", "affiliate_url", "affiliate_network",
+        "affiliate_commission_pct", "affiliate_cta", "affiliate_cta_variant",
     },
     "stories": {
-        "niche_id", "story_id", "title", "url", "source_name",
-        "source_type", "status", "published_at", "score", "video_url",
-        "video_id",
+        "niche_id", "story_id", "title", "url",
+        "status", "published_at", "score", "source", "summary",
     },
     "assets": {
         "niche_id", "asset_id", "story_id", "url", "asset_type",
@@ -82,6 +84,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
     "publishing_analytics": {
         "niche_id", "post_id", "platform", "published_at", "status",
         "views", "likes", "comments", "shares", "saves", "metrics_fetched",
+        "blueprint_id", "error_message",
     },
     "analytics": {
         "niche_id", "post_id", "platform", "metric_type", "value",
@@ -95,7 +98,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "niche_id", "arm_id", "alpha", "beta", "n_plays", "linucb_state",
     },
     "pending_engagement": {
-        "niche_id", "post_id", "platform", "scheduled_at", "status",
+        "niche_id", "post_id", "platform", "status",
         "attempts",
     },
     "pending_feedback": {
@@ -109,7 +112,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
     },
     "sources": {
         "niche_id", "source_id", "name", "url", "source_type",
-        "tier", "weight", "status", "last_fetched",
+        "tier", "weight", "status",
     },
     "monetisationprogress": {
         "niche_id", "platform", "metric_name", "current_value",
@@ -119,7 +122,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
     },
     "affiliate_clicks": {
         "niche_id", "product_id", "network", "affiliate_url",
-        "referrer", "country", "platform_source",
+        "referrer", "country", "platform_source", "blueprint_id", "channel_id",
     },
 }
 
@@ -206,8 +209,8 @@ class PostgresBackend:
 
     @staticmethod
     def _is_uuid(record_id: str) -> bool:
-        record_id = record_id.strip()
-        return len(record_id) >= 32 and "-" in record_id
+        import re
+        return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', record_id.strip(), re.I))
 
     # ── CREATE ──────────────────────────────────────────────────────
 
@@ -271,15 +274,32 @@ class PostgresBackend:
         formula: str = "",
         niche_id: str = "",
         max_records: int | None = None,
+        columns: list[str] | None = None,
         _skip_validation: bool = False,
     ) -> list[dict[str, Any]]:
-        """Find records matching a formula filter with RLS niche isolation."""
+        """Find records matching a formula filter with RLS niche isolation.
+
+        Args:
+            columns: Optional list of column names to select. When provided,
+                uses ``SELECT col1, col2, ...`` instead of ``SELECT *``.
+                The ``id``, ``extra``, ``created_at``, and ``updated_at``
+                columns are always included automatically.
+        """
         table = _validate_table(table)
         from psycopg.rows import dict_row
 
         from genlab_core.storage.formula_sql import formula_to_sql
 
         where_clause, params = formula_to_sql(formula)
+
+        # Build column projection
+        if columns is not None:
+            # Always include structural columns needed by _row_to_record
+            required = {"id", "extra", "created_at", "updated_at"}
+            col_set = required | {c for c in columns}
+            projection = ", ".join(_quote_col(c) for c in sorted(col_set))
+        else:
+            projection = "*"
 
         pool = self._get_pool()
         with pool.connection() as conn:
@@ -288,7 +308,7 @@ class PostgresBackend:
                     "SELECT set_config('app.niche_id', %s, true)",
                     (niche_id or "",),
                 )
-                sql = f"SELECT * FROM {table}"
+                sql = f"SELECT {projection} FROM {table}"
                 if where_clause:
                     # Convert $N positional params to %s for psycopg
                     import re
@@ -427,7 +447,13 @@ class PostgresBackend:
                 fields[k] = v.isoformat()
             else:
                 fields[k] = v
-        fields.update(extra)
+        # Merge extra JSONB but give promoted SQL columns absolute priority.
+        # Promoted columns are authoritative; JSONB only fills in keys that
+        # aren't already present as promoted columns (handles stale JSONB values
+        # and nulls left over from before a column was promoted).
+        for k, v in extra.items():
+            if k not in fields:  # Only use extra for keys NOT in promoted columns
+                fields[k] = v
 
         return {"id": record_id, "fields": fields}
 
@@ -444,17 +470,19 @@ class PostgresTableProxy:
         self._table = table.lower()
 
     def find(self, table: str | None = None, *, formula: str = "",
-             niche_id: str = "", max_records: int | None = None) -> list:
+             niche_id: str = "", max_records: int | None = None,
+             columns: list[str] | None = None) -> list:
         return self._backend.find(
             table or self._table, formula=formula,
-            niche_id=niche_id, max_records=max_records,
+            niche_id=niche_id, max_records=max_records, columns=columns,
         )
 
     def all(self, table: str | None = None, *, formula: str = "",
-            niche_id: str = "", max_records: int | None = None) -> list:
+            niche_id: str = "", max_records: int | None = None,
+            columns: list[str] | None = None) -> list:
         return self._backend.find(
             table or self._table, formula=formula,
-            niche_id=niche_id, max_records=max_records,
+            niche_id=niche_id, max_records=max_records, columns=columns,
         )
 
     def get(self, record_id_or_table: str, record_id: str | None = None):

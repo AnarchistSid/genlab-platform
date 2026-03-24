@@ -73,20 +73,27 @@ class TestPublish:
                     json=lambda: {"id": "post_vid_456"},
                 )
 
+        get_call_count = {"n": 0}
+
+        def mock_get(url, *args, **kwargs):
+            get_call_count["n"] += 1
+            params = kwargs.get("params", {})
+            if isinstance(params, dict) and params.get("fields") == "status":
+                # Poll container status — return FINISHED
+                return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
+            else:
+                # Permalink fetch
+                return MagicMock(ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/456"})
+
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time") as mock_time:
                 mock_req.post.side_effect = mock_post
-                mock_req.get.return_value = MagicMock(
-                    ok=True,
-                    json=lambda: {"permalink": "https://www.threads.net/@user/post/456"},
-                )
+                mock_req.get.side_effect = mock_get
                 result = threads_client.publish(payload)
 
         assert result.platform == "threads"
         assert result.success is True
         assert result.post_id == "post_vid_456"
-        # Video publish should call sleep to wait for processing
-        mock_time.sleep.assert_called_once()
 
     def test_publish_video_result_has_post_url(self, threads_client):
         """Successful video publish stores post_url in result."""
@@ -104,13 +111,16 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"id": "ctr_99"})
             return MagicMock(ok=True, json=lambda: {"id": "post_99"})
 
+        def mock_get(url, *args, **kwargs):
+            params = kwargs.get("params", {})
+            if isinstance(params, dict) and params.get("fields") == "status":
+                return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
+            return MagicMock(ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/99"})
+
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = mock_post
-                mock_req.get.return_value = MagicMock(
-                    ok=True,
-                    json=lambda: {"permalink": "https://www.threads.net/@user/post/99"},
-                )
+                mock_req.get.side_effect = mock_get
                 result = threads_client.publish(payload)
 
         assert result.success is True

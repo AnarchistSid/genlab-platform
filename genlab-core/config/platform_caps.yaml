@@ -1,14 +1,13 @@
-# Maximum posts published per platform per UTC calendar day, across all niches combined.
-# Enforced at runtime by DailyCapEnforcer in publish_all_platforms.py.
-# Also used by bulk_approve_backlog.py to space out scheduled_for slots.
-# Sprint 45: Changed from 2 to 1 per niche (single publish window at 06:30 UTC).
-# Sprint 48: Raised to 5 — one per niche (ai_creators, gaming, sports, movies, anime).
+# Maximum posts published per platform per niche per UTC calendar day.
+# DailyCapEnforcer filters by niche_id, so this is per-niche.
+# Rule: 1 reel per channel per day (CLAUDE.md) + 1 retry headroom.
+# Sprint 67: Reduced from 5 to 2 to enforce 1-per-day discipline.
 daily_post_cap:
-  instagram: 5
-  youtube: 5
-  facebook: 5
-  tiktok: 5
-  twitter: 5
-  threads: 5
+  instagram: 2
+  youtube: 2
+  facebook: 2
+  tiktok: 1
+  twitter: 2
+  threads: 2
 
 cap_timezone: "UTC"

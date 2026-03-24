@@ -463,7 +463,7 @@ def run_ffmpeg(
     """Run FFmpeg with timeout and preset fallback.
 
     If the command times out (likely -preset slow on long clips),
-    swaps to fallback_preset and retries with 180s timeout.
+    swaps to fallback_preset and retries with the same timeout.
     """
     try:
         return subprocess.run(
@@ -477,7 +477,7 @@ def run_ffmpeg(
         )
         fallback_cmd = _swap_preset(cmd, fallback_preset)
         return subprocess.run(
-            fallback_cmd, timeout=180, check=True,
+            fallback_cmd, timeout=timeout, check=True,
             capture_output=True, text=True,
         )
 

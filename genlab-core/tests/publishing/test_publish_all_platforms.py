@@ -147,7 +147,8 @@ class TestPidLock:
 class TestBuildPayload:
     def test_basic_payload(self):
         bp = _make_blueprint()
-        payload = build_payload(bp["fields"], "instagram")
+        with patch("genlab_core.publishing.publish_all_platforms.Path.exists", return_value=True):
+            payload = build_payload(bp["fields"], "instagram")
         assert isinstance(payload, PublishPayload)
         assert payload.niche_id == "gaming"
         assert payload.media_type == "video"
@@ -187,8 +188,9 @@ class TestBuildPayload:
     def test_hashtags_from_string(self):
         bp = _make_blueprint(hashtags="#gaming #esports #clutch")
         payload = build_payload(bp["fields"], "instagram")
-        assert "gaming" in payload.hashtags
-        assert "esports" in payload.hashtags
+        # Hashtags now keep # prefix (Sprint 67 fix)
+        assert "#gaming" in payload.hashtags
+        assert "#esports" in payload.hashtags
 
     def test_empty_visual_paths_raises(self):
         bp = _make_blueprint(visual_paths=[])

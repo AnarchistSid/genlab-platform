@@ -453,9 +453,11 @@ class TestArmLoaderLinUCBIntegration:
                 saved_fields.update(fields)
 
         save_arm(MockProxy(), "hook:test", 2.0, 3.0, linucb_state=arm.to_dict())
-        assert "LinUCB_State" in saved_fields
+        # save_arm now writes lowercase keys for Postgres compatibility
+        assert "linucb_state" in saved_fields or "LinUCB_State" in saved_fields
 
         import json
-        state = json.loads(saved_fields["LinUCB_State"])
+        state_key = "linucb_state" if "linucb_state" in saved_fields else "LinUCB_State"
+        state = json.loads(saved_fields[state_key])
         assert "A_matrix" in state
         assert "b_vector" in state

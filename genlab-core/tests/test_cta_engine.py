@@ -1,5 +1,9 @@
 """Tests for the affiliate CTA injection engine."""
 
+from unittest.mock import patch
+
+import pytest
+
 from genlab_core.monetization.cta_engine import inject_cta
 
 
@@ -17,13 +21,22 @@ def _make_story(**overrides):
     return base
 
 
+# Disable the bandit singleton for deterministic fallback-format tests.
+# Tests that specifically exercise the bandit integration are in a separate class below.
+@pytest.fixture(autouse=True)
+def _disable_bandit():
+    """Force inject_cta to use hardcoded CTA formats for deterministic assertions."""
+    with patch("genlab_core.monetization.cta_engine._get_bandit", return_value=None):
+        yield
+
+
 class TestYouTubeCTA:
     def test_direct_url_prepended(self):
         story = _make_story()
         fields = inject_cta({"youtube_content": "Great gaming session today."}, story)
-        assert fields["youtube_content"].startswith(
-            "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***\n\n"
-        )
+        # URL now includes UTM params appended by append_utm_params()
+        assert "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***" in fields["youtube_content"]
+        assert fields["youtube_content"].index("🔗 PS5 Console:") == 0  # still prepended
 
     def test_disclosure_appended(self):
         story = _make_story()
@@ -40,7 +53,8 @@ class TestYouTubeCTA:
         story = _make_story()
         fields = inject_cta({"youtube_content": ""}, story)
         assert "🔗 PS5 Console:" in fields["youtube_content"]
-        assert "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***" in fields["youtube_content"]
+        # URL base is preserved (UTM params may be appended)
+        assert "amazon.in/dp/B0CY5QW186" in fields["youtube_content"]
 
     def test_does_not_contain_link_in_bio(self):
         """YouTube must use the direct URL, never 'link in bio'."""
@@ -114,10 +128,17 @@ class TestInstagramCTA:
         # caption key stays empty — engine only injects if caption is non-empty
         assert fields.get("caption", "") == ""
 
-    def test_disclosure_at_very_end(self):
+    def test_disclosure_before_cta(self):
+        """Disclosure should appear before the CTA for FTC/ASCI compliance."""
         story = _make_story()
         fields = inject_cta({"caption": "Hot take content. #trending #viral"}, story)
-        assert fields["caption"].endswith("#affiliate")
+        caption = fields["caption"]
+        assert "#affiliate" in caption
+        assert "link in bio" in caption
+        # Disclosure should come BEFORE the CTA
+        disc_pos = caption.find("#affiliate")
+        cta_pos = caption.find("link in bio")
+        assert disc_pos < cta_pos, "Disclosure must appear before CTA"
 
     def test_custom_ig_disclosure(self):
         story = _make_story(
@@ -142,7 +163,8 @@ class TestFacebookCTA:
     def test_direct_url_in_content(self):
         story = _make_story()
         fields = inject_cta({"facebook_content": "Check this out!"}, story)
-        assert "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***" in fields["facebook_content"]
+        # URL base is preserved (UTM params may be appended)
+        assert "amazon.in/dp/B0CY5QW186" in fields["facebook_content"]
 
     def test_get_product_format(self):
         story = _make_story()
@@ -285,3 +307,63 @@ class TestNoProduct:
         original = {"caption": "Some text."}
         result = inject_cta(original, story)
         assert result is original
+
+
+class TestBanditIntegration:
+    """Tests that verify the bandit is actually wired in when available."""
+
+    def test_bandit_variant_selected_and_stored(self):
+        """When bandit is available, variant arm_id is stored on fields."""
+        # Don't use the autouse fixture — let the real bandit run
+        with patch("genlab_core.monetization.cta_engine._get_bandit") as mock_get:
+            from genlab_core.monetization.cta_bandit import CTAVariant
+            mock_bandit = type("MockBandit", (), {
+                "select": lambda self, platform: CTAVariant(
+                    arm_id=f"test_{platform}",
+                    platform=platform,
+                    template="{product_name} — link in bio" if platform == "instagram"
+                    else "Get {product_name} here: {url}",
+                    emoji="🔗",
+                ),
+            })()
+            mock_get.return_value = mock_bandit
+
+            story = _make_story()
+            fields = inject_cta({"caption": "Test.", "youtube_content": "Test."}, story)
+            assert "affiliate_cta_variant" in fields
+            assert "test_instagram" in fields["affiliate_cta_variant"]
+            assert "test_youtube" in fields["affiliate_cta_variant"]
+
+    def test_bandit_fallback_on_failure(self):
+        """If bandit.select() raises, hardcoded CTA is used."""
+        with patch("genlab_core.monetization.cta_engine._get_bandit") as mock_get:
+            mock_bandit = type("BrokenBandit", (), {
+                "select": lambda self, platform: (_ for _ in ()).throw(RuntimeError("boom")),
+            })()
+            mock_get.return_value = mock_bandit
+
+            story = _make_story()
+            fields = inject_cta({"caption": "Test caption."}, story)
+            # Should fall back to hardcoded format
+            assert "🔗 PS5 Console — link in bio" in fields["caption"]
+            # No variant stored because bandit failed
+            assert "affiliate_cta_variant" not in fields
+
+
+class TestCaptionLengthEnforcement:
+    """Tests for platform caption length limit enforcement."""
+
+    def test_instagram_within_limit_not_truncated(self):
+        story = _make_story()
+        fields = inject_cta({"caption": "Short caption."}, story)
+        assert len(fields["caption"]) <= 2200
+
+    def test_instagram_long_caption_truncated(self):
+        story = _make_story()
+        # Create a caption that will exceed 2200 chars after CTA injection
+        long_caption = "A" * 2200
+        fields = inject_cta({"caption": long_caption}, story)
+        assert len(fields["caption"]) <= 2200
+        # CTA should still be present (original text truncated, not the CTA)
+        assert "link in bio" in fields["caption"]
+        assert "#affiliate" in fields["caption"]
