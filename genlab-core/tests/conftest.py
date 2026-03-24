@@ -30,9 +30,9 @@ def pytest_collection_modifyitems(config, items):
     if not _SKIP_DETOXIFY:
         return
     skip_marker = pytest.mark.skip(reason="Detoxify segfaults on Python 3.14+ (PyTorch threading)")
+    # Only skip the full integration test that loads the real Detoxify model.
+    # test_toxicity_extended and test_engagement_engine mock the model.
     detoxify_modules = {
-        "test_engagement_engine",
-        "test_toxicity_extended",
         "test_reply_dispatch_live",
     }
     for item in items:
