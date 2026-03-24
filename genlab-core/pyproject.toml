@@ -17,6 +17,7 @@ dependencies = [
     "anthropic>=0.45",
     "openai>=1.0",
     "requests>=2.32",
+    "feedparser>=6.0",
 ]
 
 [project.optional-dependencies]
