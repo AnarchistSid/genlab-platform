@@ -1,0 +1,260 @@
+# Shared Ingestion Sources — unified source registry with affinity tags
+# Merged from all 5 channel sources.yaml files.
+# Each source is tagged with niche affinity for routing.
+
+youtube_categories:
+  - id: "20"
+    name: "Gaming"
+    affinity: [gaming]
+  - id: "17"
+    name: "Sports"
+    affinity: [sports]
+  - id: "1"
+    name: "Film & Animation"
+    affinity: [movies]
+  - id: "24"
+    name: "Entertainment"
+    affinity: [movies, gaming]
+  - id: "28"
+    name: "Science & Technology"
+    affinity: [ai_creators]
+
+# YouTube channel RSS feeds — zero quota, polled via feedparser
+youtube_channels:
+  # === ai_creators (BlackboxBrief) ===
+  - name: "Two Minute Papers"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg"
+    affinity: [ai_creators]
+  - name: "Fireship"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA"
+    affinity: [ai_creators]
+  - name: "Android Authority"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJO5MZQN11PqgIvyuvQ"
+    affinity: [ai_creators]
+
+  # === gaming (CriticalRush) ===
+  - name: "IGN"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
+    affinity: [gaming]
+  - name: "GameSpot"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbu2SsF1frCRVp2ghpeC0ow"
+    affinity: [gaming]
+  - name: "PlayStation"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC-2Y8dQb0S6DtpxNgAKoJKA"
+    affinity: [gaming]
+  - name: "Xbox"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXGgrKt94gR6lmN4aN3mYTg"
+    affinity: [gaming]
+  - name: "Nintendo"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGIY_O-8vW4rfX98KlMkvRg"
+    affinity: [gaming]
+
+  # === sports (ClutchWire) ===
+  - name: "NBA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWJ2lWNubArHWmf3FIHbfcQ"
+    affinity: [sports]
+  - name: "NFL"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg"
+    affinity: [sports]
+  - name: "Premier League"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCG5qGWdu8nIRZqJ_GgDwQ-w"
+    affinity: [sports]
+  - name: "House of Highlights"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqQo7ewe87aYAe7ub5cYxDg"
+    affinity: [sports]
+  - name: "ESPN"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"
+    affinity: [sports]
+
+  # === movies (SpliceReel) ===
+  - name: "FilmSelect Trailer"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCY2qt3dw2TQJxvBrDiYGHdQ"
+    affinity: [movies]
+  - name: "ONE Media"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiEwjMpBiMheJqBWFmkUNpg"
+    affinity: [movies]
+  - name: "Chris Stuckmann"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCCqEeDAUf4Mg0GgENmMbGPg"
+    affinity: [movies]
+  - name: "Screen Junkies"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A"
+    affinity: [movies]
+
+  # === anime (FrameDrift) ===
+  - name: "Crunchyroll"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDGbTiKs1Dqe-kvURsHlIAw"
+    affinity: [anime]
+  - name: "Anime News Network"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIKzjSHL-jYhGTwNs1x-3SA"
+    affinity: [anime]
+  - name: "Gigguk"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
+    affinity: [anime]
+  - name: "Mother's Basement"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBs2Y3i14e1NWQxOGliatmg"
+    affinity: [anime]
+
+# Reddit RSS feeds — from BlackboxBrief (ai_creators niche)
+reddit_feeds:
+  - name: "r/aivideo new"
+    url: "https://www.reddit.com/r/aivideo/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/aivideo top"
+    url: "https://www.reddit.com/r/aivideo/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/AiVideos new"
+    url: "https://www.reddit.com/r/AiVideos/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/AiVideos top"
+    url: "https://www.reddit.com/r/AiVideos/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/kling new"
+    url: "https://www.reddit.com/r/kling/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/kling top"
+    url: "https://www.reddit.com/r/kling/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/midjourney new"
+    url: "https://www.reddit.com/r/midjourney/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/midjourney top"
+    url: "https://www.reddit.com/r/midjourney/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/StableDiffusion new"
+    url: "https://www.reddit.com/r/StableDiffusion/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/StableDiffusion top"
+    url: "https://www.reddit.com/r/StableDiffusion/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/runwayml new"
+    url: "https://www.reddit.com/r/runwayml/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/runwayml top"
+    url: "https://www.reddit.com/r/runwayml/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/sora new"
+    url: "https://www.reddit.com/r/sora/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/sora top"
+    url: "https://www.reddit.com/r/sora/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/ComfyUI new"
+    url: "https://www.reddit.com/r/ComfyUI/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/ComfyUI top"
+    url: "https://www.reddit.com/r/ComfyUI/top/.rss?t=week"
+    affinity: [ai_creators]
+  - name: "r/fluxai new"
+    url: "https://www.reddit.com/r/fluxai/new/.rss"
+    affinity: [ai_creators]
+  - name: "r/fluxai top"
+    url: "https://www.reddit.com/r/fluxai/top/.rss?t=week"
+    affinity: [ai_creators]
+
+# General RSS feeds — news and editorial sources
+rss_feeds:
+  # === ai_creators (BlackboxBrief) ===
+  - name: "The Batch (DeepLearning.AI)"
+    url: "https://www.deeplearning.ai/the-batch/feed/"
+    affinity: [ai_creators]
+  - name: "Last Week in AI"
+    url: "https://lastweekin.ai/feed"
+    affinity: [ai_creators]
+  - name: "MIT Technology Review AI"
+    url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+    affinity: [ai_creators]
+
+  # === gaming (CriticalRush) ===
+  - name: "IGN"
+    url: "https://feeds.feedburner.com/ign/all"
+    affinity: [gaming]
+  - name: "Kotaku"
+    url: "https://kotaku.com/rss"
+    affinity: [gaming]
+  - name: "PC Gamer"
+    url: "https://www.pcgamer.com/rss/"
+    affinity: [gaming]
+  - name: "Eurogamer"
+    url: "https://www.eurogamer.net/feed"
+    affinity: [gaming]
+  - name: "GameSpot"
+    url: "https://www.gamespot.com/feeds/mashup/"
+    affinity: [gaming]
+  - name: "Rock Paper Shotgun"
+    url: "https://www.rockpapershotgun.com/feed"
+    affinity: [gaming]
+  - name: "Steam News"
+    url: "https://store.steampowered.com/feeds/news/"
+    affinity: [gaming]
+
+  # === sports (ClutchWire) ===
+  - name: "ESPN"
+    url: "https://www.espn.com/espn/rss/news"
+    affinity: [sports]
+  - name: "The Athletic"
+    url: "https://theathletic.com/rss/"
+    affinity: [sports]
+  - name: "BBC Sport"
+    url: "https://feeds.bbci.co.uk/sport/rss.xml"
+    affinity: [sports]
+  - name: "Sky Sports"
+    url: "https://www.skysports.com/rss/12040"
+    affinity: [sports]
+  - name: "Bleacher Report"
+    url: "https://bleacherreport.com/articles/feed"
+    affinity: [sports]
+
+  # === movies (SpliceReel) ===
+  - name: "Deadline Hollywood"
+    url: "https://deadline.com/feed/"
+    affinity: [movies]
+  - name: "Variety"
+    url: "https://variety.com/feed/"
+    affinity: [movies]
+  - name: "Hollywood Reporter"
+    url: "https://www.hollywoodreporter.com/feed/"
+    affinity: [movies]
+  - name: "IGN Movies"
+    url: "https://feeds.feedburner.com/ign/movies-articles"
+    affinity: [movies]
+  - name: "Screen Rant"
+    url: "https://screenrant.com/feed/"
+    affinity: [movies]
+  - name: "Collider"
+    url: "https://collider.com/feed/"
+    affinity: [movies]
+  - name: "IndieWire"
+    url: "https://www.indiewire.com/feed/"
+    affinity: [movies]
+
+  # === anime (FrameDrift) ===
+  - name: "Anime News Network"
+    url: "https://www.animenewsnetwork.com/all/rss.xml"
+    affinity: [anime]
+  - name: "Crunchyroll News"
+    url: "https://www.crunchyroll.com/feed"
+    affinity: [anime]
+  - name: "MyAnimeList News"
+    url: "https://myanimelist.net/rss/news.xml"
+    affinity: [anime]
+  - name: "Anime News Network (news)"
+    url: "https://www.animenewsnetwork.com/news/rss.xml"
+    affinity: [anime]
+  - name: "Kotaku Anime"
+    url: "https://kotaku.com/tag/anime/rss"
+    affinity: [anime]
+  - name: "LiveChart Episodes"
+    url: "https://www.livechart.me/feeds/episodes"
+    affinity: [anime]
+  - name: "Anime Corner"
+    url: "https://www.animecorner.me/feed"
+    affinity: [anime]
+
+# Google Trends seed keywords per niche
+google_trends:
+  niche_seeds:
+    ai_creators: ["AI", "ChatGPT", "artificial intelligence"]
+    gaming: ["gaming", "video games", "esports"]
+    sports: ["sports", "NBA", "cricket"]
+    movies: ["movie", "trailer", "Netflix"]
+    anime: ["anime", "manga", "crunchyroll"]
