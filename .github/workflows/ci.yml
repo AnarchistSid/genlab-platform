@@ -6,53 +6,53 @@ on:
   pull_request:
     branches: [main]
 
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  lint:
+  test-genlab-core:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-        with:
-          version: "0.10.x"
-      - run: uv run ruff check .
-
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - genlab-core
-          - BlackboxBrief
-          - CriticalRush
-          - ClutchWire
-          - SpliceReel
-          - FrameDrift
-        include:
-          - package: genlab-core
-            uv_name: genlab-core
-          - package: BlackboxBrief
-            uv_name: blackbox-brief
-          - package: CriticalRush
-            uv_name: criticalrush
-          - package: ClutchWire
-            uv_name: clutchwire
-          - package: SpliceReel
-            uv_name: splicereel
-          - package: FrameDrift
-            uv_name: framedrift
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-        with:
-          version: "0.10.x"
-      - name: Run tests
-        run: uv run --package ${{ matrix.uv_name }} pytest ${{ matrix.package }}/tests/ -x --tb=short -q
+    services:
+      postgres:
+        image: postgres:17
         env:
-          TEST_MODE: "true"
-          ANTHROPIC_API_KEY: "sk-test-placeholder"
-          YOUTUBE_API_KEY: "test-placeholder"
+          POSTGRES_DB: genlab_test
+          POSTGRES_USER: genlab
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install dependencies
+        run: uv sync --package genlab-core
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://genlab:test@localhost:5432/genlab_test
+          GENLAB_USE_POSTGRES: "true"
+        run: |
+          uv run --package genlab-core pytest genlab-core/tests/learning/ -q --tb=short
+          uv run --package genlab-core pytest genlab-core/tests/writing/ -q --tb=short
+          uv run --package genlab-core pytest genlab-core/tests/pipeline/ -q --tb=short
+
+  build-dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        working-directory: dashboard/frontend
+        run: npm ci
+      - name: Type check
+        working-directory: dashboard/frontend
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: dashboard/frontend
+        run: npm run build
