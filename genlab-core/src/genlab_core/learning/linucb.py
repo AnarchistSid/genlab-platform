@@ -26,8 +26,8 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Context feature dimensionality
-CONTEXT_DIM = 6
+# Context feature dimensionality (expanded from 6 to 12 — Break 12 fix)
+CONTEXT_DIM = 12
 
 # Minimum observations before LinUCB predictions are trusted.
 # Below this threshold, fall back to Thompson Sampling.
@@ -131,26 +131,35 @@ class LinUCBBandit:
             self.arms[arm_id] = LinUCBArm(self.d, self.alpha)
 
 
+_NICHE_ENCODING: dict[str, float] = {
+    "ai_creators": 0.0,
+    "gaming": 0.2,
+    "sports": 0.4,
+    "movies": 0.6,
+    "anime": 0.8,
+}
+
+
 def build_content_context(
     story: dict[str, Any],
     niche_id: str,
     now: datetime | None = None,
 ) -> np.ndarray:
-    """Build a 6-dimensional context feature vector for LinUCB.
+    """Build a 12-dimensional context feature vector for LinUCB.
 
-    Dimensions:
-        0: day_of_week [0, 1] — Monday=0/6, Sunday=6/6
-        1: hour_utc [0, 1] — 0:00=0/23, 23:00=23/23
-        2: source_type [0, 1] — youtube=0, reddit=0.33, rss=0.66, twitch=1.0
-        3: duration_bucket [0, 1] — seconds / 60, capped at 1.0
-        4: view_velocity [0, 1] — velocity / 10000, capped at 1.0
-        5: relevance_score [0, 1] — as-is from story
-
-    Args:
-        story: Dict with optional keys: source_type, duration_seconds,
-            view_velocity, relevance_score.
-        niche_id: Niche identifier (reserved for future per-niche features).
-        now: Override for current time (useful for testing).
+    Dimensions (expanded from 6 — Break 12 fix):
+        0: day_of_week [0, 1]
+        1: hour_utc [0, 1]
+        2: source_type [0, 1]
+        3: duration_bucket [0, 1] — seconds / 60
+        4: view_velocity [0, 1] — velocity / 5000 (scaled down for new channels)
+        5: relevance_score [0, 1]
+        6: hook_length [0, 1] — chars / 60
+        7: niche_encoding [0, 1]
+        8: has_affiliate [0, 1] — binary
+        9: caption_length [0, 1] — chars / 200
+       10: hashtag_count [0, 1] — count / 10
+       11: trending_score [0, 1] — composite score
 
     Returns:
         np.ndarray of shape (CONTEXT_DIM,) with float64 values in [0, 1].
@@ -158,11 +167,24 @@ def build_content_context(
     if now is None:
         now = datetime.now(UTC)
 
+    content = story.get("content", {})
+    hook = content.get("hook", "") if isinstance(content, dict) else ""
+    caption = content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else ""
+    hashtags = story.get("hashtags", [])
+    if isinstance(hashtags, str):
+        hashtags = hashtags.split()
+
     return np.array([
         now.weekday() / 6.0,
         now.hour / 23.0,
-        _SOURCE_TYPE_MAP.get(story.get("source_type", ""), _SOURCE_TYPE_DEFAULT),
+        _SOURCE_TYPE_MAP.get(story.get("source_type", story.get("source", "")), _SOURCE_TYPE_DEFAULT),
         min(story.get("duration_seconds", 30) / 60.0, 1.0),
-        min(story.get("view_velocity", 0) / 10000.0, 1.0),
-        story.get("relevance_score", 0.5),
+        min(story.get("view_velocity", 0) / 5000.0, 1.0),
+        story.get("relevance_score", story.get("composite_score", 0.5)),
+        min(len(hook) / 60.0, 1.0),
+        _NICHE_ENCODING.get(niche_id, 0.5),
+        1.0 if story.get("affiliate_product") else 0.0,
+        min(len(caption) / 200.0, 1.0),
+        min(len(hashtags) / 10.0, 1.0),
+        min(story.get("composite_score", story.get("score", 0.5)), 1.0),
     ], dtype=np.float64)

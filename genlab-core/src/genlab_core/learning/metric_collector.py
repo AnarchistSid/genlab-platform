@@ -14,8 +14,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-# Callback type: (niche_id, content_type, platform, reward) -> None
-BanditUpdater = Callable[[str, str, str, float], None]
+# Callback type: (niche_id, content_type, platform, reward, bandit_context) -> None
+BanditUpdater = Callable[[str, str, str, float, dict | None], None]
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +144,7 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
+    """Fetch Instagram metrics — tries Reels metrics first, falls back to standard."""
     import requests
 
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
@@ -151,25 +152,39 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
     if not token:
         return {}
-    resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{post_id}/insights",
-        params={
-            "metric": "plays,reach,likes,comments,shares,saved",
-            "access_token": token,
-        },
-        timeout=15,
-    )
-    resp.raise_for_status()
-    metrics: dict[str, Any] = {}
-    for item in resp.json().get("data", []):
-        name = item.get("name", "")
-        vals = item.get("values", [{}])
-        val = vals[0].get("value", 0) if vals else 0
-        if name == "plays":
-            metrics["views"] = val
-        elif name in ("reach", "likes", "comments", "shares", "saved"):
-            metrics[name] = val
-    return metrics
+
+    # Try Reels-compatible metrics first (Break 3 fix)
+    for metric_set in [
+        "plays,reach,likes,comments,shares,saved",
+        "reach,saved,comments,shares,likes",  # without 'plays' (some posts reject it)
+        "impressions,reach",  # minimal fallback
+    ]:
+        try:
+            resp = requests.get(
+                f"https://graph.facebook.com/v21.0/{post_id}/insights",
+                params={"metric": metric_set, "access_token": token},
+                timeout=15,
+            )
+            if resp.status_code == 400:
+                continue  # try next metric set
+            resp.raise_for_status()
+            metrics: dict[str, Any] = {}
+            for item in resp.json().get("data", []):
+                name = item.get("name", "")
+                vals = item.get("values", [{}])
+                val = vals[0].get("value", 0) if vals else 0
+                if name == "plays":
+                    metrics["views"] = val
+                elif name == "impressions":
+                    metrics.setdefault("views", val)
+                elif name in ("reach", "likes", "comments", "shares", "saved"):
+                    metrics[name] = val
+            return metrics
+        except Exception:
+            continue
+
+    logger.warning("[metric_collector] All IG metric sets failed for %s", post_id)
+    return {}
 
 
 def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
@@ -379,6 +394,51 @@ def process_pending_task(
         niche_id=task_record.niche_id,
     )
 
+    # Early-stop detection at 6h window (Break 14 fix)
+    # If 6h views are far below niche floor, the post is bombing — skip to
+    # negative reward immediately instead of waiting 48h for the inevitable.
+    if window == "6h" and metrics:
+        views_6h = metrics.get("views", 0)
+        _NICHE_6H_FLOOR: dict[str, int] = {
+            "ai_creators": 20,
+            "gaming": 30,
+            "sports": 25,
+            "movies": 20,
+            "anime": 15,
+        }
+        floor = _NICHE_6H_FLOOR.get(task_record.niche_id, 20)
+        if 0 < views_6h < floor:
+            task_record.early_stop = True
+            logger.info(
+                "[metric_collector] EARLY STOP: %s/%s 6h views=%d < floor=%d",
+                task_record.platform,
+                task_record.platform_post_id,
+                views_6h,
+                floor,
+            )
+            # Give immediate negative reward to bandit so it learns fast
+            early_reward = 0.05  # very low but non-zero
+            if bandit_updater is not None:
+                try:
+                    bandit_updater(
+                        task_record.niche_id,
+                        task_record.content_type,
+                        task_record.platform,
+                        early_reward,
+                        task_record.bandit_context,
+                    )
+                    logger.info(
+                        "[metric_collector] early-stop bandit penalty: %s/%s reward=%.3f",
+                        task_record.niche_id, task_record.content_type, early_reward,
+                    )
+                except Exception as exc:
+                    logger.debug("[metric_collector] early-stop bandit update failed: %s", exc)
+            # Mark task as early-stopped — skips 24h/48h/168h collection
+            task_record.collection_status = "early_stopped"
+            task_record.reward_48h = early_reward
+            store.update_window(task_record, window, reward_48h=early_reward)
+            return True
+
     reward_48h: float | None = None
     if window == "48h" and metrics:
         reward_48h = compute_reward(metrics, task_record.platform, shaper)
@@ -389,7 +449,7 @@ def process_pending_task(
             reward_48h,
         )
 
-        # Update bandit with the 48h reward signal
+        # Update content bandit with the 48h reward signal
         if bandit_updater is not None:
             try:
                 bandit_updater(
@@ -397,6 +457,7 @@ def process_pending_task(
                     task_record.content_type,
                     task_record.platform,
                     reward_48h,
+                    task_record.bandit_context,
                 )
                 logger.info(
                     "[metric_collector] bandit updated: niche=%s type=%s platform=%s reward=%.3f",
@@ -412,6 +473,17 @@ def process_pending_task(
                     task_record.platform_post_id,
                     exc,
                 )
+
+        # Update CTA bandit with engagement reward (Break 10 fix)
+        try:
+            from genlab_core.monetization.cta_engine import get_bandit
+            cta_bandit = get_bandit()
+            if cta_bandit is not None:
+                cta_bandit.update(task_record.platform, reward_48h)
+                logger.debug("[metric_collector] CTA bandit updated: platform=%s reward=%.3f",
+                             task_record.platform, reward_48h)
+        except Exception as exc:
+            logger.debug("[metric_collector] CTA bandit update skipped: %s", exc)
 
     # Write fetched metrics to the Analytics table for dashboard consumption
     if metrics and backlog_client is not None:
@@ -501,5 +573,89 @@ def collect_metrics(
     return processed
 
 
+def _default_bandit_updater(
+    niche_id: str,
+    content_type: str,
+    platform: str,
+    reward: float,
+    bandit_context: dict | None = None,
+) -> None:
+    """Default bandit updater — writes reward directly to bandit_arms table.
+
+    This closes the critical gap: metric_collector computes rewards but they
+    were never fed back to bandit_arms because collect_metrics() was called
+    from CLI without a bandit_updater callback (Break 8 fix).
+
+    Uses adaptive threshold instead of hardcoded 0.5 (Break 6 fix).
+    Also updates LinUCB arm with context vector when available (Break 11 fix).
+    """
+    try:
+        import json as _json
+
+        import numpy as np
+
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.arm_loader import load_all_arms_extended, save_arm
+        from genlab_core.learning.linucb import CONTEXT_DIM, LinUCBArm
+
+        client = BacklogClient()
+        proxy = client.bandit_arms
+        if proxy is None:
+            logger.warning("[bandit_updater] No bandit_arms proxy")
+            return
+
+        existing = proxy.all()
+        for item in existing:
+            fields = item.get("fields", item)
+            item_arm = fields.get("arm_id", "") or fields.get("Title", "")
+            item_niche = fields.get("niche_id", "")
+            if item_niche != niche_id or item_arm != content_type:
+                continue
+
+            alpha = float(fields.get("alpha", 1.0) or 1.0)
+            beta = float(fields.get("beta", 1.0) or 1.0)
+
+            # Adaptive threshold: use running mean instead of hardcoded 0.5
+            mean = alpha / (alpha + beta) if (alpha + beta) > 0 else 0.5
+            threshold = max(0.05, mean * 0.8)
+
+            if reward >= threshold:
+                alpha += 1.0
+            else:
+                beta += 0.5  # softer penalty
+
+            # Update LinUCB arm with context vector (Break 11 fix)
+            linucb_state_dict = None
+            if bandit_context and "linucb_context" in bandit_context:
+                try:
+                    ctx_list = bandit_context["linucb_context"]
+                    if len(ctx_list) == CONTEXT_DIM:
+                        ctx = np.array(ctx_list, dtype=np.float64)
+                        # Load or create LinUCB arm
+                        raw_state = fields.get("linucb_state") or fields.get("LinUCB_State") or ""
+                        if raw_state:
+                            arm = LinUCBArm.from_dict(_json.loads(raw_state))
+                        else:
+                            arm = LinUCBArm(d=CONTEXT_DIM)
+                        arm.update(ctx, reward)
+                        linucb_state_dict = arm.to_dict()
+                        logger.info(
+                            "[bandit_updater] LinUCB updated: %s/%s n_obs=%d",
+                            niche_id, item_arm, arm.n_obs,
+                        )
+                except Exception as linucb_exc:
+                    logger.debug("[bandit_updater] LinUCB update skipped: %s", linucb_exc)
+
+            save_arm(proxy, arm_id=item_arm, alpha=alpha, beta=beta,
+                     linucb_state=linucb_state_dict)
+            logger.info(
+                "[bandit_updater] %s/%s reward=%.3f thr=%.3f → a=%.1f b=%.1f",
+                niche_id, item_arm, reward, threshold, alpha, beta,
+            )
+            return
+    except Exception as exc:
+        logger.warning("[bandit_updater] Failed: %s", exc)
+
+
 if __name__ == "__main__":
-    collect_metrics()
+    collect_metrics(bandit_updater=_default_bandit_updater)

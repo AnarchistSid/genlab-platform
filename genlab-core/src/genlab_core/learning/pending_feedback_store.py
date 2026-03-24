@@ -128,10 +128,12 @@ class PendingFeedbackStore:
         """Mark a collection window as completed."""
         try:
             task.completed_windows.append(window)
-            next_status = _NEXT_STATUS.get(window, task.collection_status)
-            task.collection_status = next_status
+            # Preserve early_stopped/error status — don't overwrite with next window
+            if task.collection_status not in ("early_stopped", "error"):
+                next_status = _NEXT_STATUS.get(window, task.collection_status)
+                task.collection_status = next_status
 
-            if window == "48h" and reward_48h is not None:
+            if reward_48h is not None:
                 task.reward_48h = reward_48h
 
             update_fields: dict[str, Any] = {

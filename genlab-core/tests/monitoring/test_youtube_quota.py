@@ -39,9 +39,9 @@ def test_record_increments_by_operation_cost(state_file: Path) -> None:
 def test_can_upload_false_when_near_limit(state_file: Path) -> None:
     tracker = YouTubeQuotaTracker(state_path=state_file)
     # Burn enough quota that one more upload would exceed the hard stop.
-    # hard_stop = 10,000 * 0.90 = 9,000
-    # After 5 uploads: 5 * 1,600 = 8,000.  8,000 + 1,600 = 9,600 > 9,000
-    for _ in range(5):
+    # hard_stop = 10,000 * 0.98 = 9,800
+    # After 6 uploads: 6 * 1,600 = 9,600.  9,600 + 1,600 = 11,200 > 9,800
+    for _ in range(6):
         tracker.record("upload")
     assert tracker.can_upload() is False
 
