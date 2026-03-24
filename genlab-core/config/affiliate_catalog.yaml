@@ -1,164 +1,1225 @@
-# Affiliate Product Catalog — GenLab Revenue Engine
-# Each niche has curated products with multi-network affiliate URLs.
-# The AffiliateMatch pipeline stage matches content keywords to products
-# and selects the network with the highest commission.
-#
-# To add a product: add an entry under the niche's products list.
-# To update an affiliate URL: change the url under the relevant network.
-# placeholder URLs below — replace with real affiliate links.
-
 settings:
-  max_affiliate_posts_per_day: 3    # out of 5 daily posts, max 3 get affiliate links
+  max_affiliate_posts_per_day: 3
   default_network_priority:
-    - earnkaro
-    - cuelinks
-    - vcommission
-    - amazon
+  - earnkaro
+  - cuelinks
+  - amazon_us
+  - amazon
   disclosure_text:
-    instagram: "#affiliate"
-    youtube: "This description contains affiliate links — we may earn a small commission at no extra cost to you."
-    facebook: "#affiliate"
-    twitter: ""
-    threads: ""
-
+    instagram: '#affiliate'
+    youtube: This description contains affiliate links — we may earn a small commission at no extra cost to you.
+    facebook: '#affiliate'
+    twitter: '#ad #affiliate'
+    threads: '#ad #affiliate'
+  tracking:
+    facebook_pixel_id: ''
+    ga4_measurement_id: ''
 niches:
   gaming:
     products:
-      - name: "PS5 Console"
-        keywords: [playstation, ps5, sony, dualsense, ps5 pro, playstation 5]
-        category: hardware
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/ps5", commission_pct: 3.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/ps5", commission_pct: 6.5 }
-        image_url: "https://m.media-amazon.com/images/I/61SUj2aKoEL._SL1500_.jpg"
-        price_inr: 49990
-
-      - name: "Xbox Game Pass Ultimate"
-        keywords: [xbox, game pass, microsoft, series x, series s, halo, forza, starfield]
-        category: subscription
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/gamepass", commission_pct: 2.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/gamepass", commission_pct: 5.0 }
-        image_url: "https://m.media-amazon.com/images/I/81nKfnSgb0L._SL1500_.jpg"
-        price_inr: 699
-
-      - name: "Razer Gaming Headset"
-        keywords: [headset, razer, gaming audio, surround sound, blackshark, kraken]
-        category: peripheral
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/razer-headset", commission_pct: 4.0 }
-          cuelinks: { url: "https://example.com/affiliate/cuelinks/razer-headset", commission_pct: 7.0 }
-        image_url: "https://m.media-amazon.com/images/I/61CGHv6kmWL._SL1000_.jpg"
-        price_inr: 5999
-
+    - name: PS5 Console
+      keywords:
+      - playstation
+      - ps5
+      - sony
+      - dualsense
+      - ps5 pro
+      - playstation 5
+      - ps5 exclusive
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CY5QW186
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/ps5
+          commission_pct: 6.5
+      image_url: https://m.media-amazon.com/images/I/61SUj2aKoEL._SL1500_.jpg
+      price_inr: 49990
+      coupons:
+      - code: GAME10
+        discount: 10% off
+        valid_until: '2026-12-31'
+    - name: Xbox Game Pass Ultimate
+      keywords:
+      - xbox
+      - game pass
+      - microsoft
+      - series x
+      - series s
+      - halo
+      - forza
+      - starfield
+      - bethesda
+      category: subscription
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0GHJZ9QSN?tag=***REMOVED***
+          commission_pct: 2.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B07TFP7JFH?tag=***REMOVED***
+          commission_pct: 2.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GHJZ9QSN
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/gamepass
+          commission_pct: 5.0
+      image_url: https://m.media-amazon.com/images/I/81yGTbk4cJL._SL1500_.jpg
+      price_inr: 699
+    - name: Razer Gaming Headset
+      keywords:
+      - headset
+      - razer
+      - gaming audio
+      - surround sound
+      - blackshark
+      - kraken
+      category: peripheral
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0D78XSMSM?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B086PKMZ21?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0D78XSMSM
+          commission_pct: 7.0
+      image_url: https://m.media-amazon.com/images/I/61CGHv6kmWL._SL1000_.jpg
+      price_inr: 5999
+    - name: Gaming Monitor 4K
+      keywords:
+      - gaming monitor
+      - 4k
+      - 144hz
+      - monitor
+      - display
+      - screen
+      - ips
+      - refresh rate
+      - 240hz
+      - response time
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0CP7SV7XV?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0CP7SV7XV?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CP7SV7XV
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/gaming-monitor-4k
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81Pz0DcfP3L._AC_SL1500_.jpg
+      price_inr: 25000
+    - name: Mechanical Gaming Keyboard
+      keywords:
+      - keyboard
+      - mechanical
+      - gaming keyboard
+      - rgb
+      - cherry mx
+      - hot swap
+      category: peripheral
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FQJ3HBBW?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FQJ3HBBW?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FQJ3HBBW
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/mechanical-gaming-keyboard
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71iz1MXIpzL._AC_SL1500_.jpg
+      price_inr: 5999
+    - name: Gaming Chair
+      keywords:
+      - gaming chair
+      - chair
+      - ergonomic
+      - racing
+      - lumbar
+      - office chair
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FVXRZJ12?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FVXRZJ12?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVXRZJ12
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/gaming-chair
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71i1brfkBbL._AC_SL1500_.jpg
+      price_inr: 15000
+    - name: Steam Deck
+      keywords:
+      - steam deck
+      - valve
+      - handheld
+      - portable gaming
+      - steam
+      - pc gaming
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FM6C3ZMN?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FM6C3ZMN?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FM6C3ZMN
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/steam-deck
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61gZGeavWGL._SL1500_.jpg
+      price_inr: 39999
+    - name: Gaming Mouse
+      keywords:
+      - gaming mouse
+      - logitech
+      - mouse
+      - wireless
+      - dpi
+      - sensor
+      category: peripheral
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B086PJKVVT?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B086PJKVVT?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB086PJKVVT
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/gaming-mouse
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51z74wV2iHL._AC_SL1500_.jpg
+      price_inr: 4999
+    - name: Webcam for Streaming
+      keywords:
+      - webcam
+      - streaming
+      - logitech
+      - 1080p
+      - camera
+      - facecam
+      category: peripheral
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B01LXCDPPK?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B01LXCDPPK?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LXCDPPK
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/webcam-for-streaming
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61lsdoyu1yL._AC_SL1500_.jpg
+      price_inr: 7999
+    - name: Capture Card
+      keywords:
+      - capture card
+      - elgato
+      - recording
+      - streaming
+      - obs
+      - game capture
+      category: peripheral
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FFTFYGLV?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FFTFYGLV?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FFTFYGLV
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/capture-card
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51n-AAn1UBL._AC_SL1500_.jpg
+      price_inr: 12999
   sports:
     products:
-      - name: "NBA League Pass"
-        keywords: [nba, basketball, league pass, playoffs, lakers, celtics, finals]
-        category: subscription
-        networks:
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/nba-lp", commission_pct: 8.0 }
-        image_url: "https://example.com/images/nba-league-pass.jpg"
-        price_inr: 1499
-
-      - name: "Nike Running Shoes"
-        keywords: [nike, running, shoes, sneakers, air max, jordan, athletics]
-        category: gear
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/nike-shoes", commission_pct: 5.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/nike-shoes", commission_pct: 9.0 }
-          cuelinks: { url: "https://example.com/affiliate/cuelinks/nike-shoes", commission_pct: 7.5 }
-        image_url: "https://m.media-amazon.com/images/I/71jeoX0cMBL._SL1500_.jpg"
-        price_inr: 7995
-
-      - name: "ESPN+ Subscription"
-        keywords: [espn, streaming, sports streaming, live sports, premier league, ufc, mma]
-        category: subscription
-        networks:
-          cuelinks: { url: "https://example.com/affiliate/cuelinks/espn-plus", commission_pct: 10.0 }
-        image_url: "https://example.com/images/espn-plus.jpg"
-        price_inr: 999
-
+    - name: NBA League Pass
+      keywords:
+      - nba
+      - basketball
+      - league pass
+      - playoffs
+      - lakers
+      - celtics
+      - finals
+      - prime video
+      - nba india
+      - basketball streaming
+      category: subscription
+      networks:
+        amazon:
+          url: https://www.primevideo.com/offers?benefitId=nba&tag=***REMOVED***
+          commission_pct: 2.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B00CH4FPB6?tag=***REMOVED***
+          commission_pct: 2.0
+      image_url: https://m.media-amazon.com/images/I/31BVAwrO1tL._h1_.png
+      price_inr: 1499
+    - name: Nike Running Shoes
+      keywords:
+      - nike
+      - running
+      - shoes
+      - sneakers
+      - air max
+      - jordan
+      - athletics
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0GKY7N6VY?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0C8THZHJ5?tag=***REMOVED***
+          commission_pct: 4.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/nike-shoes
+          commission_pct: 9.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY
+          commission_pct: 7.0
+      image_url: https://m.media-amazon.com/images/I/71x0olWMkdL._AC_SX342_SY445_QL70_ML2_.jpg
+      price_inr: 7995
+      coupons:
+      - code: SPORT15
+        discount: 15% off
+        valid_until: '2026-12-31'
+    - name: FanCode Subscription
+      enabled: false
+      keywords:
+      - fancode
+      - sports streaming
+      - live sports
+      - cricket
+      - f1
+      - formula 1
+      - isl
+      - football
+      - live cricket
+      - premier league
+      category: subscription
+      networks: {}
+      image_url: https://example.com/images/fancode.jpg
+      price_inr: 999
+    - name: Fitness Tracker
+      keywords:
+      - fitness tracker
+      - smartwatch
+      - fitbit
+      - heart rate
+      - step counter
+      - health
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FVGBMH9B?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FVGBMH9B?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVGBMH9B
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/fitness-tracker
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61SoFSyvIsL._AC_SL1000_.jpg
+      price_inr: 3999
+    - name: Protein Supplement
+      keywords:
+      - protein
+      - whey
+      - supplement
+      - gym
+      - workout
+      - muscle
+      - nutrition
+      category: supplement
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B01N7VLTW3?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B01N7VLTW3?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01N7VLTW3
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/protein-supplement
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71tUNZ7QFgL._AC_SL1500_.jpg
+      price_inr: 2499
+    - name: Yoga Mat
+      keywords:
+      - yoga
+      - mat
+      - exercise
+      - fitness
+      - stretching
+      - pilates
+      - workout mat
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B01LP0V4JY?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B01LP0V4JY?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LP0V4JY
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/yoga-mat
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/7153xLfdwAL._AC_SL1500_.jpg
+      price_inr: 1499
+    - name: Cricket Bat
+      keywords:
+      - cricket
+      - bat
+      - willow
+      - cricket bat
+      - ipl
+      - t20
+      - batting
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B09P8PDXKT?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B09P8PDXKT?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09P8PDXKT
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/cricket-bat
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71GWfVlY+7S._AC_SL1500_.jpg
+      price_inr: 4999
+    - name: Football Boots
+      keywords:
+      - football
+      - boots
+      - cleats
+      - soccer
+      - studs
+      - adidas
+      - puma
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DQ8QSYXJ?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DQ8QSYXJ?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DQ8QSYXJ
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/football-boots
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51yfCVkHa6L._AC_SL1000_.jpg
+      price_inr: 5999
+    - name: Sports Watch
+      keywords:
+      - sports watch
+      - garmin
+      - gps
+      - running watch
+      - fitness watch
+      - triathlon
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0CG6NR413?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0CG6NR413?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CG6NR413
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/sports-watch
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61A4yOWzGBL._AC_SL1500_.jpg
+      price_inr: 15999
+    - name: Gym Bag
+      keywords:
+      - gym bag
+      - duffel
+      - sports bag
+      - training
+      - workout bag
+      - carry bag
+      category: gear
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FBR9ML3P?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FBR9ML3P?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FBR9ML3P
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/gym-bag
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81eu29zjzpL._AC_SL1500_.jpg
+      price_inr: 1999
   movies:
     products:
-      - name: "Netflix Premium"
-        keywords: [netflix, streaming, series, binge, original, netflix original]
-        category: subscription
-        networks:
-          cuelinks: { url: "https://example.com/affiliate/cuelinks/netflix", commission_pct: 10.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/netflix", commission_pct: 8.0 }
-        image_url: "https://example.com/images/netflix.jpg"
-        price_inr: 649
-
-      - name: "Amazon Prime Video"
-        keywords: [prime video, amazon prime, prime original, prime exclusive]
-        category: subscription
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/prime-video", commission_pct: 4.0 }
-        image_url: "https://example.com/images/prime-video.jpg"
-        price_inr: 1499
-
-      - name: "JBL Cinema Soundbar"
-        keywords: [soundbar, cinema, home theater, surround, dolby, atmos, imax, audio]
-        category: hardware
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/jbl-soundbar", commission_pct: 5.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/jbl-soundbar", commission_pct: 7.0 }
-        image_url: "https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg"
-        price_inr: 24999
-
+    - name: Netflix Premium
+      enabled: false
+      keywords:
+      - netflix
+      - streaming
+      - series
+      - binge
+      - original
+      - netflix original
+      category: subscription
+      networks:
+        amazon_us:
+          url: https://www.amazon.com/dp/B078J21W75?tag=***REMOVED***
+          commission_pct: 2.0
+        cuelinks:
+          url: https://example.com/affiliate/cuelinks/netflix
+          commission_pct: 10.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/netflix
+          commission_pct: 8.0
+      image_url: https://m.media-amazon.com/images/I/51BU2adIfsL._SL1500_.jpg
+      price_inr: 649
+    - name: Amazon Prime Video
+      keywords:
+      - prime video
+      - amazon prime
+      - prime original
+      - prime exclusive
+      category: subscription
+      networks:
+        amazon:
+          url: https://www.amazon.in/prime?tag=***REMOVED***
+          commission_pct: 2.0
+        amazon_us:
+          url: https://www.amazon.com/prime?tag=***REMOVED***
+          commission_pct: 2.0
+      image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
+      price_inr: 1499
+    - name: JBL Cinema Soundbar
+      keywords:
+      - soundbar
+      - cinema
+      - home theater
+      - surround
+      - dolby
+      - atmos
+      - imax
+      - audio
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DV3R2QM6?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FHBKCSNB?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DV3R2QM6
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/jbl-soundbar
+          commission_pct: 7.0
+      image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
+      price_inr: 24999
+      coupons:
+      - code: AUDIO20
+        discount: 20% off
+        valid_until: '2026-06-30'
+    - name: 4K Projector
+      keywords:
+      - projector
+      - 4k
+      - home theater
+      - cinema
+      - screen
+      - movie night
+      - lumens
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0F832HNG4?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0F832HNG4?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F832HNG4
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/4k-projector
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71lu-a3Ld0L._AC_SL1500_.jpg
+      price_inr: 45000
+    - name: Streaming Stick
+      keywords:
+      - fire stick
+      - streaming stick
+      - fire tv
+      - roku
+      - chromecast
+      - smart tv
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B09BKCDXZC?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B09BKCDXZC?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09BKCDXZC
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/streaming-stick
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
+      price_inr: 3999
+    - name: Wireless Earbuds
+      keywords:
+      - earbuds
+      - wireless
+      - noise cancelling
+      - anc
+      - bluetooth
+      - airpods
+      - audio
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FHWGB7FW?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FHWGB7FW?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FHWGB7FW
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/wireless-earbuds
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71sWRy5QxIL._AC_SL1500_.jpg
+      price_inr: 7999
+    - name: Smart TV 55 inch
+      keywords:
+      - smart tv
+      - 4k tv
+      - 55 inch
+      - led tv
+      - oled
+      - television
+      - android tv
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DW3YPBL1?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DW3YPBL1?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DW3YPBL1
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/smart-tv-55-inch
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81-jxVhtlrL._AC_SL1500_.jpg
+      price_inr: 35000
+    - name: Blu-ray Player
+      keywords:
+      - blu-ray
+      - player
+      - 4k
+      - disc
+      - uhd
+      - dvd
+      - media player
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0G29HRZYF?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0G29HRZYF?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G29HRZYF
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/blu-ray-player
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51KlkOmTEvL._AC_SL1500_.jpg
+      price_inr: 15000
+    - name: Popcorn Maker
+      keywords:
+      - popcorn
+      - popcorn maker
+      - movie snack
+      - machine
+      - home cinema
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DRCZQYHW?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DRCZQYHW?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DRCZQYHW
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/popcorn-maker
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61PvUFOLVoL._AC_SL1500_.jpg
+      price_inr: 1999
+    - name: JioHotstar
+      keywords:
+      - jiohotstar
+      - jio cinema
+      - jiocinema
+      - hotstar
+      - disney plus
+      - streaming india
+      category: subscription
+      networks:
+        amazon:
+          url: https://www.amazon.in/s?k=Disney+Plus+Hotstar+subscription&tag=***REMOVED***
+          commission_pct: 2.0
+        amazon_us:
+          url: https://www.amazon.com/s?k=Disney+Plus+Hotstar+subscription&tag=***REMOVED***
+          commission_pct: 2.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fs%3Fk%3DDisney%2BPlus%2BHotstar%2Bsubscription
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/disney+-hotstar
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
+      price_inr: 899
   anime:
     products:
-      - name: "Crunchyroll Premium"
-        keywords: [crunchyroll, anime streaming, subbed, dubbed, simulcast, seasonal anime]
-        category: subscription
-        networks:
-          cuelinks: { url: "https://example.com/affiliate/cuelinks/crunchyroll", commission_pct: 8.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/crunchyroll", commission_pct: 6.0 }
-        image_url: "https://example.com/images/crunchyroll.jpg"
-        price_inr: 79
-
-      - name: "One Piece Manga Box Set"
-        keywords: [one piece, manga, box set, luffy, pirate, oda, shonen jump]
-        category: merchandise
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/one-piece-manga", commission_pct: 5.0 }
-        image_url: "https://m.media-amazon.com/images/I/81QbDnFJDhL._SL1500_.jpg"
-        price_inr: 4999
-
-      - name: "Anime Figure Collection"
-        keywords: [figure, figurine, statue, collectible, nendoroid, banpresto, prize figure]
-        category: merchandise
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/anime-figure", commission_pct: 4.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/anime-figure", commission_pct: 6.5 }
-        image_url: "https://m.media-amazon.com/images/I/71jjidm8IwL._SL1500_.jpg"
-        price_inr: 2499
-
+    - name: Crunchyroll Premium
+      enabled: false
+      keywords:
+      - crunchyroll
+      - anime streaming
+      - subbed
+      - dubbed
+      - simulcast
+      - seasonal anime
+      category: subscription
+      networks:
+        cuelinks:
+          url: https://example.com/affiliate/cuelinks/crunchyroll
+          commission_pct: 8.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/crunchyroll
+          commission_pct: 6.0
+      image_url: https://example.com/images/crunchyroll.jpg
+      price_inr: 79
+    - name: One Piece Manga Box Set
+      keywords:
+      - one piece
+      - manga
+      - box set
+      - luffy
+      - pirate
+      - oda
+      - shonen jump
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/1569319014?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/1421560747?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1569319014
+          commission_pct: 7.0
+      image_url: https://m.media-amazon.com/images/I/91NxYvUNf6L._SL1500_.jpg
+      price_inr: 4999
+    - name: Anime Figure Collection
+      keywords:
+      - figure
+      - figurine
+      - statue
+      - collectible
+      - nendoroid
+      - banpresto
+      - prize figure
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DBFCVNC3?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FPBJX1R6?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DBFCVNC3
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/anime-figure
+          commission_pct: 6.5
+      image_url: https://m.media-amazon.com/images/I/6124DoY4M+L._SL1200_.jpg
+      price_inr: 2499
+    - name: Drawing Tablet
+      keywords:
+      - drawing tablet
+      - wacom
+      - pen tablet
+      - digital art
+      - illustration
+      - manga drawing
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B009EOLFA2?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B009EOLFA2?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB009EOLFA2
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/drawing-tablet
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51HGkqKcR-L._AC_SL1500_.jpg
+      price_inr: 8999
+    - name: Anime Hoodie
+      keywords:
+      - anime hoodie
+      - hoodie
+      - naruto
+      - one piece
+      - dragon ball
+      - anime clothing
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0F9N5B6Z9?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0F9N5B6Z9?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F9N5B6Z9
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/anime-hoodie
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71HKfMVhQ3L._AC_SL1500_.jpg
+      price_inr: 1999
+    - name: Manga Subscription Box
+      keywords:
+      - manga
+      - subscription
+      - monthly
+      - manga box
+      - shonen jump
+      - viz media
+      category: subscription
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B000KH9PAY?tag=***REMOVED***
+          commission_pct: 2.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B000KH9PAY?tag=***REMOVED***
+          commission_pct: 2.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB000KH9PAY
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/manga-subscription-box
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/51hcUqEvHCL.jpg
+      price_inr: 2499
+    - name: Anime Poster Set
+      keywords:
+      - anime poster
+      - wall art
+      - poster set
+      - room decor
+      - anime decor
+      - naruto poster
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FRXPCN9G?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FRXPCN9G?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FRXPCN9G
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/anime-poster-set
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/810d9tRiOFL._AC_SL1500_.jpg
+      price_inr: 999
+    - name: Cosplay Accessories
+      keywords:
+      - cosplay
+      - costume
+      - wig
+      - accessories
+      - anime cosplay
+      - convention
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0FDB8NYLP?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0FDB8NYLP?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FDB8NYLP
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/cosplay-accessories
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/612Sp-WvEyL._SL1500_.jpg
+      price_inr: 1499
+    - name: Light Novel Set
+      keywords:
+      - light novel
+      - novel
+      - anime novel
+      - isekai
+      - sword art online
+      - re zero
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/1646092724?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/1646092724?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1646092724
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/light-novel-set
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/916EuMaqYNL._SL1500_.jpg
+      price_inr: 3499
+    - name: Funko Pop Anime
+      keywords:
+      - funko pop
+      - funko
+      - vinyl figure
+      - pop figure
+      - collectible
+      - anime figure
+      category: merchandise
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B09HN5JFW9?tag=***REMOVED***
+          commission_pct: 5.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B09HN5JFW9?tag=***REMOVED***
+          commission_pct: 4.5
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09HN5JFW9
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/funko-pop-anime
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61uhh0jZIQL._AC_SL1300_.jpg
+      price_inr: 999
   ai_creators:
     products:
-      - name: "ChatGPT Plus"
-        keywords: [chatgpt, openai, gpt, gpt-4, gpt-5, ai chat, ai assistant]
-        category: tool
-        networks:
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/chatgpt-plus", commission_pct: 5.0 }
-        image_url: "https://example.com/images/chatgpt.jpg"
-        price_inr: 1680
-
-      - name: "Midjourney Subscription"
-        keywords: [midjourney, ai art, ai image, text to image, ai generation, diffusion]
-        category: tool
-        networks:
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/midjourney", commission_pct: 5.0 }
-          vcommission: { url: "https://example.com/affiliate/vcommission/midjourney", commission_pct: 7.0 }
-        image_url: "https://example.com/images/midjourney.jpg"
-        price_inr: 800
-
-      - name: "NVIDIA RTX 4090"
-        keywords: [nvidia, rtx, gpu, graphics card, 4090, 4080, cuda, ai training, deep learning]
-        category: hardware
-        networks:
-          amazon: { url: "https://example.com/affiliate/amazon/rtx-4090", commission_pct: 3.0 }
-          earnkaro: { url: "https://example.com/affiliate/earnkaro/rtx-4090", commission_pct: 5.5 }
-        image_url: "https://m.media-amazon.com/images/I/81StP9t0gvL._SL1500_.jpg"
-        price_inr: 159900
+    - name: ChatGPT Plus
+      enabled: false
+      keywords:
+      - chatgpt
+      - openai
+      - gpt
+      - gpt-4
+      - gpt-5
+      - ai chat
+      - ai assistant
+      - chatbot
+      - language model
+      - llm
+      category: tool
+      networks:
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/chatgpt-plus
+          commission_pct: 5.0
+      image_url: https://example.com/images/chatgpt.jpg
+      price_inr: 1680
+    - name: Midjourney Subscription
+      enabled: false
+      keywords:
+      - midjourney
+      - ai art
+      - ai image
+      - text to image
+      - ai generation
+      - diffusion
+      category: tool
+      networks:
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/midjourney
+          commission_pct: 5.0
+      image_url: https://example.com/images/midjourney.jpg
+      price_inr: 800
+    - name: NVIDIA RTX 4090
+      keywords:
+      - nvidia
+      - rtx
+      - gpu
+      - graphics card
+      - 4090
+      - 4080
+      - cuda
+      - ai training
+      - deep learning
+      - render
+      - training
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0BHD9TS9Q?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0BHD9TS9Q?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BHD9TS9Q
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/rtx-4090
+          commission_pct: 5.5
+      image_url: https://m.media-amazon.com/images/I/81SmwFXiirL._SL1500_.jpg
+      price_inr: 159900
+    - name: AI Microphone
+      keywords:
+      - microphone
+      - usb
+      - condenser
+      - podcast
+      - recording
+      - blue yeti
+      - audio
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0BXPFNNF9?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0BXPFNNF9?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BXPFNNF9
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/ai-microphone
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71QclY4ig4L._AC_SL1500_.jpg
+      price_inr: 5999
+    - name: Ring Light
+      keywords:
+      - ring light
+      - led
+      - lighting
+      - streaming light
+      - video light
+      - selfie light
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DCSHSSFF?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DCSHSSFF?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DCSHSSFF
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/ring-light
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61FeV2kuB7L._AC_SL1500_.jpg
+      price_inr: 2499
+    - name: Green Screen
+      keywords:
+      - green screen
+      - chroma key
+      - background
+      - streaming
+      - video production
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0G58979LS?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0G58979LS?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G58979LS
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/green-screen
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/61i5eTZnhtL._AC_SL1500_.jpg
+      price_inr: 1999
+    - name: Coding Keyboard
+      keywords:
+      - keyboard
+      - mechanical
+      - programmer
+      - typing
+      - code
+      - developer
+      - ergonomic
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0DF7Y1NZD?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0DF7Y1NZD?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DF7Y1NZD
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/coding-keyboard
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81s5PDK7OBL._AC_SL1500_.jpg
+      price_inr: 8999
+    - name: AI Course Bundle
+      keywords:
+      - ai course
+      - machine learning
+      - deep learning
+      - udemy
+      - coursera
+      - online course
+      - learn ai
+      - tutorial
+      - bootcamp
+      category: educational
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0BSMSV1NL?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0BSMSV1NL?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BSMSV1NL
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/ai-course-bundle
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81RnKN6BRuL._SL1500_.jpg
+      price_inr: 4999
+    - name: Portable Monitor
+      keywords:
+      - portable monitor
+      - usb-c
+      - second screen
+      - travel monitor
+      - external display
+      category: hardware
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B095GG31KX?tag=***REMOVED***
+          commission_pct: 3.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B095GG31KX?tag=***REMOVED***
+          commission_pct: 3.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB095GG31KX
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/portable-monitor
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/71k5N-RKVgL._AC_SL1500_.jpg
+      price_inr: 12999
+    - name: Claude Pro Subscription
+      keywords:
+      - claude
+      - anthropic
+      - claude pro
+      - ai assistant
+      - llm
+      - ai chat
+      category: tool
+      networks:
+        amazon:
+          url: https://www.amazon.in/dp/B0GSRSRYSH?tag=***REMOVED***
+          commission_pct: 4.0
+        amazon_us:
+          url: https://www.amazon.com/dp/B0GSRSRYSH?tag=***REMOVED***
+          commission_pct: 4.0
+        cuelinks:
+          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GSRSRYSH
+          commission_pct: 7.0
+        earnkaro:
+          url: https://example.com/affiliate/earnkaro/claude-pro-subscription
+          commission_pct: 6.0
+      image_url: https://m.media-amazon.com/images/I/81MCJnvo2KL._SL1500_.jpg
+      price_inr: 1680
