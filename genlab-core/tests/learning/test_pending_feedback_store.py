@@ -50,9 +50,9 @@ class TestCreate:
         store.create(task)
         mock_proxy.create.assert_called_once()
         fields = mock_proxy.create.call_args[0][0]
-        assert fields["Platform"] == "instagram"
-        assert fields["BanditArm"] == "carousel_hook_v2"
-        assert fields["NicheId"] == "gaming"
+        assert fields["platform"] == "instagram"
+        assert fields["arm_id"] == "carousel_hook_v2"
+        assert fields["niche_id"] == "gaming"
 
     def test_create_handles_failure_gracefully(self, store, mock_proxy):
         mock_proxy.create.side_effect = Exception("SharePoint down")
@@ -63,9 +63,9 @@ class TestCreate:
         task = _make_task(hook_text="You won't believe this play", hook_type="reaction")
         store.create(task)
         fields = mock_proxy.create.call_args[0][0]
-        assert fields["HookText"] == "You won't believe this play"
-        assert fields["HookLength"] == 27  # character count
-        assert fields["HookType"] == "reaction"
+        assert fields["hook_text"] == "You won't believe this play"
+        assert fields["hook_length"] == 27  # character count
+        assert fields["hook_type"] == "reaction"
 
     def test_create_raises_if_no_proxy(self):
         client = MagicMock(spec=[])  # no pending_feedback attr

@@ -1,1 +1,38 @@
-/Users/anarchistsid/GenLab/BlackboxBrief/config/publishing.yaml
+# Blackbox Brief (ai_creators) publishing configuration — all 6 platforms
+# Canonical location: genlab-core/config/publishing.yaml
+
+niche_id: ai_creators
+
+platforms:
+  instagram:
+    enabled: true
+    account_id: "17841403488925202"  # BlackboxBrief IG Business Account
+    schedule_slots:
+      - "12:00"
+  youtube:
+    enabled: true
+    channel_id: "UCsS0BFYV0yOoAdRzGxSxGQ"  # BlackboxBrief YT Channel
+    schedule_slots:
+      - "12:00"
+  facebook:
+    enabled: true
+    page_id: "105972598822680"  # BlackboxBrief FB Page
+    schedule_slots:
+      - "12:00"
+  x_twitter:
+    enabled: true
+    account_id: null
+    schedule_slots:
+      - "12:00"
+  threads:
+    enabled: true
+    account_id: null
+    schedule_slots:
+      - "12:00"
+  tiktok:
+    enabled: false
+    account_id: null
+
+daily_post_cap: 1
+publish_window_utc: "06:30"
+retry_window_utc: "10:00"

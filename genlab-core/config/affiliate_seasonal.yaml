@@ -1,0 +1,100 @@
+# Seasonal product rotation — event-driven affiliate product overrides.
+# During active events, these products get priority over the static catalog.
+# Products here are checked FIRST by match_product(); static catalog is fallback.
+
+events:
+  - name: "Amazon Great Indian Festival"
+    start: "2026-10-01"
+    end: "2026-10-08"
+    boost_categories: [hardware, peripheral, gear]
+    products:
+      - name: "Diwali Deal: PS5 Console"
+        keywords: [ps5, playstation, sony, gaming, console, diwali, deal, sale, festival]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***", commission_pct: 4.0 }
+
+  - name: "Black Friday"
+    start: "2026-11-27"
+    end: "2026-11-30"
+    boost_categories: [hardware, peripheral, gear, merchandise]
+    products:
+      - name: "Black Friday: RTX 4090"
+        keywords: [nvidia, rtx, gpu, graphics, black friday, deal, 4090]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=NVIDIA+RTX+4090&tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0BHD9TS9Q?tag=***REMOVED***", commission_pct: 4.0 }
+
+  - name: "Amazon Prime Day"
+    start: "2026-07-15"
+    end: "2026-07-17"
+    boost_categories: [hardware, subscription, peripheral]
+    products:
+      - name: "Prime Day: PS5 Console"
+        keywords: [ps5, playstation, sony, prime day, deal, sale, console]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***", commission_pct: 4.0 }
+      - name: "Prime Day: Gaming Monitor 4K"
+        keywords: [gaming monitor, 4k, 144hz, prime day, deal, display]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=gaming+monitor+4K+144Hz&tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0CP7SV7XV?tag=***REMOVED***", commission_pct: 4.0 }
+      - name: "Prime Day: Wireless Earbuds"
+        keywords: [earbuds, wireless, noise cancelling, anc, prime day, deal, audio]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=wireless+earbuds+noise+cancelling&tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0FHWGB7FW?tag=***REMOVED***", commission_pct: 4.0 }
+      - name: "Prime Day: Streaming Stick"
+        keywords: [fire stick, fire tv, streaming stick, prime day, deal, 4k]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=Fire+TV+Stick+4K+streaming&tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B09BKCDXZC?tag=***REMOVED***", commission_pct: 4.0 }
+      - name: "Prime Day: Fitness Tracker"
+        keywords: [fitness tracker, smartwatch, fitbit, prime day, deal, health]
+        category: gear
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=fitness+tracker+band+heart+rate&tag=***REMOVED***", commission_pct: 5.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0FVGBMH9B?tag=***REMOVED***", commission_pct: 5.0 }
+
+  - name: "Christmas & New Year"
+    start: "2026-12-20"
+    end: "2027-01-02"
+    boost_categories: [merchandise, hardware]
+    products:
+      - name: "Christmas: One Piece Manga Box Set"
+        keywords: [one piece, manga, box set, christmas, gift, holiday, stocking stuffer]
+        category: merchandise
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/1569319014?tag=***REMOVED***", commission_pct: 5.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/1421560747?tag=***REMOVED***", commission_pct: 5.0 }
+      - name: "Christmas: Xbox Game Pass Ultimate"
+        keywords: [xbox, game pass, gift, christmas, holiday, gaming gift]
+        category: subscription
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/B0GHJZ9QSN?tag=***REMOVED***", commission_pct: 3.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B07TFP7JFH?tag=***REMOVED***", commission_pct: 3.0 }
+      - name: "Christmas: Anime Figure Collection"
+        keywords: [anime figure, figurine, collectible, christmas, gift, nendoroid]
+        category: merchandise
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/B0DBFCVNC3?tag=***REMOVED***", commission_pct: 5.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0FPBJX1R6?tag=***REMOVED***", commission_pct: 5.0 }
+      - name: "Christmas: JBL Cinema Soundbar"
+        keywords: [soundbar, cinema, home theater, christmas, gift, dolby, audio]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/dp/B0DV3R2QM6?tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0FHBKCSNB?tag=***REMOVED***", commission_pct: 4.0 }
+      - name: "Christmas: Smart TV 55 inch"
+        keywords: [smart tv, 4k tv, 55 inch, christmas, gift, holiday, television]
+        category: hardware
+        networks:
+          amazon: { url: "https://www.amazon.in/s?k=smart+tv+55+inch+4K&tag=***REMOVED***", commission_pct: 4.0 }
+          amazon_us: { url: "https://www.amazon.com/dp/B0DW3YPBL1?tag=***REMOVED***", commission_pct: 4.0 }

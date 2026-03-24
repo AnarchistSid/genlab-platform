@@ -7,7 +7,7 @@ BacklogClient and GraphTableProxy) uses patterns like:
   - ``OR({f1}='v1', {f2}='v2')``
 
 This module translates those to parameterized SQL WHERE clauses with
-positional parameters ($1, $2, etc.) for use with asyncpg.
+positional parameters ($1, $2, etc.) for use with psycopg3.
 """
 from __future__ import annotations
 

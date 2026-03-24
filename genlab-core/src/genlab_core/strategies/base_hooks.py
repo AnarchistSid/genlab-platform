@@ -27,7 +27,7 @@ from typing import Any
 
 import yaml
 
-from genlab_core.intelligence.hook_validator import HookValidator
+from genlab_core.intelligence.hook_validator import HookValidator, clean_hook
 
 from .interfaces import HookStrategy
 
@@ -106,6 +106,7 @@ class BaseHookStrategy(HookStrategy):
 
         Tries LLM first, falls back to category templates, then title-derived.
         Deduplication via *used_hooks* set.
+        Banned phrases are rejected at every stage.
         """
         self._ensure_config()
         if used_hooks is None:
@@ -116,7 +117,7 @@ class BaseHookStrategy(HookStrategy):
             from genlab_core.writing.llm_hook_generator import generate_hook
 
             llm_hook = generate_hook(story, self._niche_id, used_hooks)
-            if llm_hook:
+            if llm_hook and not self._is_banned(llm_hook):
                 return llm_hook
         except ImportError:
             pass
@@ -148,13 +149,20 @@ class BaseHookStrategy(HookStrategy):
                     hook = hook[len(f) :].strip()
             if len(hook) > 60:
                 hook = hook[:57].rsplit(" ", 1)[0] + "..."
-            if hook.lower() not in used_hooks:
+            if hook.lower() not in used_hooks and not self._is_banned(hook):
                 return hook
 
         # Fallback: title-derived hook (always unique)
         title = story.get("title", self._title_fallback_label)
         hook = title[:57].rsplit(" ", 1)[0] + "..." if len(title) > 60 else title
         return hook
+
+    @staticmethod
+    def _is_banned(hook: str) -> bool:
+        """Check if hook contains any banned phrase."""
+        from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
+        hook_lower = hook.lower()
+        return any(phrase in hook_lower for phrase in _BANNED_PHRASES)
 
     # ------------------------------------------------------------------
     # execute() — shared pipeline entry point
@@ -218,13 +226,26 @@ class BaseHookStrategy(HookStrategy):
                     hook[:50],
                     [f.value for f in vr.failures],
                 )
-                # Fallback: truncate to 60 chars if too long, strip markdown
-                hook = hook[:60].rsplit(" ", 1)[0] if len(hook) > 60 else hook
-                hook = hook.replace("**", "").replace("*", "")
+                # Try to salvage the hook by cleaning artifacts
+                hook = clean_hook(hook)
+                if len(hook) > 60:
+                    hook = hook[:57].rsplit(" ", 1)[0] + "..."
+
+            # Semantic quality gate: hook should contain at least one word
+            # from the story title (specificity check)
+            title_words = set(w.lower() for w in (story.get("title", "").split()) if len(w) > 3)
+            hook_words = set(w.lower() for w in hook.split() if len(w) > 3)
+            specificity = len(title_words & hook_words)
+            if specificity == 0 and title_words:
+                logger.debug(
+                    "[%s] Hook has no title overlap — may be generic: '%s' (title: '%s')",
+                    self._niche_id, hook[:40], story.get("title", "")[:40],
+                )
 
             content = story.setdefault("content", {})
             content["hook"] = hook
             content["hook_category"] = category
+            content["hook_specificity"] = specificity
 
             categories_used[category] = categories_used.get(category, 0) + 1
             hooked_count += 1

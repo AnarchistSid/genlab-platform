@@ -141,7 +141,7 @@ class TestPollTwitterMentions:
         assert len(result) == 1
         expected_keys = {"platform", "post_id", "comment_id", "author_id", "author_name", "text", "is_question"}
         assert expected_keys.issubset(result[0].keys())
-        assert result[0]["platform"] == "twitter"
+        assert result[0]["platform"] == "x_twitter"
         assert result[0]["author_name"] == "tweeter"
         assert result[0]["is_question"] is True
 

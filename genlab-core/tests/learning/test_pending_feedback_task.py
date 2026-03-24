@@ -73,8 +73,8 @@ class TestPendingFeedbackTask:
         assert task.bandit_context is None
         # Should not raise on serialisation
         fields = task.to_sharepoint_fields()
-        assert fields["BanditArm"] == ""
-        assert fields["BanditContext"] == ""
+        assert fields["arm_id"] == ""
+        assert fields["bandit_context"] == ""
 
     def test_serialises_to_sharepoint_fields(self):
         task = PendingFeedbackTask(
@@ -90,14 +90,14 @@ class TestPendingFeedbackTask:
         fields = task.to_sharepoint_fields()
 
         assert fields["Title"] == "instagram__ig_123"
-        assert fields["Platform"] == "instagram"
-        assert fields["PostID"] == "ig_123"
-        assert fields["PostContentType"] == "viral_moment"
-        assert fields["HookType"] == "You won't believe this play"
-        assert fields["Status"] == "awaiting_6h"
-        assert fields["BanditArm"] == "viral_moment__instagram"
-        assert '"score": 0.8' in fields["BanditContext"]
-        assert fields["NicheId"] == "gaming"  # default
+        assert fields["platform"] == "instagram"
+        assert fields["post_id"] == "ig_123"
+        assert fields["content_type"] == "viral_moment"
+        assert fields["hook_type"] == "You won't believe this play"
+        assert fields["collection_status"] == "awaiting_6h"
+        assert fields["arm_id"] == "viral_moment__instagram"
+        assert '"score": 0.8' in fields["bandit_context"]
+        assert fields["niche_id"] == "gaming"  # default
 
     def test_hook_fields_serialised(self):
         task = PendingFeedbackTask(
@@ -109,8 +109,8 @@ class TestPendingFeedbackTask:
             hook_type="reaction",
         )
         fields = task.to_sharepoint_fields()
-        assert fields["HookText"] == "You won't believe this AI breakthrough"
-        assert fields["HookLength"] == 38  # character count
+        assert fields["hook_text"] == "You won't believe this AI breakthrough"
+        assert fields["hook_length"] == 38  # character count
 
     def test_hook_fields_omitted_when_empty(self):
         task = PendingFeedbackTask(
@@ -120,7 +120,7 @@ class TestPendingFeedbackTask:
             platform_post_id="ig_789",
         )
         fields = task.to_sharepoint_fields()
-        assert "HookText" not in fields
+        assert "hook_text" not in fields
 
     def test_sharepoint_id_field(self):
         task = PendingFeedbackTask(

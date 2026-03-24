@@ -55,7 +55,7 @@ class TestRunFfmpeg:
 
     @patch("genlab_core.media.ffmpeg_utils.subprocess.run")
     def test_timeout_retries_with_fallback(self, mock_run: MagicMock):
-        """First call times out → retries with fallback preset and 180s timeout."""
+        """First call times out → retries with fallback preset and same timeout."""
         fallback_result = subprocess.CompletedProcess(
             args=["ffmpeg"], returncode=0, stdout="ok", stderr=""
         )
@@ -75,16 +75,16 @@ class TestRunFfmpeg:
         preset_idx = retry_cmd.index("-preset")
         assert retry_cmd[preset_idx + 1] == "fast"
 
-        # Verify the retry used 180s timeout
+        # Verify the retry uses the same timeout as the primary call
         retry_kwargs = mock_run.call_args_list[1][1]
-        assert retry_kwargs["timeout"] == 180
+        assert retry_kwargs["timeout"] == 120
 
     @patch("genlab_core.media.ffmpeg_utils.subprocess.run")
     def test_both_timeout_raises(self, mock_run: MagicMock):
         """Both calls timeout → raises TimeoutExpired from retry."""
         mock_run.side_effect = [
             subprocess.TimeoutExpired(cmd="ffmpeg", timeout=120),
-            subprocess.TimeoutExpired(cmd="ffmpeg", timeout=180),
+            subprocess.TimeoutExpired(cmd="ffmpeg", timeout=120),
         ]
 
         cmd = ["ffmpeg", "-y", "-preset", "slow", "out.mp4"]

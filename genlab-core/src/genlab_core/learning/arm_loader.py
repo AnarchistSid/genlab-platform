@@ -44,9 +44,10 @@ def load_all_arms(proxy, niche_id: str) -> dict[str, tuple[float, float]]:
         arms: dict[str, tuple[float, float]] = {}
         for item in items:
             fields = item.get("fields", item)
-            arm_id = fields.get("Title", "")
-            alpha = float(fields.get("Alpha", 1.0))
-            beta = float(fields.get("Beta", 1.0))
+            arm_id = fields.get("arm_id") or fields.get("Title") or ""
+            alpha = float(fields.get("alpha") if "alpha" in fields else fields.get("Alpha", 1.0))
+            beta = float(fields.get("beta") if "beta" in fields else fields.get("Beta", 1.0))
+            n_plays = int(fields.get("n_plays") if "n_plays" in fields else fields.get("NPlays", 0))
             if arm_id:
                 arms[arm_id] = (alpha, beta)
         return arms
@@ -73,15 +74,15 @@ def load_all_arms_extended(
         arms: dict[str, dict[str, Any]] = {}
         for item in items:
             fields = item.get("fields", item)
-            arm_id = fields.get("Title", "")
+            arm_id = fields.get("arm_id") or fields.get("Title") or ""
             if not arm_id:
                 continue
 
-            alpha = float(fields.get("Alpha", 1.0))
-            beta = float(fields.get("Beta", 1.0))
+            alpha = float(fields.get("alpha") if "alpha" in fields else fields.get("Alpha", 1.0))
+            beta = float(fields.get("beta") if "beta" in fields else fields.get("Beta", 1.0))
 
             linucb_state: dict[str, Any] | None = None
-            raw_state = fields.get("LinUCB_State", "")
+            raw_state = fields.get("linucb_state") or fields.get("LinUCB_State") or ""
             if raw_state:
                 try:
                     linucb_state = json.loads(raw_state)
@@ -123,21 +124,22 @@ def save_arm(
             Serialized as JSON into the ``LinUCB_State`` column.
     """
     fields: dict[str, Any] = {
-        "Title": arm_id,
-        "Alpha": alpha,
-        "Beta": beta,
+        "arm_id": arm_id,
+        "alpha": alpha,
+        "beta": beta,
+        "n_plays": 0,
         "ContentType": content_type,
         "Platform": platform,
-        "TotalPulls": 0,
         "LastUpdated": datetime.now(UTC).isoformat(),
     }
     if linucb_state is not None:
-        fields["LinUCB_State"] = json.dumps(linucb_state)
+        fields["linucb_state"] = json.dumps(linucb_state)
     try:
         existing = proxy.all()
         match = next(
             (item for item in existing
-             if (item.get("fields", item)).get("Title") == arm_id),
+             if (item.get("fields", item)).get("arm_id", "")
+             == arm_id or (item.get("fields", item)).get("Title", "") == arm_id),
             None,
         )
         if match:

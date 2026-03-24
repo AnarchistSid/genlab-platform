@@ -9,30 +9,21 @@ THE LOCKED SPEC
 Canvas: 1080 x 1920 (9:16 portrait, always)
 
 LANDSCAPE (source aspect ratio >= 1.33):
-  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name(24px x=120 y=322)
-              + handle(17px x=120 y=346)
-  y=310-370:  Name row (60px)  [solid black]
-  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered,
-              max 2 lines)  [solid black]
-  y=460-466:  Accent line (6px, channel accent color)
-  y=466-1074: VIDEO 1080x608 — ZERO overlays on video
-  y=1074-1920: Solid black (846px)
+  Video 1080x608, VERTICALLY CENTERED at y=656.
+  Branding above video: logo(60px) + channel name + handle + hook text
+  (44px bold white, max 2 lines) + accent line (6px).
+  Black fill above branding and below video.
 
 PORTRAIT (source aspect ratio <= 0.75):
-  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name + handle
-  y=310-370:  Name row (60px)  [solid black]
-  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered)  [solid black]
-  y=460-466:  Accent line (6px, channel accent color)
-  y=466-1466: VIDEO 1080x1000 — ZERO overlays on video (letterboxed if needed)
-  y=1466-1920: Solid black (454px)
+  Clean full-screen video — fills entire 1080x1920 canvas.
+  NO branding, NO hook overlay, NO accent line burned into video.
+  Branding comes from post caption text only.
 
 SQUARE (source aspect ratio 0.75 to 1.33):
-  y=0-310:    Solid black top bar. Logo(60px x=45) + channel name + handle
-  y=310-370:  Name row (60px)  [solid black]
-  y=380-460:  Hook text zone (80px, 44px bold white, vertically centered)  [solid black]
-  y=460-466:  Accent line (6px, channel accent color)
-  y=466-1546: VIDEO 1080x1080 — ZERO overlays on video
-  y=1546-1920: Solid black (374px)
+  Video 1080x1080, VERTICALLY CENTERED at y=420.
+  Branding above video: logo(60px) + channel name + handle + hook text
+  (44px bold white, max 2 lines) + accent line (6px).
+  Black fill above branding and below video.
 
 Usage:
     comp = FrameCompositor.from_visuals_yaml("path/to/visuals.yaml")
@@ -70,48 +61,38 @@ LANDSCAPE_THRESHOLD = 1.33   # w/h >= this -> landscape
 PORTRAIT_THRESHOLD = 0.75    # w/h <= this -> portrait
 # Between 0.75 and 1.33 = SQUARE
 
-# Layout A: Landscape
-L_TOP_BAR_H = 310
-L_NAME_ROW_Y = 310
-L_NAME_ROW_H = 60
-L_HOOK_ZONE_Y = 380
-L_HOOK_ZONE_H = 80
-L_VIDEO_Y = 460              # video starts right after hook zone (no accent line)
-L_VIDEO_H = 816              # ~42% of canvas
-L_BOTTOM_H = 644             # ~34% of canvas
+# Layout A: Landscape — video VERTICALLY CENTERED, branding above it
+L_VIDEO_H = 608               # 16:9 at 1080w = 608h
+L_VIDEO_Y = (CANVAS_H - L_VIDEO_H) // 2   # 656 — centered vertically
+L_HOOK_Y = L_VIDEO_Y - 120    # hook text above video with 16px clear gap
+L_LOGO_Y = L_HOOK_Y - 150     # logo/name above hook with breathing room
 
-# Layout B: Portrait (fill-canvas with dark gradient overlay for logo+hook)
-# Portrait videos fill the entire 1080x1920 canvas. Logo + hook are overlaid
-# on a semi-transparent dark gradient at the top, matching the Evolving AI style.
-P_OVERLAY_H = 480           # dark gradient zone height (top 25%)
-P_OVERLAY_OPACITY = 0.55    # gradient opacity
-P_LOGO_Y = 310              # logo y — same proportional position as landscape
-P_HOOK_Y = 390              # hook text y
+# Layout B: Portrait — clean full-screen video, NO branding/hook overlay
+# Portrait videos fill the entire 1080x1920 canvas with zero overlays.
+# Branding comes from the caption/post text, not burned into the video.
 
-# Layout C: Square — same Evolving AI header as landscape
-# Reuses the same branding positions so all non-portrait layouts look consistent
-S_VIDEO_Y = L_VIDEO_Y        # 460 — same header height as landscape
-S_VIDEO_H = 1080             # 1080x1080 square video
-S_BOTTOM_H = CANVAS_H - S_VIDEO_Y - S_VIDEO_H  # 380px
+# Layout C: Square — video vertically centered, branding above
+S_VIDEO_H = 1080              # 1080x1080 square video
+S_VIDEO_Y = (CANVAS_H - S_VIDEO_H) // 2   # 420 — centered vertically
+S_HOOK_Y = S_VIDEO_Y - 120
+S_LOGO_Y = S_HOOK_Y - 150
 
-# Shared text
+# Shared branding
 LOGO_SIZE = 60
 LOGO_X = 45
-LOGO_Y = 310          # logo top aligned with name-row start (y=310)
 NAME_FONT_SIZE = 24
 NAME_X = 120
-NAME_Y = 322
 HANDLE_FONT_SIZE = 17
 HANDLE_X = 120
-HANDLE_Y = 346
 HANDLE_OPACITY = 0.70
+
+# Hook text — CENTER-ALIGNED horizontally
 HOOK_FONT_SIZE = 44
 HOOK_LINE_H = 52
 HOOK_MAX_LINES = 2
 HOOK_MAX_CHARS_LINE = 35
 SHADOW_OFFSET = 2
 SHADOW_OPACITY = 0.50
-HOOK_X = 45
 
 HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 
@@ -336,6 +317,17 @@ class FrameCompositor:
         # Probe source
         info = probe_video(source_video_path)
         case = info.layout_case
+
+        # Enforce minimum duration (15s for reels)
+        effective_duration = info.duration_seconds - trim_start
+        if duration_seconds:
+            effective_duration = min(effective_duration, duration_seconds)
+        if effective_duration < 15:
+            logger.warning(
+                f"[{self.branding.niche_id}] Source clip too short: {effective_duration:.1f}s "
+                f"(minimum 15s) — {source_video_path}"
+            )
+
         logger.info(
             f"[{self.branding.niche_id}] Source: {info.width}x{info.height} "
             f"ar={info.aspect_ratio:.3f} -> {case}"
@@ -386,7 +378,7 @@ class FrameCompositor:
                 current = f"{current} {word}".strip()
         if current:
             lines.append(current)
-        return lines[:HOOK_MAX_LINES]  # max 3 lines
+        return lines[:HOOK_MAX_LINES]  # max 2 lines
 
     # --- Accent color helper ----------------------------------------------
 
@@ -394,295 +386,156 @@ class FrameCompositor:
         """Strip '#' from accent_color for FFmpeg."""
         return self.branding.accent_color.lstrip("#").lower()
 
+    # --- Shared: build center-aligned hook drawtext chain --------------------
+
+    def _build_hook_filters(self, hook: str, hook_y: int, font_hook: str, prev_label: str) -> tuple[str, str]:
+        """Build FFmpeg drawtext filters for center-aligned hook text.
+
+        Returns (filter_chain_str, final_label).
+        """
+        hook_lines = self._wrap_hook(hook)
+        num_lines = len(hook_lines)
+        filters = ""
+        for i, line in enumerate(hook_lines):
+            safe_line = self._escape_drawtext(line)
+            line_y = hook_y + i * HOOK_LINE_H
+            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
+            filters += (
+                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
+                f"x=(w-text_w)/2:y={line_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{out_label}];"
+            )
+            prev_label = out_label
+        return filters, "withhook"
+
+    # --- Shared: build branding filters (logo + name + handle) ------------
+
+    def _build_branding_filters(self, font_bold: str, font_reg: str,
+                                 logo_y: int, base_label: str) -> tuple[str, str]:
+        """Build FFmpeg filters for logo + channel name + handle.
+
+        Returns (filter_chain_str, final_label).
+        """
+        safe_name = self._escape_drawtext(self.branding.channel_name)
+        safe_handle = self._escape_drawtext(self.branding.handle)
+        name_y = logo_y + 12
+        handle_y = logo_y + 36
+
+        has_logo = self.branding.logo_path and os.path.exists(self.branding.logo_path)
+
+        if has_logo:
+            filters = (
+                # Logo scaled to target size
+                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
+                # Subtle white backing behind logo for visibility on black
+                f"[{base_label}]drawbox=x={LOGO_X-4}:y={logo_y-4}:"
+                f"w={LOGO_SIZE+8}:h={LOGO_SIZE+8}:"
+                f"color=white@0.12:t=fill[withbg];"
+                # Overlay logo on top of backing
+                f"[withbg][logo]overlay={LOGO_X}:{logo_y}[withlogo];"
+                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={name_y}[withname];"
+                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={HANDLE_X}:y={handle_y}[withhandle];"
+            )
+        else:
+            filters = (
+                f"[{base_label}]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={name_y}[withname];"
+                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={LOGO_X}:y={handle_y}[withhandle];"
+            )
+        return filters, "withhandle"
+
     # --- Layout A: Landscape (ar >= 1.33) ---------------------------------
 
     def _build_cmd_landscape(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Landscape clip: video at y=466, hook text zone above, accent line separator."""
-
-        logo_path = self.branding.logo_path
-        channel_name = self.branding.channel_name
-        handle = self.branding.handle
-        safe_name = self._escape_drawtext(channel_name)
-        safe_handle = self._escape_drawtext(handle)
+        """Landscape clip: branding header + center-aligned hook + flush video."""
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
-
         font_bold, font_reg, font_hook = self._resolve_fonts()
+        has_logo = self.branding.logo_path and os.path.exists(self.branding.logo_path)
 
-        has_logo = logo_path and os.path.exists(logo_path)
-
-        # Wrap hook text and compute vertical centering within hook zone
-        hook_lines = self._wrap_hook(hook)
-        num_lines = len(hook_lines)
-        total_text_h = num_lines * HOOK_LINE_H
-        hook_zone_center_y = L_HOOK_ZONE_Y + L_HOOK_ZONE_H // 2
-        hook_start_y = hook_zone_center_y - total_text_h // 2
-
-        # Build hook drawtext chain
-        hook_filters = ""
-        prev_label = "withhandle"
-        for i, line in enumerate(hook_lines):
-            safe_line = self._escape_drawtext(line)
-            line_y = hook_start_y + i * HOOK_LINE_H
-            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
-            hook_filters += (
-                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
-                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
-                f"x={HOOK_X}:y={line_y}:"
-                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
-                f"[{out_label}];"
-            )
-            prev_label = out_label
-
-        if has_logo:
-            filtergraph = (
-                # Black canvas 1080x1920
-                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                # Source video scaled to fit canvas width (maintain AR), top-aligned
-                # so video is flush below the accent line — no gap between branding and content
-                f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-                # Place video at y=656
-                f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
-                # Logo scaled to 60px
-                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                # Overlay logo
-                f"[base][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
-                # Channel name
-                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
-                # Handle
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
-                # Hook lines
-                f"{hook_filters}"
-                # Final label rename
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src, "-i", logo_path]
-        else:
-            filtergraph = (
-                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-                f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
-                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={LOGO_X}:y={HANDLE_Y}[withhandle];"
-                f"{hook_filters}"
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src]
-
-        cmd = (
-            ["ffmpeg", "-y"]
-            + trim_flag
-            + inputs
-            + dur_flags
-            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps)
-            + [out]
+        # Video scaled to canvas width, top-aligned (no centering gap)
+        video_filter = (
+            f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+            f"[0:v]scale={CANVAS_W}:{L_VIDEO_H}:force_original_aspect_ratio=decrease,"
+            f"pad={CANVAS_W}:{L_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+            f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
         )
-        return cmd
+
+        branding, _ = self._build_branding_filters(font_bold, font_reg, L_LOGO_Y, "base")
+        hooks, _ = self._build_hook_filters(hook, L_HOOK_Y, font_hook, "withhandle")
+
+        filtergraph = f"{video_filter}{branding}{hooks}[withhook]null[out]"
+        inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
+
+        return (
+            ["ffmpeg", "-y"] + trim_flag + inputs + dur_flags
+            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
+            + self._output_flags(crf, preset, fps) + [out]
+        )
 
     # --- Layout B: Portrait (ar <= 0.75) ----------------------------------
 
     def _build_cmd_portrait(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Portrait clip: video fills entire canvas, logo+hook overlaid on dark gradient.
+        """Portrait clip: clean full-screen video, NO branding or hook overlay.
 
-        Portrait sources (9:16) fill the full 1080x1920 canvas. A semi-transparent
-        dark gradient at the top provides contrast for the logo, channel name,
-        handle, and hook text — matching the Evolving AI reference style.
+        Portrait sources (9:16) fill the entire 1080x1920 canvas.
+        No logo, no text, no gradient — just the video.
         """
-
-        logo_path = self.branding.logo_path
-        channel_name = self.branding.channel_name
-        handle = self.branding.handle
-        safe_name = self._escape_drawtext(channel_name)
-        safe_handle = self._escape_drawtext(handle)
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
 
-        font_bold, font_reg, font_hook = self._resolve_fonts()
-
-        has_logo = logo_path and os.path.exists(logo_path)
-
-        # Wrap hook text
-        hook_lines = self._wrap_hook(hook)
-        num_lines = len(hook_lines)
-
-        # Build hook drawtext chain
-        hook_filters = ""
-        prev_label = "withhandle"
-        for i, line in enumerate(hook_lines):
-            safe_line = self._escape_drawtext(line)
-            line_y = P_HOOK_Y + i * HOOK_LINE_H
-            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
-            hook_filters += (
-                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
-                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
-                f"x={HOOK_X}:y={line_y}:"
-                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
-                f"[{out_label}];"
-            )
-            prev_label = out_label
-
-        # Video fills entire canvas — scale to cover, crop if needed
-        video_scale = (
-            f"[0:v]scale={CANVAS_W}:{CANVAS_H}:force_original_aspect_ratio=increase,"
-            f"crop={CANVAS_W}:{CANVAS_H}[scaled];"
+        filtergraph = (
+            f"[0:v]scale={CANVAS_W}:{CANVAS_H}:"
+            f"force_original_aspect_ratio=increase,"
+            f"crop={CANVAS_W}:{CANVAS_H}[out]"
         )
 
-        # Dark gradient overlay at top for text contrast
-        gradient = (
-            f"color=black@{P_OVERLAY_OPACITY}:{CANVAS_W}x{P_OVERLAY_H}:rate={fps}[grad];"
-            f"[scaled][grad]overlay=0:0[base];"
-        )
-
-        if has_logo:
-            filtergraph = (
-                f"{video_scale}"
-                f"{gradient}"
-                # Logo
-                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                f"[base][logo]overlay={LOGO_X}:{P_LOGO_Y}[withlogo];"
-                # Channel name
-                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={P_LOGO_Y + 12}[withname];"
-                # Handle
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={NAME_X}:y={P_LOGO_Y + 36}[withhandle];"
-                # Hook lines
-                f"{hook_filters}"
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src, "-i", logo_path]
-        else:
-            filtergraph = (
-                f"{video_scale}"
-                f"{gradient}"
-                # Channel name (no logo)
-                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={P_LOGO_Y + 12}[withname];"
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={LOGO_X}:y={P_LOGO_Y + 36}[withhandle];"
-                f"{hook_filters}"
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src]
-
-        cmd = (
-            ["ffmpeg", "-y"]
-            + trim_flag
-            + inputs
-            + dur_flags
+        return (
+            ["ffmpeg", "-y"] + trim_flag + ["-i", src] + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps)
-            + [out]
+            + self._output_flags(crf, preset, fps) + [out]
         )
-        return cmd
 
     # --- Layout C: Square (0.75 < ar < 1.33) ------------------------------
 
     def _build_cmd_square(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Square-ish clip: same Evolving AI header as landscape, 1080x1080 video below."""
-
-        logo_path = self.branding.logo_path
-        channel_name = self.branding.channel_name
-        handle = self.branding.handle
-        safe_name = self._escape_drawtext(channel_name)
-        safe_handle = self._escape_drawtext(handle)
+        """Square clip: same branding header as landscape, 1080x1080 video below."""
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
-
         font_bold, font_reg, font_hook = self._resolve_fonts()
+        has_logo = self.branding.logo_path and os.path.exists(self.branding.logo_path)
 
-        has_logo = logo_path and os.path.exists(logo_path)
-
-        # Reuse landscape hook zone positions for consistent branding
-        hook_lines = self._wrap_hook(hook)
-        num_lines = len(hook_lines)
-        total_text_h = num_lines * HOOK_LINE_H
-        hook_zone_center_y = L_HOOK_ZONE_Y + L_HOOK_ZONE_H // 2
-        hook_start_y = hook_zone_center_y - total_text_h // 2
-
-        # Build hook drawtext chain
-        hook_filters = ""
-        prev_label = "withhandle"
-        for i, line in enumerate(hook_lines):
-            safe_line = self._escape_drawtext(line)
-            line_y = hook_start_y + i * HOOK_LINE_H
-            out_label = f"hook{i}" if i < num_lines - 1 else "withhook"
-            hook_filters += (
-                f"[{prev_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
-                f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
-                f"x={HOOK_X}:y={line_y}:"
-                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
-                f"[{out_label}];"
-            )
-            prev_label = out_label
-
-        if has_logo:
-            filtergraph = (
-                # Black canvas 1080x1920
-                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                # Source video scaled to fit 1080x1080 (maintain AR), top-aligned
-                f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-                # Place video below header (same y as landscape)
-                f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
-                # Logo
-                f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-                f"[base][logo]overlay={LOGO_X}:{LOGO_Y}[withlogo];"
-                # Channel name
-                f"[withlogo]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={NAME_X}:y={NAME_Y}[withname];"
-                # Handle
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={HANDLE_X}:y={HANDLE_Y}[withhandle];"
-                # Hook lines
-                f"{hook_filters}"
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src, "-i", logo_path]
-        else:
-            filtergraph = (
-                f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-                f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
-                f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-                f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
-                f"[base]drawtext=fontfile='{font_bold}':text='{safe_name}':"
-                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:x={LOGO_X}:y={NAME_Y}[withname];"
-                f"[withname]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
-                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
-                f"x={LOGO_X}:y={HANDLE_Y}[withhandle];"
-                f"{hook_filters}"
-                f"[withhook]null[out]"
-            )
-            inputs = ["-i", src]
-
-        cmd = (
-            ["ffmpeg", "-y"]
-            + trim_flag
-            + inputs
-            + dur_flags
-            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps)
-            + [out]
+        video_filter = (
+            f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
+            f"[0:v]scale={CANVAS_W}:{S_VIDEO_H}:force_original_aspect_ratio=decrease,"
+            f"pad={CANVAS_W}:{S_VIDEO_H}:(ow-iw)/2:0:black[scaled];"
+            f"[canvas][scaled]overlay=0:{S_VIDEO_Y}[base];"
         )
-        return cmd
+
+        branding, _ = self._build_branding_filters(font_bold, font_reg, S_LOGO_Y, "base")
+        hooks, _ = self._build_hook_filters(hook, S_HOOK_Y, font_hook, "withhandle")
+
+        filtergraph = f"{video_filter}{branding}{hooks}[withhook]null[out]"
+        inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
+
+        return (
+            ["ffmpeg", "-y"] + trim_flag + inputs + dur_flags
+            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
+            + self._output_flags(crf, preset, fps) + [out]
+        )
 
     # --- Helpers -------------------------------------------------------
 
@@ -699,10 +552,12 @@ class FrameCompositor:
             text
             .replace("\\", "\\\\")
             .replace("'", "\u2019")      # curly quote -- safe inside '...'
+            .replace("%", "%%")
             .replace(":", "\\:")
             .replace("[", "\\[")
             .replace("]", "\\]")
             .replace(",", "\\,")
+            .replace(";", "\\;")
         )
 
     @staticmethod
@@ -731,11 +586,25 @@ class FrameCompositor:
 
     @staticmethod
     def _resolve_fonts() -> tuple[str, str, str]:
-        """Return (bold, regular, hook) font paths for the current platform."""
+        """Return (bold, regular, hook) font paths.
+
+        Prefers Inter (brand font in genlab-core/assets/fonts/).
+        Falls back to system fonts if Inter is not available.
+        Inter Variable supports all weights — used for bold, regular, and hook.
+        """
+        # Brand font: Inter (variable font — supports all weights via FFmpeg)
+        gc_root = Path(__file__).resolve().parents[4]  # genlab-core/
+        inter = gc_root / "genlab-core" / "assets" / "fonts" / "Inter.ttf"
+        if inter.exists():
+            inter_str = str(inter)
+            return inter_str, inter_str, inter_str
+
+        # macOS fallback
         mac_bold = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
         mac_reg = "/System/Library/Fonts/Supplemental/Arial.ttf"
         if os.path.exists(mac_bold):
             return mac_bold, mac_reg, mac_bold
+
         # Linux fallback
         linux_bold = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
         linux_reg = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"

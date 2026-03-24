@@ -112,47 +112,32 @@ class TestPublish:
         assert result.success is False
         assert result.error != ""
 
-    def test_publish_no_media_link_post(self, fb_client, text_payload):
-        """No media → link/text post via /{page_id}/feed endpoint."""
+    def test_publish_no_media_rejected(self, fb_client, text_payload):
+        """No media → rejected (video-first mandate, Sprint 67)."""
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
-            mock_req.post.return_value = MagicMock(
-                status_code=200,
-                json=lambda: {"id": "page_id_feed_123"},
-            )
+            # Token pre-flight passes
+            mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
             result = fb_client.publish(text_payload)
 
         assert result.platform == "facebook"
-        assert result.success is True
+        assert result.success is False
+        assert "Video required" in result.error
 
-    def test_publish_no_media_calls_feed_endpoint(self, fb_client, text_payload):
-        """No media publish uses /{page_id}/feed endpoint."""
-        captured_urls = []
-
+    def test_publish_no_media_blocked_by_video_guard(self, fb_client, text_payload):
+        """No media → blocked by video-first mandate (Sprint 67)."""
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
-            def capture_post(url, *args, **kwargs):
-                captured_urls.append(url)
-                return MagicMock(
-                    status_code=200,
-                    json=lambda: {"id": "feed_post_456"},
-                )
-
-            mock_req.post.side_effect = capture_post
-            fb_client.publish(text_payload)
-
-        assert any("/feed" in url for url in captured_urls), (
-            f"Expected /feed endpoint call, got: {captured_urls}"
-        )
-
-    def test_publish_no_media_returns_post_id(self, fb_client, text_payload):
-        """Text-only publish returns the post ID from /feed response."""
-        with patch("genlab_core.platforms.facebook.requests") as mock_req:
-            mock_req.post.return_value = MagicMock(
-                status_code=200,
-                json=lambda: {"id": "text_post_789"},
-            )
+            mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
             result = fb_client.publish(text_payload)
+        assert result.success is False
+        assert "Video required" in result.error
 
-        assert result.post_id == "text_post_789"
+    def test_publish_no_media_does_not_call_feed(self, fb_client, text_payload):
+        """No media → no API calls made (blocked before network)."""
+        with patch("genlab_core.platforms.facebook.requests") as mock_req:
+            mock_req.get.return_value = MagicMock(status_code=200, json=lambda: {"id": "123"})
+            fb_client.publish(text_payload)
+        # Only the pre-flight GET /me should be called, no POST
+        assert mock_req.post.call_count == 0
 
     def test_publish_uses_graph_facebook_url(self, fb_client, video_payload):
         """All publish requests go to graph.facebook.com, not graph.instagram.com."""

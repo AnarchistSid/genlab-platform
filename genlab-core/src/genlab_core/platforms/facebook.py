@@ -20,6 +20,7 @@ from genlab_core.platforms.models import (
     PublishPayload,
     PublishResult,
     TokenStatus,
+    safe_json as _safe_json,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,10 +101,14 @@ class FacebookClient:
         # Route: video vs text/link
         video_url = self._resolve_video_url(payload)
 
-        if video_url:
-            return self._publish_video(video_url=video_url, message=message)
-        else:
-            return self._publish_feed(message=message, payload=payload)
+        if not video_url:
+            return PublishResult(
+                platform=self.platform_id,
+                success=False,
+                error="Video required — Facebook text-only posts disabled (video-first mandate)",
+            )
+
+        return self._publish_video(video_url=video_url, message=message)
 
     def _validate_token_preflight(self) -> bool:
         """Quick /me check to catch expired or missing tokens before publish."""
@@ -477,12 +482,8 @@ class FacebookClient:
 # ------------------------------------------------------------------
 
 
-def _safe_json(resp: requests.Response) -> dict[str, Any]:
-    """Safely parse a requests Response as JSON, returning {} on failure."""
-    try:
-        return resp.json()
-    except Exception:
-        return {}
+
+# _safe_json imported from genlab_core.platforms.models
 
 
 def _extract_error_message(data: dict[str, Any]) -> str:
