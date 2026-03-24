@@ -131,7 +131,7 @@ The dashboard has three competing styling approaches and no shared UI primitives
 
 **Rule**: `style={{}}` stays ONLY for values computed from runtime data (niche accent hex, platform colors from API, computed widths/positions, Recharts customization). Static CSS variable references like `style={{ color: "var(--text-muted)" }}` become `className="text-text-muted"`.
 
-### 3.5 Shared Components (10 new, 2 relocated)
+### 3.5 Shared Components (10 new)
 
 #### 3.5.1 `components/shared/page-header.tsx` (~30 lines)
 
@@ -296,7 +296,7 @@ export const PLATFORM_COLORS: Record<string, string>;
 export const PLATFORM_LABELS: Record<string, string>;
 ```
 
-Single source of truth. Replaces duplicate constants in: Analytics.tsx (PLATFORM_COLORS + PLATFORM_LABELS), MonetisationProgress.tsx (PLATFORM_COLORS), SystemHealthView.tsx (PLATFORMS array), EngagementView.tsx (PLATFORMS array).
+Single source of truth. Replaces duplicate constants in: Analytics.tsx (PLATFORM_COLORS + PLATFORM_LABELS), MonetisationProgress.tsx (PLATFORM_COLORS), SystemHealthView.tsx (PLATFORMS array), EngagementView.tsx (PLATFORMS array), FocusOverlay.tsx (PLATFORMS array), ChannelHealth.tsx (PLATFORMS with icons), PublishingHealth.tsx (PLATFORM_LABELS). Note: ChannelHealth currently maps platform IDs to JSX icon elements — after migration it should use the existing `<PlatformIcon>` component instead of inlining icons.
 
 #### 3.5.11 Existing Components — Wider Adoption
 
@@ -344,6 +344,10 @@ Delete `Analytics.tsx:618-623` (6-line defensive parser for top-posts — same r
 Dead chart components list: `audience-growth` (264), `content-performance` (347), `cost-tracker` (316), `engagement-breakdown` (118), `engagement-trends` (311), `heatmap` (159), `kpi-card` (115), `monetization-summary` (238), `platform-chart` (129), `post-tracker` (269), `status-funnel` (130), `template-ranking` (170), `token-health-panel` (199), `top-posts` (142), `virality-breakdown` (294).
 
 Verified via tree-shaking analysis: none of these appear in the Vite build output. Only `AnimatedProgress` (6 imports) and `MiniSparkline` (1 import) survive.
+
+After the shared `ProgressBar` component absorbs `AnimatedProgress`'s animation logic, `AnimatedProgress.tsx` (38 lines) becomes dead code and is deleted in Phase 1. `MiniSparkline.tsx` remains (used by ChannelStrip).
+
+**Note on naming collision:** There is an existing `components/review/progress-bar.tsx` (review-specific progress indicator). The new shared `components/shared/progress-bar.tsx` is a different component (data visualization bar). The review progress bar remains untouched — it serves a different purpose (step progress during focus review).
 
 ### 3.8 API Client Hygiene
 
@@ -401,9 +405,13 @@ Shell inline styles: convert 5 static `style={{ backgroundColor: "var(--surface-
 11. `lib/platforms.ts` (~30 lines)
 12. (No file — `lib/format.ts` consolidation is a modify)
 
-### 4.2 Delete (27 files, 6,168 lines)
+### 4.2 Delete (28 files, 6,206 lines)
 
-6 CSS files + 15 dead chart components + 3 dead hooks + 3 dead lib files. See §3.7.
+**Phase 1 (step 8 — before view migrations):** 22 dead files (15 chart components + 3 hooks + 3 lib + `AnimatedProgress.tsx` after its logic is absorbed into shared `ProgressBar`)
+
+**Phase 2 (step 19 — after all view migrations remove their CSS imports):** 6 per-view CSS files
+
+See §3.7 for the complete list.
 
 ### 4.3 Rename (4 files)
 
@@ -415,11 +423,9 @@ Hook convention fix. See §3.8.
 |------|---------|
 | `styles/globals.css` | Add `@import "./layouts.css"`, add `bento-card`/`btn-primary` from MC CSS |
 | `lib/format.ts` | Delete `formatCompactNumber` duplicate |
-| `lib/platforms.ts` | NEW — platform registry |
 | `api/client.ts` | Move 4 type defs to types.ts, fix `any` |
 | `api/types.ts` | Receive moved types, add `EngagementStatusResponse` |
 | `api/query-keys.ts` | Fix learning/trends to factory functions |
-| `api/socket.ts` | No change (express_progress is used) |
 | `components/layout/shell.tsx` | 5 static inline styles → Tailwind |
 | `components/layout/sidebar.tsx` | 15 static inline styles → Tailwind (keep 10 dynamic) |
 | `components/review/focus-mode.tsx` | 45 static inline styles → Tailwind (keep 2 dynamic) |
@@ -454,9 +460,19 @@ Hook convention fix. See §3.8.
 | `views/learning/HookClassifier.tsx` | Delete LABEL_STYLE/CARD_STYLE. Tailwind + shared ChartCard/SectionHeader |
 | `views/learning/ConfigUpdates.tsx` | Delete LABEL_STYLE/CARD_STYLE. Tailwind + shared ChartCard/SectionHeader |
 | `views/engagement/EngagementView.tsx` | Delete dead response parser, inline → Tailwind, shared PageHeader/ErrorState/KpiCard. Use platform registry |
+| `views/engagement/CommentFeed.tsx` | Inline styles → Tailwind (13 usages) |
+| `views/engagement/ReplyQueue.tsx` | Inline styles → Tailwind (18 usages) |
 | `views/content/ContentReviewView.tsx` | Adopt shared PageHeader |
+| `views/content/FocusOverlay.tsx` | Use platform registry for PLATFORMS constant |
 | `views/schedule.tsx` | Adopt shared PageHeader/ErrorState |
 | `views/health/SystemHealthView.tsx` | Inline → Tailwind, shared PageHeader/ErrorState. Use platform registry |
+| `views/channel-health/ChannelHealth.tsx` | Also use platform registry (needs icon mapping — use `PlatformIcon` component) |
+| `views/mission-control/PublishingHealth.tsx` | Inline styles → Tailwind (6 usages), use platform registry |
+| `components/layout/command-palette.tsx` | Inline styles → Tailwind (10 usages) |
+| `components/schedule/schedule-board.tsx` | Inline styles → Tailwind (8 usages) |
+| `components/review/PlatformAdaptationsPanel.tsx` | Inline styles → Tailwind (7 usages) |
+| `components/shared/PlatformIcon.tsx` | Inline styles → Tailwind (7 usages, most dynamic — keep) |
+| `components/shared/AlertBanner.tsx` | Inline styles → Tailwind (4 usages) |
 | `components/blueprints/blueprint-card.tsx` | Delete local `formatNumber`, import `formatCompact` |
 
 ## 5. Migration Rules
@@ -483,7 +499,7 @@ Hook convention fix. See §3.8.
 5. Consolidate `lib/format.ts` (delete duplicates)
 6. API client hygiene (move types, fix `any`, fix query keys)
 7. Rename 4 hook files + update imports
-8. Delete 27 dead files
+8. Delete 22 dead files — chart components, hooks, lib (NOT CSS files yet — views still import them)
 9. Migrate Mission Control (highest complexity — bento grid, most card types)
 10. Migrate Analytics (charts, KPI cards, tables)
 11. Migrate Pipeline (waterfall, log viewer)
@@ -511,17 +527,22 @@ Hook convention fix. See §3.8.
 - Zero `LABEL_STYLE` or `CARD_STYLE` constants remain
 - All `aria-label` and `alt` gaps closed (17 elements)
 - Hook files all follow kebab-case convention
+- Zero orphaned `AnimatedProgress` imports remain after `ProgressBar` absorption
+
+## 7.1 Rollback Strategy
+
+Each migration step (§6) should be a standalone commit. If a visual regression is detected at step 21, revert to the last passing commit and fix forward. The dead code deletion (step 8) and shared component creation (steps 1-4) are safe to keep even if view migrations are reverted — they don't change any existing behavior.
 
 ## 8. Net Impact
 
 | Metric | Before | After | Delta |
 |--------|--------|-------|-------|
-| Source files | ~105 | ~90 | -27 deleted, +12 created |
-| Source lines | ~25,500 | ~19,200 | **-6,300** |
+| Source files (views/components/hooks/lib/api) | ~105 | ~89 | -28 deleted, +12 created |
+| Estimated source lines | ~25,500 | ~19,100 | **~-6,400** |
 | Per-view CSS | 6 files, 2,463 lines | 0 | **-6 files** |
-| Dead code | 21 files, 3,705 lines | 0 | **-21 files** |
-| Inline styles (static) | ~470 | 0 | **-470** |
-| Shared components | 8 | 20 | **+12** |
-| Duplicated functions | ~25 | 0 | **-25** |
+| Dead code (charts/hooks/lib + AnimatedProgress) | 22 files, 3,743 lines | 0 | **-22 files** |
+| Inline styles (static) | ~500+ | 0 | **-500+** |
+| Shared components | 8 | 18 | **+10 new** |
+| Duplicated functions/constants | ~25 | 0 | **-25** |
 | Build CSS chunks | 7 | 1 | **-6 HTTP requests/route** |
-| Accessibility gaps | 17 | 0 | **+17 fixed** |
+| Accessibility gaps | 17+ | 0 | **+17 fixed** |
