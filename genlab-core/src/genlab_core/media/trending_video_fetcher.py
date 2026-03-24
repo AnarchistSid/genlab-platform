@@ -853,6 +853,85 @@ class FetchTrendingVideos:
     """
 
     @staticmethod
+    def _read_from_content_pool(niche_id: str) -> list[dict]:
+        """Read pre-routed stories from the shared content pool.
+
+        Queries the ``content_pool`` table for stories routed to this niche,
+        marks them as claimed, and returns them in the same dict format as
+        existing story objects so downstream stages can consume them unchanged.
+        """
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
+            logger.debug("[FetchTrending:%s] DATABASE_URL not set — skipping content pool", niche_id)
+            return []
+
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            with psycopg.connect(database_url, row_factory=dict_row) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT * FROM content_pool
+                        WHERE %s = ANY(routed_niches)
+                          AND status = 'available'
+                        ORDER BY view_velocity DESC NULLS LAST, fetched_at DESC
+                        LIMIT 20
+                        """,
+                        (niche_id,),
+                    )
+                    rows = cur.fetchall()
+
+                    if not rows:
+                        return []
+
+                    # Mark rows as claimed by this niche
+                    row_ids = [r["id"] for r in rows]
+                    cur.execute(
+                        """
+                        UPDATE content_pool
+                        SET status = 'claimed',
+                            claimed_by = %s,
+                            claimed_at = NOW()
+                        WHERE id = ANY(%s)
+                        """,
+                        (niche_id, row_ids),
+                    )
+                    conn.commit()
+
+                    # Convert to story dict format
+                    stories = []
+                    for row in rows:
+                        stories.append({
+                            "title": row["title"],
+                            "source_url": row["source_url"],
+                            "video_url": row["video_url"] or "",
+                            "video_id": row["video_id"] or "",
+                            "description": row["summary"] or "",
+                            "published_at": row["published_at"],
+                            "duration_seconds": row["duration_seconds"] or 0,
+                            "view_count": row["view_count"] or 0,
+                            "view_velocity": row["view_velocity"] or 0,
+                            "source": row["source_platform"] or "shared_pool",
+                            "source_type": row["source_platform"] or "shared_pool",
+                            "thumbnail_url": row["thumbnail_url"] or "",
+                            "_pool_id": str(row["id"]),
+                        })
+
+                    logger.info(
+                        "[FetchTrending:%s] Claimed %d stories from content pool",
+                        niche_id, len(stories),
+                    )
+                    return stories
+
+        except Exception as e:
+            logger.warning(
+                "[FetchTrending:%s] Content pool read failed: %s", niche_id, e,
+            )
+            return []
+
+    @staticmethod
     def _load_sources_config(niche_id: str) -> dict:
         """Load sources.yaml for the given niche."""
         from genlab_core.settings import _PROJECT_ROOT
@@ -876,6 +955,15 @@ class FetchTrendingVideos:
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         niche_id = context.get("niche_id", "")
+
+        # Read pre-routed stories from shared content pool
+        pool_stories = self._read_from_content_pool(niche_id)
+        if pool_stories:
+            logger.info("[FetchTrending:%s] Read %d stories from content pool", niche_id, len(pool_stories))
+            stories = context.get("stories", [])
+            stories.extend(pool_stories)
+            context["stories"] = stories
+
         config = context.get("niche_config", {})
         vs_config = config.get("video_sourcing", {})
 
