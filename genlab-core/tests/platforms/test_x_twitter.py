@@ -468,9 +468,10 @@ class TestRateLimit:
                 with patch.object(tw_client, "_is_rate_limit_error", return_value=True):
                     result1 = tw_client.publish(payload)
 
-        # Manually force rate limit in case the mock didn't trigger it
-        tw_client._rate_limited = True
-        tw_client._rate_limited_at = time.monotonic()
+        # Manually force rate limit via module-level globals (what production code uses)
+        import genlab_core.platforms.x_twitter as _xt_mod
+        _xt_mod._module_rate_limited = True
+        _xt_mod._module_rate_limited_at = time.monotonic()
 
         # Second publish should be short-circuited without calling the API
         with patch.object(tw_client, "_get_client") as mock_client_fn2:
@@ -485,9 +486,12 @@ class TestRateLimit:
 
     def test_rate_limit_cooldown_resets(self, tw_client):
         """After cooldown expires, rate limit flag is cleared."""
-        # Force an expired rate limit (set timestamp to 2 hours ago)
-        tw_client._rate_limited = True
-        tw_client._rate_limited_at = time.monotonic() - 7300  # > 3600s cooldown
+        import genlab_core.platforms.x_twitter as _xt_mod
+
+        # Force an expired rate limit via the module-level globals the production
+        # code actually uses (not instance attributes).
+        _xt_mod._module_rate_limited = True
+        _xt_mod._module_rate_limited_at = time.monotonic() - 7300  # > 3600s cooldown
 
         payload = _make_payload(tweet_text="After cooldown")
 
@@ -502,7 +506,7 @@ class TestRateLimit:
             result = tw_client.publish(payload)
 
         assert result.success is True
-        assert tw_client._rate_limited is False
+        assert _xt_mod._module_rate_limited is False
 
 
 # ---------------------------------------------------------------------------

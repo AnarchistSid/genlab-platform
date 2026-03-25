@@ -6,11 +6,30 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
+import os
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Module-level real video file (>= 10KB) for tests that need valid media paths
+# ---------------------------------------------------------------------------
+# Production code checks: file exists AND size >= 10KB
+# We create a real temp file at module load time so all tests can use it.
+_TEMP_VIDEO_DIR = tempfile.mkdtemp(prefix="genlab_test_")
+_TEMP_VIDEO_PATH = os.path.join(_TEMP_VIDEO_DIR, "video.mp4")
+with open(_TEMP_VIDEO_PATH, "wb") as _f:
+    _f.write(b"\x00" * 15000)  # 15KB — exceeds the 10KB minimum
+
+
+@pytest.fixture
+def video_file():
+    """Return path to a real temp video file that passes all production checks."""
+    return _TEMP_VIDEO_PATH
 
 # ---------------------------------------------------------------------------
 # Ensure genlab_core is importable from the worktree's src layout
@@ -51,9 +70,10 @@ def _make_blueprint(
     action_taken: str = "approved",
     scheduled_for: str = "",
     candidate_id: str = "cand-abc123",
+    video_path: str | None = None,
 ) -> dict[str, Any]:
     if visual_paths is None:
-        visual_paths = ["/tmp/test/video.mp4"]
+        visual_paths = [video_path if video_path is not None else _TEMP_VIDEO_PATH]
     return {
         "id": record_id,
         "fields": {
@@ -147,8 +167,7 @@ class TestPidLock:
 class TestBuildPayload:
     def test_basic_payload(self):
         bp = _make_blueprint()
-        with patch("genlab_core.publishing.publish_all_platforms.Path.exists", return_value=True):
-            payload = build_payload(bp["fields"], "instagram")
+        payload = build_payload(bp["fields"], "instagram")
         assert isinstance(payload, PublishPayload)
         assert payload.niche_id == "gaming"
         assert payload.media_type == "video"
@@ -193,10 +212,10 @@ class TestBuildPayload:
         assert "#esports" in payload.hashtags
 
     def test_empty_visual_paths_raises(self):
+        # Production code raises ValueError when format=reel but no valid media files
         bp = _make_blueprint(visual_paths=[])
-        # Should still build but with empty media_paths
-        payload = build_payload(bp["fields"], "instagram")
-        assert payload.media_paths == []
+        with pytest.raises(ValueError, match="No valid media files"):
+            build_payload(bp["fields"], "instagram")
 
     def test_invalid_niche_id_raises(self):
         bp = _make_blueprint(niche_id="unknown_niche")

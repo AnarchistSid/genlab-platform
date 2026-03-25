@@ -47,7 +47,8 @@ class TestRecordImage:
     def test_record_image_calculates_cost(self):
         acc = CostAccumulator(run_id="test-img")
         cost = acc.record_image("gpt-image-1", count=3)
-        assert cost == pytest.approx(0.06)
+        # gpt-image-1: per_image=0.04, count=3 → 0.12
+        assert cost == pytest.approx(0.12)
 
     def test_record_image_unknown_model_default_rate(self):
         acc = CostAccumulator(run_id="test-img-unk")
@@ -73,14 +74,14 @@ class TestTotalByCategory:
         acc.record_llm("gpt-4o-mini", 1_000_000, 0)  # 0.15
         acc.record_llm("gpt-4o-mini", 0, 1_000_000)  # 0.60
         acc.record_tts(chars=1000)  # 0.015
-        acc.record_image("gpt-image-1", count=1)  # 0.02
+        acc.record_image("gpt-image-1", count=1)  # 0.04 (per_image=0.04)
 
-        assert acc.total_usd == pytest.approx(0.15 + 0.60 + 0.015 + 0.02)
+        assert acc.total_usd == pytest.approx(0.15 + 0.60 + 0.015 + 0.04)
 
         cats = acc.by_category
         assert cats["llm"] == pytest.approx(0.75)
         assert cats["tts"] == pytest.approx(0.015)
-        assert cats["image"] == pytest.approx(0.02)
+        assert cats["image"] == pytest.approx(0.04)
 
 
 class TestBudgetRemainingPct:

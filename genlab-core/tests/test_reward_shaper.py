@@ -172,7 +172,8 @@ class TestNormaliseMetric:
         assert _normalise_metric("views", 0, "youtube") == 0.0
 
     def test_half_target_returns_half(self):
-        assert abs(_normalise_metric("views", 5000, "youtube") - 0.5) < 1e-9
+        # YouTube views target is 200; half of 200 = 100 → normalised = 0.5
+        assert abs(_normalise_metric("views", 100, "youtube") - 0.5) < 1e-9
 
 
 # ---------------------------------------------------------------------------
