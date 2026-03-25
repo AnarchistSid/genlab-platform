@@ -128,6 +128,54 @@ class _DomainRateLimiter:
             self._last_request[domain] = _time.time()
 
 
+class _FeedHealthTracker:
+    """Track consecutive failures per feed. Auto-disable after 5 failures (24h cooldown)."""
+
+    _HEALTH_PATH = Path(__file__).resolve().parent.parent.parent.parent / ".tmp" / "cache" / "feed_health.json"
+
+    def __init__(self) -> None:
+        self._health: dict[str, dict] = {}
+        self._load()
+
+    def _load(self) -> None:
+        try:
+            if self._HEALTH_PATH.exists():
+                self._health = json.loads(self._HEALTH_PATH.read_text())
+        except Exception:
+            self._health = {}
+
+    def save(self) -> None:
+        try:
+            self._HEALTH_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._HEALTH_PATH.write_text(json.dumps(self._health, indent=2, default=str))
+        except Exception:
+            pass
+
+    def is_disabled(self, url: str) -> bool:
+        entry = self._health.get(url, {})
+        disabled_until = entry.get("disabled_until")
+        if disabled_until:
+            try:
+                dt = datetime.fromisoformat(disabled_until.replace("Z", "+00:00"))
+                if datetime.now(UTC) < dt:
+                    return True
+            except (ValueError, TypeError):
+                pass
+        return False
+
+    def record_success(self, url: str) -> None:
+        self._health[url] = {"consecutive_failures": 0, "last_success": datetime.now(UTC).isoformat()}
+
+    def record_failure(self, url: str) -> None:
+        entry = self._health.get(url, {"consecutive_failures": 0})
+        entry["consecutive_failures"] = entry.get("consecutive_failures", 0) + 1
+        entry["last_failure"] = datetime.now(UTC).isoformat()
+        if entry["consecutive_failures"] >= 5:
+            entry["disabled_until"] = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
+            logger.warning("[FeedHealth] Auto-disabled %s after %d consecutive failures", url, entry["consecutive_failures"])
+        self._health[url] = entry
+
+
 class SharedIngestionPipeline:
     """Fetch from all sources, classify, and route to content_pool."""
 
@@ -142,6 +190,7 @@ class SharedIngestionPipeline:
         self._yt_api_key = youtube_api_key or os.environ.get("YOUTUBE_API_KEY", "")
         self._config: dict[str, Any] = {}
         self._classifier = NicheClassifier()
+        self._feed_health = _FeedHealthTracker()
         self._entries: list[PoolEntry] = []
         self._seen_hashes: set[str] = set()
         self._stats: dict[str, int] = {
@@ -223,6 +272,9 @@ class SharedIngestionPipeline:
             return {}
         rate_limiter.wait(url)
         name = cfg.get("name", "unknown")
+        if self._feed_health.is_disabled(url):
+            logger.debug("[SharedIngestion] Feed %s is auto-disabled, skipping", name)
+            return {}
         affinity = cfg.get("affinity", [])
         counts: dict[str, int] = {}
         stat_key = {"yt_channel": "yt_channels", "reddit": "reddit", "rss": "rss"}[ftype]
@@ -290,8 +342,11 @@ class SharedIngestionPipeline:
                 if self._add_entry(pool_entry):
                     counts[stat_key] = counts.get(stat_key, 0) + 1
 
+            self._feed_health.record_success(url)
+
         except Exception as exc:
             logger.warning("[SharedIngestion] %s %s failed: %s", ftype, name, exc)
+            self._feed_health.record_failure(url)
             counts["errors"] = counts.get("errors", 0) + 1
 
         return counts
@@ -850,6 +905,9 @@ class SharedIngestionPipeline:
 
         # 5. Expire old entries
         self._expire_old_entries()
+
+        # 5b. Persist feed health state
+        self._feed_health.save()
 
         # 6. Report
         elapsed = time.time() - start
