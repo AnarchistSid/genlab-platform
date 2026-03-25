@@ -5,7 +5,7 @@ returning the best-fit niches (max 2) for each story.
 
 Scoring components:
     - Keyword relevance (0-0.6): positive keyword hits in title+description
-    - Source affinity (+0.2): if source_affinity list contains this niche_id
+    - Source affinity (+0.15): if source_affinity list contains this niche_id and >=1 keyword hit
     - Category match (+0.15): if youtube_category matches this niche
     - Negative keyword hard-reject: any negative keyword match -> score = 0.0
 
@@ -151,14 +151,20 @@ class NicheClassifier:
 
         # Keyword relevance (0 - 0.6)
         hits = sum(1 for p in profile._positive_patterns if p.search(text_lower))
-        normalizer = min(max(len(profile.positive_keywords) * 0.15, 1), 3)
-        keyword_score = min(hits / normalizer, 1.0) * 0.6
+
+        # Min-2-hits gate: suppress keyword component for weak matches
+        # but don't return 0.0 — category/affinity can still contribute
+        if hits < 2:
+            keyword_score = 0.0
+        else:
+            normalizer = min(max(len(profile.positive_keywords) * 0.15, 1), 5)
+            keyword_score = min(hits / normalizer, 1.0) * 0.6
 
         score = keyword_score
 
-        # Source affinity bonus (+0.2)
-        if source_affinity and profile.niche_id in source_affinity:
-            score += 0.2
+        # Source affinity bonus (+0.15, requires at least 1 keyword hit)
+        if source_affinity and profile.niche_id in source_affinity and hits > 0:
+            score += 0.15
 
         # YouTube category match (+0.15)
         if youtube_category and CATEGORY_TO_NICHE.get(youtube_category) == profile.niche_id:

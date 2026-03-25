@@ -57,6 +57,22 @@ def _content_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:32]
 
 
+import re as _re
+
+_YT_ID_RE = _re.compile(
+    r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)'
+    r'([a-zA-Z0-9_-]{11})'
+)
+
+
+def _extract_youtube_id(text: str) -> str | None:
+    """Extract YouTube video ID from text containing a YouTube URL."""
+    if not text:
+        return None
+    match = _YT_ID_RE.search(text)
+    return match.group(1) if match else None
+
+
 @dataclass
 class PoolEntry:
     """A single content item ready for pool insertion."""
@@ -105,6 +121,7 @@ class SharedIngestionPipeline:
             "rss": 0,
             "total_fetched": 0,
             "deduped": 0,
+            "title_dedup_removed": 0,
             "classified": 0,
             "routed": 0,
             "inserted": 0,
@@ -460,7 +477,11 @@ class SharedIngestionPipeline:
             )
             ON CONFLICT (content_hash) DO UPDATE SET
                 niche_scores = EXCLUDED.niche_scores,
-                routed_niches = EXCLUDED.routed_niches,
+                routed_niches = (
+                    SELECT ARRAY(SELECT DISTINCT unnest(
+                        content_pool.routed_niches || EXCLUDED.routed_niches
+                    ))
+                ),
                 routing_reason = EXCLUDED.routing_reason,
                 view_count = COALESCE(EXCLUDED.view_count, content_pool.view_count),
                 view_velocity = COALESCE(EXCLUDED.view_velocity, content_pool.view_velocity)
@@ -573,6 +594,7 @@ class SharedIngestionPipeline:
             f"  RSS feeds        : {self._stats['rss']:>4}",
             f"  Total fetched    : {self._stats['total_fetched']:>4}",
             f"  Duplicates       : {self._stats['deduped']:>4}",
+            f"  Title dedup      : {self._stats.get('title_dedup_removed', 0):>4}",
             f"  Classified       : {self._stats['classified']:>4}",
             f"  Routed (>=1)     : {self._stats['routed']:>4}",
             f"  DB inserts       : {self._stats['inserted']:>4}",
@@ -589,6 +611,64 @@ class SharedIngestionPipeline:
 
         return "\n".join(lines)
 
+    # ── Title Dedup (Layer 0) ────────────────────────────────────────
+
+    def _deduplicate_batch(self) -> None:
+        """Remove near-duplicate entries by title similarity (Layer 0)."""
+        if len(self._entries) < 2:
+            return
+
+        from genlab_core.intelligence.dedup_engine import jaccard_similarity, DedupEngine
+
+        existing_titles = self._load_recent_pool_titles(limit=3000)
+
+        # Phase 1: Dedup batch against existing pool titles (anchors)
+        surviving = []
+        for entry in self._entries:
+            is_dup = False
+            entry_title = entry.title.lower().strip()
+            if len(entry_title) > 10:
+                for existing in existing_titles:
+                    if jaccard_similarity(entry_title, existing.lower()) >= 0.70:
+                        is_dup = True
+                        break
+            if not is_dup:
+                surviving.append(entry)
+
+        # Phase 2: Dedup batch items against each other
+        engine = DedupEngine(
+            jaccard_threshold=0.70,
+            tfidf_threshold=0.75,
+            url_field="source_url",
+            text_field="title",
+        )
+        batch_items = [{"title": e.title, "source_url": e.source_url} for e in surviving]
+        result = engine.run(batch_items)
+        surviving_urls = {item["source_url"] for item in result.unique}
+
+        before = len(self._entries)
+        self._entries = [e for e in surviving if e.source_url in surviving_urls]
+        removed = before - len(self._entries)
+        self._stats["title_dedup_removed"] = removed
+        if removed:
+            logger.info("[SharedIngestion] Title dedup removed %d near-duplicates", removed)
+
+    def _load_recent_pool_titles(self, limit: int = 3000) -> list[str]:
+        """Load titles from content_pool entries from the last 48h."""
+        if not self._db_url:
+            return []
+        try:
+            with psycopg.connect(self._db_url) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT title FROM content_pool WHERE fetched_at > NOW() - INTERVAL '48 hours' ORDER BY fetched_at DESC LIMIT %s",
+                        (limit,),
+                    )
+                    return [row[0] for row in cur.fetchall() if row[0]]
+        except Exception as exc:
+            logger.warning("[SharedIngestion] Could not load pool titles: %s", exc)
+            return []
+
     # ── Main ────────────────────────────────────────────────────────
 
     def run(self) -> str:
@@ -604,6 +684,9 @@ class SharedIngestionPipeline:
         self._fetch_youtube_channels()
         self._fetch_reddit_feeds()
         self._fetch_rss_feeds()
+
+        # 2b. Title-level dedup (Layer 0)
+        self._deduplicate_batch()
 
         # 3. Classify all entries
         self._classify_all()
