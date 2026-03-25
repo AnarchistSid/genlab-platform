@@ -28,6 +28,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time as _time
+
 import feedparser
 import psycopg
 import requests
@@ -98,6 +102,32 @@ class PoolEntry:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+class _DomainRateLimiter:
+    """Thread-safe per-domain rate limiter to avoid 429s from Reddit etc."""
+
+    def __init__(self) -> None:
+        self._locks: dict[str, threading.Lock] = {}
+        self._last_request: dict[str, float] = {}
+        self._global_lock = threading.Lock()
+        self._delays = {"reddit.com": 2.0, "www.reddit.com": 2.0}
+        self._default_delay = 0.05
+
+    def wait(self, url: str) -> None:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc
+        with self._global_lock:
+            if domain not in self._locks:
+                self._locks[domain] = threading.Lock()
+        lock = self._locks[domain]
+        delay = self._delays.get(domain, self._default_delay)
+        with lock:
+            last = self._last_request.get(domain, 0)
+            wait_time = max(0, delay - (_time.time() - last))
+            if wait_time > 0:
+                _time.sleep(wait_time)
+            self._last_request[domain] = _time.time()
+
+
 class SharedIngestionPipeline:
     """Fetch from all sources, classify, and route to content_pool."""
 
@@ -128,6 +158,7 @@ class SharedIngestionPipeline:
             "expired": 0,
             "errors": 0,
         }
+        self._entry_lock = threading.Lock()
 
     def _load_config(self) -> None:
         """Load shared_sources.yaml."""
@@ -135,13 +166,135 @@ class SharedIngestionPipeline:
         self._config = yaml.safe_load(self._config_path.read_text())
 
     def _add_entry(self, entry: PoolEntry) -> bool:
-        """Add entry if not a duplicate. Returns True if added."""
-        if entry.content_hash in self._seen_hashes:
-            self._stats["deduped"] += 1
-            return False
-        self._seen_hashes.add(entry.content_hash)
-        self._entries.append(entry)
-        return True
+        """Add entry if not a duplicate. Returns True if added. Thread-safe."""
+        with self._entry_lock:
+            if entry.content_hash in self._seen_hashes:
+                self._stats["deduped"] += 1
+                return False
+            self._seen_hashes.add(entry.content_hash)
+            self._entries.append(entry)
+            return True
+
+    # ── Parallel fetch (replaces 3 sequential methods below) ────────
+
+    def _fetch_all_feeds_parallel(self) -> None:
+        """Fetch YouTube channel RSS, Reddit RSS, and general RSS in parallel."""
+        rate_limiter = _DomainRateLimiter()
+        feeds: list[tuple[str, dict]] = []
+
+        for ch in self._config.get("youtube_channels", []):
+            if ch.get("enabled", True):
+                feeds.append(("yt_channel", ch))
+        for f in self._config.get("reddit_feeds", []):
+            if f.get("enabled", True):
+                feeds.append(("reddit", f))
+        for f in self._config.get("rss_feeds", []):
+            if f.get("enabled", True):
+                feeds.append(("rss", f))
+
+        logger.info("[SharedIngestion] Fetching %d feeds in parallel (max_workers=15)", len(feeds))
+
+        # Collect per-thread counts and merge after (avoids thread-safety issues with self._stats)
+        results: list[dict[str, int]] = []
+
+        with ThreadPoolExecutor(max_workers=15) as pool:
+            futures = {
+                pool.submit(self._fetch_single_feed, ftype, cfg, rate_limiter): (ftype, cfg)
+                for ftype, cfg in feeds
+            }
+            for future in as_completed(futures):
+                ftype, cfg = futures[future]
+                try:
+                    counts = future.result()
+                    results.append(counts)
+                except Exception as exc:
+                    logger.warning("[SharedIngestion] Feed %s failed: %s", cfg.get("name", "?"), exc)
+                    self._stats["errors"] += 1
+
+        # Merge thread-local counts into main stats
+        for counts in results:
+            for key, val in counts.items():
+                self._stats[key] = self._stats.get(key, 0) + val
+
+    def _fetch_single_feed(self, ftype: str, cfg: dict, rate_limiter: _DomainRateLimiter) -> dict[str, int]:
+        """Fetch a single feed. Returns local counts dict. Called from thread pool."""
+        url = cfg.get("url", "")
+        if not url:
+            return {}
+        rate_limiter.wait(url)
+        name = cfg.get("name", "unknown")
+        affinity = cfg.get("affinity", [])
+        counts: dict[str, int] = {}
+        stat_key = {"yt_channel": "yt_channels", "reddit": "reddit", "rss": "rss"}[ftype]
+
+        try:
+            feed = feedparser.parse(url, agent=_USER_AGENT)
+            limit = 15 if ftype == "reddit" else 10
+
+            for entry_data in feed.entries[:limit]:
+                link = entry_data.get("link", "")
+                if not link:
+                    continue
+
+                published_at = None
+                if entry_data.get("published_parsed"):
+                    try:
+                        published_at = datetime(*entry_data.published_parsed[:6], tzinfo=UTC)
+                    except (TypeError, ValueError):
+                        pass
+
+                if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
+                    continue
+
+                platform = {"yt_channel": "youtube", "reddit": "reddit", "rss": "rss"}[ftype]
+
+                video_id = None
+                video_url = None
+                thumbnail = ""
+
+                if ftype == "yt_channel":
+                    yt_vid = entry_data.get("yt_videoid", "")
+                    if yt_vid:
+                        video_id = yt_vid
+                    elif "watch?v=" in link:
+                        video_id = link.split("watch?v=")[-1].split("&")[0]
+                    video_url = link
+                    if hasattr(entry_data, "media_thumbnail") and entry_data.media_thumbnail:
+                        thumbnail = entry_data.media_thumbnail[0].get("url", "")
+                elif ftype == "reddit":
+                    # Extract YouTube video_id from Reddit post content (Layer 2.5)
+                    for text_field in [
+                        entry_data.get("summary", ""),
+                        (entry_data.get("content", [{}])[0].get("value", "")
+                         if entry_data.get("content") else ""),
+                    ]:
+                        yt_id = _extract_youtube_id(text_field)
+                        if yt_id:
+                            video_id = yt_id
+                            video_url = f"https://www.youtube.com/watch?v={yt_id}"
+                            break
+
+                pool_entry = PoolEntry(
+                    content_hash=_content_hash(link),
+                    title=entry_data.get("title", ""),
+                    summary=entry_data.get("summary", "")[:500],
+                    source_url=link,
+                    source_name=name,
+                    source_platform=platform,
+                    video_url=video_url,
+                    video_id=video_id,
+                    thumbnail_url=thumbnail,
+                    published_at=published_at,
+                    source_affinity=affinity,
+                )
+                if self._add_entry(pool_entry):
+                    counts[stat_key] = counts.get(stat_key, 0) + 1
+
+        except Exception as exc:
+            logger.warning("[SharedIngestion] %s %s failed: %s", ftype, name, exc)
+            counts["errors"] = counts.get("errors", 0) + 1
+
+        return counts
 
     # ── YouTube Trending (API, 1 unit per category) ─────────────────
 
@@ -231,6 +384,9 @@ class SharedIngestionPipeline:
                     exc,
                 )
                 self._stats["errors"] += 1
+
+    # ── Sequential fetch methods (replaced by _fetch_all_feeds_parallel) ──
+    # Kept for documentation and potential fallback use.
 
     # ── YouTube Channel RSS (feedparser, 0 quota) ───────────────────
 
@@ -681,9 +837,7 @@ class SharedIngestionPipeline:
 
         # 2. Fetch from all sources
         self._fetch_youtube_trending()
-        self._fetch_youtube_channels()
-        self._fetch_reddit_feeds()
-        self._fetch_rss_feeds()
+        self._fetch_all_feeds_parallel()
 
         # 2b. Title-level dedup (Layer 0)
         self._deduplicate_batch()
