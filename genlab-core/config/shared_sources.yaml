@@ -21,7 +21,7 @@ youtube_categories:
 
 # YouTube channel RSS feeds — zero quota, polled via feedparser
 youtube_channels:
-  # === ai_creators (BlackboxBrief) ===
+  # === ai_creators (BlackboxBrief) — 3 existing + 18 new ===
   - name: "Two Minute Papers"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg"
     affinity: [ai_creators]
@@ -31,8 +31,97 @@ youtube_channels:
   - name: "Android Authority"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXUPKJO5MZQN11PqgIvyuvQ"
     affinity: [ai_creators]
+  # -- new ai_creators channels --
+  - name: "Matt Wolfe"                    # AI tool roundups, weekly AI news
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UChpleBmo18P08aKCIgti38g"
+    affinity: [ai_creators]
+  - name: "TheAIGRID"                     # AI breakthroughs, daily AI news
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbY9xX3_jW5c2fjlZVBI4cg"
+    affinity: [ai_creators]
+  - name: "Yannic Kilcher"                # ML paper deep-dives, AI research
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCZHmQk67mSJgfCCTn7xBfew"
+    affinity: [ai_creators]
+  - name: "AI Jason"                      # AI tutorials, LLM demos, automation
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCrXSVX9a1mj8l0CMLwKgMVw"
+    affinity: [ai_creators]
+  - name: "bycloud"                       # AI paper summaries, tech explainers
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCgfe2ooZD3VJPB6aJAnuQng"
+    affinity: [ai_creators]
+  - name: "Matthew Berman"                # AI news, LLM reviews, tutorials
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCawZsQWqfGSbCI5yjkdVkTA"
+    affinity: [ai_creators]
+  - name: "Wes Roth"                      # AI news, emerging tech, daily updates
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqcbQf6yw5KzRoDDcZ_wBSw"
+    affinity: [ai_creators]
+  - name: "MattVidPro AI"                 # AI tool reviews, hands-on demos
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC5Wz4fFacYuON6IKbhSa7Zw"
+    affinity: [ai_creators]
+  - name: "sentdex"                       # Python ML tutorials, AI projects
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfzlCWGWYyIQ0aLC5w48gBQ"
+    affinity: [ai_creators]
+  - name: "AI Explained"                  # In-depth AI research explainers
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw"
+    affinity: [ai_creators]
+  - name: "NetworkChuck"                  # Tech tutorials, AI tools, networking
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9x0AN7BWHpCDHSm9NiJFJQ"
+    affinity: [ai_creators]
+  - name: "MKBHD"                         # Tech reviews, AI gadgets, consumer tech
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ"
+    affinity: [ai_creators]
+  - name: "Linus Tech Tips"               # Tech news, hardware, AI tools
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw"
+    affinity: [ai_creators]
+  - name: "Dave2D"                        # Tech reviews, laptop/gadget analysis
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVYamHliCI9rw1tHR1xbkfw"
+    affinity: [ai_creators]
+  - name: "The Verge"                     # Tech news, product reviews, AI coverage
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ"
+    affinity: [ai_creators]
+  - name: "Corridor Crew"                 # VFX breakdowns, AI art/video analysis
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSpFnDQr88xCZ80N-X7t0nQ"
+    affinity: [ai_creators, movies]
+  - name: "Digital Foundry"               # Tech analysis, game performance, hardware
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9PBzalIcEQCsiIkq36PyUA"
+    affinity: [ai_creators, gaming]
+  # -- new ai_creators channels (Task 3 expansion) --
+  - name: "3Blue1Brown"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Lex Fridman"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKJJfhK61sYSHBftMhrk"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "ColdFusion"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC4QZ_LsYcvcq7qOsOhpAI4A"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Jeff Su"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCHVSxDjFkrDblOVKdFtojJA"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Sam Witteveen"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCi0Hd3U6xb4V0ApUhAIfu9Q"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "AssemblyAI"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCtatfZMf-8EkIwASXM4ts0A"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Weights & Biases"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBBtFn7r7cIc9k2GJYhGm4A"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "IBM Technology"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKWaEZ-_VweaEx1j62do_vQ"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "CodeEmporium"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC5_6ZD6s8klmMoj9IN1sMfQ"
+    affinity: [ai_creators]
+    tier: 2
 
-  # === gaming (CriticalRush) ===
+  # === gaming (CriticalRush) — 5 existing + 20 new ===
   - name: "IGN"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
     affinity: [gaming]
@@ -48,8 +137,130 @@ youtube_channels:
   - name: "Nintendo"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGIY_O-8vW4rfX98KlMkvRg"
     affinity: [gaming]
+  # -- new gaming channels --
+  - name: "Riot Games"                    # League of Legends, Valorant, official trailers
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJEGvSZnQ1pkVfHO8s5G8hA"
+    affinity: [gaming]
+  - name: "Rockstar Games"                # GTA, RDR, official trailers and gameplay
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6VcWc1rAoWdBCM0JxrRQ3A"
+    affinity: [gaming]
+  - name: "Valve"                         # Steam, CS2, Dota 2, official content
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCg0FSqPeiGD_lIiPaaAehQg"
+    affinity: [gaming]
+  - name: "Skill Up"                      # In-depth game reviews, news analysis
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCZ7AeeVbyslLM_8-nVy2B8Q"
+    affinity: [gaming]
+  - name: "ACG"                           # Honest game reviews, Buy/Wait/Never
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCK9_x1DImhU-eolIay5rb2Q"
+    affinity: [gaming]
+  - name: "Fextralife"                    # RPG guides, game reviews, builds
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UClkUHCETNUph8vM-4gQpwUA"
+    affinity: [gaming]
+  - name: "gameranx"                      # Before You Buy, gaming lists, news
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCNvzD7Z-g64bPXxGzaQaa4g"
+    affinity: [gaming]
+  - name: "GamingBolt"                    # Game news, features, comparisons
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXa_bzvv7Oo1glaW9FldDhQ"
+    affinity: [gaming]
+  - name: "jackfrags"                     # FPS gameplay, Battlefield, Warzone
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCw7FkXsC00lH2v2yB5LQoYA"
+    affinity: [gaming]
+  - name: "outsidexbox"                   # Gaming lists, Let's Plays, weekly shows
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKk076mm-7JjLxJcFSXIPJA"
+    affinity: [gaming]
+  - name: "AngryJoeShow"                  # Game reviews, angry rants, news
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsgv2QHkT2ljEixyulzOnUQ"
+    affinity: [gaming]
+  - name: "TimTheTatman"                  # Gaming streams, highlights, Shorts
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXBE_QQSZueB8082ml5fslg"
+    affinity: [gaming]
+  - name: "LoL Esports"                   # League of Legends esports highlights
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw"
+    affinity: [gaming, sports]
+  - name: "GameTrailers"                  # Classic game trailers, retrospectives
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJx5KP-pCUmL9eZUv-mIcNw"
+    affinity: [gaming]
+  - name: "WatchMojo"                     # Top 10 lists, countdowns (gaming + movies)
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCaWd5_7JhbQBe4dknZhsHJg"
+    affinity: [gaming, movies]
+  - name: "Dude Perfect"                  # Trick shots, sports entertainment
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCRijo3ddMTht_IHyNSNXpNQ"
+    affinity: [sports, gaming]
+  # -- new gaming channels (Task 3 expansion) --
+  - name: "Ubisoft"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBMvc6jvuTxH6TNo9ThpYjg"
+    affinity: [gaming]
+    tier: 2
+  - name: "Square Enix"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCB4WnO_ELLYdSBxiFn3Wn1A"
+    affinity: [gaming]
+    tier: 2
+  - name: "Capcom USA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_fSAMFmSHeLJF0Ir41JBg"
+    affinity: [gaming]
+    tier: 2
+  - name: "Bethesda Softworks"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvZHe-SP3xC7DdOk4Ri8QBw"
+    affinity: [gaming]
+    tier: 2
+  - name: "EA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIHBybdoneVVpaQU7F7AkbA"
+    affinity: [gaming]
+    tier: 2
+  - name: "Epic Games"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0-7A9mKOx6JaJo4BXMQ1HQ"
+    affinity: [gaming]
+    tier: 2
+  - name: "Markiplier"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7_YxT-KID8kRbqZo7MyscQ"
+    affinity: [gaming]
+    tier: 2
+  - name: "jacksepticeye"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYzPXprvl5Y-Sf0g4vX-m6g"
+    affinity: [gaming]
+    tier: 2
+  - name: "PewDiePie"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC-lHJZR3Gqxm24_Vd_AJ5Yw"
+    affinity: [gaming]
+    tier: 2
+  - name: "SypherPK"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxaHcHmhUIGCIHPpwWSnskA"
+    affinity: [gaming]
+    tier: 2
+  - name: "Typical Gamer"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2wKfjlioOCLP4xQMOWNcgg"
+    affinity: [gaming]
+    tier: 2
+  - name: "LazarBeam"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCw1SQ6QRRtfAhrN_cjkrOgA"
+    affinity: [gaming]
+    tier: 2
+  - name: "MrBeast Gaming"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIPPMRA040LQr5QPyJEbmXA"
+    affinity: [gaming]
+    tier: 2
+  - name: "VALORANT"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC8CX0LD98EDXl4UYX1MDCXg"
+    affinity: [gaming]
+    tier: 2
+  - name: "Call of Duty"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC08Jlsc2zAkjyDDVHovfm4g"
+    affinity: [gaming]
+    tier: 2
+  - name: "Fortnite"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UClG8odDC8TS6Zpqk9CGVQiQ"
+    affinity: [gaming]
+    tier: 2
+  - name: "Asmongold"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCQeRaTukNYft1_6AZPACnog"
+    affinity: [gaming]
+    tier: 2
+  - name: "The Act Man"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2OHl_fXDBi3271PSiUziyQ"
+    affinity: [gaming]
+    tier: 2
 
-  # === sports (ClutchWire) ===
+  # === sports (ClutchWire) — 5 existing + 20 new ===
   - name: "NBA"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWJ2lWNubArHWmf3FIHbfcQ"
     affinity: [sports]
@@ -65,8 +276,92 @@ youtube_channels:
   - name: "ESPN"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"
     affinity: [sports]
+  # -- new sports channels --
+  - name: "MLB"                           # Baseball highlights, official clips
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCoLrcjPV5PbUrUyXq5mjc_A"
+    affinity: [sports]
+  - name: "NHL"                           # Hockey highlights, game recaps
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqFMzb-4AUf6WAIbl132QKA"
+    affinity: [sports]
+  - name: "UFC"                           # MMA highlights, fight clips, weigh-ins
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvgfXK4nTYKudb0rFR6noLA"
+    affinity: [sports]
+  - name: "WWE"                           # Wrestling highlights, entrances, promos
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJ5v_MCY6GNUBTO8-D3XoAg"
+    affinity: [sports]
+  - name: "Formula 1"                     # F1 race highlights, onboard cameras
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCB_qr75-ydFVKSF9Dmo6izg"
+    affinity: [sports]
+  - name: "LaLiga"                        # Spanish football highlights, goals
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCTv-XvfzLX3i4IGWAm4sbmA"
+    affinity: [sports]
+  - name: "Bundesliga"                    # German football highlights, goals
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6UL29enLNe4mqwTfAyeNuw"
+    affinity: [sports]
+  - name: "ICC Cricket"                   # Cricket highlights, match clips
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCt2JXOLNxqry7B_4rRZME3Q"
+    affinity: [sports]
+  - name: "Tennis TV"                     # ATP tennis highlights, match replays
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbcxFkd6B9xUU54InHv4Tig"
+    affinity: [sports]
+  - name: "Bleacher Report"               # Multi-sport highlights, viral moments
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9-OpMMVoNP5o10_Iyq7Ndw"
+    affinity: [sports]
+  - name: "Secret Base"                   # Sports documentaries, deep dives (SB Nation)
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDRmGMSgrtZkOsh_NQl4_xw"
+    affinity: [sports]
+  - name: "SportsCenter NEXT"             # ESPN highlights, Shorts, viral clips
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWy2Nhg0PGv21NjMFRH7HBw"
+    affinity: [sports]
+  # LoL Esports and Dude Perfect listed once under gaming with multi-affinity (not duplicated here)
+  # -- new sports channels (Task 3 expansion) --
+  - name: "Serie A"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJeMCIeLQos7wacox4hmLQ"
+    affinity: [sports]
+    tier: 2
+  - name: "Ligue 1"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC58LMAlfwtGRNR6Xpd4DlSA"
+    affinity: [sports]
+    tier: 2
+  - name: "MLS"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCFiuLsXPdi2sJbLifDEhBw"
+    affinity: [sports]
+    tier: 2
+  - name: "Champions League"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKDxPMma_mHeGRNOLR7dUYA"
+    affinity: [sports]
+    tier: 2
+  - name: "PGA Tour"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCQncr0HKnpkz1KQ5e2ePCzg"
+    affinity: [sports]
+    tier: 2
+  - name: "Olympics"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCTl3QQTvqHFjurroKxexy2Q"
+    affinity: [sports]
+    tier: 2
+  - name: "NASCAR"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGFP8V17JCsP5MlWjRbVuIQ"
+    affinity: [sports]
+    tier: 2
+  - name: "BCCI"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJMPXBzHlOiNEo3V7I_CYPw"
+    affinity: [sports]
+    tier: 2
+  - name: "Pat McAfee"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxcTeAKWJca6XyJ37_ZoKIQ"
+    affinity: [sports]
+    tier: 2
+  - name: "Jomboy Media"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCl9E4Zxa8ja5J3MRU1aqt5g"
+    affinity: [sports]
+    tier: 2
+  # Copa90 skipped — channel_id UCxaHcHmhUIGCIHPpwWSnskA conflicts with SypherPK (gaming)
+  - name: "Kenny Beecham"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOi3WBHk2Y2VYtl0mGQ0hig"
+    affinity: [sports]
+    tier: 2
 
-  # === movies (SpliceReel) ===
+  # === movies (SpliceReel) — 4 existing + 16 new ===
   - name: "FilmSelect Trailer"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCY2qt3dw2TQJxvBrDiYGHdQ"
     affinity: [movies]
@@ -79,8 +374,91 @@ youtube_channels:
   - name: "Screen Junkies"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A"
     affinity: [movies]
+  # -- new movies channels --
+  - name: "Movieclips"                    # Official movie clips, trailers (Rotten Tomatoes)
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3gNmTGu-TTbFPpfSs5kNkg"
+    affinity: [movies]
+  - name: "New Rockstars"                 # Movie breakdowns, Easter eggs, analysis
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7yRILFFJ2QZCykymr8LPwA"
+    affinity: [movies]
+  - name: "CinemaSins"                    # Everything Wrong With, movie commentary
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYUQQgogVeQY8cMQamhHJcg"
+    affinity: [movies]
+  - name: "ScreenCrush"                   # Movie breakdowns, Easter eggs, analysis
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCgMJGv4cQl8-q71AyFeFmtg"
+    affinity: [movies]
+  - name: "Emergency Awesome"             # Trailer breakdowns, comic book movies, TV
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDiFRMQWpcp8_KD4vwIVicw"
+    affinity: [movies]
+  - name: "Jeremy Jahns"                  # Movie reviews, quick takes, reactions
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7v3-2K1N84V67IF-WTRG-Q"
+    affinity: [movies]
+  - name: "Double Toasted"                # Movie reviews, comedy commentary
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCp4cuWZKxR5ZNbcWrP1DozA"
+    affinity: [movies]
+  - name: "Looper"                        # Movie/TV explainers, fan theories, lists
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCP1iRaFlS5EYjJBryFV9JPw"
+    affinity: [movies]
+  # WatchMojo and Corridor Crew listed once under their primary niche with multi-affinity (not duplicated here)
+  # -- new movies channels (Task 3 expansion) --
+  - name: "Marvel Entertainment"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvC4D8onUfXzvjTOM-dBfEA"
+    affinity: [movies]
+    tier: 2
+  - name: "DC"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvInR-d8JkS57LuMMgN2l5g"
+    affinity: [movies]
+    tier: 2
+  - name: "Warner Bros"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCjmJDM5pRKbUlVIzDYYWb6g"
+    affinity: [movies]
+    tier: 2
+  - name: "Universal Pictures"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCq0OueAsdxH6b8nyAspwViw"
+    affinity: [movies]
+    tier: 2
+  - name: "Sony Pictures"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCz5l0BBjhiJYMzmxEgRyM0g"
+    affinity: [movies]
+    tier: 2
+  - name: "Lionsgate"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCkPKiTBJiPGq-BfrfOB5xhQ"
+    affinity: [movies]
+    tier: 2
+  - name: "A24"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCLVPuxerMRPaqDP_fH8Q4Xg"
+    affinity: [movies]
+    tier: 2
+  - name: "Netflix"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWOA1ZGiwLbDQJk2xFmzHxA"
+    affinity: [movies]
+    tier: 2
+  - name: "Disney"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCuaFvcY4MhZY3LG2RYHHdMg"
+    affinity: [movies]
+    tier: 2
+  - name: "Paramount Pictures"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCF9imwPMSGz4hVANYYQMJvw"
+    affinity: [movies]
+    tier: 2
+  - name: "Nerdwriter1"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCTldTTLQrmeFBEhQJU7QTBw"
+    affinity: [movies]
+    tier: 2
+  - name: "Lessons from the Screenplay"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCErSSa3CaP_GJxmFpdjG9Jw"
+    affinity: [movies]
+    tier: 2
+  - name: "Dead Meat"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2IYWgxwtgrCmH3p3gIriZQ"
+    affinity: [movies]
+    tier: 2
+  - name: "Heavy Spoilers"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCq3hT5JPPKy87JGbDls_5BQ"
+    affinity: [movies]
+    tier: 2
 
-  # === anime (FrameDrift) ===
+  # === anime (FrameDrift) — 4 existing + 15 new ===
   - name: "Crunchyroll"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDGbTiKs1Dqe-kvURsHlIAw"
     affinity: [anime]
@@ -93,6 +471,84 @@ youtube_channels:
   - name: "Mother's Basement"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBs2Y3i14e1NWQxOGliatmg"
     affinity: [anime]
+  # -- new anime channels --
+  - name: "Muse Asia"                     # Free official anime streams (SE/S Asia)
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGbshtvS9t-8CW11W7TooQg"
+    affinity: [anime]
+  - name: "The Anime Man"                 # Anime reviews, Japan culture, interviews
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3ETCazlHenpXEsrEJH-k5A"
+    affinity: [anime]
+  - name: "Trash Taste"                   # Anime podcast, Japan culture, weekly show
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCcmxOGYGF51T1XsqQLewGtQ"
+    affinity: [anime]
+  - name: "Nux Taku"                      # Anime commentary, memes, reactions
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBBU7zUOhR_qShfMV26UUCA"
+    affinity: [anime]
+  - name: "Super Eyepatch Wolf"           # Anime essays, deep dives, video essays
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCtGoikgbxP4F3rgI9PldI9g"
+    affinity: [anime]
+  - name: "CDawgVA"                       # Voice acting, anime challenges, Japan vlogs
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCPsZ_0SkFdi551iYTG04R2g"
+    affinity: [anime]
+  - name: "Foxen Anime"                   # Anime/manga news, chapter reviews
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCzs3FmQ5qPfBcZj-xSZDKcw"
+    affinity: [anime]
+  - name: "Tekking101"                    # One Piece, manga chapter reviews
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCRdyjE3lE7dtCOxU4rTsXVA"
+    affinity: [anime]
+  - name: "Chibi Reviews"                 # Anime/manga reviews, seasonal coverage
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfGmaA-nXPryTfimsnkLieQ"
+    affinity: [anime]
+  - name: "AnimeUproar"                   # Anime theories, power scaling, discussions
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOsAfA06zghgALnXPp4VbGA"
+    affinity: [anime]
+  - name: "Totally Not Mark"              # Anime analysis, Dragon Ball, retrospectives
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCv3LuuW8auzYw1SdLmiLRAw"
+    affinity: [anime]
+  - name: "Abroad in Japan"               # Japan culture, travel, anime crossover
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCHL9bfHTxCMi-7vfxQ-AYtg"
+    affinity: [anime]
+  # -- new anime channels (Task 3 expansion) --
+  - name: "Aniplex USA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2Lk0pMb7s27EHUMd9TJdgg"
+    affinity: [anime]
+    tier: 2
+  - name: "TOHO animation"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCkVvgjHBJmYpHS_IykHzS8g"
+    affinity: [anime]
+    tier: 2
+  - name: "Viz Media"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCoh67IAf8e1RnM8WB7JQprQ"
+    affinity: [anime]
+    tier: 2
+  - name: "Crunchyroll Dubs"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCwUQMhGjHwJDNGkMT2k9Z-g"
+    affinity: [anime]
+    tier: 2
+  - name: "Bandai Namco"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCETrNUjuH4EoRdZNFx9EI-A"
+    affinity: [anime]
+    tier: 2
+  - name: "Toei Animation"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCMGmqBCgJ0IHVLvdvlk4G3A"
+    affinity: [anime]
+    tier: 2
+  - name: "Anime Balls Deep"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC1WVZ82PaKRntS4IP7FdBEg"
+    affinity: [anime]
+    tier: 2
+  - name: "RogerBase"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVOr3MYZdSr-aVVfbRb_Vhg"
+    affinity: [anime]
+    tier: 2
+  - name: "Glass Reflection"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCmEbe0XH51CI09gm_9Fcn8Q"
+    affinity: [anime]
+    tier: 2
+  - name: "AniNews"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCPyS-0v23bSjAieDR1eFLeg"
+    affinity: [anime]
+    tier: 2
 
 # Reddit RSS feeds — from BlackboxBrief (ai_creators niche)
 reddit_feeds:
@@ -150,6 +606,1602 @@ reddit_feeds:
   - name: "r/fluxai top"
     url: "https://www.reddit.com/r/fluxai/top/.rss?t=week"
     affinity: [ai_creators]
+
+  # === ai_creators — 36 additional subreddits ===
+  # Tier 1
+  - name: "r/ChatGPT new"
+    url: "https://www.reddit.com/r/ChatGPT/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/ChatGPT top"
+    url: "https://www.reddit.com/r/ChatGPT/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/OpenAI new"
+    url: "https://www.reddit.com/r/OpenAI/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/OpenAI top"
+    url: "https://www.reddit.com/r/OpenAI/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/LocalLLaMA new"
+    url: "https://www.reddit.com/r/LocalLLaMA/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/LocalLLaMA top"
+    url: "https://www.reddit.com/r/LocalLLaMA/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/MachineLearning new"
+    url: "https://www.reddit.com/r/MachineLearning/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/MachineLearning top"
+    url: "https://www.reddit.com/r/MachineLearning/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/artificial new"
+    url: "https://www.reddit.com/r/artificial/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/artificial top"
+    url: "https://www.reddit.com/r/artificial/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/singularity new"
+    url: "https://www.reddit.com/r/singularity/new/.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "r/singularity top"
+    url: "https://www.reddit.com/r/singularity/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 1
+  # Tier 2
+  - name: "r/ClaudeAI new"
+    url: "https://www.reddit.com/r/ClaudeAI/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/ClaudeAI top"
+    url: "https://www.reddit.com/r/ClaudeAI/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Gemini new"
+    url: "https://www.reddit.com/r/Gemini/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Gemini top"
+    url: "https://www.reddit.com/r/Gemini/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/perplexity_ai new"
+    url: "https://www.reddit.com/r/perplexity_ai/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/perplexity_ai top"
+    url: "https://www.reddit.com/r/perplexity_ai/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/LLMDevs new"
+    url: "https://www.reddit.com/r/LLMDevs/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/LLMDevs top"
+    url: "https://www.reddit.com/r/LLMDevs/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/ollama new"
+    url: "https://www.reddit.com/r/ollama/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/ollama top"
+    url: "https://www.reddit.com/r/ollama/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Bard new"
+    url: "https://www.reddit.com/r/Bard/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Bard top"
+    url: "https://www.reddit.com/r/Bard/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/ElevenLabs new"
+    url: "https://www.reddit.com/r/ElevenLabs/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/ElevenLabs top"
+    url: "https://www.reddit.com/r/ElevenLabs/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/HeyGen new"
+    url: "https://www.reddit.com/r/HeyGen/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/HeyGen top"
+    url: "https://www.reddit.com/r/HeyGen/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/AIMusic new"
+    url: "https://www.reddit.com/r/AIMusic/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/AIMusic top"
+    url: "https://www.reddit.com/r/AIMusic/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/suno new"
+    url: "https://www.reddit.com/r/suno/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/suno top"
+    url: "https://www.reddit.com/r/suno/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/udio new"
+    url: "https://www.reddit.com/r/udio/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/udio top"
+    url: "https://www.reddit.com/r/udio/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Cursor new"
+    url: "https://www.reddit.com/r/Cursor/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Cursor top"
+    url: "https://www.reddit.com/r/Cursor/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/AIToolsTech new"
+    url: "https://www.reddit.com/r/AIToolsTech/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/AIToolsTech top"
+    url: "https://www.reddit.com/r/AIToolsTech/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/PromptEngineering new"
+    url: "https://www.reddit.com/r/PromptEngineering/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/PromptEngineering top"
+    url: "https://www.reddit.com/r/PromptEngineering/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/LeonardoAi new"
+    url: "https://www.reddit.com/r/LeonardoAi/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/LeonardoAi top"
+    url: "https://www.reddit.com/r/LeonardoAi/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/aiArt new"
+    url: "https://www.reddit.com/r/aiArt/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/aiArt top"
+    url: "https://www.reddit.com/r/aiArt/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/dalle new"
+    url: "https://www.reddit.com/r/dalle/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/dalle top"
+    url: "https://www.reddit.com/r/dalle/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/deforum new"
+    url: "https://www.reddit.com/r/deforum/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/deforum top"
+    url: "https://www.reddit.com/r/deforum/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Futurology new"
+    url: "https://www.reddit.com/r/Futurology/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Futurology top"
+    url: "https://www.reddit.com/r/Futurology/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/technology new"
+    url: "https://www.reddit.com/r/technology/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/technology top"
+    url: "https://www.reddit.com/r/technology/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/robotics new"
+    url: "https://www.reddit.com/r/robotics/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/robotics top"
+    url: "https://www.reddit.com/r/robotics/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/SelfDrivingCars new"
+    url: "https://www.reddit.com/r/SelfDrivingCars/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/SelfDrivingCars top"
+    url: "https://www.reddit.com/r/SelfDrivingCars/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/programming new"
+    url: "https://www.reddit.com/r/programming/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/programming top"
+    url: "https://www.reddit.com/r/programming/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/datascience new"
+    url: "https://www.reddit.com/r/datascience/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/datascience top"
+    url: "https://www.reddit.com/r/datascience/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/agi new"
+    url: "https://www.reddit.com/r/agi/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/agi top"
+    url: "https://www.reddit.com/r/agi/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/GPT4 new"
+    url: "https://www.reddit.com/r/GPT4/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/GPT4 top"
+    url: "https://www.reddit.com/r/GPT4/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/CopilotAI new"
+    url: "https://www.reddit.com/r/CopilotAI/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/CopilotAI top"
+    url: "https://www.reddit.com/r/CopilotAI/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/waifu_diffusion new"
+    url: "https://www.reddit.com/r/waifu_diffusion/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/waifu_diffusion top"
+    url: "https://www.reddit.com/r/waifu_diffusion/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Oobabooga new"
+    url: "https://www.reddit.com/r/Oobabooga/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/Oobabooga top"
+    url: "https://www.reddit.com/r/Oobabooga/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/deeplearning new"
+    url: "https://www.reddit.com/r/deeplearning/new/.rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "r/deeplearning top"
+    url: "https://www.reddit.com/r/deeplearning/top/.rss?t=week"
+    affinity: [ai_creators]
+    tier: 2
+
+  # === gaming (CriticalRush) — 44 subreddits ===
+  # Tier 1
+  - name: "r/gaming new"
+    url: "https://www.reddit.com/r/gaming/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/gaming top"
+    url: "https://www.reddit.com/r/gaming/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/pcgaming new"
+    url: "https://www.reddit.com/r/pcgaming/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/pcgaming top"
+    url: "https://www.reddit.com/r/pcgaming/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/Games new"
+    url: "https://www.reddit.com/r/Games/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/Games top"
+    url: "https://www.reddit.com/r/Games/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/gamingclips new"
+    url: "https://www.reddit.com/r/gamingclips/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/gamingclips top"
+    url: "https://www.reddit.com/r/gamingclips/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/LivestreamFail new"
+    url: "https://www.reddit.com/r/LivestreamFail/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/LivestreamFail top"
+    url: "https://www.reddit.com/r/LivestreamFail/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/esports new"
+    url: "https://www.reddit.com/r/esports/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/esports top"
+    url: "https://www.reddit.com/r/esports/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/GamePhysics new"
+    url: "https://www.reddit.com/r/GamePhysics/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/GamePhysics top"
+    url: "https://www.reddit.com/r/GamePhysics/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/SteamDeck new"
+    url: "https://www.reddit.com/r/SteamDeck/new/.rss"
+    affinity: [gaming]
+    tier: 1
+  - name: "r/SteamDeck top"
+    url: "https://www.reddit.com/r/SteamDeck/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 1
+  # Tier 2
+  - name: "r/VALORANT new"
+    url: "https://www.reddit.com/r/VALORANT/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/VALORANT top"
+    url: "https://www.reddit.com/r/VALORANT/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/leagueoflegends new"
+    url: "https://www.reddit.com/r/leagueoflegends/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/leagueoflegends top"
+    url: "https://www.reddit.com/r/leagueoflegends/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/FortNiteBR new"
+    url: "https://www.reddit.com/r/FortNiteBR/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/FortNiteBR top"
+    url: "https://www.reddit.com/r/FortNiteBR/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/apexlegends new"
+    url: "https://www.reddit.com/r/apexlegends/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/apexlegends top"
+    url: "https://www.reddit.com/r/apexlegends/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Overwatch new"
+    url: "https://www.reddit.com/r/Overwatch/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Overwatch top"
+    url: "https://www.reddit.com/r/Overwatch/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/CallOfDuty new"
+    url: "https://www.reddit.com/r/CallOfDuty/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/CallOfDuty top"
+    url: "https://www.reddit.com/r/CallOfDuty/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/halo new"
+    url: "https://www.reddit.com/r/halo/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/halo top"
+    url: "https://www.reddit.com/r/halo/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Eldenring new"
+    url: "https://www.reddit.com/r/Eldenring/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Eldenring top"
+    url: "https://www.reddit.com/r/Eldenring/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/BaldursGate3 new"
+    url: "https://www.reddit.com/r/BaldursGate3/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/BaldursGate3 top"
+    url: "https://www.reddit.com/r/BaldursGate3/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/cs2 new"
+    url: "https://www.reddit.com/r/cs2/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/cs2 top"
+    url: "https://www.reddit.com/r/cs2/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GTA new"
+    url: "https://www.reddit.com/r/GTA/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GTA top"
+    url: "https://www.reddit.com/r/GTA/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Minecraft new"
+    url: "https://www.reddit.com/r/Minecraft/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Minecraft top"
+    url: "https://www.reddit.com/r/Minecraft/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Helldivers new"
+    url: "https://www.reddit.com/r/Helldivers/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Helldivers top"
+    url: "https://www.reddit.com/r/Helldivers/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Palworld new"
+    url: "https://www.reddit.com/r/Palworld/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Palworld top"
+    url: "https://www.reddit.com/r/Palworld/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/DestinyTheGame new"
+    url: "https://www.reddit.com/r/DestinyTheGame/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/DestinyTheGame top"
+    url: "https://www.reddit.com/r/DestinyTheGame/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/cyberpunkgame new"
+    url: "https://www.reddit.com/r/cyberpunkgame/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/cyberpunkgame top"
+    url: "https://www.reddit.com/r/cyberpunkgame/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/MonsterHunter new"
+    url: "https://www.reddit.com/r/MonsterHunter/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/MonsterHunter top"
+    url: "https://www.reddit.com/r/MonsterHunter/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Starfield new"
+    url: "https://www.reddit.com/r/Starfield/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Starfield top"
+    url: "https://www.reddit.com/r/Starfield/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/pokemon new"
+    url: "https://www.reddit.com/r/pokemon/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/pokemon top"
+    url: "https://www.reddit.com/r/pokemon/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/RocketLeague new"
+    url: "https://www.reddit.com/r/RocketLeague/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/RocketLeague top"
+    url: "https://www.reddit.com/r/RocketLeague/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Genshin_Impact new"
+    url: "https://www.reddit.com/r/Genshin_Impact/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Genshin_Impact top"
+    url: "https://www.reddit.com/r/Genshin_Impact/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/darksouls new"
+    url: "https://www.reddit.com/r/darksouls/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/darksouls top"
+    url: "https://www.reddit.com/r/darksouls/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/NoMansSkyTheGame new"
+    url: "https://www.reddit.com/r/NoMansSkyTheGame/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/NoMansSkyTheGame top"
+    url: "https://www.reddit.com/r/NoMansSkyTheGame/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Warframe new"
+    url: "https://www.reddit.com/r/Warframe/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/Warframe top"
+    url: "https://www.reddit.com/r/Warframe/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/PathOfExile new"
+    url: "https://www.reddit.com/r/PathOfExile/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/PathOfExile top"
+    url: "https://www.reddit.com/r/PathOfExile/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/CompetitiveOverwatch new"
+    url: "https://www.reddit.com/r/CompetitiveOverwatch/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/CompetitiveOverwatch top"
+    url: "https://www.reddit.com/r/CompetitiveOverwatch/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/ValorantCompetitive new"
+    url: "https://www.reddit.com/r/ValorantCompetitive/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/ValorantCompetitive top"
+    url: "https://www.reddit.com/r/ValorantCompetitive/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/FortniteCompetitive new"
+    url: "https://www.reddit.com/r/FortniteCompetitive/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/FortniteCompetitive top"
+    url: "https://www.reddit.com/r/FortniteCompetitive/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/VRGaming new"
+    url: "https://www.reddit.com/r/VRGaming/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/VRGaming top"
+    url: "https://www.reddit.com/r/VRGaming/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/OculusQuest new"
+    url: "https://www.reddit.com/r/OculusQuest/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/OculusQuest top"
+    url: "https://www.reddit.com/r/OculusQuest/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/IndieGaming new"
+    url: "https://www.reddit.com/r/IndieGaming/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/IndieGaming top"
+    url: "https://www.reddit.com/r/IndieGaming/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GamingLeaksAndRumours new"
+    url: "https://www.reddit.com/r/GamingLeaksAndRumours/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GamingLeaksAndRumours top"
+    url: "https://www.reddit.com/r/GamingLeaksAndRumours/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/speedrun new"
+    url: "https://www.reddit.com/r/speedrun/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/speedrun top"
+    url: "https://www.reddit.com/r/speedrun/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GameDeals new"
+    url: "https://www.reddit.com/r/GameDeals/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/GameDeals top"
+    url: "https://www.reddit.com/r/GameDeals/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/pcmasterrace new"
+    url: "https://www.reddit.com/r/pcmasterrace/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/pcmasterrace top"
+    url: "https://www.reddit.com/r/pcmasterrace/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/HitBoxPorn new"
+    url: "https://www.reddit.com/r/HitBoxPorn/new/.rss"
+    affinity: [gaming]
+    tier: 2
+  - name: "r/HitBoxPorn top"
+    url: "https://www.reddit.com/r/HitBoxPorn/top/.rss?t=week"
+    affinity: [gaming]
+    tier: 2
+
+  # === sports (ClutchWire) — 42 subreddits ===
+  # Tier 1
+  - name: "r/sports new"
+    url: "https://www.reddit.com/r/sports/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/sports top"
+    url: "https://www.reddit.com/r/sports/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nba new"
+    url: "https://www.reddit.com/r/nba/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nba top"
+    url: "https://www.reddit.com/r/nba/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/soccer new"
+    url: "https://www.reddit.com/r/soccer/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/soccer top"
+    url: "https://www.reddit.com/r/soccer/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nfl new"
+    url: "https://www.reddit.com/r/nfl/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nfl top"
+    url: "https://www.reddit.com/r/nfl/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nbahighlights new"
+    url: "https://www.reddit.com/r/nbahighlights/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/nbahighlights top"
+    url: "https://www.reddit.com/r/nbahighlights/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/footballhighlights new"
+    url: "https://www.reddit.com/r/footballhighlights/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/footballhighlights top"
+    url: "https://www.reddit.com/r/footballhighlights/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/fightporn new"
+    url: "https://www.reddit.com/r/fightporn/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/fightporn top"
+    url: "https://www.reddit.com/r/fightporn/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/baseball new"
+    url: "https://www.reddit.com/r/baseball/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/baseball top"
+    url: "https://www.reddit.com/r/baseball/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/hockey new"
+    url: "https://www.reddit.com/r/hockey/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/hockey top"
+    url: "https://www.reddit.com/r/hockey/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/boxing new"
+    url: "https://www.reddit.com/r/boxing/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/boxing top"
+    url: "https://www.reddit.com/r/boxing/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/Cricket new"
+    url: "https://www.reddit.com/r/Cricket/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/Cricket top"
+    url: "https://www.reddit.com/r/Cricket/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/SquaredCircle new"
+    url: "https://www.reddit.com/r/SquaredCircle/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/SquaredCircle top"
+    url: "https://www.reddit.com/r/SquaredCircle/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/formula1 new"
+    url: "https://www.reddit.com/r/formula1/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/formula1 top"
+    url: "https://www.reddit.com/r/formula1/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/CFB new"
+    url: "https://www.reddit.com/r/CFB/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/CFB top"
+    url: "https://www.reddit.com/r/CFB/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/MMA new"
+    url: "https://www.reddit.com/r/MMA/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/MMA top"
+    url: "https://www.reddit.com/r/MMA/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  - name: "r/ufc new"
+    url: "https://www.reddit.com/r/ufc/new/.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "r/ufc top"
+    url: "https://www.reddit.com/r/ufc/top/.rss?t=week"
+    affinity: [sports]
+    tier: 1
+  # Tier 2
+  - name: "r/CollegeBasketball new"
+    url: "https://www.reddit.com/r/CollegeBasketball/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/CollegeBasketball top"
+    url: "https://www.reddit.com/r/CollegeBasketball/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/golf new"
+    url: "https://www.reddit.com/r/golf/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/golf top"
+    url: "https://www.reddit.com/r/golf/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/tennis new"
+    url: "https://www.reddit.com/r/tennis/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/tennis top"
+    url: "https://www.reddit.com/r/tennis/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/rugbyunion new"
+    url: "https://www.reddit.com/r/rugbyunion/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/rugbyunion top"
+    url: "https://www.reddit.com/r/rugbyunion/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/olympics new"
+    url: "https://www.reddit.com/r/olympics/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/olympics top"
+    url: "https://www.reddit.com/r/olympics/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/cycling new"
+    url: "https://www.reddit.com/r/cycling/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/cycling top"
+    url: "https://www.reddit.com/r/cycling/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/peloton new"
+    url: "https://www.reddit.com/r/peloton/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/peloton top"
+    url: "https://www.reddit.com/r/peloton/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Swimming new"
+    url: "https://www.reddit.com/r/Swimming/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Swimming top"
+    url: "https://www.reddit.com/r/Swimming/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/trackandfield new"
+    url: "https://www.reddit.com/r/trackandfield/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/trackandfield top"
+    url: "https://www.reddit.com/r/trackandfield/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/PremierLeague new"
+    url: "https://www.reddit.com/r/PremierLeague/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/PremierLeague top"
+    url: "https://www.reddit.com/r/PremierLeague/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/LaLiga new"
+    url: "https://www.reddit.com/r/LaLiga/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/LaLiga top"
+    url: "https://www.reddit.com/r/LaLiga/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Bundesliga new"
+    url: "https://www.reddit.com/r/Bundesliga/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Bundesliga top"
+    url: "https://www.reddit.com/r/Bundesliga/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/seriea new"
+    url: "https://www.reddit.com/r/seriea/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/seriea top"
+    url: "https://www.reddit.com/r/seriea/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/championsleague new"
+    url: "https://www.reddit.com/r/championsleague/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/championsleague top"
+    url: "https://www.reddit.com/r/championsleague/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/MLS new"
+    url: "https://www.reddit.com/r/MLS/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/MLS top"
+    url: "https://www.reddit.com/r/MLS/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/motorsports new"
+    url: "https://www.reddit.com/r/motorsports/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/motorsports top"
+    url: "https://www.reddit.com/r/motorsports/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/NASCAR new"
+    url: "https://www.reddit.com/r/NASCAR/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/NASCAR top"
+    url: "https://www.reddit.com/r/NASCAR/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/INDYCAR new"
+    url: "https://www.reddit.com/r/INDYCAR/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/INDYCAR top"
+    url: "https://www.reddit.com/r/INDYCAR/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/formuladank new"
+    url: "https://www.reddit.com/r/formuladank/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/formuladank top"
+    url: "https://www.reddit.com/r/formuladank/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/motogp new"
+    url: "https://www.reddit.com/r/motogp/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/motogp top"
+    url: "https://www.reddit.com/r/motogp/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/bjj new"
+    url: "https://www.reddit.com/r/bjj/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/bjj top"
+    url: "https://www.reddit.com/r/bjj/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Kickboxing new"
+    url: "https://www.reddit.com/r/Kickboxing/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Kickboxing top"
+    url: "https://www.reddit.com/r/Kickboxing/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/MuayThai new"
+    url: "https://www.reddit.com/r/MuayThai/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/MuayThai top"
+    url: "https://www.reddit.com/r/MuayThai/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/WNBA new"
+    url: "https://www.reddit.com/r/WNBA/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/WNBA top"
+    url: "https://www.reddit.com/r/WNBA/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/WomensSoccer new"
+    url: "https://www.reddit.com/r/WomensSoccer/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/WomensSoccer top"
+    url: "https://www.reddit.com/r/WomensSoccer/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/NWSL new"
+    url: "https://www.reddit.com/r/NWSL/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/NWSL top"
+    url: "https://www.reddit.com/r/NWSL/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/nbadiscussion new"
+    url: "https://www.reddit.com/r/nbadiscussion/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/nbadiscussion top"
+    url: "https://www.reddit.com/r/nbadiscussion/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Barca new"
+    url: "https://www.reddit.com/r/Barca/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Barca top"
+    url: "https://www.reddit.com/r/Barca/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/reddevils new"
+    url: "https://www.reddit.com/r/reddevils/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/reddevils top"
+    url: "https://www.reddit.com/r/reddevils/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/LiverpoolFC new"
+    url: "https://www.reddit.com/r/LiverpoolFC/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/LiverpoolFC top"
+    url: "https://www.reddit.com/r/LiverpoolFC/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Ligue1 new"
+    url: "https://www.reddit.com/r/Ligue1/new/.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "r/Ligue1 top"
+    url: "https://www.reddit.com/r/Ligue1/top/.rss?t=week"
+    affinity: [sports]
+    tier: 2
+
+  # === movies (SpliceReel) — 35 subreddits ===
+  # Tier 1
+  - name: "r/movies new"
+    url: "https://www.reddit.com/r/movies/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/movies top"
+    url: "https://www.reddit.com/r/movies/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/MovieDetails new"
+    url: "https://www.reddit.com/r/MovieDetails/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/MovieDetails top"
+    url: "https://www.reddit.com/r/MovieDetails/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/boxoffice new"
+    url: "https://www.reddit.com/r/boxoffice/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/boxoffice top"
+    url: "https://www.reddit.com/r/boxoffice/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/trailers new"
+    url: "https://www.reddit.com/r/trailers/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/trailers top"
+    url: "https://www.reddit.com/r/trailers/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/entertainment new"
+    url: "https://www.reddit.com/r/entertainment/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/entertainment top"
+    url: "https://www.reddit.com/r/entertainment/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/TrueFilm new"
+    url: "https://www.reddit.com/r/TrueFilm/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/TrueFilm top"
+    url: "https://www.reddit.com/r/TrueFilm/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  - name: "r/FanTheories new"
+    url: "https://www.reddit.com/r/FanTheories/new/.rss"
+    affinity: [movies]
+    tier: 1
+  - name: "r/FanTheories top"
+    url: "https://www.reddit.com/r/FanTheories/top/.rss?t=week"
+    affinity: [movies]
+    tier: 1
+  # Tier 2
+  - name: "r/marvelstudios new"
+    url: "https://www.reddit.com/r/marvelstudios/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/marvelstudios top"
+    url: "https://www.reddit.com/r/marvelstudios/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/DC_Cinematic new"
+    url: "https://www.reddit.com/r/DC_Cinematic/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/DC_Cinematic top"
+    url: "https://www.reddit.com/r/DC_Cinematic/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StarWars new"
+    url: "https://www.reddit.com/r/StarWars/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StarWars top"
+    url: "https://www.reddit.com/r/StarWars/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/comicbookmovies new"
+    url: "https://www.reddit.com/r/comicbookmovies/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/comicbookmovies top"
+    url: "https://www.reddit.com/r/comicbookmovies/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/MCUTheories new"
+    url: "https://www.reddit.com/r/MCUTheories/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/MCUTheories top"
+    url: "https://www.reddit.com/r/MCUTheories/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/horror new"
+    url: "https://www.reddit.com/r/horror/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/horror top"
+    url: "https://www.reddit.com/r/horror/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/scifi new"
+    url: "https://www.reddit.com/r/scifi/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/scifi top"
+    url: "https://www.reddit.com/r/scifi/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Documentaries new"
+    url: "https://www.reddit.com/r/Documentaries/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Documentaries top"
+    url: "https://www.reddit.com/r/Documentaries/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/criterion new"
+    url: "https://www.reddit.com/r/criterion/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/criterion top"
+    url: "https://www.reddit.com/r/criterion/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/netflix new"
+    url: "https://www.reddit.com/r/netflix/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/netflix top"
+    url: "https://www.reddit.com/r/netflix/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/DisneyPlus new"
+    url: "https://www.reddit.com/r/DisneyPlus/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/DisneyPlus top"
+    url: "https://www.reddit.com/r/DisneyPlus/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/HBOMAX new"
+    url: "https://www.reddit.com/r/HBOMAX/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/HBOMAX top"
+    url: "https://www.reddit.com/r/HBOMAX/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/amazonprime new"
+    url: "https://www.reddit.com/r/amazonprime/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/amazonprime top"
+    url: "https://www.reddit.com/r/amazonprime/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/appletv new"
+    url: "https://www.reddit.com/r/appletv/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/appletv top"
+    url: "https://www.reddit.com/r/appletv/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Hulu new"
+    url: "https://www.reddit.com/r/Hulu/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Hulu top"
+    url: "https://www.reddit.com/r/Hulu/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/streaming new"
+    url: "https://www.reddit.com/r/streaming/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/streaming top"
+    url: "https://www.reddit.com/r/streaming/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/A24 new"
+    url: "https://www.reddit.com/r/A24/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/A24 top"
+    url: "https://www.reddit.com/r/A24/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StudioGhibli new"
+    url: "https://www.reddit.com/r/StudioGhibli/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StudioGhibli top"
+    url: "https://www.reddit.com/r/StudioGhibli/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Pixar new"
+    url: "https://www.reddit.com/r/Pixar/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Pixar top"
+    url: "https://www.reddit.com/r/Pixar/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/television new"
+    url: "https://www.reddit.com/r/television/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/television top"
+    url: "https://www.reddit.com/r/television/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/HouseOfTheDragon new"
+    url: "https://www.reddit.com/r/HouseOfTheDragon/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/HouseOfTheDragon top"
+    url: "https://www.reddit.com/r/HouseOfTheDragon/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Severance new"
+    url: "https://www.reddit.com/r/Severance/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Severance top"
+    url: "https://www.reddit.com/r/Severance/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/TheBoys new"
+    url: "https://www.reddit.com/r/TheBoys/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/TheBoys top"
+    url: "https://www.reddit.com/r/TheBoys/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Invincible new"
+    url: "https://www.reddit.com/r/Invincible/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/Invincible top"
+    url: "https://www.reddit.com/r/Invincible/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/arcane new"
+    url: "https://www.reddit.com/r/arcane/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/arcane top"
+    url: "https://www.reddit.com/r/arcane/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StrangerThings new"
+    url: "https://www.reddit.com/r/StrangerThings/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/StrangerThings top"
+    url: "https://www.reddit.com/r/StrangerThings/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/squidgame new"
+    url: "https://www.reddit.com/r/squidgame/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/squidgame top"
+    url: "https://www.reddit.com/r/squidgame/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+  - name: "r/moviecritic new"
+    url: "https://www.reddit.com/r/moviecritic/new/.rss"
+    affinity: [movies]
+    tier: 2
+  - name: "r/moviecritic top"
+    url: "https://www.reddit.com/r/moviecritic/top/.rss?t=week"
+    affinity: [movies]
+    tier: 2
+
+  # === anime (FrameDrift) — 35 subreddits ===
+  # Tier 1
+  - name: "r/anime new"
+    url: "https://www.reddit.com/r/anime/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/anime top"
+    url: "https://www.reddit.com/r/anime/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/manga new"
+    url: "https://www.reddit.com/r/manga/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/manga top"
+    url: "https://www.reddit.com/r/manga/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/animemes new"
+    url: "https://www.reddit.com/r/animemes/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/animemes top"
+    url: "https://www.reddit.com/r/animemes/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/animeclips new"
+    url: "https://www.reddit.com/r/animeclips/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/animeclips top"
+    url: "https://www.reddit.com/r/animeclips/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/anime_irl new"
+    url: "https://www.reddit.com/r/anime_irl/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/anime_irl top"
+    url: "https://www.reddit.com/r/anime_irl/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/goodanimemes new"
+    url: "https://www.reddit.com/r/goodanimemes/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/goodanimemes top"
+    url: "https://www.reddit.com/r/goodanimemes/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  - name: "r/ShitPostCrusaders new"
+    url: "https://www.reddit.com/r/ShitPostCrusaders/new/.rss"
+    affinity: [anime]
+    tier: 1
+  - name: "r/ShitPostCrusaders top"
+    url: "https://www.reddit.com/r/ShitPostCrusaders/top/.rss?t=week"
+    affinity: [anime]
+    tier: 1
+  # Tier 2
+  - name: "r/OnePiece new"
+    url: "https://www.reddit.com/r/OnePiece/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/OnePiece top"
+    url: "https://www.reddit.com/r/OnePiece/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Naruto new"
+    url: "https://www.reddit.com/r/Naruto/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Naruto top"
+    url: "https://www.reddit.com/r/Naruto/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/DragonBallSuper new"
+    url: "https://www.reddit.com/r/DragonBallSuper/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/DragonBallSuper top"
+    url: "https://www.reddit.com/r/DragonBallSuper/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/JuJutsuKaisen new"
+    url: "https://www.reddit.com/r/JuJutsuKaisen/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/JuJutsuKaisen top"
+    url: "https://www.reddit.com/r/JuJutsuKaisen/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/ChainsawMan new"
+    url: "https://www.reddit.com/r/ChainsawMan/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/ChainsawMan top"
+    url: "https://www.reddit.com/r/ChainsawMan/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/KimetsuNoYaiba new"
+    url: "https://www.reddit.com/r/KimetsuNoYaiba/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/KimetsuNoYaiba top"
+    url: "https://www.reddit.com/r/KimetsuNoYaiba/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/bleach new"
+    url: "https://www.reddit.com/r/bleach/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/bleach top"
+    url: "https://www.reddit.com/r/bleach/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/HunterXHunter new"
+    url: "https://www.reddit.com/r/HunterXHunter/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/HunterXHunter top"
+    url: "https://www.reddit.com/r/HunterXHunter/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/OnePunchMan new"
+    url: "https://www.reddit.com/r/OnePunchMan/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/OnePunchMan top"
+    url: "https://www.reddit.com/r/OnePunchMan/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/SoloLeveling new"
+    url: "https://www.reddit.com/r/SoloLeveling/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/SoloLeveling top"
+    url: "https://www.reddit.com/r/SoloLeveling/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/SpyxFamily new"
+    url: "https://www.reddit.com/r/SpyxFamily/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/SpyxFamily top"
+    url: "https://www.reddit.com/r/SpyxFamily/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Dandadan new"
+    url: "https://www.reddit.com/r/Dandadan/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Dandadan top"
+    url: "https://www.reddit.com/r/Dandadan/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Frieren new"
+    url: "https://www.reddit.com/r/Frieren/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Frieren top"
+    url: "https://www.reddit.com/r/Frieren/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/BlueLock new"
+    url: "https://www.reddit.com/r/BlueLock/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/BlueLock top"
+    url: "https://www.reddit.com/r/BlueLock/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/OshiNoKo new"
+    url: "https://www.reddit.com/r/OshiNoKo/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/OshiNoKo top"
+    url: "https://www.reddit.com/r/OshiNoKo/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Berserk new"
+    url: "https://www.reddit.com/r/Berserk/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Berserk top"
+    url: "https://www.reddit.com/r/Berserk/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/ShingekiNoKyojin new"
+    url: "https://www.reddit.com/r/ShingekiNoKyojin/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/ShingekiNoKyojin top"
+    url: "https://www.reddit.com/r/ShingekiNoKyojin/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/BokuNoHeroAcademia new"
+    url: "https://www.reddit.com/r/BokuNoHeroAcademia/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/BokuNoHeroAcademia top"
+    url: "https://www.reddit.com/r/BokuNoHeroAcademia/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/VinlandSaga new"
+    url: "https://www.reddit.com/r/VinlandSaga/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/VinlandSaga top"
+    url: "https://www.reddit.com/r/VinlandSaga/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/MobPsycho100 new"
+    url: "https://www.reddit.com/r/MobPsycho100/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/MobPsycho100 top"
+    url: "https://www.reddit.com/r/MobPsycho100/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Haikyuu new"
+    url: "https://www.reddit.com/r/Haikyuu/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Haikyuu top"
+    url: "https://www.reddit.com/r/Haikyuu/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/CodeGeass new"
+    url: "https://www.reddit.com/r/CodeGeass/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/CodeGeass top"
+    url: "https://www.reddit.com/r/CodeGeass/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Gundam new"
+    url: "https://www.reddit.com/r/Gundam/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/Gundam top"
+    url: "https://www.reddit.com/r/Gundam/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/evangelion new"
+    url: "https://www.reddit.com/r/evangelion/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/evangelion top"
+    url: "https://www.reddit.com/r/evangelion/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/cowboybebop new"
+    url: "https://www.reddit.com/r/cowboybebop/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/cowboybebop top"
+    url: "https://www.reddit.com/r/cowboybebop/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/AnimeART new"
+    url: "https://www.reddit.com/r/AnimeART/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/AnimeART top"
+    url: "https://www.reddit.com/r/AnimeART/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/AnimeFigures new"
+    url: "https://www.reddit.com/r/AnimeFigures/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/AnimeFigures top"
+    url: "https://www.reddit.com/r/AnimeFigures/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
+  - name: "r/MangaCollectors new"
+    url: "https://www.reddit.com/r/MangaCollectors/new/.rss"
+    affinity: [anime]
+    tier: 2
+  - name: "r/MangaCollectors top"
+    url: "https://www.reddit.com/r/MangaCollectors/top/.rss?t=week"
+    affinity: [anime]
+    tier: 2
 
 # General RSS feeds — news and editorial sources
 rss_feeds:
@@ -250,11 +2302,541 @@ rss_feeds:
     url: "https://www.animecorner.me/feed"
     affinity: [anime]
 
+  # === ai_creators — new feeds ===
+  # Tier 1 News
+  - name: "TechCrunch AI"
+    url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "The Verge AI"
+    url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Ars Technica AI"
+    url: "https://arstechnica.com/ai/feed/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "VentureBeat AI"
+    url: "https://venturebeat.com/category/ai/feed/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Wired AI"
+    url: "https://www.wired.com/feed/tag/ai/latest/rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "IEEE Spectrum AI"
+    url: "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "InfoQ AI/ML"
+    url: "https://feed.infoq.com/ai-ml-data-eng/"
+    affinity: [ai_creators]
+    tier: 1
+  # Tier 1 Newsletters
+  - name: "The Rundown AI"
+    url: "https://www.therundown.ai/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Ben's Bites"
+    url: "https://www.bensbites.co/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Import AI"
+    url: "https://importai.substack.com/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "The Neuron"
+    url: "https://www.theneurondaily.com/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "AI Breakfast"
+    url: "https://aibreakfast.beehiiv.com/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Ahead of AI"
+    url: "https://magazine.sebastianraschka.com/feed"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "The Gradient"
+    url: "https://thegradient.pub/rss/"
+    affinity: [ai_creators]
+    tier: 1
+  # Tier 1 Company Blogs
+  - name: "OpenAI Blog"
+    url: "https://openai.com/blog/rss.xml"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Google AI Blog"
+    url: "https://blog.google/technology/ai/rss/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "DeepMind Blog"
+    url: "https://deepmind.google/blog/rss.xml"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Hugging Face Blog"
+    url: "https://huggingface.co/blog/feed.xml"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Meta AI Blog"
+    url: "https://ai.meta.com/blog/rss/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Microsoft Research"
+    url: "https://www.microsoft.com/en-us/research/feed/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "NVIDIA Blog"
+    url: "https://blogs.nvidia.com/feed/"
+    affinity: [ai_creators]
+    tier: 1
+  - name: "Anthropic News"
+    url: "https://www.anthropic.com/feed.xml"
+    affinity: [ai_creators]
+    tier: 1
+  # Tier 2 Research
+  - name: "Stanford HAI"
+    url: "https://hai.stanford.edu/news/rss.xml"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Papers With Code"
+    url: "https://paperswithcode.com/latest/rss"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Alignment Forum"
+    url: "https://www.alignmentforum.org/feed.xml"
+    affinity: [ai_creators]
+    tier: 2
+  # Tier 2 Developer
+  - name: "KDnuggets"
+    url: "https://www.kdnuggets.com/feed"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Analytics Vidhya"
+    url: "https://www.analyticsvidhya.com/feed/"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Machine Learning Mastery"
+    url: "https://machinelearningmastery.com/feed/"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Towards AI"
+    url: "https://pub.towardsai.net/feed"
+    affinity: [ai_creators]
+    tier: 2
+  # Tier 2 Product/Industry
+  - name: "Product Hunt AI"
+    url: "https://www.producthunt.com/feed?category=artificial-intelligence"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "Hacker News AI"
+    url: "https://hnrss.org/newest?q=AI+OR+LLM+OR+GPT&points=100"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "arXiv CS.AI"
+    url: "http://export.arxiv.org/rss/cs.AI"
+    affinity: [ai_creators]
+    tier: 2
+  - name: "arXiv CS.LG"
+    url: "http://export.arxiv.org/rss/cs.LG"
+    affinity: [ai_creators]
+    tier: 2
+
+  # === gaming — new feeds ===
+  # Tier 1
+  - name: "Polygon"
+    url: "https://www.polygon.com/rss/index.xml"
+    affinity: [gaming]
+    tier: 1
+  - name: "The Verge Gaming"
+    url: "https://www.theverge.com/rss/games/index.xml"
+    affinity: [gaming]
+    tier: 1
+  - name: "Destructoid"
+    url: "https://www.destructoid.com/feed/"
+    affinity: [gaming]
+    tier: 1
+  - name: "GamesRadar"
+    url: "https://www.gamesradar.com/rss/"
+    affinity: [gaming]
+    tier: 1
+  - name: "DualShockers"
+    url: "https://www.dualshockers.com/feed/"
+    affinity: [gaming]
+    tier: 1
+  - name: "VG247"
+    url: "https://www.vg247.com/feed"
+    affinity: [gaming]
+    tier: 1
+  - name: "Siliconera"
+    url: "https://www.siliconera.com/feed/"
+    affinity: [gaming]
+    tier: 1
+  - name: "Game Informer"
+    url: "https://www.gameinformer.com/rss"
+    affinity: [gaming]
+    tier: 1
+  # Tier 1 Platform
+  - name: "Nintendo Life"
+    url: "https://www.nintendolife.com/feeds/latest"
+    affinity: [gaming]
+    tier: 1
+  - name: "Nintendo Everything"
+    url: "https://nintendoeverything.com/feed/"
+    affinity: [gaming]
+    tier: 1
+  - name: "Push Square"
+    url: "https://www.pushsquare.com/feeds/latest"
+    affinity: [gaming]
+    tier: 1
+  - name: "Pure Xbox"
+    url: "https://www.purexbox.com/feeds/latest"
+    affinity: [gaming]
+    tier: 1
+  - name: "Xbox Wire"
+    url: "https://news.xbox.com/en-us/feed/"
+    affinity: [gaming]
+    tier: 1
+  - name: "PlayStation Blog"
+    url: "https://blog.playstation.com/feed/"
+    affinity: [gaming]
+    tier: 1
+  # Tier 2 Esports
+  - name: "Dot Esports"
+    url: "https://dotesports.com/feed"
+    affinity: [gaming]
+    tier: 2
+  - name: "Dexerto"
+    url: "https://www.dexerto.com/feed/"
+    affinity: [gaming]
+    tier: 2
+  - name: "HLTV"
+    url: "https://www.hltv.org/rss/news"
+    affinity: [gaming]
+    tier: 2
+  # Tier 2
+  - name: "IndieDB"
+    url: "https://www.indiedb.com/rss/articles/"
+    affinity: [gaming]
+    tier: 2
+  - name: "TouchArcade"
+    url: "https://toucharcade.com/feed/"
+    affinity: [gaming]
+    tier: 2
+  - name: "Pocket Gamer"
+    url: "https://www.pocketgamer.com/rss/"
+    affinity: [gaming]
+    tier: 2
+  - name: "Time Extension"
+    url: "https://www.timeextension.com/feeds/latest"
+    affinity: [gaming]
+    tier: 2
+  - name: "MMORPG.com"
+    url: "https://www.mmorpg.com/rss/all.xml"
+    affinity: [gaming]
+    tier: 2
+  - name: "Massively OP"
+    url: "https://massivelyop.com/feed/"
+    affinity: [gaming]
+    tier: 2
+  - name: "Gematsu"
+    url: "https://www.gematsu.com/feed"
+    affinity: [gaming]
+    tier: 2
+  - name: "Game Developer"
+    url: "https://www.gamedeveloper.com/rss.xml"
+    affinity: [gaming]
+    tier: 2
+
+  # === sports — new feeds ===
+  # Tier 1
+  - name: "CBS Sports"
+    url: "https://www.cbssports.com/rss/headlines/"
+    affinity: [sports]
+    tier: 1
+  - name: "Yahoo Sports"
+    url: "https://sports.yahoo.com/rss/"
+    affinity: [sports]
+    tier: 1
+  - name: "Sports Illustrated"
+    url: "https://www.si.com/rss/si_topstories.rss"
+    affinity: [sports]
+    tier: 1
+  - name: "NBC Sports"
+    url: "https://www.nbcsports.com/rss"
+    affinity: [sports]
+    tier: 1
+  - name: "Sporting News"
+    url: "https://www.sportingnews.com/rss"
+    affinity: [sports]
+    tier: 1
+  - name: "The Guardian Sport"
+    url: "https://www.theguardian.com/sport/rss"
+    affinity: [sports]
+    tier: 1
+  - name: "The Ringer"
+    url: "https://www.theringer.com/rss/index.xml"
+    affinity: [sports]
+    tier: 1
+  - name: "SB Nation"
+    url: "https://www.sbnation.com/rss/index.xml"
+    affinity: [sports]
+    tier: 1
+  - name: "Deadspin"
+    url: "https://deadspin.com/rss"
+    affinity: [sports]
+    tier: 1
+  # Tier 2 Soccer
+  - name: "FourFourTwo"
+    url: "https://www.fourfourtwo.com/feeds/all"
+    affinity: [sports]
+    tier: 2
+  - name: "Football365"
+    url: "https://www.football365.com/feed"
+    affinity: [sports]
+    tier: 2
+  - name: "90min"
+    url: "https://www.90min.com/posts.rss"
+    affinity: [sports]
+    tier: 2
+  - name: "ESPN FC"
+    url: "https://www.espn.com/espn/rss/soccer/news"
+    affinity: [sports]
+    tier: 2
+  # Tier 2 Cricket
+  - name: "ESPNcricinfo"
+    url: "https://www.espncricinfo.com/rss/content/story/feeds/0.xml"
+    affinity: [sports]
+    tier: 2
+  - name: "Cricbuzz"
+    url: "https://www.cricbuzz.com/rss/cb-top-stories"
+    affinity: [sports]
+    tier: 2
+  # Tier 2 Motorsport
+  - name: "Motorsport.com"
+    url: "https://www.motorsport.com/rss/all/news/"
+    affinity: [sports]
+    tier: 2
+  - name: "Autosport"
+    url: "https://www.autosport.com/rss/feed/all"
+    affinity: [sports]
+    tier: 2
+  - name: "The Race"
+    url: "https://the-race.com/feed/"
+    affinity: [sports]
+    tier: 2
+  - name: "F1 Official"
+    url: "https://www.formula1.com/content/fom-website/en/latest/all.xml"
+    affinity: [sports]
+    tier: 2
+  # Tier 2 Combat
+  - name: "MMA Fighting"
+    url: "https://www.mmafighting.com/rss/index.xml"
+    affinity: [sports]
+    tier: 2
+  - name: "Sherdog"
+    url: "https://www.sherdog.com/rss/news.xml"
+    affinity: [sports]
+    tier: 2
+  - name: "Boxing Scene"
+    url: "https://www.boxingscene.com/rss"
+    affinity: [sports]
+    tier: 2
+  # Tier 2 Other
+  - name: "Cycling News"
+    url: "https://www.cyclingnews.com/rss/"
+    affinity: [sports]
+    tier: 2
+  - name: "VeloNews"
+    url: "https://www.velonews.com/feed/"
+    affinity: [sports]
+    tier: 2
+  - name: "Golf Digest"
+    url: "https://www.golfdigest.com/feed/rss"
+    affinity: [sports]
+    tier: 2
+  - name: "SwimSwam"
+    url: "https://swimswam.com/feed/"
+    affinity: [sports]
+    tier: 2
+
+  # === movies — new feeds ===
+  # Tier 1
+  - name: "/Film"
+    url: "https://www.slashfilm.com/feed/"
+    affinity: [movies]
+    tier: 1
+  - name: "AV Club"
+    url: "https://www.avclub.com/rss"
+    affinity: [movies]
+    tier: 1
+  - name: "Vulture"
+    url: "https://www.vulture.com/feed/rss/index.xml"
+    affinity: [movies]
+    tier: 1
+  - name: "Empire"
+    url: "https://www.empireonline.com/movies/feed/"
+    affinity: [movies]
+    tier: 1
+  - name: "Den of Geek"
+    url: "https://www.denofgeek.com/feed/"
+    affinity: [movies]
+    tier: 1
+  - name: "CinemaBlend"
+    url: "https://www.cinemablend.com/rss/topic/movies"
+    affinity: [movies]
+    tier: 1
+  - name: "The Wrap"
+    url: "https://www.thewrap.com/feed/"
+    affinity: [movies]
+    tier: 1
+  - name: "Roger Ebert"
+    url: "https://www.rogerebert.com/feed"
+    affinity: [movies]
+    tier: 1
+  # Tier 2 Streaming
+  - name: "Decider"
+    url: "https://decider.com/feed/"
+    affinity: [movies]
+    tier: 2
+  - name: "What's on Netflix"
+    url: "https://www.whats-on-netflix.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Horror
+  - name: "Bloody Disgusting"
+    url: "https://bloody-disgusting.com/feed/"
+    affinity: [movies]
+    tier: 2
+  - name: "Dread Central"
+    url: "https://www.dreadcentral.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Sci-Fi
+  - name: "io9"
+    url: "https://gizmodo.com/io9/feed"
+    affinity: [movies]
+    tier: 2
+  - name: "TOR.com"
+    url: "https://www.tor.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Comics
+  - name: "CBR"
+    url: "https://www.cbr.com/feed/"
+    affinity: [movies]
+    tier: 2
+  - name: "Newsarama"
+    url: "https://www.newsarama.com/feed"
+    affinity: [movies]
+    tier: 2
+  - name: "ComicBook.com"
+    url: "https://comicbook.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Awards
+  - name: "Awards Daily"
+    url: "https://www.awardsdaily.com/feed/"
+    affinity: [movies]
+    tier: 2
+  - name: "Gold Derby"
+    url: "https://www.goldderby.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Prestige
+  - name: "BFI"
+    url: "https://www.bfi.org.uk/rss.xml"
+    affinity: [movies]
+    tier: 2
+  - name: "Letterboxd Journal"
+    url: "https://letterboxd.com/journal/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 TV
+  - name: "TVLine"
+    url: "https://tvline.com/feed/"
+    affinity: [movies]
+    tier: 2
+  - name: "TV Insider"
+    url: "https://www.tvinsider.com/feed/"
+    affinity: [movies]
+    tier: 2
+  # Tier 2 Industry
+  - name: "Variety Streaming"
+    url: "https://variety.com/v/streaming/feed/"
+    affinity: [movies]
+    tier: 2
+
+  # === anime — new feeds ===
+  # Tier 1
+  - name: "Otaku USA"
+    url: "https://otakuusamagazine.com/feed/"
+    affinity: [anime]
+    tier: 1
+  - name: "Sakuga Blog"
+    url: "https://blog.sakugabooru.com/feed/"
+    affinity: [anime]
+    tier: 1
+  # Tier 2
+  - name: "Anime UK News"
+    url: "https://animeuknews.net/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "Anime Trending"
+    url: "https://anitrendz.net/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "CBR Anime"
+    url: "https://www.cbr.com/category/anime/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "ComicBook.com Anime"
+    url: "https://comicbook.com/anime/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "ANN Reviews"
+    url: "https://www.animenewsnetwork.com/review/rss.xml"
+    affinity: [anime]
+    tier: 2
+  - name: "Japan Times Culture"
+    url: "https://www.japantimes.co.jp/culture/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "J-Novel Club Blog"
+    url: "https://j-novel.club/feed"
+    affinity: [anime]
+    tier: 2
+  - name: "Anime Corner Rankings"
+    url: "https://www.animecorner.me/category/anime-rankings/feed/"
+    affinity: [anime]
+    tier: 2
+  - name: "LiveChart All"
+    url: "https://www.livechart.me/feeds/all"
+    affinity: [anime]
+    tier: 2
+  - name: "Viz Media Blog"
+    url: "https://www.viz.com/blog/feed"
+    affinity: [anime]
+    tier: 2
+  - name: "Manga Plus"
+    url: "https://mangaplus.shueisha.co.jp/rss"
+    affinity: [anime]
+    tier: 2
+  - name: "Siliconera Anime"
+    url: "https://www.siliconera.com/feed/"
+    affinity: [anime]
+    tier: 2
+
 # Google Trends seed keywords per niche
 google_trends:
   niche_seeds:
-    ai_creators: ["AI", "ChatGPT", "artificial intelligence"]
-    gaming: ["gaming", "video games", "esports"]
-    sports: ["sports", "NBA", "cricket"]
-    movies: ["movie", "trailer", "Netflix"]
-    anime: ["anime", "manga", "crunchyroll"]
+    ai_creators: ["AI", "ChatGPT", "artificial intelligence", "Gemini", "Claude AI",
+                   "Midjourney", "Sora", "GPT-5", "LLM", "AI video"]
+    gaming: ["gaming", "video games", "esports", "PlayStation", "Xbox",
+             "Nintendo", "Steam", "Fortnite", "GTA 6", "Call of Duty"]
+    sports: ["sports", "NBA", "cricket", "Premier League", "NFL",
+             "UFC", "Formula 1", "Champions League", "IPL", "WWE"]
+    movies: ["movie", "trailer", "Netflix", "Marvel", "DC",
+             "box office", "Oscar", "Disney Plus", "streaming", "horror movie"]
+    anime: ["anime", "manga", "crunchyroll", "one piece", "dragon ball",
+            "demon slayer", "jujutsu kaisen", "chainsaw man", "anime fight", "new anime"]
