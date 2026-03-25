@@ -70,11 +70,15 @@ def generate_story_id(url: str, published_at: str) -> str:
     canonical_url = normalize_url(url)
 
     # Normalize timestamp to date only (ignore time for stability)
-    try:
-        dt = datetime.fromisoformat(published_at.replace('Z', '+00:00'))
-        date_str = dt.date().isoformat()
-    except (ValueError, TypeError):
-        date_str = published_at[:10]  # Fallback to YYYY-MM-DD
+    # Handle both string and datetime inputs
+    if isinstance(published_at, datetime):
+        date_str = published_at.date().isoformat()
+    else:
+        try:
+            dt = datetime.fromisoformat(str(published_at).replace('Z', '+00:00'))
+            date_str = dt.date().isoformat()
+        except (ValueError, TypeError):
+            date_str = str(published_at)[:10]  # Fallback to YYYY-MM-DD
 
     content = f"{canonical_url}|{date_str}"
     return hashlib.sha256(content.encode()).hexdigest()
