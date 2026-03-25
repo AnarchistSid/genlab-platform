@@ -13,9 +13,20 @@ from genlab_core.storage.sharepoint import SharePointBackend
 
 
 @pytest.fixture(autouse=True)
-def _reset():
-    """Reset factory singletons between tests."""
+def _reset(monkeypatch):
+    """Reset factory singletons between tests.
+
+    Clear env vars AND mock the config loader to return empty dict
+    (SharePoint default). The on-disk storage_backends.yaml maps all
+    tables to postgres, which would break tests expecting SharePoint.
+    """
+    monkeypatch.delenv("GENLAB_USE_POSTGRES", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("STORAGE_BACKENDS_CONFIG", raising=False)
     reset_backends()
+    # Patch _load_config to return empty dict (default = sharepoint)
+    import genlab_core.storage.factory as _factory
+    monkeypatch.setattr(_factory, "_config", {})
     yield
     reset_backends()
 
@@ -59,8 +70,10 @@ class TestGetBackendForTable:
 
     def test_config_from_default_path(self):
         """Factory finds config/storage_backends.yaml relative to package."""
-        # Just verify it doesn't crash — the default file has all sharepoint
+        # The on-disk config maps all tables to postgres (Sprint 68).
+        # Reset _config to None so _load_config reads the real file.
+        import genlab_core.storage.factory as _factory
+        _factory._config = None
         reset_backends()
-        proxies = {"Stories": MagicMock()}
-        backend = get_backend_for_table("Stories", sharepoint_proxies=proxies)
-        assert isinstance(backend, SharePointBackend)
+        backend = get_backend_for_table("Stories")
+        assert isinstance(backend, PostgresBackend)

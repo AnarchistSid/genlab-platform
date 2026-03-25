@@ -169,9 +169,10 @@ class TestIdempotencyOnFailure:
 
         mock_result = MagicMock()
         mock_result.is_toxic = False
+        mock_result.max_score = 0.02  # low toxicity score
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
 
-        mock_engine_cls.return_value.generate_reply.return_value = "Test reply"
+        mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you liked it"
 
         with patch("genlab_core.engagement.comment_processor._post_reply", return_value=True), \
              patch("genlab_core.engagement.comment_processor._mark_replied") as mock_mark:
@@ -199,19 +200,21 @@ class TestBacklogClientWiring:
 
         mock_result = MagicMock()
         mock_result.is_toxic = False
+        mock_result.max_score = 0.02
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
-        mock_engine_cls.return_value.generate_reply.return_value = "Nice one!"
+        mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you enjoyed it"
 
         mock_bl = MagicMock()
         mock_bl.write_pending_engagement.return_value = "sp-42"
 
         with patch("genlab_core.engagement.comment_processor._post_reply", return_value=True), \
              patch("genlab_core.engagement.comment_processor._mark_replied"), \
+             patch("genlab_core.engagement.comment_processor.classify_reply_action", return_value="auto"), \
              patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl):
             process_reply_event(_make_event(comment_id="bl_c1"))
 
         mock_bl.write_pending_engagement.assert_called_once()
-        mock_bl.update_engagement_status.assert_called_once_with("sp-42", "replied", reply_text="Nice one!")
+        mock_bl.update_engagement_status.assert_called_once_with("sp-42", "replied", reply_text="Thanks! Glad you enjoyed it")
 
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0)
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
@@ -229,13 +232,15 @@ class TestBacklogClientWiring:
 
         mock_result = MagicMock()
         mock_result.is_toxic = False
+        mock_result.max_score = 0.02
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
-        mock_engine_cls.return_value.generate_reply.return_value = "Reply text"
+        mock_engine_cls.return_value.generate_reply.return_value = "Thanks for the feedback!"
 
         mock_bl = MagicMock()
         mock_bl.write_pending_engagement.return_value = "sp-99"
 
         with patch("genlab_core.engagement.comment_processor._post_reply", return_value=False), \
+             patch("genlab_core.engagement.comment_processor.classify_reply_action", return_value="auto"), \
              patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl):
             process_reply_event(_make_event(comment_id="fail_bl"))
 

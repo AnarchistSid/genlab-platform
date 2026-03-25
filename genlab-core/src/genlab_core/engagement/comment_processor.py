@@ -323,8 +323,8 @@ def _queue_for_review(
         "status": "pending",
         "created_at": datetime.now(UTC).isoformat(),
         "reviewed_at": None,
-        "confidence": round(confidence, 3),
-        "tox_score": round(tox_score, 3),
+        "confidence": round(float(confidence), 3),
+        "tox_score": round(float(tox_score), 3),
     }
     entries.append(entry)
 
