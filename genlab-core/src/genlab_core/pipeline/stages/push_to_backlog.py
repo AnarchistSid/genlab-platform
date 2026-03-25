@@ -260,7 +260,7 @@ class PushToBacklog:
         try:
             recent_bps = client.blueprints.all(
                 formula=f"{{niche_id}}='{niche_id}'",
-                max_records=500,
+                max_records=2000,
             )
             for bp in recent_bps:
                 h = (bp.get("fields", bp).get("hook") or "").strip().lower()
@@ -280,13 +280,16 @@ class PushToBacklog:
 
         # Load content_memory hashes + existing story URLs for cross-run dedup
         seen_urls: set[str] = set()
+        _existing_stories_for_titles: list = []
+        _cm_records_for_titles: list = []
         try:
             # Load URL hashes from existing stories (catches recurring sources)
             from hashlib import sha256 as _sha256
             existing_stories = client.stories.all(
                 formula=f"{{niche_id}}='{niche_id}'",
-                max_records=500,
+                max_records=2000,
             )
+            _existing_stories_for_titles = existing_stories
             for s in existing_stories:
                 url = (s.get("fields", s).get("url") or "").strip()
                 if url:
@@ -301,8 +304,9 @@ class PushToBacklog:
             if cm_proxy:
                 cm_records = cm_proxy.all(
                     formula=f"{{niche_id}}='{niche_id}'",
-                    max_records=500,
+                    max_records=2000,
                 )
+                _cm_records_for_titles = cm_records
                 for rec in cm_records:
                     h = (rec.get("fields", rec).get("content_hash") or "").strip()
                     if h:
@@ -310,6 +314,38 @@ class PushToBacklog:
                 logger.info("[PUSH] Total dedup hashes: %d", len(seen_urls))
         except Exception as e:
             logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
+
+        # Collect titles for title-level dedup (Layer 4.5 + 5.5)
+        existing_titles: set[str] = set()
+        for s in _existing_stories_for_titles:
+            t = (s.get("fields", s).get("title") or "").strip().lower()
+            if t and len(t) > 10:
+                existing_titles.add(t)
+        for rec in _cm_records_for_titles:
+            t = (rec.get("fields", rec).get("title") or "").strip().lower()
+            if t and len(t) > 10:
+                existing_titles.add(t)
+
+        # Load titles from content_pool claimed by this niche (Layer 5.5)
+        try:
+            db_url = os.environ.get("DATABASE_URL")
+            if db_url:
+                import psycopg as _psycopg
+                with _psycopg.connect(db_url) as _conn:
+                    with _conn.cursor() as _cur:
+                        _cur.execute(
+                            "SELECT title FROM content_pool WHERE claimed_by = %s AND claimed_at > NOW() - INTERVAL '48 hours'",
+                            (niche_id,),
+                        )
+                        for row in _cur.fetchall():
+                            if row[0]:
+                                existing_titles.add(row[0].strip().lower())
+                logger.info("[PUSH] Loaded %d titles for cross-dedup", len(existing_titles))
+        except Exception:
+            pass
+        context["existing_titles"] = existing_titles
+
+        existing_titles = context.get("existing_titles", set())
 
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
@@ -330,6 +366,24 @@ class PushToBacklog:
             if story_id in seen_urls:
                 logger.debug("[PUSH] URL already in content_memory: %s", title[:60])
                 continue
+
+            # Title similarity dedup (Layer 4.5)
+            title_lower = title.lower().strip()
+            title_is_dupe = False
+            if len(title_lower) > 10 and existing_titles:
+                title_words = set(title_lower.split())
+                for existing in existing_titles:
+                    existing_words = set(existing.split())
+                    if len(title_words) > 3 and len(existing_words) > 3:
+                        intersection = len(title_words & existing_words)
+                        union = len(title_words | existing_words)
+                        if union > 0 and intersection / union > 0.65:
+                            logger.info("[PUSH] Title near-dupe: '%s' ≈ '%s'", title[:40], existing[:40])
+                            title_is_dupe = True
+                            break
+            if title_is_dupe:
+                continue
+            existing_titles.add(title_lower)
 
             # Track URL hash so future stories with same URL are skipped
             if url_hash:

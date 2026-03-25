@@ -878,6 +878,7 @@ class FetchTrendingVideos:
                           AND status = 'available'
                         ORDER BY view_velocity DESC NULLS LAST, fetched_at DESC
                         LIMIT 20
+                        FOR UPDATE SKIP LOCKED
                         """,
                         (niche_id,),
                     )
