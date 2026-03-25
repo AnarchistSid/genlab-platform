@@ -328,7 +328,8 @@ class TestBanditUpdaterCalled:
 
         process_pending_task(task, store, shaper, bandit_updater=updater)
 
-        updater.assert_called_once_with("sports", "highlight", "instagram", 0.65)
+        # Production passes 5 args: (niche_id, content_type, platform, reward, bandit_context)
+        updater.assert_called_once_with("sports", "highlight", "instagram", 0.65, None)
 
     @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
     def test_updater_receives_computed_reward(self, mock_fetch):

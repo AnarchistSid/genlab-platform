@@ -126,16 +126,12 @@ class TestLLMMatchProduct:
         assert result is None
 
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("httpx.post")
-    def test_llm_returns_valid_index(self, mock_post):
+    @patch("genlab_core.writing.llm_client.AnthropicLLMClient")
+    def test_llm_returns_valid_index(self, mock_llm_cls):
         """LLM returning a valid product index selects that product."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "content": [{"type": "text", "text": "1"}],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
+        mock_client = MagicMock()
+        mock_client.complete.return_value = "1"
+        mock_llm_cls.return_value = mock_client
 
         result = _llm_match_product("wireless logitech setup", "gaming", self._products)
         assert result is not None
@@ -179,15 +175,12 @@ class TestLLMMatchProduct:
         assert result is None
 
     @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("httpx.post")
-    def test_llm_parses_index_from_verbose_response(self, mock_post):
-        """LLM responding with 'Product 2 - Gaming Chair' still parses index 2."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "content": [{"type": "text", "text": "2 - Gaming Chair seems most relevant"}],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
+    @patch("genlab_core.writing.llm_client.AnthropicLLMClient")
+    def test_llm_parses_index_from_verbose_response(self, mock_llm_cls):
+        """LLM responding with '2 - Gaming Chair' still parses index 2."""
+        mock_client = MagicMock()
+        mock_client.complete.return_value = "2 - Gaming Chair seems most relevant"
+        mock_llm_cls.return_value = mock_client
 
         result = _llm_match_product("ergonomic setup for long sessions", "gaming", self._products)
         assert result is not None

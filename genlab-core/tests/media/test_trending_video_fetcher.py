@@ -260,9 +260,12 @@ class TestFetchTrendingVideosStage:
             license="youtube",
         )
 
-        with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}), \
+        with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}, clear=False), \
              patch.object(
                  TrendingVideoFetcher, "fetch_trending", return_value=[mock_video],
+             ), \
+             patch.object(
+                 FetchTrendingVideos, "_read_from_content_pool", return_value=[],
              ):
             result = stage.execute(context)
 
