@@ -341,8 +341,8 @@ class PushToBacklog:
                             if row[0]:
                                 existing_titles.add(row[0].strip().lower())
                 logger.info("[PUSH] Loaded %d titles for cross-dedup", len(existing_titles))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[PUSH] Failed to load titles for cross-dedup: %s", exc)
         context["existing_titles"] = existing_titles
 
         existing_titles = context.get("existing_titles", set())
@@ -433,7 +433,7 @@ class PushToBacklog:
                         pub_dt = pub_dt.replace(tzinfo=UTC)
                     age_days = (datetime.now(UTC) - pub_dt).days
                     if age_days > 7:
-                        logger.debug("[PUSH] Story too old (%d days): %s", age_days, title[:40])
+                        logger.info("[PUSH] Story too old (%d days), skipping blueprint: %s", age_days, title[:40])
                         continue
                 except (ValueError, TypeError):
                     pass  # unparseable date — allow through
@@ -441,6 +441,7 @@ class PushToBacklog:
             # Create blueprint from content
             content = story.get("content", {})
             if not content:
+                logger.info("[PUSH] No content for '%s' — skipping blueprint (story has no written content)", title[:60])
                 continue
             # Content may be a JSON string from the writing stage
             if isinstance(content, str):
@@ -553,7 +554,10 @@ class PushToBacklog:
                         "title": title,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
-                        "youtube_content": json.dumps({"title": yt.get("title", ""), "description": yt.get("description", "")}),
+                        "youtube_content": json.dumps({
+                            "title": yt.get("title", ""),
+                            "description": (yt.get("description", "") + "\n\n" + content.get("youtube_attribution", "")).strip(),
+                        }),
                         "twitter_content": json.dumps({"tweet_text": tw.get("tweet", tw.get("tweet_text", "")), "routing": tw.get("routing", "single")}),
                         "facebook_content": fb.get("caption", ""),
                         "priority_score": _apply_engagement_boost(

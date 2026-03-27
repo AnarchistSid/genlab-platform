@@ -176,8 +176,8 @@ class PostgresBackend:
             if self._pool is not None:
                 try:
                     self._pool.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Pool close error (non-critical): %s", exc)
                 self._pool = None
 
     @staticmethod

@@ -17,7 +17,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-MIN_EXAMPLES = 200
+MIN_EXAMPLES = 50  # Lowered from 200 — even a noisy signal is better than neutral 0.5
 
 
 @dataclass

@@ -16,17 +16,32 @@ from datetime import UTC, datetime
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 logger = logging.getLogger(__name__)
+
+# Shared session with retry + backoff for TMDB API (handles connection resets)
+_tmdb_session: requests.Session | None = None
+
+
+def _get_tmdb_session() -> requests.Session:
+    global _tmdb_session
+    if _tmdb_session is None:
+        _tmdb_session = requests.Session()
+        retry = Retry(total=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503])
+        _tmdb_session.mount("https://", HTTPAdapter(max_retries=retry))
+    return _tmdb_session
 
 
 def _fetch_trending_movie_ids(api_key: str, max_movies: int = 20) -> list[dict]:
     """Fetch trending movie IDs from TMDB weekly trending endpoint."""
     try:
-        r = requests.get(
+        s = _get_tmdb_session()
+        r = s.get(
             "https://api.themoviedb.org/3/trending/movie/week",
             params={"api_key": api_key},
-            timeout=10,
+            timeout=15,
         )
         r.raise_for_status()
         return [
@@ -43,14 +58,15 @@ def _fetch_movie_trailer_ids(api_key: str, movie_ids: list[dict]) -> list[dict]:
 
     Returns dicts with title, yt_video_id, and movie metadata.
     """
+    s = _get_tmdb_session()
     results = []
     for movie in movie_ids:
         movie_id = movie["id"]
         try:
-            r = requests.get(
+            r = s.get(
                 f"https://api.themoviedb.org/3/movie/{movie_id}/videos",
                 params={"api_key": api_key, "language": "en-US"},
-                timeout=10,
+                timeout=15,
             )
             if r.status_code != 200:
                 continue
@@ -70,7 +86,7 @@ def _fetch_movie_trailer_ids(api_key: str, movie_ids: list[dict]) -> list[dict]:
                         "_trending_video": True,
                     })
                     break  # Take first official trailer per movie
-            time.sleep(0.1)  # 10 req/sec comfortable rate
+            time.sleep(0.15)  # ~7 req/sec (TMDB limit is 40/10sec)
         except Exception as e:
             logger.warning("[TMDBTrailers] Videos fetch failed for %d: %s", movie_id, e)
     return results

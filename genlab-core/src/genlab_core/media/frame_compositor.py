@@ -318,6 +318,15 @@ class FrameCompositor:
         info = probe_video(source_video_path)
         case = info.layout_case
 
+        # Sub-item D: Skip first 10% of long clips (intros, logos, "hey guys")
+        if info.duration_seconds > 45 and trim_start == 0:
+            skip = info.duration_seconds * 0.10
+            trim_start = round(skip, 1)
+            logger.debug(
+                "[%s] Skipping first %.1fs (10%%) of %.1fs clip for stronger opening",
+                self.branding.niche_id, trim_start, info.duration_seconds,
+            )
+
         # Enforce minimum duration (15s for reels)
         effective_duration = info.duration_seconds - trim_start
         if duration_seconds:
@@ -473,7 +482,9 @@ class FrameCompositor:
         branding, _ = self._build_branding_filters(font_bold, font_reg, L_LOGO_Y, "base")
         hooks, _ = self._build_hook_filters(hook, L_HOOK_Y, font_hook, "withhandle")
 
-        filtergraph = f"{video_filter}{branding}{hooks}[withhook]null[out]"
+        # Sub-item C: Subtle brightness flash in first 0.07s (pattern interrupt)
+        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
+        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (
@@ -528,7 +539,9 @@ class FrameCompositor:
         branding, _ = self._build_branding_filters(font_bold, font_reg, S_LOGO_Y, "base")
         hooks, _ = self._build_hook_filters(hook, S_HOOK_Y, font_hook, "withhandle")
 
-        filtergraph = f"{video_filter}{branding}{hooks}[withhook]null[out]"
+        # Sub-item C: Subtle brightness flash in first 0.07s (pattern interrupt)
+        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
+        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (

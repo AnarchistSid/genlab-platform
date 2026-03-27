@@ -66,6 +66,9 @@ class VideoGate:
                         )
 
             if has_valid_clip:
+                # Set master_path for VMAF gate (validate_videos compares rendered vs master)
+                if clip_path:
+                    story.setdefault("media", {})["master_path"] = clip_path
                 passed += 1
             else:
                 story["_skip_llm"] = True

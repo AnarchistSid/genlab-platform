@@ -65,7 +65,7 @@ def _read_cache(niche_id: str) -> list[str] | None:
             return None
         data = json.loads(cache_file.read_text())
         return data if isinstance(data, list) and data else None
-    except Exception as exc:
+    except Exception as exc:  # noqa: logging below
         return None
 
 
@@ -76,7 +76,7 @@ def _write_cache(niche_id: str, topics: list[str]) -> None:
         cache_file = _CACHE_DIR / f"trends_{niche_id}.json"
         cache_file.write_text(json.dumps(topics))
     except Exception as exc:
-        pass
+        logger.debug("[trends] Cache write failed: %s", exc)
 
 
 def _read_stale_cache(niche_id: str) -> list[str] | None:
@@ -87,7 +87,7 @@ def _read_stale_cache(niche_id: str) -> list[str] | None:
     try:
         data = json.loads(cache_file.read_text())
         return data if isinstance(data, list) and data else None
-    except Exception as exc:
+    except Exception as exc:  # noqa: logging below
         return None
 
 
@@ -307,5 +307,5 @@ class GoogleTrendsIntel:
                         return 1.5
 
             return 1.0
-        except Exception as exc:
+        except Exception as exc:  # noqa: logging below
             return 1.0

@@ -379,6 +379,18 @@ class AffiliateMatch:
 
             product_name: str = product.get("name", "")
 
+            # Geo-targeted link resolution with UTM tracking
+            from genlab_core.monetization.geo_link_resolver import resolve_affiliate_link
+            blueprint_id = story.get("_candidate_id", story.get("story_id", ""))
+            tracked_url = resolve_affiliate_link(
+                product=product,
+                niche_id=niche_id,
+                platform="instagram",  # default; cta_engine overrides per-platform
+                blueprint_id=blueprint_id,
+            )
+            if tracked_url:
+                url = tracked_url
+
             # Build CTA (platform-agnostic — detailed injection done in cta_engine)
             cta = f"🔗 {product_name} — link in bio"
 

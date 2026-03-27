@@ -51,7 +51,7 @@ testpaths = ["tests"]
 markers = [
     "integration: end-to-end pipeline smoke tests (run with: pytest -m integration)",
 ]
-addopts = "-m 'not integration'"
+addopts = "-m 'not integration' -p no:faulthandler"
 
 [dependency-groups]
 dev = [
