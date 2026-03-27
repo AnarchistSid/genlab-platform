@@ -1,33 +1,41 @@
 # configs/model_routing.yaml
-# Model routing by pipeline task type.
-# All models must be Anthropic Claude — pipeline stages call anthropic.Anthropic() directly.
-# Tiered strategy: Sonnet for quality-critical, Haiku for volume/utility.
+# Multi-provider model routing by pipeline task type.
+# Uses genlab_core.llm.router for dispatch (Anthropic, OpenAI, Google).
+#
+# Tier pricing (Q1 2026):
+#   CREATIVE (Haiku): $1.00/$5.00 per M tokens — hooks, narration, engagement
+#   BULK (GPT-4o-mini): $0.15/$0.60 per M tokens — scoring, classification
+#   VIDEO (Gemini Flash): $0.15/$0.60 per M tokens + $0.005/60s video
+#   NANO (GPT-4.1-nano): $0.10/$0.40 per M tokens — trivial extraction
 
 default_model: "claude-haiku-4-5-20251001"
 
 task_routing:
-  # Quality-critical (hooks, captions, post copy)
-  # Switched from Sonnet ($3/$15) to Haiku ($0.80/$4) to cut costs ~80%.
-  # Haiku 4.5 quality is sufficient for hooks + captions at our scale.
+  # CREATIVE tier — audience-facing, quality-critical (stays on Haiku)
   generate_hooks: "claude-haiku-4-5-20251001"
+  hook_generation: "claude-haiku-4-5-20251001"
   score_hook_quality: "claude-haiku-4-5-20251001"
   write_post_content: "claude-haiku-4-5-20251001"
+  narration_script: "claude-haiku-4-5-20251001"
+  engagement_reply: "claude-haiku-4-5-20251001"
 
-  # Volume work (content writing, adaptation)
-  generate_script: "claude-haiku-4-5-20251001"
-  write_gaming_content: "claude-haiku-4-5-20251001"
-  write_sports_content: "claude-haiku-4-5-20251001"
-  write_movie_content: "claude-haiku-4-5-20251001"
-  write_anime_content: "claude-haiku-4-5-20251001"
-  generate_captions: "claude-haiku-4-5-20251001"
-  adapt_for_platforms: "claude-haiku-4-5-20251001"
+  # BULK tier — internal processing (GPT-4o-mini, 85% cheaper)
+  generate_script: "gpt-4o-mini"
+  generate_captions: "gpt-4o-mini"
+  adapt_for_platforms: "gpt-4o-mini"
+  affiliate_matching: "gpt-4o-mini"
+  content_scoring: "gpt-4o-mini"
+  source_relevance: "gpt-4o-mini"
+  enrich_metadata: "gpt-4o-mini"
+  summarise_article: "gpt-4o-mini"
 
-  # Utility
-  extract_game_name: "claude-haiku-4-5-20251001"
-  classify_content_type: "claude-haiku-4-5-20251001"
-  enrich_metadata: "claude-haiku-4-5-20251001"
-  summarise_article: "claude-haiku-4-5-20251001"
+  # NANO tier — trivial extraction (GPT-4.1-nano, cheapest)
+  extract_game_name: "gpt-4.1-nano"
+  classify_content_type: "gpt-4.1-nano"
+
+  # VIDEO tier — Gemini Flash for video input
+  video_analysis: "gemini-2.5-flash-preview-04-17"
 
 budget_fallbacks:
-  expensive_to_mid: "claude-haiku-4-5-20251001"
-  mid_to_cheapest: "claude-haiku-4-5-20251001"
+  expensive_to_mid: "gpt-4o-mini"
+  mid_to_cheapest: "gpt-4.1-nano"

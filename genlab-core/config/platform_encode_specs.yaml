@@ -40,3 +40,26 @@ threads:
   codec: libx264
   crf: 15
   preset: slow
+
+# ── Platform-optimized video durations ──────────────────────────────
+# Completion rate is the #1 algorithm signal. Shorter = higher completion.
+# The transcode step trims from the END (never the first 3s hook).
+platform_durations:
+  youtube:
+    target_seconds: 25       # Sweet spot for Shorts completion rate
+    max_seconds: 35
+  instagram:
+    target_seconds: 60       # IG now favors longer Reels (2025+)
+    max_seconds: 90
+  facebook:
+    target_seconds: 45
+    max_seconds: 60
+  x_twitter:
+    target_seconds: 30
+    max_seconds: 45
+  threads:
+    target_seconds: 30
+    max_seconds: 45
+  tiktok:
+    target_seconds: 25
+    max_seconds: 34

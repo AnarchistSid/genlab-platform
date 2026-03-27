@@ -287,6 +287,21 @@ def write_video_content(
         if not content.get("threads_content"):
             content["threads_content"] = (title[:297] + "...") if len(title) > 300 else title
 
+        # ── Generate aligned narration opening ─────────────────
+        from genlab_core.writing.hook_alignment import build_narration_opening
+        hook = content.get("hook", "")
+        if hook:
+            content["narration_opening"] = build_narration_opening(hook, title, niche_id)
+
+        # ── Add editorial attribution to YouTube description ───
+        yt_raw = content.get("youtube_content", "")
+        if isinstance(yt_raw, str):
+            channel_name = voice.get("channel_name", niche_id.replace("_", " ").title())
+            content["youtube_attribution"] = f"Curated and produced by {channel_name} | Original commentary and analysis"
+
+        # Mark as LLM-written for hook strategy dedup
+        content["written_by"] = "llm"
+
         return content
 
     except Exception as e:

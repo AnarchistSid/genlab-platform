@@ -165,10 +165,10 @@ class RenderWhisperCaptions:
             else:
                 # Silent clip -- try TTS if available
                 try:
-                    from genlab_core.tts.cascade import TTSCascade
+                    from genlab_core.tts.factory import build_tts_cascade
 
                     tts_path = tmpdir_path / "tts_voiceover.wav"
-                    tts = TTSCascade()
+                    tts = build_tts_cascade()
                     result = tts.synthesize(caption_text, tts_path)
                     if not result.success:
                         return None

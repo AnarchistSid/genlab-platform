@@ -129,7 +129,7 @@ NICHE_SEARCH_KEYWORDS: dict[str, list[str]] = {
 
 # View velocity thresholds — minimum views/hour to be considered "trending"
 MIN_VIEW_VELOCITY: dict[str, float] = {
-    "gaming": 500,
+    "gaming": 200,
     "sports": 800,
     "movies": 300,
     "anime": 400,
@@ -876,6 +876,7 @@ class FetchTrendingVideos:
                         SELECT * FROM content_pool
                         WHERE %s = ANY(routed_niches)
                           AND status = 'available'
+                          AND video_url IS NOT NULL AND video_url != ''
                         ORDER BY view_velocity DESC NULLS LAST, fetched_at DESC
                         LIMIT 20
                         FOR UPDATE SKIP LOCKED

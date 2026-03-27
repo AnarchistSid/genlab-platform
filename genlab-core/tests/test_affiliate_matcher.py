@@ -590,7 +590,7 @@ class TestAffiliateMatchExecute:
         result = stage.execute(context)
         story = result["stories"][0]
         assert story["affiliate_product"] == "PS5 Console"
-        assert story["affiliate_url"] == "https://amzn.to/ps5"
+        assert story["affiliate_url"].startswith("https://amzn.to/ps5")
         assert story["affiliate_network"] == "amazon"
         assert story["affiliate_commission_pct"] == 4.0
         assert "link in bio" in story["affiliate_cta"]

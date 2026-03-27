@@ -47,12 +47,12 @@ class GenerateAudio:
 
         # Late import to avoid hard dependency when TTS providers aren't installed
         try:
-            from genlab_core.tts.cascade import TTSCascade
+            from genlab_core.tts.factory import build_tts_cascade
         except ImportError:
             logger.warning("[GenerateAudio] genlab_core.tts not available, skipping")
             return context
 
-        cascade = TTSCascade()
+        cascade = build_tts_cascade()
         generated = 0
         skipped = 0
         errors = 0
@@ -82,6 +82,22 @@ class GenerateAudio:
                 )
 
                 if result and out_path.exists():
+                    # Sub-item B: Remove leading silence from TTS output
+                    trimmed_path = out_path.parent / f"{out_path.stem}_trimmed{out_path.suffix}"
+                    try:
+                        import subprocess
+                        from genlab_core.media.ffmpeg import get_ffmpeg_binary
+                        subprocess.run([
+                            get_ffmpeg_binary(), "-y", "-i", str(out_path),
+                            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB",
+                            str(trimmed_path),
+                        ], check=True, capture_output=True, timeout=30)
+                        if trimmed_path.exists() and trimmed_path.stat().st_size > 100:
+                            trimmed_path.replace(out_path)
+                            logger.debug("[GenerateAudio] Trimmed leading silence from %s", out_path.name)
+                    except Exception:
+                        pass  # Non-fatal — use untrimmed audio
+
                     media["audio_path"] = str(out_path)
                     media["audio_provider"] = getattr(result, "provider", "unknown")
                     generated += 1

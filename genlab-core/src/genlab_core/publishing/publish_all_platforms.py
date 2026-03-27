@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
 from genlab_core.platforms.models import (
     FacebookSpecific,
@@ -144,6 +145,138 @@ class PidLock:
 
 
 # ---------------------------------------------------------------------------
+# Per-Platform Transcode
+# ---------------------------------------------------------------------------
+
+# Map legacy platform names to Platform enum
+_PLATFORM_MAP: dict[str, Platform] = {
+    "youtube": Platform.YOUTUBE,
+    "instagram": Platform.INSTAGRAM,
+    "facebook": Platform.FACEBOOK,
+    "twitter": Platform.X_STD,
+    "threads": Platform.THREADS,
+    "tiktok": Platform.TIKTOK,
+}
+
+
+def _transcode_for_platform(source: Path, platform: str) -> Path:
+    """Transcode video for a specific platform using PLATFORM_SPECS.
+
+    Returns the platform variant path. If transcoding fails or the platform
+    is unknown, returns the original source path (fail-open).
+    """
+    plat_enum = _PLATFORM_MAP.get(platform)
+    if plat_enum is None or plat_enum not in PLATFORM_SPECS:
+        return source
+
+    spec = PLATFORM_SPECS[plat_enum]
+    variant_path = source.parent / f"{source.stem}_{plat_enum.value}{source.suffix}"
+
+    # Skip if variant already exists and is recent
+    if variant_path.exists() and variant_path.stat().st_size > 10240:
+        return variant_path
+
+    try:
+        from genlab_core.media.ffmpeg import get_ffmpeg_binary
+        import subprocess
+        import yaml as _yaml
+
+        ffmpeg = get_ffmpeg_binary()
+
+        # Load platform duration targets from config
+        max_duration = None
+        try:
+            config_path = Path(__file__).resolve().parent.parent / "config" / "platform_encode_specs.yaml"
+            if not config_path.exists():
+                config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "platform_encode_specs.yaml"
+            if config_path.exists():
+                with open(config_path) as f:
+                    enc_config = _yaml.safe_load(f) or {}
+                durations = enc_config.get("platform_durations", {}).get(platform, {})
+                max_duration = durations.get("max_seconds")
+        except Exception:
+            pass
+
+        cmd = [ffmpeg, "-y", "-i", str(source)]
+
+        # Apply duration trim if source exceeds platform max (trim from end, keep hook)
+        if max_duration:
+            cmd.extend(["-t", str(max_duration)])
+
+        cmd.extend(["-c:v", spec.codec])
+        if spec.crf is not None:
+            cmd.extend(["-crf", str(spec.crf)])
+        cmd.extend(["-preset", "slow"])
+        if spec.width and spec.height:
+            cmd.extend(["-vf", f"scale={spec.width}:{spec.height}"])
+        cmd.extend([
+            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(variant_path),
+        ])
+        subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        dur_msg = f", trimmed to {max_duration}s" if max_duration else ""
+        logger.info("[publish] Transcoded %s for %s (%s CRF %s%s)",
+                    source.name, platform, spec.codec, spec.crf, dur_msg)
+        return variant_path
+    except Exception as exc:
+        logger.warning("[publish] Transcode failed for %s/%s: %s — using original",
+                       platform, source.name, exc)
+        return source
+
+
+# ---------------------------------------------------------------------------
+# First-Reply Affiliate Posting
+# ---------------------------------------------------------------------------
+
+
+def _post_affiliate_reply(
+    platform: str, post_id: str | None, fields: dict, niche_id: str
+) -> None:
+    """Post affiliate link as first reply/comment after publishing.
+
+    Facebook: POST /{post_id}/comments with affiliate text.
+    X/Twitter: POST tweet reply with in_reply_to_tweet_id.
+    Non-blocking: failures are logged but never crash the publisher.
+    """
+    if not post_id:
+        return
+
+    affiliate_url = fields.get("affiliate_url", "")
+    affiliate_product = fields.get("affiliate_product", "")
+    if not affiliate_url or not affiliate_product:
+        return
+
+    try:
+        if platform == "facebook":
+            from genlab_core.platforms.facebook import FacebookClient
+            from genlab_core.publishing.niche_credentials import resolve_credentials
+            creds = resolve_credentials(niche_id, "facebook")
+            if not creds.get("access_token"):
+                return
+            fb = FacebookClient(access_token=creds["access_token"])
+            text = f"🔗 {affiliate_product}: {affiliate_url}"
+            fb.post_reply(post_id, text)
+            logger.info("[affiliate] Posted FB comment on %s", post_id)
+
+        elif platform in ("twitter", "x_twitter"):
+            from genlab_core.platforms.x_twitter import XTwitterClient
+            from genlab_core.publishing.niche_credentials import resolve_credentials
+            creds = resolve_credentials(niche_id, "twitter")
+            if not creds.get("api_key"):
+                return
+            x = XTwitterClient(**creds)
+            text = f"🔗 {affiliate_product}: {affiliate_url}"
+            x.post_reply(post_id, text)
+            logger.info("[affiliate] Posted X reply to %s", post_id)
+
+    except Exception:
+        logger.debug("[affiliate] Reply failed for %s/%s (non-blocking)", platform, post_id)
+
+
+# ---------------------------------------------------------------------------
 # Payload Builder
 # ---------------------------------------------------------------------------
 
@@ -180,6 +313,13 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     if too_small:
         logger.warning("[publish] Skipping too-small media files (<10KB): %s", [str(p) for p in too_small])
         media_paths = [p for p in media_paths if p not in too_small]
+
+    # Per-platform transcode: produce optimized variant for the target platform
+    if media_paths and any(str(p).lower().endswith(".mp4") for p in media_paths):
+        media_paths = [
+            _transcode_for_platform(p, platform) if str(p).lower().endswith(".mp4") else p
+            for p in media_paths
+        ]
 
     # Media type
     fmt = (fields.get("format", "") or "").strip().lower()
@@ -553,6 +693,8 @@ def run_publish(
                     "[publish] %s: SUCCESS post_id=%s url=%s",
                     platform, result.post_id, result.post_url,
                 )
+                # Post affiliate link as first reply/comment (non-blocking)
+                _post_affiliate_reply(platform, result.post_id, fields, niche_id)
                 # Immediately persist platform status to prevent double-post on crash
                 try:
                     backlog_client.blueprints.update(
@@ -636,8 +778,8 @@ def run_publish(
                             if fp == plat and fr.success:
                                 post_id_for_plat = fr.post_id or ""
                                 break
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Failed to get post_id from future: %s", exc)
 
                     # Build bandit_context with hook features for LinUCB (Break 11 fix)
                     bandit_ctx = None
