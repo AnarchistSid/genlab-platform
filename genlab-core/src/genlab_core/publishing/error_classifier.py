@@ -32,7 +32,7 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
             r"video.*too.*(?:large|small|long|short)",
             r"media.*(?:not.*found|not.*supported)",
             r"format.*(?:not.*supported|invalid|rejected)",
-            r"2207077", r"Video required",
+            r"Video required",
             r"file.*not.*found",
             r"No media paths",
             r"media paths provided",
@@ -65,8 +65,14 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
             r"SSLError", r"certificate.*verify.*failed",
             r"JSONDecodeError",
             r"2207026",  # IG container expired
-            r"container.*(?:expired|timed?\s*out)",
+            r"2207076",  # IG "video file not supported" — transient Meta processor issue
+            r"2207077",  # IG "media upload failed" — transient CDN/processor issue
+            r"container.*(?:expired|timed?\s*out|processing.*error)",
             r"Publish timed out",
+            r"NameResolutionError",  # DNS failure — transient
+            r"nodename nor servname",  # macOS DNS failure
+            r"Failed to resolve",  # DNS failure
+            r"Max retries exceeded",  # urllib3 retry exhaustion — transient
         ]
     ],
 }
@@ -100,6 +106,6 @@ def retry_delay_seconds(error_class: str, attempt: int) -> int:
     """Delay before next retry attempt."""
     if error_class == "QUOTA":
         return 86400  # 24 hours
-    # Exponential backoff: 1h, 4h, 12h
-    delays = [3600, 14400, 43200]
+    # Exponential backoff: 10m, 1h, 4h
+    delays = [600, 3600, 14400]
     return delays[min(attempt, len(delays) - 1)]
