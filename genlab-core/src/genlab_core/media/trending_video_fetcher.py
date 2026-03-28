@@ -136,8 +136,8 @@ MIN_VIEW_VELOCITY: dict[str, float] = {
     "ai_creators": 150,
 }
 
-MAX_DURATION_SECONDS = 240  # 4 minutes
-MIN_DURATION_SECONDS = 20   # 20 seconds
+MAX_DURATION_SECONDS = 600  # 10 minutes — yt-dlp trims to reel length at render
+MIN_DURATION_SECONDS = 15   # 15 seconds
 
 
 @dataclass
