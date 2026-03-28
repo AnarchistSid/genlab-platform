@@ -342,10 +342,12 @@ class InstagramClient:
         share_to_feed: bool = True,
         cover_url: str = "",
         max_poll_seconds: int = _DEFAULT_MAX_POLL_SECONDS,
+        _retry_count: int = 0,
     ) -> str | None:
         """Three-step reel publish: create container → poll → publish.
 
         Returns the published post ID on success, or ``None`` on failure.
+        Retries once if the container hits ERROR quickly (Meta processor lag).
         """
         creation_id = self._create_reel_container(
             video_url=video_url,
@@ -361,7 +363,23 @@ class InstagramClient:
             max_poll_seconds=max_poll_seconds,
         )
         if already_published is None:
-            # Timed out or error
+            # Container ERROR or timeout — retry once after 30s
+            # Meta's processor sometimes returns ERROR immediately on
+            # transient overload, but succeeds on a second attempt.
+            if _retry_count < 1:
+                logger.warning(
+                    "Reel container ERROR — retrying in 30s (attempt %d/2)",
+                    _retry_count + 1,
+                )
+                time.sleep(30)
+                return self._publish_reel(
+                    video_url=video_url,
+                    caption=caption,
+                    share_to_feed=share_to_feed,
+                    cover_url=cover_url,
+                    max_poll_seconds=max_poll_seconds,
+                    _retry_count=_retry_count + 1,
+                )
             return None
 
         if already_published:
