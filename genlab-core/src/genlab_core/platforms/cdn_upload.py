@@ -110,10 +110,11 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
         except requests.RequestException as exc:
             logger.warning("CDN tunnel: verification failed: %s", exc)
 
-        # Return the URL anyway — tunnel might be briefly unreachable for HEAD
-        # but still work for Instagram's fetch
-        logger.info("CDN tunnel (unverified): %s → %s", file_path.name, public_url)
-        return public_url
+        # Tunnel verification failed — fall through to external CDN so
+        # Instagram/Threads can actually fetch the video.  A 530 here means
+        # Meta's servers will also get a 530 → error 2207077.
+        logger.warning("CDN tunnel (unverified): %s — falling through to external CDN", file_path.name)
+        return None
 
     except Exception as exc:
         logger.warning("CDN tunnel: failed: %s", exc)
