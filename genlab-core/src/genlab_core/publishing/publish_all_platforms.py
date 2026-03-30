@@ -237,8 +237,11 @@ def _post_affiliate_reply(
 ) -> None:
     """Post affiliate link as first reply/comment after publishing.
 
+    Instagram: POST /{media_id}/comments with affiliate text (pinned first comment).
     Facebook: POST /{post_id}/comments with affiliate text.
     X/Twitter: POST tweet reply with in_reply_to_tweet_id.
+    Threads: POST reply to thread with affiliate text.
+    YouTube: affiliate URL is already in the description (injected by cta_engine).
     Non-blocking: failures are logged but never crash the publisher.
     """
     if not post_id:
@@ -249,28 +252,61 @@ def _post_affiliate_reply(
     if not affiliate_url or not affiliate_product:
         return
 
+    text = f"🔗 {affiliate_product}: {affiliate_url}"
+
     try:
-        if platform == "facebook":
-            from genlab_core.platforms.facebook import FacebookClient
-            from genlab_core.publishing.niche_credentials import resolve_credentials
-            creds = resolve_credentials(niche_id, "facebook")
-            if not creds.get("access_token"):
+        if platform == "instagram":
+            # Post first comment on IG reel with affiliate link.
+            # Instagram doesn't support bio link updates via API, so
+            # the best approach is a first comment with the clickable link.
+            import requests as _req
+            from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+            meta_creds = resolve_meta_credentials(niche_id)
+            access_token = meta_creds.get("ig_access_token", "")
+            if not access_token:
                 return
-            fb = FacebookClient(access_token=creds["access_token"])
-            text = f"🔗 {affiliate_product}: {affiliate_url}"
+            resp = _req.post(
+                f"https://graph.facebook.com/v21.0/{post_id}/comments",
+                data={"message": text, "access_token": access_token},
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                logger.info("[affiliate] Posted IG comment on %s", post_id)
+            else:
+                logger.debug("[affiliate] IG comment failed (HTTP %d): %s", resp.status_code, resp.text[:200])
+
+        elif platform == "facebook":
+            from genlab_core.platforms.facebook import FacebookClient
+            from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+            access_token, page_id = resolve_fb_credentials(niche_id)
+            if not access_token:
+                return
+            fb = FacebookClient(access_token=access_token)
             fb.post_reply(post_id, text)
             logger.info("[affiliate] Posted FB comment on %s", post_id)
 
         elif platform in ("twitter", "x_twitter"):
             from genlab_core.platforms.x_twitter import XTwitterClient
-            from genlab_core.publishing.niche_credentials import resolve_credentials
-            creds = resolve_credentials(niche_id, "twitter")
+            from genlab_core.publishing.niche_credentials import resolve_twitter_credentials
+            creds = resolve_twitter_credentials(niche_id)
             if not creds.get("api_key"):
                 return
             x = XTwitterClient(**creds)
-            text = f"🔗 {affiliate_product}: {affiliate_url}"
             x.post_reply(post_id, text)
             logger.info("[affiliate] Posted X reply to %s", post_id)
+
+        elif platform == "threads":
+            from genlab_core.platforms.threads import ThreadsClient
+            from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+            access_token, user_id = resolve_threads_credentials(niche_id)
+            if not access_token or not user_id:
+                return
+            threads = ThreadsClient(access_token=access_token, user_id=user_id)
+            threads.post_reply(post_id, text)
+            logger.info("[affiliate] Posted Threads reply to %s", post_id)
+
+        # YouTube: affiliate URL is already in the video description
+        # (injected by cta_engine into youtube_content). No separate comment needed.
 
     except Exception:
         logger.debug("[affiliate] Reply failed for %s/%s (non-blocking)", platform, post_id)
