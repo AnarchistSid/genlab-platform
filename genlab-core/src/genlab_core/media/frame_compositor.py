@@ -498,35 +498,22 @@ class FrameCompositor:
     def _build_cmd_portrait(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Portrait clip: sandwich layout with branding header above scaled video.
+        """Portrait clip: clean full-screen video, NO branding or hook overlay.
 
-        Portrait sources (9:16) are scaled to fit below a 310px branding bar
-        (logo + channel name + hook), matching the landscape layout for
-        consistent brand identity across all content.
+        Portrait sources (9:16) fill the entire 1080x1920 canvas.
+        No logo, no text, no gradient — just the video.
         """
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
-        font_bold, font_reg, font_hook = self._resolve_fonts()
-        has_logo = self.branding.logo_path and os.path.exists(self.branding.logo_path)
 
-        # Scale portrait video to fit below header bar (1080 x ~1610)
-        video_h = CANVAS_H - L_VIDEO_Y  # reuse landscape video Y start
-        video_filter = (
-            f"color=black:{CANVAS_W}x{CANVAS_H}:rate={fps}[canvas];"
-            f"[0:v]scale={CANVAS_W}:{video_h}:force_original_aspect_ratio=decrease,"
-            f"pad={CANVAS_W}:{video_h}:(ow-iw)/2:(oh-ih)/2:black[scaled];"
-            f"[canvas][scaled]overlay=0:{L_VIDEO_Y}[base];"
+        filtergraph = (
+            f"[0:v]scale={CANVAS_W}:{CANVAS_H}:"
+            f"force_original_aspect_ratio=increase,"
+            f"crop={CANVAS_W}:{CANVAS_H}[out]"
         )
 
-        branding, _ = self._build_branding_filters(font_bold, font_reg, L_LOGO_Y, "base")
-        hooks, _ = self._build_hook_filters(hook, L_HOOK_Y, font_hook, "withhandle")
-
-        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
-        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
-        inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
-
         return (
-            ["ffmpeg", "-y"] + trim_flag + inputs + dur_flags
+            ["ffmpeg", "-y"] + trim_flag + ["-i", src] + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
             + self._output_flags(crf, preset, fps) + [out]
         )
