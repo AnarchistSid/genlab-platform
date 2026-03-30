@@ -219,12 +219,14 @@ def match_product(
         best_hits = 0
         best_matched_keywords = []
 
-    # 2. Fall back to static catalog
+    # 2. Fall back to static catalog (skip disabled products)
     niche_products = (catalog.get("niches") or {}).get(niche_id, {}).get("products", [])
     if not niche_products:
         return None
 
     for product in niche_products:
+        if not product.get("enabled", True):
+            continue
         keywords = product.get("keywords") or []
         hits, matched_kws = _keyword_hits(keywords, text_lower, return_matched=True)
         if hits > best_hits:
@@ -242,12 +244,13 @@ def match_product(
         return best_product
 
     # 3. LLM contextual fallback — only when keyword matching failed entirely
-    if not niche_products:
+    enabled_products = [p for p in niche_products if p.get("enabled", True)]
+    if not enabled_products:
         return None
 
     # Only invoke LLM if the cleaned text has enough substance (>20 chars of content)
     if len(text_lower.strip()) > 20:
-        llm_result = _llm_match_product(text_lower, niche_id, niche_products)
+        llm_result = _llm_match_product(text_lower, niche_id, enabled_products)
         if llm_result is not None:
             return llm_result
 
