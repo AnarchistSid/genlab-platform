@@ -257,28 +257,37 @@ def match_product(
 def select_best_network(product: dict[str, Any]) -> tuple[str, str, float]:
     """Return (network_name, url, commission_pct) for the network with the highest commission.
 
-    Falls back to the first available network if multiple are tied.
+    Skips placeholder URLs (example.com) and validates link health via the
+    geo_link_resolver health cache. Falls back to lower-commission networks
+    if the highest-commission link is broken.
     """
     networks: dict[str, dict[str, Any]] = product.get("networks") or {}
     if not networks:
         return ("", "", 0.0)
 
-    best_name = ""
-    best_url = ""
-    best_commission = -1.0
+    from genlab_core.monetization.geo_link_resolver import _is_placeholder, _is_url_healthy
 
-    for name, info in networks.items():
+    # Sort by commission descending so we try the best link first
+    ranked = sorted(
+        networks.items(),
+        key=lambda kv: float(kv[1].get("commission_pct", 0.0)),
+        reverse=True,
+    )
+
+    for name, info in ranked:
         url = info.get("url", "")
-        # Skip placeholder URLs that haven't been replaced with real affiliate links
-        if not url or "example.com" in url:
+        if _is_placeholder(url):
+            continue
+        if not _is_url_healthy(url):
+            logger.debug(
+                "[AffiliateMatch] Skipping broken %s link for %s",
+                name, product.get("name", "?"),
+            )
             continue
         commission = float(info.get("commission_pct", 0.0))
-        if commission > best_commission:
-            best_commission = commission
-            best_name = name
-            best_url = url
+        return (name, url, commission)
 
-    return (best_name, best_url, best_commission)
+    return ("", "", 0.0)
 
 
 class AffiliateMatch:
