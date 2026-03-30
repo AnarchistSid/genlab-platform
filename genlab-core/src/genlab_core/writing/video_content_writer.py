@@ -209,6 +209,10 @@ def write_video_content(
 
         # ── Enforce Instagram caption standards ──────────────
         ig = content.get("instagram_caption", "")
+        # LLM sometimes returns a dict instead of plain string
+        if isinstance(ig, dict):
+            ig = ig.get("caption") or ig.get("text") or str(list(ig.values())[0]) if ig else ""
+            content["instagram_caption"] = ig
         if ig:
             # Split caption body from hashtags
             ig_parts = ig.split("\n\n")
@@ -252,24 +256,42 @@ def write_video_content(
 
         # ── Enforce Twitter ≤280 chars ───────────────────────
         tw = content.get("twitter_content", "")
+        # LLM sometimes returns {"tweet_text": "..."} instead of plain string
+        if isinstance(tw, dict):
+            tw = tw.get("tweet_text") or tw.get("text") or tw.get("tweet") or str(list(tw.values())[0]) if tw else ""
+            content["twitter_content"] = tw
         if tw and len(tw) > 280:
             tw = tw[:277].rsplit(" ", 1)[0] + "..."
             content["twitter_content"] = tw
 
         # ── Enforce YouTube title ≤40 chars + question format ─
         yt = content.get("youtube_content", "")
+        # LLM sometimes returns {"title": "...", "description": "..."} instead of plain title
+        if isinstance(yt, dict):
+            yt = yt.get("title") or str(list(yt.values())[0]) if yt else ""
+            # Store description separately for YouTube description field
+            yt_desc = content["youtube_content"].get("description", "") if isinstance(content.get("youtube_content"), dict) else ""
+            if yt_desc:
+                content["youtube_description"] = yt_desc
+            content["youtube_content"] = yt
         if yt and len(yt) > 40:
             yt = yt[:37].rsplit(" ", 1)[0] + "?"
             content["youtube_content"] = yt
 
         # ── Enforce Facebook 200-300 chars ───────────────────
         fb = content.get("facebook_content", "")
+        if isinstance(fb, dict):
+            fb = fb.get("text") or fb.get("post") or str(list(fb.values())[0]) if fb else ""
+            content["facebook_content"] = fb
         if fb and len(fb) > 300:
             fb = fb[:297].rsplit(" ", 1)[0] + "..."
             content["facebook_content"] = fb
 
         # ── Enforce Threads 150-300 chars ──────────────────
         th = content.get("threads_content", "")
+        if isinstance(th, dict):
+            th = th.get("text") or th.get("post") or str(list(th.values())[0]) if th else ""
+            content["threads_content"] = th
         if th and len(th) > 300:
             th = th[:297].rsplit(" ", 1)[0] + "..."
             content["threads_content"] = th
