@@ -250,6 +250,21 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
 
     # Twitter: no modification — link goes in reply thread
 
+    # ── Threads content ─────────────────────────────────────────────────────
+    # Threads doesn't support clickable links in posts, but we mention the
+    # product so the affiliate reply (posted separately) has context.
+    th_content: str = fields.get("threads_content", "") or ""
+    if product_name and th_content:
+        if product_name.lower() not in th_content.lower():
+            th_disclosure = disclosure_map.get("threads", "#ad #affiliate")
+            th_cta = f"\n\n{th_disclosure}\n🔗 {product_name} — check first reply"
+            th_content = th_content.rstrip() + th_cta
+            if len(th_content) > 500:
+                # Threads has 500 char limit
+                overage = len(th_content) - 500
+                th_content = th_content[:len(th_content) - len(th_cta) - overage] + th_cta
+            fields["threads_content"] = th_content
+
     # Store the selected variant arm_id for downstream attribution
     if selected_variants:
         fields["affiliate_cta_variant"] = ",".join(selected_variants)

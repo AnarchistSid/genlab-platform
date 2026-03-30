@@ -373,7 +373,13 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         )
 
     # Caption, hashtags, hook
-    caption = (fields.get("caption", "") or "").strip()
+    # Use platform-specific content when available
+    if platform == "threads" and fields.get("threads_content"):
+        caption = (fields.get("threads_content", "") or "").strip()
+    elif platform == "facebook" and fields.get("facebook_content"):
+        caption = (fields.get("facebook_content", "") or "").strip()
+    else:
+        caption = (fields.get("caption", "") or "").strip()
     hashtags_raw = fields.get("hashtags", "") or ""
     if isinstance(hashtags_raw, list):
         hashtags = [t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in (str(h) for h in hashtags_raw if h) if t.strip()]
