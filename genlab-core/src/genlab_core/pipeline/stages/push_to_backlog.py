@@ -560,6 +560,7 @@ class PushToBacklog:
                         }),
                         "twitter_content": json.dumps({"tweet_text": tw.get("tweet", tw.get("tweet_text", "")), "routing": tw.get("routing", "single")}),
                         "facebook_content": fb.get("caption", ""),
+                        "threads_content": content.get("threads", {}).get("caption", ""),
                         "priority_score": _apply_engagement_boost(
                             story.get("final_score") if story.get("final_score") is not None
                             else story.get("composite_score") if story.get("composite_score") is not None
