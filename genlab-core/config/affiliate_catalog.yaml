@@ -27,6 +27,27 @@ niches:
       - ps5 pro
       - playstation 5
       - ps5 exclusive
+      - elden ring
+      - spider-man
+      - god of war
+      - final fantasy
+      - gran turismo
+      - demon's souls
+      - returnal
+      - ratchet
+      - horizon
+      - last of us
+      - ghost of tsushima
+      - bloodborne
+      - death stranding
+      - uncharted
+      - resident evil
+      - tekken
+      - street fighter
+      - mortal kombat
+      - console
+      - gaming setup
+      - controller
       category: hardware
       networks:
         amazon:
@@ -55,6 +76,20 @@ niches:
       - forza
       - starfield
       - bethesda
+      - call of duty
+      - cod
+      - diablo
+      - overwatch
+      - helldivers
+      - palworld
+      - avowed
+      - fable
+      - indiana jones
+      - doom
+      - fallout
+      - subscription
+      - gta
+      - grand theft auto
       category: subscription
       networks:
         amazon:
@@ -76,6 +111,13 @@ niches:
       - surround sound
       - blackshark
       - kraken
+      - audio
+      - voice chat
+      - discord
+      - comms
+      - esports
+      - tournament
+      - competitive
       category: peripheral
       networks:
         amazon:
@@ -152,6 +194,33 @@ niches:
       - portable gaming
       - steam
       - pc gaming
+      - counter-strike
+      - cs2
+      - dota
+      - dota 2
+      - baldurs gate
+      - cyberpunk
+      - lethal company
+      - deep rock galactic
+      - path of exile
+      - farming simulator
+      - minecraft
+      - terraria
+      - stardew valley
+      - sons of the forest
+      - the finals
+      - apex legends
+      - apex
+      - league of legends
+      - lol
+      - valorant
+      - fortnite
+      - rocket league
+      - rust
+      - world of warcraft
+      - wow
+      - steam sale
+      - indie game
       category: hardware
       networks:
         amazon_us:
@@ -167,6 +236,12 @@ niches:
       - wireless
       - dpi
       - sensor
+      - fps
+      - aim
+      - flick
+      - tracking
+      - mouspad
+      - sensitivity
       category: peripheral
       networks:
         amazon:
@@ -188,6 +263,11 @@ niches:
       - 1080p
       - camera
       - facecam
+      - twitch
+      - streamer
+      - live stream
+      - irl
+      - just chatting
       category: peripheral
       networks:
         amazon:
@@ -209,6 +289,13 @@ niches:
       - streaming
       - obs
       - game capture
+      - twitch
+      - stream
+      - streamer
+      - content creator
+      - youtube gaming
+      - kick
+      - clip
       category: peripheral
       networks:
         amazon:
@@ -236,6 +323,28 @@ niches:
       - prime video
       - nba india
       - basketball streaming
+      - lebron
+      - curry
+      - giannis
+      - jokic
+      - wemby
+      - wembanyama
+      - luka
+      - doncic
+      - tatum
+      - warriors
+      - nuggets
+      - bucks
+      - 76ers
+      - heat
+      - slam dunk
+      - dunk
+      - buzzer beater
+      - triple double
+      - march madness
+      - ncaa
+      - college basketball
+      - duke
       category: subscription
       networks:
         amazon:
@@ -255,6 +364,15 @@ niches:
       - air max
       - jordan
       - athletics
+      - marathon
+      - sprint
+      - track
+      - olympian
+      - 100m
+      - 800m
+      - usain bolt
+      - track and field
+      - relay
       category: gear
       networks:
         amazon:
@@ -297,6 +415,16 @@ niches:
       - heart rate
       - step counter
       - health
+      - ufc
+      - mma
+      - boxing
+      - fight
+      - knockout
+      - ko
+      - octagon
+      - ring
+      - wrestling
+      - submission
       category: gear
       networks:
         amazon:
@@ -357,6 +485,16 @@ niches:
       - ipl
       - t20
       - batting
+      - virat
+      - kohli
+      - sachin
+      - dhoni
+      - world cup
+      - test match
+      - odi
+      - six
+      - century
+      - wicket
       category: gear
       networks:
         amazon_us:
@@ -373,6 +511,20 @@ niches:
       - studs
       - adidas
       - puma
+      - goal
+      - striker
+      - messi
+      - ronaldo
+      - mbappe
+      - premier league
+      - champions league
+      - la liga
+      - world cup
+      - europa league
+      - tackle
+      - free kick
+      - penalty
+      - hat trick
       category: gear
       networks:
         amazon_us:
@@ -388,6 +540,13 @@ niches:
       - running watch
       - fitness watch
       - triathlon
+      - marathon
+      - training
+      - race
+      - pace
+      - vo2 max
+      - recovery
+      - workout
       category: gear
       networks:
         amazon:
@@ -446,6 +605,26 @@ niches:
       - amazon prime
       - prime original
       - prime exclusive
+      - trailer
+      - movie
+      - film
+      - sequel
+      - box office
+      - oscar
+      - academy award
+      - director
+      - actor
+      - actress
+      - marvel
+      - dc
+      - superhero
+      - horror
+      - thriller
+      - comedy
+      - action
+      - reboot
+      - remake
+      - adaptation
       category: subscription
       networks:
         amazon:
@@ -466,6 +645,10 @@ niches:
       - atmos
       - imax
       - audio
+      - surround sound
+      - home cinema
+      - speakers
+      - movie night
       category: hardware
       networks:
         amazon:
@@ -492,6 +675,11 @@ niches:
       - screen
       - movie night
       - lumens
+      - big screen
+      - projection
+      - hdr
+      - movie room
+      - home setup
       category: hardware
       networks:
         amazon:
@@ -513,6 +701,13 @@ niches:
       - roku
       - chromecast
       - smart tv
+      - firestick
+      - cord cutting
+      - streaming service
+      - hulu
+      - disney
+      - hbo
+      - max
       category: hardware
       networks:
         amazon:
@@ -651,6 +846,12 @@ niches:
       - pirate
       - oda
       - shonen jump
+      - gear 5
+      - straw hat
+      - zoro
+      - sanji
+      - nika
+      - wano
       category: merchandise
       networks:
         amazon:
@@ -673,6 +874,47 @@ niches:
       - nendoroid
       - banpresto
       - prize figure
+      - dragon ball
+      - goku
+      - vegeta
+      - naruto
+      - sasuke
+      - demon slayer
+      - tanjiro
+      - jujutsu kaisen
+      - gojo
+      - sukuna
+      - bleach
+      - ichigo
+      - my hero academia
+      - deku
+      - attack on titan
+      - chainsaw man
+      - denji
+      - makima
+      - solo leveling
+      - sung jinwoo
+      - spy x family
+      - anya
+      - frieren
+      - oshi no ko
+      - blue lock
+      - isagi
+      - haikyuu
+      - hunter x hunter
+      - one punch man
+      - saitama
+      - vinland saga
+      - tokyo ghoul
+      - mob psycho
+      - dandadan
+      - sakamoto days
+      - wind breaker
+      - kaiju no 8
+      - anime
+      - season
+      - episode
+      - fight scene
       category: merchandise
       networks:
         amazon:
@@ -694,6 +936,9 @@ niches:
       - digital art
       - illustration
       - manga drawing
+      - anime art
+      - fan art
+      - clip studio
       category: hardware
       networks:
         amazon:
@@ -715,6 +960,12 @@ niches:
       - one piece
       - dragon ball
       - anime clothing
+      - merch
+      - merchandise
+      - cosplay
+      - otaku
+      - weeb
+      - anime fan
       category: merchandise
       networks:
         amazon:
@@ -751,6 +1002,11 @@ niches:
       - room decor
       - anime decor
       - naruto poster
+      - wallpaper
+      - fan art
+      - aesthetic
+      - manga panel
+      - iconic scene
       category: merchandise
       networks:
         amazon:
@@ -787,6 +1043,10 @@ niches:
       - isekai
       - sword art online
       - re zero
+      - web novel
+      - reincarnation
+      - overpowered
+      - op mc
       category: merchandise
       networks:
         amazon:
@@ -866,6 +1126,16 @@ niches:
       - deep learning
       - render
       - training
+      - tensor
+      - machine learning
+      - stable diffusion
+      - llm
+      - local ai
+      - comfyui
+      - automatic1111
+      - ollama
+      - benchmark
+      - performance
       category: hardware
       networks:
         amazon:
@@ -888,6 +1158,11 @@ niches:
       - recording
       - blue yeti
       - audio
+      - voice
+      - tts
+      - text to speech
+      - voice clone
+      - elevenlabs
       category: hardware
       networks:
         amazon:
@@ -951,6 +1226,13 @@ niches:
       - code
       - developer
       - ergonomic
+      - coding
+      - vscode
+      - terminal
+      - github
+      - copilot
+      - cursor
+      - ide
       category: hardware
       networks:
         amazon:
@@ -975,6 +1257,15 @@ niches:
       - learn ai
       - tutorial
       - bootcamp
+      - course
+      - python
+      - pytorch
+      - tensorflow
+      - openai
+      - anthropic
+      - claude
+      - chatgpt
+      - prompt engineering
       category: educational
       networks:
         amazon_us:
@@ -989,6 +1280,11 @@ niches:
       - second screen
       - travel monitor
       - external display
+      - remote work
+      - work from home
+      - dual screen
+      - second monitor
+      - productivity
       category: hardware
       networks:
         amazon:
