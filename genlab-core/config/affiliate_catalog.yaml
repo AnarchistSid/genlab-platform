@@ -7,7 +7,8 @@ settings:
   - amazon
   disclosure_text:
     instagram: '#affiliate'
-    youtube: This description contains affiliate links — we may earn a small commission at no extra cost to you.
+    youtube: This description contains affiliate links — we may earn a small commission
+      at no extra cost to you.
     facebook: '#affiliate'
     twitter: '#ad #affiliate'
     threads: '#ad #affiliate'
@@ -37,9 +38,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CY5QW186
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/ps5
-          commission_pct: 6.5
       image_url: https://m.media-amazon.com/images/I/61SUj2aKoEL._SL1500_.jpg
       price_inr: 49990
       coupons:
@@ -68,9 +66,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GHJZ9QSN
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/gamepass
-          commission_pct: 5.0
       image_url: https://m.media-amazon.com/images/I/81yGTbk4cJL._SL1500_.jpg
       price_inr: 699
     - name: Razer Gaming Headset
@@ -108,18 +103,9 @@ niches:
       - response time
       category: hardware
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0CP7SV7XV?tag=***REMOVED***
-          commission_pct: 3.0
         amazon_us:
           url: https://www.amazon.com/dp/B0CP7SV7XV?tag=***REMOVED***
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CP7SV7XV
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/gaming-monitor-4k
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81Pz0DcfP3L._AC_SL1500_.jpg
       price_inr: 25000
     - name: Mechanical Gaming Keyboard
@@ -132,18 +118,9 @@ niches:
       - hot swap
       category: peripheral
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0FQJ3HBBW?tag=***REMOVED***
-          commission_pct: 4.0
         amazon_us:
           url: https://www.amazon.com/dp/B0FQJ3HBBW?tag=***REMOVED***
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FQJ3HBBW
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/mechanical-gaming-keyboard
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71iz1MXIpzL._AC_SL1500_.jpg
       price_inr: 5999
     - name: Gaming Chair
@@ -165,9 +142,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVXRZJ12
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/gaming-chair
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71i1brfkBbL._AC_SL1500_.jpg
       price_inr: 15000
     - name: Steam Deck
@@ -180,18 +154,9 @@ niches:
       - pc gaming
       category: hardware
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0FM6C3ZMN?tag=***REMOVED***
-          commission_pct: 3.0
         amazon_us:
           url: https://www.amazon.com/dp/B0FM6C3ZMN?tag=***REMOVED***
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FM6C3ZMN
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/steam-deck
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61gZGeavWGL._SL1500_.jpg
       price_inr: 39999
     - name: Gaming Mouse
@@ -213,9 +178,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB086PJKVVT
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/gaming-mouse
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51z74wV2iHL._AC_SL1500_.jpg
       price_inr: 4999
     - name: Webcam for Streaming
@@ -237,9 +199,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LXCDPPK
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/webcam-for-streaming
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61lsdoyu1yL._AC_SL1500_.jpg
       price_inr: 7999
     - name: Capture Card
@@ -261,9 +220,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FFTFYGLV
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/capture-card
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51n-AAn1UBL._AC_SL1500_.jpg
       price_inr: 12999
   sports:
@@ -307,9 +263,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0C8THZHJ5?tag=***REMOVED***
           commission_pct: 4.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/nike-shoes
-          commission_pct: 9.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY
           commission_pct: 7.0
@@ -355,9 +308,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVGBMH9B
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/fitness-tracker
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61SoFSyvIsL._AC_SL1000_.jpg
       price_inr: 3999
     - name: Protein Supplement
@@ -371,18 +321,9 @@ niches:
       - nutrition
       category: supplement
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B01N7VLTW3?tag=***REMOVED***
-          commission_pct: 4.0
         amazon_us:
           url: https://www.amazon.com/dp/B01N7VLTW3?tag=***REMOVED***
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01N7VLTW3
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/protein-supplement
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71tUNZ7QFgL._AC_SL1500_.jpg
       price_inr: 2499
     - name: Yoga Mat
@@ -405,9 +346,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LP0V4JY
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/yoga-mat
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/7153xLfdwAL._AC_SL1500_.jpg
       price_inr: 1499
     - name: Cricket Bat
@@ -421,18 +359,9 @@ niches:
       - batting
       category: gear
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B09P8PDXKT?tag=***REMOVED***
-          commission_pct: 5.0
         amazon_us:
           url: https://www.amazon.com/dp/B09P8PDXKT?tag=***REMOVED***
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09P8PDXKT
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/cricket-bat
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71GWfVlY+7S._AC_SL1500_.jpg
       price_inr: 4999
     - name: Football Boots
@@ -446,18 +375,9 @@ niches:
       - puma
       category: gear
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0DQ8QSYXJ?tag=***REMOVED***
-          commission_pct: 5.0
         amazon_us:
           url: https://www.amazon.com/dp/B0DQ8QSYXJ?tag=***REMOVED***
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DQ8QSYXJ
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/football-boots
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51yfCVkHa6L._AC_SL1000_.jpg
       price_inr: 5999
     - name: Sports Watch
@@ -479,9 +399,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CG6NR413
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/sports-watch
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61A4yOWzGBL._AC_SL1500_.jpg
       price_inr: 15999
     - name: Gym Bag
@@ -503,9 +420,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FBR9ML3P
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/gym-bag
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81eu29zjzpL._AC_SL1500_.jpg
       price_inr: 1999
   movies:
@@ -524,12 +438,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B078J21W75?tag=***REMOVED***
           commission_pct: 2.0
-        cuelinks:
-          url: https://example.com/affiliate/cuelinks/netflix
-          commission_pct: 10.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/netflix
-          commission_pct: 8.0
       image_url: https://m.media-amazon.com/images/I/51BU2adIfsL._SL1500_.jpg
       price_inr: 649
     - name: Amazon Prime Video
@@ -569,9 +477,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DV3R2QM6
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/jbl-soundbar
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
       price_inr: 24999
       coupons:
@@ -598,9 +503,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F832HNG4
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/4k-projector
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71lu-a3Ld0L._AC_SL1500_.jpg
       price_inr: 45000
     - name: Streaming Stick
@@ -622,9 +524,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09BKCDXZC
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/streaming-stick
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
       price_inr: 3999
     - name: Wireless Earbuds
@@ -647,9 +546,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FHWGB7FW
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/wireless-earbuds
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71sWRy5QxIL._AC_SL1500_.jpg
       price_inr: 7999
     - name: Smart TV 55 inch
@@ -672,9 +568,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DW3YPBL1
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/smart-tv-55-inch
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81-jxVhtlrL._AC_SL1500_.jpg
       price_inr: 35000
     - name: Blu-ray Player
@@ -697,9 +590,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G29HRZYF
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/blu-ray-player
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51KlkOmTEvL._AC_SL1500_.jpg
       price_inr: 15000
     - name: Popcorn Maker
@@ -720,9 +610,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DRCZQYHW
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/popcorn-maker
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61PvUFOLVoL._AC_SL1500_.jpg
       price_inr: 1999
     - name: JioHotstar
@@ -735,18 +622,9 @@ niches:
       - streaming india
       category: subscription
       networks:
-        amazon:
-          url: https://www.amazon.in/s?k=Disney+Plus+Hotstar+subscription&tag=***REMOVED***
-          commission_pct: 2.0
         amazon_us:
           url: https://www.amazon.com/s?k=Disney+Plus+Hotstar+subscription&tag=***REMOVED***
           commission_pct: 2.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fs%3Fk%3DDisney%2BPlus%2BHotstar%2Bsubscription
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/disney+-hotstar
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
       price_inr: 899
   anime:
@@ -761,13 +639,7 @@ niches:
       - simulcast
       - seasonal anime
       category: subscription
-      networks:
-        cuelinks:
-          url: https://example.com/affiliate/cuelinks/crunchyroll
-          commission_pct: 8.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/crunchyroll
-          commission_pct: 6.0
+      networks: {}
       image_url: https://example.com/images/crunchyroll.jpg
       price_inr: 79
     - name: One Piece Manga Box Set
@@ -812,9 +684,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DBFCVNC3
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/anime-figure
-          commission_pct: 6.5
       image_url: https://m.media-amazon.com/images/I/6124DoY4M+L._SL1200_.jpg
       price_inr: 2499
     - name: Drawing Tablet
@@ -836,9 +705,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB009EOLFA2
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/drawing-tablet
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51HGkqKcR-L._AC_SL1500_.jpg
       price_inr: 8999
     - name: Anime Hoodie
@@ -860,9 +726,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F9N5B6Z9
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/anime-hoodie
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71HKfMVhQ3L._AC_SL1500_.jpg
       price_inr: 1999
     - name: Manga Subscription Box
@@ -875,18 +738,9 @@ niches:
       - viz media
       category: subscription
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B000KH9PAY?tag=***REMOVED***
-          commission_pct: 2.0
         amazon_us:
           url: https://www.amazon.com/dp/B000KH9PAY?tag=***REMOVED***
           commission_pct: 2.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB000KH9PAY
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/manga-subscription-box
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/51hcUqEvHCL.jpg
       price_inr: 2499
     - name: Anime Poster Set
@@ -908,9 +762,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FRXPCN9G
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/anime-poster-set
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/810d9tRiOFL._AC_SL1500_.jpg
       price_inr: 999
     - name: Cosplay Accessories
@@ -923,18 +774,9 @@ niches:
       - convention
       category: merchandise
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0FDB8NYLP?tag=***REMOVED***
-          commission_pct: 5.0
         amazon_us:
           url: https://www.amazon.com/dp/B0FDB8NYLP?tag=***REMOVED***
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FDB8NYLP
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/cosplay-accessories
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/612Sp-WvEyL._SL1500_.jpg
       price_inr: 1499
     - name: Light Novel Set
@@ -956,9 +798,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1646092724
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/light-novel-set
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/916EuMaqYNL._SL1500_.jpg
       price_inr: 3499
     - name: Funko Pop Anime
@@ -980,9 +819,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09HN5JFW9
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/funko-pop-anime
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61uhh0jZIQL._AC_SL1300_.jpg
       price_inr: 999
   ai_creators:
@@ -1001,10 +837,7 @@ niches:
       - language model
       - llm
       category: tool
-      networks:
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/chatgpt-plus
-          commission_pct: 5.0
+      networks: {}
       image_url: https://example.com/images/chatgpt.jpg
       price_inr: 1680
     - name: Midjourney Subscription
@@ -1017,10 +850,7 @@ niches:
       - ai generation
       - diffusion
       category: tool
-      networks:
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/midjourney
-          commission_pct: 5.0
+      networks: {}
       image_url: https://example.com/images/midjourney.jpg
       price_inr: 800
     - name: NVIDIA RTX 4090
@@ -1047,9 +877,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BHD9TS9Q
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/rtx-4090
-          commission_pct: 5.5
       image_url: https://m.media-amazon.com/images/I/81SmwFXiirL._SL1500_.jpg
       price_inr: 159900
     - name: AI Microphone
@@ -1072,9 +899,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BXPFNNF9
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/ai-microphone
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71QclY4ig4L._AC_SL1500_.jpg
       price_inr: 5999
     - name: Ring Light
@@ -1096,9 +920,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DCSHSSFF
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/ring-light
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61FeV2kuB7L._AC_SL1500_.jpg
       price_inr: 2499
     - name: Green Screen
@@ -1119,9 +940,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G58979LS
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/green-screen
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/61i5eTZnhtL._AC_SL1500_.jpg
       price_inr: 1999
     - name: Coding Keyboard
@@ -1144,9 +962,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DF7Y1NZD
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/coding-keyboard
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81s5PDK7OBL._AC_SL1500_.jpg
       price_inr: 8999
     - name: AI Course Bundle
@@ -1162,18 +977,9 @@ niches:
       - bootcamp
       category: educational
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0BSMSV1NL?tag=***REMOVED***
-          commission_pct: 4.0
         amazon_us:
           url: https://www.amazon.com/dp/B0BSMSV1NL?tag=***REMOVED***
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BSMSV1NL
-          commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/ai-course-bundle
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81RnKN6BRuL._SL1500_.jpg
       price_inr: 4999
     - name: Portable Monitor
@@ -1194,9 +1000,6 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB095GG31KX
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/portable-monitor
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/71k5N-RKVgL._AC_SL1500_.jpg
       price_inr: 12999
     - name: Claude Pro Subscription
@@ -1218,8 +1021,5 @@ niches:
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GSRSRYSH
           commission_pct: 7.0
-        earnkaro:
-          url: https://example.com/affiliate/earnkaro/claude-pro-subscription
-          commission_pct: 6.0
       image_url: https://m.media-amazon.com/images/I/81MCJnvo2KL._SL1500_.jpg
       price_inr: 1680
