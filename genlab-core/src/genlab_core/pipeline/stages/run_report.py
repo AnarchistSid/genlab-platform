@@ -142,6 +142,20 @@ class RunReport:
             for v in slo_violations:
                 logger.warning("[RunReport] SLO VIOLATION: %s", v)
 
+        # Push dashboard notification event
+        try:
+            from genlab_core.observability.dashboard_events import push_event
+            push_event(
+                "pipeline_complete",
+                f"Pipeline Complete: {niche_id}",
+                f"{blueprints_pushed} blueprints, {len(stories)} stories in {total_duration:.0f}s",
+                entity_id=run_id,
+                entity_type="pipeline_run",
+                niche_id=niche_id,
+            )
+        except Exception:
+            pass  # non-fatal
+
         return context
 
     @staticmethod
