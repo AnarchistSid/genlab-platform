@@ -1047,10 +1047,11 @@ class BacklogClient:
         plays = insights.get("plays", 0) or insights.get("views", 0) or 0
         impressions = insights.get("impressions", 0) or reach
 
-        engagement_rate = round(engagement / max(reach, 1), 4)
-        save_rate = round(saves / max(reach, 1), 4)
-        share_rate = round(shares / max(reach, 1), 4)
-        play_rate = round(plays / max(reach, 1), 4)
+        # Only compute rates when reach > 0 — dividing by 1 when reach=0 inflates rates
+        engagement_rate = round(engagement / reach, 4) if reach > 0 else 0.0
+        save_rate = round(saves / reach, 4) if reach > 0 else 0.0
+        share_rate = round(shares / reach, 4) if reach > 0 else 0.0
+        play_rate = round(plays / reach, 4) if reach > 0 else 0.0
 
         # Virality score: caller can pass a pre-computed config-driven
         # score; otherwise fall back to a generic weighted formula.
