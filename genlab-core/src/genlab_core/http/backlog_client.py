@@ -1032,7 +1032,11 @@ class BacklogClient:
         viral_score: float | None = None,
         niche_id: str = "",
     ) -> str | None:
-        composite_id = f"{platform}:{post_id}"
+        # Avoid double-prefixing: post_id may already be 'youtube:ABC123'
+        if post_id.startswith(f"{platform}:"):
+            composite_id = post_id
+        else:
+            composite_id = f"{platform}:{post_id}"
 
         reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
         engagement = insights.get("engagement", 0) or 0
