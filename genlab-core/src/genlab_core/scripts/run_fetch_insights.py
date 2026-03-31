@@ -152,6 +152,17 @@ def _get_eligible_records(
     return eligible
 
 
+def _strip_platform_prefix(post_id: str) -> str:
+    """Strip the 'platform:' prefix from a post ID.
+
+    Publishing stores IDs as 'instagram:DWigzIKDeR5' but platform APIs
+    need the raw ID 'DWigzIKDeR5'.
+    """
+    if ":" in post_id:
+        return post_id.split(":", 1)[1]
+    return post_id
+
+
 def _fetch_platform_insights(
     platform: str,
     post_id: str,
@@ -162,30 +173,78 @@ def _fetch_platform_insights(
     Uses per-niche credentials via niche_credentials to avoid cross-channel
     token leakage.
     """
+    # Strip 'platform:' prefix — DB stores 'instagram:ABC' but APIs need 'ABC'
+    raw_id = _strip_platform_prefix(post_id)
+    if not raw_id:
+        return None
+
     try:
         if platform == "instagram":
-            return _fetch_instagram(post_id, niche_id=niche_id)
+            return _fetch_instagram(raw_id, niche_id=niche_id)
         elif platform == "youtube":
-            return _fetch_youtube(post_id)
+            return _fetch_youtube(raw_id)
         elif platform == "facebook":
-            return _fetch_facebook(post_id, niche_id=niche_id)
+            return _fetch_facebook(raw_id, niche_id=niche_id)
         elif platform in ("x", "twitter", "x_twitter"):
-            return _fetch_twitter(post_id)
+            return _fetch_twitter(raw_id)
         else:
             logger.debug("No fetcher for platform: %s", platform)
             return None
     except Exception:
-        logger.exception("Platform fetch failed: %s/%s", platform, post_id)
+        logger.exception("Platform fetch failed: %s/%s", platform, raw_id)
         return None
+
+
+def _resolve_ig_media_id(shortcode_or_id: str, token: str, ig_user_id: str) -> str | None:
+    """Convert an IG shortcode to a numeric media ID via the user's /media endpoint.
+
+    The publisher stores shortcodes (e.g. 'DWif8mKEjst') but the Graph API
+    insights endpoints require numeric media IDs (e.g. '18054219725706846').
+    If the input is already numeric, returns it as-is.
+    """
+    if shortcode_or_id.isdigit():
+        return shortcode_or_id
+
+    if not ig_user_id:
+        return None
+
+    import requests as _req
+    # Search recent media for the matching shortcode
+    resp = _req.get(
+        f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
+        params={
+            "fields": "id,shortcode",
+            "limit": 50,
+            "access_token": token,
+        },
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        return None
+
+    for item in resp.json().get("data", []):
+        if item.get("shortcode") == shortcode_or_id:
+            return item["id"]
+
+    logger.debug("IG shortcode '%s' not found in recent media", shortcode_or_id)
+    return None
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
     """Fetch IG metrics via graph.facebook.com using per-niche credentials."""
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
-    token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
+    meta_creds = resolve_meta_credentials(niche_id)
+    token = meta_creds.get("ig_access_token", "")
+    ig_user_id = meta_creds.get("ig_user_id", "")
     if not token:
         logger.debug("IG token not set for niche '%s' — skipping", niche_id)
+        return None
+
+    # Resolve shortcode to numeric media ID if needed
+    media_id = _resolve_ig_media_id(post_id, token, ig_user_id)
+    if not media_id:
+        logger.debug("Could not resolve IG media ID for '%s'", post_id)
         return None
 
     import requests
@@ -193,7 +252,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
 
     # Basic metrics
     r = requests.get(
-        f"{api_base}/{post_id}",
+        f"{api_base}/{media_id}",
         params={"fields": "like_count,comments_count,media_type", "access_token": token},
         timeout=15,
     )
@@ -204,7 +263,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
 
     # Reels insights — v22.0+ deprecated plays; use full metric set
     insights_resp = requests.get(
-        f"{api_base}/{post_id}/insights",
+        f"{api_base}/{media_id}/insights",
         params={
             "metric": "reach,saved,shares,likes,comments,total_interactions,ig_reels_video_view_total_time",
             "access_token": token,
