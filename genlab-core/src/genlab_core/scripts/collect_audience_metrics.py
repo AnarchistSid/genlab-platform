@@ -72,7 +72,7 @@ def _env(prefix: str, key: str) -> str:
 def fetch_instagram(prefix: str) -> dict[str, Any]:
     """Fetch IG followers, media_count."""
     token = _env(prefix, "META_ACCESS_TOKEN")
-    user_id = _env(prefix, "IG_USER_ID")
+    user_id = _env(prefix, "IG_USER_ID") or os.environ.get("META_IG_USER_ID", "")
     if not token or not user_id:
         return {}
     try:
@@ -123,7 +123,7 @@ def fetch_youtube(prefix: str) -> dict[str, Any]:
 def fetch_facebook(prefix: str) -> dict[str, Any]:
     """Fetch FB page followers/fans."""
     token = _env(prefix, "FB_PAGE_ACCESS_TOKEN")
-    page_id = _env(prefix, "FB_PAGE_ID")
+    page_id = _env(prefix, "FB_PAGE_ID") or os.environ.get("META_FB_PAGE_ID", "")
     if not token or not page_id:
         return {}
     try:
