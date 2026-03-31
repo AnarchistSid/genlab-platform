@@ -803,6 +803,32 @@ def run_publish(
     except Exception as exc:
         logger.error("[publish] Failed to update final status: %s", exc)
 
+    # Push dashboard notification event
+    try:
+        from genlab_core.observability.dashboard_events import push_event
+        hook_text = (fields.get("hook_text") or fields.get("hook") or fields.get("title") or "")[:50]
+        success_platforms = [p for p, s in platform_status.items() if s == "PUBLISHED"]
+        if any_success:
+            push_event(
+                "publish_success",
+                f"Published: {hook_text}",
+                f"{len(success_platforms)} platform(s): {', '.join(success_platforms)}",
+                entity_id=record_id,
+                entity_type="blueprint",
+                niche_id=niche_id,
+            )
+        elif final_status == "PUBLISH_FAILED":
+            push_event(
+                "publish_failure",
+                f"Publish failed: {hook_text}",
+                f"All {attempt_count} attempts failed",
+                entity_id=record_id,
+                entity_type="blueprint",
+                niche_id=niche_id,
+            )
+    except Exception:
+        pass  # non-fatal
+
     # 8. Register PendingFeedback for the learning loop (bandit updates)
     if any_success:
         try:
