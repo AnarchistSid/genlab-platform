@@ -197,47 +197,13 @@ Other channels: try hard to find a clip; only skip if truly none exists.
 - FB tokens are permanent EAA Page Tokens (expires_at=0) via the project's Meta app
 - **Never run env consolidation AFTER token provisioning** — stale values overwrite fresh ones
 
-## PIPELINE SCHEDULE (Sprint 62, timezone fix Sprint 68)
+## PIPELINE SCHEDULE
 
-**CRITICAL: launchd `StartCalendarInterval` uses LOCAL TIME (IST), NOT UTC.**
-All plist Hour/Minute values must be in IST. After any plist change, run:
-```bash
-bash scripts/verify_launchd_schedules.sh
-```
+<!-- Pipeline schedule details moved to local config. See runbooks/ for plist templates. -->
+Pipelines run via launchd on macOS. Each channel has its own schedule.
+Publisher runs after all pipelines complete. Insights collector runs twice daily.
 
-| Channel | IST | UTC | Plist |
-|---------|-----|-----|-------|
-| BB | 08:00 | 02:30 | com.genlab.daily-intel |
-| CR (gaming) | 09:30 | 04:00 | com.genlab.criticalrush |
-| FD (anime) | 11:30 | 06:00 | com.genlab.framedrift |
-| SR (movies) | 13:30 | 08:00 | com.genlab.splicereel |
-| CW (sports) | 15:30 | 10:00 | com.genlab.clutchwire |
-| Publisher | 12:05 | 06:35 | com.genlab.publisher |
-| Insights | 12:15+18:00 | 06:45+12:30 | com.genlab.insights-collector |
-
-Publish window: 06:30 UTC (12:00 IST) — PushToBacklog schedules at this time.
-Publisher runs at 12:05 IST (5 min buffer after posts become due).
-
-### Additional LaunchAgents (23 total)
-
-| Service | Plist | Purpose |
-|---------|-------|---------|
-| Review server | com.genlab.review-server | Dashboard (KeepAlive) |
-| Review tunnel | com.genlab.review-tunnel | Cloudflare tunnel for dashboard |
-| Engagement poller | com.genlab.engagement-poller | YouTube/Twitter/Threads comment polling |
-| Engagement webhook | com.genlab.engagement.webhook | Meta webhook receiver |
-| Engagement worker | com.genlab.engagement.worker | Dramatiq reply workers |
-| Metric collector | com.genlab.metric-collector | Post-publish metric collection |
-| Feedback collector | com.genlab.feedback-collector | Learning loop feedback |
-| Cleanup | com.genlab.cleanup | Log/artifact rotation |
-| DB maintenance | com.genlab.db-maintenance | VACUUM ANALYZE |
-| Quota monitor | com.genlab.quota-monitor | YouTube API quota tracking |
-| Token refresh | com.genlab.token-refresh | Threads/Meta token refresh |
-| Affiliate link check | com.genlab.affiliate-link-check | Affiliate URL health monitor |
-| Daily verify | com.genlab.daily-verify | Post-pipeline verification |
-| Morning briefing | com.genlab.morning-briefing | Daily status summary |
-| Spike detector | com.genlab.spike-detector | Engagement spike alerts |
-| Viral detector | com.genlab.viral-detector | Viral content detection |
+<!-- LaunchAgent table removed — see runbooks/ for the full list of services. -->
 
 ## DEDUP ARCHITECTURE (Sprint 62)
 
@@ -415,61 +381,5 @@ FrameDrift is ANIME (not fashion — that was a legacy description bug fixed in 
 
 ---
 
-## HUMAN ACTION ITEMS OUTSTANDING
-
-| # | Action | Blocker for |
-|---|---|---|
-| H1 | ElevenLabs API key → BlackboxBrief/.env | TTS quality |
-| H3 | YouTube quota increase (Google Cloud Console) | Multi-channel YT publishing |
-| H5 | Per-niche X/Twitter + Threads credentials (CW, SR, FD, CR) | X/Threads publishing |
-| H6 | SpliceReel FB page origin investigation (8,507 followers) | SR Facebook publishing |
-
----
-
-## CURRENT SPRINT STATUS (as of 2026-03-21)
-
-Completed: Sprints 1–67
-- Sprint 62: Dashboard overhaul, FrameCompositor video layout, schedule board
-- Sprint 63: Audit remediation, engagement reply clients, credential prefixes, SaaS tools
-- Sprint 64: Architecture refactor — base strategies, unified pipeline CLI, BB client migration
-- Sprint 65: Upgrade sweep — psycopg3, dep cleanup, CI, plist consolidation, BB extraction
-- Sprint 66: Comprehensive system remediation — 47 issues across all subsystems
-- Sprint 67: Affiliate monetization engine + pipeline debugging + BB v5.0 migration
-
-Sprint 67 highlights (affiliate monetization + pipeline fix):
-- **Affiliate monetization engine**: 16/16 v2 features built (50 products, 4 networks, 2 markets, geo-routing, CTA A/B bandit, seasonal rotation, revenue attribution, deep linking, email capture, retargeting pixels, link health monitoring, coupon display, revenue prediction, network registry, PA-API client stub, commission sync)
-- **JSONB null clobbering fix**: `_row_to_record()` was overwriting promoted column values with null from extra JSONB → gatekeeper blocked all approved blueprints → zero publishing
-- **yt-dlp fix**: Updated yt-dlp + switched from broken deno to node.js runtime for YouTube challenge solving → video downloads restored for all channels
-- **BB daily_intel.sh v4→v5 migration**: 600-line broken shell script (11 archived file references) → 60-line unified pipeline wrapper
-- **Env var fixes**: Added GENLAB_USE_POSTGRES + DATABASE_URL to all channel .env files
-- **147 new tests, 11 new Python modules in genlab_core/monetization/**
-- **23 posts published, 41 blueprints queued for coming days**
-
-Sprint 66 highlights (system-wide fix sprint):
-- **Table name mapping fix**: `PendingFeedback→pending_feedback`, `BanditArms→bandit_arms`,
-  `PendingEngagement→pending_engagement` (all 3 were querying non-existent tables)
-- **PushToBacklog field alignment**: `hook`, `title`, `video_id`, `video_url` now written
-  as promoted SQL columns (were going to `extra` JSONB, leaving promoted cols NULL)
-- **517 blueprint backfill**: all hooks/titles populated from JSONB
-- **Banned phrase enforcement**: programmatic post-check (not just LLM prompt instruction)
-- **Candidate ID stability**: hash uses `(story_id, niche_id, video_id)` not hook text
-- **Hook dedup across runs**: loads 50 recent hooks per niche, rejects exact dupes
-- **Content memory persistence**: URL-level dedup via `content_memory` table
-- **CDN upload redesign**: Cloudflare tunnel primary (100% reliable), litterbox/tmpfiles fallback
-- **Network readiness**: launch_wrapper.sh waits up to 60s for connectivity
-- **Google Trends caching**: 6h TTL + stale-cache fallback (no more seed keyword degradation)
-- **PendingFeedbackStore**: dual CamelCase/snake_case key lookup for Postgres compat
-- **Analytics writer**: populates `metric_type`, `value`, `collected_at`, `window`
-- **Dashboard pool cleanup**: `PostgresBackend.close()` via atexit (eliminates __del__ errors)
-- **Dashboard webhook forwarding**: Meta comment events forwarded to engagement server
-- **Health API**: PostgreSQL check + LaunchAgent status endpoint
-- **SQL injection prevention**: `_validate_table()` allowlist on all CRUD methods
-- **Negative keywords**: SpliceReel (roblox, minecraft), ClutchWire (anime, manga)
-- **Velocity thresholds**: ClutchWire lowered 2000→1000 (new channel growth-appropriate)
-- **FrameDrift threshold**: relevance raised 0.20→0.30
-- **Video dedup index**: `idx_bp_video_niche`, `idx_bp_hook_niche`
-- **Log rotation script**: `scripts/rotate_logs.sh` (10MB max, 7-day retention)
-- **Stale branch cleanup**: 15 worktree-agent branches deleted
-- **Test data cleanup**: rls_test/test records purged from 5 production tables
-
-Test baseline: genlab-core 1,976, BB 1,361, CW 136, SR 134, FD 143, Dashboard 235 — all green
+<!-- Internal action items and sprint notes removed for public repo. -->
+<!-- See project management tooling for current status. -->

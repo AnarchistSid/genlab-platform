@@ -6,12 +6,12 @@ settings:
   - amazon_us
   - amazon
   disclosure_text:
-    instagram: '#affiliate'
+    instagram: '#ad'
     youtube: This description contains affiliate links — we may earn a small commission
       at no extra cost to you.
-    facebook: '#affiliate'
-    twitter: '#ad #affiliate'
-    threads: '#ad #affiliate'
+    facebook: '#ad'
+    twitter: '#ad'
+    threads: '#ad'
   tracking:
     facebook_pixel_id: ''
     ga4_measurement_id: ''

@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: genlab
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-genlab_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: genlab
     ports:
       - "5432:5432"
@@ -41,7 +41,7 @@ services:
     env_file: .env
     environment:
       GENLAB_USE_POSTGRES: "true"
-      DATABASE_URL: postgresql://genlab:${POSTGRES_PASSWORD:-genlab_dev}@postgres:5432/genlab
+      DATABASE_URL: postgresql://genlab:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/genlab
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       GENLAB_PROJECT_ROOT: /app

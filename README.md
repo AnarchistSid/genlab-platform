@@ -43,6 +43,16 @@ Each channel has its own `config/` directory with YAML files for sources, scorin
 
 All credentials go in `.env` files (never committed). See `.env.example` for the full list.
 
+## Disclaimer
+
+This software is provided for educational and research purposes. Users are solely responsible for ensuring their use complies with all applicable laws, platform terms of service, and content policies. The authors are not responsible for any misuse of this software.
+
+By using this software, you agree to:
+- Comply with YouTube, Instagram, Facebook, X/Twitter, Threads, and TikTok terms of service
+- Obtain proper rights or licenses for any content you publish
+- Include appropriate disclosures for AI-generated content and affiliate links
+- Respect copyright and intellectual property rights
+
 ## License
 
 [MIT](LICENSE)

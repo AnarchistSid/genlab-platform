@@ -1,0 +1,39 @@
+AB_Tests:
+  column_count: 16
+  list_id: <LIST_ID>
+BanditArms:
+  column_count: 8
+  list_id: <LIST_ID>
+Analytics:
+  column_count: 18
+  list_id: <LIST_ID>
+Assets:
+  column_count: 15
+  list_id: <LIST_ID>
+Blueprints:
+  column_count: 44
+  list_id: <LIST_ID>
+Publishing_Analytics:
+  column_count: 11
+  list_id: <LIST_ID>
+Sources:
+  column_count: 10
+  list_id: <LIST_ID>
+Stories:
+  column_count: 14
+  list_id: <LIST_ID>
+Templates:
+  column_count: 12
+  list_id: <LIST_ID>
+Content_Memory:
+  column_count: 9
+  list_id: <LIST_ID>
+PendingEngagement:
+  column_count: 14
+  list_id: <LIST_ID>
+PendingFeedback:
+  column_count: 16
+  list_id: <LIST_ID>
+MonetisationProgress:
+  column_count: 12
+  list_id: <LIST_ID>

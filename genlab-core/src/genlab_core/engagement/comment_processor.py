@@ -85,6 +85,19 @@ def classify_reply_action(
     return "review"
 
 
+_BOT_DISCLOSURE_SUFFIX = " [automated reply]"
+
+
+def _append_bot_disclosure(text: str) -> str:
+    """Append bot disclosure suffix to a reply for transparency.
+
+    Ensures the disclosure is not duplicated if already present.
+    """
+    if text.rstrip().endswith("[automated reply]"):
+        return text
+    return text.rstrip() + _BOT_DISCLOSURE_SUFFIX
+
+
 # Per-platform reply rate caps (actions per hour).
 RATE_CAPS: dict[str, int] = {
     "instagram": 20,
@@ -452,7 +465,7 @@ def process_reply_event(event: dict) -> None:
             platform=platform,
             niche_id=niche_id,
             comment_text=comment_text,
-            reply_text=reply,
+            reply_text=_append_bot_disclosure(reply),
             author=event.get("author_name", "unknown"),
             confidence=confidence,
             tox_score=tox_score,
@@ -463,6 +476,9 @@ def process_reply_event(event: dict) -> None:
         return
 
     # action == "auto" — post immediately
+    # 5d. Append bot disclosure suffix for transparency
+    reply = _append_bot_disclosure(reply)
+
     # 6. Human-like timing delay
     delay = human_delay()
     logger.debug("Engagement: sleeping %.1fs before posting reply", delay)

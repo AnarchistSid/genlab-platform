@@ -50,7 +50,7 @@ _SHARED_SOURCES_PATH = _GENLAB_CORE_ROOT / "config" / "shared_sources.yaml"
 _YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 
 # feedparser user agent to avoid 403s
-_USER_AGENT = "GenLab/1.0 SharedIngestionPipeline (+https://aspirehub.ai)"
+_USER_AGENT = "GenLab/1.0 SharedIngestionPipeline (+https://github.com/genlab)"
 
 # Request timeout for RSS fetches
 _FETCH_TIMEOUT = 15
