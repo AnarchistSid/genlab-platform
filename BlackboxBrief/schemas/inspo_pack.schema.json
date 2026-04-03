@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Inspo Pack",
+  "description": "Curated Instagram patterns and templates",
+  "type": "object",
+  "required": ["week_of", "library_version", "patterns", "templates"],
+  "properties": {
+    "week_of": {
+      "type": "string",
+      "format": "date"
+    },
+    "library_version": {
+      "type": "string",
+      "pattern": "^v\\d+\\.\\d+$"
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern_id", "category", "description", "examples"],
+        "properties": {
+          "pattern_id": {
+            "type": "string",
+            "pattern": "^PAT_[A-Z0-9]{4}$"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["hook", "structure", "visual", "cta", "pacing"]
+          },
+          "description": {"type": "string"},
+          "examples": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "observed_in": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "effectiveness": {
+            "type": "string",
+            "enum": ["proven", "promising", "experimental"]
+          }
+        }
+      }
+    },
+    "templates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["template_id", "name", "format", "best_for", "constraints", "structure"],
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "pattern": "^TPL_[A-Z0-9]{4}$"
+          },
+          "name": {"type": "string"},
+          "format": {
+            "type": "string",
+            "enum": ["carousel", "reel", "static", "poll"]
+          },
+          "best_for": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["news", "tools", "prompts", "debate", "timeline", "data", "tutorial", "human_impact", "money", "creative", "pop_culture", "products", "safety"]
+            }
+          },
+          "constraints": {
+            "type": "object",
+            "properties": {
+              "max_slides": {"type": "integer", "minimum": 1, "maximum": 10},
+              "max_words_per_slide_title": {"type": "integer"},
+              "max_words_per_slide_body": {"type": "integer"},
+              "max_reel_seconds": {"type": "integer"},
+              "beat_cadence_seconds": {"type": "number"}
+            }
+          },
+          "structure": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "default_cta": {"type": "string"},
+          "pattern_refs": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    },
+    "anti_patterns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "why_avoid"],
+        "properties": {
+          "description": {"type": "string"},
+          "why_avoid": {"type": "string"}
+        }
+      }
+    }
+  }
+}

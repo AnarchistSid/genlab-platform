@@ -1,0 +1,354 @@
+# Instagram Reels Video Specification — Single Source of Truth
+#
+# All video rendering, validation, and auto-fix code should read from this file.
+# Two tiers: "platform" (what Instagram accepts) and "competitive" (what top
+# creators ship — @evolving.ai, @therundownai, etc.)
+#
+# Imported by:
+#   execution/validate_videos.py     — validation + auto-fix
+#   execution/render_text_overlays.py — text positioning
+#   execution/assemble_reel.py       — video assembly
+#   execution/utils/text_optimizer.py — adaptive font sizing
+#   execution/utils/background_animator.py — background generation
+#
+# Last calibrated: 2026-02-21 (based on @evolving.ai Reels analysis)
+
+# ═══════════════════════════════════════════════════════════════
+# Canvas
+# ═══════════════════════════════════════════════════════════════
+canvas:
+  width: 1080
+  height: 1920
+  aspect_ratio: "9:16"
+
+# ═══════════════════════════════════════════════════════════════
+# Platform Spec — what Instagram will accept (upload won't fail)
+# ═══════════════════════════════════════════════════════════════
+platform:
+  video:
+    codec: h264
+    profiles: ["main", "high", "baseline"]   # all accepted
+    level_max: 5.1
+    pixel_format: yuv420p
+    fps_min: 24.0
+    fps_max: 60.0
+    fps_target: 30
+    fps_tolerance: 0.5          # ±0.5 from target
+    bitrate_max_mbps: 25        # 25 Mbps ceiling
+    keyframe_interval_max: 5.0  # seconds
+
+  audio:
+    codec: aac
+    sample_rates: [44100, 48000]
+    channels_max: 2             # stereo
+    bitrate_min: 64000          # 64 kbps floor
+    bitrate_max: 320000         # 320 kbps ceiling
+
+  duration:
+    min_seconds: 3.0
+    max_seconds: 900.0
+
+  file:
+    max_size_mb: 100
+    container: mp4
+    faststart: true             # moov atom before mdat
+
+  color:
+    space: bt709
+    primaries: bt709
+    trc: bt709
+
+# ═══════════════════════════════════════════════════════════════
+# Competitive Spec — what @evolving.ai ships (engagement-optimized)
+# These are stricter than platform spec. Auto-fix targets these.
+# ═══════════════════════════════════════════════════════════════
+competitive:
+  video:
+    profile: main               # Main = best compatibility x quality
+    level: 4.1                  # 4.1 = designed for 1080p@30fps
+    fps: 30                     # exact 30fps, no tolerance
+    crf: 18                     # visually lossless
+    preset: medium              # encoding speed vs compression
+
+  audio:
+    sample_rate: 48000          # 48kHz studio standard
+    bitrate: 192000             # 192 kbps — high quality, not wasteful
+    bitrate_max: 256000         # 256 kbps ceiling
+    channels: 2                 # stereo
+
+  duration:
+    max_seconds: 60.0           # Engagement-optimal duration. NOTE: validate_videos.py uses 900s (full video policy per MEMORY.md)
+    sweet_spot_min: 15.0        # sweet spot for IG Reels
+    sweet_spot_max: 45.0        # optimal engagement window
+
+  encoding:
+    maxrate: "25M"              # VBV max bitrate
+    bufsize: "50M"              # VBV buffer size
+    bf: 2                       # B-frames for compression
+    g: 60                       # GOP size (keyframe every 2s at 30fps)
+
+# ═══════════════════════════════════════════════════════════════
+# Safe Zones — pixel regions to avoid for text/graphics
+#
+# Instagram overlays UI elements on top of Reels:
+#   Top:    status bar, username, "Follow" button
+#   Bottom: caption, audio label, share/like bar
+#   Right:  like, comment, share, save, remix buttons
+#   Left:   small left margin
+#
+# ASCII reference (1080x1920):
+#
+#   ┌──────────────────────────┐ 0
+#   │  ████ STATUS BAR ████   │
+#   │  @username · Follow      │
+#   │                          │ 250  ← SAFE_TOP
+#   │  ┌──────────────────┐   │
+#   │  │                  │   │
+#   │  │  SAFE TEXT AREA  │ ● │ ● = like/comment/share
+#   │  │   900 x 1350     │ ● │
+#   │  │                  │ ● │
+#   │  │                  │ ● │
+#   │  └──────────────────┘   │
+#   │                          │ 1600 ← SAFE_BOTTOM (1920-320)
+#   │  ♫ Audio · Caption...    │
+#   │  ████ NAV BAR ████      │
+#   └──────────────────────────┘ 1920
+#     60                  960
+#     ↑                   ↑
+#     SAFE_LEFT      1080-SAFE_RIGHT
+#
+# ═══════════════════════════════════════════════════════════════
+safe_zones:
+  margins:
+    top: 250                    # status bar + username + follow
+    bottom: 320                 # caption + audio label + share bar
+    left: 60                    # left edge breathing room
+    right: 120                  # like/comment/share/save/remix column
+
+  # Derived safe text area (computed from margins above):
+  #   x: 60, y: 250, width: 900, height: 1350
+  #   center: (510, 925)
+  safe_area:
+    x: 60
+    y: 250
+    width: 900                  # 1080 - 60 - 120
+    height: 1350                # 1920 - 250 - 320
+    center_x: 510              # 60 + 900/2
+    center_y: 925              # 250 + 1350/2
+
+# ═══════════════════════════════════════════════════════════════
+# Text Positioning — vertical zones within the safe area
+#
+# The safe area (y: 250–1600) is divided into three zones:
+#   Hook:   top 30% of safe area (attention grab)
+#   Body:   middle 45% of safe area (main content)
+#   CTA:    bottom 25% of safe area (call to action / credit)
+# ═══════════════════════════════════════════════════════════════
+text_zones:
+  hook:
+    y_min: 250                  # safe area top
+    y_max: 655                  # 250 + 1350*0.30
+    purpose: "attention grab — bold, large text"
+    max_lines: 4
+    alignment: center
+
+  body:
+    y_min: 655
+    y_max: 1262                 # 250 + 1350*0.75
+    purpose: "main content — key facts, bullet points"
+    max_lines: 6
+    alignment: center
+
+  cta:
+    y_min: 1262
+    y_max: 1600                 # safe area bottom
+    purpose: "call to action, credit, source attribution"
+    max_lines: 2
+    alignment: center
+
+  # Positioning defaults used by render_text_overlays.py
+  layout:
+    hook_start_y_ratio: 0.10    # hook starts at 10% of canvas height
+    hook_start_y_short: 0.10    # ≤2 lines
+    hook_start_y_medium: 0.07   # 3-4 lines
+    hook_start_y_long: 0.05     # 5+ lines
+    body_gap_ratio: 1.5         # gap below hook = 1.5x body font size
+    body_max_y_ratio: 0.68      # body never pushed below 68% of canvas
+    body_fallback_y_ratio: 0.35 # body at 35% if no hook present
+    credit_margin_px: 40        # credit inset from bottom-right corner
+
+# ═══════════════════════════════════════════════════════════════
+# Typography — font sizes calibrated for 1080x1920 canvas
+#
+# Competitive spec — calibrated against @evolving.ai, @therundownai
+#   Hook:    120-160px bold (2-4 words/line, max 4 lines)
+#   Body:     56-72px  regular (6-10 words/line, max 6 lines)
+#   Caption:  42px     fixed (subtitle overlays)
+#   Credit:   34px     fixed (source attribution)
+#
+# Previous 80-110px hooks were too small on video backgrounds.
+# ═══════════════════════════════════════════════════════════════
+typography:
+  font_family: Inter
+  font_paths:
+    - "templates/fonts/InterVariable.ttf"
+    - "templates/fonts/Inter.ttc"
+
+  hook:
+    size_min: 120
+    size_max: 160
+    ideal_chars: 15             # max size at this length
+    overflow_chars: 40          # min size at this length (tighter)
+    max_width_ratio: 0.88       # max width as fraction of canvas
+    max_lines: 4
+    char_width_factor: 0.55     # Inter bold: avg char width
+    weight: bold
+
+  body:
+    size_min: 56
+    size_max: 72
+    ideal_chars: 40
+    overflow_chars: 180
+    max_width_ratio: 0.85
+    max_lines: 6
+    char_width_factor: 0.50     # Inter regular
+    weight: regular
+
+  caption:
+    size: 42                    # fixed — subtitle/overlay captions
+    ideal_chars: 40
+    overflow_chars: 80
+    max_width_ratio: 0.90       # captions can be wider
+    max_lines: 2
+    char_width_factor: 0.48     # Inter regular, tighter tracking
+    weight: regular
+
+  credit:
+    size: 34                    # fixed — source attribution
+    ideal_chars: 30
+    overflow_chars: 50
+    max_width_ratio: 0.40
+    max_lines: 1
+    char_width_factor: 0.48
+    weight: regular
+
+  # Fallback ratios (size / canvas_height) when optimizer unavailable
+  fallback_ratios:
+    hook: 0.083                 # 160 / 1920
+    body: 0.038                 # 72 / 1920
+    caption: 0.022              # 42 / 1920
+    credit: 0.018               # 34 / 1920
+
+  effects:
+    hook_shadow: "shadowcolor=black@0.9:shadowx=6:shadowy=6"
+    body_shadow: "shadowcolor=black@0.85:shadowx=4:shadowy=4"
+    caption_shadow: "shadowcolor=black@0.85:shadowx=3:shadowy=3"
+    credit_shadow: "shadowcolor=black@0.7:shadowx=2:shadowy=2"
+    credit_box: "box=1:boxcolor=black@0.6:boxborderw=12"
+
+# ═══════════════════════════════════════════════════════════════
+# Ken Burns / Animation defaults (assemble_reel.py)
+# ═══════════════════════════════════════════════════════════════
+animation:
+  ken_burns:
+    zoom_factor: 1.15           # 1.0 → 1.15 over duration
+    default_duration: 10        # seconds
+
+    # Weighted random effect selection (must sum to ~1.0)
+    effect_weights:
+      zoom_in: 0.40             # Slow zoom into center — most versatile
+      zoom_out: 0.20            # Reveal zoom — good for busy images
+      pan_left: 0.15            # Horizontal pan left — works on wide images
+      pan_right: 0.15           # Horizontal pan right — works on wide images
+      diagonal: 0.10            # Diagonal drift (zoom + pan) — subtle, natural feel
+
+    # Image analysis adjustments (multipliers applied to base weights)
+    image_analysis:
+      enabled: true             # Set false to disable analysis, use pure weights
+      wide_image_boost: 1.5     # Boost pan_left + pan_right for aspect > 1.5
+      tall_image_boost: 1.5     # Boost zoom_in for aspect < 0.7
+      face_zoom_boost: 2.0      # Boost zoom_in when face detected
+      face_pan_penalty: 0.5     # Reduce pan_left/pan_right when face detected
+      busy_image_reveal: 1.3    # Boost zoom_out for high edge density
+      clean_image_focus: 1.3    # Boost zoom_in for low edge density
+
+  # ── Word-by-word reveal animation ──────────────────────
+  # MrBeast/Hormozi/@evolving.ai competitive format.
+  # Each word appears individually with gold highlight, then
+  # fades to white. Supports A/B testing via config changes.
+  #
+  # Presets: tweak these for different pacing feels:
+  #   "punchy":  wpm=180, timing_per_word=0.33, transition=0.10
+  #   "default": wpm=150, timing_per_word=0.40, transition=0.15
+  #   "relaxed": wpm=120, timing_per_word=0.50, transition=0.20
+  word_by_word:
+    # Timing
+    wpm: 150                    # Words per minute (0.40s per word at 150)
+    timing_per_word: 0.40       # Derived: 60/wpm — included for clarity
+    start_delay: 0.30           # Seconds before first word appears
+    body_gap: 0.20              # Seconds between hook end and body start
+
+    # Colors — reference style: clean white text, no gold highlight
+    highlight_color: "#FFFFFF"  # White — matches reference Evolving AI style
+    base_color: "#FFFFFF"       # White — all text white
+    shadow_color: "#000000"     # Black — drop shadow behind all words
+    shadow_alpha: 0.7           # Shadow opacity (lighter for cleaner look)
+
+    # Transitions
+    transition_duration: 0.15   # Seconds for gold → transparent fade
+
+    # Layout
+    max_words_per_line: 6       # Soft limit (pixel-width wrapping overrides)
+    char_width_factor: 0.55     # Inter bold: estimated char width / font_size
+    space_width_factor: 0.30    # Inter: space width / font_size
+    line_height_factor: 1.45    # Line height as multiple of font_size
+
+  # ── Mid-reel re-engagement hook ────────────────────────
+  # Short text flash that appears mid-video to recapture attention.
+  # Only applies to videos > min_video_duration_seconds.
+  # Reference: Social Media Examiner — 34% watch time improvement.
+  # Pattern library: config/mid_reel_hooks.yaml
+  mid_reel_hook:
+    # Timing
+    appear_at_ratio: 0.45           # Appear at 45% of video duration
+    fade_in_seconds: 0.30           # Fade from transparent to full opacity
+    display_seconds: 2.50           # Hold at full opacity
+    fade_out_seconds: 0.30          # Fade from full to transparent
+    min_video_duration_seconds: 15  # Only inject for videos > 15s (duration_urgency tiers apply)
+
+    # Typography
+    font_size: 90                   # Between body (56-72) and hook (120-160)
+
+    # Colors — white to match reference style
+    colors:
+      - "#FFFFFF"                   # White (matches reference style)
+      - "#FFFFFF"                   # White (consistent)
+    shadow_color: "#000000"
+    shadow_alpha: 0.9
+    shadow_offset: 5
+
+    # Position — lower third, below body zone (y 655-1262)
+    y_position: 1150                # Centered in lower-third area
+    # x: auto-centered in safe zone (SAFE_LEFT to canvas_width - SAFE_RIGHT)
+
+# ═══════════════════════════════════════════════════════════════
+# Export / Rendering defaults
+# ═══════════════════════════════════════════════════════════════
+export:
+  ffmpeg_timeout_seconds: 120
+  default_duration: 10          # seconds (for generated content)
+  overwrite_on_fix: true        # auto-fix overwrites original
+
+# ═══════════════════════════════════════════════════════════════
+# Brand overlay
+# ═══════════════════════════════════════════════════════════════
+brand:
+  handle: "@blackbox.brief"
+  accent_colors:
+    primary: "#6366f1"          # Indigo
+    secondary: "#8b5cf6"        # Purple
+    accent: "#06b6d4"           # Cyan (CTAs)
+  watermark:
+    enabled: true
+    position: bottom_right
+    opacity: 0.3

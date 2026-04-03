@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.tmp/
+node_modules/
+*.log
+.DS_Store
+
+# Secrets & credentials
+credentials.json
+token.json
+*.pem
+
+# Hypothesis
+.hypothesis/
+
+# OS
+.DS_Store
+
+# Brand assets (logos, covers — not public)
+assets/*.png
+assets/logos/
+config/persona.yaml

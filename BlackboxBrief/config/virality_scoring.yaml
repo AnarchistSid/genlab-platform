@@ -1,0 +1,70 @@
+# Virality Scoring Configuration
+# Two weight sets: platform engagement signals + content feature predictors
+# Updated by execution/performance_learner.py weekly (Thompson Sampling + gradient)
+#
+# IMPORTANT: All weight groups must sum to 1.0 — performance_learner normalizes after updates.
+
+version: "1.0"
+last_updated: "2026-03-04"
+
+# ── Platform engagement signal weights ───────────────────────
+# How to combine raw API metrics into a single virality score (0-1)
+# Used by fetch_insights.py after fetching real engagement data
+platform_weights:
+  instagram:
+    sends: 0.35
+    saves: 0.25
+    watch_time: 0.15
+    comments: 0.15
+    ctr: 0.05
+    likes: 0.05
+  youtube:
+    watch_time: 0.35
+    ctr: 0.20
+    shares: 0.15
+    comments: 0.15
+    saves: 0.10
+    likes: 0.05
+  twitter:
+    retweets: 0.30
+    replies: 0.25
+    bookmarks: 0.20
+    profile_clicks: 0.15
+    likes: 0.10
+  facebook:
+    shares: 0.30
+    watch_time: 0.25
+    comments: 0.20
+    reactions: 0.15
+    saves: 0.10
+
+# ── Content feature weights (pre-publication prediction) ─────
+# Which content attributes predict virality BEFORE publishing
+# Used by virality_scorer.py at blueprint composition time
+# Sum must equal 1.0
+content_features:
+  hook_format_question: 0.25
+  pop_culture_reference: 0.20
+  named_ai_tool: 0.15
+  nostalgia_angle: 0.10
+  dollar_amount_mentioned: 0.08
+  before_after_comparison: 0.08
+  controversy_debate: 0.07
+  tutorial_how_to: 0.05
+  generic_showcase: 0.02
+
+# ── Thompson Sampling (multi-armed bandit for A/B testing) ───
+bandit:
+  algorithm: "thompson_sampling"
+  exploration_budget: 0.15
+  min_samples_before_exploit: 20
+  decay_factor: 0.95
+  update_cadence: "weekly"
+
+# ── Auto-adjustment safety guards ────────────────────────────
+auto_adjust:
+  min_posts_for_learning: 50
+  confidence_threshold: 0.80
+  max_weight_change_per_cycle: 0.05
+  alert_on_major_shift: true
+  learning_rate: 0.01

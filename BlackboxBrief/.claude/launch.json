@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "review-server",
+      "runtimeExecutable": "/Users/anarchistsid/GenLab/Content Scraper/venv/bin/python",
+      "runtimeArgs": ["execution/review_server.py", "--port", "5151"],
+      "port": 5151,
+      "autoPort": false
+    },
+    {
+      "name": "dashboard-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "cwd": "dashboard"
+    }
+  ]
+}

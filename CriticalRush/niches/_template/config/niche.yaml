@@ -1,0 +1,125 @@
+niche_id: "anime"
+display_name: "FrameDrift"
+channel_handle: "@framedrift"
+description: "Anime content pipeline — seasonal releases, manga adaptations, studio announcements, fan culture"
+
+brand_voice:
+  tone: "insider curator, warm, otaku-literate, community-driven"
+  forbidden_words: ["cheap", "affordable", "buy now", "limited supply"]
+  hook_style: "trend_observation"
+  emoji_style: "selective"
+
+target_audience:
+  primary: "Anime fans 16-30, seasonal watchers + manga readers"
+  secondary: "Anime-curious mainstream audience discovering new series"
+  interests: ["anime", "manga", "seasonal anime", "studio announcements", "fan art", "cosplay"]
+  platforms_primary: ["instagram", "youtube", "tiktok"]
+  platforms_secondary: ["x", "threads", "facebook"]
+
+accent_color: "#7B3FE4"
+
+brand_sensitivity:
+  protected_brands:
+    - Studio Ghibli
+    - MAPPA
+    - ufotable
+    - Toei Animation
+    - Shueisha
+    - Kadokawa
+    - Aniplex
+    - Bones
+  pexels_query_rule: "Use generic descriptors only (anime, cosplay, manga)"
+
+feature_flags:
+  use_live_publishing: true
+  platforms_enabled:
+    - youtube
+    - instagram
+    - facebook
+    - x_twitter
+    - tiktok
+    - threads
+  tiktok:
+    enabled: false
+    audit_approved: false
+    daily_post_limit: 12
+    posting_windows_utc: ["06:00", "12:00", "16:00"]
+  threads:
+    enabled: true
+    daily_post_limit: 4
+
+freshness:
+  decay_half_life_hours: 24.0
+  max_story_age_hours: 72
+  trend_cycle_modes:
+    emerging_window_hours: 24
+    peak_window_hours: 72
+    declining_threshold_hours: 96
+
+video_sourcing:
+  strategy: trending_youtube
+  niche_category: anime
+  max_age_hours: 48
+  top_n_per_run: 5
+  min_view_velocity: 400
+  use_google_trends: true
+  allow_keyword_search: true
+  video_gate: require
+  fallback_to_text_render: false
+  composite_quality_gate:
+    velocity_threshold: 600
+    min_composite_score: 0.30
+
+pipeline:
+  stages:
+    # Phase 0: Urgency classification
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # Phase 1: Ingestion
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.fetch_anime_promos.FetchAnimePromos
+      retries: 1
+      retry_delay_seconds: 15
+    - class: fd_strategies.content_research.AnimeContentResearchStrategy
+      retries: 1
+      retry_delay_seconds: 30
+    - class: fd_strategies.scoring.AnimeScoringStrategy
+    - class: genlab_core.media.download_top_videos.DownloadTopVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # Phase 2: Content generation
+    - class: fd_strategies.writing.AnimeWritingStrategy
+      retries: 1
+      retry_delay_seconds: 60
+    - class: fd_strategies.hooks.AnimeHookStrategy
+
+    # Phase 3: Quality gates
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # Phase 4: Rendering
+    - class: fd_strategies.visual_render.AnimeVisualRenderStrategy
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+      enabled: false
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # Phase 5: Publishing
+    - class: fd_strategies.platform_adaptation.AnimePlatformAdaptationStrategy
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+
+    # Phase 6: Analytics & Learning
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
+  max_items_per_run: 4
+  min_score_threshold: 0.42

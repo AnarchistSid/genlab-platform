@@ -1,0 +1,14 @@
+version: "3"
+services:
+  short-video-maker:
+    image: gyoridavid/short-video-maker:latest-tiny
+    environment:
+      - LOG_LEVEL=info
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+    ports:
+      - "3123:3123"
+    volumes:
+      - ./videos:/app/data/videos
+    restart: unless-stopped
+    mem_limit: 4g
+    cpus: 2.0

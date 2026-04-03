@@ -1,0 +1,110 @@
+niche_id: "ai_creators"
+display_name: "Blackbox Brief"
+channel_handle: "@blackbox.brief"
+accent_color: "#00D4FF"
+description: >
+  AI creator clip channel. Surfaces the most interesting, trending, and
+  mind-blowing moments from the AI creator community — demos, reactions,
+  breakthroughs, and "you have to see this" clips. Not a news channel.
+  Content is video-first, emotion-first.
+
+brand_voice:
+  tone: "excited, conversational, creator-adjacent"
+  forbidden_words: ["simply", "just", "easy", "basic"]
+  hook_style: "reaction_emotional"
+  forbidden_patterns:
+    - "According to..."
+    - "Reports suggest..."
+    - "The company announced..."
+  preferred_patterns:
+    - "I needed this"
+    - "This just happened and..."
+    - "No way this is real"
+    - "Everyone's talking about"
+    - "The AI community is losing it over"
+
+target_audience:
+  primary: "AI enthusiasts, developers, tech creators aged 18-35"
+  secondary: "creative professionals exploring AI tools"
+  interests: ["AI", "machine learning", "tech demos", "creator content", "AI art", "AI video"]
+
+feature_flags:
+  use_live_publishing: true
+  platforms_enabled:
+    - instagram
+    - youtube
+    - x_twitter
+    - facebook
+    - threads
+  tiktok:
+    enabled: false
+    audit_approved: false
+    daily_post_limit: 4
+
+video_sourcing:
+  strategy: trending_youtube
+  niche_category: ai_creators
+  max_age_hours: 48
+  top_n_per_run: 8
+  min_view_velocity: 200
+  use_google_trends: true
+  video_gate: require
+  fallback_to_text_render: false
+  composite_quality_gate:
+    velocity_threshold: 400
+    min_composite_score: 0.25
+
+pipeline:
+  stages:
+    # Phase 0: Urgency classification
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # Phase 1: Ingestion — YouTube trending + RSS
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: bb_strategies.content_research.BBContentResearchStrategy
+      retries: 1
+      retry_delay_seconds: 30
+    - class: bb_strategies.scoring.BBScoringStrategy
+
+    # Phase 2: Video download + gate
+    - class: genlab_core.media.download_top_videos.DownloadTopVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # Phase 3: Content generation
+    - class: bb_strategies.writing.BBWritingStrategy
+      retries: 1
+      retry_delay_seconds: 30
+    - class: bb_strategies.hooks.BBHookStrategy
+
+    # Phase 4: Quality gates
+    # Phase 4b: Affiliate matching
+    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # Phase 5: Rendering
+    - class: bb_strategies.visual_render.BBVisualRenderStrategy
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # Phase 6: Publishing
+    - class: bb_strategies.platform_adaptation.BBPlatformAdaptationStrategy
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+
+    # Phase 7: Analytics & Learning
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
+  max_items_per_run: 5
+  min_score_threshold: 0.25

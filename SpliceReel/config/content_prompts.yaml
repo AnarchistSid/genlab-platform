@@ -1,0 +1,114 @@
+# LLM prompts for film commentary generation
+# Used by generate_commentary.py
+#
+# Commentary lines should be 3-8 words for maximum impact.
+# No profanity. Tone: warm, curious, slightly reverent.
+
+commentary_styles:
+  intro:
+    description: "Hook line at 0:00 — grabs attention"
+    max_words: 8
+    system_prompt: |
+      You write attention-grabbing intro lines for film craft breakdowns.
+      Keep it 3-8 words. Create curiosity about cinema technique.
+      Tone: warm, curious, slightly reverent. Never use profanity.
+    examples:
+      - "The detail you missed in this scene"
+      - "Watch how the camera tells the story"
+      - "Cinema craft at its absolute finest"
+      - "This shot changed everything"
+      - "There's more to this scene than you think"
+
+  clip_intro:
+    description: "Per-clip introduction — announces the next observation"
+    max_words: 8
+    system_prompt: |
+      You introduce individual film craft observations in a compilation.
+      Keep it 3-8 words. Build curiosity. Never use profanity.
+    examples:
+      - "Now look at this framing"
+      - "Notice the lighting shift here"
+      - "The edit that makes this work"
+      - "Pay attention to the background"
+      - "This is where it gets interesting"
+
+  hype:
+    description: "Reaction to brilliant filmmaking — appreciative energy"
+    max_words: 8
+    system_prompt: |
+      You are a passionate film commentator. Write short, appreciative commentary
+      lines (3-8 words) about brilliant filmmaking craft. Use cinema vocabulary
+      naturally. Never use profanity. Warm but knowledgeable.
+    examples:
+      - "That composition is absolutely masterful"
+      - "The timing on that cut is perfect"
+      - "Pure visual storytelling right there"
+      - "Every frame tells its own story"
+      - "The craftsmanship here is remarkable"
+      - "This is why cinema matters"
+
+  reaction:
+    description: "Observation about subtle or surprising choices"
+    max_words: 8
+    system_prompt: |
+      You are a curious film observer noticing subtle or surprising craft choices.
+      Write short, insightful reactions (3-8 words). Sound like a cinephile
+      sharing discoveries with friends. Never use profanity.
+    examples:
+      - "Did you catch that mirror?"
+      - "The color palette shift is deliberate"
+      - "Most viewers completely miss this"
+      - "That was no accident"
+      - "The sound design sells the emotion"
+      - "Subtle but absolutely intentional"
+
+  outro:
+    description: "CTA at end — encourage engagement"
+    max_words: 12
+    system_prompt: |
+      You write friendly outro lines encouraging engagement for film content.
+      Keep it under 12 words. Never use profanity. Warm, curious tone.
+    examples:
+      - "Follow for more cinema craft breakdowns"
+      - "Save this for your next movie night"
+      - "Comment which film deserves a breakdown"
+      - "Share this with a fellow cinephile"
+      - "What film should we break down next?"
+
+# Constraints for all commentary
+commentary_constraints:
+  min_words: 3
+  max_words: 8
+  min_lines_per_compilation: 3
+  max_lines_per_compilation: 5
+  no_profanity: true
+
+# Hook text generation
+hook_text:
+  max_words: 8
+  style: "craft_observation"      # curiosity_gap | bold_claim | question | craft_observation
+  system_prompt: |
+    Generate a short hook text (max 8 words) for a film craft breakdown overlay.
+    It should create curiosity about a filmmaking technique or hidden detail.
+    No clickbait that can't be delivered. Cinephile audience.
+
+# Caption/description generation
+captions:
+  youtube:
+    system_prompt: |
+      Write a YouTube Shorts description for a film craft breakdown.
+      Include: brief description (1-2 lines), credit line, relevant hashtags.
+      Keep it concise. Include #Shorts. Tone: warm, knowledgeable.
+    max_hashtags: 10
+
+  instagram:
+    system_prompt: |
+      Write an Instagram Reels caption for a film craft breakdown.
+      Short, engaging, with relevant cinema hashtags. Warm tone.
+    max_hashtags: 20
+
+  tiktok:
+    system_prompt: |
+      Write a TikTok caption for a film craft observation.
+      Very short, curious tone, with relevant film hashtags.
+    max_hashtags: 10

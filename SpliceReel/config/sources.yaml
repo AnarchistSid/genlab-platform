@@ -1,0 +1,415 @@
+# SpliceReel content sources
+# Tier 1: TMDB trending + upcoming + now_playing (primary, richest metadata)
+# Tier 2: Entertainment RSS feeds (Deadline, Variety, Hollywood Reporter)
+# OMDb: enrichment only — called selectively by scoring stage, not in bulk
+# NOTE: RSS feeds in tier_2, tier_3, rss_feeds_extra, and youtube_channels are also
+# registered in shared_sources.yaml. Full config kept here for per-niche pipeline.
+
+tmdb:
+  base_url: "https://api.themoviedb.org/3"
+  endpoints:
+    trending_movies: "/trending/movie/week"
+    upcoming: "/movie/upcoming"
+    now_playing: "/movie/now_playing"
+  rate_limit_req_per_10s: 40
+  timeout_seconds: 10
+  image_base_url: "https://image.tmdb.org/t/p/w500"
+
+omdb:
+  base_url: "https://www.omdbapi.com"
+  timeout_seconds: 8
+
+tier_1:
+  refresh_interval_minutes: 30
+  sources:
+    - name: "TMDB Trending"
+      type: "api"
+      url: "https://api.themoviedb.org/3/trending/movie/day"
+      weight: 1.0
+    - name: "TMDB Now Playing"
+      type: "api"
+      url: "https://api.themoviedb.org/3/movie/now_playing"
+      weight: 1.0
+
+tier_2:
+  refresh_interval_minutes: 60
+  sources:
+    - name: "Deadline Hollywood"
+      type: "rss"
+      url: "https://deadline.com/feed/"
+      weight: 0.9
+    - name: "Variety"
+      type: "rss"
+      url: "https://variety.com/feed/"
+      weight: 0.9
+    - name: "Hollywood Reporter"
+      type: "rss"
+      url: "https://www.hollywoodreporter.com/feed/"
+      weight: 0.9
+    - name: "IGN Movies"
+      type: "rss"
+      url: "https://feeds.feedburner.com/ign/movies-articles"
+      weight: 0.8
+
+tier_3:
+  refresh_interval_minutes: 240
+  sources:
+    - name: "Screen Rant"
+      type: "rss"
+      url: "https://screenrant.com/feed/"
+      weight: 0.7
+    - name: "Collider"
+      type: "rss"
+      url: "https://collider.com/feed/"
+      weight: 0.7
+    - name: "IndieWire"
+      type: "rss"
+      url: "https://www.indiewire.com/feed/"
+      weight: 0.7
+
+youtube_channels:
+  - name: "FilmSelect Trailer"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCY2qt3dw2TQJxvBrDiYGHdQ"
+    type: "rss"
+    weight: 0.9
+    category: "movie_trailers"
+  - name: "Screen Junkies Honest Trailers"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCi8e0iOVk1fEOogdfu4YgfA"
+    type: "rss"
+    weight: 0.8
+    category: "movie_trailers"
+  - name: "IGN"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVtL1edhT8qqY-j2JIndMzg"
+    type: "rss"
+    weight: 0.7
+    category: "movie_reviews"
+  - name: "Screen Junkies"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A"
+    type: "rss"
+    weight: 0.7
+    category: "movie_commentary"
+
+tmdb_trailers:
+  enabled: true
+  prefer_official: true
+  types: ["Trailer", "Teaser"]
+
+rate_limit_per_hour: 200
+
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+reddit_sources:
+  - subreddit: r/movies
+    min_score: 5000
+    time_filter: day
+    content_type: any
+  - subreddit: r/boxoffice
+    min_score: 2000
+    time_filter: day
+    content_type: any
+  - subreddit: r/marvelstudios
+    min_score: 5000
+    time_filter: day
+    content_type: any
+
+# RSS feeds — entertainment trade press
+rss_feeds_extra:
+  - url: "https://deadline.com/feed/"
+    name: "Deadline Hollywood"
+    max_age_hours: 24
+  - url: "https://collider.com/feed/"
+    name: "Collider"
+    max_age_hours: 24
+
+source_filters:
+  reject_title_patterns:
+    - "opinion"
+    - "essay"
+    - "ranking"
+    - "best of"
+    - "worst of"
+    - "explained"
+    - "doesn't need to"
+    - "should give up"
+    - "here's why"
+    - "the case for"
+    - "the case against"
+    - "interview:"
+    - "analysis:"
+    - "weekly roundup"
+    - "podcast"
+  reject_topic_patterns:
+    - "opinion"
+    - "editorial"
+    - "podcast"
+  score_boost:
+    trailer: 0.15
+    "first look": 0.15
+    "official clip": 0.1
+
+media:
+  pexels:
+    cinematic_queries:
+      - "cinema movie theater dark"
+      - "film clapper board production"
+      - "popcorn movie night dark"
+      - "hollywood walk of fame night"
+      - "red carpet premiere crowd"
+      - "spotlight stage performance"
+
+content_filter:
+  relevance_threshold: 0.25
+  positive_keywords:
+    # Core terms
+    - trailer
+    - movie
+    - film
+    - cinema
+    - director
+    - actor
+    - actress
+    - box office
+    - premiere
+    - sequel
+    - prequel
+    - reboot
+    - remake
+    - franchise
+    - blockbuster
+    - scene
+    - clip
+    - reaction
+    - review
+    - breakdown
+    - explained
+    - ending explained
+    - behind the scenes
+    - bloopers
+    - deleted scene
+    - post credits
+    - cameo
+    - cast
+    - soundtrack
+    - score
+    # Awards
+    - oscar
+    - academy award
+    - golden globe
+    - bafta
+    - cannes
+    - sundance
+    - venice film festival
+    - best picture
+    - best actor
+    - best director
+    # Studios & Platforms
+    - hollywood
+    - netflix
+    - disney
+    - disney plus
+    - marvel
+    - mcu
+    - dc
+    - dceu
+    - warner bros
+    - universal
+    - paramount
+    - sony pictures
+    - a24
+    - lionsgate
+    - hbo max
+    - amazon prime
+    - apple tv
+    - hulu
+    - peacock
+    - pixar
+    - dreamworks
+    - illumination
+    - studio ghibli
+    # Genres
+    - horror
+    - thriller
+    - comedy
+    - drama
+    - action
+    - sci-fi
+    - fantasy
+    - romance
+    - documentary
+    - biopic
+    - noir
+    - western
+    - musical
+    - animation
+    - superhero
+    # Popular franchises
+    - star wars
+    - james bond
+    - fast and furious
+    - john wick
+    - mission impossible
+    - jurassic
+    - batman
+    - spider-man
+    - avengers
+    - lord of the rings
+    - harry potter
+    - dune
+    - oppenheimer
+    - barbie
+    - deadpool
+    - joker
+    - avatar
+    - transformers
+    - alien
+    - gladiator
+    - top gun
+    - wicked
+    # Creators
+    - spielberg
+    - nolan
+    - tarantino
+    - scorsese
+    - villeneuve
+    - peele
+    - gerwig
+    - gunn
+    - feige
+    - imax
+    - 4dx
+    - dolby
+    # Action terms (classifier needs 2+ hits)
+    - starring
+    - returns
+    - stars in
+    - directed by
+    - produced by
+    - streaming
+    - streaming now
+    - now streaming
+    - coming soon
+    - release
+    - releases
+    - releasing
+    - drops
+    - first trailer
+    - final trailer
+    - teaser
+    - official trailer
+    - sneak peek
+    - exclusive clip
+    - opening weekend
+    - worldwide gross
+    - domestic gross
+    - number one
+    - flop
+    - hit
+    - smash hit
+    - record breaking
+    - highest grossing
+    - certified fresh
+    - rotten
+    # TV/Streaming shows (content often overlaps)
+    - tv show
+    - series
+    - limited series
+    - miniseries
+    - season finale
+    - series finale
+    - renewed
+    - cancelled
+    - canceled
+    - showrunner
+    - pilot
+    - binge
+    # Major actors (high-signal, prevents misrouting)
+    - tom hanks
+    - tom cruise
+    - leonardo dicaprio
+    - brad pitt
+    - ryan gosling
+    - margot robbie
+    - zendaya
+    - timothee chalamet
+    - florence pugh
+    - anya taylor-joy
+    - keanu reeves
+    - dwayne johnson
+    - the rock
+    - robert downey jr
+    - chris hemsworth
+    - scarlett johansson
+    - cillian murphy
+    - denzel washington
+    - matt damon
+    - joaquin phoenix
+    - pedro pascal
+    - austin butler
+    - sydney sweeney
+    - jenna ortega
+    - glen powell
+    # Additional directors
+    - ridley scott
+    - james cameron
+    - wes anderson
+    - martin scorsese
+    - david fincher
+    - denis villeneuve
+    - christopher nolan
+    - jordan peele
+    - ari aster
+    - robert eggers
+    - greta gerwig
+    - chloe zhao
+    - bong joon-ho
+  negative_keywords:
+    - prank
+    - life hack
+    - motivational
+    - compilation funny
+    - try not to laugh
+    - cooking
+    - recipe
+    - workout
+    - meditation
+    - satisfying
+    - asmr
+    # Gaming / non-film animation
+    - roblox
+    - minecraft
+    - fortnite
+    - gacha
+    - gameplay
+    - speedrun
+    - lets play
+    - game walkthrough
+    # Non-film content
+    - tiktok compilation
+    - unboxing
+    - mukbang
+    - vlog
+    - haul
+    # Sports
+    - nba
+    - nfl
+    - premier league
+    - cricket
+    - ipl
+    - soccer highlights
+    # Finance / non-entertainment
+    - stock market
+    - crypto
+    - bitcoin
+    - investing
+    - real estate
+    - mutual fund
+    # Music (non-film)
+    - music video
+    - official audio
+    - lyric video
+    - live performance
+    # Anime (separate channel)
+    - anime
+    - manga
+    - dubbed
+    - subbed
+    - family vlog

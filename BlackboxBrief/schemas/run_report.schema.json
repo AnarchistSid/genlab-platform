@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Run Report",
+  "description": "Complete run execution report with SLO metrics",
+  "type": "object",
+  "required": ["run_id", "run_type", "start_time", "status", "metrics"],
+  "properties": {
+    "run_id": {"type": "string", "pattern": "^\\d{8}_\\d{6}(_.+)?$"},
+    "run_type": {
+      "type": "string",
+      "enum": ["daily_intel", "weekly_inspo", "nightly_eval", "on_demand"]
+    },
+    "start_time": {"type": "string"},
+    "end_time": {"type": "string"},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "status": {
+      "type": "string",
+      "enum": ["success", "partial", "failed"]
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "sources_attempted": {"type": "integer"},
+        "sources_succeeded": {"type": "integer"},
+        "items_fetched": {"type": "integer"},
+        "duplicates_removed": {"type": "integer"},
+        "stories_ranked": {"type": "integer"},
+        "clustering": {
+          "type": "object",
+          "properties": {
+            "total_clusters": {"type": "integer"},
+            "avg_cluster_size": {"type": "number"},
+            "singletons": {"type": "integer"},
+            "stories_in_multi_clusters": {"type": "integer"}
+          }
+        },
+        "claims": {
+          "type": "object",
+          "properties": {
+            "total_claims": {"type": "integer"},
+            "must_cite": {"type": "integer"},
+            "coverage_rate": {"type": "string"},
+            "risk_distribution": {"type": "object"},
+            "type_distribution": {"type": "object"}
+          }
+        },
+        "candidates_generated": {"type": "integer"},
+        "blueprint_filtering": {
+          "type": "object",
+          "properties": {
+            "before_diversity_filter": {"type": "integer"},
+            "after_diversity_filter": {"type": "integer"}
+          }
+        },
+        "qc_passed": {"oneOf": [{"type": "integer"}, {"type": "string", "enum": ["n/a"]}]},
+        "qc_failed": {"oneOf": [{"type": "integer"}, {"type": "string", "enum": ["n/a"]}]},
+        "qc_auto_fixed": {"type": "integer"},
+        "qc_pass_rate": {"type": "string"},
+        "budget_compliance": {
+          "type": "object",
+          "properties": {
+            "total_candidates": {"type": "integer"},
+            "compliant_candidates": {"type": "integer"},
+            "violation_count": {"type": "integer"},
+            "compliance_rate": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "format_distribution": {"type": "object"},
+        "media_assets_total": {"type": "integer"},
+        "media_assets_ready": {"type": "integer"},
+        "media_unique_global_assets": {"type": "integer"},
+        "media_global_urls_deduped": {"type": "integer"},
+        "backlog_upserts": {"type": "integer"},
+        "cache_entries": {"type": "integer"},
+        "cache_hit_rate": {"type": "number", "minimum": 0},
+        "fetch_methods": {"type": "object"},
+        "api_calls": {"type": "integer"},
+        "estimated_cost_usd": {"type": "number", "minimum": 0},
+        "llm_cost_usd": {"type": "number", "minimum": 0}
+      }
+    },
+    "slo_violations": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "stage", "message"],
+        "properties": {
+          "timestamp": {"type": "string"},
+          "stage": {"type": "string"},
+          "message": {"type": "string"},
+          "traceback": {"type": "string"},
+          "retry_count": {"type": "integer"}
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "trend_pack_path": {"type": "string"},
+        "claim_ledger_path": {"type": "string"},
+        "blueprint_pack_path": {"type": "string"},
+        "qc_result_path": {"type": "string"},
+        "backlog_sheet_url": {"type": "string"}
+      }
+    }
+  }
+}

@@ -1,0 +1,116 @@
+niche_id: "movies"
+display_name: "SpliceReel"
+channel_handle: "@splicereel"
+description: "Movies content pipeline — trailers, box office, cinema craft, film discourse"
+
+brand_voice:
+  tone: "cinephile, warm, curious, slightly reverent"
+  forbidden_words: ["spoiler alert", "must-see", "epic", "amazing"]
+  hook_style: "craft_observation"
+  emoji_style: "minimal"
+
+target_audience:
+  primary: "Film enthusiasts aged 20-40"
+  secondary: "Cinema craft fans, trailer watchers, streaming viewers"
+  interests: ["films", "cinema craft", "trailers", "director interviews", "box office", "streaming"]
+  platforms_primary: ["youtube", "instagram", "tiktok"]
+  platforms_secondary: ["x", "facebook", "threads"]
+
+accent_color: "#C9A84C"
+
+feature_flags:
+  use_live_publishing: true
+  platforms_enabled:
+    - youtube
+    - instagram
+    - facebook
+    - x_twitter
+    - tiktok
+    - threads
+  tiktok:
+    enabled: false
+    audit_approved: false
+    daily_post_limit: 12
+    posting_windows_utc: ["06:00", "12:00", "16:00"]
+  threads:
+    enabled: true
+    daily_post_limit: 4
+
+freshness:
+  decay_half_life_hours: 48.0
+  max_story_age_hours: 96
+  film_lifecycle_modes:
+    pre_release_days: 30
+    opening_weekend_hours: 72
+    long_tail_days: 21
+
+video_sourcing:
+  strategy: trending_youtube
+  niche_category: movies
+  max_age_hours: 48
+  top_n_per_run: 8
+  min_view_velocity: 200
+  use_google_trends: true
+  allow_keyword_search: true
+  video_gate: require
+  fallback_to_text_render: false
+  composite_quality_gate:
+    velocity_threshold: 400
+    min_composite_score: 0.25
+
+pipeline:
+  stages:
+    # Phase 0: Urgency classification
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # Phase 1: Ingestion
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.fetch_tmdb_trailers.FetchTMDBTrailers
+      retries: 1
+      retry_delay_seconds: 15
+    - class: sr_strategies.content_research.MovieContentResearchStrategy
+      retries: 1
+      retry_delay_seconds: 30
+    - class: sr_strategies.scoring.MovieScoringStrategy
+    - class: genlab_core.media.download_top_videos.DownloadTopVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # Phase 2: Content generation
+    - class: sr_strategies.writing.MovieWritingStrategy
+      retries: 1
+      retry_delay_seconds: 60
+    - class: sr_strategies.hooks.MovieHookStrategy
+
+    # Phase 3: Quality gates
+    # Phase 4b: Affiliate matching
+    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # Phase 4: Rendering
+    - class: sr_strategies.visual_render.MovieVisualRenderStrategy
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+      enabled: false
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # Phase 5: Publishing
+    - class: sr_strategies.platform_adaptation.MoviePlatformAdaptationStrategy
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+
+    # Phase 6: Analytics & Learning
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
+  max_items_per_run: 5
+  min_score_threshold: 0.40

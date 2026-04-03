@@ -1,0 +1,36 @@
+# ClutchWire publishing schedule (UTC)
+# 1 daily slot: 12:00 IST = 06:30 UTC
+
+publishing_windows:
+  - time: "06:30"
+    timezone: "UTC"
+    label: "12:00 IST"
+    description: "12:00 IST — midday content drop"
+    platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
+  - time: "14:00"
+    timezone: "UTC"
+    label: "19:30 IST"
+    description: "19:30 IST — evening content drop"
+    platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
+
+max_publishes_per_day: 1
+
+golden_window: "06:00-07:00"
+
+content_mix:
+  reels_percent: 100
+  carousels_percent: 0
+  stories_percent: 0
+
+blackout_periods: []
+
+platform_overrides:
+  youtube:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  tiktok:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  threads:
+    preferred_slot: "06:30"
+    max_per_day: 1

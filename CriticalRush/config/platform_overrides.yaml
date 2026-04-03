@@ -1,0 +1,32 @@
+# CriticalRush platform rule overrides
+# These override the universal defaults from platform_rules.py
+
+instagram:
+  # Gaming content links to Twitch streams — allowed in bio, not caption
+  allowed_url_domains: []  # empty = no URLs in caption (same as universal rule)
+  cta_phrases:
+    - "Follow for daily gaming content 🎮"
+    - "Drop a 🔥 if this was insane"
+    - "Save this for the highlight reel 💾"
+  hashtag_min: 3
+  hashtag_max: 5
+
+x_twitter:
+  # Gaming clips often need Twitch/YouTube links — always goes in first reply
+  link_reply_template: "🎮 Full clip + source: {url}"
+  safe_zone_padding_pct: 0.08  # 8% safe zone for UI chrome
+
+tiktok:
+  max_caption_length: 2200
+  # TikTok trending hashtags to mix with niche hashtags
+  trending_hashtags:
+    - "#fyp"
+    - "#foryou"
+    - "#foryoupage"
+
+threads:
+  max_caption_length: 500
+
+international_date:
+  enabled: true
+  format: "DD MMM YYYY"  # e.g. "07 Mar 2026" not "03/07/2026"

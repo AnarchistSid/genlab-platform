@@ -1,0 +1,136 @@
+niche_id: "gaming"
+display_name: "CriticalRush"
+channel_handle: "@criticalrush"
+accent_color: "#f97316"
+description: "Gaming content pipeline — game releases, esports, streaming culture"
+
+brand_voice:
+  tone: "energetic, community-insider, enthusiastic-analytical"
+  forbidden_words: ["boring", "simply", "just", "easy", "basic"]
+  hook_style: "community_reaction"
+
+target_audience:
+  primary: "PC and console gamers aged 18-34"
+  secondary: "esports fans, game industry watchers, content creators"
+
+feature_flags:
+  # Short-video-maker Docker service. Enable after manual curl test.
+  use_short_video_maker: false
+
+  # 4-tier gaming clip sourcer (Steam → YouTube → Twitch → Pexels).
+  # Enable after IGDB client is tested and TWITCH_CLIENT_ID is set.
+  use_gaming_clip_sourcer: true
+
+  # CrewAI multi-agent flows. Enable after crew files tested independently.
+  use_crewai_flows: false
+
+  # Live publishing to Instagram/YouTube/X/Facebook.
+  # Enable only after all platform OAuth tokens are configured and tested.
+  use_live_publishing: true
+  platforms_enabled:
+    - youtube
+    - instagram
+    - facebook
+    - x_twitter
+    - tiktok
+    - threads
+
+  # TikTok-specific config
+  tiktok:
+    enabled: false
+    audit_approved: false  # Set true once TikTok compliance audit passes — all posts SELF_ONLY until then
+    daily_post_limit: 12   # Conservative — TikTok's actual limit is ~15, keep headroom
+    posting_windows_utc: ["06:00", "12:00", "16:00"]
+
+  # Threads-specific config
+  threads:
+    enabled: true
+    daily_post_limit: 4
+
+video_sourcing:
+  strategy: trending_youtube
+  niche_category: gaming
+  max_age_hours: 48
+  top_n_per_run: 10
+  min_view_velocity: 200
+  use_google_trends: true
+  allow_keyword_search: true
+  video_gate: require
+  fallback_to_text_render: false
+  composite_quality_gate:
+    velocity_threshold: 600
+    min_composite_score: 0.25
+
+pipeline:
+  stages:
+    # Phase 0: Urgency classification
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # Phase 1: Ingestion
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.fetch_twitch_clips.FetchTwitchClips
+      retries: 1
+      retry_delay_seconds: 15
+    - class: genlab_core.pipeline.stages.fetch_steam_trailers.FetchSteamTrailers
+      retries: 1
+      retry_delay_seconds: 15
+    - class: niches.gaming.stages.fetch_gaming_stories.FetchGamingStories
+      retries: 1
+      retry_delay_seconds: 30
+    - class: niches.gaming.stages.filter_gaming_stories.FilterGamingStories
+    - class: niches.gaming.stages.enrich_with_igdb.EnrichWithIGDB
+      retries: 1
+      retry_delay_seconds: 15
+    - class: niches.gaming.stages.extract_gaming_media.ExtractGamingMedia
+      retries: 1
+      retry_delay_seconds: 15
+    - class: niches.gaming.stages.score_gaming_clips.ScoreGamingClips
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # Phase 2: Content generation (migrated to shared path — Sprint 69)
+    - class: niches.gaming.stages.gaming_writing.GamingWritingStrategy
+      retries: 1
+      retry_delay_seconds: 60
+    - class: niches.gaming.stages.gaming_hooks.GamingHookStrategy
+    - class: niches.gaming.stages.gaming_platform_adaptation.GamingPlatformAdaptationStrategy
+
+    # Phase 2b: Monetization (Sprint 67 — was missing from gaming pipeline)
+    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+
+    # Phase 3: Quality gates
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # Phase 4: Rendering
+    - class: niches.gaming.stages.render_gaming_video.RenderGamingVideo
+      sandbox: true
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: niches.gaming.stages.generate_gaming_audio.GenerateGamingAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+      enabled: false
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # Phase 5: Push to backlog (publishing handled by publisher-all LaunchAgent at 06:30 UTC)
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+    # PublishGamingContent removed in Sprint 67 — gaming now uses the canonical
+    # publisher-all LaunchAgent like all other niches, gaining:
+    # - Dashboard approval gate
+    # - Daily cap enforcement
+    # - Affiliate CTA injection
+    # - Consistent error handling and retry logic
+    # Legacy bespoke publisher kept at niches/gaming/stages/publish_gaming_content.py
+
+    # Phase 6: Analytics & Learning
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
+  max_items_per_run: 10
+  min_score_threshold: 0.35

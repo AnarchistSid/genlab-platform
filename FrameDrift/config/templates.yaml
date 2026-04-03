@@ -1,0 +1,134 @@
+hooks:
+  formulas:
+  - '{title} just hit different this episode'
+  - The animation in {title} is on another level
+  - '{title} deserves a spot on your list'
+  - This fight scene broke the budget in the best way
+  - '{title} just went from good to legendary'
+  - The OST in this scene gave me chills
+  - '{title} manga readers eating right now'
+  - This character development is peak fiction
+  - The studio went all out for this episode
+  - '{title} opening is already stuck in my head'
+  - This anime moment will be talked about for years
+  - The voice acting in this scene is god-tier
+  - '{title} just dropped the best episode this season'
+  - The pacing in {title} is actually perfect
+  - This transformation scene is pure sakuga
+  - Nobody expected {title} to go this hard
+  - The ending of this episode left me speechless
+  - This studio doesn't know how to make a bad frame
+  - '{title} deserves way more hype than it''s getting'
+  - The tension in this arc is unbearable
+  forbidden_styles:
+  - 'BREAKING:'
+  - 'JUST IN:'
+  - 'REPORT:'
+  - 'EXCLUSIVE:'
+  - announces
+  - reveals
+  - weighs in on
+  - speaks out
+  - reacts to
+  - according to
+  - sources say
+  - report suggests
+  - releases, march
+  - release schedule
+  - weekly releases
+  - here's why
+  - doesn't need to
+  - the case for
+  story_categories:
+    anime_premiere:
+      formulas:
+      - '{title} premiere just dropped. It''s PEAK'
+      - Need to binge {title} immediately
+      - '{title} just aired and it''s PEAK'
+      - '{title} ep {episode} raised the bar'
+      weight: 1.3
+    voice_actor_trigger:
+      formulas:
+      - '{voice_actor} made {title} the season''s most hyped'
+      - Everyone's watching {title} now. {voice_actor} effect
+      - '{voice_actor} in {title} is the role of the season'
+      weight: 1.4
+    manga_release:
+      formulas:
+      - '{title} latest chapter dropped. Fandom is split'
+      - The {season} anime lineup is stacked. Watch these
+      - '{studio} cooked for {title}. No notes'
+      weight: 1.1
+    studio_collab:
+      formulas:
+      - '{studio1} x {studio2} collab. Everything we needed'
+      - '{studio1} and {studio2} teamed up. Anime gods win'
+      weight: 1.2
+    trend_emerging:
+      formulas:
+      - '{trend_name} is quietly taking over anime'
+      - Early watchers caught {trend_name}. Are you?
+      - The {trend_name} wave starts here
+      weight: 1.0
+    default:
+      formulas:
+      - '{title} just hit different this episode'
+      - The animation in {title} is on another level
+      - '{title} deserves way more attention'
+      weight: 1.0
+captions:
+  max_length: 2200
+  target_length: 300
+  cta_library:
+  - Would you add this to your list?
+  - Drop your top 3 anime this season
+  - Save this for your watchlist
+  - Rate this anime 1-10 in the comments
+  - What are you thinking? Drop your take below
+  hashtag_pool:
+  - '#FrameDrift'
+  - '#Anime'
+  - '#AnimeWeek'
+  - '#AnimeFans'
+  - '#AnimeRecommendations'
+  - '#Manga'
+  - '#MangaCommunity'
+  - '#Otaku'
+  - '#AnimeCosplay'
+  - '#SeasonalAnime'
+  - '#AnimeArt'
+  - '#AnimeCommunity'
+  hashtags_per_post: 4
+youtube:
+  title_max_length: 40
+  title_must_be_question: true
+platforms:
+  instagram:
+    reel_duration_target_seconds: 25
+    caption_ends_with_cta: true
+    hashtag_count: 4
+    no_external_urls_in_caption: true
+    structure: hook + 2-3 lines of trend observation + question CTA + 4 hashtags
+  youtube:
+    title_format: question
+    title_max_chars: 40
+    description_includes_subscribe_cta: true
+    structure: hook (= title words) + 1 setup line + no hashtags
+  x_twitter:
+    link_in_reply_not_tweet: true
+    max_tweet_chars: 280
+    hashtag_count: 2
+    structure: hook + 1 line, no links in main post
+  facebook:
+    caption_length_target: 300
+    include_engagement_question: true
+    hashtag_count: 3
+    structure: hook + 2-3 lines + engagement question + 3 hashtags
+  tiktok:
+    max_caption_length: 2200
+    hashtag_count: 2
+    structure: hook + 1 punchy line + 2 hashtags
+  threads:
+    max_caption_length: 500
+    hashtag_count: 2
+    structure: hook + 2 lines + 2 hashtags

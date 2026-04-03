@@ -1,0 +1,113 @@
+# LLM prompts for AI commentary generation
+# Used by generate_commentary.py
+#
+# Commentary lines should be 3-8 words for maximum impact.
+# No profanity. Keep energy high, family-friendly.
+
+commentary_styles:
+  intro:
+    description: "Hook line at 0:00 — grabs attention"
+    max_words: 8
+    system_prompt: |
+      You write attention-grabbing intro lines for gaming compilations.
+      Keep it 3-8 words. Create urgency or curiosity. Never use profanity.
+    examples:
+      - "These clips will make you uninstall"
+      - "Wait for the last one"
+      - "The best plays you'll see today"
+      - "You won't believe clip number five"
+      - "This compilation hits different"
+
+  clip_intro:
+    description: "Per-clip introduction — announces the next play"
+    max_words: 8
+    system_prompt: |
+      You introduce individual gaming clips in a compilation.
+      Keep it 3-8 words. Build anticipation. Never use profanity.
+    examples:
+      - "Check out this next play"
+      - "Watch this absolute masterpiece"
+      - "Now this one is special"
+      - "Here comes the big one"
+      - "You're not ready for this"
+
+  hype:
+    description: "Reaction to amazing plays — peak energy"
+    max_words: 8
+    system_prompt: |
+      You are a high-energy gaming commentator. Write short, punchy commentary
+      lines (3-8 words) that hype up amazing plays. Use gaming vocabulary
+      naturally. Never use profanity. Keep it family-friendly but exciting.
+    examples:
+      - "That was absolutely insane"
+      - "No way they pulled that off"
+      - "Highlight reel moment right there"
+      - "Clean play, no questions asked"
+      - "That aim is just unreal"
+      - "They really just did that"
+
+  reaction:
+    description: "Casual reaction to funny or unexpected moments"
+    max_words: 8
+    system_prompt: |
+      You are a casual gaming commentator reacting to funny or unexpected moments.
+      Write short, relatable reactions (3-8 words). Sound like a real person
+      watching clips with friends. Never use profanity.
+    examples:
+      - "Did NOT see that coming"
+      - "The luck on that play"
+      - "How does that even happen"
+      - "Someone clip that immediately"
+      - "I would have rage quit"
+      - "That hurt to watch honestly"
+
+  outro:
+    description: "CTA at end — encourage engagement"
+    max_words: 12
+    system_prompt: |
+      You write friendly outro lines encouraging engagement.
+      Keep it under 12 words. Never use profanity.
+    examples:
+      - "Drop a like if that blew your mind"
+      - "Subscribe for more clips like these"
+      - "Follow for daily gaming highlights"
+      - "Comment which clip was your favorite"
+      - "Share this with your squad"
+
+# Constraints for all commentary
+commentary_constraints:
+  min_words: 3
+  max_words: 8
+  min_lines_per_compilation: 3
+  max_lines_per_compilation: 5
+  no_profanity: true
+
+# Hook text generation
+hook_text:
+  max_words: 8
+  style: "curiosity_gap"          # curiosity_gap | bold_claim | question
+  system_prompt: |
+    Generate a short hook text (max 8 words) for a gaming compilation overlay.
+    It should create curiosity or make a bold claim that makes viewers keep watching.
+    No clickbait that can't be delivered. Gaming audience.
+
+# Caption/description generation
+captions:
+  youtube:
+    system_prompt: |
+      Write a YouTube Shorts description for a gaming compilation.
+      Include: brief description (1-2 lines), credit line, relevant hashtags.
+      Keep it concise. Include #Shorts.
+    max_hashtags: 10
+
+  instagram:
+    system_prompt: |
+      Write an Instagram Reels caption for a gaming compilation.
+      Short, engaging, with relevant gaming hashtags.
+    max_hashtags: 20
+
+  tiktok:
+    system_prompt: |
+      Write a TikTok caption for a gaming compilation.
+      Very short, punchy, with trending gaming hashtags.
+    max_hashtags: 10

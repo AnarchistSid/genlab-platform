@@ -1,0 +1,785 @@
+# Creator-first source mesh (quality-focused, 7-day window)
+#
+# Optional source keys supported by fetch/sync:
+#   source_id, platform, connector, params, requires_login,
+#   creator_tags, media_required
+
+# YouTube channels for FetchTrendingVideos (zero-quota RSS + Data API enrichment)
+# NOTE: Two Minute Papers, Fireship, and Android Authority moved to shared_sources.yaml
+youtube_channels:
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UChpleBmo18P08aKCIgti38g"
+    name: "Matt Wolfe"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbY9xX3_jW5c2fjlZVBI4cg"
+    name: "TheAIGRID"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCZHmQk67mSJgfCCTn7xBfew"
+    name: "Yannic Kilcher"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCrXSVX9a1mj8l0CMLwKgMVw"
+    name: "AI Jason"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCgfe2ooZD3VJPB6aJAnuQng"
+    name: "bycloud"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCawZsQWqfGSbCI5yjkdVkTA"
+    name: "Matthew Berman"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqcbQf6yw5KzRoDDcZ_wBSw"
+    name: "Wes Roth"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC5Wz4fFacYuON6IKbhSa7Zw"
+    name: "MattVidPro AI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfzlCWGWYyIQ0aLC5w48gBQ"
+    name: "sentdex"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCNJ1Ymd5yFuUPtn21xtRbbw"
+    name: "AI Explained"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9x0AN7BWHpCDHSm9NiJFJQ"
+    name: "NetworkChuck"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBJycsmduvYEL83R_U4JriQ"
+    name: "MKBHD"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXuqSBlHAE6Xw-yeJA0Tunw"
+    name: "Linus Tech Tips"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVYamHliCI9rw1tHR1xbkfw"
+    name: "Dave2D"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCddiUEpeqJcYeBxX1IVBKvQ"
+    name: "The Verge"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSpFnDQr88xCZ80N-X7t0nQ"
+    name: "Corridor Crew"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9PBzalIcEQCsiIkq36PyUA"
+    name: "Digital Foundry"
+
+google_trends:
+  stub_mode: false
+  seed_keywords: ["AI", "artificial intelligence", "ChatGPT"]
+#
+# Tuned for 1 post/day: narrow funnel, high-signal sources only.
+# Lookback reduced from 60→7 days (Sprint 46B).
+
+creator_only_mode: true
+creator_video_only_mode: true
+creator_media_only_mode: true
+creator_lookback_days: 7
+creator_direct_only_mode: false
+
+sources:
+  # ── Reddit creator subs: new + top month ─────────────────────────
+  - source_id: "SRC_REDDIT_AIVIDEO_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/aivideo/new/.rss"
+    type: "rss"
+    priority: 0.98
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["ai_video", "creator"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_AIVIDEO_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/aivideo/top/.rss?t=week"
+    type: "rss"
+    priority: 0.96
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["ai_video", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_AIVIDEOS_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/AiVideos/new/.rss"
+    type: "rss"
+    priority: 0.96
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["ai_video", "creator"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_AIVIDEOS_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/AiVideos/top/.rss?t=week"
+    type: "rss"
+    priority: 0.94
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["ai_video", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_KLING_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/kling/new/.rss"
+    type: "rss"
+    priority: 0.93
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["kling", "ai_video"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_KLING_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/kling/top/.rss?t=week"
+    type: "rss"
+    priority: 0.92
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["kling", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_MIDJOURNEY_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/midjourney/new/.rss"
+    type: "rss"
+    priority: 0.90
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["midjourney", "ai_art"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_MIDJOURNEY_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/midjourney/top/.rss?t=week"
+    type: "rss"
+    priority: 0.89
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["midjourney", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_STABLEDIFFUSION_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/StableDiffusion/new/.rss"
+    type: "rss"
+    priority: 0.88
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["stable_diffusion", "ai_art"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_STABLEDIFFUSION_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/StableDiffusion/top/.rss?t=week"
+    type: "rss"
+    priority: 0.87
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["stable_diffusion", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_RUNWAYML_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/runwayml/new/.rss"
+    type: "rss"
+    priority: 0.88
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["runway", "ai_video"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_RUNWAYML_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/runwayml/top/.rss?t=week"
+    type: "rss"
+    priority: 0.87
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["runway", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_SORA_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/sora/new/.rss"
+    type: "rss"
+    priority: 0.86
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["sora", "ai_video"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_SORA_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/sora/top/.rss?t=week"
+    type: "rss"
+    priority: 0.85
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["sora", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_COMFYUI_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/ComfyUI/new/.rss"
+    type: "rss"
+    priority: 0.84
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["comfyui", "workflow"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_COMFYUI_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/ComfyUI/top/.rss?t=week"
+    type: "rss"
+    priority: 0.83
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["comfyui", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_FLUXAI_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/fluxai/new/.rss"
+    type: "rss"
+    priority: 0.84
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["flux", "ai_art"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_FLUXAI_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/fluxai/top/.rss?t=week"
+    type: "rss"
+    priority: 0.83
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["flux", "viral"]
+    enabled: true
+    requires_auth: false
+
+  # ── AI news RSS feeds (Sprint 45 C6: diversify beyond Reddit) ────
+  # NOTE: These are not creator sources. With creator_only_mode: true,
+  # they provide story context but won't produce visual-first candidates.
+  # Disable creator_only_mode or set creator_source: true if needed.
+  - source_id: "SRC_RSS_DEEPLEARNING_BATCH"
+    platform: "rss"
+    url: "https://www.deeplearning.ai/the-batch/feed/"
+    type: "rss"
+    priority: 0.92
+    content_type: "news"
+    creator_source: false
+    media_required: false
+    creator_tags: ["ai_creators", "deeplearning"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_RSS_LASTWEEKINAI"
+    platform: "rss"
+    url: "https://lastweekin.ai/feed"
+    type: "rss"
+    priority: 0.88
+    content_type: "news"
+    creator_source: false
+    media_required: false
+    creator_tags: ["ai_creators", "weekly"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_RSS_MIT_TECH_REVIEW_AI"
+    platform: "rss"
+    url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+    type: "rss"
+    priority: 0.90
+    content_type: "news"
+    creator_source: false
+    media_required: false
+    creator_tags: ["ai_creators", "tech_review"]
+    enabled: true
+    requires_auth: false
+
+  # ── YouTube connectors (Shorts + creator channel allowlists) ─────
+  - source_id: "SRC_YOUTUBE_KEYWORD_DISCOVERY"
+    platform: "youtube"
+    url: "https://www.googleapis.com/youtube/v3/search"
+    type: "api"
+    connector: "youtube"
+    priority: 0.93
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["youtube_shorts", "creator_video"]
+    enabled: true
+    requires_auth: true
+    params:
+      mode: "keyword_discovery"
+      queries:
+        - "I made this with AI"
+        - "AI generated video timelapse"
+        - "Midjourney animation"
+        - "Kling AI video"
+        - "Sora AI demo"
+        - "ComfyUI workflow video"
+      max_results: 20
+      per_seed: 5
+      published_after_days: 7
+      require_shorts: true
+      video_duration: "short"
+
+  - source_id: "SRC_YOUTUBE_CREATOR_ALLOWLIST"
+    platform: "youtube"
+    url: "https://www.googleapis.com/youtube/v3/search"
+    type: "api"
+    connector: "youtube"
+    priority: 0.92
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["youtube_shorts", "creator_allowlist"]
+    enabled: true
+    requires_auth: true
+    params:
+      mode: "channel_allowlist"
+      channels:
+        - "@runwayml"
+        - "@LumaLabsAI"
+        - "@PikaLabs"
+        - "@KaiberAI"
+        - "@Aitrepreneur"
+      max_results: 15
+      per_seed: 5
+      published_after_days: 7
+      require_shorts: true
+      video_duration: "short"
+
+  # ── X connector (keyword + creator list) ─────────────────────────
+  - source_id: "SRC_X_KEYWORD_DISCOVERY"
+    platform: "x"
+    url: "https://api.x.com/2/tweets/search/recent"
+    type: "api"
+    connector: "x"
+    priority: 0.90
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["x", "creator_video", "viral"]
+    enabled: true
+    requires_auth: true
+    params:
+      mode: "keyword_discovery"
+      queries:
+        - "\"made with AI\""
+        - "\"AI generated video\""
+        - "\"Midjourney video\""
+        - "\"Kling AI\""
+        - "\"runway gen-3\""
+      max_results: 20
+      per_seed: 5
+      published_after_days: 7
+
+  - source_id: "SRC_X_CREATOR_LIST"
+    platform: "x"
+    url: "https://api.x.com/2/users/:id/tweets"
+    type: "api"
+    connector: "x"
+    priority: 0.89
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["x", "creator_allowlist"]
+    enabled: true
+    requires_auth: true
+    params:
+      mode: "creator_list"
+      creators:
+        - "Aitrepreneur"
+        - "therealSAC"
+        - "fofrAI"
+        - "minchoi"
+        - "rowancheung"
+      max_results: 15
+      per_seed: 5
+      published_after_days: 7
+
+  # ── Civitai creator outputs ───────────────────────────────────────
+  - source_id: "SRC_CIVITAI_TAG_FEEDS"
+    platform: "civitai"
+    url: "https://civitai.com/api/v1/images"
+    type: "api"
+    connector: "civitai"
+    priority: 0.91
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["civitai", "ai_art", "ai_video"]
+    enabled: true
+    requires_auth: false
+    params:
+      mode: "tags"
+      tags:
+        - "ai video"
+        - "midjourney"
+        - "kling"
+        - "runway"
+        - "flux"
+      limit: 20
+      sort: "Most Reactions"
+      period: "Week"
+      nsfw: "None"
+
+  - source_id: "SRC_CIVITAI_CREATOR_FEEDS"
+    platform: "civitai"
+    url: "https://civitai.com/api/v1/images"
+    type: "api"
+    connector: "civitai"
+    priority: 0.88
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["civitai", "creator_allowlist"]
+    enabled: true
+    requires_auth: false
+    params:
+      mode: "creator_feeds"
+      creators:
+        - "civitai"
+      limit: 15
+      sort: "Most Reactions"
+      period: "Week"
+      nsfw: "None"
+
+  # ── Hugging Face demo spaces ──────────────────────────────────────
+  - source_id: "SRC_HF_SPACES_DEMOS"
+    platform: "huggingface"
+    url: "https://huggingface.co/api/spaces"
+    type: "api"
+    connector: "hf_spaces"
+    priority: 0.84
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["hf_spaces", "demo"]
+    enabled: true
+    requires_auth: false
+    params:
+      max_results: 15
+      list_limit: 60
+      require_media: true
+      keywords:
+        - "wan"
+        - "kling"
+        - "video"
+        - "sora"
+        - "midjourney"
+        - "animate"
+
+  # ── Vimeo channel feed (creator demos) ────────────────────────────
+  - source_id: "SRC_VIMEO_ARTIFICIAL_INTELLIGENCE_CHANNEL"
+    platform: "vimeo"
+    url: "https://vimeo.com/channels/artificialintelligence/videos/rss"
+    type: "rss"
+    priority: 0.78
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["vimeo", "ai_demo"]
+    enabled: true
+    requires_auth: false
+
+  # ── Stage B: Logged-in Playwright profile sources (disabled by default) ──
+  - source_id: "SRC_TIKTOK_AI_TAG"
+    platform: "tiktok"
+    url: "https://www.tiktok.com/tag/aiart"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.82
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["tiktok", "ai_art"]
+    enabled: true
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 60
+      wait_ms: 14000
+      scroll_rounds: 5
+
+  - source_id: "SRC_TIKTOK_AI_VIDEO_TAG"
+    platform: "tiktok"
+    url: "https://www.tiktok.com/tag/aivideo"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.83
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["tiktok", "ai_video"]
+    enabled: true
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 60
+      wait_ms: 14000
+      scroll_rounds: 5
+
+  - source_id: "SRC_THREADS_EVOLVING"
+    platform: "threads"
+    url: "https://www.threads.net/@evolving.ai"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.82
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["threads", "creator_profile"]
+    enabled: false
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 50
+      wait_ms: 12000
+      scroll_rounds: 4
+
+  - source_id: "SRC_THREADS_AI_REVOLUTION"
+    platform: "threads"
+    url: "https://www.threads.net/@ai.revolution"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.80
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["threads", "creator_profile"]
+    enabled: false
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 50
+      wait_ms: 12000
+      scroll_rounds: 4
+
+  - source_id: "SRC_INSTAGRAM_EVOLVING_REELS"
+    platform: "instagram"
+    url: "https://www.instagram.com/evolving.ai/reels/"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.84
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["instagram", "reels"]
+    enabled: false
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 60
+      wait_ms: 15000
+      scroll_rounds: 5
+
+  - source_id: "SRC_INSTAGRAM_AI_REVOLUTION_REELS"
+    platform: "instagram"
+    url: "https://www.instagram.com/ai.revolution/reels/"
+    type: "playwright"
+    connector: "playwright_profile"
+    priority: 0.82
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["instagram", "reels"]
+    enabled: false
+    requires_login: true
+    requires_auth: true
+    params:
+      max_items: 60
+      wait_ms: 15000
+      scroll_rounds: 5
+
+content_filter:
+  relevance_threshold: 0.30
+  positive_keywords:
+    # Core terms
+    - ai
+    - artificial intelligence
+    - machine learning
+    - deep learning
+    - neural network
+    - llm
+    - large language model
+    - generative ai
+    - gen ai
+    - automation
+    - robot
+    - robotics
+    - computer vision
+    - nlp
+    - prompt
+    - prompt engineering
+    - fine-tuning
+    - training
+    - inference
+    - model
+    - transformer
+    - diffusion
+    - embedding
+    - vector
+    - rag
+    - agent
+    - agentic
+    - multimodal
+    # Companies & Models
+    - openai
+    - chatgpt
+    - gpt
+    - gpt-4
+    - gpt-5
+    - o1
+    - o3
+    - dall-e
+    - sora
+    - anthropic
+    - claude
+    - sonnet
+    - opus
+    - haiku
+    - google
+    - gemini
+    - bard
+    - deepmind
+    - meta ai
+    - llama
+    - mistral
+    - perplexity
+    - midjourney
+    - stable diffusion
+    - stability ai
+    - runway
+    - pika
+    - kling
+    - hugging face
+    - cohere
+    - nvidia
+    - tesla
+    - neuralink
+    - xai
+    - grok
+    - copilot
+    - github copilot
+    - cursor
+    - devin
+    - cognition
+    # Tools & Platforms
+    - comfyui
+    - automatic1111
+    - civitai
+    - replicate
+    - together ai
+    - groq
+    - fireworks
+    - lmstudio
+    - ollama
+    - langchain
+    - llamaindex
+    - autogen
+    - crewai
+    - elevenlabs
+    - heygen
+    - synthesia
+    - descript
+    - notion ai
+    - canva ai
+    # Content types
+    - tutorial
+    - demo
+    - showcase
+    - workflow
+    - review
+    - comparison
+    - benchmark
+    - reaction
+    - breakdown
+    - explained
+    - how to
+    - tips
+    - tricks
+    - update
+    - release
+    - announcement
+    - launch
+    # Topics
+    - text to video
+    - text to image
+    - text to speech
+    - voice clone
+    - deepfake
+    - face swap
+    - upscale
+    - image generation
+    - video generation
+    - music generation
+    - code generation
+    - ai art
+    - ai music
+    - ai video
+    - ai tool
+    - ai app
+    - open source
+    - api
+    - plugin
+    - extension
+    - integration
+  negative_keywords:
+    - cooking
+    - beauty
+    - prank
+    - lottery
+    - meditation
+    - yoga
+    - recipe
+    - mukbang
+    # Gaming content (belongs in CriticalRush, not BB)
+    - gameplay
+    - playstation
+    - xbox
+    - nintendo
+    - fortnite
+    - valorant
+    - minecraft
+    - roblox
+    - esports
+    - game pass
+    - gta
+    - elden ring
+    - last of us
+    # Sports content (belongs in ClutchWire)
+    - nba
+    - nfl
+    - ipl
+    - cricket
+    - football match
+    - basketball
+    - wrestling
+    - wrestlers
+    - gym session
+    - workout
+    # Entertainment (belongs in SpliceReel/FrameDrift)
+    - horror film
+    - movie trailer
+    - box office
+    - anime fight
+    - manga chapter

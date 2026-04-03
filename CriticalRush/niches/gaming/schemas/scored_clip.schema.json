@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scored_clip.schema.json",
+  "title": "Scored Clip",
+  "description": "A clip with highlight, virality, and risk scores applied.",
+  "type": "object",
+  "required": [
+    "clip_id", "source_platform", "game_id", "game_title",
+    "scores", "publisher_tier", "final_score", "rank", "scored_at"
+  ],
+  "properties": {
+    "clip_id": { "type": "string" },
+    "source_platform": { "type": "string", "enum": ["twitch", "reddit", "youtube", "medal", "kick", "twitter"] },
+    "source_url": { "type": "string", "format": "uri" },
+    "game_id": { "type": "string" },
+    "game_title": { "type": "string" },
+    "creator_name": { "type": "string" },
+    "duration_seconds": { "type": "number", "minimum": 0 },
+    "scores": {
+      "type": "object",
+      "required": [
+        "virality_potential", "entertainment_value", "recency",
+        "source_authority", "production_quality",
+        "highlight_detection", "chat_excitement"
+      ],
+      "properties": {
+        "virality_potential": { "type": "number", "minimum": 0, "maximum": 1 },
+        "entertainment_value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "recency": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_authority": { "type": "number", "minimum": 0, "maximum": 1 },
+        "production_quality": { "type": "number", "minimum": 0, "maximum": 1 },
+        "highlight_detection": { "type": "number", "minimum": 0, "maximum": 1 },
+        "chat_excitement": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "publisher_tier": { "type": "string", "enum": ["GREEN", "YELLOW", "RED", "UNKNOWN"] },
+    "copyright_risk_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "perceptual_hash": { "type": ["string", "null"] },
+    "is_duplicate": { "type": "boolean", "default": false },
+    "duplicate_of": { "type": ["string", "null"] },
+    "final_score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "rank": { "type": "integer", "minimum": 1 },
+    "scored_at": { "type": "string", "format": "date-time" }
+  }
+}

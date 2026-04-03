@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+/* Image content slide — hero image background with inverted overlay.
+ * Text anchored at TOP over a strong top gradient (matching inspo accounts).
+ * Hero image shows through at the bottom of the slide.
+ */
+.image-content-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 10, 15, 0.92) 0%,
+    rgba(10, 10, 15, 0.78) 25%,
+    rgba(10, 10, 15, 0.45) 50%,
+    rgba(10, 10, 15, 0.15) 75%,
+    rgba(10, 10, 15, 0.05) 100%
+  );
+  z-index: 1;
+}
+
+.image-content-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 180px 72px 120px 72px;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  {# -- Hero image background (lighter overlay — shows more image) -- #}
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="image-content-overlay"></div>
+  {% endif %}
+
+  <div class="content-layer">
+
+    {# -- Top bar -- #}
+    <div class="top-bar">
+      <div></div>
+      <div class="slide-indicator">{{ slide_number }}/{{ slide_total }}</div>
+    </div>
+
+    {# -- Content at top over image (text-at-top, image visible below) -- #}
+    <div class="image-content-layout">
+
+      <div class="slide-number-pill">{{ slide_number }}</div>
+
+      <div class="text-left-bar">
+        <h2 class="slide-title">{{ slide_title }}</h2>
+        <p class="slide-body">{{ slide_body }}</p>
+      </div>
+
+    </div>
+
+    {# -- Bottom bar -- #}
+    <div class="bottom-bar">
+      <span class="brand-handle">{{ brand_handle }}</span>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

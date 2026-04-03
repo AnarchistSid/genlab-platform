@@ -1,0 +1,471 @@
+# ClutchWire content sources
+# Tiered by priority: tier_1 = breaking/live, tier_2 = highlights, tier_3 = editorial
+# NOTE: RSS/YouTube feeds in tier_1, tier_3, and youtube_channels are also registered
+# in shared_sources.yaml. Tier structure and Reddit entries kept here for per-niche pipeline.
+
+espn_api:
+  news:
+    nba: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news"
+    nfl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news"
+    mlb: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/news"
+    epl: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/news"
+  timeout_seconds: 10
+
+tier_1:
+  refresh_interval_minutes: 15
+  sources:
+    - name: "ESPN"
+      type: "rss"
+      url: "https://www.espn.com/espn/rss/news"
+      weight: 1.0
+    - name: "The Athletic"
+      type: "rss"
+      url: "https://theathletic.com/rss/"
+      weight: 1.0
+
+tier_2:
+  refresh_interval_minutes: 60
+  sources:
+    - name: "Reddit r/sports"
+      type: "reddit"
+      subreddit: "sports"
+      weight: 0.9
+    - name: "Reddit r/nba"
+      type: "reddit"
+      subreddit: "nba"
+      weight: 0.9
+    - name: "Reddit r/soccer"
+      type: "reddit"
+      subreddit: "soccer"
+      weight: 0.9
+    - name: "Reddit r/nfl"
+      type: "reddit"
+      subreddit: "nfl"
+      weight: 0.9
+
+tier_3:
+  refresh_interval_minutes: 180
+  sources:
+    - name: "BBC Sport"
+      type: "rss"
+      url: "https://feeds.bbci.co.uk/sport/rss.xml"
+      weight: 0.8
+    - name: "Sky Sports"
+      type: "rss"
+      url: "https://www.skysports.com/rss/12040"
+      weight: 0.8
+    - name: "Bleacher Report"
+      type: "rss"
+      url: "https://bleacherreport.com/articles/feed"
+      weight: 0.7
+
+youtube_channels:
+  - name: "NBA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCWJ2lWNubArHWmf3FIHbfcQ"
+    type: "rss"
+    weight: 0.9
+    category: "sports_highlights"
+  - name: "NFL"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDVYQ4Zhbm3S2dlz7P1GBDg"
+    type: "rss"
+    weight: 0.9
+    category: "sports_highlights"
+  - name: "Premier League"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCG5qGWdu8nIRZqJ_GgDwQ-w"
+    type: "rss"
+    weight: 0.9
+    category: "sports_highlights"
+  - name: "House of Highlights"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBwnFnhkBEQG9dBMbUlcH6Q"
+    type: "rss"
+    weight: 0.8
+    category: "sports_highlights"
+  - name: "ESPN"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"
+    type: "rss"
+    weight: 0.8
+    category: "sports_news"
+
+scorebat:
+  enabled: true
+  max_highlights: 10
+  competitions: ["Premier League", "Champions League", "La Liga"]
+
+rate_limit_per_hour: 200
+
+reddit:
+  subreddits:
+    - name: "sports"
+      weight: 1.0
+    - name: "nba"
+      weight: 0.9
+    - name: "soccer"
+      weight: 0.9
+    - name: "nfl"
+      weight: 0.9
+    - name: "mma"
+      weight: 0.8
+    - name: "tennis"
+      weight: 0.7
+    - name: "formula1"
+      weight: 0.7
+  velocity_window_hours: 1
+  fetch_interval_minutes: 30
+
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+reddit_sources:
+  - subreddit: r/nba
+    min_score: 5000
+    time_filter: day
+    content_type: video
+  - subreddit: r/soccer
+    min_score: 3000
+    time_filter: day
+    content_type: video
+  - subreddit: r/nfl
+    min_score: 5000
+    time_filter: day
+    content_type: video
+  - subreddit: r/MMA
+    min_score: 2000
+    time_filter: day
+    content_type: video
+  - subreddit: r/sports
+    min_score: 8000
+    time_filter: day
+    content_type: video
+
+mlb_highlights:
+  enabled: true
+  max_highlights_per_game: 3
+  max_age_hours: 24
+
+source_filters:
+  reject_title_patterns:
+    - "tracker"
+    - "fantasy"
+    - " DFS "
+    - "betting tips"
+    - "power rankings"
+    - "best players available"
+    - "offseason moves"
+    - "free agency"
+    - "podcast"
+    - "opinion:"
+    - "preview:"
+    - "weekly roundup"
+    - "schedule:"
+    - "here's why"
+    - "the case for"
+    - "weekly releases"
+    - "mock draft"
+  reject_topic_patterns:
+    - "podcast"
+    - "opinion"
+    - "preview"
+  min_priority_score_for_render: 0.5
+
+content_filter:
+  relevance_threshold: 0.20
+  positive_keywords:
+    - goal
+    - touchdown
+    - home run
+    - slam dunk
+    - championship
+    - playoff
+    - highlights
+    - match
+    - score
+    - season
+    - nba
+    - nfl
+    - mlb
+    - nhl
+    - ncaa
+    - premier league
+    - champions league
+    - athlete
+    - coach
+    - stadium
+    - cricket
+    - rugby
+    - tennis
+    - formula 1
+    - f1
+    - soccer
+    - football
+    - basketball
+    - baseball
+    - hockey
+    - golf
+    - olympics
+    - world cup
+    - final
+    - knockout
+    - hat trick
+    - overtime
+    - buzzer beater
+    - grand slam
+    - medal
+    - trophy
+    - draft
+    - transfer
+    - debut
+    - record
+    - comeback
+    - injury
+    - mvp
+    - espn
+    - sportscenter
+    - reaction
+    - trailer
+    # Action terms (classifier needs 2+ hits)
+    - win
+    - wins
+    - beat
+    - beats
+    - defeat
+    - lost
+    - loss
+    - scores
+    - scored
+    - scoring
+    - assists
+    - rebound
+    - tackle
+    - pass
+    - catch
+    - kick
+    - penalty
+    - foul
+    - red card
+    - yellow card
+    - substitution
+    - halftime
+    - full time
+    - extra time
+    - shootout
+    - offside
+    - corner
+    - free kick
+    - header
+    - volley
+    - save
+    - clean sheet
+    - shutout
+    - strikeout
+    - double play
+    - triple play
+    - grand prix
+    - lap
+    - pit stop
+    - pole position
+    - podium
+    - fastest lap
+    - round
+    - bout
+    - submission
+    - decision
+    - unanimous
+    - split decision
+    - tko
+    - ko
+    # League & competition names
+    - la liga
+    - bundesliga
+    - serie a
+    - ligue 1
+    - mls
+    - ufc
+    - wwe
+    - aew
+    - ipl
+    - psl
+    - big bash
+    - ashes
+    - afl
+    - super bowl
+    - stanley cup
+    - world series
+    - fa cup
+    - copa america
+    - euro
+    - copa libertadores
+    - six nations
+    - wimbledon
+    - us open
+    - french open
+    - australian open
+    - masters
+    - ryder cup
+    - daytona
+    - indy 500
+    - le mans
+    - dakar
+    # Major teams (high-signal, prevents misrouting)
+    - lakers
+    - celtics
+    - warriors
+    - heat
+    - bulls
+    - knicks
+    - nets
+    - sixers
+    - bucks
+    - suns
+    - mavericks
+    - nuggets
+    - clippers
+    - raptors
+    - thunder
+    - chiefs
+    - eagles
+    - cowboys
+    - 49ers
+    - patriots
+    - packers
+    - ravens
+    - bills
+    - dolphins
+    - steelers
+    - bengals
+    - lions
+    - bears
+    - texans
+    - seahawks
+    - yankees
+    - dodgers
+    - red sox
+    - cubs
+    - mets
+    - astros
+    - braves
+    - phillies
+    - padres
+    - guardians
+    - manchester united
+    - man utd
+    - liverpool
+    - arsenal
+    - chelsea
+    - man city
+    - tottenham
+    - spurs
+    - barcelona
+    - real madrid
+    - bayern munich
+    - psg
+    - juventus
+    - ac milan
+    - inter milan
+    - dortmund
+    - atletico madrid
+    # Major athletes (high-signal names)
+    - lebron
+    - curry
+    - giannis
+    - jokic
+    - luka
+    - mahomes
+    - josh allen
+    - lamar jackson
+    - messi
+    - ronaldo
+    - haaland
+    - mbappe
+    - salah
+    - neymar
+    - vinicius
+    - bellingham
+    - djokovic
+    - alcaraz
+    - sinner
+    - nadal
+    - federer
+    - hamilton
+    - verstappen
+    - leclerc
+    - norris
+    - ohtani
+    - judge
+    - trout
+    - ovechkin
+    - mcdavid
+    - mcgregor
+    - jon jones
+    - islam makhachev
+    - virat kohli
+    - sachin
+    - kohli
+    - bumrah
+    # Roster actions & common sports verbs
+    - signs
+    - signed
+    - signing
+    - trade
+    - traded
+    - trades
+    - throws
+    - threw
+    - crashes
+    - crashed
+    - streak
+    - unbeaten
+    - sacked
+    - interception
+    - rushing
+    - yards
+    - points
+    - wicket
+    - runs
+    - century
+    - fifty
+    - striker
+    - defender
+    - goalkeeper
+    - midfielder
+    - winger
+    - pitcher
+    - catcher
+    - batter
+    - quarterback
+    - receiver
+    - running back
+    - linebacker
+    - cornerback
+    - safety
+    # Motorsport specifics
+    - monaco
+    - silverstone
+    - monza
+    - spa
+    - suzuka
+    - bahrain
+    - jeddah
+    - las vegas gp
+    - singapore gp
+  negative_keywords:
+    - cooking
+    - beauty
+    - prank
+    - life hack
+    - motivational speech
+    - cancer awareness
+    - lottery
+    - unboxing
+    # Gaming / anime / non-sports
+    - anime
+    - manga
+    - gameplay
+    - minecraft
+    - fortnite
+    - roblox
+    - lets play
+    - speedrun
+    # Non-sports entertainment
+    - movie trailer
+    - mukbang
+    - asmr
+    - vlog
+    - haul

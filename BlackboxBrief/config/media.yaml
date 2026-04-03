@@ -1,0 +1,45 @@
+# Media Extraction Configuration
+# Controls how images, videos, and stock photos are pulled per story.
+
+extraction:
+  enabled: true
+  max_images_per_story: 5        # Cap total media assets per story
+  max_video_downloads: 500       # Creator mode: high-coverage batch download cap
+  download_workers: 2            # Lower concurrency to reduce Reddit 429 losses
+  max_stock_results: 3           # Stock API results per query
+  min_image_width: 400           # HTML attribute filter (pre-download)
+  max_file_size_mb: 10           # Skip files larger than this
+  allowed_types:
+    - jpg
+    - jpeg
+    - png
+    - webp
+    - gif
+  download_timeout_seconds: 15
+  user_agent: "ContentIntelBot/1.0 (media extraction)"
+
+# Quality gate: only images at these tiers are pushed to backlog
+# Tiers: hero (≥1080px), usable (≥800px), reference (≥400px), too_small (<400px)
+quality:
+  push_min_tier: "usable"        # Minimum tier to push to backlog
+  instagram_min_width: 1080      # IG post/carousel minimum
+  instagram_min_height: 1080     # IG square post minimum
+  pick_best_per_story: 3         # Only push top N images per story (by tier)
+
+stock_api:
+  provider: unsplash             # supported: unsplash, pexels
+  enabled: false                 # Set true + add API key to .env
+
+cache:
+  ttl_hours: 24                  # Media cache lives longer than news (6h)
+  media_dir: ".tmp/media"        # Downloaded files location
+
+# Creator clip policy (execution/clip_video.py + extract_media.py Phase 2.5)
+# Goal: preserve FULL creator video — no trimming. Instagram Reels supports up to 15 min.
+clip_policy:
+  target_duration_seconds: 900
+  max_duration_seconds: 900
+  short_video_threshold_seconds: 900
+  intro_skip_ratio: 0.0
+  outro_skip_ratio: 0.0
+  cache_duration_tolerance_seconds: 1.0

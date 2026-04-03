@@ -1,0 +1,51 @@
+# Consumed by genlab_core.media.VideoCompositor via VisualConfig
+# Shared structural standards — all 5 channels use identical values
+
+niche_id: movies
+logo_path: "assets/logos/SpliceReel-Logo.png"
+accent_color: "#C9A84C"  # SpliceReel warm gold (visual context — #F5EDD6 cream too light for overlays)
+
+# Structural standards (identical across all channels)
+top_bar_height_pct: 0.24
+bottom_bar_height_pct: 0.34
+hook_font_size: 44
+hook_x_offset: 24
+logo_height_px: 60
+logo_x_offset: 24
+bar_color: [0, 0, 0]
+hook_color: [255, 255, 255]
+landscape_mode: "blurred_pillarbox"
+platforms_vertical: ["instagram", "youtube", "tiktok", "threads", "facebook", "twitter"]
+platforms_landscape: []
+
+# Frame layout is defined in genlab_core/media/frame_compositor.py (source of truth).
+# See frame_compositor.py constants for current pixel positions.
+
+
+# FFmpeg render settings
+ffmpeg:
+  preset: medium            # target preset for quality (veryslow|slow|medium|fast|ultrafast)
+  fallback_preset: fast   # used if render exceeds timeout
+  timeout_seconds: 600    # max seconds for FFmpeg subprocess
+
+# Word-by-word caption animation
+animation:
+  word_by_word:
+    whisper_sync:
+      enabled: true
+      model_size: "base"
+      fallback: "wpm"
+      silence_threshold_db: -40
+      skip_tts_when_audio: true
+      min_confidence: 0.3
+      ab_test:
+        enabled: false   # flip to true when ready to measure
+        wpm_control_pct: 0.30  # 30% of stories get WPM as control group
+
+
+# Channel branding (used by FrameCompositor for text overlays)
+branding:
+  channel_name: "SpliceReel"
+  handle: "@splicereel"
+  logo_path: "assets/logos/SpliceReel-Logo.png"
+  accent_color: "#C9A84C"

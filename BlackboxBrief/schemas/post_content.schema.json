@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Post Content",
+  "description": "Schema for LLM-generated Instagram post content",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["slides", "caption", "hashtags"],
+      "properties": {
+        "slides": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["slide_number", "slide_title"],
+            "properties": {
+              "slide_number": {"type": "integer", "minimum": 1},
+              "slide_title": {"type": "string", "minLength": 1},
+              "slide_body": {"type": "string"}
+            }
+          }
+        },
+        "caption": {"type": "string", "minLength": 10, "maxLength": 2200},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "maxItems": 30},
+        "alt_text_slides": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    {
+      "type": "object",
+      "required": ["beats", "caption", "hashtags", "cover_title"],
+      "properties": {
+        "beats": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["beat_number", "voiceover"],
+            "properties": {
+              "beat_number": {"type": "integer"},
+              "timestamp": {"type": "string"},
+              "voiceover": {"type": "string"},
+              "visual_notes": {"type": "string"}
+            }
+          }
+        },
+        "caption": {"type": "string", "minLength": 10, "maxLength": 2200},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
+        "cover_title": {"type": "string", "minLength": 1}
+      }
+    },
+    {
+      "type": "object",
+      "required": ["cover_title", "caption", "hashtags"],
+      "not": {"required": ["beats"]},
+      "properties": {
+        "cover_title": {"type": "string", "minLength": 1},
+        "caption": {"type": "string", "minLength": 10, "maxLength": 2200},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "maxItems": 30},
+        "source_credit": {"type": "string"},
+        "alt_text_slides": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  ]
+}

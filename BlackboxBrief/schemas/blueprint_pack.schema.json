@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Blueprint Pack",
+  "description": "Content candidates ready for production",
+  "type": "object",
+  "required": ["generated_at", "run_id", "candidates"],
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"},
+    "run_id": {"type": "string"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "story_id", "template_id", "format", "priority_score"],
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "story_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "topic": {"type": "string"},
+          "angle": {"type": "string"},
+          "template_id": {"type": "string", "pattern": "^TPL_[A-Z0-9]{4}$"},
+          "format": {
+            "type": "string",
+            "enum": ["carousel", "reel", "static", "poll"]
+          },
+          "render_mode": {
+            "type": "string",
+            "enum": ["custom", "quick"],
+            "default": "custom",
+            "description": "Render path: custom=FFmpeg pipeline, quick=short-video-maker Docker"
+          },
+          "hook": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "structure": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "cta": {"type": "string"},
+          "claim_requirements": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "source_urls": {
+            "type": "array",
+            "items": {"type": "string", "format": "uri"}
+          },
+          "priority_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "production_estimate": {
+            "type": "object",
+            "properties": {
+              "time_minutes": {"type": "integer"},
+              "complexity": {"type": "string", "enum": ["low", "medium", "high"]}
+            }
+          },
+          "why_this_will_work": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "constraints": {
+            "type": "object",
+            "description": "Per-template constraints from templates.yaml"
+          },
+          "validation_status": {
+            "type": "object",
+            "properties": {
+              "constraints_passed": {"type": "boolean"},
+              "claims_passed": {"type": "boolean"},
+              "risk_acceptable": {"type": "boolean"}
+            }
+          },
+          "platform_hints": {
+            "type": "object",
+            "description": "Algorithm-aware hints per platform from platform_algorithms.yaml",
+            "properties": {
+              "instagram": {
+                "type": "object",
+                "properties": {
+                  "target_length_seconds": {"type": "array", "items": {"type": "integer"}},
+                  "cta_index": {"type": "integer"},
+                  "hashtags": {"type": "array", "items": {"type": "string"}},
+                  "format_recommendation": {"type": "string"}
+                }
+              },
+              "youtube": {
+                "type": "object",
+                "properties": {
+                  "title_format": {"type": "string"},
+                  "title_template_index": {"type": "integer"},
+                  "target_length_seconds": {"type": "array", "items": {"type": "integer"}},
+                  "generate_community_post": {"type": "boolean"}
+                }
+              },
+              "twitter": {
+                "type": "object",
+                "properties": {
+                  "format": {"type": "string", "enum": ["single", "thread"]},
+                  "native_video": {"type": "boolean"},
+                  "link_in_reply": {"type": "boolean"},
+                  "hashtags": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "facebook": {
+                "type": "object",
+                "properties": {
+                  "format": {"type": "string"},
+                  "caption_length_target": {"type": "integer"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

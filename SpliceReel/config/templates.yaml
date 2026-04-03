@@ -1,0 +1,164 @@
+hooks:
+  formulas:
+  - This scene alone is worth the ticket
+  - Nobody's talking about this shot in {film}
+  - The detail in {film} you definitely missed
+  - This is what practical effects look like
+  - '{film} deserves a second watch just for this'
+  - The sound design in this scene is insane
+  - This trailer is hiding something big
+  - One shot. No cuts. Pure cinema.
+  - '{film} just raised the bar for the genre'
+  - The villain in {film} might be the best this decade
+  - This director doesn't miss
+  - The opening sequence alone had me hooked
+  - Notice what happens in the background here
+  - This performance deserves every award
+  - The color grading in {film} tells its own story
+  - Every frame of this trailer is a painting
+  - This sequel actually improves on the original
+  - The twist in {film} changes everything you saw
+  - Watch the actor's eyes in this scene
+  - This is the role they were born to play
+  forbidden_styles:
+  - 'BREAKING:'
+  - 'JUST IN:'
+  - 'REPORT:'
+  - 'EXCLUSIVE:'
+  - announces
+  - reveals
+  - weighs in on
+  - speaks out
+  - reacts to
+  - according to
+  - sources say
+  - report suggests
+  - here's why
+  - doesn't need to
+  - should give up
+  - the case for
+  story_categories:
+    trailer_drop:
+      formulas:
+      - The {film_title} trailer just dropped and I'm not okay
+      - '{film_title} looks UNREAL. Director cooked'
+      - '{film_title} looks like it could define the year'
+      - Drop everything. The {film_title} trailer is here
+      weight: 1.3
+      lifecycle: pre_release
+    box_office_win:
+      formulas:
+      - '{film_title} delivered at the box office'
+      - Hollywood wanted a hit. {film_title} answered
+      - '{film_title} just proved people still go to the movies'
+      weight: 1.2
+      lifecycle: opening_weekend
+    box_office_miss:
+      formulas:
+      - '{film_title} underperformed. The studios are sweating'
+      - Not what they projected. {film_title} has work to do
+      weight: 1.0
+      lifecycle: opening_weekend
+    critical_acclaim:
+      formulas:
+      - '{film_title} is certified fresh. A masterpiece?'
+      - Critics call {film_title} one of the year's best
+      - Certified fresh. {film_title} is the real deal
+      weight: 1.2
+      lifecycle: long_tail
+    critical_bomb:
+      formulas:
+      - Critics roasted {film_title}. Internet has thoughts
+      - '{film_title} had everyone fooled by the trailer'
+      weight: 1.0
+      lifecycle: long_tail
+    award_nomination:
+      formulas:
+      - '{film_title} just picked up an Oscar nomination. Deserved?'
+      - Awards season just validated {film_title}. History incoming
+      weight: 1.3
+      lifecycle: long_tail
+    franchise_news:
+      formulas:
+      - The {franchise} universe will never be the same after this
+      - '{franchise} fans are losing it right now'
+      weight: 1.2
+    streaming_premiere:
+      formulas:
+      - '{film_title} just landed on streaming. Clear your weekend'
+      - '{film_title} is finally streaming. Worth the wait?'
+      weight: 1.1
+      lifecycle: long_tail
+    default:
+      formulas:
+      - This scene alone is worth the ticket
+      - How did they even film this?
+      - The craft in this shot is next level
+      weight: 1.0
+captions:
+  max_length: 2200
+  target_length: 300
+  cta_library:
+  - what's your favorite scene?
+  - follow for daily cinema moments
+  - save this for your watchlist
+  - have you seen this yet?
+  - tag a film lover who needs this
+  hashtag_pool:
+  - '#cinema'
+  - '#film'
+  - '#movies'
+  - '#filmmaking'
+  - '#movienews'
+  - '#newmovie'
+  - '#trailerwatch'
+  - '#boxoffice'
+  - '#filmcritic'
+  - '#cinematography'
+  - '#mustwatch'
+  - '#SpliceReel'
+  franchise_hashtags:
+    MCU: '#MCU'
+    DC: '#DC'
+    Star_Wars: '#StarWars'
+    Disney_Animation: '#Disney'
+    Pixar: '#Pixar'
+  hashtags_per_post: 4
+youtube:
+  title_max_length: 40
+  title_must_be_question: true
+  title_formulas:
+  - Is {Film} the Best This Year?
+  - How Was {Scene} Even Filmed?
+  - Did {Director} Just Make a Masterpiece?
+  - Why Everyone Is Watching {Film}
+platforms:
+  instagram:
+    reel_duration_target_seconds: 25
+    caption_ends_with_cta: true
+    hashtag_count: 4
+    no_external_urls_in_caption: true
+    structure: hook + 2-3 lines of craft observation + question CTA + 4 hashtags
+  youtube:
+    title_format: question
+    title_max_chars: 40
+    description_includes_subscribe_cta: true
+    structure: hook (= title words) + 1 setup line + no hashtags
+  x_twitter:
+    link_in_reply_not_tweet: true
+    max_tweet_chars: 280
+    hashtag_count: 2
+    structure: hook + 1 line, no links in main post
+  facebook:
+    caption_length_target: 300
+    include_engagement_question: true
+    hashtag_count: 3
+    structure: hook + 2-3 lines + engagement question + 3 hashtags
+  tiktok:
+    max_caption_length: 2200
+    hashtag_count: 2
+    structure: hook + 1 punchy line + 2 hashtags
+  threads:
+    max_caption_length: 500
+    hashtag_count: 2
+    structure: hook + 2 lines + 2 hashtags

@@ -1,0 +1,8 @@
+name = "bb-review-edge-cache"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[triggers]
+routes = [
+  { pattern = "review.aspirehub.ai/api/*", zone_name = "aspirehub.ai" }
+]

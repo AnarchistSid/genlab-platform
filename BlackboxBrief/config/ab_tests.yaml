@@ -1,0 +1,70 @@
+# A/B Testing Configuration
+#
+# Controls test creation, measurement, and auto-application of results.
+# Imported by: execution/ab_testing.py, execution/fetch_insights.py
+#
+# Cost: ~$0.01 per non-background test, ~$0.05 per background test
+# Cap: max_tests_per_day (default 1) to control costs + feed quality
+
+ab_testing:
+  enabled: true
+  max_tests_per_day: 1
+  measurement_delay_hours: 48       # wait before fetching insights
+  min_impressions_per_variant: 100  # below this → INSUFFICIENT_DATA
+  significance_threshold: 0.05     # p-value for declaring winner
+  min_effect_size: 0.10            # 10% relative improvement required to declare winner
+
+  # Primary metric per test type (used for winner declaration)
+  primary_metrics:
+    hook: "engagement_rate"         # (likes + comments + saves + shares) / reach
+    visual_style: "engagement_rate" # proxy for watch time (saves indicate interest)
+    posting_time: "reach"           # how many people saw it
+    mid_hook: "engagement_rate"     # watch time proxy via engagement
+    background: "save_rate"         # saves / reach (indicates quality/interest)
+
+  # Auto-apply winning config to production defaults
+  auto_apply:
+    enabled: true
+    # Score adjustment for hook formula wins/losses
+    hook_score_delta: 0.05          # ± applied to hook_formulas.yaml engagement_score
+    max_hook_score: 0.95
+    min_hook_score: 0.20
+    # Log all changes for audit trail
+    changelog_path: ".tmp/ab_changelog.jsonl"
+
+  # Auto-create: rotate test types daily
+  auto_create:
+    enabled: true
+    test_type_rotation:
+      - hook
+      - visual_style
+      - posting_time
+      - mid_hook
+      - background
+
+  # Per-type variant definitions
+  hook_variants:
+    control: "top_scored"           # rank #1 from generate_hooks.py
+    treatment: "second_scored"      # rank #2 (different formula category preferred)
+
+  visual_variants:
+    control:
+      highlight_color: "#FFD700"    # gold (current)
+    treatment:
+      highlight_color: "#06b6d4"    # cyan
+
+  timing_variants:
+    control_hour: 10
+    treatment_hour: 14
+    offset_hours: 4
+
+  mid_hook_variants:
+    control:
+      enabled: true
+      appear_at_ratio: 0.45
+    treatment:
+      enabled: false
+
+  background_variants:
+    control: "ai_generated"
+    treatment: "gradient_fallback"

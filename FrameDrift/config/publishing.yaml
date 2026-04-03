@@ -1,0 +1,46 @@
+# FrameDrift publishing configuration — all 6 platforms
+
+niche_id: anime
+
+platforms:
+  instagram:
+    enabled: true
+    account_id: ""  # Set via FRAMEDRIFT_META_IG_USER_ID env var
+    schedule_slots:
+      - "12:00"
+    content_types: [reels, carousels, stories]
+    aspect_ratios:
+      reels: "9:16"
+      carousels: "1:1"
+      stories: "9:16"
+  youtube:
+    enabled: true
+    channel_id: "UCt7vXV-dzsgofLyZRAFbvIA"
+    content_types: [shorts]
+    aspect_ratio: "9:16"
+    title_format: question
+    max_title_length: 40
+  x:
+    enabled: true
+    account_id: null  # TODO: Create X developer app for FrameDrift
+    content_types: [video_tweet, image_tweet]
+    aspect_ratio: "9:16"
+    link_placement: first_reply   # CRITICAL: no links in main tweet
+  facebook:
+    enabled: true
+    page_id: "1073495579170377"
+    content_types: [reels, video_posts]
+    aspect_ratio: "9:16"
+  tiktok:
+    enabled: false
+    account_id: null
+    content_types: [video]
+    aspect_ratio: "9:16"
+    note: >-
+      Pending TikTok developer app approval.
+      Set enabled: true and add TIKTOK_ACCESS_TOKEN to .env when approved.
+  threads:
+    enabled: true
+    account_id: null  # TODO: Generate Threads token for @theframedrift
+    content_types: [video_post, text_post]
+    aspect_ratio: "1:1"

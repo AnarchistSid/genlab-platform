@@ -1,0 +1,97 @@
+# Consumed by genlab_core.media.VideoCompositor via VisualConfig
+# Shared structural standards — all 5 channels use identical values
+
+niche_id: gaming
+logo_path: "assets/criticalrush_logo.png"
+accent_color: "#F97316"  # CriticalRush orange
+
+# Structural standards (identical across all channels)
+top_bar_height_pct: 0.24
+bottom_bar_height_pct: 0.34
+hook_font_size: 44
+hook_x_offset: 24
+logo_height_px: 60
+logo_x_offset: 24
+bar_color: [0, 0, 0]
+hook_color: [255, 255, 255]
+landscape_mode: "blurred_pillarbox"
+platforms_vertical: ["instagram", "youtube", "tiktok", "threads", "facebook", "twitter"]
+platforms_landscape: []
+
+# --- Gen Lab Frame Layout Spec (Sprint 56 -- LOCKED) ---
+# This is the canonical visual frame layout for all Gen Lab reels.
+# DO NOT CHANGE WITHOUT UPDATING frame_compositor.py AND ALL CHANNEL RENDERS.
+frame_layout:
+  canvas:
+    width: 1080
+    height: 1920
+
+  top_bar:
+    height: 310
+    logo_height: 60
+    logo_x: 45
+    logo_y: 310
+    channel_name_size: 24
+    channel_name_x: 120
+    channel_name_y: 322
+    handle_size: 17
+    handle_y: 346
+
+  hook_text:
+    font_size: 44
+    font_color: white
+    shadow: true
+    max_chars: 60
+    x_offset: 45
+
+  layout_cases:
+    native_portrait:
+      detect_threshold_max: 0.65
+      detect_threshold_min: 0.50
+      video_placement: sandwich
+      video_y: 466
+      video_height: 1000
+      bottom_bar_height: 454
+      hook_y: 380
+
+    landscape_16_9:
+      detect_threshold: 0.90
+      video_width: 1080
+      video_height: 608
+      video_y_start: 466
+      video_y_end: 1074
+      hook_zone_top: 310
+      hook_zone_bottom: 460
+      hook_zone_height: 150
+      hook_y: 380
+      bottom_black_height: 846
+
+    other:
+      video_placement: scale_to_fit_with_black_bars
+
+  branding:
+    channel_name: "CriticalRush"
+    handle: "@CriticalRush"
+    accent_color: "#F97316"
+    logo_path: "assets/criticalrush_logo.png"
+    niche_id: "gaming"
+
+# Word-by-word caption animation
+animation:
+  word_by_word:
+    whisper_sync:
+      enabled: true
+      model_size: "base"
+      fallback: "wpm"
+      silence_threshold_db: -40
+      skip_tts_when_audio: true
+      min_confidence: 0.3
+      ab_test:
+        enabled: false   # flip to true when ready to measure
+        wpm_control_pct: 0.30  # 30% of stories get WPM as control group
+
+# FFmpeg render settings
+ffmpeg:
+  preset: medium          # medium balances quality vs speed (slow was timing out)
+  fallback_preset: fast   # used if render exceeds timeout
+  timeout_seconds: 600    # max seconds for FFmpeg subprocess

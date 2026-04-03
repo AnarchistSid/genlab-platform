@@ -1,0 +1,39 @@
+# Gen Lab — Niche Registry
+# Used by the dashboard to populate Mission Control and multi-niche views.
+# Each niche maps to a channel folder under GenLab/.
+
+niches:
+  - id: ai_creators
+    display_name: Blackbox Brief
+    folder: BlackboxBrief
+    accent_hex: "#00D4FF"
+    status: active
+    target_posts_per_day: 1
+
+  - id: gaming
+    display_name: CriticalRush
+    folder: CriticalRush
+    accent_hex: "#f97316"
+    status: active
+    target_posts_per_day: 1
+
+  - id: sports
+    display_name: ClutchWire
+    folder: ClutchWire
+    accent_hex: "#FF2040"
+    status: active
+    target_posts_per_day: 1
+
+  - id: movies
+    display_name: SpliceReel
+    folder: SpliceReel
+    accent_hex: "#C9A84C"
+    status: active
+    target_posts_per_day: 1
+
+  - id: anime
+    display_name: FrameDrift
+    folder: FrameDrift
+    accent_hex: "#7B3FE4"
+    status: active
+    target_posts_per_day: 1

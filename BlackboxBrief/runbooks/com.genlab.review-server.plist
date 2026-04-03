@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.genlab.review-server</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/anarchistsid/GenLab/dashboard/runbooks/review_server_wrapper.sh</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>/Users/anarchistsid/GenLab/dashboard</string>
+    <key>StandardOutPath</key>
+    <string>/Users/anarchistsid/GenLab/.logs/review_server_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/anarchistsid/GenLab/.logs/review_server_stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>TimeOut</key>
+    <integer>600</integer>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

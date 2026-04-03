@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Backlog Row",
+  "description": "Single backlog entry (backlog record)",
+  "type": "object",
+  "required": ["id", "status", "type", "title", "created_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "story_id or candidate_id"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["story", "candidate"]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "INTEL_READY",
+        "DRAFTED",
+        "VISUAL_READY",
+        "SCHEDULED",
+        "PUBLISHED",
+        "ERROR",
+        "BLOCKED",
+        "NEEDS_REVIEW",
+        "ARCHIVED"
+      ]
+    },
+    "title": {"type": "string"},
+    "source_url": {"type": "string", "format": "uri"},
+    "priority": {"type": "number", "minimum": 0, "maximum": 1},
+    "format": {
+      "type": ["string", "null"],
+      "enum": ["carousel", "reel", "static", "poll", null]
+    },
+    "template_id": {"type": "string"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "error_log": {"type": "string"},
+    "assigned_to": {"type": "string"},
+    "tags": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "caption": {"type": "string"},
+    "slide_content": {"type": "string", "description": "JSON array of slide objects"},
+    "hashtags": {"type": "string"},
+    "scheduled_for": {"type": "string", "format": "date-time"},
+    "content_generated_at": {"type": "string", "format": "date-time"},
+    "alt_text_slides": {"type": "string", "description": "JSON array of alt text strings"},
+    "visual_paths": {"type": "string", "description": "JSON array of image URLs"},
+    "visuals_rendered_at": {"type": "string", "format": "date-time"},
+    "youtube_content": {"type": "string", "description": "JSON object with YouTube community post"},
+    "twitter_content": {"type": "string", "description": "JSON object with tweet/thread content"},
+    "platform_publish_status": {"type": "string", "description": "JSON object with per-platform publish status"},
+    "slide_previews": {"type": "array", "description": "Backlog attachment objects"},
+    "feedback_issue": {"type": "string"},
+    "feedback_notes": {"type": "string", "description": "What's wrong + how to fix it (combined field)"},
+    "action_taken": {"type": "string"},
+    "review_notes": {"type": "string"},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "generation_cost_usd": {"type": "number"},
+    "revision_count": {"type": "integer", "minimum": 0}
+  }
+}

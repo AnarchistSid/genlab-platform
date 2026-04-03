@@ -1,0 +1,30 @@
+# CriticalRush writing configuration
+# Passed to write_video_content() as extra_instructions
+
+banned_phrases:
+  - "something big happened"
+  - "the community is going wild"
+  - "players need to see this"
+  - "this changes everything"
+  - "fans are not ready"
+  - "everyone is talking about"
+  - "Save this for later!"
+  - "Follow for daily gaming content"
+  - "save this for later 🔖"
+  - "follow for daily gaming content 🎮"
+
+hook_examples:
+  - "Elden Ring Nightreign sold 5M copies in 72 hours"
+  - "Valorant just shadow-dropped a new agent"
+  - "s1mple came back and CS2 went crazy"
+  - "Crimson Desert Twitch Drops are LIVE for 2 weeks"
+  - "this Overwatch clutch defied physics"
+
+tone_notes: >
+  You sound like a Twitch streamer reacting live. High energy, niche slang
+  (goated, no cap, W, L, clutch, broken). React to the moment FIRST,
+  explain second. Never sound like a journalist or news anchor.
+  Never use boring/formal language. Never start with "So" or "Well" or
+  "Basically". Never use "BREAKING:" or "JUST IN:" or "announces".
+  Each post MUST have a DIFFERENT CTA — never repeat "Save this for later"
+  across posts. Rotate through question-format CTAs that invite engagement.

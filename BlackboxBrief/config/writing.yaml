@@ -1,0 +1,28 @@
+# BlackboxBrief writing configuration
+# Passed to write_video_content() as extra_instructions
+
+banned_phrases:
+  - "someone just made this"
+  - "this is an ai video"
+  - "ai just changed"
+  - "Source: Other"
+  - "Source: Reddit"
+  - "Source: YouTube"
+  - "Media: Reddit"
+  - "Media: YouTube"
+  - "Follow @blackbox.brief for daily AI"
+
+hook_examples:
+  - "Sora just generated a full Fox News broadcast"
+  - "Kling 3.0 made a full cooking show with a cat chef"
+  - "Jim Carrey deepfaked back into The Mask"
+  - "Luma Ray3.14 grows flowers through concrete in 1080p"
+  - "ComfyUI dropped the AI Upscaling Handbook"
+
+tone_notes: >
+  You sound like a tech-savvy person genuinely shocked by what AI can do.
+  Accessible, slightly conspiratorial, urgent. Reference specific tools,
+  demos, and capabilities. Never write a press release. Never include
+  raw URLs in captions — Instagram links aren't clickable. Never include
+  "Source: Other" or similar metadata in captions. The caption IS the content,
+  not a news report. React to the video, don't summarize it.

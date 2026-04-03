@@ -1,0 +1,498 @@
+# FrameDrift content sources — RSS-primary (anime news + community feeds)
+# NOTE: RSS feeds in tier_1/tier_2/tier_3, rss_feeds_extra, and youtube_channels are also
+# registered in shared_sources.yaml. Full config kept here for per-niche pipeline.
+
+tier_1:
+  refresh_interval_minutes: 30
+  sources:
+    - name: "Anime News Network"
+      type: "rss"
+      url: "https://www.animenewsnetwork.com/all/rss.xml"
+      category: anime_news
+      weight: 0.90
+    - name: "Crunchyroll News"
+      type: "rss"
+      url: "https://www.crunchyroll.com/feed"
+      category: anime_culture
+      weight: 0.85
+    - name: "MyAnimeList News"
+      type: "rss"
+      url: "https://myanimelist.net/rss/news.xml"
+      category: industry_news
+      weight: 0.80
+
+tier_2:
+  refresh_interval_minutes: 30
+  sources:
+    - name: "Anime News Network"
+      type: "rss"
+      url: "https://www.animenewsnetwork.com/news/rss.xml"
+      category: anime_culture
+      weight: 0.75
+    - name: "Kotaku Anime"
+      type: "rss"
+      url: "https://kotaku.com/tag/anime/rss"
+      category: editorial
+      weight: 0.70
+    - name: "Manga Plus"
+      type: "rss"
+      url: "https://mangaplus.shueisha.co.jp/rss"
+      category: manga_releases
+      weight: 0.70
+
+tier_3:
+  refresh_interval_minutes: 120
+  sources:
+    - name: "AniList Blog"
+      type: "rss"
+      url: "https://anilist.co/feed"
+      category: community
+      weight: 0.65
+
+youtube_channels:
+  - name: "Muse Asia"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsnDtu-g18tDA4miYwurGQQ"
+    type: "rss"
+    weight: 0.9
+    category: "anime_episodes"
+  - name: "AnimeUproar"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVtFOytbRpEvzLjpe6H_toQ"
+    type: "rss"
+    weight: 0.8
+    category: "anime_news"
+  - name: "Gigguk"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
+    type: "rss"
+    weight: 0.7
+    category: "anime_reviews"
+  - name: "Mother's Basement"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBs2Y3i14e1NWQxOGliatmg"
+    type: "rss"
+    weight: 0.7
+    category: "anime_analysis"
+  - name: "Crunchyroll"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UChnA74xRB4NQbP5ExdG0TAQ"
+    type: "rss"
+    weight: 0.95
+    category: "anime_official"
+  - name: "TOEI ANIMATION"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCpgm7kzm1eT4ZcxzggYRBQ"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "Aniplex USA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGbshtvS9t-8CW11W7TooQg"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "MAPPA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiJg7scGY2MCUzkNQ5RXXXQ"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "Viz Media"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCoh01Siu36cB9MpRi-vNtKA"
+    type: "rss"
+    weight: 0.8
+    category: "anime_official"
+  - name: "Anime Corner"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCh8TBbhGJm0vFXVb7a7txlQ"
+    type: "rss"
+    weight: 0.75
+    category: "anime_news"
+  - name: "The Anime Man"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
+    type: "rss"
+    weight: 0.7
+    category: "anime_reviews"
+  - name: "Trash Taste"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCRMr2mAnFYmpkdpFWJwEqkQ"
+    type: "rss"
+    weight: 0.65
+    category: "anime_culture"
+  - name: "Muse Indonesia"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxxnxya_32jcKj4yN1_kD7A"
+    type: "rss"
+    weight: 0.8
+    category: "anime_episodes"
+  - name: "Ani-One Asia"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0wNSTMWo4vwKP2N6kYVgxA"
+    type: "rss"
+    weight: 0.8
+    category: "anime_episodes"
+
+jikan:
+  enabled: true
+  max_promos: 20
+  endpoint: "https://api.jikan.moe/v4/watch/promos"
+
+anilist:
+  enabled: true
+  max_results: 20
+
+cross_mention:
+  window_hours: 6
+  min_sources_for_peak: 4
+
+google_trends:
+  enabled: true
+  stub_mode: true  # pytrends 4.9.2 returns 404 — leave stubbed until upstream fix
+  timeframe: "now 1-d"
+  geo: ""
+  category: 185
+
+reddit:
+  enabled: false
+  subreddits:
+    - anime
+    - animenews
+    - manga
+    - animesuggest
+
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+reddit_sources:
+  - subreddit: r/anime
+    min_score: 1000
+    time_filter: day
+    content_type: video
+  - subreddit: r/AnimeSakuga
+    min_score: 200
+    time_filter: week
+    content_type: video
+  - subreddit: r/OnePiece
+    min_score: 1000
+    time_filter: day
+    content_type: video
+  - subreddit: r/JuJutsuKaisen
+    min_score: 500
+    time_filter: day
+    content_type: video
+  - subreddit: r/DemonSlayer
+    min_score: 500
+    time_filter: day
+    content_type: video
+  - subreddit: r/DragonBallSuper
+    min_score: 500
+    time_filter: day
+    content_type: video
+  - subreddit: r/SoloLeveling
+    min_score: 300
+    time_filter: day
+    content_type: video
+  - subreddit: r/BlueLock
+    min_score: 300
+    time_filter: day
+    content_type: video
+  - subreddit: r/ChainsawMan
+    min_score: 500
+    time_filter: day
+    content_type: video
+  - subreddit: r/MyHeroAcademia
+    min_score: 500
+    time_filter: day
+    content_type: video
+
+# Extra RSS feeds — episode drops and rankings
+rss_feeds_extra:
+  - url: "https://www.livechart.me/feeds/episodes"
+    name: "LiveChart Episodes"
+    max_age_hours: 12
+  - url: "https://www.animecorner.me/feed"
+    name: "Anime Corner"
+    max_age_hours: 168
+
+source_filters:
+  reject_title_patterns:
+    - "BAFTA"
+    - "game award"
+    - "video game"
+    - "north american releases"
+    - "release schedule"
+    - "weekly releases"
+    - "manga releases"
+    - "web novels"
+    - "merchandise"
+    - "podcast"
+    - "opinion:"
+    - "march 1-"
+    - "march 8-"
+    - "march 15-"
+    - "march 22-"
+    - "adds digitally"
+  reject_topic_patterns:
+    - "fashion"
+    - "streetwear"
+    - "merchandise"
+    - "novels digitally"
+  score_boost:
+    season: 0.15
+    premiere: 0.15
+    trailer: 0.15
+    "release date": 0.1
+
+media:
+  pexels:
+    anime_queries:
+      - "anime cosplay convention"
+      - "anime art illustration"
+      - "manga illustration drawing"
+      - "anime figure collection display"
+      - "anime wallpaper aesthetic"
+      - "cosplay costume creative"
+      - "japanese animation studio"
+      - "anime merchandise collection"
+
+content_filter:
+  relevance_threshold: 0.20
+  positive_keywords:
+    # Core terms
+    - anime
+    - manga
+    - otaku
+    - weeb
+    - waifu
+    - husbando
+    - dubbed
+    - subbed
+    - sub
+    - dub
+    - episode
+    - season
+    - arc
+    - saga
+    - filler
+    - canon
+    - opening
+    - ending
+    - op
+    - ed
+    - ova
+    - ona
+    - special
+    - movie
+    - light novel
+    - web novel
+    - manhwa
+    - manhua
+    - doujin
+    # Platforms
+    - crunchyroll
+    - funimation
+    - hidive
+    - anilist
+    - myanimelist
+    - mal
+    # Genres/Demographics
+    - shonen
+    - shojo
+    - seinen
+    - josei
+    - isekai
+    - mecha
+    - slice of life
+    - ecchi
+    - harem
+    - shounen ai
+    - magical girl
+    - sports anime
+    - romance anime
+    - horror anime
+    - comedy anime
+    # Studios
+    - mappa
+    - ufotable
+    - cloverworks
+    - wit studio
+    - madhouse
+    - bones
+    - toei animation
+    - sunrise
+    - a-1 pictures
+    - kyoto animation
+    - trigger
+    - shaft
+    - david production
+    - pierrot
+    - j.c. staff
+    - production ig
+    - gainax
+    - p.a. works
+    - silver link
+    - kinema citrus
+    # Popular series (2024-2026)
+    - one piece
+    - dragon ball
+    - naruto
+    - boruto
+    - bleach
+    - jujutsu kaisen
+    - demon slayer
+    - attack on titan
+    - my hero academia
+    - chainsaw man
+    - spy x family
+    - solo leveling
+    - dandadan
+    - frieren
+    - oshi no ko
+    - blue lock
+    - vinland saga
+    - mushoku tensei
+    - re:zero
+    - konosuba
+    - overlord
+    - shield hero
+    - sword art online
+    - black clover
+    - hunter x hunter
+    - mob psycho
+    - one punch man
+    - tokyo ghoul
+    - death note
+    - fullmetal alchemist
+    - cowboy bebop
+    - evangelion
+    - steins gate
+    - code geass
+    - classroom of the elite
+    - witch hat atelier
+    - kaiju no 8
+    - wind breaker
+    - sakamoto days
+    - hell's paradise
+    # Content types
+    - trailer
+    - pv
+    - teaser
+    - amv
+    - sakuga
+    - fight scene
+    - transformation
+    - power up
+    - reaction
+    - review
+    - breakdown
+    - explained
+    - ranking
+    - top 10
+    - tier list
+    - cosplay
+    - figure
+    - adaptation
+    - announcement
+    - key visual
+    # Events
+    - anime expo
+    - comiket
+    - jump festa
+    - anime japan
+    - comic con
+    # Additional action terms (classifier needs 2+ hits)
+    - premiere
+    - premieres
+    - premiere date
+    - release date
+    - confirmed
+    - reveals
+    - revealed
+    - drops
+    - dropped
+    - returns
+    - returning
+    - new season
+    - new episode
+    - final episode
+    - season finale
+    - chapter
+    - latest chapter
+    - new chapter
+    - simulcast
+    - streaming
+    - dub release
+    - voice actor
+    - voice cast
+    - seiyuu
+    - manga chapter
+    - manga release
+    - volume
+    - tankoubon
+    - anime movie
+    - anime film
+    - anime trailer
+    # Additional popular series
+    - tower of god
+    - made in abyss
+    - golden kamuy
+    - haikyuu
+    - fire force
+    - undead unluck
+    - mashle
+    - berserk
+    - grand blue
+    - kaguya sama
+    - dorohedoro
+    - land of the lustrous
+    - tensura
+    - slime
+    - noragami
+    - fairy tail
+    - inuyasha
+    - yu yu hakusho
+    - slam dunk
+    - gundam
+    - dragon ball z
+    - dbz
+    - goku
+    - luffy
+    - zoro
+    - naruto uzumaki
+    - sasuke
+    - itachi
+    - gojo
+    - sukuna
+    - denji
+    - pochita
+    - tanjiro
+    - zenitsu
+    - inosuke
+    - anya
+    - loid
+    - yor
+  negative_keywords:
+    # Combat sports
+    - mma
+    - ufc
+    - boxing
+    - wrestling
+    - dana white
+    - nate diaz
+    - nick diaz
+    - conor mcgregor
+    - bellator
+    - cage fight
+    - knockout ko
+    - wwe
+    - aew
+    # Finance/business (Hindi market news leaking in)
+    - stock market
+    - share price
+    - nifty
+    - sensex
+    - hdfc
+    - mutual fund
+    - बाजार
+    - शेयर
+    # General non-anime
+    - cricket
+    - ipl
+    - football
+    - soccer
+    - nba
+    - nfl
+    - premier league
+    - roblox
+    - fortnite
+    - minecraft
+    - trump
+    - election
+    - politics

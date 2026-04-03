@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+/* Content slide — hero image background + numbered pill + indigo title + white body.
+ * Every slide MUST have an image background (user feedback: "every slide needs an image").
+ * Heavier overlay than hook slide to ensure text readability.
+ */
+.content-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-content-overlay);
+  z-index: 1;
+}
+
+.content-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 180px var(--space-2xl) var(--space-3xl) var(--space-2xl);
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  {# -- Hero image background (same image as hook slide, heavier overlay for text) -- #}
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="content-overlay"></div>
+  {% else %}
+  {# -- Fallback: accent glow gradient (should be rare — AI gen covers most cases) -- #}
+  <div class="glow-accent" style="top: -80px; right: -120px;"></div>
+  <div class="glow-accent" style="bottom: -60px; left: -100px; width: 300px; height: 300px; opacity: 0.04;"></div>
+  {% endif %}
+
+  <div class="content-layer">
+
+    {# -- Top bar -- #}
+    <div class="top-bar">
+      <div></div>
+      <div class="slide-indicator">{{ slide_number }}/{{ slide_total }}</div>
+    </div>
+
+    {# -- Content block -- #}
+    <div class="content-layout">
+
+      {# -- Numbered pill -- #}
+      <div class="slide-number-pill">{{ slide_number }}</div>
+
+      {# -- Content with accent bar -- #}
+      <div class="text-left-bar">
+        <h2 class="slide-title">{{ slide_title }}</h2>
+        <p class="slide-body">{{ slide_body }}</p>
+      </div>
+
+    </div>
+
+    {# -- Bottom bar -- #}
+    <div class="bottom-bar">
+      <span class="brand-handle">{{ brand_handle }}</span>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

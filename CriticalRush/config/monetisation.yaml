@@ -1,0 +1,37 @@
+# Current platform monetisation status — update manually or via the learner weekly.
+# The reward shaper reads these to compute threshold proximity boosts.
+# Thresholds sourced from platform docs (verified March 2026).
+
+platforms:
+  youtube:
+    current_subscribers: 0
+    current_watch_hours: 0
+    threshold_subscribers: 1000
+    threshold_watch_hours: 4000
+    threshold_shorts_views_90d: 10000000
+    monetised: false
+
+  instagram:
+    current_followers: 0
+    monetised: false
+    note: "invite-only — no fixed threshold, engage heavily to be considered"
+
+  x_twitter:
+    current_impressions_90d: 0
+    threshold_impressions_90d: 5000000
+    has_premium: false
+    monetised: false
+
+  facebook:
+    current_followers: 0
+    current_minutes_viewed_60d: 0
+    threshold_followers: 5000
+    threshold_minutes_viewed_60d: 600000
+    monetised: false
+
+  tiktok:
+    current_followers: 0
+    current_views_30d: 0
+    threshold_followers: 10000
+    threshold_views_30d: 100000
+    monetised: false

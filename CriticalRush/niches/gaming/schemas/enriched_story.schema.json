@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "enriched_story.schema.json",
+  "title": "Enriched Story",
+  "description": "A story after IGDB enrichment — original fields plus game metadata.",
+  "type": "object",
+  "required": ["title"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Article/story headline"
+    },
+    "summary": {
+      "type": ["string", "null"],
+      "description": "Story summary or angle"
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "description": "Original source URL"
+    },
+    "igdb_game_id": {
+      "type": ["string", "integer", "null"],
+      "description": "IGDB game identifier added by enrichment"
+    },
+    "steam_app_id": {
+      "type": ["string", "integer", "null"],
+      "description": "Steam application ID added by enrichment"
+    },
+    "game_name": {
+      "type": ["string", "null"],
+      "description": "Canonical game name from IGDB"
+    },
+    "genres": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Game genres from IGDB"
+    },
+    "platforms": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Game platforms from IGDB"
+    },
+    "cover_url": {
+      "type": ["string", "null"],
+      "description": "Game cover image URL from IGDB"
+    },
+    "first_release_date": {
+      "type": ["string", "integer", "null"],
+      "description": "First release date (ISO string or Unix timestamp)"
+    },
+    "rating": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 100,
+      "description": "IGDB rating (0-100)"
+    },
+    "content": {
+      "type": "object",
+      "description": "Written content (added by later stage)"
+    }
+  }
+}

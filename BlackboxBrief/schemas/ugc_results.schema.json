@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UGC Search Results",
+  "type": "object",
+  "required": ["run_id", "timestamp", "total_results", "blueprints_searched", "results_by_blueprint"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "total_results": { "type": "integer", "minimum": 0 },
+    "blueprints_searched": { "type": "integer", "minimum": 0 },
+    "sources_queried": {
+      "type": "object",
+      "additionalProperties": { "type": "integer" }
+    },
+    "results_by_blueprint": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "keywords", "results"],
+        "properties": {
+          "candidate_id": { "type": "string" },
+          "keywords": { "type": "array", "items": { "type": "string" } },
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/ugc_result" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "ugc_result": {
+      "type": "object",
+      "required": ["asset_id", "source_url", "page_url", "source_type", "attribution_text"],
+      "properties": {
+        "asset_id": { "type": "string" },
+        "source_url": { "type": "string" },
+        "page_url": { "type": "string" },
+        "source_type": { "type": "string", "enum": ["ugc_reddit", "ugc_gallery", "ugc_submission"] },
+        "author": { "type": "string" },
+        "attribution_text": { "type": "string" },
+        "relevance_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "quality_tier": { "type": "string" },
+        "content_type": { "type": "string", "enum": ["image", "video"] },
+        "is_hero_candidate": { "type": "boolean" },
+        "score": { "type": "integer" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" }
+      }
+    }
+  }
+}

@@ -1,0 +1,64 @@
+# Topic Weights — Audience Interest Scoring
+# Higher weight = more relevant to your audience
+# Updated by feedback loop (directives/09_process_feedback.md)
+#
+# Strategy: Balance technical authority with layman relatability.
+# Reference accounts: @evolving.ai (3.9M), @chatgptricks (2.4M), @theaifield (537K)
+# Key insight: The biggest AI accounts on Instagram lead with HUMAN stories, not tech specs.
+
+version: "2.0"
+
+# ── Primary Topics (what the story is about) ────────────────────
+topics:
+  # HIGH — Stories regular people care about
+  tools: 1.0             # New AI tools anyone can use (ChatGPT, Midjourney, etc.)
+  human_impact: 1.0      # AI affecting real people's lives, jobs, relationships
+  pop_culture: 0.95      # AI + movies, music, games, sports, celebrities
+  money: 0.95            # AI making/saving/costing money (funding, jobs, prices)
+  creative: 0.95         # AI art, video, music — things people can SEE and SHARE
+  prompts: 0.90          # Prompt tips, tricks, hacks anyone can use today
+  products: 0.90         # Product launches everyday people will use
+  llm: 0.85             # ChatGPT, Claude, Gemini updates (only if user-facing)
+  agents: 0.80           # AI agents — but framed as "AI that does X for you"
+  ugc: 1.0               # User-generated AI content (creators pushing boundaries)
+  controversial: 0.90    # Controversial/ethical AI stories that drive comments
+
+  # MEDIUM — Interesting if made relatable
+  robots: 0.80           # Physical robots, humanoids — visual and shareable
+  safety: 0.70           # AI safety — but only "will AI take my job?" angles
+  industry: 0.65          # General AI industry developments (not creator-focused)
+  policy: 0.55           # Regulation — only if it affects regular users
+
+  # LOW — Too technical for Instagram unless reframed
+  research: 0.40         # Academic papers (skip unless breakthrough with clear impact)
+  data: 0.30             # Datasets, benchmarks (almost never relatable)
+  infrastructure: 0.25   # Cloud, chips, data centers (only if human story attached)
+
+# ── Relatability Boost ──────────────────────────────────────────
+# Stories matching these signals get a bonus multiplier on top of topic weight.
+# Applied in dedupe_rank_items.py after base scoring.
+relatability_signals:
+  has_dollar_amount: 0.15       # "$200M movie made with AI in one day"
+  has_person_name: 0.10         # "86-year-old farmer" > "new data center built"
+  has_pop_culture_ref: 0.20     # "Game of Thrones", "Naruto", "Titanic"
+  has_how_to_angle: 0.15        # "how to", "you can now", "try this"
+  has_emotional_hook: 0.10      # "incredible", "terrifying", "mind-blowing"
+  has_before_after: 0.10        # Transformation stories
+  has_creator_credit: 0.15      # "@username", "by [creator name]", "a [age]-year-old"
+  has_ugc_showcase: 0.20        # "made with", "created using", "generated with"
+  has_visual_ai_output: 0.15    # AI art, video, image — shareable visual content
+  has_controversy: 0.10         # "debate", "backlash", "divided", "controversial"
+
+# ── Anti-patterns (stories to deprioritize) ─────────────────────
+# These make stories LESS relatable on Instagram
+deprioritize_signals:
+  pure_api_announcement: -0.3   # "We released v2.1 of our API"
+  benchmark_only: -0.3          # "Achieves 94.2% on MMLU"
+  internal_tooling: -0.25       # "New developer console features"
+  corporate_restructuring: -0.2 # "VP of Engineering leaves company"
+  paper_abstract: -0.3          # Reads like an arXiv abstract
+
+# Decay: topics with repeated low engagement get penalized
+# Managed by execution/process_feedback.py
+decay_factor: 0.9       # Multiply weight by this per negative signal
+min_weight: 0.2         # Floor — never drop below this

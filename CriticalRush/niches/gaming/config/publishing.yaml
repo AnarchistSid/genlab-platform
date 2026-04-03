@@ -1,0 +1,64 @@
+# Publishing configuration — CriticalRush gaming niche
+
+rate_limits:
+  instagram:
+    requests_per_hour: 200
+    burst: 10
+  youtube:
+    requests_per_hour: 100
+    burst: 3
+  x_twitter:
+    requests_per_hour: 50
+    burst: 2
+  facebook:
+    requests_per_hour: 200
+    burst: 10
+  tiktok:
+    requests_per_hour: 6     # TikTok hard limit: 6 init requests/min
+    burst: 1
+  threads:
+    requests_per_hour: 200   # 250 posts/24hr — keep headroom
+    burst: 5
+
+platforms:
+  enabled:
+    - instagram
+    - youtube
+    # - twitter          # Disabled Sprint 30
+    - facebook
+    - tiktok
+    - threads
+  concurrent_publish: true
+  publish_strategy: "best_effort"  # "best_effort" | "all_or_nothing"
+
+instagram:
+  schedule_slots:
+    - "12:00"
+  video_aspect_ratio: "9:16"
+  max_caption_length: 2200
+  max_hashtags: 5
+
+youtube:
+  video_aspect_ratio: "9:16"
+  max_short_duration_seconds: 180
+  category_id: 20              # Gaming category
+  privacy_status: "public"
+
+twitter:
+  max_tweet_length: 275
+  max_video_duration_seconds: 140
+  include_source_link: true
+
+facebook:
+  max_post_length: 5000
+  post_mode: "auto"
+
+tiktok:
+  video_aspect_ratio: "9:16"
+  max_caption_length: 2200
+  title_display_limit: 150   # First 150 chars visible before "more"
+  max_hashtags: 5
+
+threads:
+  max_caption_length: 500
+  reply_control: "everyone"

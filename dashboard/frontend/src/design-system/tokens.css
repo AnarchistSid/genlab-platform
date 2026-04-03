@@ -1,0 +1,207 @@
+/*
+ * Obsidian Design Tokens — v2
+ * ─────────────────────────────────────────────────────────────
+ * Every component must reference these tokens.
+ * No hardcoded hex values anywhere in the codebase.
+ *
+ * Modeled on Linear / Vercel / Raycast dark-mode systems.
+ * Alpha-based borders, 5-layer surfaces, 4-tier text.
+ */
+
+:root {
+  /* ── Surface scale (dark obsidian palette) ─────────────────── */
+  --surface-0: #09090b;     /* deepest: page/app background */
+  --surface-1: #0f0f12;     /* main content area */
+  --surface-2: #18181b;     /* cards, panels */
+  --surface-3: #1f1f23;     /* popovers, dropdowns, modals */
+  --surface-hover: #27272a; /* hover states, subtle backgrounds */
+
+  /* ── Text scale (4-tier hierarchy) ─────────────────────────── */
+  --text-primary:   #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
+  --text-ghost:     #52525b;
+  --text-disabled:  #3f3f46;
+
+  /* ── Alpha borders (blend with any surface) ────────────────── */
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border:         rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.15);
+
+  /* ── Status colors ─────────────────────────────────────────── */
+  --color-green:  #22c55e;
+  --color-amber:  #f59e0b;
+  --color-red:    #ef4444;
+  --color-blue:   #3b82f6;
+  --color-purple: #8b5cf6;
+  --color-cyan:   #06b6d4;
+  --color-emerald:#10b981;
+  --color-rose:   #f43f5e;
+  --color-violet: #8b5cf6;
+
+  /* ── Status dim backgrounds (for badges/pills) ─────────────── */
+  --color-green-dim:  rgba(34, 197, 94, 0.12);
+  --color-amber-dim:  rgba(245, 158, 11, 0.12);
+  --color-red-dim:    rgba(239, 68, 68, 0.12);
+  --color-blue-dim:   rgba(59, 130, 246, 0.12);
+  --color-purple-dim: rgba(139, 92, 246, 0.12);
+
+  /* ── Chart palette (60-70% OKLCH lightness for dark mode) ─── */
+  --chart-1: #3b82f6;  /* blue */
+  --chart-2: #10b981;  /* emerald */
+  --chart-3: #f59e0b;  /* amber */
+  --chart-4: #8b5cf6;  /* violet */
+  --chart-5: #f43f5e;  /* rose */
+  --chart-6: #06b6d4;  /* cyan */
+  --chart-fill-opacity: 0.15;
+  --chart-grid: rgba(255, 255, 255, 0.05);
+
+  /* ── Platform brand colors ─────────────────────────────────── */
+  --platform-instagram: #E1306C;
+  --platform-youtube:   #FF0000;
+  --platform-x:         #1DA1F2;
+  --platform-facebook:  #1877F2;
+  --platform-tiktok:    #00F2EA;
+  --platform-threads:   #A0A0A0;
+
+  /* ── Niche accent tokens ───────────────────────────────────── */
+  --niche-ai:      #00D4FF;
+  --niche-gaming:  #f97316;
+  --niche-sports:  #FF2040;  /* ClutchWire red */
+  --niche-anime:   #7B3FE4;  /* FrameDrift violet */
+  /* SpliceReel: #F5EDD6 (cream) passes AA contrast on --surface-2 (#18181b)
+     with ratio ~11.4:1. Preferred over #E8C87A (gold, ~7.8:1) as the actual
+     brand color and higher contrast ratio. */
+  --niche-movies:  #F5EDD6;  /* SpliceReel cream */
+  --niche-current: var(--niche-ai);
+
+  /* ── Typography ────────────────────────────────────────────── */
+  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+
+  --text-xs:   0.6875rem;   /* 11px — labels */
+  --text-sm:   0.8125rem;   /* 13px — metadata */
+  --text-base: 0.875rem;    /* 14px — body */
+  --text-lg:   1rem;        /* 16px — section titles */
+  --text-xl:   1.25rem;     /* 20px — page headings */
+  --text-2xl:  1.5rem;      /* 24px — page headings */
+  --text-3xl:  1.875rem;    /* 30px — hero metrics */
+
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.05em; /* labels: uppercase + wide tracking */
+
+  /* ── Spacing (4px base grid) ───────────────────────────────── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  16px;
+  --space-xl:  24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* ── Radius ────────────────────────────────────────────────── */
+  --radius-sm:   6px;   /* buttons, inputs, small interactives */
+  --radius-md:   8px;   /* default — matches Linear/Vercel */
+  --radius-lg:  12px;   /* panels, cards */
+  --radius-xl:  16px;   /* modals */
+  --radius-full: 9999px; /* avatars, status dots, pills */
+
+  /* ── Shadow (elevation through border luminance + subtle shadow) */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 64px -16px rgba(0, 0, 0, 0.65);
+  --shadow-float: 0 16px 64px -16px rgba(0, 0, 0, 0.65),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  /* ── Transition ────────────────────────────────────────────── */
+  --duration-fast:   100ms;  /* micro-feedback */
+  --duration-base:   150ms;  /* interactions */
+  --duration-slow:   200ms;  /* transitions */
+  --duration-layout: 350ms;  /* layout changes */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* CSS spring approx */
+
+  /* ── Animation ──────────────────────────────────────────── */
+  --stagger-delay: 50ms;
+  --count-up-duration: 800ms;
+  --noise-opacity: 0.02;
+}
+
+/* ── Light theme ───────────────────────────────────────────── */
+/* Apply with <html class="light"> or data-theme="light"        */
+:root[data-theme="light"],
+.light {
+  --surface-0: #ffffff;
+  --surface-1: #fafafa;
+  --surface-2: #f4f4f5;
+  --surface-3: #e4e4e7;
+  --surface-hover: #e4e4e7;
+
+  --text-primary:   #18181b;
+  --text-secondary: #52525b;
+  --text-muted:     #71717a;
+  --text-ghost:     #a1a1aa;
+  --text-disabled:  #d4d4d8;
+
+  --border-subtle:  rgba(0, 0, 0, 0.06);
+  --border:         rgba(0, 0, 0, 0.12);
+  --border-strong:  rgba(0, 0, 0, 0.18);
+
+  --color-green-dim:  rgba(34, 197, 94, 0.10);
+  --color-amber-dim:  rgba(245, 158, 11, 0.10);
+  --color-red-dim:    rgba(239, 68, 68, 0.10);
+  --color-blue-dim:   rgba(59, 130, 246, 0.10);
+  --color-purple-dim: rgba(139, 92, 246, 0.10);
+
+  --chart-fill-opacity: 0.10;
+  --chart-grid: rgba(0, 0, 0, 0.06);
+
+  --niche-movies: #C9A84C;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 16px 64px -16px rgba(0, 0, 0, 0.15);
+  --shadow-float: 0 16px 64px -16px rgba(0, 0, 0, 0.15),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+  --noise-opacity: 0;
+}
+
+.light ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); }
+.light ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+.light * { scrollbar-color: rgba(0, 0, 0, 0.15) transparent; }
+
+/* ── Custom scrollbars ──────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.1) transparent; }
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--noise-opacity);
+}

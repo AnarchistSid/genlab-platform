@@ -1,0 +1,113 @@
+# UGC (User Generated Content) Search Configuration
+# Controls automated search for Reddit posts, AI art galleries, and (future) community submissions.
+
+ugc:
+  enabled: true
+  max_results_per_blueprint: 5
+  prefer_ugc_over_ai_hero: true    # Use UGC hero over AI-generated when available
+  prefer_video_ugc: true           # Boost video poster frames as hero candidates
+  video_relevance_bonus: 0.08      # Added to relevance score for video posts
+  min_quality_tier: "usable"       # hero or usable
+  min_relevance_score: 0.3
+  cache_ttl_hours: 6
+
+sources:
+  reddit:
+    enabled: true
+    subreddits:
+      # Creator-first media discovery (AI art/video showcase communities)
+      - "aivideo"
+      - "aiArt"
+      - "midjourney"
+      - "kling"
+      - "StableDiffusion"
+    max_results_per_subreddit: 5
+    sort: "top"                    # top | relevance | new
+    time_filter: "week"            # hour | day | week | month — "day" is too strict, posts need time to accumulate votes
+    min_score: 10                  # Lowered from 50 — day-old posts rarely hit 50 upvotes
+    exclude_nsfw: true
+    user_agent: "ContentIntelBot/1.0 (UGC search for AI news curation)"
+    # Media types to look for in posts
+    accepted_post_hints:
+      - "image"
+      - "hosted:video"
+      - "rich:video"
+      - "link"
+
+  youtube:
+    enabled: true
+    min_views: 1000                # Skip videos with < 1000 views
+    published_after_days: 7        # Only recent videos
+    video_duration: "short"        # short (<4 min) — best for reel source clips
+    # Uses existing YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN from .env (OAuth2)
+    # Costs: 100 quota units per search (10,000 units/day free tier = 100 searches/day)
+
+  pexels:
+    enabled: true                  # Enable when PEXELS_API_KEY is set in .env
+    prefer_video: true             # Search videos first, fall back to photos
+    # Free API: 200 requests/hour. Sign up at https://www.pexels.com/api/
+    # Set PEXELS_API_KEY in .env
+
+  pixabay:
+    enabled: true                  # Enable when PIXABAY_API_KEY is set in .env
+    prefer_video: true             # Search videos first, fall back to photos
+    image_type: "photo"            # photo | illustration | vector
+    # Free API: 5,000 requests/hour. Sign up at https://pixabay.com/api/docs/
+    # Set PIXABAY_API_KEY in .env
+
+  unsplash:
+    enabled: true                  # Enable when UNSPLASH_ACCESS_KEY is set in .env
+    orientation: "portrait"        # portrait (best for 9:16 reels), landscape, or squarish
+    # Free API: 50 requests/hour (Demo), 5,000/hour (Production)
+    # Sign up at: https://unsplash.com/developers
+    # Set UNSPLASH_ACCESS_KEY in .env
+
+  gallery:
+    enabled: true
+    min_keyword_matches: 1
+
+  submission:
+    enabled: false                 # Future: Google Form / DM bot integration
+    # google_sheet_id: ""
+    # form_webhook_url: ""
+
+# Video clip settings (yt-dlp)
+video_clips:
+  enabled: true                    # Download actual video clips for reels (vs ken-burns)
+  max_clip_seconds: 15             # Clip first N seconds of YouTube videos
+  max_file_size_mb: 50             # Skip videos larger than this
+  prefer_real_video: true          # Use real video clips when available, ken-burns as fallback
+
+# Attribution format strings (used in credit overlays on rendered slides)
+attribution:
+  reddit: "u/{author} via r/{subreddit}"
+  youtube: "{channel} on YouTube"
+  pexels: "{photographer} on Pexels"
+  pixabay: "{user} on Pixabay"
+  unsplash: "Photo by {name} on Unsplash"
+  gallery: "{creator} on {platform} ({model})"
+  submission: "Submitted by {author}"
+
+# Pexels API configuration (used by execution/utils/pexels_client.py)
+pexels:
+  enabled: true
+  api_version: "v1"
+  rate_limit_per_hour: 200
+  default_orientation: "portrait"
+  min_video_height: 1920
+  min_photo_width: 1080
+  cache_ttl_hours: 12
+  fallback_queries: ["technology", "artificial intelligence", "digital", "futuristic"]
+  theme_mappings:
+    llm: "artificial intelligence"
+    safety: "AI security technology"
+    products: "tech product launch"
+    research: "science laboratory"
+    agents: "robot automation"
+    tools: "software developer"
+    policy: "government regulation"
+    news: "breaking news"
+    prompts: "AI chatbot"
+    pop_culture: "celebrity entertainment"
+    creative: "digital art creative"
+    money: "finance business"

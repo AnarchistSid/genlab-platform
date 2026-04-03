@@ -1,0 +1,75 @@
+# Text overlay templates for compilation videos
+
+fonts:
+  montserrat_bold:
+    family: "Montserrat"
+    weight: "ExtraBold"
+    file: "assets/fonts/Montserrat-ExtraBold.ttf"
+
+  bebas_neue:
+    family: "Bebas Neue"
+    weight: "Regular"
+    file: "assets/fonts/BebasNeue-Regular.ttf"
+
+overlay_templates:
+  streamer_name:
+    font: "montserrat_bold"
+    size_px: 48
+    color: "#FFFFFF"
+    stroke_color: "#000000"
+    stroke_width: 3
+    position: "bottom_left"
+    margin_x: 40
+    margin_y: 120
+    duration_seconds: 3.0
+    fade_in_seconds: 0.2
+    fade_out_seconds: 0.3
+
+  game_title:
+    font: "bebas_neue"
+    size_px: 36
+    color: "#FFD700"
+    stroke_color: "#000000"
+    stroke_width: 2
+    position: "top_right"
+    margin_x: 40
+    margin_y: 60
+    duration_seconds: 3.0
+    fade_in_seconds: 0.2
+    fade_out_seconds: 0.3
+
+  hook_text:
+    font: "montserrat_bold"
+    size_px: 64
+    color: "#FFFFFF"
+    stroke_color: "#000000"
+    stroke_width: 4
+    position: "center"
+    duration_seconds: 2.0
+    fade_in_seconds: 0.3
+    fade_out_seconds: 0.5
+    only_first_clip: true
+
+  cta_text:
+    font: "montserrat_bold"
+    size_px: 48
+    color: "#FFD700"
+    stroke_color: "#000000"
+    stroke_width: 3
+    position: "bottom_center"
+    margin_y: 250
+    duration_seconds: 3.0
+    fade_in_seconds: 0.3
+    fade_out_seconds: 0.5
+    only_last_clip: true
+
+  caption:
+    font: "montserrat_bold"
+    size_px: 36
+    color: "#FFFFFF"
+    stroke_color: "#000000"
+    stroke_width: 3
+    position: "bottom_center"
+    margin_y: 200
+    word_by_word: true             # Whisper-synced word highlights
+    highlight_color: "#FFD700"

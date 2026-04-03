@@ -1,0 +1,21 @@
+# FrameDrift publishing schedule
+# 1 daily slot: 12:00 IST = 06:30 UTC
+
+timezone: Asia/Kolkata
+
+daily_slots_ist:
+  - time: "12:00"
+    utc: "06:30"
+    label: "12:00 IST"
+  - time: "19:30"
+    utc: "14:00"
+    label: "19:30 IST"
+
+max_publishes_per_day: 1
+
+content_mix:
+  reels_percent: 55
+  carousels_percent: 30
+  stories_percent: 15
+
+blackout_periods: []

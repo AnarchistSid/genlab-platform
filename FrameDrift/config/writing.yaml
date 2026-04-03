@@ -1,0 +1,24 @@
+# FrameDrift writing config — additive niche instructions for LLM content writer.
+# VideoContentWriter already has niche voice profiles; this adds banned phrases
+# and hook examples that are specific to FrameDrift.
+
+niche_id: anime
+
+banned_phrases:
+  - "the anime community is going wild"
+  - "something big happened"
+  - "fans can't believe"
+  - "otaku need to see this"
+  - "a new era of anime"
+  - "the most anticipated anime"
+  - "anime fans are shaking"
+
+hook_examples:
+  - "Jujutsu Kaisen just dropped THAT scene"
+  - "Studio MAPPA outdid themselves again"
+  - "This fight scene broke Crunchyroll"
+
+tone_notes: >
+  Write with passionate otaku energy. Reference specific anime titles,
+  studios, characters, and episodes. Use anime culture references
+  naturally — never forced. Emotional reactions are welcome.

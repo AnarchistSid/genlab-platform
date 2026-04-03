@@ -1,0 +1,115 @@
+# Monetization configuration — affiliate links + newsletter CTAs
+# Injected deterministically AFTER LLM content generation (no prompt pollution).
+#
+# Flow:
+#   1. match_affiliate() checks blueprint story text + themes against triggers
+#   2. If match found: inject affiliate link per platform (adapt_for_platforms.py)
+#   3. write_post_content.py adds organic tool mention hint to LLM prompt
+#
+# Revenue model: affiliate commissions on AI tool signups + newsletter growth.
+# All links use UTM tracking: ?utm_source=blackbox_brief&utm_medium={platform}&utm_campaign=ai_tools
+
+version: "2026.03"
+
+affiliate_programs:
+  - name: "Kling AI"
+    slug: "kling"
+    url: "https://klingai.com"
+    commission: "varies"
+    link_template: "https://klingai.com/?ref=blackboxbrief"
+    trigger_themes: ["products", "creative"]
+    trigger_tools: ["kling", "kling 3", "kling 3.0", "kling ai"]
+    cta_text: "Try Kling AI free"
+    active: true
+
+  - name: "Jasper AI"
+    slug: "jasper"
+    url: "https://jasper.ai"
+    commission: "25% recurring 12 months"
+    link_template: "https://jasper.ai/?fpr=blackboxbrief"
+    trigger_themes: ["tools", "prompts"]
+    trigger_tools: ["jasper", "jasper ai"]
+    cta_text: "Try Jasper AI free"
+    active: true
+
+  - name: "Synthesia"
+    slug: "synthesia"
+    url: "https://synthesia.io"
+    commission: "25%"
+    link_template: "https://synthesia.io/?via=blackboxbrief"
+    trigger_themes: ["products", "creative"]
+    trigger_tools: ["synthesia"]
+    cta_text: "Create AI videos with Synthesia"
+    active: true
+
+  - name: "Writesonic"
+    slug: "writesonic"
+    url: "https://writesonic.com"
+    commission: "30% lifetime recurring"
+    link_template: "https://writesonic.com/?ref=blackboxbrief"
+    trigger_themes: ["tools", "prompts"]
+    trigger_tools: ["writesonic"]
+    cta_text: "Try Writesonic free"
+    active: true
+
+  - name: "ContentStudio"
+    slug: "contentstudio"
+    url: "https://contentstudio.io"
+    commission: "50% recurring"
+    link_template: "https://contentstudio.io/?ref=blackboxbrief"
+    trigger_themes: ["tools"]
+    trigger_tools: ["contentstudio", "content studio"]
+    cta_text: "Manage your content with ContentStudio"
+    active: true
+
+  - name: "Canva"
+    slug: "canva"
+    url: "https://canva.com"
+    commission: "up to $36 per Pro subscription"
+    link_template: "https://canva.com/?ref=blackboxbrief"
+    trigger_themes: ["tools", "creative"]
+    trigger_tools: ["canva"]
+    cta_text: "Design with Canva AI"
+    active: true
+
+newsletter:
+  platform: "beehiiv"
+  publication_name: "Blackbox Brief"
+  signup_url: "https://blackboxbrief.beehiiv.com/subscribe"
+  cta_templates:
+    - "Get the full breakdown in our free newsletter: {signup_url}"
+    - "Want the tools and workflows? Subscribe to Blackbox Brief: {signup_url}"
+    - "Daily AI breakdowns in your inbox: {signup_url}"
+  include_in:
+    - "youtube_description"
+    - "twitter_thread_final"
+
+link_in_bio:
+  service: "beacons"
+  url: "https://beacons.ai/blackboxbrief"
+  items:
+    - label: "Free Newsletter"
+      url: "https://blackboxbrief.beehiiv.com/subscribe"
+    - label: "AI Prompt Pack ($9)"
+      url: "https://blackboxbrief.gumroad.com/l/ai-prompts"
+  ig_cta: "Link in bio for {tool_name} and more AI tools"
+  fallback_ig_cta: "Link in bio for free AI tools"
+
+# Platform-specific injection rules
+injection_rules:
+  youtube:
+    location: "description_end"
+    format: "\n\n{cta_text}: {link}\n\n{newsletter_cta}"
+    max_links: 2
+  instagram:
+    location: "caption_end"
+    format: "\n\n{link_in_bio_cta}"
+    max_links: 0  # No clickable links in IG captions
+  twitter:
+    location: "first_reply"
+    format: "{cta_text}: {link}"
+    max_links: 1
+  facebook:
+    location: "caption_end"
+    format: "\n\n{cta_text}: {link}"
+    max_links: 1

@@ -1,0 +1,106 @@
+# Scoring Weights (Phase 7 — post-inspo-research update)
+# All weights must sum to 1.0
+#
+# Updated 2026-02-18 based on deep-dive analysis of 20+ competitor accounts.
+# Key finding: authority alone doesn't predict Instagram performance.
+# Stories need both credibility AND virality fit.
+
+version: "3.0"
+
+weights:
+  virality_fit: 0.35    # Primary signal — predicts Instagram shareability
+  recency: 0.25         # Time-sensitive stories still matter
+  novelty: 0.20         # Dedup importance slightly reduced
+  authority: 0.20        # Tiebreaker, not lead — credibility matters but doesn't drive engagement
+
+# ── Platform quality scoring (fallback for items without source_priority) ──
+# Primary scoring uses source_priority from sources.yaml (per-source granularity).
+# This map is only consulted for items lacking source_priority (test data, manual).
+authority_map:
+  # Tier 1: High-quality creator platforms (0.80–0.85)
+  "reddit.com": 0.85        # Community-curated, highest volume
+  "i.redd.it": 0.85         # Reddit image host (domain on parsed items)
+  "v.redd.it": 0.85         # Reddit video host (domain on parsed items)
+  "youtube.com": 0.80       # Shorts = high quality creator content
+  "youtu.be": 0.80          # YouTube short URL alias
+  "civitai.com": 0.80       # Reaction-curated, high visual quality
+  "instagram.com": 0.80     # Reels = proven format
+  "tiktok.com": 0.80        # Top-tier when enabled
+
+  # Tier 2: Good platforms (0.70–0.75)
+  "vimeo.com": 0.75         # High production, low volume
+  "x.com": 0.70             # Fast-breaking but noisy
+  "twitter.com": 0.70       # Alias for x.com
+  "threads.net": 0.70       # Decent, less mature
+
+  # Tier 3: Tech/demo platforms (0.65)
+  "huggingface.co": 0.65    # Tech demos, less polished visually
+
+  # Default for unknown platforms
+  "default": 0.50
+
+# ── Recency decay (exponential) ────────────────────────────────
+recency_decay_hours: 24  # Half-life
+
+# ── Novelty threshold (Jaccard similarity) ─────────────────────
+novelty_threshold: 0.85  # >0.85 = duplicate
+
+# ── Virality Fit Scoring ───────────────────────────────────────
+# Predicts how well a story will perform on Instagram specifically.
+# Based on analysis of 20+ accounts' highest-engagement posts.
+# Applied in dedupe_rank_items.py alongside authority/recency/novelty.
+#
+# Each story gets a virality_fit score (0.0-1.0) based on which
+# hook formula(s) it matches. Multiple matches stack (capped at 1.0).
+virality_fit:
+  # Hook formulas ranked by observed avg engagement (from inspo research)
+  hook_formulas:
+    dollar_amount: 0.35        # "$200M movie", "$15M offer", "$70M domain sale"
+    pop_culture_crossover: 0.30 # "Game of Thrones x AI", "Naruto recreated"
+    human_interest: 0.25       # "86-year-old farmer", "22-year-old developer"
+    ai_creator_showcase: 0.25  # "Someone just made...", "AI generated a..."
+    just_happened_urgency: 0.20 # "just", "breaking", "now", time-sensitive
+    provocative_claim: 0.20    # "McKinsey should be worried", "coding dies"
+    geopolitical_angle: 0.15   # "China vs US", trade wars, regulations
+    listicle_utility: 0.15     # "5 prompts that...", "10 free tools"
+    stop_doing_x: 0.15         # "Stop saying X to ChatGPT"
+    before_after: 0.20         # Transformation — highest share rate
+
+  # Content type bonus — visual/shareable content performs better on IG
+  content_type_bonus:
+    has_video_demo: 0.15       # Robotics demo, AI tool demo, etc.
+    has_visual_output: 0.15    # AI-generated art, video, music
+    has_recognizable_face: 0.10 # Tech CEO, celebrity, public figure
+
+  # Cap: virality_fit score maxes at 1.0 regardless of stacking
+  max_score: 1.0
+
+# ── Story clustering (groups related stories by topic) ─────────
+clustering:
+  enabled: true
+  similarity_threshold: 0.35  # TF-IDF cosine threshold for same-cluster
+  tfidf_ngram_range: [1, 2]   # Word unigrams + bigrams
+  tfidf_max_features: 5000    # Vocabulary cap
+
+# ── Content fitness filters (F-16) ───────────────────────────
+# Used by review_content.py to flag non-AI and low-visual stories.
+# Patterns are regex strings (re.IGNORECASE applied at runtime).
+content_filters:
+  non_ai_patterns:
+    - '\bfundraising\b.*\braises?\b'
+    - '\braises?\s+\$\d+[MBK]'
+    - '\bseries\s+[A-F]\b'
+    - '\bIPO\b'
+    - '\bdata\s+center\s+(power|energy|solar|grid)\b'
+    - '\bclimate[\s-]conscious\s+consumer'
+    - '\bdark\s+web\b'
+    - '\bcrypto\s+(price|trading|market)\b'
+    - '\bNFL\b|\bNBA\b|\bsuper\s+bowl\b'
+    - '\belection\s+(results|poll|vote)\b'
+    - '\breal\s+estate\s+(market|price)\b'
+  low_visual_patterns:
+    - '\binfrastructure\b.*\b(power|grid|energy)\b'
+    - '\bsemiconductor\s+(shortage|supply)\b'
+    - '\bregulat(ion|ory)\s+(compliance|framework)\b'
+    - '\bwhitepaper\b'
+    - '\bacademic\s+paper\b'

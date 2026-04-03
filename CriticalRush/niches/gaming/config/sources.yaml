@@ -1,0 +1,426 @@
+# Gaming sources configuration for CriticalRush
+# All tunable parameters for content fetching and clip sourcing.
+
+clip_sourcer:
+  max_duration_seconds: 300
+  min_duration_seconds: 5
+  target_resolution: "1080"
+  trim_start_pct: 0.25
+  output_dir: ".tmp/clips"
+  banned_fragments:
+    - "reaction"
+    - "review"
+    - "explained"
+    - "ranking"
+    - "top 10"
+    - "worst"
+  pexels_query_template: "{game_title} gameplay"
+  youtube_search_template: "{game_title} official trailer"
+  twitch_clip_limit: 5
+
+# rss_feeds: moved to shared_sources.yaml (IGN, Kotaku, PC Gamer, Eurogamer, GameSpot, Rock Paper Shotgun, Steam News)
+
+steam:
+  poll_interval_minutes: 30
+  spike_threshold: 5000
+  spike_threshold_multiplier: 1.5
+  max_stories: 5
+
+twitch:
+  poll_interval_minutes: 15
+  min_viewer_count: 1000
+
+igdb:
+  api_base: "https://api.igdb.com/v4"
+  rate_limit_per_second: 4
+  game_fields:
+    - "id"
+    - "name"
+    - "slug"
+    - "cover.url"
+    - "involved_companies.company.name"
+    - "involved_companies.developer"
+    - "external_games.category"
+    - "external_games.uid"
+    - "total_rating"
+
+reddit:
+  subreddits:
+    - name: "gaming"
+      weight: 1.0
+    - name: "pcgaming"
+      weight: 0.9
+    - name: "Games"
+      weight: 0.8
+    - name: "PS5"
+      weight: 0.7
+    - name: "XboxSeriesX"
+      weight: 0.7
+    - name: "NintendoSwitch"
+      weight: 0.7
+    - name: "Steam"
+      weight: 0.6
+  velocity_window_hours: 6
+  fetch_interval_minutes: 30
+
+# YouTube channels that post SHORT gaming clips (trailers, highlights, shorts)
+# RSS feeds cost 0 API quota — primary source for short-form content
+youtube_channels:
+  - name: "IGN"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
+    weight: 1.0
+    category: trailers
+  - name: "GameSpot"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbu2SsF-Or3Rsn3NxqODImw"
+    weight: 0.9
+    category: trailers
+  - name: "PlayStation"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC-2Y8dQb0S6DtpxNgAKoJKA"
+    weight: 0.8
+    category: trailers
+  - name: "Xbox"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXGgrKt94gR6lmN4aN3mYTg"
+    weight: 0.8
+    category: trailers
+  - name: "Nintendo of America"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfAPTv1LgeEWevG8X_6PUOQ"
+    weight: 0.8
+    category: trailers
+  - name: "Riot Games"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2t5bjwHdUX4vM2g8TRDq5g"
+    weight: 0.7
+    category: esports
+  - name: "Valorant"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC8CX0LD98EDXl4UYX1MDCXg"
+    weight: 0.7
+    category: esports
+  - name: "Epic Games"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0gAYVSEbOPSxkj3whKXfyA"
+    weight: 0.7
+    category: trailers
+  - name: "Ubisoft"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBMvc6jvuTxH6TNo9ThpGhA"
+    weight: 0.7
+    category: trailers
+  - name: "Rockstar Games"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIc3bAVSh0Kz4yP1BrhGlwg"
+    weight: 0.8
+    category: trailers
+  - name: "Steam"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
+    weight: 0.6
+    category: trailers
+  - name: "Blizzard Entertainment"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3GriadTkVbsVDHiMUbo8NA"
+    weight: 0.7
+    category: trailers
+  - name: "EA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIHBvYBsR-JODFLcpAEMHNQ"
+    weight: 0.7
+    category: trailers
+  - name: "Capcom"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_kDLGRnklMNX-q3Hl8ZOQ"
+    weight: 0.7
+    category: trailers
+  - name: "BANDAI NAMCO"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCExqywGFWE1EZfqKVg0HLYg"
+    weight: 0.7
+    category: trailers
+  - name: "Square Enix"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCeGGMPWkklGlRfr28VJttMQ"
+    weight: 0.7
+    category: trailers
+  - name: "Shroud"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCoz3Kpu5lv-ALhR4h9bDvcw"
+    weight: 0.6
+    category: highlights
+  - name: "LoL Esports"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw"
+    weight: 0.7
+    category: esports
+  - name: "VALORANT Champions Tour"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKHa8fQX4VCrstGhHHPQ1nQ"
+    weight: 0.7
+    category: esports
+
+twitch_clips:
+  enabled: true
+  max_clips_per_game: 5
+  min_view_count: 1000
+  lookback_days: 7
+
+steam_trailers:
+  enabled: true
+  max_per_game: 2
+
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+reddit_sources:
+  - subreddit: r/gaming
+    min_score: 10000
+    time_filter: day
+    content_type: video
+  - subreddit: r/VALORANT
+    min_score: 3000
+    time_filter: day
+    content_type: video
+  - subreddit: r/leagueoflegends
+    min_score: 5000
+    time_filter: day
+    content_type: video
+  - subreddit: r/FortNiteBR
+    min_score: 3000
+    time_filter: day
+    content_type: video
+  - subreddit: r/apexlegends
+    min_score: 2000
+    time_filter: day
+    content_type: video
+
+source_filters:
+  reject_title_patterns:
+    - "deal"
+    - "sale"
+    - "discount"
+    - "price drop"
+    - "drops to $"
+    - "for today only"
+    - "headset"
+    - "controller"
+    - "keyboard"
+    - "mouse"
+    - "monitor"
+    - "opinion:"
+    - "here's why"
+    - "weekly roundup"
+    - "podcast"
+    - "review:"
+    - "the case for"
+    - "best gaming"
+    - "buying guide"
+  reject_topic_patterns:
+    - "rss_deals"
+    - "rss_gear"
+    - "hardware"
+    - "opinion"
+    - "podcast"
+
+content_filter:
+  relevance_threshold: 0.20
+  positive_keywords:
+    # Core terms
+    - game
+    - gaming
+    - gameplay
+    - gamer
+    - esports
+    - streamer
+    - speedrun
+    - walkthrough
+    - playthrough
+    - lets play
+    - mod
+    - modding
+    - glitch
+    - exploit
+    - clutch
+    - montage
+    - compilation
+    - highlights
+    - ranked
+    - competitive
+    - tournament
+    - trailer
+    - update
+    - patch
+    - dlc
+    - season pass
+    - beta
+    - early access
+    - review
+    - first look
+    # Platforms
+    - playstation
+    - ps5
+    - xbox
+    - series x
+    - nintendo
+    - switch
+    - steam
+    - epic games
+    - pc gaming
+    - mobile gaming
+    # Genres
+    - fps
+    - mmorpg
+    - rpg
+    - battle royale
+    - moba
+    - sandbox
+    - survival
+    - horror game
+    - indie game
+    - roguelike
+    - open world
+    - co-op
+    - pvp
+    - pve
+    # Popular titles (2024-2026)
+    - fortnite
+    - valorant
+    - league of legends
+    - minecraft
+    - roblox
+    - gta
+    - call of duty
+    - cod
+    - apex legends
+    - overwatch
+    - elden ring
+    - zelda
+    - counter-strike
+    - cs2
+    - dota
+    - rocket league
+    - destiny
+    - diablo
+    - world of warcraft
+    - final fantasy
+    - pokemon
+    - smash bros
+    - street fighter
+    - tekken
+    - mortal kombat
+    - resident evil
+    - cyberpunk
+    - starfield
+    - palworld
+    - helldivers
+    - baldurs gate
+    - hogwarts legacy
+    - spider-man
+    - god of war
+    - halo
+    - fifa
+    - ea fc
+    - madden
+    - nba 2k
+    # Streamers/creators
+    - twitch
+    - kick
+    - xqc
+    - shroud
+    - ninja
+    - pokimane
+    - ludwig
+    - jerma
+    - pewdiepie
+    - markiplier
+    - jacksepticeye
+    - dream
+    - mrbeast gaming
+    - ibai
+    - caedrel
+    # Industry
+    - e3
+    - gamescom
+    - game awards
+    - state of play
+    - nintendo direct
+    - xbox showcase
+    - summer game fest
+    - devlog
+    - game dev
+    - unreal engine
+    - unity
+    # Commerce & events (classifier needs 2+ hits)
+    - sale
+    - deals
+    - free to play
+    - free game
+    - game pass
+    - ps plus
+    - price drop
+    - discount
+    - bundle
+    - pre-order
+    - release date
+    - launch
+    - reveal
+    - announcement
+    - showcase
+    - hands on
+    - first look
+    - gameplay reveal
+    - demo
+    # Additional titles (2025-2026)
+    - monster hunter
+    - persona
+    - dark souls
+    - bloodborne
+    - sekiro
+    - ghost of tsushima
+    - horizon
+    - last of us
+    - uncharted
+    - metal gear
+    - death stranding
+    - no mans sky
+    - sea of thieves
+    - warframe
+    - path of exile
+    - genshin impact
+    - honkai star rail
+    - wuthering waves
+    - animal crossing
+    - splatoon
+    - mario
+    - kirby
+    - metroid
+    - fire emblem
+    - stardew valley
+    - terraria
+    - among us
+    - phasmophobia
+    - lethal company
+    - escape from tarkov
+    - rust
+    - dayz
+    - ark
+    - deep rock galactic
+    - dragon ball fighterz
+    - guilty gear
+    - granblue fantasy
+    # Additional action terms
+    - leak
+    - leaked
+    - leaks
+    - rumor
+    - rumored
+    - datamine
+    - datamined
+    - banner
+    - patch notes
+    - nerf
+    - buff
+    - character
+    - new character
+    - skin
+    - cosmetic
+    - battlepass
+    - battle pass
+    - roadmap
+    - update
+    - hotfix
+    - server
+    - maintenance
+    - downtime
+    - crossplay
+    - cross-play
+  negative_keywords:
+    - cooking
+    - beauty tutorial
+    - mukbang
+    - asmr eating
+    - meditation
+    - yoga
+    - recipe

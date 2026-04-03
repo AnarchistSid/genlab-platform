@@ -1,0 +1,166 @@
+# AI Story Background Generation — Prompt Templates
+#
+# Topic-aware prompt templates for generating contextual hero images.
+# Each story is matched to a topic via infer_story_tags() from
+# compose_blueprints.py, then the corresponding scene templates
+# are used to build the OpenAI gpt-image-1 prompt.
+#
+# Two scene_templates per topic (wide shot + close-up):
+#   - attempt=0 picks scene_templates[0]
+#   - attempt=1 picks scene_templates[1] (fallback if first fails quality)
+#
+# {entity_context} placeholder: filled with entity-specific hint when
+# a KNOWN_COMPANIES entity is detected in the title, otherwise empty string.
+#
+# Imported by: execution/utils/image_gen_client.py
+
+# ═══════════════════════════════════════════════════════════════
+# Default fallback — used when no topic tag matches
+# ═══════════════════════════════════════════════════════════════
+default:
+  scene_templates:
+    - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a futuristic AI server room with rows of glowing blue LED racks, shallow depth of field, smoke wisps catching the light"
+    - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}an abstract neural network visualization with glowing nodes and connections against a deep navy background, macro photography style"
+  style_suffix: "Photorealistic, high-end magazine quality, dramatic cinematic lighting, 4K detail. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+# ═══════════════════════════════════════════════════════════════
+# Per-topic templates — keyed on tags from infer_story_tags()
+# ═══════════════════════════════════════════════════════════════
+topics:
+  money:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a modern glass office with a large digital screen showing abstract upward-trending data curves in green and blue, warm golden hour light streaming through floor-to-ceiling windows"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a close-up of a person's hands holding a premium smartphone, a blurred financial dashboard with abstract colored bars visible on screen, shallow depth of field"
+    style_suffix: "Rich warm tones, shallow depth of field, magazine editorial photography, luxury business atmosphere. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  creative:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a digital artist's dual-monitor setup in a dim studio, vibrant AI-generated abstract artwork glowing on the screens, creative tools scattered on the desk"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a close-up of a canvas showing AI-generated art blending into paint strokes, a stylus resting beside a glowing tablet, soft studio lighting"
+    style_suffix: "Vibrant saturated colors, artistic mood, cinematic lighting with neon accent colors. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  human_impact:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a candid portrait of a middle-aged person looking at a laptop screen in a warm home office, soft natural window light illuminating their thoughtful expression, bokeh background"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a pair of weathered hands typing on a modern laptop keyboard, a blurred AI chat interface visible on the screen, intimate close-up with warm tones"
+    style_suffix: "Warm human tones, natural light, documentary photography style, authentic and empathetic mood. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  pop_culture:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a dramatic movie theater interior with volumetric light beams from the projector cutting through dust, empty red velvet seats, cinematic atmosphere"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a stylized record player with vinyl spinning under purple neon light, headphones resting on the turntable, moody nightclub atmosphere"
+    style_suffix: "High-contrast cinematic style, deep saturated colors, dramatic shadows, entertainment industry aesthetic. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  safety:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a padlock sitting on a glowing blue circuit board, dramatic side lighting casting long shadows, macro photography with shallow depth of field"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a silhouette of a person standing before a massive wall of abstract digital data streams in blue and red, surveillance aesthetic"
+    style_suffix: "Dark moody tones, dramatic chiaroscuro lighting, editorial style, tension and gravitas. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  tools:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a sleek premium smartphone lying flat on a minimalist white marble surface, a colorful blurred AI interface glowing on screen, soft studio lighting from the side"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a close-up of a modern laptop keyboard with ambient blue light reflecting off the keys, a person's fingers in motion, tech product photography style"
+    style_suffix: "Clean tech product photography, studio lighting, minimal background, Apple-aesthetic simplicity. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  robots:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a humanoid robot arm in a pristine white factory, dramatic backlighting creating a rim glow, industrial automation setting"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a sleek bipedal robot standing in a minimalist white studio, side-angle view, the robot's joints and sensors visible in detail"
+    style_suffix: "Industrial cinematic style, sharp contrast, clean lines, futuristic precision. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  industry:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a modern tech office with multiple curved monitors showing abstract data visualizations, dramatic overhead LED panel lighting, professional atmosphere"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a person interacting with a sleek digital interface, blurred city skyline through a floor-to-ceiling window behind them"
+    style_suffix: "Clean tech editorial style, neutral tones with blue accent lighting, professional authority. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  debate:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}two abstract human silhouettes facing each other across a table, one lit in cool blue and the other in warm amber, a digital display between them, dramatic contrast"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a conference podium in an empty auditorium with dramatic spot lighting, red and blue accent lights casting opposing shadows, debate atmosphere"
+    style_suffix: "High contrast, split-tone lighting (warm vs cool), dramatic editorial photography, intellectual tension. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+  products:
+    scene_templates:
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}a premium tech product reveal setup with a floating holographic-style device on a dark pedestal, soft volumetric backlighting, product launch aesthetic"
+      - "Editorial photograph with absolutely no text, letters, logos, or watermarks: {entity_context}an unboxing scene with sleek packaging on a clean desk, soft top-down studio lighting, anticipation and innovation mood"
+    style_suffix: "Apple keynote aesthetic, clean studio lighting, product photography, premium feel. ABSOLUTELY NO TEXT, LETTERS, WORDS, LOGOS, OR WATERMARKS OF ANY KIND."
+
+# ═══════════════════════════════════════════════════════════════
+# Entity hints — injected as {entity_context} when detected
+# These add company-specific visual anchors to the scene.
+# ═══════════════════════════════════════════════════════════════
+entity_hints:
+  openai: "an OpenAI-inspired minimalist white space with a subtle green glow, "
+  anthropic: "an abstract cosmic purple neural constellation, "
+  google: "a Google DeepMind-style colorful geometric visualization, "
+  deepmind: "a Google DeepMind-style colorful geometric visualization, "
+  nvidia: "rows of bright green GPU circuit boards with vivid neon lighting, "
+  meta: "a holographic social network graph floating in space, "
+  microsoft: "an Azure-blue cloud computing environment with floating data, "
+  apple: "an Apple-style product on a glossy white surface with soft reflections, "
+  chatgpt: "a phone screen showing a conversational AI interface with a warm glow, "
+  gemini: "a multicolored crystalline AI interface with prismatic light, "
+  claude: "an abstract warm amber neural pattern on a dark background, "
+  sora: "a cinematic film frame being generated from pixels, "
+  midjourney: "a canvas where digital brushstrokes transform into photorealistic art, "
+  dall-e: "an easel where abstract shapes morph into detailed images, "
+  dalle: "an easel where abstract shapes morph into detailed images, "
+  stability: "a diffusion of particles forming a detailed scene, "
+  runway: "a video editing timeline transforming into reality, "
+  mistral: "an elegant European tech aesthetic with blue geometric lines, "
+  tesla: "a Tesla factory with robotic arms and electric blue accents, "
+  amazon: "a massive fulfillment center with autonomous delivery robots, "
+
+# ═══════════════════════════════════════════════════════════════
+# Topic priority — when a story matches multiple tags, highest
+# priority wins. Visual topics produce the most distinctive images.
+# Mirrors topic_weights.yaml ordering.
+# ═══════════════════════════════════════════════════════════════
+topic_priority:
+  - creative
+  - pop_culture
+  - money
+  - human_impact
+  - robots
+  - products
+  - safety
+  - tools
+  - debate
+  - industry
+
+# ═══════════════════════════════════════════════════════════════
+# Quality validation + generation limits
+# ═══════════════════════════════════════════════════════════════
+validation:
+  min_file_size_bytes: 51200    # 50KB — real gpt-image-1 PNGs are 300-800KB
+  max_candidates: 2             # Generate at most 2 before giving up
+  cost_per_image_usd: 0.02     # gpt-image-1 low quality
+
+# ═══════════════════════════════════════════════════════════════
+# Cache settings
+# ═══════════════════════════════════════════════════════════════
+cache:
+  ttl_days: 7                   # Generated images don't expire like news
+  subdir: "image_gen"           # Stored in .tmp/cache/image_gen/
+
+# ═══════════════════════════════════════════════════════════════
+# Feature toggles + daily budget
+# ═══════════════════════════════════════════════════════════════
+# Curation-first mode: prefer sourced creator/company media over generated art.
+# Keep this OFF for aggregation workflows unless explicitly running fallback tests.
+enable_ai_backgrounds: false
+max_ai_images_per_day: 50         # Hard cap on API calls per calendar day ($1/day at $0.02/image)
+daily_budget_usd: 1.00            # Soft warning threshold — logs warning when exceeded
+
+# ═══════════════════════════════════════════════════════════════
+# Candidate scoring weights (select_best_ai_image)
+# ═══════════════════════════════════════════════════════════════
+scoring:
+  weights:
+    file_size: 0.4                # Larger file = more detail (300-800KB typical for gpt-image-1)
+    aspect_ratio: 0.3             # Closeness to target aspect ratio (1080:1350 = 0.8)
+    prompt_specificity: 0.3       # Topic+entity match quality from build_contextual_prompt
+  min_acceptable_score: 0.3       # Reject candidates scoring below this threshold
+  file_size_optimal_kb: 500       # Score = min(1.0, actual_kb / optimal_kb)

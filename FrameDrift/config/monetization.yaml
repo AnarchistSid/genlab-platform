@@ -1,0 +1,29 @@
+# FrameDrift monetization config
+
+affiliate_programs:
+  - name: "Crunchyroll"
+    commission_pct: 8
+    relevant_content: ["anime_premiere", "manga_release", "voice_actor_trigger"]
+    link_placement: bio_only
+  - name: "Right Stuf Anime"
+    commission_pct: 5
+    relevant_content: ["manga_release", "studio_collab"]
+    link_placement: bio_only
+  - name: "AmiAmi"
+    commission_pct: 4
+    relevant_content: ["anime_premiere", "studio_collab"]
+    link_placement: bio_only
+  - name: "BookWalker"
+    commission_pct: 6
+    relevant_content: ["manga_release", "trend_emerging"]
+    link_placement: bio_only
+
+newsletter:
+  enabled: false
+  platform: beehiiv
+
+link_in_bio:
+  - label: "Seasonal Watchlist"
+    url_placeholder: "${FRAMEDRIFT_WATCHLIST_URL}"
+  - label: "Anime Merch Picks"
+    url_placeholder: "${FRAMEDRIFT_MERCH_URL}"

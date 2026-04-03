@@ -1,0 +1,10 @@
+handle: '@ai.explained'
+niche: news_explainer
+category: news_explainer
+status: active
+content_types:
+- carousel
+- reel
+notes: Visual-first explainers. Great before/after format.
+added_date: '2026-02-17'
+posts_saved: 0

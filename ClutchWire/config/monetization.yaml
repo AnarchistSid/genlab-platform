@@ -1,0 +1,39 @@
+# ClutchWire monetization config
+
+affiliate_programs:
+  - name: "DraftKings"
+    category: sports_betting
+    enabled: false
+    sports: [nba, nfl, mlb]
+    link_template: "https://draftkings.com?ref={affiliate_id}"
+  - name: "FanDuel"
+    category: sports_betting
+    enabled: false
+    sports: [nba, nfl, mlb]
+  - name: "Nike"
+    category: sports_apparel
+    enabled: false
+    link_template: "https://nike.com?ref={affiliate_id}"
+  - name: "ESPN+"
+    category: streaming
+    enabled: false
+    link_template: "https://plus.espn.com?ref={affiliate_id}"
+  - name: "DAZN"
+    category: streaming
+    enabled: false
+
+newsletter_enabled: false
+newsletter_cta: "Get ClutchWire highlights in your inbox"
+
+link_in_bio_items:
+  - label: "Latest highlights"
+    url: ""
+    enabled: false
+  - label: "Newsletter signup"
+    url: ""
+    enabled: false
+
+revenue_tracking:
+  enabled: false
+  utm_source: "clutchwire"
+  utm_medium: "social"

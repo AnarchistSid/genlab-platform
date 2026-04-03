@@ -1,0 +1,782 @@
+# Hook Formulas — Proven engagement patterns for AI news content
+#
+# Each formula has:
+#   - pattern: Template string with {placeholders}
+#   - category: When to use (breaking, milestone, comparison, controversy, tutorial, prediction, reaction, curiosity)
+#   - trigger_elements: What story elements activate this formula
+#   - engagement_score: Baseline predicted engagement (0.0-1.0)
+#   - max_words: Hard limit for Instagram readability
+#   - examples: Real-world examples of this pattern working
+#
+# Placeholders:
+#   {company}     — Company/org name (OpenAI, Google, Anthropic)
+#   {product}     — Product name (GPT-5, Claude, Gemini)
+#   {number}      — A specific number from the story (10x, 500M, 3B)
+#   {metric}      — What the number measures (performance, users, parameters)
+#   {claim}       — The core claim/announcement
+#   {comparison}  — What it's being compared to (vs X, better than Y)
+#   {topic}       — General topic noun phrase (2-4 words)
+#   {short_title} — Shortened story title (≤6 words)
+
+formulas:
+
+  # ── BREAKING NEWS ────────────────────────────────────────
+  - id: "BREAK_ANNOUNCE"
+    pattern: "{company} Just Dropped {product}"
+    category: "breaking"
+    trigger_elements: ["company", "product"]
+    engagement_score: 0.85
+    max_words: 6
+    examples:
+      - "OpenAI Just Dropped GPT-5"
+      - "Google Just Dropped Gemini 2.0"
+      - "Anthropic Just Dropped Claude 4"
+
+  - id: "BREAK_BOMBSHELL"
+    pattern: "BREAKING: {claim}"
+    category: "breaking"
+    trigger_elements: ["claim"]
+    engagement_score: 0.80
+    max_words: 7
+    examples:
+      - "BREAKING: ChatGPT Can Now See and Hear"
+      - "BREAKING: AI Passes Medical Licensing Exam"
+
+  - id: "BREAK_GAME_CHANGE"
+    pattern: "{product} Changes Everything"
+    category: "breaking"
+    trigger_elements: ["product"]
+    engagement_score: 0.82
+    max_words: 5
+    examples:
+      - "GPT-5 Changes Everything"
+      - "Claude Opus 4 Changes Everything"
+
+  - id: "BREAK_EMOJI_ALERT"
+    pattern: "🚨 BREAKING: {company} just {claim}"
+    category: "breaking"
+    trigger_elements: ["company", "claim"]
+    engagement_score: 0.88
+    max_words: 9
+    examples:
+      - "🚨 BREAKING: OpenAI just released GPT-5"
+      - "🚨 BREAKING: Google just dropped Gemini 2.0"
+
+  - id: "BREAK_EMOJI_NO_ONE"
+    pattern: "🚨 {company} just did what no one expected"
+    category: "breaking"
+    trigger_elements: ["company"]
+    engagement_score: 0.86
+    max_words: 9
+    examples:
+      - "🚨 OpenAI just did what no one expected"
+      - "🚨 Anthropic just did what no one expected"
+
+  - id: "BREAK_EMOJI_CHANGED"
+    pattern: "🚨 {product} just changed the entire game"
+    category: "breaking"
+    trigger_elements: ["product"]
+    engagement_score: 0.85
+    max_words: 8
+    examples:
+      - "🚨 GPT-5 just changed the entire game"
+      - "🚨 Claude Opus 4 just changed the entire game"
+
+  - id: "BREAK_EMOJI_NOT_READY"
+    pattern: "🚨 {company}'s new AI — you're NOT ready"
+    category: "breaking"
+    trigger_elements: ["company"]
+    engagement_score: 0.84
+    max_words: 8
+    examples:
+      - "🚨 OpenAI's new AI — you're NOT ready"
+      - "🚨 Google's new AI — you're NOT ready"
+
+  - id: "BREAK_EMOJI_HAPPENING"
+    pattern: "⚡ It's happening — {claim}"
+    category: "breaking"
+    trigger_elements: ["claim"]
+    engagement_score: 0.83
+    max_words: 8
+    examples:
+      - "⚡ It's happening — GPT-5 Is Here"
+      - "⚡ It's happening — AI Can Code Now"
+
+  - id: "BREAK_EMOJI_QUIETLY"
+    pattern: "🔴 {company} quietly dropped something MASSIVE"
+    category: "breaking"
+    trigger_elements: ["company"]
+    engagement_score: 0.85
+    max_words: 7
+    examples:
+      - "🔴 OpenAI quietly dropped something MASSIVE"
+      - "🔴 Meta quietly dropped something MASSIVE"
+
+  - id: "BREAK_EMOJI_EVERYONE"
+    pattern: "🚨 Everyone is sleeping on {product}"
+    category: "breaking"
+    trigger_elements: ["product"]
+    engagement_score: 0.82
+    max_words: 7
+    examples:
+      - "🚨 Everyone is sleeping on Claude Opus 4"
+      - "🚨 Everyone is sleeping on Gemini 2.0"
+
+  - id: "BREAK_EMOJI_OBSOLETE"
+    pattern: "⚠️ {product} just made {comparison} obsolete"
+    category: "breaking"
+    trigger_elements: ["product", "comparison"]
+    engagement_score: 0.87
+    max_words: 8
+    examples:
+      - "⚠️ GPT-5 just made Claude obsolete"
+      - "⚠️ Gemini just made ChatGPT obsolete"
+
+  # ── NUMBERS / MILESTONES ─────────────────────────────────
+  - id: "NUM_SPECIFIC"
+    pattern: "{number} {metric} — {company} Did It"
+    category: "milestone"
+    trigger_elements: ["number", "metric", "company"]
+    engagement_score: 0.88
+    max_words: 8
+    examples:
+      - "10x Faster — Google Did It"
+      - "500M Users — ChatGPT Did It"
+      - "3B Parameters — Meta Did It"
+
+  - id: "NUM_SHOCKING"
+    pattern: "{product} Just Hit {number}"
+    category: "milestone"
+    trigger_elements: ["product", "number"]
+    engagement_score: 0.83
+    max_words: 6
+    examples:
+      - "ChatGPT Just Hit 500M Users"
+      - "Midjourney Just Hit 1B Images"
+
+  - id: "NUM_COMPARISON"
+    pattern: "{number} Better Than {comparison}"
+    category: "milestone"
+    trigger_elements: ["number", "comparison"]
+    engagement_score: 0.86
+    max_words: 7
+    examples:
+      - "10x Better Than GPT-4"
+      - "3x Faster Than Claude 3"
+
+  - id: "NUM_EMOJI_BILLION"
+    pattern: "💰 {billion_number} just announced for {topic}"
+    category: "milestone"
+    trigger_elements: ["billion_number", "topic"]
+    engagement_score: 0.87
+    max_words: 8
+    examples:
+      - "💰 $10B just announced for AI Safety"
+      - "💰 $3B just announced for AI Agents"
+
+  - id: "NUM_EMOJI_USERS"
+    pattern: "📊 {number} users in {metric} — {product} is EXPLODING"
+    category: "milestone"
+    trigger_elements: ["number", "metric", "product"]
+    engagement_score: 0.86
+    max_words: 9
+    examples:
+      - "📊 500M users in 6 months — ChatGPT is EXPLODING"
+      - "📊 100M users in 2 weeks — Claude is EXPLODING"
+
+  - id: "NUM_EMOJI_OUTPERFORM"
+    pattern: "📈 {product} just scored {number} — beats EVERY competitor"
+    category: "milestone"
+    trigger_elements: ["product", "number"]
+    engagement_score: 0.85
+    max_words: 9
+    examples:
+      - "📈 GPT-5 just scored 96% — beats EVERY competitor"
+      - "📈 Gemini just scored 99.1% — beats EVERY competitor"
+
+  - id: "NUM_EMOJI_IMPOSSIBLE"
+    pattern: "🔥 {number} — the number that changes everything"
+    category: "milestone"
+    trigger_elements: ["number"]
+    engagement_score: 0.83
+    max_words: 8
+    examples:
+      - "🔥 10x — the number that changes everything"
+      - "🔥 $100B — the number that changes everything"
+
+  # ── COMPARISON / VS ──────────────────────────────────────
+  - id: "VS_HEAD_TO_HEAD"
+    pattern: "{product} vs {comparison}: Who Wins?"
+    category: "comparison"
+    trigger_elements: ["product", "comparison"]
+    engagement_score: 0.84
+    max_words: 7
+    examples:
+      - "GPT-5 vs Claude 4: Who Wins?"
+      - "Gemini vs ChatGPT: Who Wins?"
+
+  - id: "VS_UPSET"
+    pattern: "{product} Just Beat {comparison}"
+    category: "comparison"
+    trigger_elements: ["product", "comparison"]
+    engagement_score: 0.82
+    max_words: 6
+    examples:
+      - "Claude Just Beat GPT-5"
+      - "Gemini Just Beat Every Benchmark"
+
+  # ── CONTROVERSY / DEBATE ─────────────────────────────────
+  - id: "DEBATE_TRUTH"
+    pattern: "The Truth About {topic}"
+    category: "controversy"
+    trigger_elements: ["topic"]
+    engagement_score: 0.79
+    max_words: 5
+    examples:
+      - "The Truth About AI Jobs"
+      - "The Truth About ChatGPT"
+
+  - id: "DEBATE_PROBLEM"
+    pattern: "The Real Problem With {product}"
+    category: "controversy"
+    trigger_elements: ["product"]
+    engagement_score: 0.77
+    max_words: 6
+    examples:
+      - "The Real Problem With GPT-5"
+      - "The Real Problem With AI Art"
+
+  - id: "DEBATE_QUESTION"
+    pattern: "Is {topic} Actually Dangerous?"
+    category: "controversy"
+    trigger_elements: ["topic"]
+    engagement_score: 0.78
+    max_words: 5
+    examples:
+      - "Is AGI Actually Dangerous?"
+      - "Is AI Coding Actually Good?"
+
+  # ── TUTORIAL / HOW-TO ────────────────────────────────────
+  - id: "TUT_TRANSFORM"
+    pattern: "{product} Can Do THIS Now"
+    category: "tutorial"
+    trigger_elements: ["product"]
+    engagement_score: 0.81
+    max_words: 6
+    examples:
+      - "ChatGPT Can Do THIS Now"
+      - "Claude Can Do THIS Now"
+
+  - id: "TUT_SECRET"
+    pattern: "{number} {product} Tricks Nobody Knows"
+    category: "tutorial"
+    trigger_elements: ["number", "product"]
+    engagement_score: 0.80
+    max_words: 7
+    examples:
+      - "5 ChatGPT Tricks Nobody Knows"
+      - "3 Claude Features Nobody Uses"
+
+  # ── CURIOSITY GAP ────────────────────────────────────────
+  - id: "CURIO_NOBODY"
+    pattern: "Nobody Is Talking About {company}'s Secret {topic}"
+    category: "curiosity"
+    trigger_elements: ["company", "topic"]
+    engagement_score: 0.83
+    max_words: 8
+    examples:
+      - "Nobody Is Talking About OpenAI's Secret Project"
+      - "Nobody Is Talking About Google's Secret AI Model"
+
+  - id: "CURIO_QUIETLY"
+    pattern: "{company} Quietly Built Something Incredible"
+    category: "curiosity"
+    trigger_elements: ["company"]
+    engagement_score: 0.82
+    max_words: 7
+    examples:
+      - "OpenAI Quietly Built Something Incredible"
+      - "Anthropic Quietly Built Something Incredible"
+
+  - id: "CURIO_HIDDEN"
+    pattern: "The Hidden Feature in {product} Nobody Uses"
+    category: "curiosity"
+    trigger_elements: ["product"]
+    engagement_score: 0.81
+    max_words: 8
+    examples:
+      - "The Hidden Feature in ChatGPT Nobody Uses"
+      - "The Hidden Feature in Claude Nobody Uses"
+
+  - id: "CURIO_DONT_KNOW"
+    pattern: "What {company} Doesn't Want You to Know About {topic}"
+    category: "curiosity"
+    trigger_elements: ["company", "topic"]
+    engagement_score: 0.84
+    max_words: 10
+    examples:
+      - "What OpenAI Doesn't Want You to Know About GPT-5"
+      - "What Google Doesn't Want You to Know About AI Search"
+
+  # ── PREDICTION / FUTURE ──────────────────────────────────
+  - id: "PRED_COMING"
+    pattern: "{company} Is About to Change {topic}"
+    category: "prediction"
+    trigger_elements: ["company", "topic"]
+    engagement_score: 0.76
+    max_words: 7
+    examples:
+      - "OpenAI Is About to Change Everything"
+      - "Google Is About to Change Search"
+
+  - id: "PRED_TIMELINE"
+    pattern: "{topic} in {number}: What It Means"
+    category: "prediction"
+    trigger_elements: ["topic", "number"]
+    engagement_score: 0.74
+    max_words: 7
+    examples:
+      - "AGI in 2027: What It Means"
+      - "AI Agents in 6 Months: What It Means"
+
+  # ── REACTION / AWE ──────────────────────────────────────
+  - id: "REACT_WAIT_THIS"
+    pattern: "Wait… AI can do THIS now?! 🤯"
+    category: "reaction"
+    trigger_elements: []
+    engagement_score: 0.84
+    max_words: 7
+    examples:
+      - "Wait… AI can do THIS now?! 🤯"
+
+  - id: "REACT_NOT_BELIEVE"
+    pattern: "I tested {product} and I can't believe what happened 🤯"
+    category: "reaction"
+    trigger_elements: ["product"]
+    engagement_score: 0.85
+    max_words: 10
+    examples:
+      - "I tested GPT-5 and I can't believe what happened 🤯"
+      - "I tested Claude and I can't believe what happened 🤯"
+
+  - id: "REACT_TOLD_ME"
+    pattern: "I asked {product} to {claim}… and it actually DID IT 😳"
+    category: "reaction"
+    trigger_elements: ["product", "claim"]
+    engagement_score: 0.86
+    max_words: 11
+    examples:
+      - "I asked GPT-5 to write a song… and it actually DID IT 😳"
+      - "I asked Claude to debug my code… and it actually DID IT 😳"
+
+  - id: "REACT_SERIOUSLY"
+    pattern: "Okay {product}… this is getting SCARY good 😨"
+    category: "reaction"
+    trigger_elements: ["product"]
+    engagement_score: 0.83
+    max_words: 8
+    examples:
+      - "Okay GPT-5… this is getting SCARY good 😨"
+      - "Okay Claude… this is getting SCARY good 😨"
+
+  - id: "REACT_HUMANS"
+    pattern: "This AI just out-performed real humans at {topic} 😶"
+    category: "reaction"
+    trigger_elements: ["topic"]
+    engagement_score: 0.85
+    max_words: 9
+    examples:
+      - "This AI just out-performed real humans at coding 😶"
+      - "This AI just out-performed real humans at writing 😶"
+
+  # ── UNIVERSAL FALLBACKS ──────────────────────────────────
+  - id: "UNIVERSAL_THIS"
+    pattern: "This Is {topic} Now"
+    category: "universal"
+    trigger_elements: ["topic"]
+    engagement_score: 0.72
+    max_words: 5
+    examples:
+      - "This Is AI Now"
+      - "This Is Coding Now"
+
+  - id: "UNIVERSAL_STOP"
+    pattern: "Stop What You're Doing — {claim}"
+    category: "universal"
+    trigger_elements: ["claim"]
+    engagement_score: 0.75
+    max_words: 8
+    examples:
+      - "Stop What You're Doing — GPT-5 Is Here"
+      - "Stop What You're Doing — AI Can Code Now"
+
+  # ── SHOWCASE (AI creator work) ─────────────────────────────
+  # For curated AI art/video showcases, NOT news.
+  # Short, punchy, curiosity-driven.
+
+  - id: "SHOWCASE_WAIT"
+    pattern: "Wait for the {topic} Transformation"
+    category: "showcase"
+    trigger_elements: ["topic"]
+    engagement_score: 0.90
+    max_words: 7
+    examples:
+      - "Wait for the AI Portrait Transformation"
+      - "Wait for the Kling Video Transformation"
+
+  - id: "SHOWCASE_MADE_WITH"
+    pattern: "Made with {product}"
+    category: "showcase"
+    trigger_elements: ["product"]
+    engagement_score: 0.88
+    max_words: 5
+    examples:
+      - "Made with Seedance"
+      - "Made with Kling AI"
+      - "Made with Midjourney v7"
+
+  - id: "SHOWCASE_THIS_IS"
+    pattern: "This Is {product} in 2026"
+    category: "showcase"
+    trigger_elements: ["product"]
+    engagement_score: 0.85
+    max_words: 6
+    examples:
+      - "This Is Sora in 2026"
+      - "This Is Midjourney in 2026"
+
+  - id: "SHOWCASE_WATCH_THIS"
+    pattern: "Watch What {product} Can Do"
+    category: "showcase"
+    trigger_elements: ["product"]
+    engagement_score: 0.87
+    max_words: 6
+    examples:
+      - "Watch What Seedance Can Do"
+      - "Watch What Kling AI Can Do"
+
+  - id: "SHOWCASE_POV"
+    pattern: "POV: You Discover {product}"
+    category: "showcase"
+    trigger_elements: ["product"]
+    engagement_score: 0.86
+    max_words: 6
+    examples:
+      - "POV: You Discover Sora"
+      - "POV: You Discover AI Video"
+
+  - id: "SHOWCASE_ART"
+    pattern: "AI Art Is Getting Insane"
+    category: "showcase"
+    trigger_elements: []
+    engagement_score: 0.84
+    max_words: 6
+    examples:
+      - "AI Art Is Getting Insane"
+
+  # ══════════════════════════════════════════════════════════
+  # CONVERSATIONAL / @evolving.ai STYLE HOOKS
+  # ══════════════════════════════════════════════════════════
+  # Emotional, first-person, emoji-driven hooks for creator
+  # content channels. These replace formal "BREAKING:" style
+  # with conversational reaction hooks that drive engagement
+  # through empathy, surprise, and storytelling.
+  #
+  # New placeholders (filled by extract_conversational_elements):
+  #   {story_summary}        — 3-6 word summary of what happened
+  #   {creator_achievement}  — what the creator/tool accomplished
+  #   {visual_description}   — what was visually impressive
+  #   {surprising_fact}      — the unexpected detail
+  #   {old_requirements}     — what it used to require
+  #   {now_possible}         — what's now easy/accessible
+  #   {role}                 — person type (artist, filmmaker, developer)
+  #   {tool}                 — specific AI tool used
+  #   {achievement}          — what they accomplished
+
+  # ── EMOTIONAL REACTION ─────────────────────────────────────
+  # First-person emotional response. Highest engagement category.
+  # Use for: impressive results, heartwarming stories, creative work.
+
+  - id: "EMOTE_NEEDED"
+    pattern: "I needed this \U0001F62D {story_summary}"
+    category: "emotional_reaction"
+    trigger_elements: ["story_summary"]
+    engagement_score: 0.92
+    max_words: 10
+    examples:
+      - "I needed this \U0001F62D OpenAI just made coding accessible to everyone"
+      - "I needed this \U0001F62D AI can now generate music from humming"
+
+  - id: "EMOTE_AMAZING"
+    pattern: "This turned out amazing \U0001F60D {creator_achievement}"
+    category: "emotional_reaction"
+    trigger_elements: ["creator_achievement"]
+    engagement_score: 0.91
+    max_words: 10
+    examples:
+      - "This turned out amazing \U0001F60D a full short film made entirely with AI"
+      - "This turned out amazing \U0001F60D Sora generating photorealistic nature scenes"
+
+  - id: "EMOTE_CREATIVITY"
+    pattern: "This gets a 10/10 for creativity \U0001F525 {visual_description}"
+    category: "emotional_reaction"
+    trigger_elements: ["visual_description"]
+    engagement_score: 0.90
+    max_words: 12
+    examples:
+      - "This gets a 10/10 for creativity \U0001F525 AI-generated architecture that looks real"
+      - "This gets a 10/10 for creativity \U0001F525 turning sketches into photorealistic portraits"
+
+  - id: "EMOTE_OBSESSED"
+    pattern: "I'm obsessed with this \U0001F92F {story_summary}"
+    category: "emotional_reaction"
+    trigger_elements: ["story_summary"]
+    engagement_score: 0.90
+    max_words: 10
+    examples:
+      - "I'm obsessed with this \U0001F92F AI video generation just leveled up"
+      - "I'm obsessed with this \U0001F92F real-time AI music composition"
+
+  - id: "EMOTE_WILD"
+    pattern: "This is wild \U0001F525 {surprising_fact}"
+    category: "emotional_reaction"
+    trigger_elements: ["surprising_fact"]
+    engagement_score: 0.89
+    max_words: 10
+    examples:
+      - "This is wild \U0001F525 AI generated a full movie trailer in 30 seconds"
+      - "This is wild \U0001F525 this model understands physics better than most humans"
+
+  - id: "EMOTE_CANT_STOP"
+    pattern: "I can't stop watching this \U0001F60D {visual_description}"
+    category: "emotional_reaction"
+    trigger_elements: ["visual_description"]
+    engagement_score: 0.88
+    max_words: 10
+    examples:
+      - "I can't stop watching this \U0001F60D AI-animated Studio Ghibli scenes"
+      - "I can't stop watching this \U0001F60D photorealistic AI portraits coming alive"
+
+  - id: "EMOTE_PRODUCT_WILD"
+    pattern: "This is wild \U0001F525 {product} just {claim}"
+    category: "emotional_reaction"
+    trigger_elements: ["product", "claim"]
+    engagement_score: 0.89
+    max_words: 10
+    examples:
+      - "This is wild \U0001F525 Sora just generated a full movie scene"
+      - "This is wild \U0001F525 Claude just wrote an entire app from scratch"
+
+  # ── ALERT / CONTRAST ───────────────────────────────────────
+  # Emoji-led alerts that subvert expectations. Second highest category.
+  # Use for: surprising reveals, illusion content, unexpected truths.
+
+  - id: "ALERT_NEVER_EXISTED"
+    pattern: "\U0001F6A8 {claim}, but it never existed"
+    category: "alert_contrast"
+    trigger_elements: ["claim"]
+    engagement_score: 0.90
+    max_words: 12
+    examples:
+      - "\U0001F6A8 This photo looks completely real, but it never existed"
+      - "\U0001F6A8 This building won architecture awards, but it never existed"
+
+  - id: "ALERT_CONSEQUENCE"
+    pattern: "\U0001F6A8 {story_summary}, and {surprising_fact}"
+    category: "alert_contrast"
+    trigger_elements: ["story_summary", "surprising_fact"]
+    engagement_score: 0.89
+    max_words: 14
+    examples:
+      - "\U0001F6A8 AI video is getting scarily realistic, and Hollywood is panicking"
+      - "\U0001F6A8 This AI model just passed the bar exam, and lawyers aren't laughing"
+
+  - id: "ALERT_HERES_WHY"
+    pattern: "\u26A0\uFE0F {surprising_fact} — and here's why"
+    category: "alert_contrast"
+    trigger_elements: ["surprising_fact"]
+    engagement_score: 0.87
+    max_words: 11
+    examples:
+      - "\u26A0\uFE0F AI-generated faces are now indistinguishable from real ones — and here's why"
+      - "\u26A0\uFE0F This free AI tool outperforms $200/month software — and here's why"
+
+  - id: "ALERT_COMPANY_QUIETLY"
+    pattern: "\U0001F6A8 {company} quietly {story_summary}, and nobody noticed"
+    category: "alert_contrast"
+    trigger_elements: ["company", "story_summary"]
+    engagement_score: 0.89
+    max_words: 14
+    examples:
+      - "\U0001F6A8 Google quietly released a free AI studio, and nobody noticed"
+      - "\U0001F6A8 Meta quietly open-sourced their best model, and nobody noticed"
+
+  # ── STORYTELLING SETUP ─────────────────────────────────────
+  # Narrative-driven hooks that pull viewers into a story.
+  # Use for: creator spotlights, viral content, person-centric stories.
+
+  - id: "STORY_BLOWING_UP"
+    pattern: "The story of {topic} has been blowing up across the internet"
+    category: "storytelling"
+    trigger_elements: ["topic"]
+    engagement_score: 0.88
+    max_words: 12
+    examples:
+      - "The story of this AI artist has been blowing up across the internet"
+      - "The story of Sora's first movie has been blowing up across the internet"
+
+  - id: "STORY_CREATOR_USED"
+    pattern: "This {role} used {tool} to {achievement}"
+    category: "storytelling"
+    trigger_elements: ["role", "tool", "achievement"]
+    engagement_score: 0.87
+    max_words: 12
+    examples:
+      - "This filmmaker used Sora to create a full short film"
+      - "This artist used Midjourney to design an entire clothing line"
+
+  - id: "STORY_PRODUCT_DID"
+    pattern: "This {role} used {product} to {achievement}"
+    category: "storytelling"
+    trigger_elements: ["role", "product", "achievement"]
+    engagement_score: 0.87
+    max_words: 12
+    examples:
+      - "This developer used Claude to build an app in 24 hours"
+      - "This designer used DALL-E to reimagine iconic album covers"
+
+  - id: "STORY_WENT_VIRAL"
+    pattern: "{company}'s latest {topic} just went viral — here's why"
+    category: "storytelling"
+    trigger_elements: ["company", "topic"]
+    engagement_score: 0.86
+    max_words: 11
+    examples:
+      - "OpenAI's latest demo just went viral — here's why"
+      - "Google's latest AI experiment just went viral — here's why"
+
+  # ── TRANSFORMED REALITY ────────────────────────────────────
+  # Before/after contrast of capability. Use for: tech demos,
+  # democratization stories, efficiency breakthroughs.
+
+  - id: "TRANSFORM_OLD_NEW"
+    pattern: "Scenes that once required {old_requirements}, {now_possible}"
+    category: "transformed_reality"
+    trigger_elements: ["old_requirements", "now_possible"]
+    engagement_score: 0.86
+    max_words: 14
+    examples:
+      - "Scenes that once required a full VFX team, now take 30 seconds with AI"
+      - "Scenes that once required $10K in equipment, can now be made on a phone"
+
+  - id: "TRANSFORM_USED_TO"
+    pattern: "What used to take {old_requirements} can now {now_possible}"
+    category: "transformed_reality"
+    trigger_elements: ["old_requirements", "now_possible"]
+    engagement_score: 0.85
+    max_words: 14
+    examples:
+      - "What used to take a 20-person team can now be done by one person with AI"
+      - "What used to take 6 months of training can now be learned in a weekend"
+
+  - id: "TRANSFORM_TOPIC"
+    pattern: "{topic} is being completely transformed by AI"
+    category: "transformed_reality"
+    trigger_elements: ["topic"]
+    engagement_score: 0.84
+    max_words: 9
+    examples:
+      - "Filmmaking is being completely transformed by AI"
+      - "Music production is being completely transformed by AI"
+
+  - id: "TRANSFORM_PRODUCT"
+    pattern: "{product} just made {topic} accessible to everyone"
+    category: "transformed_reality"
+    trigger_elements: ["product", "topic"]
+    engagement_score: 0.85
+    max_words: 10
+    examples:
+      - "Sora just made filmmaking accessible to everyone"
+      - "Claude just made coding accessible to everyone"
+
+  # ── INTRIGUE / PROBLEM ─────────────────────────────────────
+  # Hooks that surface overlooked issues or accelerating trends.
+  # Use for: think pieces, industry shifts, emerging concerns.
+
+  - id: "INTRIGUE_DETACHED"
+    pattern: "{topic} are starting to feel completely detached from reality"
+    category: "intrigue"
+    trigger_elements: ["topic"]
+    engagement_score: 0.85
+    max_words: 11
+    examples:
+      - "AI images are starting to feel completely detached from reality"
+      - "AI benchmarks are starting to feel completely detached from reality"
+
+  - id: "INTRIGUE_NOBODY"
+    pattern: "Nobody is talking about {surprising_fact}"
+    category: "intrigue"
+    trigger_elements: ["surprising_fact"]
+    engagement_score: 0.84
+    max_words: 10
+    examples:
+      - "Nobody is talking about how fast AI coding has gotten"
+      - "Nobody is talking about the real cost of AI training"
+
+  - id: "INTRIGUE_FASTER"
+    pattern: "{topic} is happening faster than anyone expected"
+    category: "intrigue"
+    trigger_elements: ["topic"]
+    engagement_score: 0.84
+    max_words: 9
+    examples:
+      - "AI video generation is happening faster than anyone expected"
+      - "The AI job displacement is happening faster than anyone expected"
+
+  - id: "INTRIGUE_COMPANY"
+    pattern: "{company} just proved that {surprising_fact}"
+    category: "intrigue"
+    trigger_elements: ["company", "surprising_fact"]
+    engagement_score: 0.85
+    max_words: 11
+    examples:
+      - "OpenAI just proved that AI can reason about physics"
+      - "Google just proved that small models can beat large ones"
+
+# ── Category priority (for formula matching) ─────────────
+# Higher = tried first when multiple categories match
+category_priority:
+  emotional_reaction: 8     # Highest: conversational engagement drivers
+  alert_contrast: 7         # Strong: surprise + emoji-led attention
+  showcase: 6
+  storytelling: 6            # Narrative hooks for creator content
+  transformed_reality: 5    # Before/after contrast
+  intrigue: 5                # Overlooked issues, accelerating trends
+  breaking: 4                # Demoted: formal news style (avoid)
+  milestone: 3
+  reaction: 3
+  comparison: 3
+  curiosity: 2
+  controversy: 2
+  tutorial: 2
+  prediction: 1
+  universal: 0
+
+# ── Scoring weights ──────────────────────────────────────
+scoring_weights:
+  # Core factors (weighted, sum to 1.0)
+  formula_base: 0.40       # Base engagement score from formula
+  element_coverage: 0.25   # How many placeholders were filled
+  specificity: 0.20        # Named entities > generic topics
+  brevity: 0.15            # Shorter hooks score higher
+
+  # Competitive boosts (additive bonuses, capped at 1.0 total)
+  emoji_boost: 0.18        # Emoji-driven hooks perform best (increased from 0.15)
+  caps_urgency_boost: 0.05 # Reduced: ALL CAPS reads as formal/news-like (was 0.12)
+  numbers_boost: 0.10      # Contains any digit (specificity = credibility)
+  length_boost: 0.08       # Under 60 chars (mobile readability)
+  urgency_boost: 0.10      # FOMO language (now, just, breaking, quietly)
+  question_boost: 0.05     # Ends with ? (engagement trigger)
+  dollar_boost: 0.08       # Contains $ (financial stakes = attention)
+  contrarian_boost: 0.12   # Contrarian language (wrong, actually, truth, nobody)
+  conversational_boost: 0.15  # First-person / lowercase emotional language

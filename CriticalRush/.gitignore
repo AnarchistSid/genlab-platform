@@ -1,0 +1,33 @@
+# Environment
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Temporary files
+.tmp/
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Credentials
+credentials.json
+token.json
+.logs/
+.coverage
+.hypothesis/
+
+# Brand assets (logos, covers — not public)
+assets/*.png
+assets/logos/
+niches/gaming/assets/*.png
+
+# Game-specific model files (large binaries)
+*.npz
+niches/gaming/models/
+config/persona.yaml

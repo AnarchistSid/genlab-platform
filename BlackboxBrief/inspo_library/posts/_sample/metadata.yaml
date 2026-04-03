@@ -1,0 +1,25 @@
+# Instagram Post Metadata — Copy this template for each saved post
+# Required fields: account, post_id, post_url, saved_at, category, format
+# See directive 04 for full field definitions
+
+account: '@example_account'
+post_id: POST_001
+post_url: https://www.instagram.com/p/EXAMPLE/
+saved_at: '2026-02-17'
+category: news_explainer
+format: carousel
+slide_count: 5
+estimated_engagement: high
+hook_text: This changes everything about AI...
+cta_text: Save this for later!
+tags:
+- ai_creators
+- carousel
+- explainer
+notes: Clean design, strong hook. Could adapt for TPL_BRK1.
+structure_observed:
+- Hook (bold claim)
+- Context (why now)
+- Key detail with visual
+- Impact on viewer
+- CTA slide

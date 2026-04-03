@@ -1,0 +1,357 @@
+# Instagram Reel Templates Library (Video-Only Pipeline)
+# Reference: @evolving.ai, @chatgptricks, @theaifield, @artificialintelligence.co
+#
+# All templates are reels. The pipeline runs in video-only mode
+# (creator_video_only_mode: true). Each template is a distinct content
+# angle — stories are matched to 1+ reel templates based on tags.
+#
+# IMPORTANT: We upload full creator videos as-is. Templates define the
+# caption writing angle and hook framing, NOT video editing beats or
+# duration constraints. The video duration is whatever the source is.
+
+version: "3.0"
+
+# Blueprint diversity limits
+blueprint_limits:
+  max_per_story: 1  # One high-quality reel per story
+  max_stories: 10   # Only compose blueprints for top N ranked stories
+
+templates:
+
+  # ── Core Content Angles ──────────────────────────────
+
+  - template_id: "TPL_REE_NEWS"
+    name: "Breaking News Reel"
+    format: "reel"
+    best_for: ["news", "products", "timeline"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the headline in one line"
+      - "What happened — the key fact with a name or number"
+      - "Why it matters — who this affects and how"
+      - "What to watch for — the next thing that will happen"
+    default_cta: "Follow @blackbox.brief for daily AI updates"
+    pattern_refs: ["PAT_0001", "PAT_0012"]
+    notes: "Lead with the most surprising fact. Names and numbers in the hook."
+
+  - template_id: "TPL_REE_CREATOR"
+    name: "AI Creator Showcase Reel"
+    format: "reel"
+    best_for: ["creative", "pop_culture", "tools", "tutorial", "human_impact"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the jaw-dropping creation"
+      - "The process — how they made it"
+      - "The final result — full reveal"
+      - "Creator credit + tool used"
+    default_cta: "Follow for more AI creations 🔥"
+    pattern_refs: []
+    notes: >
+      The bread-and-butter template. Features AI creators pushing boundaries.
+      Always credit the creator AND the model/tool used. Show the actual output.
+      Reels with visual AI content get 5x more shares.
+
+  - template_id: "TPL_REE_BEFORE_AFTER"
+    name: "Before/After Reel"
+    format: "reel"
+    best_for: ["tools", "news", "tutorial", "products", "creative"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the transformation promise"
+      - "Before — the old way or input"
+      - "After — the AI result"
+    default_cta: "Follow for more"
+    pattern_refs: []
+    notes: "Before/after is the highest shareability angle. Works for tool demos, style transfers, and quality comparisons."
+
+  - template_id: "TPL_REE_TOOL_DEMO"
+    name: "Tool Demo Reel"
+    format: "reel"
+    best_for: ["tools", "products", "tutorial", "prompts"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the problem this solves"
+      - "The tool + what it does"
+      - "The key demo moment — what makes it impressive"
+      - "The result — show the output"
+    default_cta: "Save this for later 🔖"
+    pattern_refs: ["PAT_0003", "PAT_0007"]
+    notes: "Tutorial-style reel. Specific tool names in hook and CTA drive saves."
+
+  - template_id: "TPL_REE_HUMAN"
+    name: "Human Story Reel"
+    format: "reel"
+    best_for: ["human_impact", "money", "creative", "pop_culture"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the person and the surprise"
+      - "Their backstory — who, where, specific context"
+      - "What they did with AI — the tool and action"
+      - "The result — specific numbers or outcome"
+    default_cta: "Would you do this? Comment below 👇"
+    pattern_refs: []
+    notes: >
+      People stories drive 3-5x more saves than product news.
+      Use specific details: names, ages, dollar amounts.
+      Inspired by @evolving.ai's 86-year-old farmer and $200M AI movie stories.
+
+  - template_id: "TPL_REE_POP"
+    name: "Pop Culture x AI Reel"
+    format: "reel"
+    best_for: ["pop_culture", "creative"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the pop culture reference + AI twist"
+      - "What AI created — the full visual"
+      - "How it was made — tool + technique"
+      - "The internet reaction — fan quotes/numbers"
+    default_cta: "Tag someone who needs to see this 👇"
+    pattern_refs: []
+    notes: >
+      AI x pop culture = maximum shareability. Game of Thrones, Naruto,
+      Marvel, Ghibli — recognizable IPs drive reach. Show side-by-side
+      with original when possible.
+
+  - template_id: "TPL_REE_MONEY"
+    name: "Money Story Reel"
+    format: "reel"
+    best_for: ["money", "human_impact", "products"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the dollar amount"
+      - "Who made/lost/saved the money"
+      - "How AI was involved"
+      - "The numbers that prove it"
+    default_cta: "Save this if you want to try it 💰"
+    pattern_refs: []
+    notes: "Dollar amounts in hooks get 2x more clicks. Lead with the biggest number."
+
+  # ── Engagement-Optimized Angles ──────────────────────
+
+  - template_id: "TPL_REE_DEBATE"
+    name: "Hot Take Reel"
+    format: "reel"
+    best_for: ["debate", "news", "safety"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the controversial claim"
+      - "Side A — why people support it"
+      - "Side B — why people are worried"
+      - "The nuance — what most people miss"
+    default_cta: "Agree or disagree? Drop your take 👇"
+    pattern_refs: []
+    notes: >
+      Controversial content drives comments. Always present BOTH sides
+      and let the audience decide. Never take a one-sided stance on sensitive topics.
+
+  - template_id: "TPL_REE_REACTION"
+    name: "AI Reaction Reel"
+    format: "reel"
+    best_for: ["creative", "news", "pop_culture", "products"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the emotional reaction to AI output"
+      - "The AI content that caused the reaction"
+      - "The specific detail that makes it impressive"
+    default_cta: "Follow for more 🤯"
+    pattern_refs: []
+    notes: >
+      Punchy reaction angle. Works when the AI output speaks for itself.
+      Minimal text overlay — let the visual do the talking.
+      Best for photorealistic images, seamless video gen, and unexpected outputs.
+
+  - template_id: "TPL_REE_COMPARE"
+    name: "AI Model Comparison Reel"
+    format: "reel"
+    best_for: ["tools", "products", "news", "creative"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — which AI wins?"
+      - "Model A output"
+      - "Model B output"
+      - "Side-by-side verdict"
+    default_cta: "Comment A or B 👇"
+    pattern_refs: []
+    notes: >
+      Head-to-head comparisons drive engagement through opinion.
+      Works for image gen (Midjourney vs DALL-E), video gen (Sora vs Kling),
+      and voice/music models.
+
+  - template_id: "TPL_REE_DANGER"
+    name: "AI Safety Alert Reel"
+    format: "reel"
+    best_for: ["safety", "debate", "human_impact"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the scary headline"
+      - "What actually happened — the facts"
+      - "Why experts are concerned"
+      - "What's being done about it"
+    default_cta: "Should this be allowed? 👇"
+    pattern_refs: []
+    notes: >
+      Safety and regulation content. Always ground in facts, never sensationalize.
+      Present expert opinions. Label unverified claims clearly.
+
+  - template_id: "TPL_REE_VIRAL"
+    name: "Viral AI Moment Reel"
+    format: "reel"
+    best_for: ["creative", "pop_culture", "news", "human_impact"]
+    constraints:
+      max_seconds: 900
+      max_words_per_beat_title: 15
+      beat_cadence_seconds: 5
+    structure:
+      - "Hook — the viral visual"
+      - "The full reveal — let it speak for itself"
+    default_cta: "Send this to someone 🤯"
+    pattern_refs: []
+    notes: >
+      For content that needs zero explanation. The AI output IS the story.
+      Minimal caption — let the visual do the talking.
+      Highest share rate of any angle. Use for jaw-drop moments only.
+
+# ── Hook Formulas (for BaseHookStrategy) ─────────────────────────
+hooks:
+  formulas:
+    # Tool launches
+    - "{company} just dropped {product}"
+    - "{product} can now do {claim}"
+    - "The {product} update nobody expected"
+    - "{company} quietly released {product}"
+    - "{product} generated this in seconds"
+    # Creator content
+    - "Someone recreated {topic} with AI"
+    - "This creator made a full {topic} with {product}"
+    - "Creators are using {product} to make {topic}"
+    # Milestones
+    - "{product} just hit {number}"
+    - "{number} better than {comparison}"
+    - "This AI demo has {number} views in {metric}"
+    # Comparisons
+    - "{company} vs {comparison} just got real"
+    - "{product} just beat {comparison}"
+    - "The {comparison} debate is officially over"
+    # Controversy
+    - "{company} CEO said {claim} and people are furious"
+    - "The real problem with {product}"
+    - "Is {topic} actually dangerous?"
+    # Curiosity
+    - "{product} can do THIS now"
+    - "The hidden feature in {product} nobody uses"
+    - "{company} quietly built something incredible"
+    - "What {company} doesn't want you to know about {topic}"
+    # Reactions
+    - "This {product} output looks real"
+    - "Watch what happens when you tell {product} to {claim}"
+    - "{product} just passed the {claim} test"
+    - "AI art just hit {number} quality"
+    - "Reddit is losing it over this {product} demo"
+    - "AI just made {topic} obsolete"
+    - "{number} people tried {product} and it broke"
+    # Prediction
+    - "{company} is about to change {topic}"
+    - "{topic} in {number}: what it means"
+    # Emotional reaction
+    - "This AI just out-performed real humans at {topic}"
+    - "Stop what you're doing — {claim}"
+  story_categories:
+    tool_launch:
+      formulas:
+        - "{company} just dropped {product}"
+        - "{product} can now do {claim}"
+        - "The {product} update nobody expected"
+        - "{company} quietly released {product}"
+    creator_showcase:
+      formulas:
+        - "Someone recreated {topic} with AI"
+        - "This creator made a full {topic} with {product}"
+        - "Creators are using {product} to make {topic}"
+    milestone:
+      formulas:
+        - "{product} just hit {number}"
+        - "{number} better than {comparison}"
+        - "This AI demo has {number} views in {metric}"
+    controversy:
+      formulas:
+        - "{company} vs {comparison} just got real"
+        - "{company} CEO said {claim} and people are furious"
+        - "The {comparison} debate is officially over"
+        - "The real problem with {product}"
+    curiosity:
+      formulas:
+        - "{product} can do THIS now"
+        - "The hidden feature in {product} nobody uses"
+        - "{company} quietly built something incredible"
+        - "What {company} doesn't want you to know about {topic}"
+    demo_viral:
+      formulas:
+        - "This {product} output looks real"
+        - "Watch what happens when you tell {product} to {claim}"
+        - "This AI just out-performed real humans at {topic}"
+    default:
+      formulas:
+        - "Reddit is losing it over this {product} demo"
+        - "AI just made {topic} obsolete"
+        - "{product} generated this in seconds"
+        - "Stop what you're doing — {claim}"
+  forbidden_styles:
+    - "BREAKING:"
+    - "JUST IN:"
+    - "ALERT:"
+    - "URGENT:"
+    - "EXCLUSIVE:"
+
+# ── Caption Config (for BaseWritingStrategy) ─────────────────────
+captions:
+  max_length: 2200
+  target_length: 200
+  cta_library:
+    - "What do you think?"
+    - "Would you use this?"
+    - "Better than the original?"
+    - "Share your results"
+    - "Try this yourself"
+    - "Thoughts?"
+  hashtag_pool:
+    - "#AI"
+    - "#ArtificialIntelligence"
+    - "#Tech"
+    - "#MachineLearning"
+    - "#AIArt"
+    - "#Deepfake"
+    - "#AIVideo"
+  hashtags_per_post: 4

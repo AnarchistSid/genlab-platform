@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+/* Hook slide layout — @evolving.ai style
+ * Real photo hero (top 55%) + gradient fade + bold ALL-CAPS headline (bottom 45%)
+ * Brand identity: small centered "BLACKBOX BRIEF" label above headline
+ * Key phrases highlighted in brand primary color (Indigo #6366f1)
+ */
+
+/* The hero image should be visible in the top portion, with a strong
+ * gradient overlay that fades to near-black at the bottom so the headline
+ * text is always readable regardless of photo brightness/color */
+.hero-overlay {
+  background: var(--gradient-hero-overlay);
+}
+
+.hook-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--space-xl) 80px var(--space-xl);
+}
+
+/* Minimal brand identity strip (à la @evolving.ai — centered, thin line above) */
+.brand-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: var(--space-md);
+}
+
+.brand-strip__line {
+  width: 60px;
+  height: 2px;
+  background: rgba(var(--brand-primary-rgb), 0.4);
+  border-radius: 2px;
+}
+
+.brand-strip__name {
+  font-size: var(--text-brand-strip);
+  font-weight: var(--font-display);
+  letter-spacing: var(--tracking-brand);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Headline — ALL-CAPS, centered, max 40% of slide height
+ * Font size controlled by --text-hook from brand_system.css (responsive).
+ * overflow: hidden prevents long text from bleeding into hero area. */
+.hook-text {
+  text-align: center;
+  max-width: 95%;
+  max-height: 40%;
+  overflow: hidden;
+  /* font-size inherited from base.css .hook-text { font-size: var(--text-hook) } */
+  line-height: 1.1;
+}
+
+/* Swipe CTA */
+.swipe-label {
+  margin-top: var(--space-md);
+  font-size: 16px;
+  letter-spacing: 0.2em;
+}
+
+/* Source credit at bottom (small, unobtrusive) */
+.hero-credit {
+  bottom: var(--space-md);
+  left: var(--space-xl);
+  font-size: 14px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.35);
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  {# -- Hero image background — real photo from the story article -- #}
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="hero-overlay"></div>
+
+  {% elif hero_mode == 'text_only' %}
+  {# -- Fallback gradient when no image available -- #}
+  <div class="hero-gradient"></div>
+  {% endif %}
+
+  <div class="content-layer">
+
+    {# -- Top bar: source badge + slide count -- #}
+    <div class="top-bar">
+      {% if source_name %}
+      <div class="source-badge">{{ source_name }}</div>
+      {% else %}
+      <div></div>
+      {% endif %}
+      <div class="slide-indicator">1/{{ slide_total }}</div>
+    </div>
+
+    {# -- Bottom layout: brand strip + headline + swipe CTA -- #}
+    <div class="hook-layout">
+
+      {# -- Brand identity strip (minimal, centered) -- #}
+      <div class="brand-strip">
+        <div class="brand-strip__line"></div>
+        <div class="brand-strip__name">Blackbox Brief</div>
+      </div>
+
+      {# -- Hook headline with highlighted keywords -- #}
+      <h1 class="hook-text">{{ hook_text }}</h1>
+
+      {# -- Swipe prompt -- #}
+      <div class="swipe-label">SWIPE FOR MORE &rarr;</div>
+
+    </div>
+
+    <div class="bottom-bar">
+      <span class="brand-handle">{{ brand_handle }}</span>
+    </div>
+
+    {# -- Image credit overlay (bottom left, subtle) -- #}
+    {% if hero_credit %}
+    <div class="hero-credit">{{ hero_credit }}</div>
+    {% endif %}
+
+  </div>
+
+</div>
+
+</body>
+</html>
