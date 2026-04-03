@@ -45,7 +45,7 @@ class AmazonOneLinkAdapter:
 class AmazonINAdapter:
     network_id: str = "amazon"
     display_name: str = "Amazon India"
-    default_tag: str = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "")
+    default_tag: str = field(default_factory=lambda: os.environ.get("AMAZON_IN_AFFILIATE_TAG", ""))
 
     def validate_url(self, url: str) -> bool:
         return "amazon.in" in url and "tag=" in url
