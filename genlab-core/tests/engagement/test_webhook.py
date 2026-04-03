@@ -66,7 +66,7 @@ def _make_comment_payload(comment_id: str, text: str, media_id: str = "media_123
         "object": "instagram",
         "entry": [
             {
-                "id": "17841448019867838",
+                "id": "17841400000000001",
                 "time": 1700000000,
                 "changes": [
                     {

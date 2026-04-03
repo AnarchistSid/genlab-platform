@@ -31,7 +31,7 @@ class TestAppendUtmParams:
 
     def test_basic_utm_append(self):
         """UTM params are appended to a clean URL."""
-        url = "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***"
+        url = "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21"
         result = append_utm_params(url, niche_id="gaming", blueprint_id="bp-123")
         assert "utm_source=genlab" in result
         assert "utm_medium=affiliate" in result
@@ -40,14 +40,14 @@ class TestAppendUtmParams:
 
     def test_preserves_existing_params(self):
         """Existing query parameters are preserved."""
-        url = "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***"
+        url = "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21"
         result = append_utm_params(url, niche_id="gaming")
-        assert "tag=***REMOVED***" in result
+        assert "tag=test-tag-21" in result
         assert "utm_source=genlab" in result
 
     def test_no_double_utm(self):
         """If UTM params already exist, don't add them again."""
-        url = "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***&utm_source=existing"
+        url = "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21&utm_source=existing"
         result = append_utm_params(url, niche_id="gaming")
         assert result == url  # unchanged
 
@@ -64,7 +64,7 @@ class TestAppendUtmParams:
 
     def test_niche_optional(self):
         """UTM params work without niche_id."""
-        url = "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***"
+        url = "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21"
         result = append_utm_params(url)
         assert "utm_source=genlab" in result
         assert "utm_medium=affiliate" in result

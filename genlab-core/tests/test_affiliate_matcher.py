@@ -31,7 +31,7 @@ def _make_catalog(niche_id: str = "gaming", products: list | None = None) -> dic
                 "keywords": ["ps5", "playstation", "console"],
                 "networks": {
                     "amazon": {
-                        "url": "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***",
+                        "url": "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21",
                         "commission_pct": 4.0,
                     }
                 },
@@ -51,7 +51,7 @@ def _make_multi_catalog() -> dict:
                         "keywords": ["ps5", "playstation", "console"],
                         "networks": {
                             "amazon": {
-                                "url": "https://www.amazon.in/dp/PS5?tag=***REMOVED***",
+                                "url": "https://www.amazon.in/dp/PS5?tag=test-tag-21",
                                 "commission_pct": 4.0,
                             }
                         },
@@ -61,7 +61,7 @@ def _make_multi_catalog() -> dict:
                         "keywords": ["nvidia", "rtx", "4090", "gpu"],
                         "networks": {
                             "amazon": {
-                                "url": "https://www.amazon.in/dp/RTX?tag=***REMOVED***",
+                                "url": "https://www.amazon.in/dp/RTX?tag=test-tag-21",
                                 "commission_pct": 4.0,
                             }
                         },
@@ -75,7 +75,7 @@ def _make_multi_catalog() -> dict:
                         "keywords": ["blu-ray", "4k", "player"],
                         "networks": {
                             "amazon": {
-                                "url": "https://www.amazon.in/dp/BLU?tag=***REMOVED***",
+                                "url": "https://www.amazon.in/dp/BLU?tag=test-tag-21",
                                 "commission_pct": 3.0,
                             }
                         },
