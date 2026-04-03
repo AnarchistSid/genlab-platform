@@ -58,7 +58,7 @@ def test_no_changes_cuelinks_default_rate():
                 "hardware",
                 {
                     "cuelinks": _network(
-                        "https://linksredirect.com/?cid=***REMOVED***&url=test", 7.0
+                        "https://linksredirect.com/?cid=000000&url=test", 7.0
                     ),
                 },
             )
@@ -234,7 +234,7 @@ def test_unknown_category_with_default_rate():
                 "Streaming Service",
                 "streaming",  # not in cuelinks category map, but _default=7.0 applies
                 {
-                    "cuelinks": _network("https://linksredirect.com/?cid=***REMOVED***", 3.0),
+                    "cuelinks": _network("https://linksredirect.com/?cid=000000", 3.0),
                 },
             )
         ])
