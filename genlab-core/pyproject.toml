@@ -59,6 +59,7 @@ addopts = "-m 'not integration' -p no:faulthandler"
 dev = [
     "hypothesis>=6.151.9",
     "pytest>=9.0.2",
+    "pytest-cov>=6.0",
 ]
 
 [tool.mypy]
