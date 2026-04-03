@@ -7,7 +7,7 @@ and can be included in YouTube video descriptions.
 Usage:
     from genlab_core.monetization.qr_generator import generate_qr_code
 
-    path = generate_qr_code("clutchwire", base_url="https://review.aspirehub.ai")
+    path = generate_qr_code("clutchwire")
     # Returns: Path(".tmp/qr/clutchwire_qr.png")
 
 Requires: ``qrcode[pil]`` (qrcode + Pillow)
@@ -18,6 +18,7 @@ instead of crashing the pipeline.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -36,9 +37,16 @@ _CHANNEL_SLUGS = {
 }
 
 
+def _default_base_url() -> str:
+    """Resolve the dashboard base URL from environment."""
+    domain = os.environ.get("GENLAB_DOMAIN", "localhost")
+    scheme = "http" if domain == "localhost" else "https"
+    return f"{scheme}://{domain}"
+
+
 def generate_qr_code(
     channel_slug: str,
-    base_url: str = "https://review.aspirehub.ai",
+    base_url: str | None = None,
     output_dir: Path | None = None,
     size: int = 10,
     border: int = 2,
@@ -64,6 +72,9 @@ def generate_qr_code(
         except ImportError:
             logger.warning("[QRGenerator] qrcode package not installed — run: pip install qrcode[pil]")
             return None
+
+    if base_url is None:
+        base_url = _default_base_url()
 
     out_dir = output_dir or _QR_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,13 +107,16 @@ def generate_qr_code(
 
 
 def generate_all_qr_codes(
-    base_url: str = "https://review.aspirehub.ai",
+    base_url: str | None = None,
     output_dir: Path | None = None,
 ) -> dict[str, Path | None]:
     """Generate QR codes for all 5 channels.
 
     Returns a dict mapping channel_slug to QR code path (or None on failure).
     """
+    if base_url is None:
+        base_url = _default_base_url()
+
     results: dict[str, Path | None] = {}
     for niche_id, channel_slug in _CHANNEL_SLUGS.items():
         results[channel_slug] = generate_qr_code(
@@ -120,5 +134,5 @@ def get_youtube_description_snippet(channel_slug: str) -> str:
     return (
         f"\n---\n"
         f"Scan the QR code or visit our link page for product picks & deals.\n"
-        f"All links and recommendations: https://review.aspirehub.ai/links/{channel_slug}?ref=yt_desc"
+        f"All links and recommendations: {_default_base_url()}/links/{channel_slug}?ref=yt_desc"
     )

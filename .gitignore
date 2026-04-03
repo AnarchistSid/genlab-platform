@@ -101,3 +101,21 @@ firebase-debug.log
 # Audit/status reports (generated, not source)
 DEEP_AUDIT_*.md
 STATUS_REPORT_*.md
+
+# LaunchAgent plists (machine-specific)
+genlab-core/runbooks/*.plist
+
+# SharePoint config (infrastructure IDs)
+genlab-core/config/lists_config.yaml
+
+# Claude rules (operational, not public)
+.claude/rules/
+.claude/launch.json
+
+# OpenSandbox
+OpenSandbox
+
+# Competitive strategy configs (use .example.yaml as templates)
+genlab-core/config/monetisation_targets.yaml
+genlab-core/config/affiliate_seasonal.yaml
+genlab-core/config/affiliate_catalog.yaml
