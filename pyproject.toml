@@ -1,3 +1,7 @@
+[tool.uv]
+# Override GPL text-unidecode with MIT unidecode for python-slugify
+override-dependencies = ["text-unidecode ; python_version < '0'"]
+
 [tool.uv.workspace]
 members = [
     "genlab-core",
