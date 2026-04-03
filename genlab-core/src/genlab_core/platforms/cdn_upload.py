@@ -202,6 +202,8 @@ def upload_to_cdn(
     file_path: str | Path,
     expiry: str = "24h",
     max_attempts: int = 3,
+    *,
+    require_external: bool = False,
 ) -> str | None:
     """Upload a local file and return a public HTTPS URL.
 
@@ -209,6 +211,13 @@ def upload_to_cdn(
       1. Cloudflare tunnel — local file served via dashboard (100% reliable)
       2. litterbox.catbox.moe — free external CDN
       3. tmpfiles.org — free fallback
+
+    Args:
+        require_external: If True, skip the Cloudflare tunnel and use an
+            external CDN that third-party servers (e.g. Meta) can download
+            from.  Meta's video fetcher is blocked by Cloudflare's bot
+            protection on the tunnel, so Instagram/Threads uploads must use
+            an external host.
 
     Returns None if all methods fail.
     """
@@ -218,18 +227,19 @@ def upload_to_cdn(
         return None
 
     size_mb = file_path.stat().st_size / (1024 * 1024)
-    logger.info("CDN upload: %s (%.1f MB, expiry=%s)", file_path.name, size_mb, expiry)
+    logger.info("CDN upload: %s (%.1f MB, expiry=%s, external=%s)", file_path.name, size_mb, expiry, require_external)
 
-    # Tier 1: Cloudflare tunnel (most reliable)
-    url = _serve_via_tunnel(file_path)
-    if url:
-        return url
+    if not require_external:
+        # Tier 1: Cloudflare tunnel (most reliable for direct access)
+        url = _serve_via_tunnel(file_path)
+        if url:
+            return url
 
-    # Tier 2: Litterbox
+    # Tier 2: Litterbox (externally accessible)
     url = _upload_to_litterbox(file_path, expiry, max_attempts)
     if url:
         return url
 
-    # Tier 3: tmpfiles
+    # Tier 3: tmpfiles (externally accessible)
     logger.warning("Litterbox unreachable, trying tmpfiles.org...")
     return _upload_to_tmpfiles(file_path)
