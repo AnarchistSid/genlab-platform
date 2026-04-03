@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/publishing/threads_client.py
-# hypothesis_version: 6.151.9
-
-[500, 'IMAGE', 'TEXT', 'VIDEO', 'access_token', 'creation_id', 'critical', 'data', 'days_remaining', 'everyone', 'expires_in', 'fields', 'grant_type', 'id', 'image_url', 'media_type', 'metric', 'name', 'ok', 'permalink', 'refreshed', 'reply_control', 'status', 'text', 'th_refresh_token', 'threads_access_token', 'threads_id', 'threads_user_id', 'unknown', 'v1.0', 'value', 'values', 'video_url', 'warning', '…']

@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/tools/safe_push.py
-# hypothesis_version: 6.151.9
-
-['--abbrev-ref', '--force-main', '--oneline', '--porcelain', '--stat', '-u', 'HEAD', 'Push successful.', '__main__', 'diff', 'git', 'log', 'main', 'master', 'origin', 'push', 'rev-parse', 'status', 'store_true']

@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/render/video_renderer.py
-# hypothesis_version: 6.151.9
-
-[0.08, -500, 300, '%', '%%', "'", "'\\\\\\''", '+faststart', '-b:a', '-c:a', '-c:v', '-color_primaries', '-color_trc', '-colorspace', '-crf', '-filter_complex', '-i', '-map', '-movflags', '-pix_fmt', '-preset', '-r', '-y', '0:a?', '128k', ':', '[final]', '\\', '\\\\:', '\\\\\\\\', 'aac', 'facebook', 'ffmpeg', 'instagram', 'threads', 'tiktok', 'twitter', 'x_premium', 'x_standard', 'youtube', 'yuv420p']

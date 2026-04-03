@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/dashboard/server/api/stories.py
-# hypothesis_version: 6.151.9
-
-[100, 400, 404, 502, "'", "''", ')', ',', '/<record_id>', '/api/v1/stories', 'AND(', 'GET', 'Invalid record ID', 'Not found', '^\\d+$', 'data', 'error', 'fields', 'id', 'meta', 'page', 'per_page', 'priority', 'published_at', 'published_date', 'score', 'search', 'source', 'stories_api', 'title', 'total', 'total_pages']

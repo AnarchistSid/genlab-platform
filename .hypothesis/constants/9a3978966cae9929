@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/orchestration/dashboard_routes.py
-# hypothesis_version: 6.151.9
-
-[0.0, 200, 404, 503, '+00:00', '/health', '/runs', '/runs/<run_id>', '/status', '/trigger', '?', 'CANCELLED', 'COMPLETED', 'FAILED', 'PENDING', 'POST', 'RUNNING', 'Run not found', 'SCHEDULED', 'UNKNOWN', 'Z', 'ai-news', 'ai_news', 'current_stage', 'data', 'duration_seconds', 'elapsed_seconds', 'end_time', 'error', 'expected_start_time', 'finished_at', 'flow_id', 'flow_name', 'gaming', 'id', 'idle', 'items_processed', 'items_total', 'last_run', 'limit', 'manual', 'message', 'name', 'niche_id', 'niches', 'parameters', 'pipeline_status', 'prefect', 'prefect_healthy', 'run_id', 'running', 'scheduled', 'spike', 'stage_index', 'stage_progress', 'stages', 'start_time', 'started_at', 'state', 'status', 'total_stages', 'trigger', 'triggered', 'type', 'unknown']

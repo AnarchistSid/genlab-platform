@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platform/platform_rules.py
-# hypothesis_version: 6.151.9
-
-[100, 200, 2000, '?', '?.!,', 'April', 'August', 'December', 'February', 'January', 'July', 'June', 'March', 'May', 'November', 'October', 'Save this for later!', 'September', '\\n{3,}', 'facebook', 'https?://\\S+', 'instagram', 'threads', 'twitter', 'x', 'x_premium', 'x_standard', 'youtube']

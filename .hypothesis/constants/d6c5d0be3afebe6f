@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/video_content_gate.py
-# hypothesis_version: 6.151.9
-
-[b'#', b'P5', 0.0, 0.05, 0.2, 0.5, 0.6, 0.7, 0.8, 1.0, 3.0, 120.0, 250.0, 255, 320, 10000, '-', '-f', '-frames:v', '-i', '-ss', '-v', '-vcodec', '-vf', '1', 'active_bands', 'avg_full_variance', 'bottom_variance', 'dominant_band_share', 'duration', 'error', 'ffmpeg', 'file_missing', 'frames', 'full_variance', 'height', 'image2pipe', 'mid_variance', 'ok', 'passed', 'passing_frames', 'path', 'pgm', 'reason', 'resolution', 'sampled_frames', 'timestamp', 'top_variance', 'width']

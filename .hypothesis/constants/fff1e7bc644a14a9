@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/smart_crop.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.5, 0.6, 0.8, 1.0, 1.1, 1.2, 2.0, 9.0, 16.0, 30.0, -2000, 120, '+faststart', '-c:a', '-c:v', '-crf', '-i', '-movflags', '-pix_fmt', '-preset', '-vf', '-y', '18', 'center', 'copy', 'face_center', 'genlab_smartcrop_', 'height', 'libx264', 'medium', 'motion_center', 'none', 'smart_crop', 'width', 'yuv420p']

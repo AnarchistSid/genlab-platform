@@ -118,7 +118,7 @@ For all non-BB channels (CriticalRush, ClutchWire, SpliceReel, FrameDrift):
 3. compose_blueprints.py      ← Build blueprint for top-N clips
 4. write_content.py           ← LLM: write hook + captions around the video
 5. render_visuals.py          ← FFmpeg: render video with logo overlay
-6. human_review               ← Approve at review.aspirehub.ai
+6. human_review               ← Approve at the review dashboard
 7. publish_all_platforms.py   ← Publish to IG, YT, FB, X, Threads
 8. metric_collector.py        ← Collect engagement after 6h/24h
 9. performance_learner.py     ← Update BanditArms for next run
@@ -194,7 +194,7 @@ Other channels: try hard to find a clip; only skip if truly none exists.
 - Root `GenLab/.env` — shared credentials + all per-niche prefixed vars
 - Per-niche `.env` — that channel's own tokens (belt + suspenders)
 - `niche_credentials.py` resolves `{PREFIX}_{KEY}` per niche, never falls back cross-channel
-- FB tokens are permanent EAA Page Tokens (expires_at=0) via Aspire Publisher app
+- FB tokens are permanent EAA Page Tokens (expires_at=0) via the project's Meta app
 - **Never run env consolidation AFTER token provisioning** — stale values overwrite fresh ones
 
 ## PIPELINE SCHEDULE (Sprint 62, timezone fix Sprint 68)
@@ -332,19 +332,20 @@ Local PostgreSQL database `genlab` with psycopg3 (`psycopg[binary,pool]>=3.2`).
 - RLS niche isolation via `SET LOCAL app.niche_id`
 
 ### SharePoint Lists (LEGACY — kept as fallback, not actively used)
-### SharePoint Site: 4020953b-b622-4a33-a0ea-763386c6af24
+<!-- Infrastructure IDs redacted. See .env and config/ for actual values. -->
+### SharePoint Site: `<SHAREPOINT_SITE_ID>`
 
 | List | ID | Purpose |
 |---|---|---|
-| Blueprints | 1376e514-ea7d-4995-8544-eab68f8eb9cc | Main content queue |
-| Stories | 217e0bc1-22c9-4219-8e3a-de865a09be3e | Fetched stories backlog |
-| Publishing_Analytics | ea0c759a-1d9c-4aea-84ee-45cd2b5deb42 | Per-platform publish records |
-| Analytics | 05d52cce-8501-470c-9a43-0537f7090ca8 | Engagement data |
-| Content_Memory | aabea5e0-6225-4aec-890c-98fe2bb1814e | Dedup history — DO NOT PURGE |
-| CriticalRush_BanditArms | b361467c-876d-427e-becd-8718f476fcc6 | Thompson Sampling state |
-| GenLab_PendingFeedback | 95b41fc0-36e2-4d1d-a870-21f46c75d423 | Engagement collection queue |
-| PendingEngagement | 5d03ac7f-d0d6-4291-93e6-c61e310e92f3 | Engagement worker queue |
-| GenLab_MonetisationProgress | 1a464f5e-fc95-4597-84ab-3fe6e7f4274a | Channel growth tracking |
+| Blueprints | `<LIST_ID_BLUEPRINTS>` | Main content queue |
+| Stories | `<LIST_ID_STORIES>` | Fetched stories backlog |
+| Publishing_Analytics | `<LIST_ID_PUBLISHING_ANALYTICS>` | Per-platform publish records |
+| Analytics | `<LIST_ID_ANALYTICS>` | Engagement data |
+| Content_Memory | `<LIST_ID_CONTENT_MEMORY>` | Dedup history — DO NOT PURGE |
+| CriticalRush_BanditArms | `<LIST_ID_BANDIT_ARMS>` | Thompson Sampling state |
+| GenLab_PendingFeedback | `<LIST_ID_PENDING_FEEDBACK>` | Engagement collection queue |
+| PendingEngagement | `<LIST_ID_PENDING_ENGAGEMENT>` | Engagement worker queue |
+| GenLab_MonetisationProgress | `<LIST_ID_MONETISATION_PROGRESS>` | Channel growth tracking |
 
 ### YouTube API
 - YOUTUBE_API_KEY = Data API v3 key (search + videos.list)

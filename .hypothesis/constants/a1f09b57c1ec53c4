@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/spam_filter.py
-# hypothesis_version: 6.151.9
-
-['(.)\\1{5,}', 'https?://\\S+']

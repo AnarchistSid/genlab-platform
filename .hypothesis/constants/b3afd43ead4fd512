@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/publish_youtube.py
-# hypothesis_version: 6.151.9
-
-[180.0, 100, 1024, 1500, '#', '#Shorts', '#shorts', '--dry-run', '--run-id', '.mp4', '.tmp', '28', 'AI News #Shorts', 'HttpError', 'Shorts', 'VISUAL_READY', '[]', '__main__', '_landscape', 'blueprint_id', 'candidate_id', 'caption', 'category_id', 'channel_id', 'community_post', 'community_post_text', 'dry_run', 'dry_run_yt_post_id', 'dry_run_yt_short_id', 'dry_run_yt_video_id', 'enabled', 'engagement_question', 'error', 'failed', 'fields', 'hashtags', 'hook', 'manual_post_required', 'manual_posts', 'max_text_length', 'message', 'platform', 'post_id', 'privacy_status', 'public', 'published', 'publishing.yaml', 'run_id', 'runs', 'shorts_title', 'source:', 'store_true', 'text', 'timestamp', 'unknown', 'url', 'video_id', 'visual_paths', 'w', 'youtube', 'youtube_community', 'youtube_content', '📰', '🔗']

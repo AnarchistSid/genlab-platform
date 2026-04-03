@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/ratelimit/domain_limiter.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1.0, 1.5, 2.0, 3.0, 200, '://', 'arstechnica.com', 'blog.google', 'domain_delays', 'marktechpost.com', 'news.ycombinator.com', 'techcrunch.com', 'the-decoder.com', 'theverge.com', 'venturebeat.com', 'wired.com', 'www.arstechnica.com', 'www.marktechpost.com', 'www.techcrunch.com', 'www.theverge.com', 'www.venturebeat.com', 'www.wired.com']

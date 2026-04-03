@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/qc_risk_classifier.py
-# hypothesis_version: 6.151.9
-
-['--claim-file', '--run-id', '.tmp', '__main__', 'allow_critical_risk', 'allow_high_risk', 'claim_id', 'claim_ledger.json', 'claims', 'config', 'critical', 'failures', 'high', 'high_risk', 'high_risk_keywords', 'low', 'medium', 'mitigation', 'passed', 'qc_risk_result.json', 'reason', 'require_mitigation', 'risk', 'risk_level', 'risk_rules.yaml', 'runs', 'text', 'total_claims', 'unknown']

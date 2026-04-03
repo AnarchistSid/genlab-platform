@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/workflow_state_machine.py
-# hypothesis_version: 6.151.9
-
-['ANALYZED', 'ARCHIVED', 'BLOCKED', 'DELETED', 'DRAFTED', 'ERROR', 'INTAKE', 'INTEL_READY', 'NEEDS_REVIEW', 'PUBLISHED', 'RESEARCHED', 'SCHEDULED', 'VALIDATED', 'VISUAL_READY', 'ok']

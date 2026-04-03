@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/sources/hf_spaces_connector.py
-# hypothesis_version: 6.151.9
-
-[120, 350, 429, 500, '+00:00', '.gif', '.jpeg', '.jpg', '.mov', '.mp4', '.png', '.webm', '.webp', '/', '429', 'Z', 'author', 'authors', 'cardData', 'connector:hf_spaces', 'createdAt', 'demo', 'entries', 'entry_count', 'error', 'failed', 'fetch_method', 'fetch_status', 'host', 'http', 'id', 'keywords', 'lastModified', 'limit', 'link', 'list_limit', 'max_results', 'params', 'published', 'rate_limited', 'require_media', 'rfilename', 'short_description', 'siblings', 'success', 'summary', 'tags', 'title', 'url']

@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/pipeline/stage_runner.py
-# hypothesis_version: 6.151.9
-
-['FAIL', 'OK', 'StageResult', '_sandbox_runner', 'egress', 'sandbox']

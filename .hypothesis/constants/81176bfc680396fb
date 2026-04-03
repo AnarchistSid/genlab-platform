@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/tools/crispy_scorer.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.01, 0.05, 0.3, 0.5, 0.9, 0.99, 1.0, 1.1, 1.5, 4.0, 30.0, 255.0, 100, 120, 180, 200, 255, 720, 960, '.npy', '.npz', 'R', 'RGB', 'box_height', 'box_width', 'box_x', 'box_y', 'confidence_threshold', 'csgo2_edge_mask', 'fallback_score', 'frame_sample_rate', 'game_names', 'getdata', 'input_resolution', 'kill_feed_region', 'mask_path', 'models', 'preprocessing', 'shift_x', 'valorant_edge_mask', 'weights_path']

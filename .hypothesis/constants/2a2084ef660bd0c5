@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/creator_policy.py
-# hypothesis_version: 6.151.9
-
-['08:00', '12:00', '16:00', '20:00', 'America/Los_Angeles', 'ai_visual_curation', 'config', 'content_mix.yaml', 'creator_only_mode', 'instagram', 'platforms', 'posts_per_day', 'publishing.yaml', 'schedule_slots', 'sources.yaml', 'timezone', 'video_only_mode', 'visuals']

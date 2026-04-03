@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platforms/instagram.py
-# hypothesis_version: 6.151.9
-
-[120, 200, 'ERROR', 'FINISHED', 'META_ACCESS_TOKEN', 'META_IG_USER_ID', 'PUBLISHED', 'REELS', 'UNKNOWN', 'access_token', 'caption', 'cover_url', 'creation_id', 'error', 'fields', 'id', 'instagram', 'media_type', 'message', 'name', 'share_to_feed', 'status_code', 'v21.0', 'video_url']

@@ -24,7 +24,12 @@ except ImportError:
     pass
 
 
-GENLAB_ROOT = Path("/Users/anarchistsid/GenLab")
+GENLAB_ROOT = Path(
+    os.environ.get(
+        "GENLAB_PROJECT_ROOT",
+        str(Path(__file__).resolve().parent.parent.parent.parent),
+    )
+)
 
 
 # ── Unit tests (no server needed) ────────────────────────────────────────────
@@ -54,7 +59,7 @@ class TestPathRewriting:
         self.runner = SandboxedFFmpegRunner(genlab_root=GENLAB_ROOT)
 
     def test_host_to_sandbox(self):
-        host = "/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/runs/clip.mp4"
+        host = str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "runs" / "clip.mp4")
         sandbox = self.runner.host_to_sandbox_path(host)
         assert sandbox == "/workspace/BlackboxBrief/.tmp/runs/clip.mp4"
 
@@ -72,9 +77,9 @@ class TestPathRewriting:
     def test_rewrite_ffmpeg_cmd(self):
         cmd = [
             "/opt/homebrew/bin/ffmpeg", "-y",
-            "-i", f"{GENLAB_ROOT}/BlackboxBrief/.tmp/clip.mp4",
+            "-i", str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "clip.mp4"),
             "-c:v", "libx264",
-            f"{GENLAB_ROOT}/BlackboxBrief/.tmp/out.mp4",
+            str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "out.mp4"),
         ]
         rewritten = self.runner.rewrite_ffmpeg_cmd(cmd)
         joined = " ".join(rewritten)

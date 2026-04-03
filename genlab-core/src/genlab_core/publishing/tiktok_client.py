@@ -295,7 +295,8 @@ class TikTokClient:
         new_refresh = data.get("refresh_token")
 
         if not new_access:
-            raise RuntimeError(f"TikTok token refresh failed — no access_token in response: {data}")
+            redacted = {k: '***' if 'token' in k.lower() else v for k, v in data.items()}
+            raise RuntimeError(f"TikTok token refresh failed — no access_token in response: {redacted}")
 
         self._access_token = new_access
 

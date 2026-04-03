@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/dashboard/server/api/schedule.py
-# hypothesis_version: 6.151.9
-
-[0.0, 400, 409, 500, 502, '%H:%M', '%Y-%m-%d', '%Y-%m-%d %H:%M', '+00:00', '/api/v1/schedule', '/coverage', '/reorder', '12:00', '20:00', 'Content Scraper', 'GENLAB_PROJECT_ROOT', 'GET', 'Invalid blueprint_id', 'PATCH', 'PUBLISHED', 'Z', '[', '^\\d+$', '^\\d{1,2}:\\d{2}$', 'action_taken', 'approved', 'blueprint', 'blueprint_id', 'collision', 'config', 'coverage', 'data', 'date', 'empty', 'error', 'fields', 'from', 'id', 'instagram', 'ok', 'published', 'publishing.yaml', 'schedule_api', 'schedule_slots', 'scheduled', 'scheduled_for', 'slide_previews', 'slots', 'status', 'time', 'title', 'to', 'to_date', 'to_slot', 'twitter_content', 'url', 'visual_paths', 'youtube_content', '{']

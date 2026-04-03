@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/egress_policies.py
-# hypothesis_version: 6.151.9
-
-['*.anthropic.com', '*.googleapis.com', '*.openai.com', '*.pexels.com', '*.reddit.com', '*.theverge.com', '*.unsplash.com', 'api.anthropic.com', 'api.elevenlabs.io', 'api.igdb.com', 'api.openai.com', 'api.pexels.com', 'api.steampowered.com', 'api.twitch.tv', 'api.twitter.com', 'api.unsplash.com', 'civitai.com', 'config', 'egress_policies.yaml', 'engagement', 'enrich_gaming', 'fetch_ai_news', 'fetch_gaming', 'fetch_ugc', 'graph.facebook.com', 'graph.threads.net', 'huggingface.co', 'metrics', 'open.tiktokapis.com', 'pixabay.com', 'publish', 'render', 'tts', 'upload.twitter.com']

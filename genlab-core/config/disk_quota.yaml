@@ -1,24 +1,24 @@
 agents:
   criticalrush:
-    runs_dir: /Users/anarchistsid/GenLab/CriticalRush/.tmp/runs
+    runs_dir: CriticalRush/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
   clutchwire:
-    runs_dir: /Users/anarchistsid/GenLab/ClutchWire/.tmp/runs
+    runs_dir: ClutchWire/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
   splicereel:
-    runs_dir: /Users/anarchistsid/GenLab/SpliceReel/.tmp/runs
+    runs_dir: SpliceReel/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
   framedrift:
-    runs_dir: /Users/anarchistsid/GenLab/FrameDrift/.tmp/runs
+    runs_dir: FrameDrift/.tmp/runs
     quota_gb: 30
     warn_pct: 75
     evict_pct: 90

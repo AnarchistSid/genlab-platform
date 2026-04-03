@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/tools/credential_check.py
-# hypothesis_version: 6.151.9
-
-[', ', '-', 'FB_PAGE_ACCESS_TOKEN', 'Facebook', 'Instagram/Meta', 'META_ACCESS_TOKEN', 'MISSING', 'READY', 'THREADS_ACCESS_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'Threads', 'TikTok', 'WARN', 'X/Twitter', 'X_ACCESS_SECRET', 'X_ACCESS_TOKEN', 'X_API_KEY', 'X_API_SECRET', 'X_BEARER_TOKEN', 'YOUTUBE_CLIENT_ID', 'YouTube', '__main__']

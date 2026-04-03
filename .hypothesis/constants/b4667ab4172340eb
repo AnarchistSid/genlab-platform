@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/ratelimit/token_bucket.py
-# hypothesis_version: 6.151.9
-
-[1.0, 2.0, 60.0, 3600.0, 86400.0, 'RateLimiterRegistry', 'burst', 'day', 'hour', 'minute', 'rate', 'second', 'unit']

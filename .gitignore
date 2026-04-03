@@ -62,3 +62,42 @@ OpenSandbox/
 
 # Brand assets at root level (copies live in channel assets/ dirs)
 *.png
+
+# ── Added during public-readiness remediation (2026-04-03) ──
+
+# Logs directory
+.logs/
+
+# Media CDN cache
+.media/cdn/
+
+# Production media (copyrighted source content)
+.media/
+
+# Claude Code local settings
+.claude/settings.local.json
+.claude/worktrees/
+
+# Serena AI assistant memories
+.serena/
+
+# Firebase
+firebase-debug.log
+
+# Hypothesis test database
+.hypothesis/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Backups
+.backups/
+
+# JSONL pipeline logs
+*.jsonl
+
+# Audit/status reports (generated, not source)
+DEEP_AUDIT_*.md
+STATUS_REPORT_*.md
