@@ -1,6 +1,5 @@
 # CLAUDE.md — Gen Lab
 # Authoritative context for every Claude Code session in this project.
-# Last updated: 2026-03-17 (Sprint 65 — upgrade sweep)
 
 ## MISSION — READ THIS FIRST
 
