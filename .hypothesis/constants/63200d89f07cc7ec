@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/classify_urgency.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, ' → EXPRESS LANE', ' 🚨', ', ', '--express', '--run-id', '--trend-pack', '--verbose', '.tmp', 'B', 'CRITICAL', 'File not found: %s', 'HIGH', 'LOW', 'MEDIUM', 'No data to classify', 'T', 'Urgency report → %s', '__main__', 'breaking_news', 'civitai.com', 'company_event', 'entries', 'error', 'express', 'express_count', 'express_stories', 'fetch_log.json', 'items', 'level_counts', 'major_company', 'major_product_launch', 'parsed_items.json', 'reasoning', 'reddit.com', 'results', 'run_id', 'runs', 'score', 'signals', 'standard', 'standard_count', 'store_true', 'stories', 'summary', 'time_sensitive', 'timestamp', 'title', 'total', 'total_stories', 'trend_pack.json', 'twitter.com', 'urgency', 'urgency_report.json', 'urgency_score', 'url', 'w', 'x.com', 'youtu.be', 'youtube.com']

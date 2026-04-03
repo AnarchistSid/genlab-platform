@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/html_scraper.py
-# hypothesis_version: 6.151.9
-
-[300, 1000, '%Y/%m/%d', '/\\d{4}/', 'Accept', 'Accept-Encoding', 'Accept-Language', 'Anthropic', 'Connection', 'OpenAI', 'User-Agent', '\\w+ \\d{1,2}, \\d{4}', 'a', 'anthropic.com', 'author', 'datetime', 'en-US,en;q=0.5', 'entries', 'entry_count', 'error', 'feed_title', 'fetch_method', 'fetched_at', 'gzip, deflate, br', 'h2', 'h3', 'h4', 'h5', 'href', 'html.parser', 'html_scraper', 'https://openai.com', 'keep-alive', 'link', 'openai.com', 'p', 'published', 'requests is required', 'span', 'string', 'summary', 'theverge.com', 'time', 'title', 'url', 'www.']

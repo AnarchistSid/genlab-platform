@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/bb_strategies/platform_adaptation.py
-# hypothesis_version: 6.151.9
-
-[-500, '--run-id', 'adapt', 'completed', 'execution', 'failed', 'no stderr', 'returncode', 'run_id', 'run_stats', 'status']

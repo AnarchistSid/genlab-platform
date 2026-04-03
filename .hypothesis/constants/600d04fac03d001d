@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/cache/disk_cache.py
-# hypothesis_version: 6.151.9
-
-[3600, 10000, '*.json', '.tmp/cache', 'cache_dir', 'data', 'entries', 'timestamp', 'total_size_bytes', 'w']

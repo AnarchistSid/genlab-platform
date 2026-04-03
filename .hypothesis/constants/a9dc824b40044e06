@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/monitoring/youtube_quota.py
-# hypothesis_version: 6.151.9
-
-[0.9, 100, 1600, 10000, '%Y-%m-%d', '.genlab', 'America/Los_Angeles', 'analytics_query', 'channel_list', 'comment_list', 'pct_used', 'playlist_insert', 'remaining', 'reset_date', 'thumbnail_set', 'updated_at', 'upload', 'upload_count', 'used', 'utf-8', 'youtube_quota.json']

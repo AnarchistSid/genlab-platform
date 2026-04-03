@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/dashboard/server/api/niches.py
-# hypothesis_version: 6.151.9
-
-['#6366f1', '/api/v1/niches', 'GET', 'accent_hex', 'coming_soon', 'configs', 'data', 'display_name', 'id', 'last_run', 'niches', 'niches_api', 'niches_registry.yaml', 'pending_review', 'r', 'status', 'tagline', 'utf-8']

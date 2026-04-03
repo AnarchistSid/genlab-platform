@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/dashboard/server/api/publishing_queue.py
-# hypothesis_version: 6.151.9
-
-[200, 400, 500, 502, '/api/v1', '/channel-health', '/queue', '/queue/stats', 'APPROVED', 'GET', 'HELD', 'Invalid record ID', 'PENDING_APPROVAL', 'POST', '^\\d+$', 'action', 'all', 'approved', 'blueprint_updated', 'data', 'error', 'held', 'id', 'limit', 'meta', 'niche_id', 'notes', 'ok', 'publishing_queue_api', 'queue_status', 'reason', 'record_id', 'released', 'status', 'total']

@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/cost/model_router.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.1, 0.25, 'MODEL_ROUTING_CONFIG', 'budget_fallbacks', 'configs', 'default_model', 'expensive_to_mid', 'gpt-4o-mini', 'mid_to_cheapest', 'model_routing.yaml', 'task_routing']

@@ -57,6 +57,13 @@ from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_exc(exc: Exception) -> str:
+    """Redact API keys from exception messages (e.g. HTTPError URLs)."""
+    msg = str(exc)
+    # Strip key=... query parameter from URLs in error messages
+    return re.sub(r'[?&]key=[^&\s]*', '?key=***', msg)
+
 # Quota tracking — reset per pipeline run, logs total units consumed.
 # Protected by _QUOTA_LOCK so concurrent niche pipelines don't corrupt counts.
 QUOTA_TRACKER: dict[str, int] = {"units_used": 0, "rss_fetches": 0}
@@ -394,7 +401,7 @@ class TrendingVideoFetcher:
             logger.warning("YouTube circuit open — skipping mostPopular for category %s", category_id)
             return []
         except Exception as e:
-            logger.error("mostPopular fetch failed for category %s: %s", category_id, e)
+            logger.error("mostPopular fetch failed for category %s: %s", category_id, _sanitize_exc(e))
             return []
 
     # ------------------------------------------------------------------
@@ -508,7 +515,7 @@ class TrendingVideoFetcher:
             logger.warning("YouTube circuit open — skipping playlistItems for %s", channel_id)
             return []
         except Exception as e:
-            logger.warning("playlistItems fetch failed for %s: %s", channel_id, e)
+            logger.warning("playlistItems fetch failed for %s: %s", channel_id, _sanitize_exc(e))
             return []
 
     # ------------------------------------------------------------------
@@ -700,7 +707,7 @@ class TrendingVideoFetcher:
             logger.warning("YouTube circuit open — skipping search for '%s'", query)
             return []
         except Exception as e:
-            logger.error("YouTube search failed for '%s': %s", query, e)
+            logger.error("YouTube search failed for '%s': %s", query, _sanitize_exc(e))
             return []
 
     def _fetch_video_details(
@@ -736,7 +743,7 @@ class TrendingVideoFetcher:
                 logger.warning("YouTube circuit open — skipping video details batch")
                 break  # No point trying remaining batches
             except Exception as e:
-                logger.error("Video details fetch failed: %s", e)
+                logger.error("Video details fetch failed: %s", _sanitize_exc(e))
         return results
 
     def _parse_video(self, item: dict, source: str) -> TrendingVideo | None:

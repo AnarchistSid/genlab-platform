@@ -1,17 +1,25 @@
 """Tests for persona configuration loading and system prompt building."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 from genlab_core.engagement.persona_schema import NichePersona, ReplyConstraints, VoiceConfig
 
+_GENLAB_ROOT = Path(
+    os.environ.get(
+        "GENLAB_PROJECT_ROOT",
+        str(Path(__file__).resolve().parent.parent.parent.parent),
+    )
+)
+
 
 class TestPersonaLoadFromYaml:
     def test_gaming_persona_loads(self):
         """Load the actual gaming persona.yaml and verify key fields."""
-        path = Path("/Users/anarchistsid/GenLab/CriticalRush/niches/gaming/config/persona.yaml")
+        path = _GENLAB_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "persona.yaml"
         if not path.exists():
             pytest.skip("Gaming persona.yaml not found")
         with open(path) as f:
@@ -24,7 +32,7 @@ class TestPersonaLoadFromYaml:
 
     def test_ai_creators_persona_loads(self):
         """Load the actual BB persona.yaml and verify key fields."""
-        path = Path("/Users/anarchistsid/GenLab/BlackboxBrief/config/persona.yaml")
+        path = _GENLAB_ROOT / "BlackboxBrief" / "config" / "persona.yaml"
         if not path.exists():
             pytest.skip("BB persona.yaml not found")
         with open(path) as f:
@@ -36,7 +44,7 @@ class TestPersonaLoadFromYaml:
 
     def test_gaming_has_gamer_vocabulary(self):
         """Gaming persona should use gamer vocabulary."""
-        path = Path("/Users/anarchistsid/GenLab/CriticalRush/niches/gaming/config/persona.yaml")
+        path = _GENLAB_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "persona.yaml"
         if not path.exists():
             pytest.skip("Gaming persona.yaml not found")
         with open(path) as f:

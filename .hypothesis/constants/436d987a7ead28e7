@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/CriticalRush/niches/gaming/stages/adapt_gaming_content.py
-# hypothesis_version: 6.151.9
-
-[0.08, 500, 2200, '#foryou', '#foryoupage', '#fyp', '9/16', '9:16', 'Source: {url}', 'adapt', 'adapted', 'aspect_ratio', 'caption', 'captions', 'config', 'content', 'cta_phrases', 'facebook', 'first_reply', 'hashtag_max', 'hashtag_min', 'hashtag_pool', 'hashtags', 'hook', 'https?://\\S+', 'instagram', 'link_reply_template', 'max_caption_length', 'media', 'r', 'rendered_path', 'run_stats', 'safe_zone_enforced', 'skipped_no_content', 'source_url', 'stories', 'templates.yaml', 'threads', 'tiktok', 'title', 'tweet', 'twitter', 'unknown', 'utf-8', 'vertical', 'warnings', 'x_twitter', '…']

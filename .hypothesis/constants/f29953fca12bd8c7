@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platforms/youtube.py
-# hypothesis_version: 6.151.9
-
-[0.0, 100, 200, 1024, 3000, 3600, 5000, '#', '#shorts', '%Y-%m-%d', '28', 'Authorization', 'Shorts', 'YOUTUBE_CLIENT_ID', 'YouTube Short', 'access_token', 'averageViewDuration', 'avg_view_duration_s', 'avg_view_pct', 'categoryId', 'client_id', 'client_secret', 'columnHeaders', 'comments', 'description', 'grant_type', 'id', 'items', 'likes', 'mine', 'name', 'parentId', 'part', 'privacyStatus', 'public', 'refresh_token', 'rows', 'shares', 'snippet', 'snippet,status', 'status', 'subscribersGained', 'subscribers_gained', 'tags', 'textOriginal', 'title', 'true', 'v2', 'v3', 'video', 'video/mp4', 'video_id', 'views', 'watch_minutes', 'youtube', 'youtubeAnalytics']

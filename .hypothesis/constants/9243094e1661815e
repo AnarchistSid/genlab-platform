@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/webhook.py
-# hypothesis_version: 6.151.9
-
-[403, '/health', '/webhooks/meta', '?', 'Invalid signature', 'META_APP_SECRET', 'NICHE_ID', 'Verification failed', 'X-Hub-Signature-256', 'changes', 'comment_id', 'comment_text', 'comments', 'entry', 'field', 'gaming', 'high', 'hub.challenge', 'hub.mode', 'hub.verify_token', 'id', 'instagram', 'media', 'niche_id', 'normal', 'ok', 'platform', 'post_context', 'post_id', 'sha256=', 'status', 'subscribe', 'text', 'value']

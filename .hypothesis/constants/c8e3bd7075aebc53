@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/stages/render_overlay_stages.py
-# hypothesis_version: 6.151.9
-
-['.tmp', 'blueprint_pack.json', 'candidate_id', 'clip_index.json', 'media_index.json', 'render_index.json', 'rendered', 'runs']

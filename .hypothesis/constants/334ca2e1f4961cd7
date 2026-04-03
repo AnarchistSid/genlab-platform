@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/publish_twitter.py
-# hypothesis_version: 6.151.9
-
-[100, 140, 275, 300, '    %d: %s', '  Empty tweet_text', '+faststart', '--dry-run', '--run-id', '-b:a', '-c:a', '-c:v', '-crf', '-i', '-map', '-movflags', '-preset', '-profile:v', '-t', '-y', '.mp4', '.tmp', '0:a?', '0:v:0', '17', '256k', 'PUBLISHED', 'VISUAL_READY', '[]', '__main__', 'aac', 'candidate_id', 'dry_run', 'dry_run_thread_id', 'dry_run_tweet_id', 'enabled', 'failed', 'ffmpeg', 'fields', 'format', 'high', 'id', 'libx264', 'link_in_reply', 'max_images_per_tweet', 'max_tweet_length', 'medium', 'platform', 'position', 'published', 'publishing.yaml', 'reel', 'routing', 'run_id', 'runs', 'single', 'store_true', 'story_url', 'text', 'thread', 'thread_tweets', 'timestamp', 'tweet_text', 'twitter', 'twitter_content', 'unknown', 'visual_paths', 'w']

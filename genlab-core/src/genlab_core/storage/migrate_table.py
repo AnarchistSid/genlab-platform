@@ -19,7 +19,7 @@ import sys
 import uuid
 from typing import Any
 
-from genlab_core.storage.postgres import PROMOTED_COLUMNS, PostgresBackend, _quote_col
+from genlab_core.storage.postgres import PROMOTED_COLUMNS, PostgresBackend, _quote_col, _validate_table
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,7 @@ def _build_insert_sql(
     Returns (sql, values) tuple. Uses the promoted column split from
     PostgresBackend to match the table schema exactly.
     """
+    table = _validate_table(table)
     promoted = PROMOTED_COLUMNS.get(table, set())
     cols: dict[str, Any] = {}
     extra: dict[str, Any] = {}
@@ -175,6 +176,7 @@ async def _record_exists(conn, table: str, record: dict[str, Any]) -> bool:
 
     For tables without a unique key, checks the extra JSONB for sp_id match.
     """
+    table = _validate_table(table)
     unique_key = TABLE_UNIQUE_KEY.get(table)
 
     if unique_key and unique_key in record:
@@ -253,6 +255,7 @@ def migrate_table(
     Returns:
         Dict with 'total', 'migrated', 'skipped', 'errors' counts.
     """
+    pg_table = _validate_table(pg_table)
 
     total = len(sp_records)
     migrated = 0

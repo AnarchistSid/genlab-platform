@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/intelligence/cost_accumulator.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.015, 0.02, 0.15, 0.6, 0.8, 1.0, 2.5, 3.0, 4.0, 5.0, 10.0, 15.0, 100, 1000, 1000000, 'assistant', 'bandwidth', 'budget_remaining_pct', 'by_category', 'claude-haiku-4-5', 'compute', 'cost-calc', 'cost_accumulator', 'entry_count', 'gpt-4o', 'gpt-4o-mini', 'gpt-image-1', 'image', 'input', 'llm', 'media', 'output', 'per_image', 'run_id', 'stop', 'total_usd', 'tts']

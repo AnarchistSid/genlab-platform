@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/error_events.py
-# hypothesis_version: 6.151.9
-
-['candidate_id', 'code', 'component', 'critical', 'details', 'error', 'error_event=%s', 'event_type', 'exception_message', 'exception_type', 'message', 'pipeline_error', 'run_id', 'severity', 'timestamp']

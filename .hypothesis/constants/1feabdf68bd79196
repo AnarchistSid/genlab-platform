@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/rendering/overlay_compositor.py
-# hypothesis_version: 6.151.9
-
-[-500, 120, '  |  ', "'", '(no stderr)', '(w-text_w)/2', ',', '-c:a', '-c:v', '-crf', '-i', '-preset', '-vf', '-y', '20', '24', '32', ':', 'Impact', '\\', "\\'", '\\:', '\\\\', 'black@0.70', 'black@0.72', 'copy', 'fast', 'ffmpeg', 'h*0.70', 'libx264', 'white@0.95', 'white@0.97']

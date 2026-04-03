@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/svm_client.py
-# hypothesis_version: 6.151.9
-
-[120, 200, 201, 202, 204, 300, 500, 1024, 1500, 8192, '.tmp', '/', 'Content-Type', 'SVM poll %s: HTTP %d', 'SVM_BASE_URL', 'application/json', 'chill', 'completed', 'config', 'download_url', 'error', 'failed', 'http', 'id', 'job_id', 'music', 'paddingBack', 'scenes', 'status', 'svm_videos', 'unknown', 'url', 'videoId', 'videoUrl', 'wb']

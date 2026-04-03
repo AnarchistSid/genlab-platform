@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/poller.py
-# hypothesis_version: 6.151.9
-
-[200, 300, 600, 900, '?', 'Authorization', 'META_ACCESS_TOKEN', 'THREADS_ACCESS_TOKEN', 'X_ACCESS_SECRET', 'X_ACCESS_TOKEN', 'X_API_KEY', 'X_API_SECRET', 'YOUTUBE_CLIENT_ID', 'access_token', 'authorChannelId', 'authorDisplayName', 'author_id', 'author_name', 'client_id', 'client_secret', 'comment_id', 'created_at', 'data', 'fields', 'grant_type', 'id', 'in_reply_to_user_id', 'is_question', 'items', 'limit', 'maxResults', 'order', 'part', 'platform', 'post_id', 'refresh_token', 'snippet', 'text', 'textOriginal', 'threads', 'time', 'topLevelComment', 'twitter', 'username', 'users', 'value', 'videoId', 'youtube']

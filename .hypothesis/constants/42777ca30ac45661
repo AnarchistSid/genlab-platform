@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/Content Scraper/execution/utils/mid_reel_hooks.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.45, 0.75, 0.8, 999, 'BREAK', 'CURIO', 'DEBATE', 'NUM', 'PRED', 'REACT', 'TUT', 'VS', '_', 'animation', 'appear_at_ratio', 'categories', 'config', 'consequence', 'content_type_map', 'default_category', 'duration_urgency', 'engagement_weight', 'instagram_specs.yaml', 'mandatory', 'max_seconds', 'mid_reel_hook', 'mid_reel_hooks.yaml', 'min_seconds', 'min_weight', 'optional', 'patterns', 'publishing.yaml', 'question', 'recommended', 'reel_animation', 'reveal', 'skip_below_seconds', 'statistics', 'teaser', 'template_ids', 'text', 'universal', 'visuals']

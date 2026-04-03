@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/dashboard/server/api/youtube_quota.py
-# hypothesis_version: 6.151.9
-
-[500, '/api/v1/monitoring', '/youtube-quota', 'error', 'youtube_quota_api']

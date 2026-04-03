@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/pipeline/stages/render_whisper_captions.py
-# hypothesis_version: 6.151.9
-
-[0.3, 120, '-c:a', '-c:v', '-crf', '-i', '-pix_fmt', '-preset', '-vf', '-y', '18', '_captioned.mp4', 'animation', 'audio.wav', 'base', 'captioned', 'config', 'copy', 'enabled', 'failed', 'fast', 'hook', 'hook_text', 'libx264', 'media', 'min_confidence', 'model_size', 'rendered_path', 'run_stats', 'silence_threshold_db', 'skipped', 'stories', 'title', 'tts_voiceover.wav', 'visuals', 'whisper_captions', 'whisper_sync', 'word_by_word', 'wpm_fallback', 'yuv420p']

@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/engagement/toxicity_gate.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.3, 0.7, 'error', 'original', 'toxicity']

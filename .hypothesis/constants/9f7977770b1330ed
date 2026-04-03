@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/platforms/registry.py
-# hypothesis_version: 6.151.9
-
-[':', 'facebook', 'instagram', 'threads', 'tiktok', 'x_twitter', 'youtube']

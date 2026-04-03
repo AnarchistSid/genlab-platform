@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/pipeline/log_streamer.py
-# hypothesis_version: 6.151.9
-
-[200, 2000, '%(message)s', 'INFO', '_type', 'a', 'level', 'logger', 'message', 'niche_id', 'pipeline', 'r', 'run_id', 'run_start', 'stage', 'ts', 'utf-8', 'w']

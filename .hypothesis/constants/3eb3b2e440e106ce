@@ -1,4 +1,0 @@
-# file: /Users/anarchistsid/GenLab/genlab-core/src/genlab_core/media/quota_manager.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.8, 0.95, 100, 1024, '*', '.score', 'critical', 'ok', 'warning']
