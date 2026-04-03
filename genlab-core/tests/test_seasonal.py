@@ -31,7 +31,7 @@ _SAMPLE_CONFIG = {
                     "category": "hardware",
                     "networks": {
                         "amazon": {
-                            "url": "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***",
+                            "url": "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21",
                             "commission_pct": 4.0,
                         }
                     },
@@ -50,7 +50,7 @@ _SAMPLE_CONFIG = {
                     "category": "hardware",
                     "networks": {
                         "amazon_us": {
-                            "url": "https://www.amazon.com/dp/B0BHD9TS9Q?tag=***REMOVED***",
+                            "url": "https://www.amazon.com/dp/B0BHD9TS9Q?tag=test-tag-20",
                             "commission_pct": 4.0,
                         }
                     },
