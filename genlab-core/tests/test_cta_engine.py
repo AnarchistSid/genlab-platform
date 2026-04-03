@@ -10,7 +10,7 @@ from genlab_core.monetization.cta_engine import inject_cta
 def _make_story(**overrides):
     base = {
         "affiliate_product": "PS5 Console",
-        "affiliate_url": "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***",
+        "affiliate_url": "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21",
         "_affiliate_disclosure_map": {
             "instagram": "#affiliate",
             "youtube": "Contains affiliate links.",
@@ -35,7 +35,7 @@ class TestYouTubeCTA:
         story = _make_story()
         fields = inject_cta({"youtube_content": "Great gaming session today."}, story)
         # URL now includes UTM params appended by append_utm_params()
-        assert "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***" in fields["youtube_content"]
+        assert "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21" in fields["youtube_content"]
         assert fields["youtube_content"].index("🔗 PS5 Console:") == 0  # still prepended
 
     def test_disclosure_appended(self):
@@ -156,7 +156,7 @@ class TestInstagramCTA:
         story = _make_story()
         fields = inject_cta({"caption": "Amazing deal for gamers. #gaming"}, story)
         assert "amazon.in" not in fields["caption"]
-        assert "***REMOVED***" not in fields["caption"]
+        assert "test-tag-21" not in fields["caption"]
 
 
 class TestFacebookCTA:
@@ -270,7 +270,7 @@ class TestNoProduct:
 
     def test_missing_affiliate_product_returns_fields_unchanged(self):
         story = {
-            "affiliate_url": "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***",
+            "affiliate_url": "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21",
             "_affiliate_disclosure_map": {"instagram": "#affiliate"},
         }
         original_fields = {"caption": "Some caption.", "youtube_content": "Some YouTube."}

@@ -36,11 +36,11 @@ MINIMAL_CATALOG = {
                     "name": "PS5 Console",
                     "networks": {
                         "amazon": {
-                            "url": "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***",
+                            "url": "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21",
                             "commission_pct": 3.0,
                         },
                         "amazon_us": {
-                            "url": "https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***",
+                            "url": "https://www.amazon.com/dp/B0DJHG2VVS?tag=test-tag-20",
                             "commission_pct": 3.0,
                         },
                         "earnkaro": {
@@ -66,7 +66,7 @@ MINIMAL_CATALOG = {
                     "name": "Nike Running Shoes",
                     "networks": {
                         "amazon": {
-                            "url": "https://www.amazon.in/dp/B0GKY7N6VY?tag=***REMOVED***",
+                            "url": "https://www.amazon.in/dp/B0GKY7N6VY?tag=test-tag-21",
                             "commission_pct": 5.0,
                         },
                         "cuelinks": {
@@ -123,9 +123,9 @@ class TestParseCatalogUrls:
         urls = [r["url"] for r in results]
 
         # Real Amazon URLs must be present
-        assert "https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***" in urls
-        assert "https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***" in urls
-        assert "https://www.amazon.in/dp/B0GKY7N6VY?tag=***REMOVED***" in urls
+        assert "https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21" in urls
+        assert "https://www.amazon.com/dp/B0DJHG2VVS?tag=test-tag-20" in urls
+        assert "https://www.amazon.in/dp/B0GKY7N6VY?tag=test-tag-21" in urls
         assert (
             "https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY"
             in urls

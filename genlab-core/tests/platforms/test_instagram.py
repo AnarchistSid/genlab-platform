@@ -13,7 +13,7 @@ def ig_client():
     from genlab_core.platforms.instagram import InstagramClient
     return InstagramClient(
         access_token="EAA_TEST_TOKEN",
-        ig_user_id="17841448019867838",
+        ig_user_id="17841400000000001",
         api_version="v21.0",
     )
 
@@ -292,7 +292,7 @@ class TestHealthCheck:
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
-                json=lambda: {"id": "17841448019867838", "name": "Test"},
+                json=lambda: {"id": "17841400000000001", "name": "Test"},
             )
             status = ig_client.check_token_health()
         assert status.valid is True
@@ -312,7 +312,7 @@ class TestHealthCheck:
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
-                json=lambda: {"id": "17841448019867838", "name": "BB Page"},
+                json=lambda: {"id": "17841400000000001", "name": "BB Page"},
             )
             status = ig_client.check_token_health()
         assert status.message != ""
@@ -373,7 +373,7 @@ class TestVerifyChannel:
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
-                json=lambda: {"id": "17841448019867838", "username": "blackboxbrief"},
+                json=lambda: {"id": "17841400000000001", "username": "blackboxbrief"},
             )
             ok = ig_client.verify_channel()
         assert ok is True
@@ -413,7 +413,7 @@ class TestVerifyChannel:
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
             mock_req.get.return_value = MagicMock(
                 status_code=200,
-                json=lambda: {"id": "17841448019867838", "username": "bb"},
+                json=lambda: {"id": "17841400000000001", "username": "bb"},
             )
             ig_client.verify_channel()
 

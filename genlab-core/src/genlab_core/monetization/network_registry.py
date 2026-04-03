@@ -8,7 +8,7 @@ Each network adapter knows how to:
 Usage:
     from genlab_core.monetization.network_registry import get_adapter, ADAPTERS
     adapter = get_adapter("amazon_onelink")
-    url = adapter.generate_url("B0CY5QW186", tag="***REMOVED***")
+    url = adapter.generate_url("B0CY5QW186", tag="your-tag-20")
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class NetworkAdapter(Protocol):
 class AmazonOneLinkAdapter:
     network_id: str = "amazon_onelink"
     display_name: str = "Amazon (OneLink)"
-    default_tag: str = "***REMOVED***"
+    default_tag: str = field(default_factory=lambda: os.environ.get("AMAZON_US_AFFILIATE_TAG", ""))
 
     def validate_url(self, url: str) -> bool:
         return "amazon.com" in url and "tag=" in url and "linkCode" in url
@@ -59,7 +59,7 @@ class AmazonINAdapter:
 class AmazonUSAdapter:
     network_id: str = "amazon_us"
     display_name: str = "Amazon US"
-    default_tag: str = "***REMOVED***"
+    default_tag: str = field(default_factory=lambda: os.environ.get("AMAZON_US_AFFILIATE_TAG", ""))
 
     def validate_url(self, url: str) -> bool:
         return "amazon.com" in url and "tag=" in url
@@ -73,7 +73,7 @@ class AmazonUSAdapter:
 class CuelinksAdapter:
     network_id: str = "cuelinks"
     display_name: str = "Cuelinks"
-    publisher_id: str = "***REMOVED***"
+    publisher_id: str = field(default_factory=lambda: os.environ.get("CUELINKS_PUBLISHER_ID", ""))
 
     def validate_url(self, url: str) -> bool:
         return "linksredirect.com" in url

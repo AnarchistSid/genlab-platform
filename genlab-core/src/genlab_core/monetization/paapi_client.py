@@ -6,7 +6,7 @@ Requires PA-API credentials (access_key, secret_key, partner_tag).
 Note: PA-API requires $5+ trailing 30-day revenue to maintain access.
 
 Usage:
-    client = PaapiClient(access_key="...", secret_key="...", partner_tag="***REMOVED***")
+    client = PaapiClient(access_key="...", secret_key="...", partner_tag="your-tag-20")
     products = client.search("PS5 console", search_index="VideoGames")
 """
 from __future__ import annotations
@@ -62,14 +62,14 @@ class PaapiClient:
         self,
         access_key: str = "",
         secret_key: str = "",
-        partner_tag: str = "***REMOVED***",
+        partner_tag: str = "",
         region: str = "us",
         cache_dir: Path | None = None,
         cache_ttl: int = _CACHE_TTL,
     ) -> None:
         self._access_key = access_key or os.environ.get("PAAPI_ACCESS_KEY", "")
         self._secret_key = secret_key or os.environ.get("PAAPI_SECRET_KEY", "")
-        self._partner_tag = partner_tag
+        self._partner_tag = partner_tag or os.environ.get("AMAZON_US_AFFILIATE_TAG", "")
         self._host = _HOSTS.get(region, _HOSTS["us"])
         self._cache_dir = cache_dir or _CACHE_DIR
         self._cache_ttl = cache_ttl

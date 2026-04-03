@@ -38,8 +38,8 @@ def test_no_changes_when_rates_match():
                 "PS5 Console",
                 "hardware",
                 {
-                    "amazon": _network("https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***", 3.0),
-                    "amazon_us": _network("https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***", 3.0),
+                    "amazon": _network("https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21", 3.0),
+                    "amazon_us": _network("https://www.amazon.com/dp/B0DJHG2VVS?tag=test-tag-20", 3.0),
                 },
             )
         ])
@@ -82,7 +82,7 @@ def test_detects_rate_mismatch():
                 "hardware",
                 {
                     # hardware amazon should be 3.0 — this is wrong
-                    "amazon": _network("https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***", 5.0),
+                    "amazon": _network("https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21", 5.0),
                 },
             )
         ])
@@ -106,12 +106,12 @@ def test_detects_multiple_mismatches():
             _product(
                 "PS5 Console",
                 "hardware",
-                {"amazon": _network("https://www.amazon.in/dp/X?tag=***REMOVED***", 5.0)},
+                {"amazon": _network("https://www.amazon.in/dp/X?tag=test-tag-21", 5.0)},
             ),
             _product(
                 "Gaming Headset",
                 "peripheral",
-                {"amazon": _network("https://www.amazon.in/dp/Y?tag=***REMOVED***", 1.0)},
+                {"amazon": _network("https://www.amazon.in/dp/Y?tag=test-tag-21", 1.0)},
             ),
         ])
     })
@@ -184,7 +184,7 @@ def test_skips_example_com_but_checks_real_urls():
                     # This placeholder is skipped
                     "earnkaro": _network("https://example.com/affiliate/ps5", 99.9),
                     # This real URL is checked — rate is wrong
-                    "amazon": _network("https://www.amazon.in/dp/X?tag=***REMOVED***", 9.9),
+                    "amazon": _network("https://www.amazon.in/dp/X?tag=test-tag-21", 9.9),
                 },
             )
         ])
@@ -215,7 +215,7 @@ def test_unknown_network_not_in_known_rates_is_skipped():
                 "hardware",
                 {
                     "amazon_onelink": _network(
-                        "https://www.amazon.com/dp/X?tag=***REMOVED***&linkCode=ll1", 99.0
+                        "https://www.amazon.com/dp/X?tag=test-tag-20&linkCode=ll1", 99.0
                     )
                 },
             )
@@ -255,7 +255,7 @@ def test_mismatch_tolerance_is_within_001():
                 "PS5 Console",
                 "hardware",
                 # 3.005 is within 0.01 of 3.0 — should NOT flag
-                {"amazon": _network("https://www.amazon.in/dp/X?tag=***REMOVED***", 3.005)},
+                {"amazon": _network("https://www.amazon.in/dp/X?tag=test-tag-21", 3.005)},
             )
         ])
     })

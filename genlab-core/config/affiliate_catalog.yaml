@@ -51,10 +51,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0CY5QW186?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0CY5QW186?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0DJHG2VVS?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DJHG2VVS?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CY5QW186
@@ -93,10 +93,10 @@ niches:
       category: subscription
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0GHJZ9QSN?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0GHJZ9QSN?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 2.0
         amazon_us:
-          url: https://www.amazon.com/dp/B07TFP7JFH?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B07TFP7JFH?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GHJZ9QSN
@@ -121,10 +121,10 @@ niches:
       category: peripheral
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0D78XSMSM?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0D78XSMSM?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 4.0
         amazon_us:
-          url: https://www.amazon.com/dp/B086PKMZ21?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B086PKMZ21?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0D78XSMSM
@@ -146,7 +146,7 @@ niches:
       category: hardware
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0CP7SV7XV?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0CP7SV7XV?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
       image_url: https://m.media-amazon.com/images/I/81Pz0DcfP3L._AC_SL1500_.jpg
       price_inr: 25000
@@ -161,7 +161,7 @@ niches:
       category: peripheral
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0FQJ3HBBW?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FQJ3HBBW?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/71iz1MXIpzL._AC_SL1500_.jpg
       price_inr: 5999
@@ -176,10 +176,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FVXRZJ12?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FVXRZJ12?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FVXRZJ12?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FVXRZJ12?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVXRZJ12
@@ -224,7 +224,7 @@ niches:
       category: hardware
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0FM6C3ZMN?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FM6C3ZMN?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
       image_url: https://m.media-amazon.com/images/I/61gZGeavWGL._SL1500_.jpg
       price_inr: 39999
@@ -245,10 +245,10 @@ niches:
       category: peripheral
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B086PJKVVT?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B086PJKVVT?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 4.0
         amazon_us:
-          url: https://www.amazon.com/dp/B086PJKVVT?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B086PJKVVT?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB086PJKVVT
@@ -271,10 +271,10 @@ niches:
       category: peripheral
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B01LXCDPPK?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B01LXCDPPK?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 4.0
         amazon_us:
-          url: https://www.amazon.com/dp/B01LXCDPPK?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B01LXCDPPK?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LXCDPPK
@@ -299,10 +299,10 @@ niches:
       category: peripheral
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FFTFYGLV?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FFTFYGLV?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 4.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FFTFYGLV?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FFTFYGLV?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FFTFYGLV
@@ -348,10 +348,10 @@ niches:
       category: subscription
       networks:
         amazon:
-          url: https://www.primevideo.com/offers?benefitId=nba&tag=***REMOVED***
+          url: https://www.primevideo.com/offers?benefitId=nba&tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 2.0
         amazon_us:
-          url: https://www.amazon.com/dp/B00CH4FPB6?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B00CH4FPB6?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/31BVAwrO1tL._h1_.png
       price_inr: 1499
@@ -376,10 +376,10 @@ niches:
       category: gear
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0GKY7N6VY?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0GKY7N6VY?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0C8THZHJ5?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0C8THZHJ5?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY
@@ -428,10 +428,10 @@ niches:
       category: gear
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FVGBMH9B?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FVGBMH9B?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FVGBMH9B?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FVGBMH9B?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVGBMH9B
@@ -450,7 +450,7 @@ niches:
       category: supplement
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B01N7VLTW3?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B01N7VLTW3?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/71tUNZ7QFgL._AC_SL1500_.jpg
       price_inr: 2499
@@ -466,10 +466,10 @@ niches:
       category: gear
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B01LP0V4JY?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B01LP0V4JY?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B01LP0V4JY?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B01LP0V4JY?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LP0V4JY
@@ -498,7 +498,7 @@ niches:
       category: gear
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B09P8PDXKT?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B09P8PDXKT?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/71GWfVlY+7S._AC_SL1500_.jpg
       price_inr: 4999
@@ -528,7 +528,7 @@ niches:
       category: gear
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0DQ8QSYXJ?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DQ8QSYXJ?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/51yfCVkHa6L._AC_SL1000_.jpg
       price_inr: 5999
@@ -550,10 +550,10 @@ niches:
       category: gear
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0CG6NR413?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0CG6NR413?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0CG6NR413?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0CG6NR413?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CG6NR413
@@ -571,10 +571,10 @@ niches:
       category: gear
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FBR9ML3P?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FBR9ML3P?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FBR9ML3P?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FBR9ML3P?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FBR9ML3P
@@ -595,7 +595,7 @@ niches:
       category: subscription
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B078J21W75?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B078J21W75?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/51BU2adIfsL._SL1500_.jpg
       price_inr: 649
@@ -628,10 +628,10 @@ niches:
       category: subscription
       networks:
         amazon:
-          url: https://www.amazon.in/prime?tag=***REMOVED***
+          url: https://www.amazon.in/prime?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 2.0
         amazon_us:
-          url: https://www.amazon.com/prime?tag=***REMOVED***
+          url: https://www.amazon.com/prime?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
       price_inr: 1499
@@ -652,10 +652,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DV3R2QM6?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DV3R2QM6?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FHBKCSNB?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FHBKCSNB?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DV3R2QM6
@@ -683,10 +683,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0F832HNG4?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0F832HNG4?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0F832HNG4?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0F832HNG4?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F832HNG4
@@ -711,10 +711,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B09BKCDXZC?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B09BKCDXZC?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B09BKCDXZC?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B09BKCDXZC?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09BKCDXZC
@@ -733,10 +733,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FHWGB7FW?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FHWGB7FW?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FHWGB7FW?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FHWGB7FW?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FHWGB7FW
@@ -755,10 +755,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DW3YPBL1?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DW3YPBL1?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0DW3YPBL1?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DW3YPBL1?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DW3YPBL1
@@ -777,10 +777,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0G29HRZYF?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0G29HRZYF?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0G29HRZYF?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0G29HRZYF?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G29HRZYF
@@ -797,10 +797,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DRCZQYHW?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DRCZQYHW?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0DRCZQYHW?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DRCZQYHW?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DRCZQYHW
@@ -818,7 +818,7 @@ niches:
       category: subscription
       networks:
         amazon_us:
-          url: https://www.amazon.com/s?k=Disney+Plus+Hotstar+subscription&tag=***REMOVED***
+          url: https://www.amazon.com/s?k=Disney+Plus+Hotstar+subscription&tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
       price_inr: 899
@@ -855,10 +855,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/1569319014?tag=***REMOVED***
+          url: https://www.amazon.in/dp/1569319014?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/1421560747?tag=***REMOVED***
+          url: https://www.amazon.com/dp/1421560747?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1569319014
@@ -918,10 +918,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DBFCVNC3?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DBFCVNC3?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FPBJX1R6?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FPBJX1R6?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DBFCVNC3
@@ -942,10 +942,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B009EOLFA2?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B009EOLFA2?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B009EOLFA2?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B009EOLFA2?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB009EOLFA2
@@ -969,10 +969,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0F9N5B6Z9?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0F9N5B6Z9?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0F9N5B6Z9?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0F9N5B6Z9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F9N5B6Z9
@@ -990,7 +990,7 @@ niches:
       category: subscription
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B000KH9PAY?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B000KH9PAY?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
       image_url: https://m.media-amazon.com/images/I/51hcUqEvHCL.jpg
       price_inr: 2499
@@ -1010,10 +1010,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0FRXPCN9G?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0FRXPCN9G?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0FRXPCN9G?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FRXPCN9G?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FRXPCN9G
@@ -1031,7 +1031,7 @@ niches:
       category: merchandise
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0FDB8NYLP?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0FDB8NYLP?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
       image_url: https://m.media-amazon.com/images/I/612Sp-WvEyL._SL1500_.jpg
       price_inr: 1499
@@ -1050,10 +1050,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/1646092724?tag=***REMOVED***
+          url: https://www.amazon.in/dp/1646092724?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/1646092724?tag=***REMOVED***
+          url: https://www.amazon.com/dp/1646092724?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1646092724
@@ -1071,10 +1071,10 @@ niches:
       category: merchandise
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B09HN5JFW9?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B09HN5JFW9?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 5.0
         amazon_us:
-          url: https://www.amazon.com/dp/B09HN5JFW9?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B09HN5JFW9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09HN5JFW9
@@ -1139,10 +1139,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0BHD9TS9Q?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0BHD9TS9Q?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0BHD9TS9Q?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0BHD9TS9Q?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BHD9TS9Q
@@ -1166,10 +1166,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0BXPFNNF9?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0BXPFNNF9?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0BXPFNNF9?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0BXPFNNF9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BXPFNNF9
@@ -1187,10 +1187,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DCSHSSFF?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DCSHSSFF?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0DCSHSSFF?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DCSHSSFF?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DCSHSSFF
@@ -1207,10 +1207,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0G58979LS?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0G58979LS?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0G58979LS?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0G58979LS?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G58979LS
@@ -1236,10 +1236,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0DF7Y1NZD?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0DF7Y1NZD?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0DF7Y1NZD?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0DF7Y1NZD?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DF7Y1NZD
@@ -1269,7 +1269,7 @@ niches:
       category: educational
       networks:
         amazon_us:
-          url: https://www.amazon.com/dp/B0BSMSV1NL?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0BSMSV1NL?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
       image_url: https://m.media-amazon.com/images/I/81RnKN6BRuL._SL1500_.jpg
       price_inr: 4999
@@ -1288,10 +1288,10 @@ niches:
       category: hardware
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B095GG31KX?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B095GG31KX?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 3.0
         amazon_us:
-          url: https://www.amazon.com/dp/B095GG31KX?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B095GG31KX?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB095GG31KX
@@ -1309,10 +1309,10 @@ niches:
       category: tool
       networks:
         amazon:
-          url: https://www.amazon.in/dp/B0GSRSRYSH?tag=***REMOVED***
+          url: https://www.amazon.in/dp/B0GSRSRYSH?tag=${AMAZON_IN_AFFILIATE_TAG}
           commission_pct: 4.0
         amazon_us:
-          url: https://www.amazon.com/dp/B0GSRSRYSH?tag=***REMOVED***
+          url: https://www.amazon.com/dp/B0GSRSRYSH?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
         cuelinks:
           url: https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GSRSRYSH
