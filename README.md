@@ -8,16 +8,16 @@ GenLab finds trending video content on YouTube, writes platform-native captions 
 
 ## Architecture
 
+GenLab is organized as a monorepo with a shared core library and per-channel configurations.
+
 ```
 genlab-core/         Shared infrastructure (pipeline, platform clients, learning loop)
-BlackboxBrief/       AI creators channel
-CriticalRush/        Gaming channel
-ClutchWire/          Sports channel
-SpliceReel/          Movies channel
-FrameDrift/          Anime channel
+channels/            Per-channel configurations (niche-specific)
 dashboard/           Operations dashboard (React + Flask)
 scripts/             Shared automation scripts
 ```
+
+Each channel directory contains YAML configs for sources, scoring, visuals, and publishing, along with thin strategy subclasses that customize the shared pipeline for that niche.
 
 ## Quick start
 
@@ -31,7 +31,7 @@ cp .env.example .env
 # Fill in API keys: ANTHROPIC_API_KEY, YOUTUBE_API_KEY, META_ACCESS_TOKEN, etc.
 
 # 3. Run a pipeline
-uv run --package genlab-core python -m genlab_core.pipeline --niche gaming
+uv run --package genlab-core python -m genlab_core.pipeline --niche <niche_id>
 
 # 4. Run tests
 uv run --package genlab-core pytest genlab-core/tests/ -x
