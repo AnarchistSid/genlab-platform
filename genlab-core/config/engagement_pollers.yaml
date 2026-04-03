@@ -8,23 +8,23 @@
 pollers:
   ai_creators:
     youtube:
-      channel_id: UC3GCipF_BTgjaxu-iSuBZ-g
+      channel_id: ""  # Set via BLACKBOXBRIEF_YOUTUBE_CHANNEL_ID env var
     twitter:
-      user_id: "632788275"
+      user_id: ""  # Set via BLACKBOXBRIEF_X_USER_ID env var
     threads:
       user_id: ""  # Set when Threads access token is provisioned
 
   gaming:
     youtube:
-      channel_id: UCW20NL2FiCO5F90IuCGwtTw
+      channel_id: ""  # Set via CRITICALRUSH_YOUTUBE_CHANNEL_ID env var
     twitter:
-      user_id: "2029218265801846784"
+      user_id: ""  # Set via CRITICALRUSH_X_USER_ID env var
     threads:
       user_id: ""  # Set when Threads access token is provisioned
 
   sports:
     youtube:
-      channel_id: UC9QhmCY9PnWW5i4H8LgtJUg
+      channel_id: ""  # Set via CLUTCHWIRE_YOUTUBE_CHANNEL_ID env var
     twitter:
       user_id: ""  # placeholder until X developer app provisioned
     threads:
@@ -32,7 +32,7 @@ pollers:
 
   movies:
     youtube:
-      channel_id: UCdqiuSQOiSp-t3IFzhbcvzQ
+      channel_id: ""  # Set via SPLICEREEL_YOUTUBE_CHANNEL_ID env var
     twitter:
       user_id: ""  # placeholder until X developer app provisioned
     threads:
@@ -40,7 +40,7 @@ pollers:
 
   anime:
     youtube:
-      channel_id: UCt7vXV-dzsgofLyZRAFbvIA
+      channel_id: ""  # Set via FRAMEDRIFT_YOUTUBE_CHANNEL_ID env var
     twitter:
       user_id: ""  # placeholder until X developer app provisioned
     threads:

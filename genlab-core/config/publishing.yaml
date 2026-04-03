@@ -6,17 +6,17 @@ niche_id: ai_creators
 platforms:
   instagram:
     enabled: true
-    account_id: "17841403488925202"  # BlackboxBrief IG Business Account
+    account_id: ""  # Set via BLACKBOXBRIEF_META_IG_USER_ID env var
     schedule_slots:
       - "12:00"
   youtube:
     enabled: true
-    channel_id: "UCsS0BFYV0yOoAdRzGxSxGQ"  # BlackboxBrief YT Channel
+    channel_id: ""  # Set via BLACKBOXBRIEF_YOUTUBE_CHANNEL_ID env var
     schedule_slots:
       - "12:00"
   facebook:
     enabled: true
-    page_id: "105972598822680"  # BlackboxBrief FB Page
+    page_id: ""  # Set via BLACKBOXBRIEF_META_FB_PAGE_ID env var
     schedule_slots:
       - "12:00"
   x_twitter:
