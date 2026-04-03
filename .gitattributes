@@ -1,0 +1,37 @@
+# Auto detect text files and ensure LF line endings
+* text=auto eol=lf
+
+# Explicit text
+*.py text diff=python
+*.yaml text
+*.yml text
+*.md text
+*.json text
+*.toml text
+*.sh text eol=lf
+*.html text
+*.css text
+*.js text
+*.ts text
+*.tsx text
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.mp3 binary
+*.wav binary
+*.ttf binary
+*.ttc binary
+*.woff binary
+*.woff2 binary
+*.npz binary
+*.gz binary
+*.zip binary
+
+# Lock files — don't diff
+uv.lock -diff linguist-generated
+package-lock.json -diff linguist-generated

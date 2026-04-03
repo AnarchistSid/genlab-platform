@@ -1,39 +1,67 @@
 # GenLab
 
+[![CI](https://github.com/AnarchistSid/genlab-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/AnarchistSid/genlab-platform/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+
 Video-first viral content automation platform for short-form video reels.
 
-## What it does
+## Features
 
-GenLab finds trending video content on YouTube, writes platform-native captions and hooks using LLMs, renders branded reels with FFmpeg, and publishes to Instagram, YouTube Shorts, Facebook Reels, Threads, and X/Twitter.
+- **Video-first pipeline** — Finds trending clips on YouTube, writes platform-native captions via LLM, renders branded reels with FFmpeg
+- **6 platform publishing** — Instagram Reels, YouTube Shorts, Facebook Reels, Threads, X/Twitter, TikTok
+- **Learning loop** — LinUCB contextual bandit optimizes content selection based on engagement feedback
+- **Engagement engine** — AI-powered comment replies with toxicity filtering, rate limiting, and bot disclosure
+- **Affiliate monetization** — Multi-network product matching, CTA injection, A/B testing, revenue attribution
+- **Operations dashboard** — React + Flask dashboard for content approval, scheduling, analytics, and monitoring
+- **Multi-channel** — Config-driven architecture supports unlimited niches with ~200 lines of niche-specific code each
 
 ## Architecture
 
-GenLab is organized as a monorepo with a shared core library and per-channel configurations.
-
 ```
 genlab-core/         Shared infrastructure (pipeline, platform clients, learning loop)
-channels/            Per-channel configurations (niche-specific)
+channels/            Per-channel configurations (niche-specific YAML + thin strategy classes)
 dashboard/           Operations dashboard (React + Flask)
 scripts/             Shared automation scripts
 ```
 
-Each channel directory contains YAML configs for sources, scoring, visuals, and publishing, along with thin strategy subclasses that customize the shared pipeline for that niche.
+### Pipeline stages
+
+```
+1. Fetch trending videos    ← YouTube API: find what's viral right now
+2. Score and filter          ← View velocity + Google Trends multiplier
+3. Compose blueprints       ← Build blueprint for top-N clips
+4. Write content             ← LLM: write hook + captions around the video
+5. Render visuals            ← FFmpeg: render video with logo overlay
+6. Human review              ← Approve via dashboard
+7. Publish                   ← All platforms in parallel
+8. Collect metrics           ← Engagement after 6h/24h/48h/168h
+9. Learn                     ← Update bandit arms for next run
+```
 
 ## Quick start
 
 ```bash
 # Prerequisites: Python 3.12+, PostgreSQL, FFmpeg, uv
+
 # 1. Clone and install
+git clone https://github.com/AnarchistSid/genlab-platform.git
+cd genlab-platform
 uv sync
 
 # 2. Set up environment
 cp .env.example .env
 # Fill in API keys: ANTHROPIC_API_KEY, YOUTUBE_API_KEY, META_ACCESS_TOKEN, etc.
 
-# 3. Run a pipeline
+# 3. Set up database
+createdb genlab
+uv run alembic -c genlab-core/alembic.ini upgrade head
+
+# 4. Run a pipeline
 uv run --package genlab-core python -m genlab_core.pipeline --niche <niche_id>
 
-# 4. Run tests
+# 5. Run tests
 uv run --package genlab-core pytest genlab-core/tests/ -x
 ```
 
@@ -42,6 +70,20 @@ uv run --package genlab-core pytest genlab-core/tests/ -x
 Each channel has its own `config/` directory with YAML files for sources, scoring, visuals, scheduling, and publishing. Shared configs live in `genlab-core/config/`.
 
 All credentials go in `.env` files (never committed). See `.env.example` for the full list.
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Python 3.12+ |
+| Package manager | [uv](https://github.com/astral-sh/uv) (workspace) |
+| Database | PostgreSQL 16 (psycopg3) |
+| LLM | Anthropic Claude Haiku |
+| Video | FFmpeg, yt-dlp |
+| Dashboard | React + Vite (frontend), Flask + Gunicorn (backend) |
+| Queue | Dramatiq + Redis |
+| Scheduling | launchd (macOS) |
+| CI | GitHub Actions (lint, test, secret scan) |
 
 ## Disclaimer
 
