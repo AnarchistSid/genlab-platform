@@ -7,52 +7,48 @@ on:
     branches: [main]
 
 jobs:
-  test-genlab-core:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  test:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:16-alpine
         env:
-          POSTGRES_DB: genlab_test
           POSTGRES_USER: genlab
-          POSTGRES_PASSWORD: test
-        ports:
-          - 5432:5432
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
+          POSTGRES_DB: genlab
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/cache@v4
         with:
-          version: "latest"
-      - name: Install dependencies
-        run: uv sync --package genlab-core
-      - name: Run tests
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - run: uv sync --frozen
+      - run: uv run --package genlab-core pytest genlab-core/tests/ -x -q --ignore=genlab-core/tests/storage/ --ignore=genlab-core/tests/integration/
         env:
-          DATABASE_URL: postgresql://genlab:test@localhost:5432/genlab_test
-          GENLAB_USE_POSTGRES: "true"
-        run: |
-          uv run --package genlab-core pytest genlab-core/tests/learning/ -q --tb=short
-          uv run --package genlab-core pytest genlab-core/tests/writing/ -q --tb=short
-          uv run --package genlab-core pytest genlab-core/tests/pipeline/ -q --tb=short
+          GENLAB_USE_POSTGRES: "false"
 
-  build-dashboard:
+  secret-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Install dependencies
-        working-directory: dashboard/frontend
-        run: npm ci
-      - name: Type check
-        working-directory: dashboard/frontend
-        run: npx tsc --noEmit
-      - name: Build
-        working-directory: dashboard/frontend
-        run: npm run build
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

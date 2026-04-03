@@ -119,3 +119,10 @@ OpenSandbox
 genlab-core/config/monetisation_targets.yaml
 genlab-core/config/affiliate_seasonal.yaml
 genlab-core/config/affiliate_catalog.yaml
+
+# Large binary assets (keep locally, don't track)
+*.ttc
+*.mp3
+*.wav
+BlackboxBrief/templates/fonts/
+BlackboxBrief/assets/music/
