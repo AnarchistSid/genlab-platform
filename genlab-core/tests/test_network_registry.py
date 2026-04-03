@@ -3,10 +3,10 @@ import os
 
 import pytest
 
-# Set test affiliate tags before importing adapters (they read env at class init)
-os.environ.setdefault("AMAZON_US_AFFILIATE_TAG", "test-tag-20")
-os.environ.setdefault("AMAZON_IN_AFFILIATE_TAG", "test-tag-21")
-os.environ.setdefault("CUELINKS_PUBLISHER_ID", "000000")
+# Set test affiliate tags before importing adapters (they read env at instantiation)
+os.environ["AMAZON_US_AFFILIATE_TAG"] = "test-tag-20"
+os.environ["AMAZON_IN_AFFILIATE_TAG"] = "test-tag-21"
+os.environ["CUELINKS_PUBLISHER_ID"] = "000000"
 
 from genlab_core.monetization.network_registry import (
     ADAPTERS,

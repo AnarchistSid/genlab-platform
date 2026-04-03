@@ -214,7 +214,7 @@ class TestBacklogClientWiring:
             process_reply_event(_make_event(comment_id="bl_c1"))
 
         mock_bl.write_pending_engagement.assert_called_once()
-        mock_bl.update_engagement_status.assert_called_once_with("sp-42", "replied", reply_text="Thanks! Glad you enjoyed it")
+        mock_bl.update_engagement_status.assert_called_once_with("sp-42", "replied", reply_text="Thanks! Glad you enjoyed it [automated reply]")
 
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0)
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
