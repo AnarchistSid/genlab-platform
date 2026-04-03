@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>/Users/anarchistsid</string>
+		<key>PATH</key>
+		<string>/Users/anarchistsid/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.genlab.token-refresh</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/anarchistsid/.local/bin/uv</string>
+		<string>run</string>
+		<string>--project</string>
+		<string>/Users/anarchistsid/GenLab</string>
+		<string>python</string>
+		<string>/Users/anarchistsid/GenLab/scripts/token_health.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/anarchistsid/Library/Logs/genlab-token-refresh-stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/anarchistsid/Library/Logs/genlab-token-refresh.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>2</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/anarchistsid/GenLab</string>
+</dict>
+</plist>

@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-02-15T16:00:00+00:00",
+  "run_id": "a1b2c3d4",
+  "candidates": [
+    {
+      "candidate_id": "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c",
+      "story_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "topic": "llm",
+      "angle": "breaking news",
+      "template_id": "TPL_BRK1",
+      "format": "carousel",
+      "hook": "OpenAI just dropped GPT-5 — here's what changed",
+      "structure": [
+        "Hook: OpenAI just dropped GPT-5",
+        "Context: Why this matters now",
+        "Key detail: Enhanced reasoning",
+        "Key detail: Longer context windows",
+        "Key detail: New multimodal capabilities",
+        "What it means for developers",
+        "What's next for the AI race",
+        "CTA: Follow for more AI news"
+      ],
+      "cta": "Follow for more AI news",
+      "claim_requirements": ["CLM_A1B2C3D4"],
+      "source_urls": ["https://openai.com/blog/gpt-5-announcement"],
+      "priority_score": 0.87,
+      "production_estimate": {
+        "time_minutes": 30,
+        "complexity": "low"
+      },
+      "why_this_will_work": "Breaking news from primary source + proven carousel template with urgency hook pattern",
+      "validation_status": {
+        "constraints_passed": true,
+        "claims_passed": true,
+        "risk_acceptable": true
+      }
+    }
+  ]
+}

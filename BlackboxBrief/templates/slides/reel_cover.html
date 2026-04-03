@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+.reel-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 var(--space-xl) 120px var(--space-xl);
+}
+
+.reel-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-hero-overlay);
+  z-index: 1;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="reel-overlay"></div>
+  {% endif %}
+
+  <div class="content-layer">
+    <div class="top-bar">
+      {% if source_name %}
+      <div class="source-badge">{{ source_name }}</div>
+      {% else %}
+      <div></div>
+      {% endif %}
+      <div class="slide-indicator">1/1</div>
+    </div>
+
+    <div class="reel-content">
+      <h1 class="cover-title">{{ cover_title }}</h1>
+    </div>
+
+    <div class="bottom-bar">
+      <span class="brand-handle">{{ brand_handle }}</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

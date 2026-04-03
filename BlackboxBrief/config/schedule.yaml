@@ -1,0 +1,32 @@
+# Blackbox Brief publishing schedule (UTC)
+# 1 daily slot: 12:00 IST = 06:30 UTC
+# Video-only pipeline: 100% reels (no carousels, no stories)
+
+publishing_windows:
+  - time: "06:30"
+    timezone: "UTC"
+    label: "12:00 IST"
+    platforms: [instagram, youtube, facebook]
+
+max_publishes_per_day: 1
+
+golden_window: "06:00-07:00"
+
+# Video-only mode: 100% reels (carousels and stories are not produced)
+content_mix:
+  reels_percent: 100
+  carousels_percent: 0
+  stories_percent: 0
+
+blackout_periods: []
+
+platform_overrides:
+  youtube:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  tiktok:
+    preferred_slot: "06:30"
+    max_per_day: 1
+  threads:
+    preferred_slot: "06:30"
+    max_per_day: 1

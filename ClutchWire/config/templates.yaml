@@ -1,0 +1,144 @@
+hooks:
+  formulas:
+  - '{player} just went OFF'
+  - '{team} came back from the dead'
+  - '{player} in that moment was unreal'
+  - '{team} fans are eating right now'
+  - Not even {sport} fans expected this
+  - That {play_type} will be replayed forever
+  - '{player} just made everyone look silly'
+  - '{team} defense just collapsed'
+  - This ref call changed the entire game
+  - The crowd went SILENT after this
+  - '{player} stat line is disgusting'
+  - '{team} just sent a message to the league'
+  - Nobody is stopping {player} right now
+  - This rivalry just got personal
+  - '{player} earned every dollar of that contract'
+  - The bench reaction tells you everything
+  - '{team} coach had NO answer for this'
+  - Watch {player}'s footwork on this play
+  - This goal deserves its own highlight reel
+  - That pass should be illegal
+  forbidden_styles:
+  - 'BREAKING:'
+  - 'JUST IN:'
+  - 'REPORT:'
+  - 'EXCLUSIVE:'
+  - announces
+  - reveals
+  - weighs in on
+  - speaks out
+  - reacts to
+  - according to
+  - sources say
+  - report suggests
+  - here's why
+  - doesn't need to
+  - the case for
+  - 'preview:'
+  - 'schedule:'
+  story_categories:
+    upset:
+      formulas:
+      - Nobody expected {team} to pull this off
+      - '{team} just SHOCKED everyone'
+      - The biggest upset of the season
+      weight: 1.3
+    record:
+      formulas:
+      - '{player} just made HISTORY'
+      - A record that might never be broken
+      - We just witnessed something historic
+      weight: 1.2
+    injury:
+      formulas:
+      - '{player} is OUT — what now for {team}?'
+      - '{team} without {player}. Season on the line'
+      weight: 1.0
+    trade:
+      formulas:
+      - '{player} to {team} — instant contenders?'
+      - '{player} to {team}. The league just shifted'
+      weight: 1.1
+    clutch:
+      formulas:
+      - ICE in his veins
+      - '{player} with the CLUTCH play'
+      - This is why they call it clutch
+      weight: 1.4
+    rivalry:
+      formulas:
+      - '{team_a} vs {team_b} NEVER disappoints'
+      - The rivalry continues
+      weight: 1.2
+    default:
+      formulas:
+      - '{team} just pulled off the impossible'
+      - '{player} in that moment was unreal'
+      - That {play_type} will be replayed forever
+      weight: 1.0
+captions:
+  max_length: 2200
+  target_length: 300
+  cta_library:
+  - tag a fan who needs to see this
+  - follow for daily sports moments
+  - save this for later
+  - comment your hot take below
+  - who saw this coming?
+  hashtag_pool:
+  - '#sports'
+  - '#clutch'
+  - '#highlights'
+  - '#sportsnews'
+  - '#mustwatch'
+  - '#nba'
+  - '#nfl'
+  - '#soccer'
+  - '#ufc'
+  - '#tennis'
+  - '#f1'
+  - '#cricket'
+  - '#whathappened'
+  - '#didyousee'
+  - '#sportsmoment'
+  hashtags_per_post: 4
+youtube:
+  title_max_length: 40
+  title_must_be_question: true
+  title_formulas:
+  - Is {Player} the GOAT?
+  - Did {Team} Just Win It All?
+  - Best Play of the Year?
+  - How Did {Team} Pull This Off?
+platforms:
+  instagram:
+    reel_duration_target_seconds: 25
+    caption_ends_with_cta: true
+    hashtag_count: 4
+    no_external_urls_in_caption: true
+    structure: hook + 2-3 lines of context + question CTA + 4 hashtags
+  youtube:
+    title_format: question
+    title_max_chars: 40
+    description_includes_subscribe_cta: true
+    structure: hook (first 3 words = title hook) + 1 line + no hashtags
+  x_twitter:
+    link_in_reply_not_tweet: true
+    max_tweet_chars: 280
+    hashtag_count: 2
+    structure: hook + 1 line only, NO external links in main post
+  facebook:
+    caption_length_target: 300
+    include_engagement_question: true
+    hashtag_count: 4
+    structure: hook + 2-3 lines + CTA question + 3-4 hashtags
+  tiktok:
+    max_caption_length: 2200
+    hashtag_count: 2
+    structure: hook + 1 punchy line + 2 hashtags max
+  threads:
+    max_caption_length: 500
+    hashtag_count: 2
+    structure: hook + 2 lines max + 2 hashtags

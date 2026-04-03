@@ -1,0 +1,120 @@
+# Clip scoring weights and thresholds
+# All weights must sum to 1.0
+
+clip_scoring:
+  weights:
+    virality_potential: 0.22
+    entertainment_value: 0.18
+    recency: 0.13
+    source_authority: 0.13
+    production_quality: 0.09
+    chat_excitement: 0.13
+    highlight_detection: 0.12  # Crispy neural network kill/highlight detection
+
+  # Virality: view velocity + engagement rate
+  virality:
+    view_count_baseline:
+      twitch: 1000
+      reddit: 500
+      youtube: 5000
+      medal: 200
+      kick: 300
+      twitter: 1000
+    engagement_rate_floor: 0.01   # min likes+comments / views
+
+  # Entertainment: audio energy + visual action
+  entertainment:
+    audio_rms_threshold: 0.05     # librosa RMS minimum for "active" clip
+    min_duration_seconds: 5
+    max_duration_seconds: 60
+    preferred_min_seconds: 15
+    preferred_max_seconds: 45
+
+  # Recency: time-decay half-life
+  recency:
+    half_life_hours: 48
+
+  # Source authority: platform weights
+  source_authority:
+    platform_weights:
+      twitch: 1.0
+      reddit: 0.85
+      youtube: 0.80
+      twitch_trending: 0.80  # CriticalRush Twitch trending source
+      steam_spike: 0.75      # CriticalRush Steam spike source
+      rss: 0.65              # CriticalRush RSS gaming news source
+      medal: 0.60
+      kick: 0.55
+      twitter: 0.50
+    streamer_size_bonus:          # follower count tiers
+      mega: { min_followers: 1000000, bonus: 0.15 }
+      large: { min_followers: 100000, bonus: 0.10 }
+      medium: { min_followers: 10000, bonus: 0.05 }
+      small: { min_followers: 0, bonus: 0.0 }
+
+  # Production quality
+  production:
+    min_resolution_height: 720
+    native_vertical_bonus: 0.10   # 9:16 source gets bonus
+    min_fps: 24
+    preferred_fps: 60
+
+  # Chat excitement: Twitch chat activity analysis
+  chat_excitement:
+    baseline_message_rate: 5.0    # messages/sec assumed as "normal" activity
+    min_messages_for_score: 5     # below this, return 0.0
+    signal_weights:
+      message_rate: 0.35
+      emote_density: 0.25
+      caps_ratio: 0.15
+      keyword_density: 0.15
+      brevity: 0.10
+    # Emote tiers and keywords loaded from config/chat_emotes.yaml
+
+# Compilation-level scoring
+compilation_scoring:
+  diversity_bonus_threshold: 3     # games needed for 1.15x
+  diversity_bonus_multiplier: 1.15
+  single_game_multiplier: 1.0
+  copyright_risk_penalty_per_clip: 0.2
+
+  # Pacing: escalating intensity scoring
+  pacing:
+    escalating_weight: 1.0         # ideal: weakest → strongest
+    flat_weight: 0.7
+    descending_weight: 0.5
+
+# Dedup thresholds (used by genlab_core.intelligence.dedup_engine)
+# Gaming uses slightly more aggressive thresholds than AI news because
+# 'Elden Ring Sets Record' and 'Elden Ring Breaks Record' should dedup
+dedup:
+  jaccard_threshold: 0.80
+  tfidf_threshold: 0.70
+
+# Thresholds
+thresholds:
+  min_clip_score: 0.25            # below this, clip is rejected
+  min_compilation_score: 0.40     # below this, compilation is not assembled
+  top_clips_per_run: 20           # max clips to advance past scoring
+
+# Reward computation for the self-learning feedback loop
+reward:
+  thresholds:
+    engagement_rate_perfect: 0.05   # 5% engagement = perfect score
+    views_perfect_48h: 10000        # 10K views in 48h = perfect reach score
+  weights:
+    engagement_rate: 0.5
+    view_completion: 0.3
+    reach_score: 0.2
+  min_training_samples: 40          # min complete records for hook predictor
+
+  # Bandit reward scaling: normalise raw rates to [0,1] before blending.
+  # Formula: min(rate * scale, 1.0)
+  # engagement_rate ~0.05 is excellent → scale=10 maps 0.1 to 1.0
+  # share_rate ~0.02 is excellent → scale=20 maps 0.05 to 1.0
+  bandit_blend:
+    completion_rate_weight: 0.40
+    engagement_rate_weight: 0.35
+    engagement_rate_scale: 10       # was hardcoded *10
+    share_rate_weight: 0.25
+    share_rate_scale: 20            # was hardcoded *20

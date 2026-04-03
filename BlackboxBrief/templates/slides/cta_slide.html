@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+/* CTA slide — hero image background with heavy overlay + accent tint.
+ * Every slide needs an image background per user feedback.
+ */
+.cta-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    170deg,
+    rgba(10, 10, 15, 0.60) 0%,
+    rgba(10, 10, 15, 0.78) 40%,
+    rgba(10, 10, 15, 0.92) 70%,
+    rgba(10, 10, 15, 0.98) 100%
+  );
+  z-index: 1;
+}
+
+/* Accent tint layer (on top of image + overlay) */
+.cta-accent-tint {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% 40%,
+    rgba(var(--accent-rgb), 0.12) 0%,
+    transparent 70%
+  );
+  z-index: 2;
+}
+
+.cta-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 56px;
+  max-width: 80%;
+  text-align: center;
+}
+
+.cta-divider {
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  {# -- Hero image background -- #}
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="cta-overlay"></div>
+  <div class="cta-accent-tint"></div>
+  {% else %}
+  {# -- Fallback: accent glow blobs -- #}
+  <div class="glow-accent" style="top: 20%; left: -100px; opacity: 0.08;"></div>
+  <div class="glow-accent" style="bottom: 10%; right: -100px; width: 300px; height: 300px; opacity: 0.05;"></div>
+  {% endif %}
+
+  <div class="content-layer">
+
+    {# -- Top bar (optional slide indicator) -- #}
+    <div class="top-bar">
+      <div></div>
+      <div class="slide-indicator">{{ slide_number }}/{{ slide_total }}</div>
+    </div>
+
+    {# -- CTA block -- #}
+    <div class="cta-wrapper">
+      <p class="cta-text">{{ cta_text }}</p>
+      <div class="cta-divider"></div>
+      <span class="brand-handle brand-handle--prominent">{{ brand_handle }}</span>
+    </div>
+
+    {# -- Bottom bar intentionally empty — handle is in CTA block -- #}
+
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,39 @@
+# SpliceReel monetization config
+
+affiliate_programs:
+  - name: "Amazon Prime Video"
+    category: streaming
+    commission_type: referral
+    relevant_content: ["streaming_premieres", "award_nominations"]
+    enabled: false
+  - name: "Fandango"
+    category: ticketing
+    relevant_content: ["trailer_drops", "opening_weekend"]
+    enabled: false
+  - name: "MUBI"
+    category: streaming
+    commission_type: subscription_referral
+    relevant_content: ["critical_acclaim", "award_nominations"]
+    enabled: false
+  - name: "Letterboxd Pro"
+    category: film_community
+    enabled: false
+  - name: "Criterion Channel"
+    category: streaming
+    enabled: false
+
+newsletter_enabled: false
+newsletter_cta: "5 films worth watching this weekend"
+
+link_in_bio_items:
+  - label: "Latest Reviews"
+    url: ""
+    enabled: false
+  - label: "Watchlist Builder"
+    url: ""
+    enabled: false
+
+revenue_tracking:
+  enabled: false
+  utm_source: "splicereel"
+  utm_medium: "social"

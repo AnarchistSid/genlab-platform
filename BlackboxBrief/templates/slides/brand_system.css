@@ -1,0 +1,78 @@
+/* brand_system.css
+ *
+ * Visual tokens for slide templates.
+ * Keep this file local to templates/slides so Jinja includes resolve
+ * correctly in both tests and runtime rendering.
+ */
+
+:root {
+  /* Canvas */
+  --canvas-w: 1080px;
+  --canvas-h: 1350px;
+
+  /* Brand palette */
+  --brand-primary: #6366f1;
+  --brand-primary-rgb: 99, 102, 241;
+  --brand-secondary-rgb: 45, 212, 191;
+  --surface-base-rgb: 10, 10, 15;
+
+  /* Typography */
+  --font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: 800;
+  --font-label: 600;
+  --font-body: 400;
+
+  --text-hook: clamp(58px, 7.2vw, 86px);
+  --text-title: clamp(44px, 5.2vw, 62px);
+  --text-body: 34px;
+  --text-cta: clamp(62px, 7.8vw, 92px);
+  --text-cover: clamp(64px, 8vw, 98px);
+  --text-brand-strip: 20px;
+  --text-badge: 19px;
+  --text-indicator: 20px;
+  --text-handle: 22px;
+  --text-credit: 15px;
+
+  /* Text color */
+  --text-primary: #f7f8ff;
+  --text-secondary: rgba(247, 248, 255, 0.92);
+  --text-muted: rgba(247, 248, 255, 0.74);
+  --text-dim: rgba(247, 248, 255, 0.62);
+
+  /* Rhythm */
+  --leading-snug: 1.08;
+  --leading-relaxed: 1.4;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+  --tracking-wider: 0.14em;
+  --tracking-widest: 0.2em;
+  --tracking-brand: 0.24em;
+
+  /* Spacing */
+  --space-xs: 8px;
+  --space-sm: 14px;
+  --space-md: 24px;
+  --space-lg: 36px;
+  --space-xl: 56px;
+  --space-2xl: 84px;
+  --space-3xl: 120px;
+
+  /* Surfaces */
+  --radius-sm: 12px;
+  --radius-md: 22px;
+  --radius-pill: 999px;
+  --glass-bg: rgba(15, 17, 30, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-blur: 18px;
+  --shadow-glow: 0 0 72px rgba(99, 102, 241, 0.28);
+
+  /* Background treatments */
+  --gradient-base:
+    radial-gradient(1200px 760px at 8% 12%, rgba(var(--brand-primary-rgb), 0.18), transparent 62%),
+    radial-gradient(900px 680px at 92% 88%, rgba(var(--brand-secondary-rgb), 0.14), transparent 60%),
+    linear-gradient(180deg, #0a0a0f 0%, #0d0f1e 54%, #08090f 100%);
+  --gradient-hero-overlay:
+    linear-gradient(180deg, rgba(10, 10, 15, 0.08) 0%, rgba(10, 10, 15, 0.7) 54%, rgba(10, 10, 15, 0.98) 100%);
+  --gradient-content-overlay:
+    linear-gradient(165deg, rgba(10, 10, 15, 0.52) 0%, rgba(10, 10, 15, 0.84) 56%, rgba(10, 10, 15, 0.97) 100%);
+}

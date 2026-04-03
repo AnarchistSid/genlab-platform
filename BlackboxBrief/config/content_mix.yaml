@@ -1,0 +1,38 @@
+# Content Mix Configuration — UGC/creator curation strategy.
+#
+# Goal:
+#   Curate the best AI creator content (art, video, demos) for Instagram Reels.
+#   Current mode is locked to creator-curated AI visual reels only.
+#
+# Primary buckets:
+#   1) ai_visual_curation      — creator AI art/video remixes (active)
+#   2) company_demo_reels      — product demos from companies (disabled)
+
+content_mix:
+  # Curation buckets:
+  ai_visual_curation: 0.70
+  company_demo_reels: 0.30
+
+# Hard output mode: compose_blueprints.py will keep only reel blueprints.
+video_only_mode: true
+
+# Hard bucket allowlist across compose + drafting stages.
+# Sprint 47: added company_demo_reels — product demos (Luma, Sora, Kling)
+# are valid BB content. Without this, the pipeline produces 0 blueprints
+# because all clipped videos are product demos, not UGC creator content.
+allowed_content_buckets:
+  - "ai_visual_curation"
+  - "company_demo_reels"
+
+# Daily post budget (1 per channel per day, enforced by DailyCapEnforcer)
+max_daily_posts: 1
+
+# Format routing by content type
+format_preference:
+  ai_visual_curation: "reel"      # Native vertical/square creator clips
+  company_demo_reels: "reel"      # Often 16:9 source clips → sandwich layout
+
+# Scoring boosts for content type alignment
+scoring:
+  ai_visual_curation_boost: 0.25
+  company_demo_boost: 0.20

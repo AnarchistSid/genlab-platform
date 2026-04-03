@@ -1,0 +1,59 @@
+# Per-platform Thompson Sampling bandit configurations.
+# Each platform has independent dimensions, arms, and discount factors.
+# State persisted to niches/gaming/config/bandit_states/{platform}_bandit.json
+
+state_dir: "niches/gaming/config/bandit_states"
+
+youtube_shorts:
+  discount_factor: 0.99  # YouTube is less volatile, slower decay
+  dimensions:
+    hook_type:
+      arms: ["gameplay_first", "text_hook_first", "question_hook", "reaction_hook"]
+    duration_bucket:
+      arms: ["15s", "25s", "35s", "45s"]
+    caption_keyword_style:
+      arms: ["seo_heavy", "minimal", "question_based"]
+    posting_window:
+      arms: ["morning_US_ET", "afternoon_US_ET", "evening_EU_CET", "morning_AU_AEST"]
+    thumbnail_style:
+      arms: ["text_overlay", "gameplay_frame", "reaction_face"]
+
+tiktok:
+  discount_factor: 0.96  # TikTok is volatile, faster adaptation
+  dimensions:
+    hook_type:
+      arms: ["gameplay_first", "text_hook_first", "pattern_interrupt", "audio_hook"]
+    duration_bucket:
+      arms: ["30s", "45s", "60s", "90s"]
+    caption_style:
+      arms: ["seo_keyword", "storytelling", "question_cta"]
+    posting_window:
+      arms: ["morning_US_ET", "afternoon_US_ET", "evening_EU_CET", "evening_SEA"]
+    audio_type:
+      arms: ["original_commentary", "trending_sound", "music_only"]
+
+instagram_reels:
+  discount_factor: 0.97
+  dimensions:
+    hook_type:
+      arms: ["gameplay_first", "text_hook_first", "share_bait", "reaction_hook"]
+    duration_bucket:
+      arms: ["15s", "30s", "45s", "60s"]
+    cta_type:
+      arms: ["tag_friend", "send_to_duo", "save_for_later", "comment_prompt"]
+    posting_window:
+      arms: ["morning_US_ET", "afternoon_EU_CET", "evening_US_ET", "morning_AU_AEST"]
+    audio_type:
+      arms: ["trending_audio", "original_commentary", "music_only"]
+
+facebook_reels:
+  discount_factor: 0.96
+  dimensions:
+    hook_type:
+      arms: ["gameplay_first", "text_hook_first", "question_hook"]
+    duration_bucket:
+      arms: ["15s", "20s", "25s", "30s"]
+    posting_window:
+      arms: ["morning_US_ET", "lunch_US_ET", "evening_EU_CET", "evening_US_ET"]
+    cta_type:
+      arms: ["comment_prompt", "share_to_group", "react_prompt"]

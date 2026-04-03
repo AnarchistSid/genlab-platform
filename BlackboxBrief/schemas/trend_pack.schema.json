@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Trend Pack",
+  "description": "Daily ranked AI creator stories with scores and metadata",
+  "type": "object",
+  "required": ["run_id", "generated_at", "version", "story_count", "stories"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Unique run identifier (timestamp-based)"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 generation timestamp"
+    },
+    "version": {
+      "type": "string",
+      "description": "Schema version"
+    },
+    "story_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 300
+    },
+    "stories": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+        "type": "object",
+        "required": ["story_id", "rank", "title", "url", "composite_score", "scores"],
+        "properties": {
+          "story_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 of url+published_at"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "url": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string",
+            "description": "Source domain"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "published_at": {
+            "type": ["string", "null"]
+          },
+          "composite_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "scores": {
+            "type": "object",
+            "required": ["authority", "recency", "novelty"],
+            "properties": {
+              "authority": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "recency": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "novelty": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "virality_fit": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

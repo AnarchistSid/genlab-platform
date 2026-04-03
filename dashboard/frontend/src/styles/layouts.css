@@ -1,0 +1,662 @@
+/*
+ * layouts.css — Shared complex CSS patterns extracted from per-view files.
+ *
+ * These are patterns genuinely awkward in Tailwind:
+ *   grid-template-areas, stage waterfall, chart tooltips,
+ *   SVG rings, log viewer, keyframe animations.
+ *
+ * All CSS variable references point to tokens.css (imported via globals.css).
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   § 1  BENTO GRID  (from mission-control.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.mc-grid-v2 {
+  display: grid;
+  grid-template-columns: 5fr 3fr 3fr;
+  grid-template-areas:
+    "kpi          kpi          kpi"
+    "spotlight    learning     insight"
+    "timeline     upcoming     upcoming"
+    "channels     channels     channels"
+    "engagement   trends       quality"
+    "countdowns   monetisation monetisation";
+  gap: var(--space-md);
+}
+
+@media (max-width: 900px) {
+  .mc-grid-v2 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "kpi          kpi"
+      "spotlight    spotlight"
+      "learning     insight"
+      "timeline     upcoming"
+      "channels     channels"
+      "engagement   engagement"
+      "trends       quality"
+      "countdowns   monetisation";
+  }
+}
+
+@media (max-width: 700px) {
+  .mc-grid-v2 {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "kpi"
+      "spotlight"
+      "learning"
+      "insight"
+      "timeline"
+      "upcoming"
+      "channels"
+      "engagement"
+      "trends"
+      "quality"
+      "countdowns"
+      "monetisation";
+  }
+}
+
+.area-kpi          { grid-area: kpi; }
+.area-spotlight    { grid-area: spotlight; }
+.area-learning     { grid-area: learning; }
+.area-insight      { grid-area: insight; }
+.area-timeline     { grid-area: timeline; }
+.area-upcoming     { grid-area: upcoming; }
+.area-channels     { grid-area: channels; }
+.area-engagement   { grid-area: engagement; }
+.area-trends       { grid-area: trends; }
+.area-quality      { grid-area: quality; }
+.area-countdowns   { grid-area: countdowns; }
+.area-monetisation { grid-area: monetisation; }
+
+/* Each area's child card fills the area */
+.mc-grid-v2 > div > .bento-card {
+  height: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 2  KPI HERO GRID  (from mission-control.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.kpi-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+}
+
+@media (max-width: 700px) {
+  .kpi-hero-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-hero-grid {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: var(--space-md);
+    /* Ensure cards don't shrink below a readable width */
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px; /* prevent clipping scrollbar */
+  }
+
+  .kpi-hero-grid > * {
+    flex: 0 0 160px;
+    min-width: 160px;
+    scroll-snap-align: start;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 3  CARD-IN ANIMATION  (from mission-control.css)
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 4  AI GRADIENT BORDER  (from mission-control.css, renamed)
+   ═══════════════════════════════════════════════════════════ */
+
+.ai-gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: var(--radius-lg);
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(59, 130, 246, 0.15));
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 5  CHART CARD  (from analytics.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.chart-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.chart-card-title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-md);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 6  CHART TOOLTIP  (from analytics.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.chart-tooltip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-md);
+}
+
+.chart-tooltip-date {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.chart-tooltip-value {
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 7  DATA TABLE  (from analytics.css, renamed from .top-table)
+   ═══════════════════════════════════════════════════════════ */
+
+.data-table {
+  width: 100%;
+  font-size: var(--text-sm);
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.data-table td {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--text-secondary);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background: var(--surface-2);
+}
+
+.data-table .mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 8  TWO-COL LAYOUT  (from analytics.css, renamed)
+   ═══════════════════════════════════════════════════════════ */
+
+.two-col-layout {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+@media (max-width: 768px) {
+  .two-col-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 9  KPI HERO CARD  (from analytics.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.kpi-hero-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color var(--duration-fast);
+}
+
+.kpi-hero-card:hover {
+  border-color: var(--border-strong);
+}
+
+.kpi-hero-value {
+  font-size: 32px;
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 10  STAGE WATERFALL  (from pipeline-monitor.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.waterfall-container {
+  overflow-x: auto;
+  position: relative;
+  padding: var(--space-md) 0;
+}
+
+.waterfall-container::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background: linear-gradient(90deg, transparent, var(--surface-1));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-base);
+}
+
+.waterfall-container.has-overflow::after {
+  opacity: 1;
+}
+
+.waterfall-track {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  min-width: max-content;
+}
+
+.waterfall-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 72px;
+  position: relative;
+}
+
+.waterfall-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border);
+  background: var(--surface-0);
+  transition: all var(--duration-base) var(--ease-out);
+  position: relative;
+  z-index: 1;
+}
+
+.waterfall-circle.completed {
+  border-color: transparent;
+}
+
+.waterfall-circle.running {
+  border-color: transparent;
+  animation: stageGlow 1.5s ease-in-out infinite;
+}
+
+.waterfall-circle.error {
+  border-color: var(--color-red);
+  background: color-mix(in srgb, var(--color-red) 15%, var(--surface-0));
+}
+
+.waterfall-circle.pending {
+  border-color: var(--border);
+  background: var(--surface-0);
+}
+
+@keyframes stageGlow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--glow-color, var(--color-blue)) 25%, transparent); }
+}
+
+.waterfall-label {
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 64px;
+  line-height: 1.2;
+}
+
+.waterfall-label.active {
+  color: var(--text-primary);
+}
+
+.waterfall-timing {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.waterfall-connector {
+  flex: 0 0 24px;
+  height: 2px;
+  margin-top: 14px;
+  background: var(--border);
+  transition: background var(--duration-base);
+}
+
+.waterfall-connector.done {
+  background: var(--connector-color, var(--text-muted));
+}
+
+.waterfall-connector.dashed {
+  background: transparent;
+  border-top: 2px dashed var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 11  PROGRESS BAR  (from pipeline-monitor.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.pm-progress-bar {
+  height: 3px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: var(--space-sm) 0;
+}
+
+.pm-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s var(--ease-out);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 12  LOG VIEWER  (from pipeline-monitor.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.log-viewer {
+  margin-top: var(--space-lg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+.log-viewer-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color var(--duration-fast);
+}
+
+.log-viewer-toggle:hover {
+  color: var(--text-primary);
+}
+
+.log-count-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+  margin-right: var(--space-sm);
+}
+
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--space-md);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-0);
+}
+
+.log-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+}
+
+.log-level-select {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.log-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
+}
+
+.log-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.log-scroll-area {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-0);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.log-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: var(--space-md) 0;
+  text-align: center;
+}
+
+.log-line {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.log-ts {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.log-level {
+  flex-shrink: 0;
+  font-weight: var(--weight-semibold);
+  width: 36px;
+}
+
+.log-stage-tag {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.log-msg {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.log-tail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-0);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  line-height: 1.6;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 13  MONETISATION PROGRESS BARS  (from monetisation-progress.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.mp-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mp-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+  min-width: 2px;
+}
+
+.mp-bar-fill-low {
+  background: var(--color-red);
+}
+
+.mp-bar-fill-mid {
+  background: var(--color-amber);
+}
+
+.mp-bar-fill-high {
+  background: var(--color-green);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 14  SLIDE-IN ANIMATION  (from publishing-queue.css)
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 15  SCORE RING (SVG)  (from channel-health.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.ch-score-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.ch-score-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ch-score-bg {
+  fill: none;
+  stroke: var(--surface-3);
+  stroke-width: 6;
+}
+
+.ch-score-fill {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease;
+}
+
+.ch-score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   § 16  STATUS DOTS  (from channel-health.css)
+   ═══════════════════════════════════════════════════════════ */
+
+.ch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.ch-dot-ok       { background: var(--color-green); animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.ch-dot-degraded { background: var(--color-amber); box-shadow: 0 0 6px var(--color-amber); }
+.ch-dot-error    { background: var(--color-red);   box-shadow: 0 0 6px var(--color-red); }
+.ch-dot-unknown  { background: var(--text-muted);  opacity: 0.5; }

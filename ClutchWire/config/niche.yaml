@@ -1,0 +1,108 @@
+niche_id: "sports"
+display_name: "ClutchWire"
+channel_handle: "@theclutchwire"
+description: "Sports content pipeline — live scores, highlights, clutch moments"
+
+brand_voice:
+  tone: "urgent, electric, insider, punchy"
+  forbidden_words: ["allegedly", "reportedly", "perhaps", "might", "could be"]
+  hook_style: "emotional_reaction"
+  emoji_style: "strategic"
+
+target_audience:
+  primary: "Sports fans aged 18-34"
+  secondary: "NBA, NFL, Premier League, UFC enthusiasts, highlights watchers"
+  interests: ["NBA", "NFL", "Premier League", "UFC", "clutch moments", "sports highlights"]
+  platforms_primary: ["instagram", "youtube", "tiktok"]
+  platforms_secondary: ["x", "facebook", "threads"]
+
+accent_color: "#FF2040"
+
+feature_flags:
+  use_live_publishing: true
+  platforms_enabled:
+    - youtube
+    - instagram
+    - facebook
+    - x_twitter
+    - tiktok
+    - threads
+  tiktok:
+    enabled: false
+    audit_approved: false
+    daily_post_limit: 12
+    posting_windows_utc: ["06:00", "12:00", "16:00"]
+  threads:
+    enabled: true
+    daily_post_limit: 4
+
+video_sourcing:
+  strategy: trending_youtube
+  niche_category: sports
+  max_age_hours: 48
+  top_n_per_run: 10
+  min_view_velocity: 200
+  use_google_trends: true
+  allow_keyword_search: true
+  video_gate: require
+  fallback_to_text_render: false
+  composite_quality_gate:
+    velocity_threshold: 400
+    min_composite_score: 0.25
+
+pipeline:
+  stages:
+    # Phase 0: Urgency classification
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # Phase 1: Ingestion
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.fetch_scorebat.FetchScoreBatHighlights
+      retries: 1
+      retry_delay_seconds: 15
+    - class: cw_strategies.content_research.SportContentResearchStrategy
+      retries: 1
+      retry_delay_seconds: 30
+    - class: cw_strategies.scoring.SportScoringStrategy
+    - class: genlab_core.media.download_top_videos.DownloadTopVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # Phase 2: Content generation
+    - class: cw_strategies.writing.SportWritingStrategy
+      retries: 1
+      retry_delay_seconds: 60
+    - class: cw_strategies.hooks.SportHookStrategy
+
+    # Phase 3: Quality gates
+    # Phase 4b: Affiliate matching
+    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # Phase 4: Rendering
+    - class: cw_strategies.visual_render.SportVisualRenderStrategy
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+      enabled: false
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # Phase 5: Publishing
+    - class: cw_strategies.platform_adaptation.SportPlatformAdaptationStrategy
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+
+    # Phase 6: Analytics & Learning
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
+  max_items_per_run: 10
+  min_score_threshold: 0.35

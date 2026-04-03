@@ -1,0 +1,102 @@
+# Caption generation configuration (faster-whisper backend)
+# See: https://github.com/SYSTRAN/faster-whisper
+
+# ---------------------------------------------------------------------------
+# Model settings
+# ---------------------------------------------------------------------------
+model:
+  # Default model size when no duration-based selection applies.
+  # Options: tiny, base, small, medium, large-v3, distil-large-v3
+  default_size: "base"
+
+  # Device for inference: "cpu" or "cuda"
+  device: "cpu"
+
+  # Compute type controls precision/memory trade-off:
+  #   CPU:  "int8" (recommended, ~38% less memory), "float32"
+  #   GPU:  "float16" (recommended), "int8_float16", "int8"
+  compute_type: "int8"
+
+  # Duration-based model selection heuristic.
+  # For short clips, use faster/smaller models. For full compilations,
+  # use the most accurate model. Evaluated top-to-bottom; first match wins.
+  size_by_duration:
+    - max_seconds: 30
+      model_size: "base"        # Fast, good enough for short commentary
+    - max_seconds: 60
+      model_size: "small"       # Balance of speed and accuracy
+    - max_seconds: 180
+      model_size: "medium"      # Good for typical compilations
+    - max_seconds: null          # Catch-all for longer content
+      model_size: "large-v3"    # Best accuracy for full compilations
+
+# ---------------------------------------------------------------------------
+# Transcription settings
+# ---------------------------------------------------------------------------
+transcription:
+  # Enable Silero VAD (Voice Activity Detection) to skip silent sections.
+  # Highly recommended for gaming clips where most audio is gameplay, not speech.
+  vad_filter: true
+
+  # Minimum word probability (0.0-1.0). Words below this threshold are
+  # filtered out to remove low-confidence garbage words.
+  min_word_probability: 0.5
+
+  # Enable word-level timestamps (required for word-level SRT and ASS output).
+  word_timestamps: true
+
+  # Language hint (null = auto-detect). Set to "en" to force English.
+  language: null
+
+# ---------------------------------------------------------------------------
+# Subtitle style settings (ASS word-by-word highlighting)
+# ---------------------------------------------------------------------------
+subtitle_style:
+  # Output format: "ass" for CapCut-style word highlighting, "srt" for plain.
+  # ASS is the primary path for published compilations.
+  subtitle_format: "ass"
+
+  # Font settings — ASS references fonts by their INTERNAL name, not filename.
+  # The fontsdir parameter in FFmpeg tells it where to find the .ttf files.
+  font_name: "Montserrat ExtraBold"
+  font_size: 72
+
+  # Fallback font if primary not found (must be system-installed)
+  fallback_font: "Impact"
+
+  # ASS uses BGR color order: &HAABBGGRR
+  # Yellow highlight for the currently-spoken word
+  highlight_color: "&H0000FFFF"
+  # White for all non-active words
+  normal_color: "&H00FFFFFF"
+  # Black outline for readability
+  outline_color: "&H00000000"
+  # Semi-transparent black shadow/background
+  back_color: "&H80000000"
+
+  # Outline thickness (in pixels at PlayRes scale)
+  outline_width: 4
+  # Shadow distance
+  shadow_depth: 2
+
+  # Word grouping: show N words at a time (CapCut-style chunking).
+  # Keeps text readable on small mobile screens.
+  max_words_per_group: 5
+
+  # Bottom margin in ASS units (PlayResY=1920).
+  # 350 keeps text above TikTok/Reels/Shorts UI elements (~18% safe zone).
+  margin_bottom: 350
+
+  # UPPERCASE all words for viral short-form aesthetic
+  uppercase: true
+
+  # Minimum word confidence (0.0-1.0). Words below this are excluded from
+  # subtitle display (separate from transcription-level filtering).
+  min_word_confidence: 0.5
+
+  # Alignment: 2 = bottom-center (ASS numpad alignment)
+  alignment: 2
+
+  # PlayRes dimensions (must match your video resolution for correct scaling)
+  play_res_x: 1080
+  play_res_y: 1920

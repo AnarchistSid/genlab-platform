@@ -1,0 +1,16 @@
+# FrameDrift publishing schedule (UTC)
+# 1 daily slot: 12:00 IST = 06:30 UTC
+
+publishing_windows:
+  - time: "06:30"
+    timezone: "UTC"
+    label: "12:00 IST"
+
+max_publishes_per_day: 1
+
+content_mix:
+  reels_percent: 100
+  carousels_percent: 0
+  stories_percent: 0
+
+blackout_periods: []

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080">
+<style>
+{% include 'base.css' %}
+
+/* Stat slide — big number/metric centered with context below.
+ * Uses hero image background like all other slides.
+ * Heavier overlay to make the stat value pop against any background.
+ */
+.stat-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 10, 15, 0.50) 0%,
+    rgba(10, 10, 15, 0.70) 30%,
+    rgba(10, 10, 15, 0.88) 60%,
+    rgba(10, 10, 15, 0.96) 100%
+  );
+  z-index: 1;
+}
+
+.stat-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 140px 72px 120px 72px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 120px;
+  font-weight: 900;
+  line-height: 1.0;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.stat-label {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 36px;
+  max-width: 80%;
+}
+
+.stat-body {
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: rgba(240, 240, 240, 0.75);
+  max-width: 80%;
+}
+
+.stat-divider {
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.3);
+  margin: 24px 0;
+}
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  {# -- Hero image background -- #}
+  {% if hero_image_url %}
+  <div class="hero-bg" style="background-image: url('{{ hero_image_url }}');"></div>
+  <div class="stat-overlay"></div>
+  {% else %}
+  <div class="glow-accent" style="top: 30%; left: 50%; transform: translateX(-50%); opacity: 0.08;"></div>
+  {% endif %}
+
+  <div class="content-layer">
+
+    {# -- Top bar -- #}
+    <div class="top-bar">
+      <div></div>
+      <div class="slide-indicator">{{ slide_number }}/{{ slide_total }}</div>
+    </div>
+
+    {# -- Stat block -- #}
+    <div class="stat-layout">
+      <div class="stat-value">{{ stat_value }}</div>
+      <div class="stat-label">{{ stat_label }}</div>
+      <div class="stat-divider"></div>
+      <p class="stat-body">{{ slide_body }}</p>
+    </div>
+
+    {# -- Bottom bar -- #}
+    <div class="bottom-bar">
+      <span class="brand-handle">{{ brand_handle }}</span>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

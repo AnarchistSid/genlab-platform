@@ -1,0 +1,143 @@
+version: "2026.03"
+
+instagram:
+  primary_signal: "sends"
+  secondary_signals: ["saves", "watch_time", "comments"]
+  content_rules:
+    optimal_reel_length_seconds: [15, 30]
+    explainer_length_seconds: [30, 60]
+    three_second_hold_target: 0.65
+    hook_window_seconds: 3
+    originality_score: true
+    caption_max_length: 2200
+    hashtag_count: [3, 5]
+    cta_required: true
+    cta_templates:
+      - "Follow @theclutchwire for daily highlights"
+      - "Tag a fan who needs to see this play"
+      - "Save this — who had the better game?"
+      - "Send this to someone who missed the game"
+    format_mix:
+      reels: 0.70
+      carousels: 0.20
+      stories: 0.10
+  posting_schedule:
+    primary_utc: "14:00"
+    secondary_utc: "06:30"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 3
+
+youtube:
+  primary_signal: "viewed_vs_swiped"
+  secondary_signals: ["watch_time", "ctr", "subscribe_click"]
+  content_rules:
+    optimal_shorts_length_seconds: [30, 60]
+    hook_window_seconds: 5
+    hashtag_count: [3, 8]
+    title_format: "reaction"
+    title_max_chars: 50
+    title_templates:
+      - "This {player} Highlight Is UNREAL"
+      - "Did {team} Just Pull Off the Comeback?!"
+      - "The Play That Won the Game"
+      - "{league} Fans Can't Believe This Finish"
+    subscribe_cta_overlay: true
+  posting_schedule:
+    primary_utc: "06:30"
+    secondary_utc: null
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 1
+
+twitter:
+  primary_signal: "reply_chains"
+  secondary_signals: ["bookmarks", "retweets", "profile_clicks"]
+  content_rules:
+    format: "native_video_plus_thread"
+    hook_window_seconds: 3
+    external_link_penalty: 0.50
+    link_strategy: "first_reply"
+    tweet_char_limit: 280
+    video_max_seconds: 140
+    native_video_required: true
+    hashtag_count: [2, 4]
+    question_hook_in_first_tweet: true
+    engagement_templates:
+      - "Who had the game of the night? Reply below"
+      - "Tag a fan who needs to see this highlight"
+      - "Bookmark this thread for game day"
+  posting_schedule:
+    primary_utc: "14:00"
+    secondary_utc: "06:30"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 5
+
+facebook:
+  primary_signal: "shares"
+  secondary_signals: ["comments", "watch_time", "reactions"]
+  content_rules:
+    hook_window_seconds: 3
+    hashtag_count: [1, 3]
+    all_video_is_reels: true
+    reels_reach_bonus: 3.0
+    caption_style: "longer_than_twitter"
+  posting_schedule:
+    primary_utc: "15:00"
+    frequency: "daily"
+    min_posts_per_day: 0
+    max_posts_per_day: 2
+
+tiktok:
+  primary_signal: "watch_time"
+  secondary_signals: ["shares", "comments", "saves", "follows_from_video"]
+  content_rules:
+    optimal_reel_length_seconds: [15, 45]
+    three_second_hold_target: 0.70
+    hook_window_seconds: 3
+    loop_reward: true
+    caption_max_length: 2200
+    caption_optimal_length: 150
+    hashtag_count: [3, 5]
+    hashtag_optimal: 4
+    cta_required: true
+    cta_position: "overlay"
+    autoplay_sound: true
+    video_aspect_ratio: "9:16"
+    video_min_seconds: 7
+    video_max_seconds: 600
+    cta_templates:
+      - "Follow for daily sports highlights"
+      - "Drop a comment — was this the play of the night?"
+      - "Share this with your sports group"
+  posting_schedule:
+    primary_utc: "15:00"
+    secondary_utc: "20:00"
+    tertiary_utc: "12:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 4
+
+threads:
+  primary_signal: "conversation"
+  secondary_signals: ["reposts", "quotes", "likes"]
+  content_rules:
+    caption_max_length: 500
+    caption_optimal_length: 200
+    hashtag_count: [0, 3]
+    hashtag_optimal: 1
+    hook_window_seconds: 2
+    link_in_post: true
+    video_aspect_ratio: "9:16"
+    video_optimal_seconds: 30
+    cta_required: false
+    cta_templates:
+      - "Who's winning the MVP race this season?"
+      - "Reply with your hot take"
+  posting_schedule:
+    primary_utc: "12:00"
+    secondary_utc: "17:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 3

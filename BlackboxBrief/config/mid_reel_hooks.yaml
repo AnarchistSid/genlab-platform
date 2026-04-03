@@ -1,0 +1,283 @@
+# Mid-Reel Re-Engagement Hooks — short phrases to recapture attention
+# mid-way through longer videos (>20s).
+#
+# Social Media Examiner study: mid-hooks at 10-15s improve average watch
+# time by 34% and completion rate from 42% to 61%.
+#
+# Two routing paths (checked in priority order):
+#   1. content_type  → category via content_type_map (explicit, human-friendly)
+#   2. template_id   → category via template_category_map (automated pipeline)
+#   3. hook_formula   → category via prefix inference (fallback)
+#   4. universal      → default category (last resort)
+#
+# Within each matched set, highest engagement_weight wins (deterministic).
+#
+# Imported by: execution/render_text_overlays.py
+
+patterns:
+  # ═══════════════════════════════════════════════════════════
+  # TEASER / SUSPENSE — best for tutorials, demos, how-to
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_CRAZY_PART
+    text: "But here's the crazy part..."
+    categories: [teaser, tutorial]
+    template_ids: [TPL_TUT1, TPL_REE2]
+    engagement_weight: 0.93
+
+  - id: MID_GETS_BETTER
+    text: "Wait, it gets better..."
+    categories: [teaser, tutorial]
+    template_ids: [TPL_TUT1]
+    engagement_weight: 0.91
+
+  - id: MID_NOT_BEST_PART
+    text: "And that's not even the best part..."
+    categories: [teaser, curiosity]
+    template_ids: []
+    engagement_weight: 0.89
+
+  - id: MID_REAL_STORY_V2
+    text: "But the real story is..."
+    categories: [teaser, news]
+    template_ids: [TPL_REE1]
+    engagement_weight: 0.87
+
+  # ═══════════════════════════════════════════════════════════
+  # STATISTICS / PROOF — best for big-numbers content
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_NUMBERS_SHOCKING
+    text: "The numbers are shocking..."
+    categories: [statistics, news]
+    template_ids: []
+    engagement_weight: 0.90
+
+  - id: MID_DATA_SHOWS
+    text: "Here's what the data shows..."
+    categories: [statistics, prediction]
+    template_ids: []
+    engagement_weight: 0.88
+
+  - id: MID_RESULTS_SPEAK
+    text: "The results speak for themselves..."
+    categories: [statistics]
+    template_ids: []
+    engagement_weight: 0.86
+
+  # ═══════════════════════════════════════════════════════════
+  # CONSEQUENCE / STAKES — best for breaking news, urgency
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_WHY_MATTERS
+    text: "And this is why it matters..."
+    categories: [consequence, breaking]
+    template_ids: [TPL_BRK1]
+    engagement_weight: 0.92
+
+  - id: MID_MEANS_FOR_YOU
+    text: "Here's what this means for you..."
+    categories: [consequence, breaking, news]
+    template_ids: [TPL_BRK1, TPL_REE1]
+    engagement_weight: 0.90
+
+  - id: MID_IMPLICATIONS
+    text: "The implications are huge..."
+    categories: [consequence, debate]
+    template_ids: [TPL_DEB1]
+    engagement_weight: 0.88
+
+  # ═══════════════════════════════════════════════════════════
+  # REVEAL / SURPRISE — best for comparisons, plot twists
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_SURPRISED_EVERYONE
+    text: "What happened next surprised everyone..."
+    categories: [reveal, comparison]
+    template_ids: [TPL_CON1]
+    engagement_weight: 0.91
+
+  - id: MID_NO_ONE_SAW
+    text: "Nobody saw this coming..."
+    categories: [reveal, comparison, debate]
+    template_ids: [TPL_DEB1, TPL_CON1]
+    engagement_weight: 0.93
+
+  - id: MID_ALREADY_HAPPENING
+    text: "The twist? It's already happening..."
+    categories: [reveal, prediction]
+    template_ids: [TPL_VIS1]
+    engagement_weight: 0.89
+
+  # ═══════════════════════════════════════════════════════════
+  # QUESTION / ENGAGEMENT — best for industry analysis
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_CAN_AI
+    text: "But can AI really do this?"
+    categories: [question, curiosity]
+    template_ids: [TPL_VIS1, TPL_HUM1]
+    engagement_weight: 0.87
+
+  - id: MID_FUTURE_WE_WANT
+    text: "Is this the future we want?"
+    categories: [question, debate]
+    template_ids: [TPL_POL1]
+    engagement_weight: 0.85
+
+  - id: MID_WHAT_MEANS
+    text: "What does this mean for the industry?"
+    categories: [question, prediction]
+    template_ids: []
+    engagement_weight: 0.83
+
+  # ═══════════════════════════════════════════════════════════
+  # LEGACY (original patterns — kept for template_id routing)
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_WAIT
+    text: "But wait \u2014 there's more"
+    categories: [breaking, news, teaser]
+    template_ids: [TPL_BRK1, TPL_REE1]
+    engagement_weight: 0.86
+
+  - id: MID_GETS_CRAZIER
+    text: "It gets crazier"
+    categories: [breaking, news]
+    template_ids: []
+    engagement_weight: 0.84
+
+  - id: MID_KEY_PART
+    text: "Here's the key part"
+    categories: [tutorial, teaser]
+    template_ids: []
+    engagement_weight: 0.82
+
+  - id: MID_WATCH_THIS
+    text: "Watch this closely"
+    categories: [tutorial]
+    template_ids: []
+    engagement_weight: 0.80
+
+  - id: MID_PLOT_TWIST
+    text: "Plot twist"
+    categories: [comparison, debate, reveal]
+    template_ids: []
+    engagement_weight: 0.85
+
+  - id: MID_DIDNT_EXPECT
+    text: "Nobody expected this"
+    categories: [comparison, debate, reveal]
+    template_ids: []
+    engagement_weight: 0.82
+
+  - id: MID_REAL_STORY
+    text: "Here's the real story"
+    categories: [curiosity, prediction]
+    template_ids: []
+    engagement_weight: 0.80
+
+  - id: MID_BEST_PART
+    text: "The best part?"
+    categories: [curiosity, reaction, question]
+    template_ids: []
+    engagement_weight: 0.79
+
+  # ═══════════════════════════════════════════════════════════
+  # UNIVERSAL (fallbacks — match any content type)
+  # ═══════════════════════════════════════════════════════════
+  - id: MID_NOT_DONE
+    text: "We're not done yet"
+    categories: [universal]
+    template_ids: []
+    engagement_weight: 0.81          # Above recommended tier (0.80) so universals always fire
+
+  - id: MID_KEEP_WATCHING
+    text: "Keep watching"
+    categories: [universal]
+    template_ids: []
+    engagement_weight: 0.80          # At recommended tier threshold
+
+# ═══════════════════════════════════════════════════════════════
+# Content-type → category mapping (human-friendly routing)
+#
+# Used by select_mid_hook(content_type="breaking_news") to pick
+# the right category without needing a template_id.
+#
+# Maps content descriptors to the primary category that should be
+# selected. The selection logic also picks based on duration:
+#   15-25s: optional (engagement_weight threshold raised to 0.90)
+#   26-40s: recommended (normal threshold)
+#   41-60s: mandatory (engagement_weight threshold lowered to 0.75)
+# ═══════════════════════════════════════════════════════════════
+content_type_map:
+  # Breaking / urgent news → consequence + stakes
+  breaking_news: consequence
+  urgent: consequence
+  breaking: consequence
+
+  # Tutorial / demo → teaser + suspense
+  tutorial: teaser
+  demo: teaser
+  how_to: teaser
+
+  # Comparison → reveal + surprise
+  comparison: reveal
+  vs: reveal
+
+  # Industry analysis → question + engagement
+  industry_analysis: question
+  analysis: question
+  opinion: question
+
+  # Big numbers → statistics + proof
+  big_numbers: statistics
+  data: statistics
+  research: statistics
+
+  # General news → consequence (lower urgency)
+  news: consequence
+  report: consequence
+
+  # Debate / controversy → reveal
+  debate: reveal
+  controversy: reveal
+
+# ═══════════════════════════════════════════════════════════════
+# Template → category mapping (automated pipeline routing)
+# ═══════════════════════════════════════════════════════════════
+template_category_map:
+  TPL_BRK1: consequence
+  TPL_REE1: consequence
+  TPL_REE2: teaser
+  TPL_TUT1: teaser
+  TPL_DEB1: reveal
+  TPL_CON1: reveal
+  TPL_VIS1: question
+  TPL_HUM1: question
+  TPL_WRU1: consequence
+  TPL_POL1: question
+  TPL_UGC1: teaser
+  TPL_UGR1: teaser
+
+# Duration urgency tiers — controls whether mid-hook is injected
+# and adjusts selection threshold.
+#
+#   Tier       Duration    Behavior
+#   ─────────  ──────────  ────────────────────────────────
+#   optional   15-25s      Only inject if weight ≥ 0.90
+#   recommended 26-40s     Normal injection (weight ≥ 0.80)
+#   mandatory  41-60s      Always inject (weight ≥ 0.75)
+#   skip       <15s        Never inject (too short)
+#   skip       >60s        Content after 60s already drops; not our format
+duration_urgency:
+  skip_below_seconds: 15
+  optional:
+    min_seconds: 15
+    max_seconds: 25
+    min_weight: 0.90          # Only high-confidence hooks for short content
+  recommended:
+    min_seconds: 26
+    max_seconds: 40
+    min_weight: 0.80          # Normal threshold
+  mandatory:
+    min_seconds: 41
+    max_seconds: 60
+    min_weight: 0.75          # Lower bar — any decent hook helps at this length
+
+# Fallback when template_id and content_type are unknown
+default_category: universal

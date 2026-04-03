@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>GENLAB_PROJECT_DIR</key>
+		<string>/Users/anarchistsid/GenLab/BlackboxBrief</string>
+		<key>HOME</key>
+		<string>/Users/anarchistsid</string>
+		<key>LANG</key>
+		<string>en_US.UTF-8</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<false/>
+	<key>Label</key>
+	<string>com.genlab.daily-intel</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>-lc</string>
+		<string>exec "${GENLAB_PROJECT_DIR:-$HOME/GenLab/BlackboxBrief}/runbooks/cron_wrapper.sh"</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/logs/launchd_stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/anarchistsid/GenLab/BlackboxBrief/.tmp/logs/launchd_stdout.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>8</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>TimeOut</key>
+	<integer>14400</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/anarchistsid/GenLab/BlackboxBrief</string>
+</dict>
+</plist>

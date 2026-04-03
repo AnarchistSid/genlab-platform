@@ -1,0 +1,192 @@
+version: "2026.03"
+
+instagram:
+  primary_signal: "sends"  # DM shares weighted 3-5x over likes
+  secondary_signals: ["saves", "watch_time", "comments"]
+  content_rules:
+    optimal_reel_length_seconds: [15, 30]
+    explainer_length_seconds: [30, 60]
+    three_second_hold_target: 0.60
+    hook_window_seconds: 3
+    originality_score: true
+    caption_max_length: 2200
+    hashtag_count: [3, 5]
+    cta_required: true
+    cta_templates:
+      - "Follow @blackbox.brief for daily AI breakdowns"
+      - "Save this for later and share with a friend who needs to see this"
+      - "What would you create with this? Drop a comment below"
+      - "Send this to someone who thinks AI can't do this yet"
+    format_mix:
+      reels: 0.65
+      carousels: 0.25
+      stories: 0.10
+  posting_schedule:
+    primary_utc: "14:00"
+    secondary_utc: "08:00"
+    tertiary_utc: "17:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 3
+
+youtube:
+  primary_signal: "viewed_vs_swiped"
+  secondary_signals: ["watch_time", "ctr", "subscribe_click"]
+  content_rules:
+    optimal_shorts_length_seconds: [30, 60]
+    title_format: "question"  # Question titles get dramatically higher CTR
+    title_max_chars: 40
+    title_templates:
+      - "Did {company} Just {claim}?"
+      - "What Happens When AI {action}?"
+      - "Is {product} the Future of {topic}?"
+      - "Can AI Really {claim}? Watch This"
+      - "Why Is Everyone Talking About {product}?"
+    community_posts_enabled: true
+    hook_window_seconds: 5
+    hashtag_count: [3, 8]
+    subscribe_cta_overlay: true
+    description_template: |
+      {summary}
+      Follow Blackbox Brief for daily AI content breakdowns.
+      Instagram: @blackbox.brief
+      X: @blackbox_brief
+      #AI #AIVideo #ArtificialIntelligence #{topic_tag}
+  posting_schedule:
+    primary_utc: "06:30"
+    secondary_utc: null
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 2
+
+twitter:
+  primary_signal: "reply_chains"  # Author replies = 150x a like
+  secondary_signals: ["bookmarks", "retweets", "profile_clicks"]
+  algorithm_weights:
+    reply_with_author_response: 150
+    bookmark: 20
+    retweet: 20
+    profile_click: 12
+    like: 1
+  content_rules:
+    format: "native_video_plus_thread"
+    external_link_penalty: 0.50  # 30-50% reach cut
+    link_strategy: "first_reply"  # Links ONLY in first reply
+    thread_threshold: 5
+    max_thread_tweets: 10
+    tweet_char_limit: 280
+    video_max_seconds: 140
+    hook_window_seconds: 3
+    native_video_required: true
+    hashtag_count: [2, 4]
+    question_hook_in_first_tweet: true
+    engagement_templates:
+      - "What would you create with this? Reply below"
+      - "Tag someone who needs to see this"
+      - "Bookmark this for your next project"
+  posting_schedule:
+    primary_utc: "14:00"
+    secondary_utc: "08:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 5
+  premium:
+    recommended: true
+    tier: "basic"
+    benefits: ["longer_posts", "edit_button", "reach_boost"]
+
+facebook:
+  primary_signal: "shares"
+  secondary_signals: ["comments", "watch_time", "reactions"]
+  content_rules:
+    hook_window_seconds: 3
+    hashtag_count: [1, 3]
+    all_video_is_reels: true
+    reels_reach_bonus: 3.0
+    ghost_follower_strategy: "bypass_via_reels"
+    caption_style: "longer_than_twitter"
+  posting_schedule:
+    primary_utc: "15:00"
+    frequency: "3_per_week"
+    min_posts_per_day: 0
+    max_posts_per_day: 1
+
+tiktok:
+  primary_signal: "watch_time"  # Completion rate and replays weighted heaviest
+  secondary_signals: ["shares", "comments", "saves", "follows_from_video"]
+  content_rules:
+    optimal_reel_length_seconds: [15, 45]
+    explainer_length_seconds: [45, 120]
+    three_second_hold_target: 0.70  # Hook window is 3s — higher bar than IG
+    hook_window_seconds: 3
+    loop_reward: true          # TikTok rewards videos users replay
+    caption_max_length: 2200
+    caption_optimal_length: 150
+    hashtag_count: [3, 5]
+    hashtag_optimal: 4
+    cta_required: true
+    cta_position: "overlay"    # Visual overlay CTA, not just caption
+    autoplay_sound: true       # Sound on by default — audio hook matters
+    reach_penalty_external_links: true  # Links in caption suppressed
+    video_aspect_ratio: "9:16"
+    video_min_seconds: 7
+    video_max_seconds: 600
+    cta_templates:
+      - "Follow for more AI clips like this"
+      - "Drop a comment if this blew your mind"
+      - "Share this with someone who needs to see it"
+  posting_schedule:
+    primary_utc: "15:00"
+    secondary_utc: "20:00"
+    tertiary_utc: "12:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 4
+
+threads:
+  primary_signal: "conversation"  # Reply count weighted heavily in feed ranking
+  secondary_signals: ["reposts", "quotes", "likes"]
+  content_rules:
+    caption_max_length: 500
+    caption_optimal_length: 200
+    hashtag_count: [0, 3]      # Threads does not boost for hashtags
+    hashtag_optimal: 1
+    link_in_post: true         # Unlike Instagram, links work in Threads posts
+    reach_penalty_external_links: false
+    video_aspect_ratio: "9:16"
+    video_min_seconds: 1
+    video_max_seconds: 300
+    video_optimal_seconds: 30
+    hook_window_seconds: 2
+    loop_reward: false
+    conversation_signals: true
+    cta_required: false
+    cta_templates:
+      - "What do you think — is this the future?"
+      - "Reply with your take"
+  posting_schedule:
+    primary_utc: "12:00"
+    secondary_utc: "17:00"
+    tertiary_utc: "07:00"
+    frequency: "daily"
+    min_posts_per_day: 1
+    max_posts_per_day: 3
+
+international:
+  golden_posting_window_utc: "14:00"
+  secondary_window_utc: "08:00"
+  tertiary_window_utc: "17:00"
+  language: "en"
+  avoid_geotagging: true
+  subtitle_captions: true
+  date_format: "month_day_year_spelled"  # "March 3, 2026" not "3/3/26"
+  currency_strategy: "usd_with_approximate"  # "$50M (~£40M / €46M)"
+  content_tone: "balanced_demystifying"
+  avoid_references:
+    - "US-only holidays"
+    - "US sports (NFL, NBA, MLB)"
+    - "US-specific slang"
+  include_global_coverage:
+    - "EU AI Act"
+    - "UK AI Safety Institute"
+    - "Australian social media regulations"

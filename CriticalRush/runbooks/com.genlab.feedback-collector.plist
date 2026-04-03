@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>AGENT_ROOT</key>
+		<string>/Users/anarchistsid/GenLab/CriticalRush</string>
+		<key>HOME</key>
+		<string>/Users/anarchistsid</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<false/>
+	<key>Label</key>
+	<string>com.genlab.feedback-collector</string>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/anarchistsid/.local/bin/uv</string>
+		<string>run</string>
+		<string>--project</string>
+		<string>/Users/anarchistsid/GenLab/CriticalRush</string>
+		<string>python</string>
+		<string>scripts/collect_feedback.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>/Users/anarchistsid/GenLab/CriticalRush/.logs/feedback-collector-stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/anarchistsid/GenLab/CriticalRush/.logs/feedback-collector.log</string>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>19</integer>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+	<key>TimeOut</key>
+	<integer>600</integer>
+	<key>WorkingDirectory</key>
+	<string>/Users/anarchistsid/GenLab/CriticalRush</string>
+</dict>
+</plist>

@@ -1,0 +1,88 @@
+# Compilation assembly rules: length, pacing, transitions, types
+
+compilation_types:
+  short_compilation:
+    target_duration_seconds: 45
+    min_duration_seconds: 30
+    max_duration_seconds: 60
+    min_clips: 4
+    max_clips: 8
+    max_single_clip_ratio: 0.35    # no clip > 35% of total
+    max_clips_per_game: 2          # max 2 clips from same game
+    pacing: "escalating"           # weakest → strongest
+    min_commentary_lines: 3
+    transition_style: "beat_synced"
+
+  long_compilation:
+    target_duration_seconds: 600
+    min_duration_seconds: 300
+    max_duration_seconds: 900
+    min_clips: 20
+    max_clips: 40
+    max_single_clip_ratio: 0.10
+    pacing: "wave"                 # build-up → peak → cooldown → repeat
+    min_commentary_lines: 10
+    transition_style: "mixed"
+
+# Transition weights (must sum to 1.0)
+transitions:
+  hard_cut: 0.60
+  zoom_impact: 0.15
+  glitch: 0.10
+  white_flash: 0.10
+  chromatic_aberration: 0.05
+
+# Overlay defaults
+overlays:
+  streamer_name:
+    font: "Montserrat-ExtraBold"
+    size_px: 48
+    color: "#FFFFFF"
+    stroke_color: "#000000"
+    stroke_width: 3
+    position: "bottom_left"
+    duration_seconds: 3
+
+  game_title:
+    font: "Bebas Neue"
+    size_px: 36
+    color: "#FFD700"               # gold
+    position: "top_right"
+    duration_seconds: 3
+
+  hook_text:
+    font: "Montserrat-ExtraBold"
+    size_px: 64
+    color: "#FFFFFF"
+    position: "center"
+    duration_seconds: 2
+    only_first_clip: true
+
+# Intro/outro
+intro:
+  enabled: true
+  max_duration_seconds: 1.0
+  template: "assets/intros/default.mp4"
+
+outro:
+  enabled: true
+  max_duration_seconds: 2.0
+  template: "assets/outros/subscribe.mp4"
+  overlay_text: "Subscribe for more!"
+
+# Theme-based clip grouping
+themes:
+  fails:
+    keywords: [fail, died, death, rip, choke, missed, whiff, blunder, oops, unlucky]
+  clutch:
+    keywords: [clutch, ace, insane, godlike, carry, comeback, save, outplay, "1v5", "1v4", "1v3"]
+  funny:
+    keywords: [funny, lol, lmao, wtf, bug, glitch, rage, troll, meme, unexpected]
+  mixed:
+    keywords: []  # fallback theme — no keyword matching needed
+
+# Multi-compilation settings
+multi_compilation:
+  max_compilations: 3
+  min_clips_per_compilation: 4
+  prefer_themed: true  # try themed compilations first, then mixed for leftovers

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "clip_sourcer_config.schema.json",
+  "title": "Clip Sourcer Config",
+  "description": "Configuration schema for GamingClipSourcer, mirrors ClipSourcerConfig Pydantic model.",
+  "type": "object",
+  "properties": {
+    "max_duration_seconds": {
+      "type": "integer",
+      "default": 60,
+      "minimum": 1,
+      "description": "Maximum clip duration in seconds"
+    },
+    "min_duration_seconds": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "description": "Minimum clip duration in seconds"
+    },
+    "target_resolution": {
+      "type": "string",
+      "default": "1080",
+      "description": "Target video resolution (e.g. 1080, 720)"
+    },
+    "trim_start_pct": {
+      "type": "number",
+      "default": 0.25,
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Percentage into the video to start trimming"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": ".tmp/clips",
+      "description": "Output directory for sourced clips"
+    },
+    "banned_fragments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["reaction", "review", "explained", "ranking"],
+      "description": "Title fragments that disqualify a clip"
+    },
+    "pexels_query_template": {
+      "type": "string",
+      "default": "{game_title} gameplay",
+      "description": "Query template for Pexels fallback search"
+    },
+    "youtube_search_template": {
+      "type": "string",
+      "default": "{game_title} official trailer",
+      "description": "Query template for YouTube trailer search"
+    },
+    "twitch_clip_limit": {
+      "type": "integer",
+      "default": 5,
+      "minimum": 1,
+      "description": "Number of Twitch clips to fetch per game"
+    },
+    "min_views": {
+      "type": "integer",
+      "default": 1000,
+      "minimum": 0,
+      "description": "Minimum view count threshold"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,70 @@
+# Audio Production Configuration
+# Controls voiceover, background music, and mixing for Reels.
+# All volume values are in dB (0 = unity, negative = quieter).
+
+voiceover:
+  quality: "premium"            # premium | standard | basic
+  # premium:  ElevenLabs → OpenAI TTS → Edge-TTS   (~$0.42/Reel)
+  # standard: OpenAI TTS → Edge-TTS → gTTS         (~$0.02/Reel)
+  # basic:    Edge-TTS → gTTS                       (FREE)
+
+background_music:
+  enabled: true
+  library_path: "assets/music/"   # Local royalty-free tracks (MP3/M4A/WAV)
+  fallback: "lavfi"               # "lavfi" = FFmpeg-synthesized pads when no library track
+
+  # ── Mixing specs (competitive Reels standard) ──
+  volume_db: -20                  # Music bed volume (-20 dB ≈ 10% of voice)
+  fade_in_ms: 500                 # Gentle ramp-up
+  fade_out_ms: 1000               # Smooth exit
+  normalize_lufs: -14             # Loudness target (social media standard)
+
+  # ── Track assignments by mood ──
+  # Each mood maps to a track filename in library_path.
+  # The selector picks the first file that exists.
+  # If none exist, falls back to lavfi synthesis.
+  tracks:
+    tech:
+      description: "Deep ambient — default for AI/tech stories"
+      files:
+        - "tech-ambient-01.mp3"
+        - "tech-ambient-02.mp3"
+    neutral:
+      description: "Clean, neutral bed — funding, regulation, analysis"
+      files:
+        - "news-neutral-01.mp3"
+        - "news-neutral-02.mp3"
+    dramatic:
+      description: "Tense, deeper pad — breaking stories, safety, critical"
+      files:
+        - "dramatic-tension-01.mp3"
+        - "dramatic-tension-02.mp3"
+    upbeat:
+      description: "Brighter, energetic — launches, open-source, positive"
+      files:
+        - "upbeat-bright-01.mp3"
+        - "upbeat-bright-02.mp3"
+
+  # ── Mood selection rules ──
+  # Keywords matched against blueprint topic + hook + urgency fields.
+  # First match wins; unmatched blueprints get "tech" (default).
+  mood_rules:
+    - keywords: ["breaking", "critical", "safety", "security", "vulnerability"]
+      mood: "dramatic"
+    - keywords: ["launch", "release", "open-source", "milestone", "achievement"]
+      mood: "upbeat"
+    - keywords: ["funding", "regulation", "policy", "acquisition", "partnership"]
+      mood: "neutral"
+    # Default mood (no keywords needed — catch-all)
+    - keywords: []
+      mood: "tech"
+
+sfx:
+  enabled: true
+  volume_db: -12                  # SFX volume (-12 dB ≈ 25% of voice)
+
+mixing:
+  voice_volume_db: 0              # Voice is always full volume (foreground)
+  output_bitrate: "192k"          # AAC output quality
+  sample_rate: 48000
+  channels: 2

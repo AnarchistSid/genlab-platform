@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "written_content.schema.json",
+  "title": "Written Content",
+  "description": "Multi-platform content output from write_gaming_content stage.",
+  "type": "object",
+  "required": ["hook", "instagram", "youtube", "x_twitter", "facebook", "tiktok", "threads"],
+  "properties": {
+    "hook": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Scroll-stopping first line (max 15 words, emotional)"
+    },
+    "hook_prediction_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Optional engagement prediction score from HookPredictor"
+    },
+    "instagram": {
+      "type": "object",
+      "required": ["caption"],
+      "properties": {
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Full caption body (150-300 chars) ending with CTA"
+        },
+        "hashtags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 10,
+          "description": "Exactly 4 hashtags from the pool"
+        }
+      }
+    },
+    "youtube": {
+      "type": "object",
+      "required": ["title", "description"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Question format, max 40 chars"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "2-3 sentences including game name"
+        }
+      }
+    },
+    "x_twitter": {
+      "type": "object",
+      "required": ["tweet"],
+      "properties": {
+        "tweet": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280,
+          "description": "Max 240 chars (leave room for link in reply)"
+        },
+        "hashtags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 5,
+          "description": "2 hashtags from pool"
+        },
+        "link_reply": {
+          "type": "string",
+          "description": "Link reply added by platform rules"
+        }
+      }
+    },
+    "facebook": {
+      "type": "object",
+      "required": ["caption"],
+      "properties": {
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "description": "200-400 chars with engagement question at end"
+        }
+      }
+    },
+    "tiktok": {
+      "type": "object",
+      "required": ["caption"],
+      "properties": {
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2200,
+          "description": "Hook in first 150 chars, emotionally punchy"
+        },
+        "hashtags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 10,
+          "description": "3-5 hashtags mixing niche and trending"
+        }
+      }
+    },
+    "threads": {
+      "type": "object",
+      "required": ["caption"],
+      "properties": {
+        "caption": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "150-300 chars, text-first, conversational"
+        }
+      }
+    }
+  }
+}

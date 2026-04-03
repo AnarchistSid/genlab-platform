@@ -1,0 +1,141 @@
+# DEPRECATED: Per-platform encoding specs are now defined in genlab-core's
+# PLATFORM_SPECS (genlab_core.media.ffmpeg.PLATFORM_SPECS) as RenderSpec
+# Pydantic models with codec, CRF, preset, colorspace, fps, and audio settings.
+# This file is retained for reference (content constraints like max_duration,
+# caption limits, hashtag limits) but encoding params here are NOT consumed.
+#
+# Per-platform video specifications
+
+platforms:
+  youtube_shorts:
+    display_name: "YouTube Shorts"
+    aspect_ratio: "9:16"
+    resolution:
+      width: 1080
+      height: 1920
+    fps: 60
+    max_duration_seconds: 180
+    min_duration_seconds: 15
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 12000
+    audio_sample_rate: 48000
+    audio_channels: 2
+    audio_bitrate_kbps: 320
+    loudness_target_lufs: -14
+    max_file_size_mb: 256
+    title_max_length: 100
+    description_max_length: 5000
+    max_hashtags: 15
+
+  instagram_reels:
+    display_name: "Instagram Reels"
+    aspect_ratio: "9:16"
+    resolution:
+      width: 1080
+      height: 1920
+    fps: 30                        # Instagram caps at 30fps
+    max_duration_seconds: 90
+    min_duration_seconds: 15
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 10000
+    audio_sample_rate: 44100
+    audio_channels: 2
+    audio_bitrate_kbps: 256
+    loudness_target_lufs: -14
+    max_file_size_mb: 100
+    caption_max_length: 2200
+    max_hashtags: 30
+
+  tiktok:
+    display_name: "TikTok"
+    aspect_ratio: "9:16"
+    resolution:
+      width: 1080
+      height: 1920
+    fps: 60
+    max_duration_seconds: 180
+    min_duration_seconds: 15
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 10000
+    audio_sample_rate: 44100
+    audio_channels: 2
+    audio_bitrate_kbps: 256
+    loudness_target_lufs: -14
+    max_file_size_mb: 287
+    caption_max_length: 4000
+    max_hashtags: 20
+
+  facebook_reels:
+    display_name: "Facebook Reels"
+    aspect_ratio: "9:16"
+    resolution:
+      width: 1080
+      height: 1920
+    fps: 30
+    max_duration_seconds: 90
+    min_duration_seconds: 3
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 10000
+    audio_sample_rate: 44100
+    audio_channels: 2
+    audio_bitrate_kbps: 256
+    loudness_target_lufs: -14
+    max_file_size_mb: 100
+    description_max_length: 2000
+    max_hashtags: 30
+
+  twitter:
+    display_name: "X / Twitter"
+    aspect_ratio: "16:9"
+    resolution:
+      width: 1920
+      height: 1080
+    fps: 30
+    max_duration_seconds: 140
+    min_duration_seconds: 1
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 5000
+    audio_sample_rate: 44100
+    audio_channels: 2
+    audio_bitrate_kbps: 192
+    loudness_target_lufs: -14
+    max_file_size_mb: 512
+    tweet_max_length: 280
+    max_hashtags: 4
+
+  threads:
+    display_name: "Threads"
+    aspect_ratio: "9:16"
+    resolution:
+      width: 1080
+      height: 1920
+    fps: 30
+    max_duration_seconds: 300
+    min_duration_seconds: 1
+    codec:
+      video: "h264"
+      audio: "aac"
+    container: "mp4"
+    bitrate_kbps: 8000
+    audio_sample_rate: 44100
+    audio_channels: 2
+    audio_bitrate_kbps: 320
+    loudness_target_lufs: -14
+    max_file_size_mb: 1024
+    caption_max_length: 500
+    max_hashtags: 3

@@ -1,0 +1,24 @@
+# Instagram Inspiration Library — Auto-generated Index
+# Run: python execution/bootstrap_inspo_library.py --validate
+
+last_updated: 2026-02-17 22:54
+stats:
+  total_posts: 0
+  unique_accounts_with_posts: 0
+  account_dirs_created: 7
+  formats_covered: []
+coverage_targets:
+  min_posts: 20
+  min_accounts: 5
+  min_formats: 2
+  posts_met: false
+  accounts_met: false
+  formats_met: false
+accounts:
+- mattgray1
+- ai.explained
+- whatstheaibuzz
+- visualizevalue
+- maboroshi.ai
+- theaiexchange
+- ruben.hassid

@@ -1,0 +1,167 @@
+# FrameDrift content sources — RSS-primary (anime news + community feeds)
+
+tier_1:
+  refresh_interval_minutes: 30
+  sources:
+    - name: "Anime News Network"
+      type: "rss"
+      url: "https://www.animenewsnetwork.com/all/rss.xml"
+      category: anime_news
+      weight: 0.90
+    - name: "Crunchyroll News"
+      type: "rss"
+      url: "https://www.crunchyroll.com/feed"
+      category: anime_culture
+      weight: 0.85
+    - name: "MyAnimeList News"
+      type: "rss"
+      url: "https://myanimelist.net/rss/news.xml"
+      category: industry_news
+      weight: 0.80
+
+tier_2:
+  refresh_interval_minutes: 30
+  sources:
+    - name: "Anime News Network"
+      type: "rss"
+      url: "https://www.animenewsnetwork.com/news/rss.xml"
+      category: anime_culture
+      weight: 0.75
+    - name: "Kotaku Anime"
+      type: "rss"
+      url: "https://kotaku.com/tag/anime/rss"
+      category: editorial
+      weight: 0.70
+    - name: "Manga Plus"
+      type: "rss"
+      url: "https://mangaplus.shueisha.co.jp/rss"
+      category: manga_releases
+      weight: 0.70
+
+tier_3:
+  refresh_interval_minutes: 120
+  sources:
+    - name: "AniList Blog"
+      type: "rss"
+      url: "https://anilist.co/feed"
+      category: community
+      weight: 0.65
+
+youtube_channels:
+  - name: "Crunchyroll"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDGbTiKs1Dqe-kvURsHlIAw"
+    type: "rss"
+    weight: 0.9
+    category: "anime_trailers"
+  - name: "Anime News Network"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIKzjSHL-jYhGTwNs1x-3SA"
+    type: "rss"
+    weight: 0.8
+    category: "anime_news"
+  - name: "Gigguk"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
+    type: "rss"
+    weight: 0.7
+    category: "anime_reviews"
+  - name: "Mother's Basement"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBs2Y3i14e1NWQxOGliatmg"
+    type: "rss"
+    weight: 0.7
+    category: "anime_analysis"
+
+jikan:
+  enabled: true
+  max_promos: 20
+  endpoint: "https://api.jikan.moe/v4/watch/promos"
+
+anilist:
+  enabled: true
+  max_results: 20
+
+cross_mention:
+  window_hours: 6
+  min_sources_for_peak: 4
+
+google_trends:
+  enabled: true
+  stub_mode: true  # pytrends 4.9.2 returns 404 — leave stubbed until upstream fix
+  timeframe: "now 1-d"
+  geo: ""
+  category: 185
+
+reddit:
+  enabled: false
+  subreddits:
+    - anime
+    - animenews
+    - manga
+    - animesuggest
+
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+reddit_sources:
+  - subreddit: r/anime
+    min_score: 3000
+    time_filter: day
+    content_type: video
+  - subreddit: r/AnimeSakuga
+    min_score: 500
+    time_filter: week
+    content_type: video
+  - subreddit: r/OnePiece
+    min_score: 2000
+    time_filter: day
+    content_type: video
+  - subreddit: r/JuJutsuKaisen
+    min_score: 1000
+    time_filter: day
+    content_type: video
+
+# Extra RSS feeds — episode drops and rankings
+rss_feeds_extra:
+  - url: "https://www.livechart.me/feeds/episodes"
+    name: "LiveChart Episodes"
+    max_age_hours: 12
+  - url: "https://www.animecorner.me/feed"
+    name: "Anime Corner"
+    max_age_hours: 168
+
+source_filters:
+  reject_title_patterns:
+    - "BAFTA"
+    - "game award"
+    - "video game"
+    - "north american releases"
+    - "release schedule"
+    - "weekly releases"
+    - "manga releases"
+    - "web novels"
+    - "merchandise"
+    - "podcast"
+    - "opinion:"
+    - "march 1-"
+    - "march 8-"
+    - "march 15-"
+    - "march 22-"
+    - "adds digitally"
+  reject_topic_patterns:
+    - "fashion"
+    - "streetwear"
+    - "merchandise"
+    - "novels digitally"
+  score_boost:
+    season: 0.15
+    premiere: 0.15
+    trailer: 0.15
+    "release date": 0.1
+
+media:
+  pexels:
+    anime_queries:
+      - "anime cosplay convention"
+      - "anime art illustration"
+      - "manga illustration drawing"
+      - "anime figure collection display"
+      - "anime wallpaper aesthetic"
+      - "cosplay costume creative"
+      - "japanese animation studio"
+      - "anime merchandise collection"

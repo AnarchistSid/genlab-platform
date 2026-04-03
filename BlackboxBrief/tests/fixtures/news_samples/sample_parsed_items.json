@@ -1,0 +1,52 @@
+[
+  {
+    "title": "OpenAI Announces GPT-5 with Enhanced Reasoning Capabilities",
+    "url": "https://openai.com/blog/gpt-5-announcement",
+    "published_at": "2026-02-15T14:30:00Z",
+    "source": "openai.com",
+    "summary": "OpenAI has released GPT-5, the next generation of their large language model, featuring significantly improved reasoning, longer context windows, and new multimodal capabilities.",
+    "raw_text": "OpenAI has released GPT-5, the next generation of their large language model...",
+    "word_count": 450,
+    "themes": ["llm", "products"]
+  },
+  {
+    "title": "Google DeepMind Publishes Breakthrough in Protein Folding Prediction",
+    "url": "https://deepmind.google/blog/protein-folding-v3",
+    "published_at": "2026-02-15T10:00:00Z",
+    "source": "deepmind.com",
+    "summary": "Google DeepMind has published a new paper demonstrating a significant advancement in protein structure prediction, building on their AlphaFold work with 40% improved accuracy.",
+    "raw_text": "Google DeepMind has published a new paper...",
+    "word_count": 380,
+    "themes": ["research"]
+  },
+  {
+    "title": "Anthropic Releases Claude Agent SDK for Building Custom AI Agents",
+    "url": "https://www.anthropic.com/news/claude-agent-sdk",
+    "published_at": "2026-02-14T16:00:00Z",
+    "source": "anthropic.com",
+    "summary": "Anthropic has launched the Claude Agent SDK, enabling developers to build custom AI agents with tool use, memory, and orchestration capabilities built in.",
+    "raw_text": "Anthropic has launched the Claude Agent SDK...",
+    "word_count": 520,
+    "themes": ["agents", "tools"]
+  },
+  {
+    "title": "EU AI Act Enforcement Begins with First Wave of Compliance Deadlines",
+    "url": "https://techcrunch.com/2026/02/14/eu-ai-act-enforcement-begins",
+    "published_at": "2026-02-14T09:00:00Z",
+    "source": "techcrunch.com",
+    "summary": "The European Union has begun enforcing its landmark AI Act, with the first compliance deadlines taking effect this week. Companies face significant fines for non-compliance.",
+    "raw_text": "The European Union has begun enforcing...",
+    "word_count": 600,
+    "themes": ["policy"]
+  },
+  {
+    "title": "OpenAI GPT-5 Launch Changes the AI Landscape Forever",
+    "url": "https://theverge.com/2026/2/15/openai-gpt-5-launch",
+    "published_at": "2026-02-15T15:00:00Z",
+    "source": "theverge.com",
+    "summary": "OpenAI has launched GPT-5 with major improvements to reasoning and context length. The model represents a significant step forward in large language model capabilities.",
+    "raw_text": "OpenAI has launched GPT-5 with major improvements...",
+    "word_count": 350,
+    "themes": ["llm", "products", "news"]
+  }
+]

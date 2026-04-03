@@ -1,0 +1,30 @@
+# FrameDrift scoring weights
+# Anime: 24h decay, trend cycle multipliers, voice actor boost
+
+scoring_dimensions:
+  weights:
+    timeliness: 0.30
+    magnitude: 0.35
+    engagement_potential: 0.25
+    novelty: 0.10
+
+  timeliness:
+    decay_half_life_hours: 24.0
+
+  magnitude:
+    voice_actor_multiplier: 1.9
+    studio_collab_multiplier: 1.5
+
+trend_cycle_multipliers:
+  emerging: 1.4
+  peak: 1.0
+  declining: 0.5
+  unknown: 0.7
+
+dedup:
+  similarity_threshold: 0.68
+  time_window_hours: 48
+
+thresholds:
+  min_score: 0.42
+  top_items_per_run: 4

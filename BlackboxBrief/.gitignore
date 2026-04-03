@@ -1,0 +1,72 @@
+# Environment & secrets
+.env
+.env.local
+credentials.json
+token.json
+
+# Intermediates (never commit)
+.tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Claude Code local overrides
+CLAUDE.local.md
+.claude/memory/
+.claude/settings.local.json
+
+# Junk files
+=*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Inspo library screenshots (large binaries)
+inspo_library/posts/*/screenshot.png
+inspo_library/posts/*/screenshot.jpg
+
+# Dashboard (extracted to GenLab/dashboard/)
+dashboard/node_modules/
+dashboard/dist/
+
+# Test / coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Logs
+.logs/
+*.log
+firebase-debug.log
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Generated video files
+docker/short-video-maker/videos/*.mp4
+
+# Scratch files
+structure.txt
+TRIAGE_REPORT.md
+
+# Brand assets (logos, covers — not public)
+assets/*.png
+assets/logos/
+config/persona.yaml

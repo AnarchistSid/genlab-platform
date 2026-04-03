@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rendered_video.schema.json",
+  "title": "RenderedVideo",
+  "description": "Output of CriticalRush render stage, including per-platform variant paths",
+  "type": "object",
+  "required": ["story_id", "master_path", "rendered_at", "platform_variants"],
+  "additionalProperties": false,
+  "properties": {
+    "story_id": { "type": "string" },
+    "master_path": { "type": "string" },
+    "rendered_at": { "type": "string", "format": "date-time" },
+    "duration_s": { "type": ["number", "null"], "minimum": 0 },
+    "master_resolution": { "type": ["string", "null"], "pattern": "^\\d+x\\d+$" },
+    "platform_variants": {
+      "type": "object",
+      "description": "Maps platform name to rendered file path",
+      "additionalProperties": { "type": "string" },
+      "minProperties": 1
+    },
+    "audio_path": { "type": ["string", "null"] },
+    "captions_path": { "type": ["string", "null"] },
+    "quality_gate_passed": { "type": ["boolean", "null"] },
+    "quality_scores": { "type": ["object", "null"] }
+  }
+}

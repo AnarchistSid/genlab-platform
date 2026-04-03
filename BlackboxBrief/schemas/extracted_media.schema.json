@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Extracted Media Pack",
+  "description": "Media assets extracted from news stories — images, videos, stock photos.",
+  "type": "object",
+  "required": ["run_id", "timestamp", "total_assets", "assets"],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Run identifier"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "total_assets": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stories_with_media": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stories_without_media": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/asset"
+      }
+    }
+  },
+  "definitions": {
+    "asset": {
+      "type": "object",
+      "required": ["asset_id", "story_id", "type", "source", "source_url", "status"],
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "description": "Stable ID: AST_ + first 16 hex of sha256(story_id|source_url|type)"
+        },
+        "story_id": {
+          "type": "string",
+          "description": "Parent story stable ID"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["image", "video", "thumbnail"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["og_image", "og_video", "schema_org", "hero_image", "video_embed", "stock_search"],
+          "description": "How this media was discovered"
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Original URL of the media file"
+        },
+        "local_path": {
+          "type": "string",
+          "description": "Path to downloaded file in .tmp/media/"
+        },
+        "alt_text": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "file_size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "content_type": {
+          "type": "string",
+          "description": "MIME type of the downloaded file"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["READY", "FAILED", "SKIPPED"]
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if status is FAILED"
+        }
+      }
+    }
+  }
+}

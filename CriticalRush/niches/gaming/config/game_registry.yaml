@@ -1,0 +1,538 @@
+# Game metadata registry
+# Maps game titles to platform IDs, publishers, and risk tiers
+
+games:
+  # ============================================================
+  # EXISTING GAMES (12)
+  # ============================================================
+
+  fortnite:
+    display_name: "Fortnite"
+    twitch_id: "33214"
+    youtube_category_id: "20"      # Gaming
+    publisher: "Epic Games"
+    publisher_tier: "GREEN"
+    subreddits: ["FortNiteBR", "FortniteCompetitive"]
+    tags: ["battle_royale", "shooter"]
+
+  gta_v:
+    display_name: "GTA V / GTA Online"
+    twitch_id: "32982"
+    youtube_category_id: "20"
+    publisher: "Rockstar Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["GTAOnline", "gtavcustoms"]
+    tags: ["open_world", "action"]
+
+  league_of_legends:
+    display_name: "League of Legends"
+    twitch_id: "21779"
+    youtube_category_id: "20"
+    publisher: "Riot Games"
+    publisher_tier: "GREEN"
+    subreddits: ["leagueoflegends", "LeagueOfMemes"]
+    tags: ["moba"]
+
+  valorant:
+    display_name: "Valorant"
+    twitch_id: "516575"
+    youtube_category_id: "20"
+    publisher: "Riot Games"
+    publisher_tier: "GREEN"
+    subreddits: ["ValorantClips", "VALORANT"]
+    tags: ["fps", "tactical_shooter"]
+
+  minecraft:
+    display_name: "Minecraft"
+    twitch_id: "27471"
+    youtube_category_id: "20"
+    publisher: "Mojang Studios"
+    publisher_tier: "GREEN"
+    subreddits: ["Minecraft"]
+    tags: ["sandbox", "survival"]
+
+  apex_legends:
+    display_name: "Apex Legends"
+    twitch_id: "511224"
+    youtube_category_id: "20"
+    publisher: "Electronic Arts"
+    publisher_tier: "YELLOW"
+    subreddits: ["apexlegends"]
+    tags: ["battle_royale", "fps"]
+
+  rainbow_six_siege:
+    display_name: "Rainbow Six Siege"
+    twitch_id: "460630"
+    youtube_category_id: "20"
+    publisher: "Ubisoft"
+    publisher_tier: "YELLOW"
+    subreddits: ["Rainbow6"]
+    tags: ["fps", "tactical_shooter"]
+
+  counter_strike_2:
+    display_name: "Counter-Strike 2"
+    twitch_id: "32399"
+    youtube_category_id: "20"
+    publisher: "Valve"
+    publisher_tier: "GREEN"
+    subreddits: ["GlobalOffensive", "cs2"]
+    tags: ["fps", "competitive"]
+
+  dota_2:
+    display_name: "Dota 2"
+    twitch_id: "29595"
+    youtube_category_id: "20"
+    publisher: "Valve"
+    publisher_tier: "GREEN"
+    subreddits: ["DotA2"]
+    tags: ["moba"]
+
+  overwatch_2:
+    display_name: "Overwatch 2"
+    twitch_id: "518203"
+    youtube_category_id: "20"
+    publisher: "Blizzard Entertainment"
+    publisher_tier: "YELLOW"
+    subreddits: ["Overwatch"]
+    tags: ["fps", "hero_shooter"]
+
+  rocket_league:
+    display_name: "Rocket League"
+    twitch_id: "30921"
+    youtube_category_id: "20"
+    publisher: "Psyonix / Epic Games"
+    publisher_tier: "GREEN"
+    subreddits: ["RocketLeague"]
+    tags: ["sports", "vehicular"]
+
+  elden_ring:
+    display_name: "Elden Ring"
+    twitch_id: "512953"
+    youtube_category_id: "20"
+    publisher: "Bandai Namco"
+    publisher_tier: "YELLOW"
+    subreddits: ["Eldenring"]
+    tags: ["action_rpg", "souls"]
+
+  # ============================================================
+  # NEW GAMES — Battle Royale / Shooters (10)
+  # ============================================================
+
+  pubg:
+    display_name: "PUBG: Battlegrounds"
+    twitch_id: "493057"
+    youtube_category_id: "20"
+    publisher: "KRAFTON"
+    publisher_tier: "YELLOW"
+    subreddits: ["PUBATTLEGROUNDS"]
+    tags: ["battle_royale", "shooter"]
+
+  call_of_duty_warzone:
+    display_name: "Call of Duty: Warzone"
+    twitch_id: "512710"
+    youtube_category_id: "20"
+    publisher: "Activision Blizzard"
+    publisher_tier: "YELLOW"
+    subreddits: ["CODWarzone", "ModernWarfareIII"]
+    tags: ["battle_royale", "fps"]
+
+  battlefield_2042:
+    display_name: "Battlefield 2042"
+    twitch_id: "514974"
+    youtube_category_id: "20"
+    publisher: "Electronic Arts"
+    publisher_tier: "YELLOW"
+    subreddits: ["battlefield2042"]
+    tags: ["fps", "large_scale"]
+
+  halo_infinite:
+    display_name: "Halo Infinite"
+    twitch_id: "506416"
+    youtube_category_id: "20"
+    publisher: "343 Industries"
+    publisher_tier: "YELLOW"
+    subreddits: ["halo", "HaloInfinite"]
+    tags: ["fps", "arena_shooter"]
+
+  destiny_2:
+    display_name: "Destiny 2"
+    twitch_id: "497057"
+    youtube_category_id: "20"
+    publisher: "Bungie"
+    publisher_tier: "YELLOW"
+    subreddits: ["DestinyTheGame", "destiny2"]
+    tags: ["fps", "looter_shooter"]
+
+  escape_from_tarkov:
+    display_name: "Escape from Tarkov"
+    twitch_id: "491931"
+    youtube_category_id: "20"
+    publisher: "Battlestate Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["EscapefromTarkov"]
+    tags: ["fps", "hardcore", "survival"]
+
+  hunt_showdown:
+    display_name: "Hunt: Showdown 1896"
+    twitch_id: "500188"
+    youtube_category_id: "20"
+    publisher: "Crytek"
+    publisher_tier: "YELLOW"
+    subreddits: ["HuntShowdown"]
+    tags: ["fps", "extraction", "horror"]
+
+  xdefiant:
+    display_name: "XDefiant"
+    twitch_id: "1713426850"
+    youtube_category_id: "20"
+    publisher: "Ubisoft"
+    publisher_tier: "YELLOW"
+    subreddits: ["XDefiant"]
+    tags: ["fps", "arena_shooter"]
+
+  the_finals:
+    display_name: "THE FINALS"
+    twitch_id: "2031965402"
+    youtube_category_id: "20"
+    publisher: "Embark Studios"
+    publisher_tier: "YELLOW"
+    subreddits: ["thefinals"]
+    tags: ["fps", "destruction"]
+
+  deadlock:
+    display_name: "Deadlock"
+    twitch_id: "1778828498"
+    youtube_category_id: "20"
+    publisher: "Valve"
+    publisher_tier: "GREEN"
+    subreddits: ["DeadlockTheGame"]
+    tags: ["moba", "shooter", "hero_shooter"]
+
+  # ============================================================
+  # NEW GAMES — MOBAs / Strategy (3)
+  # ============================================================
+
+  teamfight_tactics:
+    display_name: "Teamfight Tactics"
+    twitch_id: "513143"
+    youtube_category_id: "20"
+    publisher: "Riot Games"
+    publisher_tier: "GREEN"
+    subreddits: ["TeamfightTactics"]
+    tags: ["auto_battler", "strategy"]
+
+  smite_2:
+    display_name: "Smite 2"
+    twitch_id: "2215250498"
+    youtube_category_id: "20"
+    publisher: "Hi-Rez Studios"
+    publisher_tier: "YELLOW"
+    subreddits: ["Smite"]
+    tags: ["moba", "mythology"]
+
+  starcraft_2:
+    display_name: "StarCraft II"
+    twitch_id: "490422"
+    youtube_category_id: "20"
+    publisher: "Blizzard Entertainment"
+    publisher_tier: "YELLOW"
+    subreddits: ["starcraft"]
+    tags: ["rts", "strategy", "competitive"]
+
+  # ============================================================
+  # NEW GAMES — Sports / Racing (7)
+  # ============================================================
+
+  ea_fc_25:
+    display_name: "EA SPORTS FC 25"
+    twitch_id: "2141342158"
+    youtube_category_id: "20"
+    publisher: "Electronic Arts"
+    publisher_tier: "YELLOW"
+    subreddits: ["EASportsFC", "FIFA"]
+    tags: ["sports", "soccer"]
+
+  madden_nfl:
+    display_name: "Madden NFL 25"
+    twitch_id: "1745202732"
+    youtube_category_id: "20"
+    publisher: "Electronic Arts"
+    publisher_tier: "YELLOW"
+    subreddits: ["Madden", "MaddenUltimateTeam"]
+    tags: ["sports", "football"]
+
+  nba_2k25:
+    display_name: "NBA 2K25"
+    twitch_id: "2087711898"
+    youtube_category_id: "20"
+    publisher: "2K Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["NBA2k"]
+    tags: ["sports", "basketball"]
+
+  f1_24:
+    display_name: "F1 24"
+    twitch_id: "1899528498"
+    youtube_category_id: "20"
+    publisher: "Codemasters"
+    publisher_tier: "YELLOW"
+    subreddits: ["F1Game"]
+    tags: ["racing", "simulation"]
+
+  forza_horizon_5:
+    display_name: "Forza Horizon 5"
+    twitch_id: "506450"
+    youtube_category_id: "20"
+    publisher: "Playground Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["ForzaHorizon", "forza"]
+    tags: ["racing", "open_world"]
+
+  gran_turismo_7:
+    display_name: "Gran Turismo 7"
+    twitch_id: "869498432"
+    youtube_category_id: "20"
+    publisher: "Polyphony Digital"
+    publisher_tier: "RED"
+    subreddits: ["granturismo"]
+    tags: ["racing", "simulation"]
+
+  mario_kart_8:
+    display_name: "Mario Kart 8 Deluxe"
+    twitch_id: "38745"
+    youtube_category_id: "20"
+    publisher: "Nintendo"
+    publisher_tier: "RED"
+    subreddits: ["MarioKart"]
+    tags: ["racing", "party"]
+
+  # ============================================================
+  # NEW GAMES — Fighting (3)
+  # ============================================================
+
+  street_fighter_6:
+    display_name: "Street Fighter 6"
+    twitch_id: "1905738779"
+    youtube_category_id: "20"
+    publisher: "Capcom"
+    publisher_tier: "YELLOW"
+    subreddits: ["StreetFighter"]
+    tags: ["fighting", "competitive"]
+
+  tekken_8:
+    display_name: "Tekken 8"
+    twitch_id: "1158884259"
+    youtube_category_id: "20"
+    publisher: "Bandai Namco"
+    publisher_tier: "YELLOW"
+    subreddits: ["Tekken"]
+    tags: ["fighting", "competitive"]
+
+  mortal_kombat_1:
+    display_name: "Mortal Kombat 1"
+    twitch_id: "2004944154"
+    youtube_category_id: "20"
+    publisher: "NetherRealm Studios"
+    publisher_tier: "YELLOW"
+    subreddits: ["MortalKombat"]
+    tags: ["fighting", "competitive"]
+
+  # ============================================================
+  # NEW GAMES — Survival / Sandbox (6)
+  # ============================================================
+
+  rust:
+    display_name: "Rust"
+    twitch_id: "263490"
+    youtube_category_id: "20"
+    publisher: "Facepunch Studios"
+    publisher_tier: "YELLOW"
+    subreddits: ["playrust"]
+    tags: ["survival", "multiplayer"]
+
+  ark_survival_ascended:
+    display_name: "ARK: Survival Ascended"
+    twitch_id: "2073641826"
+    youtube_category_id: "20"
+    publisher: "Studio Wildcard"
+    publisher_tier: "YELLOW"
+    subreddits: ["ARK", "playark"]
+    tags: ["survival", "sandbox"]
+
+  palworld:
+    display_name: "Palworld"
+    twitch_id: "2020919626"
+    youtube_category_id: "20"
+    publisher: "Pocketpair"
+    publisher_tier: "YELLOW"
+    subreddits: ["Palworld"]
+    tags: ["survival", "creature_collector"]
+
+  lethal_company:
+    display_name: "Lethal Company"
+    twitch_id: "2040567744"
+    youtube_category_id: "20"
+    publisher: "Zeekerss"
+    publisher_tier: "YELLOW"
+    subreddits: ["LethalCompany"]
+    tags: ["horror", "co_op"]
+
+  dayz:
+    display_name: "DayZ"
+    twitch_id: "65632"
+    youtube_category_id: "20"
+    publisher: "Bohemia Interactive"
+    publisher_tier: "YELLOW"
+    subreddits: ["dayz"]
+    tags: ["survival", "multiplayer"]
+
+  terraria:
+    display_name: "Terraria"
+    twitch_id: "31376"
+    youtube_category_id: "20"
+    publisher: "Re-Logic"
+    publisher_tier: "GREEN"
+    subreddits: ["Terraria"]
+    tags: ["sandbox", "action_adventure"]
+
+  # ============================================================
+  # NEW GAMES — Horror / Action (3)
+  # ============================================================
+
+  dead_by_daylight:
+    display_name: "Dead by Daylight"
+    twitch_id: "491487"
+    youtube_category_id: "20"
+    publisher: "Behaviour Interactive"
+    publisher_tier: "GREEN"
+    subreddits: ["deadbydaylight"]
+    tags: ["horror", "asymmetric_multiplayer"]
+
+  phasmophobia:
+    display_name: "Phasmophobia"
+    twitch_id: "518184"
+    youtube_category_id: "20"
+    publisher: "Kinetic Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["PhasmophobiaGame"]
+    tags: ["horror", "co_op"]
+
+  resident_evil_4_remake:
+    display_name: "Resident Evil 4 Remake"
+    twitch_id: "1694866498"
+    youtube_category_id: "20"
+    publisher: "Capcom"
+    publisher_tier: "YELLOW"
+    subreddits: ["residentevil"]
+    tags: ["horror", "action", "survival"]
+
+  # ============================================================
+  # NEW GAMES — RPG / Adventure (5)
+  # ============================================================
+
+  baldurs_gate_3:
+    display_name: "Baldur's Gate 3"
+    twitch_id: "497456"
+    youtube_category_id: "20"
+    publisher: "Larian Studios"
+    publisher_tier: "GREEN"
+    subreddits: ["BaldursGate3"]
+    tags: ["rpg", "turn_based"]
+
+  hogwarts_legacy:
+    display_name: "Hogwarts Legacy"
+    twitch_id: "1046498848"
+    youtube_category_id: "20"
+    publisher: "Warner Bros. Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["HarryPotterGame"]
+    tags: ["rpg", "open_world", "action"]
+
+  genshin_impact:
+    display_name: "Genshin Impact"
+    twitch_id: "513181"
+    youtube_category_id: "20"
+    publisher: "miHoYo / HoYoverse"
+    publisher_tier: "YELLOW"
+    subreddits: ["Genshin_Impact", "GenshinImpactTips"]
+    tags: ["rpg", "open_world", "gacha"]
+
+  diablo_iv:
+    display_name: "Diablo IV"
+    twitch_id: "515024"
+    youtube_category_id: "20"
+    publisher: "Blizzard Entertainment"
+    publisher_tier: "YELLOW"
+    subreddits: ["diablo4", "Diablo"]
+    tags: ["action_rpg", "looter"]
+
+  path_of_exile_2:
+    display_name: "Path of Exile 2"
+    twitch_id: "2181962498"
+    youtube_category_id: "20"
+    publisher: "Grinding Gear Games"
+    publisher_tier: "YELLOW"
+    subreddits: ["pathofexile"]
+    tags: ["action_rpg", "looter"]
+
+  # ============================================================
+  # NEW GAMES — Platformer / Party (3)
+  # ============================================================
+
+  fall_guys:
+    display_name: "Fall Guys"
+    twitch_id: "512980"
+    youtube_category_id: "20"
+    publisher: "Mediatonic"
+    publisher_tier: "GREEN"
+    subreddits: ["FallGuysGame"]
+    tags: ["party", "battle_royale"]
+
+  among_us:
+    display_name: "Among Us"
+    twitch_id: "510218"
+    youtube_category_id: "20"
+    publisher: "InnerSloth"
+    publisher_tier: "GREEN"
+    subreddits: ["AmongUs"]
+    tags: ["party", "social_deduction"]
+
+  it_takes_two:
+    display_name: "It Takes Two"
+    twitch_id: "518002"
+    youtube_category_id: "20"
+    publisher: "Hazelight Studios"
+    publisher_tier: "YELLOW"
+    subreddits: ["ItTakesTwo"]
+    tags: ["co_op", "platformer", "adventure"]
+
+  # ============================================================
+  # NEW GAMES — Sim / Other (3)
+  # ============================================================
+
+  the_sims_4:
+    display_name: "The Sims 4"
+    twitch_id: "369252"
+    youtube_category_id: "20"
+    publisher: "Maxis / Electronic Arts"
+    publisher_tier: "YELLOW"
+    subreddits: ["Sims4", "thesims"]
+    tags: ["simulation", "life_sim"]
+
+  stardew_valley:
+    display_name: "Stardew Valley"
+    twitch_id: "490744"
+    youtube_category_id: "20"
+    publisher: "ConcernedApe"
+    publisher_tier: "GREEN"
+    subreddits: ["StardewValley"]
+    tags: ["simulation", "farming"]
+
+  helldivers_2:
+    display_name: "Helldivers 2"
+    twitch_id: "2102702498"
+    youtube_category_id: "20"
+    publisher: "Arrowhead Game Studios"
+    publisher_tier: "GREEN"
+    subreddits: ["Helldivers", "helldivers2"]
+    tags: ["co_op", "shooter", "action"]

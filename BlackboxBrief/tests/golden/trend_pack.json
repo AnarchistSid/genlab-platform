@@ -1,0 +1,23 @@
+{
+  "run_id": "20260215_140000",
+  "generated_at": "2026-02-15T16:00:00+00:00",
+  "version": "1.0",
+  "story_count": 1,
+  "stories": [
+    {
+      "story_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rank": 1,
+      "title": "OpenAI Announces GPT-5 with Enhanced Reasoning Capabilities",
+      "url": "https://openai.com/blog/gpt-5-announcement",
+      "domain": "openai.com",
+      "summary": "OpenAI has released GPT-5, the next generation of their large language model, featuring significantly improved reasoning, longer context windows, and new multimodal capabilities.",
+      "published_at": "2026-02-15T14:30:00Z",
+      "composite_score": 0.95,
+      "scores": {
+        "authority": 1.0,
+        "recency": 0.95,
+        "novelty": 0.9
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+# Gen Lab — Niche Registry
+# Each niche maps to a content agent and its SharePoint list configuration.
+
+niches:
+  - id: ai_creators
+    display_name: "Blackbox Brief"
+    tagline: "AI News"
+    status: active
+    accent_hex: "#6366f1"
+    target_posts_per_day: 4
+    sharepoint_lists:
+      blueprints: "Blueprints"
+      stories: "Stories"
+
+  - id: gaming
+    display_name: "CriticalRush"
+    tagline: "Gaming"
+    status: active
+    accent_hex: "#F97316"
+    target_posts_per_day: 4
+    sharepoint_lists:
+      blueprints: "Gaming_Blueprints"
+      stories: "Gaming_Stories"
+
+  - id: sports
+    display_name: "ClutchWire"
+    tagline: "Sports"
+    status: active
+    accent_hex: "#FF2040"
+
+  - id: anime
+    display_name: "FrameDrift"
+    tagline: "Anime"
+    status: active
+    accent_hex: "#EC4899"
+
+  - id: movies
+    display_name: "SpliceReel"
+    tagline: "Movies"
+    status: active
+    accent_hex: "#EAB308"

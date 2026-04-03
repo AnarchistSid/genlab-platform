@@ -1,0 +1,32 @@
+# ClutchWire writing config — additive niche instructions for LLM content writer.
+# VideoContentWriter already has niche voice profiles; this adds banned phrases
+# and hook examples that are specific to ClutchWire.
+
+niche_id: sports
+
+banned_phrases:
+  - "the sports world is watching"
+  - "fans can't believe"
+  - "something big happened"
+  - "the community is going wild"
+  - "no more excuses"
+  - "athletes need to see this"
+  - "a new era begins"
+  - "This is what clutch looks like"
+  - "The moment this player changed everything"
+  - "Nobody saw them doing THIS"
+  - "The rivalry continues"
+  - "The trade that changes the league"
+  - "This changes everything"
+  - "Nobody expected this"
+  - "The comeback of the year"
+
+hook_examples:
+  - "Nobody saw the Lakers doing THIS"
+  - "Mahomes just broke the playbook"
+  - "90th-minute stunner changes everything"
+
+tone_notes: >
+  Write like a passionate sports commentator who just witnessed
+  something incredible. Use stats when available. Reference specific
+  plays, players, and moments — never generic hype.

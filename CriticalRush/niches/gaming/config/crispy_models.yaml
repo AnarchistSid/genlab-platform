@@ -1,0 +1,82 @@
+# Crispy-based highlight detection models
+# Adapted from https://github.com/Flowtter/crispy (MIT License)
+# Models are custom numpy MLPs (.npz weight files) — NOT ONNX
+#
+# Neural network architecture: input -> hidden1 -> hidden2 -> output (2 classes)
+# Activation: sigmoid (scipy.special.expit)
+# Output: [non_kill_confidence, kill_confidence]
+# A frame is a "kill" if output[1] >= confidence_threshold
+
+# Master switch (GPU/CPU-intensive per-frame inference)
+enable_highlight_detection: true
+
+# Frame sampling
+frame_sample_rate: 8          # FPS for frame extraction (matches Crispy default)
+min_consecutive_frames: 3     # Minimum consecutive positive frames to count as a kill
+
+# Fallback score for unsupported games (0.5 = neutral)
+fallback_score: 0.5
+
+models:
+  valorant:
+    game_names:
+      - "VALORANT"
+      - "Valorant"
+      - "valorant"
+    weights_path: "niches/gaming/models/crispy/valorant.npz"
+    mask_path: "niches/gaming/models/crispy/valorant-mask.png"
+    architecture: [4000, 120, 15, 2]
+    confidence_threshold: 0.90
+    input_resolution: [1920, 1080]
+    # Kill feed region — Crispy Box(61, 801, 122, 62, 0, stretch)
+    # Coordinates are center-offset: x = half - box_x + shift_x
+    kill_feed_region:
+      box_x: 61
+      box_y: 801
+      box_width: 122
+      box_height: 62
+      shift_x: 0
+    preprocessing: "valorant_edge_mask"
+    output_size: [50, 80]    # 50*80 = 4000 pixels (matches architecture[0])
+
+  cs2:
+    game_names:
+      - "Counter-Strike 2"
+      - "CS2"
+      - "cs2"
+      - "CSGO2"
+      - "Counter-Strike: Global Offensive"
+    weights_path: "niches/gaming/models/crispy/csgo2.npz"
+    mask_path: "niches/gaming/models/crispy/csgo2-mask.png"
+    architecture: [10000, 120, 15, 2]
+    confidence_threshold: 0.90
+    input_resolution: [1920, 1080]
+    # Kill feed region — Crispy Box(50, 925, 100, 100, 20, stretch)
+    kill_feed_region:
+      box_x: 50
+      box_y: 925
+      box_width: 100
+      box_height: 100
+      shift_x: 20
+    preprocessing: "csgo2_edge_mask"
+    output_size: [100, 100]  # 100*100 = 10000 pixels (matches architecture[0])
+
+  overwatch:
+    game_names:
+      - "Overwatch 2"
+      - "Overwatch"
+      - "overwatch"
+    weights_path: "niches/gaming/models/crispy/overwatch.npz"
+    mask_path: null
+    architecture: [10000, 120, 15, 2]
+    confidence_threshold: 0.90
+    input_resolution: [1920, 1080]
+    # Kill feed region — Crispy Box(50, 490, 100, 100, 0, stretch)
+    kill_feed_region:
+      box_x: 50
+      box_y: 490
+      box_width: 100
+      box_height: 100
+      shift_x: 0
+    preprocessing: "overwatch_color_filter"
+    output_size: [100, 100]  # 100*100 = 10000 pixels (matches architecture[0])
