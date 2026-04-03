@@ -484,7 +484,7 @@ class ThreadsClient:
             return s
         # If path is not an HTTP URL, upload to CDN first
         from genlab_core.platforms.cdn_upload import upload_to_cdn
-        cdn_url = upload_to_cdn(Path(path))
+        cdn_url = upload_to_cdn(Path(path), require_external=True)
         if cdn_url:
             return cdn_url
         # CDN upload failed — return path as-is (will fail at API level)

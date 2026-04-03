@@ -104,7 +104,7 @@ class InstagramClient:
             _cdn_last_exc = None
             for _cdn_attempt in range(2):
                 try:
-                    cdn_url = upload_to_cdn(video_url)
+                    cdn_url = upload_to_cdn(video_url, require_external=True)
                     if cdn_url:
                         break
                 except Exception as _cdn_exc:
