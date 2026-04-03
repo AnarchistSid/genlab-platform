@@ -45,7 +45,7 @@ class AmazonOneLinkAdapter:
 class AmazonINAdapter:
     network_id: str = "amazon"
     display_name: str = "Amazon India"
-    default_tag: str = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "***REMOVED***")
+    default_tag: str = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "")
 
     def validate_url(self, url: str) -> bool:
         return "amazon.in" in url and "tag=" in url
@@ -81,7 +81,7 @@ class CuelinksAdapter:
     def generate_url(self, product_id: str, **kwargs) -> str:
         product_url = kwargs.get("product_url", "")
         if not product_url:
-            _tag = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "***REMOVED***")
+            _tag = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "")
             product_url = f"https://www.amazon.in/dp/{product_id}?tag={_tag}"
         encoded = urllib.parse.quote(product_url, safe="")
         return f"https://linksredirect.com/?cid={self.publisher_id}&source=linkkit&url={encoded}"

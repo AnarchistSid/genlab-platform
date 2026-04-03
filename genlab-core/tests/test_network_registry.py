@@ -70,7 +70,7 @@ def test_validate_url_amazon():
 
 
 def test_validate_url_cuelinks():
-    url = "https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2F"
+    url = "https://linksredirect.com/?cid=000000&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2F"
     network = validate_affiliate_url(url)
     assert network == "cuelinks"
 

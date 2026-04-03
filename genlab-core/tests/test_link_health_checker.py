@@ -70,7 +70,7 @@ MINIMAL_CATALOG = {
                             "commission_pct": 5.0,
                         },
                         "cuelinks": {
-                            "url": "https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY",
+                            "url": "https://linksredirect.com/?cid=000000&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY",
                             "commission_pct": 7.5,
                         },
                         "earnkaro": {
@@ -127,7 +127,7 @@ class TestParseCatalogUrls:
         assert "https://www.amazon.com/dp/B0DJHG2VVS?tag=test-tag-20" in urls
         assert "https://www.amazon.in/dp/B0GKY7N6VY?tag=test-tag-21" in urls
         assert (
-            "https://linksredirect.com/?cid=***REMOVED***&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY"
+            "https://linksredirect.com/?cid=000000&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY"
             in urls
         )
 
