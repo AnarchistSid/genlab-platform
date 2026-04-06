@@ -1,5 +1,10 @@
 ops.aspirehub.ai {
     reverse_proxy localhost:5151
+
+    handle_path /webhooks/meta/* {
+        reverse_proxy localhost:8765
+    }
+
     encode gzip
 
     header {
