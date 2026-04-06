@@ -61,8 +61,6 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
-        # YouTube JS challenge solver: use node.js runtime (deno is broken as of 2026-03)
-        "--extractor-args", 'youtube:jsc_config={"runtimes":["node"]}',
         url,
     ]
     t0 = time.monotonic()
