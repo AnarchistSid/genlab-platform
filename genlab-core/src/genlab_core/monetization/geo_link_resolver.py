@@ -67,7 +67,7 @@ def _is_url_healthy(url: str) -> bool:
 
 def _is_placeholder(url: str) -> bool:
     """Return True if the URL is a placeholder that should be skipped."""
-    return not url or "example.com" in url
+    return not url or "example.com" in url or "${" in url
 
 
 def resolve_affiliate_link(

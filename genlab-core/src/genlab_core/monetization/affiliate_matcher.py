@@ -126,10 +126,25 @@ def _llm_match_product(
 
 
 def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
-    """Load the affiliate catalog YAML from disk."""
+    """Load the affiliate catalog YAML from disk.
+
+    Expands ``${ENV_VAR}`` placeholders in all affiliate URLs so that
+    tags like ``${AMAZON_US_AFFILIATE_TAG}`` resolve to their actual
+    values from the environment.
+    """
     path = catalog_path or _CATALOG_PATH
     with open(path, "r", encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        catalog = yaml.safe_load(fh)
+
+    # Expand ${...} env var placeholders in all network URLs
+    for niche_data in (catalog.get("niches") or {}).values():
+        for product in niche_data.get("products") or []:
+            for net_info in (product.get("networks") or {}).values():
+                url = net_info.get("url", "")
+                if "${" in url:
+                    net_info["url"] = os.path.expandvars(url)
+
+    return catalog
 
 
 def _keyword_hits(keywords: list, text_lower: str, *, return_matched: bool = False) -> int | tuple[int, list[str]]:
