@@ -21,10 +21,17 @@ Video-first viral content automation platform for short-form video reels.
 
 ```
 genlab-core/         Shared infrastructure (pipeline, platform clients, learning loop)
-channels/            Per-channel configurations (niche-specific YAML + thin strategy classes)
+BlackboxBrief/       AI/Tech news channel
+CriticalRush/        Gaming channel
+ClutchWire/          Sports channel
+SpliceReel/          Movies channel
+FrameDrift/          Anime channel
 dashboard/           Operations dashboard (React + Flask)
+deploy/              Cloud deployment configs (systemd, Docker, Caddy)
 scripts/             Shared automation scripts
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture documentation.
 
 ### Pipeline stages
 
@@ -82,7 +89,8 @@ All credentials go in `.env` files (never committed). See `.env.example` for the
 | Video | FFmpeg, yt-dlp |
 | Dashboard | React + Vite (frontend), Flask + Gunicorn (backend) |
 | Queue | Dramatiq + Redis |
-| Scheduling | launchd (macOS) |
+| Scheduling | systemd timers (cloud) |
+| Deployment | Hetzner Cloud, Docker, Caddy, Cloudflare |
 | CI | GitHub Actions (lint, test, secret scan) |
 
 ## Disclaimer

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Migrated all 31 services from macOS launchd to systemd on Hetzner Cloud
+- Pipeline scheduling now uses staggered systemd timers (90min apart)
+- Media storage moved to 50GB Hetzner Volume
+- Dashboard accessible at `review.aspirehub.ai` via Caddy + Cloudflare
+
+### Added
+- `deploy/` directory with systemd units, Docker Compose prod config, Caddy config
+- Server bootstrap script for one-time provisioning
+- yt-dlp cookie + Deno EJS solver config for YouTube downloads
+- Per-channel media symlinks to cloud volume
+
+### Fixed
+- pg_backup.sh: macOS-specific pg_dump path replaced with portable version
+- viral_detector.py: macOS osascript notification guarded with platform check
+- Engagement poller: populated channel IDs in config
+- FFmpeg installed on cloud server for video rendering
+
 ## [0.1.0] - 2026-04-04
 
 ### Added
