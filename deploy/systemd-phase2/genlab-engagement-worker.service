@@ -1,0 +1,23 @@
+[Unit]
+Description=GenLab Engagement Worker (Dramatiq)
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=exec
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/genlab-core
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+ExecStart=/opt/genlab/.venv/bin/python -m dramatiq \
+    genlab_core.engagement.tasks \
+    --queues engagement_high engagement_normal engagement_low \
+    --processes 1 --threads 2
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

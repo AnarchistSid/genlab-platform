@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Anime Pipeline (FrameDrift)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/FrameDrift
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/FrameDrift/runbooks/daily_intel.sh
+TimeoutSec=3600

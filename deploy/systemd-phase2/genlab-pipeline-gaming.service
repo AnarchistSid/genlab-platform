@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Gaming Pipeline (CriticalRush)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/CriticalRush
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/CriticalRush/runbooks/daily_intel.sh
+TimeoutSec=7200

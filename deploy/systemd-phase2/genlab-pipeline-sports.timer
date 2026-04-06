@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab Sports Pipeline Timer
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=GenLab Meta Webhook Receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/uvicorn \
+    genlab_core.engagement.webhook:app \
+    --host 127.0.0.1 --port 8765
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

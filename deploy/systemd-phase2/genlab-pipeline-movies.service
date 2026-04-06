@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Movies Pipeline (SpliceReel)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/SpliceReel
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/SpliceReel/runbooks/daily_intel.sh
+TimeoutSec=3600
