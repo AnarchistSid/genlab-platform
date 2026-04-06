@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab DB Maintenance Timer
+
+[Timer]
+OnCalendar=*-*-* 08:45:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

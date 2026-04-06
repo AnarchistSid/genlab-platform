@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab DB Maintenance
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+ExecStart=/opt/genlab/scripts/db_maintenance.sh
+TimeoutSec=300

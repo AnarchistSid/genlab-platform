@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab Engagement Poller
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=exec
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/genlab-core
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+Environment=ENGAGEMENT_DISPATCH=dramatiq
+ExecStart=/opt/genlab/.venv/bin/python \
+    /opt/genlab/genlab-core/scripts/run_engagement_poller.py \
+    --niche all --platform all
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
