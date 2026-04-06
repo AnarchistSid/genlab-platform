@@ -1,4 +1,4 @@
-ops.aspirehub.ai {
+review.aspirehub.ai {
     reverse_proxy localhost:5151
 
     handle_path /webhooks/meta/* {
