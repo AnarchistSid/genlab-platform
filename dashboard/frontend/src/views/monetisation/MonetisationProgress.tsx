@@ -98,7 +98,9 @@ function MetricRow({
   metric: MonetisationMetric;
   accentColor?: string;
 }) {
-  const pct = metric.pct_complete;
+  const rawPct = metric.pct_complete;
+  // API returns pct_complete as a ratio (0.0–1.0+), ProgressBar expects 0–100
+  const pct = rawPct != null ? rawPct * 100 : null;
   const cappedPct = pct != null ? Math.min(pct, 100) : 0;
 
   // Pick bar color: use accent when available, else fallback to status colors
@@ -664,9 +666,10 @@ export function MonetisationWidget({
     const niche = allNiches.find((n) => n.id === nicheId);
     const allMetrics = Object.values(platforms).flatMap((p) => p.metrics);
     const withTarget = allMetrics.filter((m) => m.target_value != null && m.pct_complete != null);
+    // pct_complete is a ratio (0.0–1.0+), convert to percentage for display
     const avgPct =
       withTarget.length > 0
-        ? withTarget.reduce((sum, m) => sum + (m.pct_complete ?? 0), 0) / withTarget.length
+        ? withTarget.reduce((sum, m) => sum + ((m.pct_complete ?? 0) * 100), 0) / withTarget.length
         : 0;
     return {
       nicheId,
