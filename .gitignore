@@ -6,6 +6,10 @@ __pycache__/
 dist/
 build/
 *.egg
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
 .venv/
@@ -62,6 +66,11 @@ OpenSandbox/
 
 # Brand assets at root level (copies live in channel assets/ dirs)
 *.png
+
+# Internal AI tooling
+CLAUDE.md
+*/CLAUDE.md
+.superpowers/
 
 # ── Added during public-readiness remediation (2026-04-03) ──
 
