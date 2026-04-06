@@ -35,14 +35,17 @@ TRENDING_THRESHOLD = 2.5       # 2.5x = trending
 
 
 def _send_notification(title: str, message: str):
-    """Send macOS notification."""
-    try:
-        subprocess.run([
-            "osascript", "-e",
-            f'display notification "{message}" with title "{title}" sound name "Glass"'
-        ], capture_output=True, timeout=5)
-    except Exception as e:
-        logger.warning("Failed to send notification: %s", e)
+    """Send desktop notification (macOS) or log alert (Linux)."""
+    if sys.platform == "darwin":
+        try:
+            subprocess.run([
+                "osascript", "-e",
+                f'display notification "{message}" with title "{title}" sound name "Glass"'
+            ], capture_output=True, timeout=5)
+        except Exception as e:
+            logger.warning("Failed to send notification: %s", e)
+    else:
+        logger.info("[VIRAL ALERT] %s — %s", title, message)
 
 
 def _load_baselines(niche_id: str | None = None) -> dict[str, float]:
