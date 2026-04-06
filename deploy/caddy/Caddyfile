@@ -1,0 +1,15 @@
+ops.aspirehub.ai {
+    reverse_proxy localhost:5151
+    encode gzip
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    log {
+        output file /opt/genlab/.logs/caddy_access.log
+        format json
+    }
+}
