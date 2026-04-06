@@ -14,7 +14,7 @@ review.aspirehub.ai {
     }
 
     log {
-        output file /opt/genlab/.logs/caddy_access.log
+        output file /var/log/caddy/access.log
         format json
     }
 }
