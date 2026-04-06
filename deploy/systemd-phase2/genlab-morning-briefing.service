@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Morning Briefing
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/morning_briefing.py
+TimeoutSec=600

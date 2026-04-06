@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Preference Collector
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.learning.preference_collector import collect_weekly_pairs; print(f'Pairs: {collect_weekly_pairs(window_days=7)}')"
+TimeoutSec=600

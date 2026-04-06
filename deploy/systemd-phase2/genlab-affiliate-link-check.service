@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Affiliate Link Checker
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/genlab-core/scripts/check_affiliate_links.py
+TimeoutSec=300

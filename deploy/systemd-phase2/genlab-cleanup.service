@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Media Cleanup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/scripts/cleanup_all.sh
+TimeoutSec=600

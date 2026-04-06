@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab PG Backup Timer
+
+[Timer]
+OnCalendar=*-*-* 01:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

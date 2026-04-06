@@ -1,0 +1,10 @@
+[Unit]
+Description=GenLab Viral Detector Timer
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=2h
+AccuracySec=5min
+
+[Install]
+WantedBy=timers.target

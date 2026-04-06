@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Viral Detector
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/viral_detector.py
+TimeoutSec=300

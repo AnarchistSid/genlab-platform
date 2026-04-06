@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab Audience Collector Timer
+
+[Timer]
+OnCalendar=*-*-* 14:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

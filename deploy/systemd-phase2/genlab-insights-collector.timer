@@ -1,0 +1,10 @@
+[Unit]
+Description=GenLab Insights Collector Timer
+
+[Timer]
+OnCalendar=*-*-* 06:45:00 UTC
+OnCalendar=*-*-* 12:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

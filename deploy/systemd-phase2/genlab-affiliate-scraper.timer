@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab Affiliate Scraper Timer
+
+[Timer]
+OnCalendar=*-*-* 12:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

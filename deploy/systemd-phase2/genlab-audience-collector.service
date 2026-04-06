@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Audience Collector
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scripts.collect_audience_metrics
+TimeoutSec=600

@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Affiliate Revenue Scraper
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/scrape_affiliate_revenue.py
+TimeoutSec=600

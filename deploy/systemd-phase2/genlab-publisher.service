@@ -1,0 +1,16 @@
+[Unit]
+Description=GenLab Publisher
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_platforms --niche all
+TimeoutSec=1800

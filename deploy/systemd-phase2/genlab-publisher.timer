@@ -1,0 +1,10 @@
+[Unit]
+Description=GenLab Publisher Timer
+
+[Timer]
+OnCalendar=*-*-* 06:35:00 UTC
+OnCalendar=*-*-* 10:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

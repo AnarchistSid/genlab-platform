@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Insights Collector
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/scripts/collect_all_insights.sh
+TimeoutSec=1800

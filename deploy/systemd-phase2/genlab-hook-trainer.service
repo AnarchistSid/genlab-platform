@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Hook Trainer
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scripts.train_hook_classifier
+TimeoutSec=300

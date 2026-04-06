@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab Morning Briefing Timer
+
+[Timer]
+OnCalendar=*-*-* 02:45:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
