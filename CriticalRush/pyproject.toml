@@ -1,6 +1,6 @@
 [project]
 name = "criticalrush"
-version = "1.0.0"
+version = "0.1.0"
 description = "Unified niche content runner — gaming pipeline"
 requires-python = ">=3.12"
 dependencies = [

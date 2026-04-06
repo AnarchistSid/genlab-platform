@@ -6,7 +6,7 @@ If you discover a security vulnerability in GenLab, please report it responsibly
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
-Instead, email **security@<your-domain>** with:
+Instead, email **security@aspirehub.ai** with:
 - A description of the vulnerability
 - Steps to reproduce
 - Potential impact

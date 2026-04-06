@@ -1,6 +1,6 @@
 [project]
 name = "framedrift"
-version = "1.0.0"
+version = "0.1.0"
 description = "FrameDrift — Anime content automation agent for Gen Lab"
 requires-python = ">=3.12"
 dependencies = [

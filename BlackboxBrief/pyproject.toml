@@ -1,6 +1,6 @@
 [project]
 name = "blackbox-brief"
-version = "1.0.0"
+version = "0.1.0"
 description = "Blackbox Brief — AI/Tech news content agent"
 requires-python = ">=3.12"
 dependencies = [

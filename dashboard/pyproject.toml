@@ -1,6 +1,6 @@
 [project]
 name = "genlab-dashboard"
-version = "1.0.0"
+version = "0.1.0"
 description = "Gen Lab Operations Dashboard — shared review server + React frontend"
 requires-python = ">=3.12"
 dependencies = [

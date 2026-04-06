@@ -1,0 +1,11 @@
+# Default owner
+* @AnarchistSid
+
+# Core library
+/genlab-core/ @AnarchistSid
+
+# Dashboard
+/dashboard/ @AnarchistSid
+
+# Deployment
+/deploy/ @AnarchistSid
