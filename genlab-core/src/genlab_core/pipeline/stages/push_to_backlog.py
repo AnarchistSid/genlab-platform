@@ -316,14 +316,37 @@ class PushToBacklog:
             logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
 
         # Collect titles for title-level dedup (Layer 4.5 + 5.5)
+        # Time-windowed: only recent titles contribute to dedup so ongoing
+        # series (anime episodes, game sequels) can be re-covered after the
+        # window expires.  URL-level dedup remains unbounded.
+        _TITLE_DEDUP_DAYS = 7
+        _title_cutoff = datetime.now(UTC) - timedelta(days=_TITLE_DEDUP_DAYS)
         existing_titles: set[str] = set()
         for s in _existing_stories_for_titles:
-            t = (s.get("fields", s).get("title") or "").strip().lower()
+            f = s.get("fields", s)
+            t = (f.get("title") or "").strip().lower()
             if t and len(t) > 10:
+                _created = f.get("created_at") or f.get("published_at") or ""
+                if _created:
+                    try:
+                        _dt = datetime.fromisoformat(str(_created).replace("Z", "+00:00"))
+                        if _dt < _title_cutoff:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
                 existing_titles.add(t)
         for rec in _cm_records_for_titles:
-            t = (rec.get("fields", rec).get("title") or "").strip().lower()
+            f = rec.get("fields", rec)
+            t = (f.get("title") or "").strip().lower()
             if t and len(t) > 10:
+                _created = f.get("first_seen") or f.get("last_seen") or ""
+                if _created:
+                    try:
+                        _dt = datetime.fromisoformat(str(_created).replace("Z", "+00:00"))
+                        if _dt < _title_cutoff:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
                 existing_titles.add(t)
 
         # Load titles from content_pool claimed by this niche (Layer 5.5)
@@ -575,6 +598,11 @@ class PushToBacklog:
                         "angle": (story.get("summary") or title)[:200],
                     }
 
+                    # LinUCB context fields — store for publish-time context building
+                    for ctx_key in ("duration_seconds", "view_velocity", "source_type", "relevance_score"):
+                        if story.get(ctx_key) is not None:
+                            fields[ctx_key] = story[ctx_key]
+
                     # Persist urgency classification for express lane publishing
                     urgency = story.get("urgency_classification", {})
                     if urgency:
@@ -612,7 +640,20 @@ class PushToBacklog:
                                 6, 30, tzinfo=UTC,
                             )
                         fields["scheduled_for"] = publish_time.isoformat()
-                    # clip_url and thumbnail_url intentionally omitted — not SharePoint columns
+                    # Store thumbnail_url for dashboard previews when local
+                    # renders are unavailable (e.g. on cloud dashboard server).
+                    thumb = story.get("thumbnail_url", "")
+                    if not thumb:
+                        thumb = story.get("cover_url", "")
+                    if not thumb and video_id:
+                        thumb = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+                    if not thumb:
+                        # Steam header image fallback
+                        app_id = story.get("steam_app_id")
+                        if app_id:
+                            thumb = f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg"
+                    if thumb:
+                        fields["thumbnail_url"] = thumb
 
                     client.blueprints.create(fields, typecast=True)
                     blueprints_pushed += 1

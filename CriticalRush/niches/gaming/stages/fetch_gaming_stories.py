@@ -136,6 +136,7 @@ class SteamSpikeFetcher:
                     "steam_app_id": app_id,
                     "igdb_game_id": None,
                     "developer": None,
+                    "thumbnail_url": f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
                 })
 
                 if len(stories) >= self._max_stories:
@@ -191,6 +192,8 @@ class TwitchTrendingFetcher:
             stories: list[dict[str, Any]] = []
             for rank, game in enumerate(games[:5], start=1):
                 score = round(1.0 - (rank - 1) * 0.18, 3)  # rank 1=1.0, 5=0.28
+                # Twitch provides box_art_url with {width}x{height} placeholders
+                box_art = (game.get("box_art_url") or "").replace("{width}", "285").replace("{height}", "380")
                 stories.append({
                     "title": game["name"],
                     "source": "twitch_trending",
@@ -201,6 +204,7 @@ class TwitchTrendingFetcher:
                     "steam_app_id": None,
                     "igdb_game_id": game.get("igdb_id") or game.get("id"),
                     "developer": None,
+                    "thumbnail_url": box_art or None,
                 })
 
             logger.info("[Twitch] Found %d trending games", len(stories))

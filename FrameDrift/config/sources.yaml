@@ -50,15 +50,48 @@ tier_3:
       weight: 0.65
 
 youtube_channels:
-  - name: "Muse Asia"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsnDtu-g18tDA4miYwurGQQ"
+  # --- Official studio/publisher channels ---
+  - name: "Crunchyroll"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6pGDc4bFGD1_36IKv3FnYg"
     type: "rss"
-    weight: 0.9
-    category: "anime_episodes"
-  - name: "AnimeUproar"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVtFOytbRpEvzLjpe6H_toQ"
+    weight: 0.95
+    category: "anime_official"
+  - name: "TOEI ANIMATION"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCLhgIX2L5ZCaWdlaxR_oTAg"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "Aniplex USA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGbshtvS9t-8CW11W7TooQg"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "MAPPA CHANNEL"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCjfAEJZdfbIjVHdo5yODfyQ"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "Bandai Namco Filmworks"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCeagNi3-wLiok3MWPIHAScw"
+    type: "rss"
+    weight: 0.80
+    category: "anime_official"
+  # --- Episode/clip distribution channels ---
+  - name: "Muse Indonesia"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxxnxya_32jcKj4yN1_kD7A"
     type: "rss"
     weight: 0.8
+    category: "anime_episodes"
+  - name: "Ani-One Asia"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0wNSTMWIL3qaorLx0jie6A"
+    type: "rss"
+    weight: 0.8
+    category: "anime_episodes"
+  # --- Community / analysis channels ---
+  - name: "Anime Corner"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCkWK1Q5jvyoGSm48QjzvFMQ"
+    type: "rss"
+    weight: 0.75
     category: "anime_news"
   - name: "Gigguk"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
@@ -70,56 +103,6 @@ youtube_channels:
     type: "rss"
     weight: 0.7
     category: "anime_analysis"
-  - name: "Crunchyroll"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UChnA74xRB4NQbP5ExdG0TAQ"
-    type: "rss"
-    weight: 0.95
-    category: "anime_official"
-  - name: "TOEI ANIMATION"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCpgm7kzm1eT4ZcxzggYRBQ"
-    type: "rss"
-    weight: 0.85
-    category: "anime_official"
-  - name: "Aniplex USA"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGbshtvS9t-8CW11W7TooQg"
-    type: "rss"
-    weight: 0.85
-    category: "anime_official"
-  - name: "MAPPA"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiJg7scGY2MCUzkNQ5RXXXQ"
-    type: "rss"
-    weight: 0.85
-    category: "anime_official"
-  - name: "Viz Media"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCoh01Siu36cB9MpRi-vNtKA"
-    type: "rss"
-    weight: 0.8
-    category: "anime_official"
-  - name: "Anime Corner"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCh8TBbhGJm0vFXVb7a7txlQ"
-    type: "rss"
-    weight: 0.75
-    category: "anime_news"
-  - name: "The Anime Man"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC7dF9qfBMXrSlaaFFDvV_Yg"
-    type: "rss"
-    weight: 0.7
-    category: "anime_reviews"
-  - name: "Trash Taste"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCRMr2mAnFYmpkdpFWJwEqkQ"
-    type: "rss"
-    weight: 0.65
-    category: "anime_culture"
-  - name: "Muse Indonesia"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxxnxya_32jcKj4yN1_kD7A"
-    type: "rss"
-    weight: 0.8
-    category: "anime_episodes"
-  - name: "Ani-One Asia"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0wNSTMWo4vwKP2N6kYVgxA"
-    type: "rss"
-    weight: 0.8
-    category: "anime_episodes"
 
 jikan:
   enabled: true
