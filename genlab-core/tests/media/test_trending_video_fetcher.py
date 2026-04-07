@@ -103,7 +103,7 @@ class TestFetchTrending:
     def test_filters_by_duration(self):
         f = _make_fetcher()
         short = f._parse_video(_make_api_video_item("short", duration="PT10S"), "test")
-        long_v = f._parse_video(_make_api_video_item("long", duration="PT10M"), "test")
+        long_v = f._parse_video(_make_api_video_item("long", duration="PT11M"), "test")
         good = f._parse_video(_make_api_video_item("good", duration="PT2M30S"), "test")
 
         with patch.object(f, "_fetch_most_popular", return_value=[short, long_v, good]), \

@@ -115,13 +115,26 @@ class TMDBFetcher:
     def _fetch_list(self, endpoint: str, source: str, limit: int) -> list[FilmStoryItem]:
         now_iso = datetime.now(UTC).isoformat()
 
-        with httpx.Client(timeout=self._timeout) as client:
-            resp = client.get(
-                f"{self.BASE}{endpoint}",
-                params={"api_key": self._api_key, "language": "en-US"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        data: dict[str, Any] = {}
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(timeout=self._timeout) as client:
+                    resp = client.get(
+                        f"{self.BASE}{endpoint}",
+                        params={"api_key": self._api_key, "language": "en-US"},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    break
+            except (httpx.ConnectError, httpx.ReadError, httpx.TimeoutException) as exc:
+                last_err = exc
+                if attempt < 2:
+                    import time
+                    time.sleep(2 ** attempt)
+                    logger.debug("[tmdb] %s attempt %d failed: %s — retrying", endpoint, attempt + 1, exc)
+        else:
+            raise last_err  # type: ignore[misc]
 
         items: list[FilmStoryItem] = []
         for movie in data.get("results", [])[:limit]:

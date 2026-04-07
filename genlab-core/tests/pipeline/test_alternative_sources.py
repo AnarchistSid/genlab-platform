@@ -119,6 +119,7 @@ class TestFetchTMDBTrailers:
         assert "tmdb_trailers_found" not in result.get("run_stats", {})
 
     def test_fetch_trailer_ids_filters_official_youtube(self):
+        import genlab_core.pipeline.stages.fetch_tmdb_trailers as _mod
         from genlab_core.pipeline.stages.fetch_tmdb_trailers import _fetch_movie_trailer_ids
         mock_videos = {
             "results": [
@@ -127,13 +128,19 @@ class TestFetchTMDBTrailers:
                 {"key": "vm_trailer", "site": "Vimeo", "type": "Trailer", "official": True},
             ]
         }
-        with patch("genlab_core.pipeline.stages.fetch_tmdb_trailers.requests.get") as mock_get:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_resp.json.return_value = mock_videos
-            mock_get.return_value = mock_resp
+        mock_session = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = mock_videos
+        mock_session.get.return_value = mock_resp
 
+        # Reset module-level session singleton and inject mock
+        old_session = getattr(_mod, "_tmdb_session", None)
+        _mod._tmdb_session = mock_session
+        try:
             result = _fetch_movie_trailer_ids("fake_key", [{"id": 1, "title": "Test Movie"}])
+        finally:
+            _mod._tmdb_session = old_session
 
         assert len(result) == 1
         assert result[0]["video_id"] == "yt_official"

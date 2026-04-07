@@ -16,14 +16,16 @@ def _make_records(
     platform: str = "youtube",
 ):
     """Create n PendingFeedbackTask objects with given hook_type and reward."""
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
+    # Use dates relative to now so records always fall within the 30-day window
+    base = datetime.now(UTC) - timedelta(days=7)
     return [
         PendingFeedbackTask(
             content_id=f"s{i}",
             platform=platform,
             niche_id="gaming",
-            published_at=datetime(2026, 3, i % 28 + 1, 12, 0, tzinfo=UTC),
+            published_at=base - timedelta(hours=i * 6),
             platform_post_id=f"post_{i}",
             hook_type=hook_type,
             content_type=hook_type,

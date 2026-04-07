@@ -56,7 +56,7 @@ class TestDetectSpikes:
             [5] * 10,     # stable rank
         )
         current = {"123": {"name": "TestGame", "players": 1050, "rank": 5}}
-        spikes, _ = detect_spikes.fn(current, state)
+        spikes, _ = detect_spikes(current, state)
         assert len(spikes) == 0
 
     def test_spike_on_massive_increase(self):
@@ -68,7 +68,7 @@ class TestDetectSpikes:
         )
         # 5x player count + rank jump from 8 to 1
         current = {"456": {"name": "SpikyGame", "players": 5000, "rank": 1}}
-        spikes, _ = detect_spikes.fn(current, state)
+        spikes, _ = detect_spikes(current, state)
         assert len(spikes) == 1
         assert spikes[0]["name"] == "SpikyGame"
         assert spikes[0]["z_score"] > Z_SCORE_THRESHOLD
@@ -86,7 +86,7 @@ class TestDetectSpikes:
             "triggered": {},
         }
         current = {"789": {"name": "NewGame", "players": 10000, "rank": 1}}
-        spikes, _ = detect_spikes.fn(current, state)
+        spikes, _ = detect_spikes(current, state)
         assert len(spikes) == 0
 
     def test_cooldown_prevents_retrigger(self):
@@ -99,7 +99,7 @@ class TestDetectSpikes:
         )
         state["triggered"]["111"] = time.time()  # just triggered
         current = {"111": {"name": "CooldownGame", "players": 5000, "rank": 1}}
-        spikes, _ = detect_spikes.fn(current, state)
+        spikes, _ = detect_spikes(current, state)
         assert len(spikes) == 0
 
     def test_state_updated_after_detection(self):
@@ -110,7 +110,7 @@ class TestDetectSpikes:
             [5] * 10,
         )
         current = {"222": {"name": "UpdateGame", "players": 1100, "rank": 5}}
-        _, updated = detect_spikes.fn(current, state)
+        _, updated = detect_spikes(current, state)
         # History should have 11 entries now
         assert len(updated["games"]["222"]["history"]) == 11
 

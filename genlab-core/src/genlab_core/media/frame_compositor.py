@@ -403,6 +403,9 @@ class FrameCompositor:
         Returns (filter_chain_str, final_label).
         """
         hook_lines = self._wrap_hook(hook)
+        if not hook_lines:
+            # Empty hook — pass through to keep the filtergraph connected
+            return f"[{prev_label}]copy[withhook];", "withhook"
         num_lines = len(hook_lines)
         filters = ""
         for i, line in enumerate(hook_lines):
@@ -549,6 +552,75 @@ class FrameCompositor:
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
             + self._output_flags(crf, preset, fps) + [out]
         )
+
+    # --- Overlay branding on already-composed video ----------------------
+
+    def overlay_branding(
+        self,
+        source_video_path: str,
+        hook_text: str,
+        output_path: str,
+        duration_seconds: float | None = None,
+        crf: int = 15,
+        preset: str | None = None,
+    ) -> str:
+        """Burn logo + channel name + handle + hook onto an already-composed video.
+
+        Unlike compose(), this does NOT re-layout the video — it overlays
+        branding elements directly on top. Use for compilation videos that
+        are already 1080x1920 but need channel branding burned in.
+
+        Uses the LANDSCAPE branding positions (logo+name above center,
+        hook text below) since compilations use landscape-style centering.
+        """
+        ff = self.branding.ffmpeg
+        if preset is None:
+            preset = ff.preset
+
+        if len(hook_text) > HOOK_MAX_CHARS:
+            hook_text = hook_text[:HOOK_MAX_CHARS - 3] + "..."
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
+        font_bold, font_reg, font_hook = self._resolve_fonts()
+        has_logo = self.branding.logo_path and os.path.exists(self.branding.logo_path)
+        dur_flags = self._duration_flags(duration_seconds)
+
+        # Build branding filters on top of the source video
+        branding, _ = self._build_branding_filters(
+            font_bold, font_reg, L_LOGO_Y, "base"
+        )
+        hooks, _ = self._build_hook_filters(hook_text, L_HOOK_Y, font_hook, "withhandle")
+        flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
+
+        # Source video becomes [base] directly (no re-layout)
+        video_filter = "[0:v]copy[base];"
+        filtergraph = f"{video_filter}{branding}{hooks}{flash}"
+
+        inputs = ["-i", source_video_path]
+        if has_logo:
+            inputs += ["-i", self.branding.logo_path]
+
+        cmd = (
+            ["ffmpeg", "-y"] + inputs + dur_flags
+            + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
+            + self._output_flags(crf, preset, 30) + [output_path]
+        )
+
+        logger.info(
+            f"[{self.branding.niche_id}] Overlaying branding on compilation: "
+            f"{' '.join(cmd[:8])}..."
+        )
+        try:
+            run_ffmpeg(cmd, timeout=ff.timeout_seconds, fallback_preset=ff.fallback_preset)
+        except subprocess.CalledProcessError as exc:
+            logger.error(f"FFmpeg branding overlay failed:\n{(exc.stderr or '')[-2000:]}")
+            raise RuntimeError(
+                f"FFmpeg branding overlay failed: {(exc.stderr or '')[-500:]}"
+            ) from exc
+
+        logger.info(f"[{self.branding.niche_id}] Branded -> {output_path}")
+        return output_path
 
     # --- Helpers -------------------------------------------------------
 
