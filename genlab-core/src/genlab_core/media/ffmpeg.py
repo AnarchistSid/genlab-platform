@@ -169,11 +169,11 @@ MASTER_SPEC = RenderSpec(
 
 PLATFORM_SPECS: dict[Platform, RenderSpec] = {
     Platform.YOUTUBE: RenderSpec(
-        codec="libx265",
+        codec="libx264",  # x265 OOMs on 4GB VPS; x264 is safe and YouTube re-encodes anyway
         fps="source",  # 60fps gaming preserved through to YouTube
         audio_bitrate="320k",
         crf=18,
-        preset="slow",
+        preset="medium",  # slow + x264 is diminishing returns for YouTube
     ),
     Platform.INSTAGRAM: RenderSpec(
         codec="libx264",

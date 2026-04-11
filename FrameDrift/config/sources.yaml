@@ -155,7 +155,7 @@ cross_mention:
 
 google_trends:
   enabled: true
-  stub_mode: true  # pytrends 4.9.2 returns 404 — leave stubbed until upstream fix
+  stub_mode: false  # pytrends verified working on VPS (2026-04-11)
   timeframe: "now 1-d"
   geo: ""
   category: 185

@@ -711,7 +711,7 @@ def run_publish(
         }
         for future in futures:
             try:
-                platform, result = future.result(timeout=300)  # 5-min max per platform
+                platform, result = future.result(timeout=600)  # 10-min max per platform
             except TimeoutError:
                 platform = futures[future]
                 result = PublishResult(

@@ -26,7 +26,7 @@ from genlab_core.platforms.models import (
 logger = logging.getLogger(__name__)
 
 # Poll config (kept short for tests; real use is fine because it's mocked)
-_DEFAULT_MAX_POLL_SECONDS = 120
+_DEFAULT_MAX_POLL_SECONDS = 480
 _POLL_INTERVAL_INITIAL = 5
 _POLL_INTERVAL_SLOW = 10
 _POLL_SLOWDOWN_AFTER = 30

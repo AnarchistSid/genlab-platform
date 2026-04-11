@@ -289,7 +289,10 @@ class PushToBacklog:
             # parser has a parameter ordering bug with mixed > and = operators.
             from hashlib import sha256 as _sha256
             from datetime import datetime, timedelta, timezone as _tz
-            _dedup_cutoff = datetime.now(_tz.utc) - timedelta(days=14)
+            _dedup_days = context.get("niche_config", {}).get(
+                "pipeline", {}
+            ).get("dedup_window_days", 14)
+            _dedup_cutoff = datetime.now(_tz.utc) - timedelta(days=_dedup_days)
             existing_stories = client.stories.all(
                 formula=f"{{niche_id}}='{niche_id}'",
                 max_records=2000,

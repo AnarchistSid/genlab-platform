@@ -500,14 +500,21 @@ def fetch_rss(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
     last_err = None
     for attempt in range(1, retries + 1):
         try:
-            # P2.1: feedparser 6.x uses urllib internally with no timeout kwarg.
-            # Set socket-level default timeout to prevent hanging on unresponsive feeds.
-            old_timeout = socket.getdefaulttimeout()
+            # P2.1: feedparser's internal urllib gets blocked by Reddit/Cloudflare.
+            # Use requests for the HTTP fetch, then parse the response text.
+            import requests as _req
             try:
-                socket.setdefaulttimeout(30)
-                feed = feedparser.parse(url, request_headers={"User-Agent": "GenLab-Fetcher/1.0"})
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+                resp = _req.get(url, headers={"User-Agent": "GenLab-Fetcher/1.0"}, timeout=30)
+                resp.raise_for_status()
+                feed = feedparser.parse(resp.text)
+            except _req.RequestException:
+                # Fall back to feedparser's built-in fetcher
+                old_timeout = socket.getdefaulttimeout()
+                try:
+                    socket.setdefaulttimeout(30)
+                    feed = feedparser.parse(url, request_headers={"User-Agent": "GenLab-Fetcher/1.0"})
+                finally:
+                    socket.setdefaulttimeout(old_timeout)
             if feed.bozo and not feed.entries:
                 raise RuntimeError(f"Feed parse error: {feed.bozo_exception}")
             if feed.bozo and feed.entries:
