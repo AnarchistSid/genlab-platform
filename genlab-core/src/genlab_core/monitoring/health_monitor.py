@@ -112,9 +112,11 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
         )
         # Auto-fix: try updating yt-dlp
         try:
+            _uv = os.environ.get("UV_PATH", "/usr/local/bin/uv")
             result = subprocess.run(
-                ["pip", "install", "--upgrade", "yt-dlp"],
+                [_uv, "pip", "install", "--upgrade", "yt-dlp"],
                 capture_output=True, text=True, timeout=60,
+                cwd=os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab"),
             )
             alert.auto_fix = f"yt-dlp update: {'success' if result.returncode == 0 else 'failed'}"
         except Exception as e:
