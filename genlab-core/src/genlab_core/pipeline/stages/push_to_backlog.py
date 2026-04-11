@@ -285,21 +285,37 @@ class PushToBacklog:
         try:
             # Load URL hashes from recent stories (rolling 14-day window).
             # All-time dedup causes content starvation as the story pool grows.
+            # NOTE: Date filtering is done in Python because the formula_sql
+            # parser has a parameter ordering bug with mixed > and = operators.
             from hashlib import sha256 as _sha256
             from datetime import datetime, timedelta, timezone as _tz
-            _dedup_cutoff = (datetime.now(_tz.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            _dedup_formula = f"AND({{niche_id}}='{niche_id}', {{created_at}}>'{_dedup_cutoff}')"
+            _dedup_cutoff = datetime.now(_tz.utc) - timedelta(days=14)
             existing_stories = client.stories.all(
-                formula=_dedup_formula,
+                formula=f"{{niche_id}}='{niche_id}'",
                 max_records=2000,
             )
-            _existing_stories_for_titles = existing_stories
+            # Filter to last 14 days in Python
+            _recent_stories = []
             for s in existing_stories:
+                fields = s.get("fields", s)
+                created = fields.get("created_at")
+                if created:
+                    if isinstance(created, str):
+                        try:
+                            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                        except (ValueError, TypeError):
+                            created = None
+                    if created and created >= _dedup_cutoff:
+                        _recent_stories.append(s)
+                else:
+                    _recent_stories.append(s)
+            _existing_stories_for_titles = _recent_stories
+            for s in _recent_stories:
                 url = (s.get("fields", s).get("url") or "").strip()
                 if url:
                     seen_urls.add(_sha256(url.encode()).hexdigest()[:16])
-            if existing_stories:
-                logger.info("[PUSH] Loaded %d existing story URL hashes for cross-run dedup", len(seen_urls))
+            logger.info("[PUSH] Loaded %d/%d story URL hashes for cross-run dedup (14d window)",
+                        len(seen_urls), len(existing_stories))
         except Exception as e:
             logger.debug("[PUSH] Could not load existing story URLs: %s", e)
 
