@@ -283,10 +283,14 @@ class PushToBacklog:
         _existing_stories_for_titles: list = []
         _cm_records_for_titles: list = []
         try:
-            # Load URL hashes from existing stories (catches recurring sources)
+            # Load URL hashes from recent stories (rolling 14-day window).
+            # All-time dedup causes content starvation as the story pool grows.
             from hashlib import sha256 as _sha256
+            from datetime import datetime, timedelta, timezone as _tz
+            _dedup_cutoff = (datetime.now(_tz.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            _dedup_formula = f"AND({{niche_id}}='{niche_id}', {{created_at}}>'{_dedup_cutoff}')"
             existing_stories = client.stories.all(
-                formula=f"{{niche_id}}='{niche_id}'",
+                formula=_dedup_formula,
                 max_records=2000,
             )
             _existing_stories_for_titles = existing_stories

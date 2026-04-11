@@ -45,7 +45,7 @@ video_sourcing:
   strategy: trending_youtube
   niche_category: ai_creators
   max_age_hours: 48
-  top_n_per_run: 8
+  top_n_per_run: 15
   min_view_velocity: 200
   use_google_trends: true
   video_gate: require
@@ -106,5 +106,5 @@ pipeline:
     - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
     - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
     - class: genlab_core.pipeline.stages.run_report.RunReport
-  max_items_per_run: 5
+  max_items_per_run: 10
   min_score_threshold: 0.25
