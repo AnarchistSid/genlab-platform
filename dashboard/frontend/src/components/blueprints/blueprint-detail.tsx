@@ -72,7 +72,9 @@ export function BlueprintDetail({ blueprintId, onClose }: BlueprintDetailProps) 
 
   const slides = Array.isArray(blueprint?.slide_previews) ? blueprint.slide_previews : undefined;
   const videoUrl = blueprint?.visual_paths ?? undefined;
-  const hasVideo = Boolean(videoUrl);
+  const hasVideo = Boolean(videoUrl && isVideoUrl(videoUrl));
+  // When visual_paths is an HTTP image URL (e.g. Steam/YouTube CDN), show it as an image
+  const hasImagePreview = Boolean(videoUrl?.startsWith("http") && !isVideoUrl(videoUrl));
   const hasSlides = slides && slides.length > 0 && !isVideoUrl(slides[0]?.url);
 
   const captionText = blueprint?.caption ?? "";
@@ -129,6 +131,13 @@ export function BlueprintDetail({ blueprintId, onClose }: BlueprintDetailProps) 
                   <CarouselViewer
                     images={slides!.map((s) => ({ url: s.url }))}
                     className="rounded-lg"
+                  />
+                ) : hasImagePreview ? (
+                  <img
+                    src={videoUrl}
+                    alt={blueprint?.hook_text ?? "Preview"}
+                    className="w-full rounded-lg bg-bg-surface object-cover"
+                    onError={() => setVideoError(true)}
                   />
                 ) : hasVideo && !videoError ? (
                   <video

@@ -103,6 +103,42 @@ youtube_channels:
     type: "rss"
     weight: 0.7
     category: "anime_analysis"
+  # --- Added Sprint 69: community + distributor channels ---
+  - name: "Trash Taste Highlights"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCry1ZVKLslbZXuQgsf-3TXg"
+    type: "rss"
+    weight: 0.75
+    category: "anime_community"
+  - name: "TheAnimeMan"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3ETCazlHenpXEsrEJH-k5A"
+    type: "rss"
+    weight: 0.7
+    category: "anime_reviews"
+  - name: "Nux Taku"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBBU7zUOhR_qShfMV26UUCA"
+    type: "rss"
+    weight: 0.7
+    category: "anime_community"
+  - name: "Chibi Reviews"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfGmaA-nXPryTfimsnkLieQ"
+    type: "rss"
+    weight: 0.7
+    category: "anime_reviews"
+  - name: "VIZ Media"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCV1da9peoqEwqr45bpTJsbQ"
+    type: "rss"
+    weight: 0.85
+    category: "anime_official"
+  - name: "KADOKAWAanime"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCY5fcqgSrQItPAX_Z5Frmwg"
+    type: "rss"
+    weight: 0.8
+    category: "anime_official"
+  - name: "Netflix Anime"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBSs9x2KzSLhyyA9IKyt4YA"
+    type: "rss"
+    weight: 0.8
+    category: "anime_official"
 
 jikan:
   enabled: true
@@ -173,6 +209,31 @@ reddit_sources:
   - subreddit: r/MyHeroAcademia
     min_score: 500
     time_filter: day
+    content_type: video
+  # --- Added Sprint 69: currently popular shows ---
+  - subreddit: r/Frieren
+    min_score: 300
+    time_filter: day
+    content_type: video
+  - subreddit: r/DanDaDan
+    min_score: 300
+    time_filter: day
+    content_type: video
+  - subreddit: r/OshiNoKo
+    min_score: 400
+    time_filter: day
+    content_type: video
+  - subreddit: r/KaijuNo8
+    min_score: 300
+    time_filter: day
+    content_type: video
+  - subreddit: r/SakamotoDays
+    min_score: 200
+    time_filter: day
+    content_type: video
+  - subreddit: r/ShingekiNoKyojin
+    min_score: 500
+    time_filter: week
     content_type: video
 
 # Extra RSS feeds — episode drops and rankings

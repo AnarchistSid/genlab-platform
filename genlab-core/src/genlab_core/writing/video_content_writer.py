@@ -99,9 +99,16 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "tech-curious people aged 22-45",
         "ctas": [
-            "What do you think?", "Would you use this?",
-            "Better than the original?", "Share your results 👀",
-            "Try this yourself", "Thoughts? 👇",
+            "Follow for daily AI drops",
+            "Save this before it blows up",
+            "Tag someone who needs to see this",
+            "Drop your hot take below",
+            "Which tool are you switching to?",
+            "Try this and report back",
+            "Name a better demo — we'll wait",
+            "This changes everything and nobody's talking about it",
+            "The future just got weird",
+            "Share your results in the comments",
         ],
         "hashtags": ["#AI", "#ArtificialIntelligence", "#Tech", "#MachineLearning"],
     },
@@ -145,7 +152,9 @@ def write_video_content(
         f"Audience: {voice['audience']}\n\n"
         "You are writing content FOR a video that's already going viral.\n"
         "Reference what's actually happening in the video — be specific.\n"
-        "Never use generic templates like \"something big happened\".\n\n"
+        "Never use generic templates like \"something big happened\".\n"
+        "If the video is NOT relevant to the channel's niche, return an empty hook\n"
+        "to signal it should be skipped. Do NOT force irrelevant content.\n\n"
         "STRICT CHARACTER LIMITS (enforced — content will be truncated if exceeded):\n"
         "- hook: ≤60 characters. Story-specific, creates curiosity. NO generic phrases.\n"
         "- instagram_caption: EXACTLY 150-180 characters of body text, then a line break,\n"

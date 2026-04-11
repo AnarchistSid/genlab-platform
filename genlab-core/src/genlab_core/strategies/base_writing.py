@@ -302,8 +302,17 @@ class BaseWritingStrategy(WritingStrategy):
                         clip_index,
                     )
                     hook = story.get("content", {}).get("hook", "")
-                    if hook:
-                        existing_hooks.append(hook)
+                    if not hook:
+                        # LLM returned empty hook — story is off-topic or unwritable.
+                        # Mark for skip so downstream stages ignore it.
+                        story["_skip_llm"] = True
+                        logger.info(
+                            "[%s] LLM returned empty hook, marking skip: %s",
+                            self._niche_id,
+                            story.get("title", "")[:60],
+                        )
+                        continue
+                    existing_hooks.append(hook)
                     llm_count += 1
                 else:
                     self._write_story_template(story)

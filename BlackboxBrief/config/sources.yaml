@@ -41,6 +41,19 @@ youtube_channels:
     name: "Corridor Crew"
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC9PBzalIcEQCsiIkq36PyUA"
     name: "Digital Foundry"
+  # --- Added Sprint 69: more AI creator channels ---
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsBjURrPoezykLs9EqgamOA"
+    name: "Fireship"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCbfYPyITQ-7l4upoX8nvctg"
+    name: "Two Minute Papers"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCR9j1jqqB5Rse69wjUnbYwA"
+    name: "All About AI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2WmuBuFq6gL08QYG-JjXKw"
+    name: "WorldofAI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCHhYXsLBEVVnbvsq57n1MTQ"
+    name: "The AI Advantage"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCf4tGwyNQGyFWX3F-9rUk9A"
+    name: "Prompt Engineering"
 
 google_trends:
   stub_mode: false
@@ -273,6 +286,79 @@ sources:
     enabled: true
     requires_auth: false
 
+  # ── Added Sprint 69: more Reddit AI communities ─────────────────
+  - source_id: "SRC_REDDIT_LOCALLLAMA_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/LocalLLaMA/new/.rss"
+    type: "rss"
+    priority: 0.88
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["local_llm", "open_source"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_LOCALLLAMA_TOP"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/LocalLLaMA/top/.rss?t=week"
+    type: "rss"
+    priority: 0.87
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["local_llm", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_SINGULARITY_TOP"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/singularity/top/.rss?t=week"
+    type: "rss"
+    priority: 0.82
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["ai_culture", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_CHATGPT_TOP"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/ChatGPT/top/.rss?t=week"
+    type: "rss"
+    priority: 0.80
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["chatgpt", "viral"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_VEO_NEW"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/veo/new/.rss"
+    type: "rss"
+    priority: 0.84
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["veo", "ai_video"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_REDDIT_VEO_TOP"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/veo/top/.rss?t=week"
+    type: "rss"
+    priority: 0.83
+    content_type: "showcase"
+    creator_source: true
+    media_required: true
+    creator_tags: ["veo", "viral"]
+    enabled: true
+    requires_auth: false
+
   # ── AI news RSS feeds (Sprint 45 C6: diversify beyond Reddit) ────
   # NOTE: These are not creator sources. With creator_only_mode: true,
   # they provide story context but won't produce visual-first candidates.
@@ -310,6 +396,31 @@ sources:
     creator_source: false
     media_required: false
     creator_tags: ["ai_creators", "tech_review"]
+    enabled: true
+    requires_auth: false
+
+  # ── Added Sprint 69: more AI news RSS ──────────────────────────
+  - source_id: "SRC_RSS_TECHCRUNCH_AI"
+    platform: "rss"
+    url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+    type: "rss"
+    priority: 0.91
+    content_type: "news"
+    creator_source: false
+    media_required: false
+    creator_tags: ["ai_creators", "techcrunch"]
+    enabled: true
+    requires_auth: false
+
+  - source_id: "SRC_RSS_VERGE_AI"
+    platform: "rss"
+    url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+    type: "rss"
+    priority: 0.89
+    content_type: "news"
+    creator_source: false
+    media_required: false
+    creator_tags: ["ai_creators", "verge"]
     enabled: true
     requires_auth: false
 
@@ -752,6 +863,9 @@ content_filter:
     - yoga
     - recipe
     - mukbang
+    - asmr
+    - unboxing
+    - haul
     # Gaming content (belongs in CriticalRush, not BB)
     - gameplay
     - playstation
@@ -783,3 +897,27 @@ content_filter:
     - box office
     - anime fight
     - manga chapter
+    - naruto
+    - konoha
+    - one piece
+    - dragon ball
+    - jujutsu kaisen
+    - demon slayer
+    # Automotive / non-tech hardware
+    - electric vehicle
+    - ev truck
+    - car review
+    - road test
+    - horsepower
+    # Finance / business
+    - stock market
+    - share price
+    - nifty
+    - sensex
+    - mutual fund
+    - cryptocurrency
+    # Politics
+    - trump
+    - election
+    - congress
+    - parliament

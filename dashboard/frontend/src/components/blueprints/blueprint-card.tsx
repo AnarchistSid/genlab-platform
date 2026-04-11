@@ -75,9 +75,14 @@ export function BlueprintCard({
   );
 
   const slides = blueprint.slide_previews;
-  const thumbnail = Array.isArray(slides) ? slides[0]?.url : undefined;
+  const slideThumbnail = Array.isArray(slides) ? slides[0]?.url : undefined;
   const videoUrl = blueprint.visual_paths ?? undefined;
   const isVideo = Boolean(videoUrl?.endsWith(".mp4") || videoUrl?.endsWith(".webm"));
+  // When visual_paths is an HTTP image URL (e.g. Steam CDN thumbnail), use it as the thumbnail
+  const isImageUrl = Boolean(
+    videoUrl?.startsWith("http") && !isVideo
+  );
+  const thumbnail = slideThumbnail ?? (isImageUrl ? videoUrl : undefined);
   const priorityScore = blueprint.priority_score;
   const cost = blueprint.generation_cost_usd;
   const pps = blueprint.platform_publish_status;

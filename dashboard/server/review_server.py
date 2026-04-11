@@ -422,7 +422,7 @@ def _add_security_headers(response):
             "default-src 'self'; "
             "script-src 'self'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "img-src 'self' data: blob: https://i.ytimg.com; "
+            "img-src 'self' data: blob: https://i.ytimg.com https://cdn.akamai.steamstatic.com https://*.steamstatic.com; "
             "media-src 'self' blob:; "
             f"connect-src 'self' wss://review.aspirehub.ai ws://localhost:{_DEFAULT_PORT}; "
             "font-src 'self' https://fonts.gstatic.com; "
@@ -1098,9 +1098,16 @@ def _resolve_video_url(blueprint: dict) -> str | None:
         elif isinstance(vp, list) and vp:
             rendered_path = vp[0]
 
-    if tunnel_base and rendered_path and isinstance(rendered_path, str):
-        filename = os.path.basename(rendered_path)
-        return f"{tunnel_base}/cdn/{filename}"
+    if rendered_path and isinstance(rendered_path, str):
+        # Convert absolute filesystem path to a relative /api/media/ URL.
+        # The /api/media/ endpoint resolves files under GENLAB_ROOT.
+        rel_path = None
+        for prefix in (str(GENLAB_ROOT), str(PROJECT_ROOT), "/opt/genlab"):
+            if rendered_path.startswith(prefix):
+                rel_path = rendered_path[len(prefix):].lstrip("/")
+                break
+        if rel_path:
+            return f"/api/media/{rel_path}"
 
     # 3. Fall back to streaming endpoint
     blueprint_id = fields.get("candidate_id") or blueprint.get("id")
@@ -1161,14 +1168,20 @@ def stream_video(blueprint_id):
             except (json.JSONDecodeError, TypeError):
                 pass
 
+    # Thumbnail redirect allowlist — shared by both "no video" and "video cleaned up" paths
+    _allowed_redirect_domains = {
+        "i.ytimg.com",
+        "cdn.akamai.steamstatic.com",
+        "cdn.cloudflare.steamstatic.com",
+        "image.tmdb.org",
+    }
+    if _tunnel_url:
+        _allowed_redirect_domains.add(urlparse(_tunnel_url).hostname or "")
+
     if not video_path or not isinstance(video_path, str):
         # No video path — redirect to thumbnail if available
         thumb = fields.get("thumbnail_url")
         if thumb and isinstance(thumb, str) and thumb.startswith("http"):
-            # Validate redirect domain to prevent open redirect
-            _allowed_redirect_domains = {"i.ytimg.com"}
-            if _tunnel_url:
-                _allowed_redirect_domains.add(urlparse(_tunnel_url).hostname or "")
             parsed_thumb = urlparse(thumb)
             if parsed_thumb.hostname in _allowed_redirect_domains:
                 return redirect(thumb)
@@ -1204,10 +1217,12 @@ def stream_video(blueprint_id):
                 return _api_error(error="Access denied", code=403)
             resolved = fallback
         else:
-            # Video cleaned up — redirect to YouTube thumbnail if available
+            # Video cleaned up — redirect to thumbnail if available
             thumb = fields.get("thumbnail_url")
             if thumb and isinstance(thumb, str) and thumb.startswith("http"):
-                return redirect(thumb)
+                parsed_thumb2 = urlparse(thumb)
+                if parsed_thumb2.hostname in _allowed_redirect_domains:
+                    return redirect(thumb)
             return _placeholder_image()
 
     mime = mimetypes.guess_type(str(resolved))[0] or "video/mp4"

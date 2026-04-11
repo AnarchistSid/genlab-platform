@@ -20,6 +20,19 @@ function VideoWithFallback({ src, className, ...props }: React.ComponentProps<"v
     );
   }
 
+  // When src is an HTTP image URL (e.g. Steam CDN thumbnail, YouTube CDN),
+  // render as <img> instead of <video> which would silently fail.
+  if (src.startsWith("http") && !isVideoUrl(src)) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={cn("object-cover", className)}
+        onError={() => setError(true)}
+      />
+    );
+  }
+
   return (
     <video
       src={src}

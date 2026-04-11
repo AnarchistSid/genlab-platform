@@ -119,11 +119,14 @@ NICHE_SEARCH_KEYWORDS: dict[str, list[str]] = {
         "box office this week",
     ],
     "anime": [
+        "anime trailer official",
         "anime fight scene new",
+        "anime pv 2026",
         "anime clip viral",
+        "new anime season announced",
+        "anime opening full",
         "anime moment trending",
         "anime episode reaction",
-        "new anime opening",
     ],
     "ai_creators": [
         "AI demo new",
@@ -139,7 +142,7 @@ MIN_VIEW_VELOCITY: dict[str, float] = {
     "gaming": 200,
     "sports": 800,
     "movies": 300,
-    "anime": 400,
+    "anime": 100,      # Lowered: official studio PVs gain traction slowly
     "ai_creators": 150,
 }
 
@@ -319,11 +322,21 @@ class TrendingVideoFetcher:
         # and enriched here via videos.list (1 unit per 50).
 
         # Strategy 4 (fallback): Keyword search — ONLY if explicitly enabled
-        if allow_keyword_search and len(candidates) < 3:
+        # For niches without a YouTube category (anime), keyword search is
+        # essential — RSS alone returns stale content that dedup rejects.
+        _has_category = niche_id in YOUTUBE_CATEGORIES
+        _needs_keyword_search = (
+            allow_keyword_search
+            and (len(candidates) < 3 or not _has_category)
+        )
+        if _needs_keyword_search:
             keywords = list(NICHE_SEARCH_KEYWORDS.get(niche_id, []))
             if extra_keywords:
                 keywords = list(extra_keywords[:3]) + keywords
-            for keyword in keywords[:2]:  # Cap at 2 = 200 units max
+            # Niches without a category get 3 searches (more diversity needed);
+            # niches with a category keep the original 2-search cap.
+            _max_searches = 3 if not _has_category else 2
+            for keyword in keywords[:_max_searches]:
                 search_videos = self._search_recent(
                     query=keyword,
                     niche_id=niche_id,
@@ -967,11 +980,6 @@ class FetchTrendingVideos:
 
         # Read pre-routed stories from shared content pool
         pool_stories = self._read_from_content_pool(niche_id)
-        if pool_stories:
-            logger.info("[FetchTrending:%s] Read %d stories from content pool", niche_id, len(pool_stories))
-            stories = context.get("stories", [])
-            stories.extend(pool_stories)
-            context["stories"] = stories
 
         config = context.get("niche_config", {})
         vs_config = config.get("video_sourcing", {})
@@ -997,6 +1005,39 @@ class FetchTrendingVideos:
                 "[FetchTrendingVideos] %d subscribed channels for %s",
                 len(subscribed_channels), niche_id,
             )
+
+        # ── Relevance-filter content pool items ──────────────────
+        # Pool items were routed by NicheClassifier but may be weak
+        # matches. Apply the same per-niche relevance filter used on
+        # YouTube videos before letting them into the story pipeline.
+        if pool_stories:
+            content_filter_config = sources_config.get("content_filter", {})
+            if content_filter_config:
+                from genlab_core.media.relevance_filter import RelevanceFilter
+                rf = RelevanceFilter(niche_id, content_filter_config)
+                pre = len(pool_stories)
+                pool_stories = [
+                    s for s in pool_stories
+                    if rf.score(s.get("title", ""), s.get("description", "")) >= rf.threshold
+                ]
+                rejected = pre - len(pool_stories)
+                if rejected:
+                    logger.info(
+                        "[FetchTrending:%s] Pool relevance filter: rejected=%d kept=%d",
+                        niche_id, rejected, len(pool_stories),
+                    )
+
+            # Also reject stories with negligible title/description (spam, one-word posts)
+            pool_stories = [
+                s for s in pool_stories
+                if len(s.get("title", "")) >= 10 or len(s.get("description", "")) >= 20
+            ]
+
+            if pool_stories:
+                logger.info("[FetchTrending:%s] %d pool stories passed relevance filter", niche_id, len(pool_stories))
+                stories = context.get("stories", [])
+                stories.extend(pool_stories)
+                context["stories"] = stories
 
         # Optionally enrich keywords with Google Trends
         extra_keywords: list[str] = []

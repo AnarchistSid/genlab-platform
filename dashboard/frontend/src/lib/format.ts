@@ -120,6 +120,10 @@ export function getThumbnailInfo(bp: { slide_previews?: Array<{ url: string }> |
     const first = bp.slide_previews[0]?.url;
     if (first) return { url: first, isVideo: isVideoUrl(first) };
   }
+  // 3. Remote visual_paths URL (Steam CDN, YouTube CDN thumbnail fallback)
+  if (typeof bp.visual_paths === "string" && bp.visual_paths.startsWith("http")) {
+    return { url: bp.visual_paths, isVideo: isVideoUrl(bp.visual_paths) };
+  }
   return null;
 }
 

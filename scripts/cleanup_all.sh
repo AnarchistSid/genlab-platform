@@ -69,7 +69,7 @@ if [ -d "$SHARED_TMP" ]; then
     # Clean per-niche runs (keep last 5, not 3 — safer margin)
     for niche in ai_creators gaming sports movies anime; do
         dirs=$(ls -dt "$SHARED_TMP"/${niche}_* 2>/dev/null || true)
-        count=$(echo "$dirs" | grep -c . 2>/dev/null || echo 0)
+        count=$(echo "$dirs" | grep -c . 2>/dev/null) || count=0
         if [ "$count" -gt 5 ]; then
             echo "$dirs" | tail -n +6 | while read dir; do
                 [ -z "$dir" ] && continue
@@ -88,7 +88,7 @@ if [ -d "$SHARED_TMP" ]; then
     # Clean multi_* and other prefixed dirs (keep last 3, protect active)
     for prefix in multi; do
         dirs=$(ls -dt "$SHARED_TMP"/${prefix}_* 2>/dev/null || true)
-        count=$(echo "$dirs" | grep -c . 2>/dev/null || echo 0)
+        count=$(echo "$dirs" | grep -c . 2>/dev/null) || count=0
         if [ "$count" -gt 3 ]; then
             echo "$dirs" | tail -n +4 | while read dir; do
                 [ -z "$dir" ] && continue

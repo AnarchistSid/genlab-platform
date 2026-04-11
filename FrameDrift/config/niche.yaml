@@ -67,8 +67,8 @@ video_sourcing:
   video_gate: require
   fallback_to_text_render: false
   composite_quality_gate:
-    velocity_threshold: 200
-    min_composite_score: 0.20
+    velocity_threshold: 80
+    min_composite_score: 0.15
 
 pipeline:
   stages:

@@ -91,26 +91,46 @@ except Exception as e:
 
 # Check engagement
 print("\n── ENGAGEMENT ──")
-import subprocess
-result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
-pollers = [l for l in result.stdout.splitlines() if "poller" in l and l.split()[0] != "-"]
-print(f"  Active pollers: {len(pollers)}")
-for p in pollers:
-    parts = p.split()
-    print(f"    PID={parts[0]} {parts[2]}")
+import subprocess, platform
+if platform.system() == "Darwin":
+    result = subprocess.run(["launchctl", "list"], capture_output=True, text=True)
+    pollers = [l for l in result.stdout.splitlines() if "poller" in l and l.split()[0] != "-"]
+    print(f"  Active pollers: {len(pollers)}")
+    for p in pollers:
+        parts = p.split()
+        print(f"    PID={parts[0]} {parts[2]}")
+else:
+    result = subprocess.run(
+        ["systemctl", "list-units", "genlab-*", "--no-pager", "--plain"],
+        capture_output=True, text=True,
+    )
+    pollers = [l for l in result.stdout.splitlines() if "poller" in l and "running" in l.lower()]
+    print(f"  Active pollers: {len(pollers)}")
+    for p in pollers:
+        print(f"    {p.split()[0]}")
 
 # Check services
 print("\n── SERVICES ──")
-for svc in ["prefect-server", "prefect-worker", "engagement.worker", "review-server"]:
-    line = [l for l in result.stdout.splitlines() if svc in l]
-    if line:
-        parts = line[0].split()
-        pid = parts[0]
-        exit_code = parts[1]
-        status = "RUNNING" if pid != "-" else f"STOPPED (exit={exit_code})"
-        print(f"  {svc}: {status}")
-    else:
-        print(f"  {svc}: NOT REGISTERED")
+svc_names = ["engagement-poller", "engagement.worker", "review-server", "webhook"]
+if platform.system() == "Darwin":
+    for svc in svc_names:
+        line = [l for l in result.stdout.splitlines() if svc in l]
+        if line:
+            parts = line[0].split()
+            pid = parts[0]
+            exit_code = parts[1]
+            status = "RUNNING" if pid != "-" else f"STOPPED (exit={exit_code})"
+            print(f"  {svc}: {status}")
+        else:
+            print(f"  {svc}: NOT REGISTERED")
+else:
+    for svc in svc_names:
+        svc_unit = f"genlab-{svc}.service"
+        chk = subprocess.run(
+            ["systemctl", "is-active", svc_unit],
+            capture_output=True, text=True,
+        )
+        print(f"  {svc}: {chk.stdout.strip()}")
 
 # Summary
 print("\n── VERDICT ──")

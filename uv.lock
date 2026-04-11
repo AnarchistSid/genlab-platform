@@ -353,7 +353,7 @@ wheels = [
 
 [[package]]
 name = "blackbox-brief"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "BlackboxBrief" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -561,7 +561,7 @@ wheels = [
 
 [[package]]
 name = "clutchwire"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "ClutchWire" }
 dependencies = [
     { name = "feedparser" },
@@ -673,7 +673,7 @@ wheels = [
 
 [[package]]
 name = "criticalrush"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "CriticalRush" }
 dependencies = [
     { name = "genlab-core", extra = ["engagement"] },
@@ -1076,7 +1076,7 @@ wheels = [
 
 [[package]]
 name = "framedrift"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "FrameDrift" }
 dependencies = [
     { name = "feedparser" },
@@ -1195,7 +1195,7 @@ wheels = [
 
 [[package]]
 name = "genlab-core"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "genlab-core" }
 dependencies = [
     { name = "alembic" },
@@ -1273,6 +1273,7 @@ whisper = [
 dev = [
     { name = "hypothesis" },
     { name = "pytest" },
+    { name = "pytest-cov" },
 ]
 
 [package.metadata]
@@ -1321,11 +1322,12 @@ provides-extras = ["tts", "tts-elevenlabs", "tts-openai", "tts-edge", "tts-gtts"
 dev = [
     { name = "hypothesis", specifier = ">=6.151.9" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=6.0" },
 ]
 
 [[package]]
 name = "genlab-dashboard"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "dashboard" }
 dependencies = [
     { name = "apscheduler" },
@@ -3838,7 +3840,7 @@ wheels = [
 
 [[package]]
 name = "splicereel"
-version = "1.0.0"
+version = "0.1.0"
 source = { editable = "SpliceReel" }
 dependencies = [
     { name = "feedparser" },
