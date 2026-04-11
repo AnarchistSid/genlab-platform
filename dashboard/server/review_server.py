@@ -1251,27 +1251,33 @@ def serve_media(filepath):
         logger.warning("Blocked path traversal attempt: %s", filepath[:200])
         abort(403)
 
-    # Try PROJECT_ROOT first (BB media), then GENLAB_ROOT (all niches)
+    # Try PROJECT_ROOT first (BB media), then GENLAB_ROOT (all niches).
+    # Also allow MEDIA_VOLUME for symlinked media dirs (e.g. /mnt/genlab-media/).
+    _MEDIA_VOLUME = Path(os.environ.get("GENLAB_MEDIA_VOLUME", "/mnt/genlab-media"))
     resolved = None
+    allowed_roots = [PROJECT_ROOT, GENLAB_ROOT, _MEDIA_VOLUME]
     for root in (PROJECT_ROOT, GENLAB_ROOT):
         candidate = (root / filepath).resolve()
-        try:
-            candidate.relative_to(root.resolve())
-            if candidate.is_file():
-                resolved = candidate
-                break
-            # visual_paths often point to a directory containing the .mp4
-            # (e.g., visuals/<candidate_id>/ with <hash>_reel.mp4 inside)
-            if candidate.is_dir():
-                media_exts = (".mp4", ".webm", ".mov", ".png", ".jpg")
-                for child in candidate.iterdir():
-                    if child.is_file() and child.suffix.lower() in media_exts:
-                        resolved = child
-                        break
-                if resolved:
-                    break
-        except ValueError:
+        # After resolving symlinks, the path may land in MEDIA_VOLUME
+        if not any(
+            str(candidate).startswith(str(ar.resolve()))
+            for ar in allowed_roots
+            if ar.exists()
+        ):
             continue
+        if candidate.is_file():
+            resolved = candidate
+            break
+        # visual_paths often point to a directory containing the .mp4
+        # (e.g., visuals/<candidate_id>/ with <hash>_reel.mp4 inside)
+        if candidate.is_dir():
+            media_exts = (".mp4", ".webm", ".mov", ".png", ".jpg")
+            for child in candidate.iterdir():
+                if child.is_file() and child.suffix.lower() in media_exts:
+                    resolved = child
+                    break
+            if resolved:
+                break
 
     if resolved is None:
         abort(404)
