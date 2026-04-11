@@ -716,7 +716,7 @@ def run_publish(
                 platform = futures[future]
                 result = PublishResult(
                     platform=_to_registry_id(platform), success=False,
-                    error=f"Publish timed out after 300s for {platform}",
+                    error=f"Publish timed out after 600s for {platform}",
                 )
             except Exception as exc:
                 platform = futures[future]
