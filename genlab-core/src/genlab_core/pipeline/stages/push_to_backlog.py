@@ -255,15 +255,27 @@ class PushToBacklog:
         video_dedup_skipped = 0
         errors: list[str] = []
 
-        # Load recent hooks for this niche to prevent cross-run duplicates
+        # Load recent hooks for this niche to prevent cross-run duplicates.
+        # Time-windowed to prevent hook starvation as history grows.
         existing_hooks: set[str] = set()
         try:
+            from datetime import datetime, timedelta, timezone as _tz2
+            _hook_cutoff = datetime.now(_tz2.utc) - timedelta(days=30)
             recent_bps = client.blueprints.all(
                 formula=f"{{niche_id}}='{niche_id}'",
                 max_records=2000,
             )
             for bp in recent_bps:
-                h = (bp.get("fields", bp).get("hook") or "").strip().lower()
+                fields = bp.get("fields", bp)
+                _bp_created = fields.get("created_at")
+                if isinstance(_bp_created, str):
+                    try:
+                        _bp_created = datetime.fromisoformat(_bp_created.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        _bp_created = None
+                if _bp_created and _bp_created < _hook_cutoff:
+                    continue
+                h = (fields.get("hook") or "").strip().lower()
                 if h:
                     existing_hooks.add(h)
             if existing_hooks:
