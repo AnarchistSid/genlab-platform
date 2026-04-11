@@ -59,33 +59,82 @@ class PerformanceLearner:
         ]
 
         # If no engagement in current stories, check Analytics for PREVIOUSLY
-        # published posts with engagement data (collected by fetch_insights)
+        # published posts with engagement data (collected by metric_collector).
+        # Join through publishing_analytics → blueprints to recover arm_id,
+        # which analytics records don't store directly.
         if len(with_engagement) < MIN_STORIES_WITH_DATA:
             try:
-                # Reuse BacklogClient from context if available
                 client = context.get("_backlog_client")
                 if client is None:
                     from genlab_core.http.backlog_client import BacklogClient
                     client = BacklogClient()
                     context["_backlog_client"] = client
-                analytics = client.analytics.all(max_records=50)
-                for a in analytics:
-                    f = a.get("fields", a)
-                    if (str(f.get("niche_id", "")) == niche_id and
-                            f.get("engagement_rate") is not None):
-                        with_engagement.append({
-                            "story_id": f.get("candidate_id", ""),
-                            "hook_formula": f.get("hook_formula", ""),
-                            "template_id": f.get("template_id", ""),
-                            "scheduled_slot": f.get("scheduled_slot", ""),
-                            "engagement": {
-                                f.get("platform", "unknown"): {
-                                    "metrics": {"engagement_rate": f.get("engagement_rate", 0)}
-                                }
-                            },
-                        })
+
+                # Direct DB query to join analytics → publishing_analytics → blueprints
+                # for arm_id recovery. The ORM doesn't support joins, so use raw SQL.
+                _pg = getattr(client, "_pg", None)
+                if _pg is not None:
+                    import psycopg
+                    pool = _pg._get_pool()
+                    with pool.connection() as conn:
+                        with conn.cursor(row_factory=psycopg.rows.dict_row) as cur:
+                            cur.execute("""
+                                SELECT a.post_id, a.niche_id, a.platform,
+                                       a.extra->>'engagement_rate' as engagement_rate,
+                                       a.extra->>'likes' as likes,
+                                       a.extra->>'comments' as comments,
+                                       a.extra->>'plays' as plays,
+                                       a.extra->>'shares' as shares,
+                                       b.arm_id, b.candidate_id
+                                FROM analytics a
+                                JOIN publishing_analytics pa ON pa.post_id = a.post_id
+                                JOIN blueprints b ON b.id = pa.blueprint_id
+                                WHERE a.niche_id = %s
+                                  AND b.arm_id IS NOT NULL
+                                  AND a.extra->>'engagement_rate' IS NOT NULL
+                                ORDER BY a.created_at DESC
+                                LIMIT 50
+                            """, (niche_id,))
+                            for row in cur.fetchall():
+                                er = float(row["engagement_rate"] or 0)
+                                with_engagement.append({
+                                    "story_id": row["candidate_id"] or "",
+                                    "arm_id": row["arm_id"],
+                                    "engagement": {
+                                        row["platform"]: {
+                                            "metrics": {
+                                                "engagement_rate": er,
+                                                "likes": int(row["likes"] or 0),
+                                                "comments": int(row["comments"] or 0),
+                                                "views": int(row["plays"] or 0),
+                                                "shares": int(row["shares"] or 0),
+                                            }
+                                        }
+                                    },
+                                })
+                    logger.info(
+                        "[PerformanceLearner] Loaded %d analytics records with arm_id for %s",
+                        len(with_engagement), niche_id,
+                    )
+                else:
+                    # Fallback: load from analytics without arm_id (original behavior)
+                    analytics = client.analytics.all(max_records=50)
+                    for a in analytics:
+                        f = a.get("fields", a)
+                        if (str(f.get("niche_id", "")) == niche_id and
+                                f.get("engagement_rate") is not None):
+                            with_engagement.append({
+                                "story_id": f.get("candidate_id", ""),
+                                "hook_formula": f.get("hook_formula", ""),
+                                "template_id": f.get("template_id", ""),
+                                "engagement": {
+                                    f.get("platform", "unknown"): {
+                                        "metrics": {"engagement_rate": f.get("engagement_rate", 0)}
+                                    }
+                                },
+                            })
             except Exception as exc:
-                logger.debug("[PerformanceLearner] Analytics check failed: %s", exc)
+                logger.warning("[PerformanceLearner] Analytics check failed: %s", exc)
 
         if len(with_engagement) < MIN_STORIES_WITH_DATA:
             logger.info(
