@@ -114,3 +114,4 @@ pipeline:
     - class: genlab_core.pipeline.stages.run_report.RunReport
   max_items_per_run: 10
   min_score_threshold: 0.20
+  dedup_window_days: 7  # consistent with other channels — prevent dedup saturation

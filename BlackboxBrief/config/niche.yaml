@@ -108,3 +108,4 @@ pipeline:
     - class: genlab_core.pipeline.stages.run_report.RunReport
   max_items_per_run: 10
   min_score_threshold: 0.25
+  dedup_window_days: 7  # 14d window leaves 133+ hashes blocking all new fetches
