@@ -50,6 +50,11 @@ _DOWNLOAD_TIMEOUT = 120
 def _download_video(url: str, output_path: str) -> dict[str, Any]:
     """Download a video using yt-dlp subprocess.
 
+    Uses the Android/iOS player clients which bypass most bot detection
+    (the web client triggers "sign in to confirm you're not a bot" on
+    data center IPs). Also reads cookies from .youtube_cookies.txt if
+    present, for videos that still require authentication.
+
     Returns:
         {"success": bool, "duration": float, "error": str}
     """
@@ -61,8 +66,19 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
+        # Use Android + iOS clients first — they bypass bot detection on
+        # data center IPs where the web client fails with "sign in to confirm"
+        "--extractor-args", "youtube:player_client=android,ios,web",
+        # User agent that matches a real Android device
+        "--user-agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
         url,
     ]
+
+    # Use cookies if available (last-resort auth for gated videos)
+    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+    cookies_path = os.path.join(project_root, ".youtube_cookies.txt")
+    if os.path.exists(cookies_path):
+        cmd.extend(["--cookies", cookies_path])
     t0 = time.monotonic()
     try:
         result = subprocess.run(
@@ -274,6 +290,39 @@ def download_videos_for_stories(
         output_path = str(clips_dir / f"{safe_id}.mp4")
 
         dl_result = _download_video(video_url, output_path)
+
+        # FALLBACK: if the primary URL failed (usually YouTube bot detection),
+        # ask VideoSourcer for an alternative backend and retry once.
+        if not dl_result["success"]:
+            err = dl_result.get("error", "")
+            is_bot_or_block = (
+                "Sign in to confirm" in err
+                or "not a bot" in err
+                or "Private video" in err
+                or "Video unavailable" in err
+                or "not available in your country" in err
+            )
+            if is_bot_or_block and backend == "direct_url":
+                logger.info(
+                    "  Primary URL failed (%s) — trying alternative source",
+                    err[:50],
+                )
+                # Force sourcer to skip direct URL and try youtube/reddit/tmdb search
+                try:
+                    alt_result = sourcer.source_alternative(story, exclude_url=video_url)
+                except AttributeError:
+                    alt_result = None
+                except Exception as exc:
+                    logger.warning("  Alternative source failed: %s", exc)
+                    alt_result = None
+
+                if alt_result is not None and alt_result.url != video_url:
+                    video_url = alt_result.url
+                    backend = alt_result.backend
+                    logger.info(
+                        "  Retrying with %s: %s", backend, video_url[:80],
+                    )
+                    dl_result = _download_video(video_url, output_path)
 
         if not dl_result["success"]:
             entries[story_id] = {

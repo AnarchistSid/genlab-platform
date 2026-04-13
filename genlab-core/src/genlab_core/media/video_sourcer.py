@@ -276,6 +276,55 @@ class VideoSourcer:
         self.stats.none += 1
         return None
 
+    def source_alternative(
+        self,
+        story: dict[str, Any],
+        exclude_url: str = "",
+    ) -> VideoSearchResult | None:
+        """Find an alternative video source when the primary fails to download.
+
+        Skips Level 1 (direct URL) since that's what failed, and tries
+        Reddit → TMDB → YouTube search (YouTube last because bot detection
+        is usually why the primary failed). Excludes the failing URL from
+        results to prevent selecting the same broken source.
+        """
+        story_title: str = story.get("title", "")
+        story_published_at = story.get("published_at")
+        if isinstance(story_published_at, str):
+            try:
+                story_published_at = datetime.fromisoformat(story_published_at)
+            except (ValueError, TypeError):
+                story_published_at = None
+
+        def _filter_excluded(results: list) -> list:
+            if not exclude_url:
+                return results
+            return [r for r in results if getattr(r, "url", "") != exclude_url]
+
+        # Reddit first — no bot detection
+        results = _filter_excluded(self._search_reddit(story_title))
+        best = self._pick_best(results, story_title, story_published_at)
+        if best is not None:
+            self.stats.reddit += 1
+            return best
+
+        # TMDB for movies
+        if self.niche_id == "movies":
+            results = _filter_excluded(self._search_tmdb(story_title))
+            best = self._pick_best(results, story_title, story_published_at)
+            if best is not None:
+                self.stats.tmdb += 1
+                return best
+
+        # YouTube search last (may also hit bot detection)
+        results = _filter_excluded(self._search_youtube(story_title))
+        best = self._pick_best(results, story_title, story_published_at)
+        if best is not None:
+            self.stats.youtube += 1
+            return best
+
+        return None
+
     def get_stats(self) -> dict[str, int]:
         """Return per-backend usage counts."""
         return {
