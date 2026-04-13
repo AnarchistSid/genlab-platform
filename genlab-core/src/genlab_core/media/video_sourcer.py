@@ -301,20 +301,31 @@ class VideoSourcer:
                 return results
             return [r for r in results if getattr(r, "url", "") != exclude_url]
 
-        # Reddit first — no bot detection
-        results = _filter_excluded(self._search_reddit(story_title))
-        best = self._pick_best(results, story_title, story_published_at)
-        if best is not None:
-            self.stats.reddit += 1
-            return best
-
-        # TMDB for movies
+        # TMDB first for movies — the pre-fetched trailer URLs are authoritative
+        # and less likely to hit YouTube bot detection than random search results
         if self.niche_id == "movies":
+            # Check story for attached TMDB trailer URL (from FetchTMDBTrailers stage)
+            tmdb_url = story.get("_tmdb_trailer_url") or story.get("trailer_url")
+            if tmdb_url and tmdb_url != exclude_url:
+                return VideoSearchResult(
+                    url=tmdb_url,
+                    title=story.get("title", ""),
+                    backend="tmdb",
+                    channel_name="TMDB",
+                )
+            # Otherwise query TMDB API
             results = _filter_excluded(self._search_tmdb(story_title))
             best = self._pick_best(results, story_title, story_published_at)
             if best is not None:
                 self.stats.tmdb += 1
                 return best
+
+        # Reddit second — no bot detection, but limited movie content
+        results = _filter_excluded(self._search_reddit(story_title))
+        best = self._pick_best(results, story_title, story_published_at)
+        if best is not None:
+            self.stats.reddit += 1
+            return best
 
         # YouTube search last (may also hit bot detection)
         results = _filter_excluded(self._search_youtube(story_title))
@@ -443,6 +454,15 @@ class VideoSourcer:
         subreddits = NICHE_SUBREDDITS.get(self.niche_id, ["videos"])
         results: list[VideoSearchResult] = []
 
+        # Use requests with a realistic User-Agent. Reddit blocks urllib's
+        # default UA and short UA strings like "GenLab/1.0" from data center IPs.
+        import requests as _req
+        _ua = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+
         for sub in subreddits:
             if len(results) >= self.max_results:
                 break
@@ -453,9 +473,13 @@ class VideoSourcer:
                     f"q={encoded_q}&sort=relevance&t=week&limit={self.max_results}"
                     f"&restrict_sr=on"
                 )
-                req = Request(url, headers={"User-Agent": "GenLab/1.0"})
-                with urlopen(req, timeout=10) as resp:
-                    data = json.loads(resp.read().decode())
+                resp = _req.get(url, headers={"User-Agent": _ua}, timeout=10)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "Reddit search HTTP %d for r/%s", resp.status_code, sub,
+                    )
+                    continue
+                data = resp.json()
 
                 for child in data.get("data", {}).get("children", []):
                     post = child.get("data", {})
