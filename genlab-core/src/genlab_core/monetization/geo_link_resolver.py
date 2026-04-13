@@ -76,12 +76,29 @@ def resolve_affiliate_link(
     platform: str,
     blueprint_id: str | None = None,
 ) -> str:
+    """Wrapper that returns just the URL (back-compat). New callers should
+    use resolve_affiliate_link_with_network() to get both URL and network.
+    """
+    url, _network = resolve_affiliate_link_with_network(product, niche_id, platform, blueprint_id)
+    return url
+
+
+def resolve_affiliate_link_with_network(
+    product: dict,
+    niche_id: str,
+    platform: str,
+    blueprint_id: str | None = None,
+) -> tuple[str, str]:
     """Return the best affiliate URL with geo-targeting and tracking params.
 
     Selection order (IN audience):
-    1. amazon (IN) → amazon_us (fallback) → cuelinks
+    1. cuelinks (7% — wraps amazon.in) → amazon (IN, 3%) → amazon_us (fallback)
     Selection order (US audience):
     1. amazon_us → amazon (IN) → cuelinks
+
+    Cuelinks earns higher commission than direct Amazon Associates for
+    amazon.in traffic, so it gets priority for IN audiences. US uses
+    direct Amazon Associates first since Cuelinks doesn't cover amazon.com.
 
     Skips placeholder URLs and validates link health before selection.
     Falls through to next candidate on broken/placeholder links.
@@ -91,7 +108,7 @@ def resolve_affiliate_link(
 
     # Build candidate list with cross-geo fallback
     if geo == "IN":
-        candidates = ["amazon", "amazon_in", "cuelinks", "amazon_us"]
+        candidates = ["cuelinks", "amazon", "amazon_in", "amazon_us"]
     else:
         candidates = ["amazon_us", "amazon", "cuelinks"]
 
@@ -117,7 +134,7 @@ def resolve_affiliate_link(
             "[GeoResolver] No healthy link found for product %s",
             product.get("name", "?"),
         )
-        return ""
+        return ("", "")
 
     # Add UTM tracking parameters
     utm_params = {
@@ -136,4 +153,4 @@ def resolve_affiliate_link(
     # Append params to URL
     sep = "&" if "?" in base_url else "?"
     param_str = urllib.parse.urlencode(utm_params)
-    return f"{base_url}{sep}{param_str}"
+    return (f"{base_url}{sep}{param_str}", network)

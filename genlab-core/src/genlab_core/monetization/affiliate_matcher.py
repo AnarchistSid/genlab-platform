@@ -406,10 +406,14 @@ class AffiliateMatch:
 
             product_name: str = product.get("name", "")
 
-            # Geo-targeted link resolution with UTM tracking
-            from genlab_core.monetization.geo_link_resolver import resolve_affiliate_link
+            # Geo-targeted link resolution with UTM tracking.
+            # Returns BOTH url and the actual network used (geo-priority may
+            # differ from commission-priority used by select_best_network).
+            from genlab_core.monetization.geo_link_resolver import (
+                resolve_affiliate_link_with_network,
+            )
             blueprint_id = story.get("_candidate_id", story.get("story_id", ""))
-            tracked_url = resolve_affiliate_link(
+            tracked_url, resolved_network = resolve_affiliate_link_with_network(
                 product=product,
                 niche_id=niche_id,
                 platform="instagram",  # default; cta_engine overrides per-platform
@@ -417,6 +421,13 @@ class AffiliateMatch:
             )
             if tracked_url:
                 url = tracked_url
+                # Sync network_name to whatever resolve_affiliate_link picked,
+                # so the DB label matches the actual URL provider.
+                if resolved_network:
+                    network_name = resolved_network
+                    # Update commission_pct to match the resolved network
+                    resolved_info = (product.get("networks") or {}).get(resolved_network, {})
+                    commission_pct = float(resolved_info.get("commission_pct", commission_pct))
 
             # Build CTA (platform-agnostic — detailed injection done in cta_engine)
             cta = f"🔗 {product_name} — link in bio"
