@@ -92,13 +92,18 @@ def resolve_affiliate_link_with_network(
     """Return the best affiliate URL with geo-targeting and tracking params.
 
     Selection order (IN audience):
-    1. cuelinks (7% — wraps amazon.in) → amazon (IN, 3%) → amazon_us (fallback)
+    1. amazon (IN) → amazon_us (fallback)
     Selection order (US audience):
-    1. amazon_us → amazon (IN) → cuelinks
+    1. amazon_us → amazon (IN)
 
-    Cuelinks earns higher commission than direct Amazon Associates for
-    amazon.in traffic, so it gets priority for IN audiences. US uses
-    direct Amazon Associates first since Cuelinks doesn't cover amazon.com.
+    NOTE: Cuelinks linksredirect.com is a click tracker only — it does
+    NOT inject affiliate tags. Server-side wrapping through Cuelinks
+    strips our Amazon Associates tag entirely, earning zero commission.
+    Direct Amazon Associates links earn commission via our tags
+    (aspirehub-21 for IN, aspirehub06-20 for US).
+
+    Cuelinks is kept as last-resort fallback only when no Amazon link
+    is available (e.g., for non-Amazon merchants).
 
     Skips placeholder URLs and validates link health before selection.
     Falls through to next candidate on broken/placeholder links.
@@ -106,9 +111,10 @@ def resolve_affiliate_link_with_network(
     networks = product.get("networks", {})
     geo = NICHE_PRIMARY_GEO.get(niche_id, "US")
 
-    # Build candidate list with cross-geo fallback
+    # Build candidate list — Amazon Associates first (real commission),
+    # Cuelinks only as last resort (works as click tracker, not monetizer).
     if geo == "IN":
-        candidates = ["cuelinks", "amazon", "amazon_in", "amazon_us"]
+        candidates = ["amazon", "amazon_in", "amazon_us", "cuelinks"]
     else:
         candidates = ["amazon_us", "amazon", "cuelinks"]
 
