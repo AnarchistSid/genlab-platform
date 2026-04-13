@@ -38,7 +38,10 @@ token.json
 *.pem
 
 # Temp and cache
+.tmp
 .tmp/
+**/.tmp
+**/.tmp/
 *.log
 *.cache
 

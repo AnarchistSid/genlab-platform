@@ -238,7 +238,13 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
 
 
 def check_missing_media(niche_id: str) -> list[Alert]:
-    """Check VISUAL_READY blueprints for missing video files."""
+    """Check VISUAL_READY blueprints for missing video files.
+
+    SAFETY: Bails out entirely if more than 50% of files appear missing
+    OR the media root mount/symlink seems broken. A mass missing-file
+    event is almost always a mount/symlink issue, not real data loss —
+    auto-archiving in that scenario destroys recoverable blueprints.
+    """
     alerts = []
     try:
         import psycopg
@@ -249,11 +255,14 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             "WHERE niche_id = %s AND status = 'VISUAL_READY'",
             (niche_id,),
         )
+        rows = cur.fetchall()
         broken = []
-        for bp_id, title, vp in cur.fetchall():
+        total_with_paths = 0
+        for bp_id, title, vp in rows:
             if not vp:
                 broken.append(bp_id)
                 continue
+            total_with_paths += 1
             try:
                 paths = json.loads(vp) if vp.startswith("[") else [vp]
             except (json.JSONDecodeError, ValueError):
@@ -261,8 +270,35 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             if not any(p and pathlib.Path(p).exists() for p in paths):
                 broken.append(bp_id)
 
+        # SAFETY GATE 1: If >50% are broken, this is a mount issue, not data loss
+        if total_with_paths > 0 and len(broken) > total_with_paths // 2:
+            alerts.append(Alert(
+                check="missing_media_mass",
+                severity="critical",
+                message=(
+                    f"{len(broken)}/{total_with_paths} blueprints appear to have "
+                    f"missing media — likely a symlink/mount issue, NOT auto-archiving"
+                ),
+                niche_id=niche_id,
+                details={"broken_count": len(broken), "total": total_with_paths},
+            ))
+            conn.close()
+            return alerts
+
+        # SAFETY GATE 2: Verify the media root mount is actually accessible
+        media_root = pathlib.Path(os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")) / ".tmp"
+        if not media_root.exists():
+            alerts.append(Alert(
+                check="media_root_missing",
+                severity="critical",
+                message=f"Media root {media_root} does not exist — symlink broken",
+                niche_id=niche_id,
+            ))
+            conn.close()
+            return alerts
+
         if broken:
-            # Auto-fix: archive broken blueprints
+            # Auto-fix: archive broken blueprints (only when safety gates passed)
             cur.execute(
                 "UPDATE blueprints SET status = 'ARCHIVED', "
                 "action_taken = 'auto_archived_missing_media' "
