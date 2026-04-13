@@ -129,9 +129,9 @@ export default function ContentReviewView() {
     } else {
       params.status = activeStatus;
     }
-    // niche_id: use the sidebar selection as default, override with local filter
-    const niche = activeNiche !== "all" ? activeNiche : selectedNicheId ?? "all";
-    params.niche_id = niche;
+    // niche_id: local filter takes precedence. "all" means show everything
+    // across niches, regardless of the sidebar's global niche selection.
+    params.niche_id = activeNiche;
     return params;
   }, [activeStatus, activeNiche, sort, selectedNicheId]);
 
@@ -151,10 +151,9 @@ export default function ContentReviewView() {
     // action_taken=approved + scheduled_for set. No client-side re-filter needed
     // since the API already handles this.
 
-    // Niche filter
-    const niche = activeNiche !== "all" ? activeNiche : selectedNicheId;
-    if (niche && niche !== "all") {
-      items = items.filter((bp) => bp.niche_id === niche);
+    // Niche filter — local filter is authoritative; "all" means no filter.
+    if (activeNiche && activeNiche !== "all") {
+      items = items.filter((bp) => bp.niche_id === activeNiche);
     }
 
     // Text search filter
