@@ -173,6 +173,20 @@ def _keyword_hits(keywords: list, text_lower: str, *, return_matched: bool = Fal
     return hits
 
 
+_DEFAULT_MAX_PRICE_INR = 2500  # Impulse-buy threshold for short-form video viewers
+
+
+def _price_filter(products: list, max_price_inr: int = _DEFAULT_MAX_PRICE_INR) -> list:
+    """Filter products to those at or below the max price.
+
+    High-ticket items (>₹2500) have near-zero conversion rate from
+    short-form video traffic. Restrict to impulse-buy zone by default.
+    Falls through to all products if no cheap matches exist.
+    """
+    cheap = [p for p in products if 0 < p.get("price_inr", 0) <= max_price_inr]
+    return cheap if cheap else products
+
+
 def match_product(
     text: str,
     niche_id: str,
@@ -184,6 +198,7 @@ def match_product(
     Checks seasonal products first (if any active events), then falls back
     to static catalog. Returns the product with the most keyword hits, or None.
     Uses word-boundary matching to prevent substring false positives.
+    Filters to impulse-buy price range (≤₹2500) by default.
     """
     # Strip hashtags and existing affiliate CTAs from search text to prevent
     # self-referencing circular matches and hashtag keyword pollution.
@@ -234,14 +249,24 @@ def match_product(
         best_hits = 0
         best_matched_keywords = []
 
-    # 2. Fall back to static catalog (skip disabled products)
-    niche_products = (catalog.get("niches") or {}).get(niche_id, {}).get("products", [])
-    if not niche_products:
+    # 2. Fall back to static catalog (skip disabled products).
+    # Apply price filter: only consider impulse-buy items unless niche overrides.
+    raw_niche_products = (catalog.get("niches") or {}).get(niche_id, {}).get("products", [])
+    if not raw_niche_products:
         return None
+    niche_max_price = (
+        (catalog.get("niches") or {}).get(niche_id, {}).get("max_price_inr")
+        or _DEFAULT_MAX_PRICE_INR
+    )
+    enabled = [p for p in raw_niche_products if p.get("enabled", True)]
+    niche_products = _price_filter(enabled, niche_max_price)
+    if len(niche_products) < len(enabled):
+        logger.debug(
+            "[AffiliateMatch] Price filter for %s: %d/%d products under ₹%d",
+            niche_id, len(niche_products), len(enabled), niche_max_price,
+        )
 
     for product in niche_products:
-        if not product.get("enabled", True):
-            continue
         keywords = product.get("keywords") or []
         hits, matched_kws = _keyword_hits(keywords, text_lower, return_matched=True)
         if hits > best_hits:
@@ -258,8 +283,9 @@ def match_product(
         )
         return best_product
 
-    # 3. LLM contextual fallback — only when keyword matching failed entirely
-    enabled_products = [p for p in niche_products if p.get("enabled", True)]
+    # 3. LLM contextual fallback — only when keyword matching failed entirely.
+    # Use the same price-filtered list (impulse-buy zone only).
+    enabled_products = niche_products
     if not enabled_products:
         return None
 
@@ -429,14 +455,24 @@ class AffiliateMatch:
                     resolved_info = (product.get("networks") or {}).get(resolved_network, {})
                     commission_pct = float(resolved_info.get("commission_pct", commission_pct))
 
-            # Build CTA (platform-agnostic — detailed injection done in cta_engine)
-            cta = f"🔗 {product_name} — link in bio"
+            # Build CTA — actionable, price-aware, urgency-driven.
+            # "link in bio" has near-zero CTR; show price + emoji + verb.
+            price = product.get("price_inr", 0)
+            if price and price < 1000:
+                cta = f"🛒 Get {product_name} for ₹{price} — link in 1st comment 👇"
+            elif price and price < 5000:
+                cta = f"🔥 {product_name} — only ₹{price}. Link in 1st comment 👇"
+            elif price:
+                cta = f"⭐ {product_name} (₹{price}) — link below 👇"
+            else:
+                cta = f"🔗 Get {product_name} — link in 1st comment 👇"
 
             story["affiliate_product"] = product_name
             story["affiliate_url"] = url
             story["affiliate_network"] = network_name
             story["affiliate_commission_pct"] = commission_pct
             story["affiliate_cta"] = cta
+            story["affiliate_price_inr"] = int(product.get("price_inr", 0) or 0)
             story["_affiliate_disclosure_map"] = disclosure_map
 
             matched += 1

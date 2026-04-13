@@ -142,6 +142,17 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     """
     product_name: str = story.get("affiliate_product", "")
     raw_url: str = story.get("affiliate_url", "")
+    product_price: int = int(story.get("affiliate_price_inr", 0) or 0)
+
+    def _build_cta_text(price: int, name: str) -> str:
+        """Build a price-aware, action-oriented CTA. Falls back to generic if no price."""
+        if price and price < 1000:
+            return f"🛒 Get {name} for ₹{price} 👇"
+        if price and price < 5000:
+            return f"🔥 {name} — ₹{price} 👇"
+        if price:
+            return f"⭐ {name} (₹{price}) 👇"
+        return f"🔗 Get {name} 👇"
 
     # Append UTM tracking parameters to affiliate URL
     niche_id: str = story.get("niche_id", "") or fields.get("niche_id", "")
@@ -170,17 +181,22 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     caption: str = fields.get("caption", "") or ""
     if caption:
         # Check for existing affiliate CTA to avoid duplication
-        if "link in bio" in caption.lower():
+        if "link in bio" in caption.lower() or "1st comment" in caption.lower():
             pass  # CTA already present, skip injection
         else:
             hashtag_match = re.search(r"((?:\s*#\w+)+\s*)$", caption)
 
-            # Select CTA variant via bandit, fallback to hardcoded format
-            ig_cta_text = f"🔗 {product_name} — link in bio"
+            # Use price-aware CTA. IG users navigate to first pinned comment
+            # more reliably than bio links — also support both formats.
+            ig_cta_text = _build_cta_text(product_price, product_name) + " (1st comment)"
             if bandit:
                 try:
                     variant = bandit.select(platform="instagram")
-                    ig_cta_text = variant.format(product_name=product_name)
+                    # Bandit variants are templates; use them but inject price if set
+                    rendered = variant.format(product_name=product_name)
+                    if product_price and "{price}" in variant:
+                        rendered = variant.format(product_name=product_name, price=product_price)
+                    ig_cta_text = rendered
                     selected_variants.append(variant.arm_id)
                 except Exception as e:
                     logger.debug("[CTAEngine] Bandit select failed for instagram: %s", e)
