@@ -91,8 +91,19 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--sleep-requests", "2",
         "--sleep-interval", "5",
         "--max-sleep-interval", "15",
-        url,
     ]
+
+    # Route through Cloudflare WARP SOCKS proxy when available.
+    # WARP uses Cloudflare's network which has better IP reputation than
+    # data-center IPs, bypassing YouTube's "Sign in to confirm" wall.
+    warp_proxy = os.environ.get("YT_DLP_PROXY", "")
+    if not warp_proxy and os.path.exists("/run/cloudflare-warp"):
+        # Default WARP SOCKS proxy port (we configured this to 40000)
+        warp_proxy = "socks5://127.0.0.1:40000"
+    if warp_proxy:
+        cmd.extend(["--proxy", warp_proxy])
+
+    cmd.append(url)
 
     # Use cookies if available. .youtube_cookies.txt should contain at least
     # __Secure-3PAPISID and PREF (captured from a fresh browser session)
