@@ -58,6 +58,24 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     Returns:
         {"success": bool, "duration": float, "error": str}
     """
+    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+
+    # Build extractor_args — combine player_client list with visitor_data if
+    # we have it from a real browser session (bypasses bot detection)
+    extractor_args = "youtube:player_client=android,ios,tv,web"
+    session_path = os.path.join(project_root, ".youtube_session.json")
+    if os.path.exists(session_path):
+        try:
+            import json as _json
+            with open(session_path) as fh:
+                session = _json.load(fh)
+            visitor_data = session.get("visitor_data", "")
+            if visitor_data:
+                # yt-dlp accepts visitor_data via extractor-args
+                extractor_args += f";visitor_data={visitor_data}"
+        except (OSError, ValueError):
+            pass
+
     cmd = [
         "yt-dlp",
         "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]"
@@ -66,30 +84,24 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
-        # Use multiple player clients — fall through to whichever bypasses
-        # YouTube's bot detection on the current request
-        "--extractor-args", "youtube:player_client=android,ios,tv,web",
+        "--extractor-args", extractor_args,
         # User agent matching a real Android YouTube app
         "--user-agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
         # Sleep between requests to avoid triggering rate limit / bot detection
         "--sleep-requests", "2",
-        # Add request randomization to look more like a real client
         "--sleep-interval", "5",
         "--max-sleep-interval", "15",
         url,
     ]
 
-    # Use cookies if available — required for VPS IPs that hit YouTube's
-    # "Sign in to confirm you're not a bot" wall. User must populate
-    # .youtube_cookies.txt by exporting from a logged-in browser.
-    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+    # Use cookies if available. .youtube_cookies.txt should contain at least
+    # __Secure-3PAPISID and PREF (captured from a fresh browser session)
     cookies_path = os.path.join(project_root, ".youtube_cookies.txt")
     has_real_cookies = False
     if os.path.exists(cookies_path):
         try:
             with open(cookies_path) as fh:
                 content = fh.read()
-            # Real cookies file has actual cookie lines (not just comments)
             has_real_cookies = any(
                 line.strip() and not line.startswith("#")
                 for line in content.splitlines()
@@ -99,8 +111,7 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         if has_real_cookies:
             cmd.extend(["--cookies", cookies_path])
 
-    # Use browser TLS impersonation when curl_cffi is available — helps
-    # when cookies are also present (cookies + real-looking TLS = success)
+    # Use browser TLS impersonation via curl_cffi (real Chrome fingerprint)
     try:
         import curl_cffi  # noqa: F401
         cmd.extend(["--impersonate", "chrome-136"])
