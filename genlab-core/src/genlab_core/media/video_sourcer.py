@@ -313,12 +313,30 @@ class VideoSourcer:
                     backend="tmdb",
                     channel_name="TMDB",
                 )
-            # Otherwise query TMDB API
-            results = _filter_excluded(self._search_tmdb(story_title))
-            best = self._pick_best(results, story_title, story_published_at)
-            if best is not None:
-                self.stats.tmdb += 1
-                return best
+            # Query TMDB API. Try the full title first, then progressively
+            # cleaner variants (TMDB needs the bare movie name, not
+            # "Mortal Kombat 2 Official Trailer").
+            tmdb_queries = [story_title]
+            cleaned = re.sub(
+                r"\s*[-|]?\s*(official\s+)?(trailer|teaser|clip|preview|review|reaction|breakdown|spot|tv\s+spot|featurette|behind\s+the\s+scenes|first\s+look|sneak\s+peek)\b.*$",
+                "",
+                story_title,
+                flags=re.IGNORECASE,
+            ).strip()
+            if cleaned and cleaned != story_title:
+                tmdb_queries.append(cleaned)
+            # Last resort: first 2-3 words
+            words = story_title.split()
+            if len(words) > 2:
+                tmdb_queries.append(" ".join(words[:3]))
+            for q in tmdb_queries:
+                if not q:
+                    continue
+                results = _filter_excluded(self._search_tmdb(q))
+                best = self._pick_best(results, q, story_published_at)
+                if best is not None:
+                    self.stats.tmdb += 1
+                    return best
 
         # Reddit second — no bot detection, but limited movie content
         results = _filter_excluded(self._search_reddit(story_title))
