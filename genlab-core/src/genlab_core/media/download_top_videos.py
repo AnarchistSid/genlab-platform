@@ -66,19 +66,46 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
         "--no-playlist",
         "--socket-timeout", "30",
         "--retries", "2",
-        # Use Android + iOS clients first — they bypass bot detection on
-        # data center IPs where the web client fails with "sign in to confirm"
-        "--extractor-args", "youtube:player_client=android,ios,web",
-        # User agent that matches a real Android device
+        # Use multiple player clients — fall through to whichever bypasses
+        # YouTube's bot detection on the current request
+        "--extractor-args", "youtube:player_client=android,ios,tv,web",
+        # User agent matching a real Android YouTube app
         "--user-agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
+        # Sleep between requests to avoid triggering rate limit / bot detection
+        "--sleep-requests", "2",
+        # Add request randomization to look more like a real client
+        "--sleep-interval", "5",
+        "--max-sleep-interval", "15",
         url,
     ]
 
-    # Use cookies if available (last-resort auth for gated videos)
+    # Use cookies if available — required for VPS IPs that hit YouTube's
+    # "Sign in to confirm you're not a bot" wall. User must populate
+    # .youtube_cookies.txt by exporting from a logged-in browser.
     project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
     cookies_path = os.path.join(project_root, ".youtube_cookies.txt")
+    has_real_cookies = False
     if os.path.exists(cookies_path):
-        cmd.extend(["--cookies", cookies_path])
+        try:
+            with open(cookies_path) as fh:
+                content = fh.read()
+            # Real cookies file has actual cookie lines (not just comments)
+            has_real_cookies = any(
+                line.strip() and not line.startswith("#")
+                for line in content.splitlines()
+            )
+        except OSError:
+            pass
+        if has_real_cookies:
+            cmd.extend(["--cookies", cookies_path])
+
+    # Use browser TLS impersonation when curl_cffi is available — helps
+    # when cookies are also present (cookies + real-looking TLS = success)
+    try:
+        import curl_cffi  # noqa: F401
+        cmd.extend(["--impersonate", "chrome-136"])
+    except ImportError:
+        pass
     t0 = time.monotonic()
     try:
         result = subprocess.run(
