@@ -235,32 +235,57 @@ def _lookup_skip_rate(
 
 
 def _query_completed_feedback(backlog_client: Any) -> list[dict]:
-    """Query the PendingFeedback list for completed items.
+    """Query the pending_feedback table for completed items.
 
-    Tries multiple access patterns since the BacklogClient interface
-    for PendingFeedback is not fully standardised.
+    Uses psycopg directly against the canonical PG schema. The legacy
+    SharePoint-style get_items('Status eq complete') paths fail because
+    the live column is `collection_status`, not `Status`.
     """
-    # Approach 1: direct get_items (if available on the client)
-    if hasattr(backlog_client, "get_items"):
-        return backlog_client.get_items(
-            "GenLab_PendingFeedback",
-            filter_query="Status eq 'complete'",
-        )
+    import os
 
-    # Approach 2: use the graph proxy if exposed
-    # The store injects backlog_client; if it has a _pending_feedback proxy,
-    # use it. Otherwise try constructing one.
-    if hasattr(backlog_client, "pending_feedback"):
-        return backlog_client.pending_feedback.all(
-            formula="{Status}='complete'",
-        )
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        logger.warning("[hook_training] DATABASE_URL unset — returning empty")
+        return []
+    try:
+        import psycopg
+    except ImportError:
+        logger.warning("[hook_training] psycopg not installed — returning empty")
+        return []
+    try:
+        with psycopg.connect(db_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT niche_id, post_id, platform, reward_48h,
+                           publish_time, extra
+                    FROM pending_feedback
+                    WHERE collection_status = 'complete'
+                      AND reward_48h IS NOT NULL
+                    """
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        logger.warning("[hook_training] DB query failed: %s", exc)
+        return []
 
-    # Approach 3: fallback — no way to query
-    logger.warning(
-        "[hook_training] BacklogClient has no get_items or pending_feedback proxy. "
-        "Returning empty results."
-    )
-    return []
+    items: list[dict] = []
+    for niche_id, post_id, platform, reward_48h, publish_time, extra in rows:
+        items.append({
+            "fields": {
+                "niche_id": niche_id,
+                "PostID": post_id,
+                "content_id": post_id,
+                "Platform": platform,
+                "platform": platform,
+                "Reward48h": reward_48h,
+                "reward_48h": reward_48h,
+                "PublishedAt": publish_time.isoformat() if publish_time else "",
+                "published_at": publish_time.isoformat() if publish_time else "",
+                **(extra or {}),
+            }
+        })
+    return items
 
 
 def _extract_hook_text(blueprint: dict | None) -> str:

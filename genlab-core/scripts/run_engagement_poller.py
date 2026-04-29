@@ -158,6 +158,24 @@ async def _poll_loop_threads(niche_id: str, user_id: str) -> None:
         await asyncio.sleep(THREADS_POLL_INTERVAL)
 
 
+def _resolve_id(yaml_value: str, niche_id: str, env_suffix: str) -> str:
+    """Resolve an ID, preferring YAML value, falling back to prefixed env var.
+
+    The YAML files document the convention that channel/user IDs are populated
+    from `{NICHE_PREFIX}_{ENV_SUFFIX}` env vars (e.g. CRITICALRUSH_YOUTUBE_CHANNEL_ID).
+    This helper actually wires that intent — callers don't have to.
+    """
+    val = (yaml_value or "").strip()
+    if val and val not in ("", "0"):
+        return val
+
+    from genlab_core.publishing.niche_credentials import NICHE_CREDENTIAL_PREFIXES
+    prefix = NICHE_CREDENTIAL_PREFIXES.get(niche_id, "")
+    if not prefix:
+        return ""
+    return os.environ.get(f"{prefix}_{env_suffix}", "").strip()
+
+
 def _load_poller_config() -> dict:
     """Load engagement poller config from YAML."""
     from pathlib import Path
@@ -172,36 +190,55 @@ def _load_poller_config() -> dict:
         return yaml.safe_load(f).get("pollers", {})
 
 
+async def _idle_forever(reason: str) -> None:
+    """Sleep indefinitely so systemd doesn't restart-loop when no work to do."""
+    logger.warning("%s — entering idle sleep (no restart loop)", reason)
+    while True:
+        await asyncio.sleep(3600)
+
+
 async def _run_all_pollers(platform: str) -> None:
     """Run pollers for all niches concurrently."""
     config = _load_poller_config()
     if not config:
-        logger.error("No poller configuration found")
-        sys.exit(1)
+        await _idle_forever("No poller configuration found")
+        return
 
     tasks = []
     for niche_id, platforms in config.items():
         if platform in ("all", "youtube") and "youtube" in platforms:
-            channel_id = platforms["youtube"].get("channel_id", "")
+            channel_id = _resolve_id(
+                platforms["youtube"].get("channel_id", ""),
+                niche_id, "YOUTUBE_CHANNEL_ID",
+            )
             if channel_id:
                 tasks.append(_poll_loop_youtube(niche_id, channel_id))
-                logger.info("Queued YouTube poller for %s", niche_id)
+                logger.info("Queued YouTube poller for %s (channel=%s)", niche_id, channel_id)
 
         if platform in ("all", "twitter") and "twitter" in platforms:
-            user_id = str(platforms["twitter"].get("user_id", ""))
-            if user_id and user_id not in ("", "0"):
+            user_id = _resolve_id(
+                str(platforms["twitter"].get("user_id", "")),
+                niche_id, "X_USER_ID",
+            )
+            if user_id:
                 tasks.append(_poll_loop_twitter(niche_id, user_id))
-                logger.info("Queued Twitter poller for %s", niche_id)
+                logger.info("Queued Twitter poller for %s (user=%s)", niche_id, user_id)
 
         if platform in ("all", "threads") and "threads" in platforms:
-            threads_user_id = str(platforms["threads"].get("user_id", ""))
-            if threads_user_id and threads_user_id not in ("", "0"):
+            threads_user_id = _resolve_id(
+                str(platforms["threads"].get("user_id", "")),
+                niche_id, "THREADS_USER_ID",
+            )
+            if threads_user_id:
                 tasks.append(_poll_loop_threads(niche_id, threads_user_id))
-                logger.info("Queued Threads poller for %s", niche_id)
+                logger.info("Queued Threads poller for %s (user=%s)", niche_id, threads_user_id)
 
     if not tasks:
-        logger.error("No valid pollers configured for platform=%s", platform)
-        sys.exit(1)
+        # Idle instead of exit(1) so systemd doesn't restart-loop when only
+        # some platforms are provisioned. The service will pick up new IDs
+        # on next restart (e.g. after .env update + systemctl restart).
+        await _idle_forever(f"No valid pollers configured for platform={platform}")
+        return
 
     logger.info("Starting %d poller tasks concurrently", len(tasks))
     await asyncio.gather(*tasks)
