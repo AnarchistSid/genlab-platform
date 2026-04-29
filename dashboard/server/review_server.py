@@ -853,6 +853,13 @@ def _execute_review_action(
         if next_slot:
             update_fields["scheduled_for"] = next_slot
             logger.info("[REVIEW] Auto-scheduled %s → %s (niche=%s)", record_id, next_slot, niche_id)
+        else:
+            logger.warning(
+                "[REVIEW] No available slot found for niche=%s — "
+                "approving %s without scheduled_for (will sit in queue until "
+                "a slot opens)",
+                niche_id, record_id[:16],
+            )
     elif action == "rejected":
         update_fields["status"] = "ARCHIVED"
         update_fields["feedback_issue"] = feedback_issue or "rejected_in_review"
@@ -1034,26 +1041,37 @@ def express_status():
 
 @app.route("/api/express/trigger", methods=["POST"])
 def trigger_express():
-    """Trigger a new express lane run in a background thread."""
-    with _express_lock:
-        if express_state["running"]:
-            return _api_error(error="Express lane already running", code=409)
-        # Claim the run under the lock to prevent duplicate triggers
-        express_state["running"] = True
-        express_state["current_step"] = None
-        express_state["steps_completed"] = []
+    """Trigger a new express lane run in a background thread.
+
+    Concurrency model: an on-disk fcntl.flock survives dashboard worker
+    restarts and is the source of truth. The in-memory `express_state`
+    dict is informational only — it can desync with the lock during
+    crashes but won't cause double-runs.
+    """
+    import fcntl
 
     data = request.json or {}
     run_id = data.get("run_id") or request.args.get("run-id", "test_express")
     if not _SAFE_RUN_ID.match(run_id):
-        # Release the lock claim on invalid input
-        with _express_lock:
-            express_state["running"] = False
         return _api_error(error="Invalid run ID", code=400)
+
+    lock_path = PROJECT_ROOT / ".tmp" / "express_pipeline.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        lock_fd.close()
+        return _api_error(error="Express lane already running", code=409)
+
+    with _express_lock:
+        express_state["running"] = True
+        express_state["current_step"] = None
+        express_state["steps_completed"] = []
 
     thread = threading.Thread(
         target=run_express_pipeline,
-        args=(run_id,),
+        args=(run_id, lock_fd),
         daemon=True,
     )
     thread.start()
@@ -1301,11 +1319,14 @@ def serve_media(filepath):
 # Express Pipeline Runner
 # ══════════════════════════════════════════════════════════════
 
-def run_express_pipeline(run_id: str):
-    """Run express lane steps, emit WebSocket progress after each."""
-    # Note: express_state["running"] = True is already set by the trigger
-    # endpoint under _express_lock before this thread starts.
+def run_express_pipeline(run_id: str, lock_fd=None):
+    """Run express lane steps, emit WebSocket progress after each.
 
+    `lock_fd` is the flock-held file handle from `trigger_express`; the
+    worker owns the lock for the run's lifetime. The on-disk lock is the
+    source of truth for whether a run is in flight; the in-memory
+    express_state dict is informational only.
+    """
     run_dir = PROJECT_ROOT / ".tmp" / "runs" / run_id
     express_tp = str(run_dir / "express_trend_pack.json")
     total_start = time.time()
@@ -1422,6 +1443,14 @@ def run_express_pipeline(run_id: str):
         run_id,
         total_elapsed,
     )
+
+    # Release the on-disk lock — must be the last thing we do so a follow-up
+    # POST can immediately claim it.
+    if lock_fd is not None:
+        try:
+            lock_fd.close()
+        except Exception:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════

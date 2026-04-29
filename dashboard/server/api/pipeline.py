@@ -387,8 +387,12 @@ def _trigger_via_prefect(niche_id: str, mode: str) -> tuple:
         return api_error(error=str(exc), code=500)
 
 
-def _run_unified_pipeline(run_id: str, niche_id: str):
-    """Run pipeline via the unified CLI in a background thread."""
+def _run_unified_pipeline(run_id: str, niche_id: str, lock_fd=None):
+    """Run pipeline via the unified CLI in a background thread.
+
+    `lock_fd` is the flock-held file handle from the trigger endpoint; we
+    keep it open for the run's lifetime so concurrent POSTs are blocked.
+    """
     import subprocess
 
     from server.review_server import _express_lock, express_state, socketio
@@ -399,7 +403,11 @@ def _run_unified_pipeline(run_id: str, niche_id: str):
 
     lock_file = TMP_DIR / f"{niche_id}_pipeline.lock"
     try:
-        lock_file.write_text(run_id)
+        if lock_fd is not None:
+            lock_fd.write(run_id)
+            lock_fd.flush()
+        else:
+            lock_file.write_text(run_id)
         socketio.emit("pipeline_started", {"niche_id": niche_id, "run_id": run_id})
 
         uv = os.path.expanduser("~/.local/bin/uv")
@@ -439,6 +447,11 @@ def _run_unified_pipeline(run_id: str, niche_id: str):
         except Exception:
             pass
     finally:
+        if lock_fd is not None:
+            try:
+                lock_fd.close()  # releases the flock
+            except Exception:
+                pass
         lock_file.unlink(missing_ok=True)
         with _express_lock:
             express_state["running"] = False
@@ -453,6 +466,7 @@ def _run_unified_pipeline(run_id: str, niche_id: str):
 def trigger():
     """Trigger the express pipeline in a background thread."""
     try:
+        import fcntl
         import threading
 
         from server.review_server import express_state
@@ -464,26 +478,34 @@ def trigger():
         if niche_id not in VALID_NICHES:
             return api_error(error=f"Unknown niche: {niche_id}", code=400)
 
-        # Check lock file
+        # Atomically acquire the per-niche pipeline lock. Two concurrent POSTs
+        # used to race past a non-atomic existence check; flock is the only
+        # safe way to single-thread this. The fd is leaked into the worker
+        # thread which must close it (handled by `_run_unified_pipeline`).
         lock_file = TMP_DIR / f"{niche_id}_pipeline.lock"
-        if lock_file.exists():
-            age = _time.time() - lock_file.stat().st_mtime
-            if age < 1800:
-                return api_error(error="Pipeline already running", code=409)
+        lock_fd = open(lock_file, "w")
+        try:
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock_fd.close()
+            return api_error(error="Pipeline already running", code=409)
 
-        # Auto-reset stale "running" state (>15 min is stuck)
+        # express_state is in-memory; on a worker restart it can desync from
+        # the on-disk lock. The flock above is the source of truth — this
+        # check is informational (and clears the dict so future code that
+        # reads it doesn't loop forever on a stale value).
         if express_state.get("running"):
             started = express_state.get("started_at", 0)
             if _time.time() - started > 900:
-                logger.warning("Pipeline stuck for >15 min — resetting state")
+                logger.warning("Pipeline stuck for >15 min — resetting in-memory state")
                 express_state["running"] = False
-            else:
-                return api_error(error="Pipeline already running", code=409)
 
         run_id = f"pipeline_{niche_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         express_state["started_at"] = _time.time()
+        # Pass the locked fd into the worker; it owns the lock for the run's
+        # lifetime and releases when closed.
         t = threading.Thread(
-            target=_run_unified_pipeline, args=(run_id, niche_id), daemon=True
+            target=_run_unified_pipeline, args=(run_id, niche_id, lock_fd), daemon=True
         )
         t.start()
 
