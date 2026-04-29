@@ -19,12 +19,42 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import socket
 import threading
 import uuid
 from datetime import date, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# Cached at import time so every checked-out connection pays the cost once.
+_HOST_ID = (
+    os.environ.get("GENLAB_HOST_ID", "").strip()
+    or socket.gethostname()
+    or "unknown"
+)
+
+
+def _configure_connection(conn) -> None:
+    """Stamp every pooled connection with `app.host_id`.
+
+    The DB-side trigger `tag_host_id` reads this GUC when populating
+    `extra->>'host_id'` on blueprint and publishing_analytics writes.
+    Without it, the trigger falls back to `inet_client_addr()`, which
+    misattributes Hetzner-internal connections (NULL or docker bridge IP).
+
+    Postgres `SET` does not accept parameters, so we use `set_config()`
+    which does. The third arg `false` makes the value persist for the
+    whole session (until the connection is checked back into the pool).
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('app.host_id', %s, false)", (_HOST_ID,))
+        conn.commit()
+    except Exception as exc:
+        logger.warning("Failed to set app.host_id on new connection: %s", exc)
 
 # PostgreSQL reserved words that must be quoted when used as column names.
 _RESERVED_WORDS: frozenset[str] = frozenset({
@@ -163,6 +193,7 @@ class PostgresBackend:
                         min_size=self._min_size,
                         max_size=self._max_size,
                         open=True,
+                        configure=_configure_connection,
                     )
         return self._pool
 

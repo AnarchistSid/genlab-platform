@@ -126,7 +126,15 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
 
 
 def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
-    """Check for consecutive runs producing 0 blueprints."""
+    """Alert on runs producing 0 blueprints.
+
+    Previously required 3 consecutive zero-blueprint runs before alerting,
+    which meant up to 72 hours of silent content loss. Now alerts on the
+    first occurrence — severity scales with consecutive count:
+        1 run  → warning (could be transient)
+        2 runs → critical
+        3+ runs → critical + diagnosis
+    """
     alerts = []
     consecutive_zero = 0
     for r in reports:
@@ -135,27 +143,33 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
         else:
             break
 
-    if consecutive_zero >= 3:
-        # Diagnose which stage lost the content
-        latest = reports[0] if reports else {}
-        m = latest.get("metrics", {})
-        diagnosis = []
-        ci = _load_clip_index(latest.get("_run_dir", ""))
-        if ci.get("videos_total", 0) > 0 and ci.get("videos_downloaded", 0) == 0:
-            diagnosis.append("downloads failing (yt-dlp?)")
-        qc = m.get("qc", {})
-        if qc.get("pass_rate") == "0.0%":
-            diagnosis.append("QC 0% (no content written?)")
-        if m.get("stories_count", 0) > 0 and m.get("blueprints_count", 0) == 0:
-            diagnosis.append("stories created but 0 blueprints (dedup?)")
+    if consecutive_zero == 0:
+        return alerts
 
-        alerts.append(Alert(
-            check="zero_blueprints",
-            severity="critical",
-            message=f"{consecutive_zero} consecutive runs with 0 blueprints. Likely: {', '.join(diagnosis) or 'unknown'}",
-            niche_id=niche_id,
-            details={"consecutive_zero": consecutive_zero, "diagnosis": diagnosis},
-        ))
+    # Diagnose which stage lost the content
+    latest = reports[0] if reports else {}
+    m = latest.get("metrics", {})
+    diagnosis = []
+    ci = _load_clip_index(latest.get("_run_dir", ""))
+    if ci.get("videos_total", 0) > 0 and ci.get("videos_downloaded", 0) == 0:
+        diagnosis.append("downloads failing (yt-dlp?)")
+    qc = m.get("qc", {})
+    if qc.get("pass_rate") == "0.0%":
+        diagnosis.append("QC 0% (no content written?)")
+    if m.get("stories_count", 0) > 0 and m.get("blueprints_count", 0) == 0:
+        diagnosis.append("stories created but 0 blueprints (dedup?)")
+
+    severity = "warning" if consecutive_zero == 1 else "critical"
+    alerts.append(Alert(
+        check="zero_blueprints",
+        severity=severity,
+        message=(
+            f"{consecutive_zero} consecutive run(s) with 0 blueprints. "
+            f"Likely: {', '.join(diagnosis) or 'unknown'}"
+        ),
+        niche_id=niche_id,
+        details={"consecutive_zero": consecutive_zero, "diagnosis": diagnosis},
+    ))
     return alerts
 
 
@@ -270,17 +284,31 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             if not any(p and pathlib.Path(p).exists() for p in paths):
                 broken.append(bp_id)
 
-        # SAFETY GATE 1: If >50% are broken, this is a mount issue, not data loss
-        if total_with_paths > 0 and len(broken) > total_with_paths // 2:
+        # SAFETY GATE 1: bail out on mass-failure patterns that look like a mount
+        # issue rather than genuine per-row media loss. Two patterns trigger:
+        #   (a) >=25% of a non-trivial batch (>=4 rows) is broken
+        #   (b) 100% of any batch (>=1 row) is broken — covers the small-batch
+        #       case the >=4 guard used to drop. The Mac/Hetzner split-brain
+        #       incident on 2026-04-29 surfaced this: 3 gaming blueprints with
+        #       Mac-host paths slipped past the gate and were auto-archived.
+        rate_gate = total_with_paths >= 4 and len(broken) * 4 >= total_with_paths
+        all_broken_gate = total_with_paths >= 1 and len(broken) == total_with_paths
+        if rate_gate or all_broken_gate:
+            pct = (len(broken) * 100 // total_with_paths) if total_with_paths else 0
             alerts.append(Alert(
                 check="missing_media_mass",
                 severity="critical",
                 message=(
                     f"{len(broken)}/{total_with_paths} blueprints appear to have "
-                    f"missing media — likely a symlink/mount issue, NOT auto-archiving"
+                    f"missing media ({pct}%) — likely a symlink/mount/host issue, "
+                    f"NOT auto-archiving"
                 ),
                 niche_id=niche_id,
-                details={"broken_count": len(broken), "total": total_with_paths},
+                details={
+                    "broken_count": len(broken),
+                    "total": total_with_paths,
+                    "trigger": "all_broken" if all_broken_gate and not rate_gate else "rate",
+                },
             ))
             conn.close()
             return alerts
@@ -344,6 +372,88 @@ def check_content_gap(niche_id: str) -> list[Alert]:
             ))
     except Exception as e:
         logger.debug("Content gap check failed: %s", e)
+    return alerts
+
+
+def check_stuck_publishing(niche_id: str) -> list[Alert]:
+    """Recover blueprints stuck in PUBLISHING state for >30 minutes.
+
+    The publisher has its own in-process recovery loop at the top of
+    publish_all_platforms(), but that only runs when the publisher itself
+    runs. If a niche's publisher is broken or hasn't fired for a day,
+    stuck PUBLISHING rows are never rescued. This check closes that gap
+    by running on the hourly health-monitor timer regardless of publisher
+    state.
+
+    Safety: mirrors the publisher's recovery semantics exactly so the
+    two paths stay consistent.
+    """
+    alerts = []
+    try:
+        import psycopg
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+        # publish_attempts lives in the extra JSONB field on Postgres, not as
+        # a top-level column. The publisher's own recovery reads it via
+        # fields.get("publish_attempts", 0) and defaults to 0, so we mirror
+        # that semantic: missing = zero attempts.
+        cur.execute(
+            "SELECT id, title, updated_at, "
+            "COALESCE((extra->>'publish_attempts')::int, 0), "
+            "platform_publish_status FROM blueprints "
+            "WHERE niche_id = %s AND status = 'PUBLISHING' "
+            "AND updated_at < NOW() - INTERVAL '30 minutes'",
+            (niche_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            conn.close()
+            return alerts
+
+        for bp_id, title, updated_at, attempts, pps_raw in rows:
+            attempts = int(attempts or 0)
+            # Parse per-platform status to detect partial success
+            pps = {}
+            if pps_raw:
+                try:
+                    pps = json.loads(pps_raw) if isinstance(pps_raw, str) else (pps_raw or {})
+                except (json.JSONDecodeError, TypeError):
+                    pps = {}
+            has_published = any(
+                v == "PUBLISHED" or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
+                for v in pps.values()
+            )
+            if has_published:
+                new_status = "PUBLISHED"
+                reason = "partial success detected — marking PUBLISHED"
+            elif attempts >= 3:
+                new_status = "PUBLISH_FAILED"
+                reason = f"{attempts} attempts exhausted — marking PUBLISH_FAILED"
+            else:
+                new_status = "VISUAL_READY"
+                reason = f"stuck >30min ({attempts} prior attempts) — resetting to VISUAL_READY"
+
+            cur.execute(
+                "UPDATE blueprints SET status = %s WHERE id = %s",
+                (new_status, bp_id),
+            )
+            alerts.append(Alert(
+                check="stuck_publishing",
+                severity="warning",
+                message=f"Recovered stuck PUBLISHING '{(title or '')[:60]}': {reason}",
+                niche_id=niche_id,
+                details={
+                    "blueprint_id": str(bp_id),
+                    "new_status": new_status,
+                    "updated_at": str(updated_at),
+                    "attempts": attempts,
+                },
+                auto_fix=f"status={new_status}",
+            ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning("[health_monitor] check_stuck_publishing failed for %s: %s", niche_id, e)
     return alerts
 
 
@@ -458,6 +568,48 @@ def check_swap() -> list[Alert]:
 # ── Orchestrator ──────────────────────────────────────────────────────
 
 
+def check_foreign_host_writes() -> list[Alert]:
+    """Detect rows arriving from any host other than `hetzner-vps`.
+
+    The DB trigger `tag_host_id` populates `extra->>'host_id'` on every
+    INSERT/UPDATE. Anything other than `hetzner-vps` here means a process
+    on another machine (Mac, dev laptop, attacker) has written to the
+    shared DB — the exact split-brain pattern that took out 12 blueprints
+    on 2026-04-29 morning before the Mac plists were disabled.
+
+    Returns one critical alert per foreign host_id seen in the last hour.
+    """
+    alerts: list[Alert] = []
+    try:
+        import psycopg
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT extra->>'host_id' AS host, count(*)
+            FROM blueprints
+            WHERE created_at > NOW() - INTERVAL '1 hour'
+              AND extra ? 'host_id'
+              AND extra->>'host_id' NOT IN ('hetzner-vps', '')
+            GROUP BY 1 ORDER BY 2 DESC
+            """
+        )
+        for host, count in cur.fetchall():
+            alerts.append(Alert(
+                check="foreign_host_write",
+                severity="critical",
+                message=(
+                    f"{count} blueprint(s) written from foreign host '{host}' "
+                    f"in the last hour — split-brain in progress"
+                ),
+                details={"host": host, "count": count},
+            ))
+        conn.close()
+    except Exception as e:
+        logger.debug("Foreign host check failed: %s", e)
+    return alerts
+
+
 def run_all_checks(niche_id: str | None = None) -> list[Alert]:
     """Run all health checks. If niche_id is None, checks all niches."""
     all_alerts: list[Alert] = []
@@ -471,6 +623,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_source_starvation(reports, nid))
         all_alerts.extend(check_bandit_staleness(nid))
         all_alerts.extend(check_missing_media(nid))
+        all_alerts.extend(check_stuck_publishing(nid))
         all_alerts.extend(check_content_gap(nid))
         all_alerts.extend(check_publish_failures(nid))
 
@@ -479,6 +632,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_disk())
         all_alerts.extend(check_services())
         all_alerts.extend(check_swap())
+        all_alerts.extend(check_foreign_host_writes())
 
     return all_alerts
 
