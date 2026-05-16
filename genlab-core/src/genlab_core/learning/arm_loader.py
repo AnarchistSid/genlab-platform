@@ -113,13 +113,15 @@ def save_arm(
     content_type: str = "",
     platform: str = "",
     linucb_state: dict[str, Any] | None = None,
+    n_plays: int | None = None,
 ) -> None:
     """Save a single bandit arm — upsert by Title.
 
-    Checks for an existing arm with the same Title and updates it
-    instead of creating a duplicate row.
-
     Args:
+        n_plays: If provided, written as-is. If None (default), the
+            existing row's n_plays is preserved on update; new rows
+            get 0. Previously hardcoded to 0 on every write, which
+            silently zeroed the column on every update.
         linucb_state: Optional LinUCB state dict from ``LinUCBArm.to_dict()``.
             Serialized as JSON into the ``LinUCB_State`` column.
     """
@@ -127,7 +129,6 @@ def save_arm(
         "arm_id": arm_id,
         "alpha": alpha,
         "beta": beta,
-        "n_plays": 0,
         "ContentType": content_type,
         "Platform": platform,
         "LastUpdated": datetime.now(UTC).isoformat(),
@@ -143,8 +144,12 @@ def save_arm(
             None,
         )
         if match:
+            if n_plays is not None:
+                fields["n_plays"] = n_plays
+            # else: omit from update payload → preserve existing value
             proxy.update(match["id"], fields)
         else:
+            fields["n_plays"] = n_plays if n_plays is not None else 0
             proxy.create(fields)
     except Exception as e:
         logger.warning("[arm_loader] save failed for %s: %s", arm_id, e)

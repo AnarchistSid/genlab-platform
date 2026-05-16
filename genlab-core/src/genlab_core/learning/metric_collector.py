@@ -85,7 +85,14 @@ _YT_TOKEN_TTL = 2400.0  # 40 minutes (tokens last ~60 min)
 
 
 def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
-    """YouTube Data API v3 basic stats (per-niche credentials)."""
+    """YouTube Data API v3 basic stats (per-niche credentials).
+
+    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["youtube"]``:
+    ``views, avg_view_duration, subscriber_gained, like_rate, comment_rate``.
+    avg_view_duration and subscriber_gained require the YouTube Analytics
+    API (separate OAuth scope); they're stubbed as 0 here. Wiring those
+    in is tracked in the learning-loop follow-up.
+    """
     import time as _time
 
     import requests
@@ -136,15 +143,32 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
         return {}
 
     stats = items[0].get("statistics", {})
+    views = int(stats.get("viewCount", 0))
+    likes = int(stats.get("likeCount", 0))
+    comments = int(stats.get("commentCount", 0))
+    like_rate = (likes / views) if views > 0 else 0.0
+    comment_rate = (comments / views) if views > 0 else 0.0
     return {
-        "views": int(stats.get("viewCount", 0)),
-        "likes": int(stats.get("likeCount", 0)),
-        "comments": int(stats.get("commentCount", 0)),
+        "views": views,
+        "likes": likes,
+        "comments": comments,
+        "like_rate": round(like_rate, 4),
+        "comment_rate": round(comment_rate, 4),
+        # Stubs — require YouTube Analytics API (yt-analytics.readonly scope)
+        "avg_view_duration": 0.0,
+        "subscriber_gained": 0,
     }
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
-    """Fetch Instagram metrics — tries Reels metrics first, falls back to standard."""
+    """Fetch Instagram metrics — tries Reels metrics first, falls back to standard.
+
+    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["instagram"]``:
+    ``views, saves, dm_send_rate, shares, skip_rate``.
+    Graph API ``saved`` is returned as ``saves``. ``dm_send_rate`` and
+    ``skip_rate`` aren't directly available from the basic insights
+    endpoints; stubbed as 0.
+    """
     import requests
 
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
@@ -177,8 +201,13 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
                     metrics["views"] = val
                 elif name == "impressions":
                     metrics.setdefault("views", val)
-                elif name in ("reach", "likes", "comments", "shares", "saved"):
+                elif name == "saved":
+                    metrics["saves"] = val
+                elif name in ("reach", "likes", "comments", "shares"):
                     metrics[name] = val
+            # Stubs for fields RewardShaper expects but Graph API doesn't expose
+            metrics.setdefault("dm_send_rate", 0.0)
+            metrics.setdefault("skip_rate", 0.0)
             return metrics
         except Exception:
             continue
@@ -220,6 +249,14 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
 
 
 def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
+    """Fetch Facebook post insights.
+
+    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["facebook"]``:
+    ``minutes_viewed, shares, completion_rate, reach``.
+    ``shares`` and ``completion_rate`` require additional Graph API calls
+    (post object + video duration) — stubbed as 0 for now and tracked
+    as a follow-up.
+    """
     import requests
 
     from genlab_core.publishing.niche_credentials import resolve_fb_credentials
@@ -230,29 +267,57 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     resp = requests.get(
         f"https://graph.facebook.com/v21.0/{post_id}/insights",
         params={
-            "metric": "post_impressions,post_engaged_users,post_video_views,post_video_avg_time_watched",
+            "metric": (
+                "post_impressions,post_impressions_unique,"
+                "post_engaged_users,post_video_views,"
+                "post_video_avg_time_watched"
+            ),
             "access_token": token,
         },
         timeout=15,
     )
     resp.raise_for_status()
     metrics: dict[str, Any] = {}
+    impressions = 0
+    reach = 0
+    video_views = 0
+    avg_watch_time = 0.0
     for item in resp.json().get("data", []):
         name = item.get("name", "")
         vals = item.get("values", [{}])
         val = vals[0].get("value", 0) if vals else 0
         if name == "post_impressions":
-            metrics["impressions"] = val
+            impressions = int(val)
+        elif name == "post_impressions_unique":
+            reach = int(val)
         elif name == "post_engaged_users":
             metrics["engaged_users"] = val
         elif name == "post_video_views":
+            video_views = int(val)
             metrics["video_views"] = val
         elif name == "post_video_avg_time_watched":
+            avg_watch_time = float(val)
             metrics["avg_watch_time"] = val
+
+    metrics["impressions"] = impressions
+    metrics["reach"] = reach or impressions  # fall back to impressions if reach unavailable
+    # avg_watch_time is in milliseconds from Graph API; convert to minutes
+    metrics["minutes_viewed"] = round((video_views * avg_watch_time) / 60_000.0, 2)
+    # Stubs — need post object (shares) + video duration (completion_rate)
+    metrics.setdefault("shares", 0)
+    metrics.setdefault("completion_rate", 0.0)
     return metrics
 
 
 def _fetch_x(post_id: str, niche_id: str = "") -> dict:
+    """Fetch X/Twitter metrics via API v2.
+
+    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["twitter"]``:
+    ``impressions, reply_chain_rate, engagements, profile_clicks``.
+    Raw ``likes/retweets/replies`` are also returned for compatibility
+    with ``upsert_analytics`` storage. ``profile_clicks`` requires the
+    organic_tweet metrics endpoint (premium-only) — stubbed as 0.
+    """
     import os
 
     import requests
@@ -268,11 +333,20 @@ def _fetch_x(post_id: str, niche_id: str = "") -> dict:
     )
     resp.raise_for_status()
     public = resp.json().get("data", {}).get("public_metrics", {})
+    impressions = int(public.get("impression_count", 0))
+    likes = int(public.get("like_count", 0))
+    retweets = int(public.get("retweet_count", 0))
+    replies = int(public.get("reply_count", 0))
+    engagements = likes + retweets + replies
+    reply_chain_rate = (replies / impressions) if impressions > 0 else 0.0
     return {
-        "impressions": public.get("impression_count", 0),
-        "likes": public.get("like_count", 0),
-        "retweets": public.get("retweet_count", 0),
-        "replies": public.get("reply_count", 0),
+        "impressions": impressions,
+        "likes": likes,
+        "retweets": retweets,
+        "replies": replies,
+        "engagements": engagements,
+        "reply_chain_rate": round(reply_chain_rate, 4),
+        "profile_clicks": 0,  # not in public_metrics; needs organic_tweet metrics
     }
 
 
@@ -315,7 +389,12 @@ def _fetch_tiktok(post_id: str, niche_id: str = "") -> dict:
 
 
 def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
-    """Threads API — media insights."""
+    """Threads API — media insights.
+
+    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["threads"]``:
+    ``views, replies, reposts, discovery_share``. ``discovery_share``
+    isn't exposed by the Threads insights endpoint — stubbed as 0.
+    """
     import requests
 
     from genlab_core.publishing.niche_credentials import resolve_threads_credentials
@@ -339,6 +418,8 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
             vals = item.get("values", [{}])
             val = vals[0].get("value", 0) if vals else 0
             metrics[name] = val
+        # discovery_share not exposed by Threads API
+        metrics.setdefault("discovery_share", 0.0)
         return metrics
     except Exception as exc:
         logger.warning("[metric_collector] Threads fetch failed for %s: %s", post_id, exc)
@@ -409,8 +490,12 @@ def process_pending_task(
             logger.debug("[metric_collector] lifecycle snapshot failed: %s", exc)
 
     # Early-stop detection at 6h window (Break 14 fix)
-    # If 6h views are far below niche floor, the post is bombing — skip to
-    # negative reward immediately instead of waiting 48h for the inevitable.
+    # If 6h views are far below niche floor, the post is bombing — skip
+    # collection of later windows.  We do NOT update the bandit here:
+    # the 48h reward path is the single source of bandit truth, so a
+    # bombing post will naturally produce a near-zero reward there.
+    # Sending 0.05 here previously hit the adaptive-threshold floor and
+    # incremented α (Bug F in 2026-05-16 audit) — the opposite of intent.
     if window == "6h" and metrics:
         views_6h = metrics.get("views", 0)
         _NICHE_6H_FLOOR: dict[str, int] = {
@@ -430,27 +515,10 @@ def process_pending_task(
                 views_6h,
                 floor,
             )
-            # Give immediate negative reward to bandit so it learns fast
-            early_reward = 0.05  # very low but non-zero
-            if bandit_updater is not None:
-                try:
-                    bandit_updater(
-                        task_record.niche_id,
-                        task_record.content_type,
-                        task_record.platform,
-                        early_reward,
-                        task_record.bandit_context,
-                    )
-                    logger.info(
-                        "[metric_collector] early-stop bandit penalty: %s/%s reward=%.3f",
-                        task_record.niche_id, task_record.content_type, early_reward,
-                    )
-                except Exception as exc:
-                    logger.debug("[metric_collector] early-stop bandit update failed: %s", exc)
             # Mark task as early-stopped — skips 24h/48h/168h collection
             task_record.collection_status = "early_stopped"
-            task_record.reward_48h = early_reward
-            store.update_window(task_record, window, reward_48h=early_reward)
+            task_record.reward_48h = 0.0
+            store.update_window(task_record, window, reward_48h=0.0)
             return True
 
     reward_48h: float | None = None
@@ -497,7 +565,10 @@ def process_pending_task(
                 logger.debug("[metric_collector] CTA bandit updated: platform=%s reward=%.3f",
                              task_record.platform, reward_48h)
         except Exception as exc:
-            logger.debug("[metric_collector] CTA bandit update skipped: %s", exc)
+            logger.warning(
+                "[metric_collector] CTA bandit update failed (learning loop degraded): %s",
+                exc,
+            )
 
     # Write fetched metrics to the Analytics table for dashboard consumption
     if metrics and backlog_client is not None:
@@ -594,14 +665,28 @@ def _default_bandit_updater(
     reward: float,
     bandit_context: dict | None = None,
 ) -> None:
-    """Default bandit updater — writes reward directly to bandit_arms table.
+    """Default bandit updater — writes reward into bandit_arms table.
 
-    This closes the critical gap: metric_collector computes rewards but they
-    were never fed back to bandit_arms because collect_metrics() was called
-    from CLI without a bandit_updater callback (Break 8 fix).
+    Math (2026-05-16 audit fix):
+      * Fractional Thompson update preserves signal magnitude:
+            alpha += clip(reward, 0, 1)
+            beta  += 1 - clip(reward, 0, 1)
+        A reward of 0.49 contributes "almost a success" instead of a
+        hard failure (the previous threshold-binarized update lost
+        ~half the gradient information).
+      * n_plays is incremented per observation — previously hardcoded
+        to 0 in save_arm, leaving the column permanently lying.
 
-    Uses adaptive threshold instead of hardcoded 0.5 (Break 6 fix).
-    Also updates LinUCB arm with context vector when available (Break 11 fix).
+    Idempotency:
+      * No explicit dedupe cache. The pending_feedback state machine
+        in process_pending_task guarantees a single bandit_updater fire
+        per (task_id, window).  PerformanceLearner's parallel update
+        path (which DID cause duplicate writes via historical replay)
+        was deleted in the same audit fix.
+
+    LinUCB:
+      * Same fractional reward is fed into LinUCB's update.
+        bandit_context["linucb_context"] is a CONTEXT_DIM-length list.
     """
     try:
         import json as _json
@@ -609,7 +694,7 @@ def _default_bandit_updater(
         import numpy as np
 
         from genlab_core.http.backlog_client import BacklogClient
-        from genlab_core.learning.arm_loader import load_all_arms_extended, save_arm
+        from genlab_core.learning.arm_loader import save_arm
         from genlab_core.learning.linucb import CONTEXT_DIM, LinUCBArm
 
         client = BacklogClient()
@@ -617,6 +702,8 @@ def _default_bandit_updater(
         if proxy is None:
             logger.warning("[bandit_updater] No bandit_arms proxy")
             return
+
+        reward_clipped = max(0.0, min(1.0, float(reward)))
 
         existing = proxy.all()
         for item in existing:
@@ -628,43 +715,53 @@ def _default_bandit_updater(
 
             alpha = float(fields.get("alpha", 1.0) or 1.0)
             beta = float(fields.get("beta", 1.0) or 1.0)
+            n_plays = int(fields.get("n_plays", 0) or 0)
 
-            # Adaptive threshold: use running mean instead of hardcoded 0.5
-            mean = alpha / (alpha + beta) if (alpha + beta) > 0 else 0.5
-            threshold = max(0.05, mean * 0.8)
+            # Fractional Beta update — preserves reward magnitude.
+            alpha += reward_clipped
+            beta += 1.0 - reward_clipped
+            n_plays += 1
 
-            if reward >= threshold:
-                alpha += 1.0
-            else:
-                beta += 0.5  # softer penalty
-
-            # Update LinUCB arm with context vector (Break 11 fix)
+            # Update LinUCB arm with context vector if provided.
             linucb_state_dict = None
             if bandit_context and "linucb_context" in bandit_context:
                 try:
                     ctx_list = bandit_context["linucb_context"]
                     if len(ctx_list) == CONTEXT_DIM:
                         ctx = np.array(ctx_list, dtype=np.float64)
-                        # Load or create LinUCB arm
-                        raw_state = fields.get("linucb_state") or fields.get("LinUCB_State") or ""
+                        raw_state = (
+                            fields.get("linucb_state")
+                            or fields.get("LinUCB_State")
+                            or ""
+                        )
                         if raw_state:
                             arm = LinUCBArm.from_dict(_json.loads(raw_state))
                         else:
                             arm = LinUCBArm(d=CONTEXT_DIM)
-                        arm.update(ctx, reward)
+                        arm.update(ctx, reward_clipped)
                         linucb_state_dict = arm.to_dict()
                         logger.info(
                             "[bandit_updater] LinUCB updated: %s/%s n_obs=%d",
                             niche_id, item_arm, arm.n_obs,
                         )
                 except Exception as linucb_exc:
-                    logger.debug("[bandit_updater] LinUCB update skipped: %s", linucb_exc)
+                    logger.warning(
+                        "[bandit_updater] LinUCB update failed for %s/%s "
+                        "(falling back to Thompson): %s",
+                        niche_id, item_arm, linucb_exc,
+                    )
 
-            save_arm(proxy, arm_id=item_arm, alpha=alpha, beta=beta,
-                     linucb_state=linucb_state_dict)
+            save_arm(
+                proxy,
+                arm_id=item_arm,
+                alpha=alpha,
+                beta=beta,
+                linucb_state=linucb_state_dict,
+                n_plays=n_plays,
+            )
             logger.info(
-                "[bandit_updater] %s/%s reward=%.3f thr=%.3f → a=%.1f b=%.1f",
-                niche_id, item_arm, reward, threshold, alpha, beta,
+                "[bandit_updater] %s/%s reward=%.3f → a=%.2f b=%.2f n_plays=%d",
+                niche_id, item_arm, reward_clipped, alpha, beta, n_plays,
             )
             return
     except Exception as exc:

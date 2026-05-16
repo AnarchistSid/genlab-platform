@@ -108,6 +108,7 @@ class TestFetchThreads:
             "replies": 12,
             "reposts": 5,
             "quotes": 3,
+            "discovery_share": 0.0,  # RewardShaper-aligned stub
         }
         mock_get.assert_called_once()
         call_args = mock_get.call_args
@@ -200,7 +201,8 @@ class TestFetchPlatformMetricsRouting:
         with patch("requests.get", return_value=regular_resp):
             result = fetch_platform_metrics("instagram", "post001", "48h")
 
-        assert result == {}
+        # Regular fetcher always adds RewardShaper-aligned stubs
+        assert result == {"dm_send_rate": 0.0, "skip_rate": 0.0}
 
     def test_instagram_6h_exception_returns_empty(self, monkeypatch):
         monkeypatch.setenv("META_ACCESS_TOKEN", "tok_meta")
@@ -235,11 +237,20 @@ class TestFetchFacebook:
         with patch("requests.get", return_value=mock_resp) as mock_get:
             result = _fetch_facebook("fbpost1")
 
+        # RewardShaper-aligned output: minutes_viewed, reach, shares,
+        # completion_rate added alongside raw counts.
+        # avg_watch_time is treated as milliseconds → minutes_viewed
+        # = video_views * avg_watch_time / 60_000.
+        # 8000 * 12.5 / 60000 = 1.666... → rounded to 1.67
         assert result == {
             "impressions": 10000,
             "engaged_users": 500,
             "video_views": 8000,
             "avg_watch_time": 12.5,
+            "reach": 10000,  # falls back to impressions when post_impressions_unique absent
+            "minutes_viewed": 1.67,
+            "shares": 0,
+            "completion_rate": 0.0,
         }
         # Verify the metric param includes video metrics
         params = mock_get.call_args[1]["params"]
@@ -258,7 +269,16 @@ class TestFetchFacebook:
         with patch("requests.get", return_value=mock_resp):
             result = _fetch_facebook("fbpost2")
 
-        assert result == {"impressions": 2000, "engaged_users": 100}
+        # video keys absent → minutes_viewed=0 stub. reach falls back to
+        # impressions when post_impressions_unique not present.
+        assert result == {
+            "impressions": 2000,
+            "engaged_users": 100,
+            "reach": 2000,
+            "minutes_viewed": 0.0,
+            "shares": 0,
+            "completion_rate": 0.0,
+        }
         assert "video_views" not in result
         assert "avg_watch_time" not in result
 
@@ -517,3 +537,170 @@ class TestNoWindowDue:
         assert result is False
         updater.assert_not_called()
         store.update_window.assert_not_called()
+
+
+# ===========================================================================
+# 2026-05-16 audit fixes — regression tests
+# ===========================================================================
+
+
+class TestEarlyStopDoesNotFireBandit:
+    """Bug F (2026-05-16): early-stop sent reward=0.05 which hit the
+    adaptive threshold floor and incremented α, treating a flop as a
+    success. The fix is to skip the bandit update at 6h entirely and
+    rely on the 48h reward path."""
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    def test_early_stop_does_not_call_bandit_updater(self, mock_fetch):
+        # Views well below the gaming niche floor (30) → triggers early stop
+        mock_fetch.return_value = {"views": 5}
+
+        task = _make_task(
+            published_hours_ago=7.0,
+            collection_status="awaiting_6h",
+            completed_windows=[],
+            niche_id="gaming",
+        )
+        store = _mock_store(next_window="6h")
+        shaper = _mock_shaper()
+        updater = MagicMock()
+
+        result = process_pending_task(task, store, shaper, bandit_updater=updater)
+
+        # Early-stop happened (returned True), but bandit was NOT touched.
+        assert result is True
+        updater.assert_not_called()
+        # Task marked as early_stopped with reward 0.0 (not 0.05).
+        assert task.collection_status == "early_stopped"
+        assert task.reward_48h == 0.0
+
+
+class TestDefaultBanditUpdaterFractionalMath:
+    """Bug B+C (2026-05-16): updater binarized reward against threshold
+    instead of α += r; β += (1−r). For reward in [0,1] the fractional
+    update preserves signal magnitude."""
+
+    def test_fractional_update_preserves_reward_gradient(self):
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        # Stand in for the BacklogClient + bandit_arms proxy.
+        proxy = MagicMock()
+        existing_arm = {
+            "id": "arm_row_1",
+            "fields": {
+                "arm_id": "gameplay_clip",
+                "niche_id": "gaming",
+                "alpha": 1.0,
+                "beta": 1.0,
+                "n_plays": 5,
+            },
+        }
+        proxy.all.return_value = [existing_arm]
+        proxy.update = MagicMock()
+        proxy.create = MagicMock()
+
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.4,
+            )
+
+        # Verify the update written:
+        #   alpha 1.0 + 0.4 = 1.4
+        #   beta  1.0 + 0.6 = 1.6
+        #   n_plays 5 + 1 = 6
+        proxy.update.assert_called_once()
+        written_fields = proxy.update.call_args[0][1]
+        assert abs(written_fields["alpha"] - 1.4) < 1e-9
+        assert abs(written_fields["beta"] - 1.6) < 1e-9
+        assert written_fields["n_plays"] == 6
+
+    def test_reward_clipped_to_unit_interval(self):
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = MagicMock()
+        proxy.all.return_value = [{
+            "id": "row",
+            "fields": {
+                "arm_id": "clip",
+                "niche_id": "gaming",
+                "alpha": 2.0,
+                "beta": 3.0,
+                "n_plays": 10,
+            },
+        }]
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            # Reward beyond [0,1] must be clipped.
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="clip",
+                platform="youtube",
+                reward=1.7,
+            )
+
+        fields = proxy.update.call_args[0][1]
+        # Clipped to 1.0 → α += 1, β += 0
+        assert abs(fields["alpha"] - 3.0) < 1e-9
+        assert abs(fields["beta"] - 3.0) < 1e-9
+        assert fields["n_plays"] == 11
+
+
+class TestSaveArmPreservesNPlays:
+    """Bug D (2026-05-16): save_arm hardcoded n_plays=0 on every write,
+    overwriting prior counts. Fix: accept optional n_plays; if None,
+    omit from update payload so existing value is preserved."""
+
+    def test_save_arm_writes_explicit_n_plays(self):
+        from genlab_core.learning.arm_loader import save_arm
+
+        proxy = MagicMock()
+        proxy.all.return_value = [{
+            "id": "row_42",
+            "fields": {"arm_id": "test_arm", "n_plays": 9},
+        }]
+
+        save_arm(proxy, arm_id="test_arm", alpha=2.0, beta=3.0, n_plays=10)
+
+        written = proxy.update.call_args[0][1]
+        assert written["n_plays"] == 10
+
+    def test_save_arm_omits_n_plays_when_not_provided_on_update(self):
+        from genlab_core.learning.arm_loader import save_arm
+
+        proxy = MagicMock()
+        proxy.all.return_value = [{
+            "id": "row_42",
+            "fields": {"arm_id": "test_arm", "n_plays": 9},
+        }]
+
+        save_arm(proxy, arm_id="test_arm", alpha=2.0, beta=3.0)
+
+        # n_plays must NOT appear in the update payload — preserves the
+        # existing value rather than clobbering with 0.
+        written = proxy.update.call_args[0][1]
+        assert "n_plays" not in written
+
+    def test_save_arm_sets_zero_n_plays_on_create_when_not_provided(self):
+        from genlab_core.learning.arm_loader import save_arm
+
+        proxy = MagicMock()
+        proxy.all.return_value = []  # no existing arm → create path
+
+        save_arm(proxy, arm_id="new_arm", alpha=1.0, beta=1.0)
+
+        written = proxy.create.call_args[0][0]
+        assert written["n_plays"] == 0
