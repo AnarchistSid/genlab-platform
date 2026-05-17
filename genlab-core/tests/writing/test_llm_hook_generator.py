@@ -139,3 +139,201 @@ class TestBannedPhrases:
 
     def test_banned_phrases_not_empty(self):
         assert len(_BANNED_PHRASES) >= 10
+
+
+class TestPickHookStyle:
+    """Bandit-driven hook style selection (2026-05-17).
+
+    pick_hook_style reads bandit_arms rows whose arm_id starts with
+    style: and Thompson-samples among them. Returns None for cold-start
+    (no arms, no client, etc.) so callers can degrade gracefully.
+    """
+
+    def test_returns_none_when_no_arms_exist(self):
+        from genlab_core.writing.llm_hook_generator import pick_hook_style
+
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all.return_value = []
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            assert pick_hook_style("gaming") is None
+
+    def test_returns_none_when_proxy_missing(self):
+        from genlab_core.writing.llm_hook_generator import pick_hook_style
+
+        mock_client = MagicMock()
+        mock_client.bandit_arms = None
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            assert pick_hook_style("gaming") is None
+
+    def test_picks_style_when_arms_exist(self):
+        from genlab_core.writing.llm_hook_generator import (
+            _HOOK_STYLES,
+            pick_hook_style,
+        )
+
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "style:gaming:question",
+                                   "niche_id": "gaming",
+                                   "alpha": 5.0, "beta": 2.0}},
+            {"id": "2", "fields": {"arm_id": "style:gaming:bold_claim",
+                                   "niche_id": "gaming",
+                                   "alpha": 1.0, "beta": 5.0}},
+        ]
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            chosen = pick_hook_style("gaming")
+        assert chosen in _HOOK_STYLES
+
+    def test_ignores_unrecognized_arm_names(self):
+        """If bandit_arms contains a style name not in _HOOK_STYLES
+        (e.g. left over from a renamed style), don't return it — the
+        LLM prompt template only has hints for known styles."""
+        from genlab_core.writing.llm_hook_generator import pick_hook_style
+
+        mock_client = MagicMock()
+        # Only one arm, and it's an unknown style
+        mock_client.bandit_arms.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "style:gaming:mystery_genre",
+                                   "niche_id": "gaming",
+                                   "alpha": 99.0, "beta": 1.0}},
+        ]
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            assert pick_hook_style("gaming") is None
+
+    def test_only_considers_niche_scoped_arms(self):
+        """Style arms from other niches must not influence this niche's
+        sampling. arm_id is namespaced as style:{niche}:{name} so
+        gaming's pick_hook_style only matches style:gaming:* entries.
+        """
+        from genlab_core.writing.llm_hook_generator import pick_hook_style
+
+        mock_client = MagicMock()
+        # gaming has a low-confidence arm; movies has a very-strong one
+        mock_client.bandit_arms.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "style:gaming:question",
+                                   "niche_id": "gaming",
+                                   "alpha": 1.0, "beta": 5.0}},
+            {"id": "2", "fields": {"arm_id": "style:movies:question",
+                                   "niche_id": "movies",
+                                   "alpha": 99.0, "beta": 1.0}},
+        ]
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            chosen = pick_hook_style("gaming")
+        assert chosen == "question"
+
+    def test_legacy_unprefixed_style_format_still_works(self):
+        """Backwards-compat: rows with arm_id "style:{name}" (no niche
+        segment) should still parse correctly. Falls through the
+        UNIQUE(arm_id) constraint for single-niche deployments."""
+        from genlab_core.writing.llm_hook_generator import pick_hook_style
+
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "style:question",
+                                   "niche_id": "gaming",
+                                   "alpha": 10.0, "beta": 1.0}},
+        ]
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=mock_client,
+        ):
+            chosen = pick_hook_style("gaming")
+        assert chosen == "question"
+
+
+class TestGenerateHookStyleHint:
+    """Verify the LLM system prompt gets a style hint when bandit
+    returns one, and verify backwards compatibility of the return
+    signature."""
+
+    def test_return_style_false_returns_plain_string(self):
+        """Default behaviour must still return ``str | None``."""
+        mock_cls = _mock_anthropic_success("Jokic owned Game 7")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value=None,
+                ):
+                    result = generate_hook(_make_story(), "sports")
+        assert isinstance(result, str)
+        assert result == "Jokic owned Game 7"
+
+    def test_return_style_true_returns_tuple(self):
+        mock_cls = _mock_anthropic_success("Jokic owned Game 7")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value="bold_claim",
+                ):
+                    result = generate_hook(
+                        _make_story(), "sports", return_style=True,
+                    )
+        assert isinstance(result, tuple)
+        assert result[0] == "Jokic owned Game 7"
+        assert result[1] == "bold_claim"
+
+    def test_style_hint_appears_in_system_prompt(self):
+        mock_cls = _mock_anthropic_success("Jokic owned Game 7")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value="controversy",
+                ):
+                    generate_hook(_make_story(), "sports")
+
+        client = mock_cls.return_value
+        system_prompt = client.messages.create.call_args.kwargs["system"]
+        assert "STYLE TARGET" in system_prompt
+        # The body of the controversy hint should be in the prompt
+        assert "tension" in system_prompt.lower() or \
+               "dispute" in system_prompt.lower()
+
+    def test_no_style_hint_when_pick_returns_none(self):
+        mock_cls = _mock_anthropic_success("Jokic owned Game 7")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value=None,
+                ):
+                    generate_hook(_make_story(), "sports")
+
+        client = mock_cls.return_value
+        system_prompt = client.messages.create.call_args.kwargs["system"]
+        assert "STYLE TARGET" not in system_prompt
+
+    def test_none_returned_with_style_on_api_error(self):
+        """API failure with return_style=True returns (None, style)
+        so the caller still knows which arm was 'attempted'."""
+        mock_cls = MagicMock()
+        mock_client_inst = MagicMock()
+        mock_client_inst.messages.create.side_effect = RuntimeError("down")
+        mock_cls.return_value = mock_client_inst
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value="revelation",
+                ):
+                    result = generate_hook(
+                        _make_story(), "sports", return_style=True,
+                    )
+        assert result == (None, "revelation")

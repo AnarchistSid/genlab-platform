@@ -116,8 +116,18 @@ class BaseHookStrategy(HookStrategy):
         try:
             from genlab_core.writing.llm_hook_generator import generate_hook
 
-            llm_hook = generate_hook(story, self._niche_id, used_hooks)
+            result = generate_hook(
+                story, self._niche_id, used_hooks, return_style=True,
+            )
+            # return_style=True yields (hook, style) — None style means
+            # cold-start / no bandit influence, which we don't record.
+            if isinstance(result, tuple):
+                llm_hook, hook_style = result
+            else:  # Defensive: older mock or stub returning plain str
+                llm_hook, hook_style = result, None
             if llm_hook and not self._is_banned(llm_hook):
+                if hook_style:
+                    story["hook_style"] = hook_style
                 return llm_hook
         except ImportError:
             pass

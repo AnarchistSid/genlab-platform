@@ -765,6 +765,13 @@ class PushToBacklog:
                         "angle": (story.get("summary") or title)[:200],
                     }
 
+                    # Hook style picked by the bandit at writing time
+                    # (2026-05-17). Recorded so the eventual multi-arm
+                    # update in metric_collector can attribute reward
+                    # to style:{name} alongside the content_type arm.
+                    if story.get("hook_style"):
+                        fields["hook_style"] = story["hook_style"]
+
                     # LinUCB context fields — store for publish-time context building
                     for ctx_key in ("duration_seconds", "view_velocity", "source_type", "relevance_score"):
                         if story.get(ctx_key) is not None:

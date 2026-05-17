@@ -2,6 +2,14 @@
 
 Called by niche hook strategies when ANTHROPIC_API_KEY is set.
 Returns None on any failure — callers fall back to template-based hooks.
+
+Bandit-driven style hint (2026-05-17):
+  When ``bandit_arms`` contains rows like ``style:question`` for a
+  niche, ``pick_hook_style`` Thompson-samples among them and the
+  chosen style is injected into the LLM system prompt as a one-line
+  hint. The story's ``hook_style`` field records which arm was used
+  so the feedback loop can attribute reward (extension to multi-arm
+  updates in metric_collector is tracked separately).
 """
 
 from __future__ import annotations
@@ -11,6 +19,104 @@ import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# Hook style taxonomy. Each style maps to a one-line instruction that
+# becomes part of the LLM system prompt. Adding a style here is a
+# breaking change for the bandit posterior (new arms need to be
+# seeded) — keep the set stable across deploys.
+_HOOK_STYLES: dict[str, str] = {
+    "question": (
+        "Phrase the hook as a direct question to the viewer. Make them "
+        "want to click for the answer."
+    ),
+    "bold_claim": (
+        "Start with a confident, declarative statement. Use a "
+        "superlative or absolute (most, never, only)."
+    ),
+    "controversy": (
+        "Frame the hook around a tension, dispute, or opinion that "
+        "splits viewers. Avoid neutral language."
+    ),
+    "revelation": (
+        "Frame the hook as if revealing a hidden truth or behind-the-"
+        "scenes detail. Use 'why', 'how', or 'what nobody told you'."
+    ),
+    "comparison": (
+        "Frame the hook as a direct comparison or contrast — X vs Y, "
+        "before vs after, expected vs actual."
+    ),
+}
+
+
+def pick_hook_style(niche_id: str) -> str | None:
+    """Thompson-sample a hook style for ``niche_id``.
+
+    Reads ``bandit_arms`` rows whose ``arm_id`` starts with ``style:``
+    and draws Beta(alpha, beta) for each. Returns the style with the
+    highest sample, stripped of the ``style:`` prefix.
+
+    Returns None if:
+      - No style arms exist for this niche (cold-start scenario).
+      - BacklogClient creation fails.
+      - Any unexpected error occurs.
+
+    None is the well-defined "no bandit influence" signal — the caller
+    proceeds with a vanilla LLM prompt.
+    """
+    try:
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.arm_loader import load_all_arms
+    except ImportError:
+        return None
+
+    try:
+        client = BacklogClient()
+    except Exception:
+        return None
+
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return None
+
+    arms = load_all_arms(proxy, niche_id)
+    # arm_id format is "style:{niche}:{name}" — bandit_arms has
+    # UNIQUE(arm_id) so the niche segment is required even though it
+    # duplicates the niche_id column. Strip both prefix levels.
+    style_arms: dict[str, tuple[float, float]] = {}
+    legacy_prefix = "style:"  # for backwards-compat with the simpler form
+    niche_prefix = f"style:{niche_id}:"
+    for arm_id, (alpha, beta) in arms.items():
+        if arm_id.startswith(niche_prefix):
+            name = arm_id[len(niche_prefix):]
+        elif arm_id.startswith(legacy_prefix) and ":" not in arm_id[len(legacy_prefix):]:
+            # Legacy "style:question" form (single-niche deployment)
+            name = arm_id[len(legacy_prefix):]
+        else:
+            continue
+        style_arms[name] = (alpha, beta)
+    if not style_arms:
+        return None
+
+    import random
+    best_sample = -1.0
+    best_style: str | None = None
+    for name, (alpha, beta) in style_arms.items():
+        a = alpha if alpha > 0 else 1.0
+        b = beta if beta > 0 else 1.0
+        try:
+            sample = random.betavariate(a, b)
+        except (ValueError, OverflowError):
+            sample = 0.5
+        if sample > best_sample:
+            best_sample = sample
+            best_style = name
+
+    if best_style not in _HOOK_STYLES:
+        # Bandit sampled an unrecognized arm name. Don't inject a
+        # malformed hint; treat as cold-start.
+        return None
+    return best_style
 
 _BANNED_PHRASES = [
     # Generic hype
@@ -138,7 +244,8 @@ def generate_hook(
     story: dict[str, Any],
     niche_id: str,
     used_hooks: set[str] | None = None,
-) -> str | None:
+    return_style: bool = False,
+) -> str | None | tuple[str | None, str | None]:
     """Generate a story-specific hook via Claude Haiku.
 
     Returns None if:
@@ -146,23 +253,40 @@ def generate_hook(
     - anthropic not installed
     - API call fails
     - Generated hook is in used_hooks
+
+    Args:
+        return_style: When True, returns ``(hook, style_name)`` so the
+            caller can record which bandit arm was used. ``style_name``
+            is None when no bandit influence was applied (cold-start,
+            no arms, error). Default False preserves the legacy
+            ``str | None`` return for existing callers.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return None
+        return (None, None) if return_style else None
 
     try:
         import anthropic
     except ImportError:
         logger.debug("anthropic not installed — skipping LLM hook generation")
-        return None
+        return (None, None) if return_style else None
 
     style = NICHE_STYLE.get(niche_id, NICHE_STYLE["gaming"])
     title = story.get("title", "")
     summary = (story.get("summary", "") or "")[:300]
 
     if not title:
-        return None
+        return (None, None) if return_style else None
+
+    # Bandit-driven style hint — only takes effect when style:* arms
+    # have been seeded for this niche. Cold-start (no arms) silently
+    # falls through to the vanilla prompt.
+    chosen_style = pick_hook_style(niche_id)
+    style_hint = ""
+    if chosen_style and chosen_style in _HOOK_STYLES:
+        style_hint = (
+            f"\n\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}"
+        )
 
     banned_text = "\n".join(f"  - {p}" for p in _BANNED_PHRASES)
     used_text = ""
@@ -189,6 +313,7 @@ def generate_hook(
         "No news language: BREAKING:, JUST IN:, announces, reveals\n"
         "No markdown. No quotes around your answer.\n"
         "Write ONE hook. Nothing else."
+        f"{style_hint}"
     )
 
     # Add few-shot examples from top performers
@@ -209,7 +334,7 @@ def generate_hook(
         client = anthropic.Anthropic(api_key=api_key)
     except Exception as exc:
         logger.warning("[%s] LLM client init failed: %s", niche_id, exc)
-        return None
+        return (None, chosen_style) if return_style else None
 
     for _ in range(3):
         try:
@@ -236,7 +361,7 @@ def generate_hook(
             logger.debug("Hook candidate generation failed: %s", exc)
 
     if not candidates:
-        return None
+        return (None, chosen_style) if return_style else None
 
     # Score candidates and pick the best
     if len(candidates) == 1:
@@ -263,7 +388,12 @@ def generate_hook(
             # If scoring fails, return the first candidate
             best = candidates[0]
 
-    logger.info("[%s] LLM hook: %s", niche_id, best)
+    logger.info(
+        "[%s] LLM hook: %s (style=%s)",
+        niche_id, best, chosen_style or "none",
+    )
+    if return_style:
+        return (best, chosen_style)
     return best
 
 
