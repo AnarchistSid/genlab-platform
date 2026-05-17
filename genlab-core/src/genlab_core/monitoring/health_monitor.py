@@ -110,17 +110,39 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
             niche_id=niche_id,
             details={"consecutive_fails": consecutive_fails},
         )
-        # Auto-fix: try updating yt-dlp
-        try:
-            _uv = os.environ.get("UV_PATH", "/usr/local/bin/uv")
-            result = subprocess.run(
-                [_uv, "pip", "install", "--upgrade", "yt-dlp"],
-                capture_output=True, text=True, timeout=60,
-                cwd=os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab"),
+        # WARP is the most common root cause of download failures on the
+        # Hetzner datacenter (YouTube blocks the datacenter IP without it).
+        # Skip the yt-dlp update if WARP is down — updating the downloader
+        # binary doesn't fix a broken network proxy, and "yt-dlp update:
+        # success" would be a misleading message.
+        warp_alerts = check_warp_health()
+        if warp_alerts:
+            alert.auto_fix = (
+                "skipped yt-dlp update — WARP proxy is down (see warp_down "
+                "alert). yt-dlp can't fix a network-layer outage."
             )
-            alert.auto_fix = f"yt-dlp update: {'success' if result.returncode == 0 else 'failed'}"
-        except Exception as e:
-            alert.auto_fix = f"yt-dlp update failed: {e}"
+        else:
+            try:
+                _uv = os.environ.get("UV_PATH", "/usr/local/bin/uv")
+                result = subprocess.run(
+                    [_uv, "pip", "install", "--upgrade", "yt-dlp"],
+                    capture_output=True, text=True, timeout=60,
+                    cwd=os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab"),
+                )
+                if result.returncode == 0:
+                    # Don't claim "success" — the pip install succeeded but
+                    # that doesn't mean downloads will work.  Acknowledge
+                    # the scope honestly.
+                    alert.auto_fix = (
+                        "yt-dlp updated (binary-level only — does not "
+                        "address network/proxy/credential failures)"
+                    )
+                else:
+                    alert.auto_fix = (
+                        f"yt-dlp update failed (rc={result.returncode})"
+                    )
+            except Exception as e:
+                alert.auto_fix = f"yt-dlp update failed: {e}"
         alerts.append(alert)
     return alerts
 
