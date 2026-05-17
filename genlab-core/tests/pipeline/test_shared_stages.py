@@ -156,6 +156,108 @@ class TestViralityScoring:
         result = stage.execute(ctx)
         assert "controversy_debate" in result["stories"][0]["virality_features"]
 
+    def test_reads_nested_content_shape(self):
+        """Regression: production pipeline stores hook/caption under story['content'].
+
+        BaseWritingStrategy writes to story['content']['hook'] and
+        story['content']['caption']; the virality scorer must honor that shape,
+        not only the flat {hook, body} test fixtures.
+        """
+        stage = self._make()
+        ctx = {
+            "stories": [
+                {
+                    "story_id": "abc",
+                    "title": "Gameplay highlight",
+                    "content": {
+                        "hook": "How did this clutch happen in one round?",
+                        "caption": "Top 5 reasons this controversial play divided fans.",
+                    },
+                },
+            ],
+            "niche_config": {},
+        }
+        result = stage.execute(ctx)
+        bp = result["stories"][0]
+        assert bp["virality_score"] > 0
+        assert "hook_format_question" in bp["virality_features"]
+        assert "listicle_number" in bp["virality_features"]
+        assert "controversy_debate" in bp["virality_features"]
+
+    def test_falls_back_to_title_when_content_empty(self):
+        """Title is always populated upstream; it should contribute signal."""
+        stage = self._make()
+        ctx = {
+            "stories": [{"story_id": "x", "title": "Top 5 ways Marvel saved Iron Man"}],
+            "niche_config": {},
+        }
+        result = stage.execute(ctx)
+        bp = result["stories"][0]
+        assert bp["virality_score"] > 0
+        assert "listicle_number" in bp["virality_features"]
+        assert "pop_culture_reference" in bp["virality_features"]
+
+    def test_per_niche_pattern_override(self):
+        """A niche can override pop_culture_reference with its own vocabulary."""
+        stage = self._make()
+        ctx = {
+            "stories": [
+                {
+                    "story_id": "g",
+                    "title": "PS5 launches massive Elden Ring DLC",
+                },
+            ],
+            "niche_config": {
+                "virality_scoring": {
+                    "patterns": {
+                        "pop_culture_reference": r"\b(ps5|xbox|switch|elden ring|fortnite)\b",
+                    },
+                },
+            },
+        }
+        result = stage.execute(ctx)
+        bp = result["stories"][0]
+        # Under defaults, "PS5" and "Elden Ring" would not hit pop_culture.
+        # Under gaming override they do.
+        assert "pop_culture_reference" in bp["virality_features"]
+        assert bp["virality_score"] > 0
+
+    def test_invalid_regex_falls_back_to_default(self):
+        """A broken regex in niche config must not crash the pipeline."""
+        stage = self._make()
+        ctx = {
+            "stories": [{"story_id": "x", "title": "How to use ChatGPT for coding"}],
+            "niche_config": {
+                "virality_scoring": {
+                    "patterns": {
+                        "named_tool": r"[unclosed",  # invalid regex
+                    },
+                },
+            },
+        }
+        result = stage.execute(ctx)
+        bp = result["stories"][0]
+        # Default "chatgpt" pattern should still match
+        assert "named_tool" in bp["virality_features"]
+
+    def test_unknown_pattern_key_ignored(self):
+        """Unknown pattern keys in niche config log a warning but don't crash."""
+        stage = self._make()
+        ctx = {
+            "stories": [{"story_id": "x", "title": "How to build an API"}],
+            "niche_config": {
+                "virality_scoring": {
+                    "patterns": {
+                        "not_a_real_feature": r".*",
+                    },
+                },
+            },
+        }
+        # Just verify no crash; default features still score
+        result = stage.execute(ctx)
+        assert "virality_score" in result["stories"][0]
+        assert "tutorial_how_to" in result["stories"][0]["virality_features"]
+
 
 # ── ExpressLane ─────────────────────────────────────────────────
 
@@ -686,6 +788,60 @@ class TestRunReport:
                 result = stage.execute(ctx)
                 report_path = Path(tmpdir) / "run_report.json"
                 assert report_path.exists()
+
+    def test_zero_blueprints_with_stories_fails(self):
+        """Regression: bot-detection cascade produced 'success' runs with 0 blueprints.
+
+        When the pipeline fetches stories but pushes 0 blueprints, it means
+        something cascaded to zero (yt-dlp bot wall, dedup overkill, writing
+        cascade). That's a failure, not a success, and must emit an SLO
+        violation so downstream alerting can see it.
+        """
+        stage = self._make()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "genlab_core.pipeline.stages.run_report.RunReport._resolve_run_dir",
+                return_value=Path(tmpdir),
+            ):
+                ctx = {
+                    "stories": [{"title": "a"}, {"title": "b"}, {"title": "c"}],
+                    "run_stats": {
+                        "backlog_push": {"blueprints_pushed": 0},
+                        "qc": {"passed": 3, "failed": 0, "total": 3, "pass_rate": "100.0%"},
+                        "video_validation": {"passed": 0, "failed": 0, "skipped": 3},
+                    },
+                    "niche_config": {"niche_id": "movies"},
+                }
+                stage.execute(ctx)
+                report = json.loads((Path(tmpdir) / "run_report.json").read_text())
+                assert report["status"] == "failed"
+                assert any(
+                    "Zero blueprints produced from 3 stories" in v
+                    for v in report["slo_violations"]
+                ), report["slo_violations"]
+
+    def test_nonzero_blueprints_is_success(self):
+        """Guardrail: a run that produced blueprints must NOT trip the SLO."""
+        stage = self._make()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "genlab_core.pipeline.stages.run_report.RunReport._resolve_run_dir",
+                return_value=Path(tmpdir),
+            ):
+                ctx = {
+                    "stories": [{"title": "a"}, {"title": "b"}],
+                    "run_stats": {
+                        "backlog_push": {"blueprints_pushed": 2},
+                        "qc": {"passed": 2, "failed": 0, "total": 2, "pass_rate": "100.0%"},
+                    },
+                    "niche_config": {"niche_id": "movies"},
+                }
+                stage.execute(ctx)
+                report = json.loads((Path(tmpdir) / "run_report.json").read_text())
+                assert report["status"] == "success"
+                assert not any(
+                    "Zero blueprints" in v for v in report["slo_violations"]
+                )
 
 
 # ── PerformanceLearner ──────────────────────────────────────────

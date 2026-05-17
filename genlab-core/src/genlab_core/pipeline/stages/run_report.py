@@ -85,10 +85,23 @@ class RunReport:
                 f"QC pass rate {qc_passed}/{qc_total} below 90% SLO"
             )
 
+        # Zero-blueprint SLO: if we fetched stories but produced no blueprints,
+        # the pipeline is broken in a hidden way (e.g. yt-dlp bot-detection
+        # cascade, writing-stage cascade, over-aggressive dedup). Flag it.
+        zero_blueprint_cascade = len(stories) > 0 and blueprints_pushed == 0
+        if zero_blueprint_cascade:
+            downloaded = video_val.get("passed", 0)
+            slo_violations.append(
+                f"Zero blueprints produced from {len(stories)} stories "
+                f"(videos_validated={downloaded})"
+            )
+
         # Determine status
         has_errors = bool(run_stats.get("errors"))
         if has_errors and not stories:
             status = "failed"
+        elif zero_blueprint_cascade:
+            status = "failed"  # success on paper but produced nothing
         elif has_errors:
             status = "partial"
         else:

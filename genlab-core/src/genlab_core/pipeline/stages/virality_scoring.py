@@ -26,17 +26,33 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# ── Feature detectors (compiled once) ────────────────────────
+# ── Feature detectors ─────────────────────────────────────────
+#
+# DEFAULT_PATTERNS below are the historical AI-biased patterns (they were
+# originally written for the ai_creators niche before the pipeline went
+# multi-niche). Per-niche overrides are supported via niche_config:
+#
+#   virality_scoring:
+#     patterns:
+#       pop_culture_reference: "\\b(nba|nfl|lakers|barcelona|...)\\b"
+#       named_tool: "\\b(ps5|xbox|switch|unreal|...)\\b"
+#     weights:
+#       listicle_number: 0.15
+#
+# Any key not present in the per-niche override falls back to DEFAULT_PATTERNS.
+# This lets each niche ship its own vocabulary without touching code.
 
-_QUESTION = re.compile(r"^(what|why|how|when|where|who|which|is|are|do|does|can|could|will|would|should|did)\b", re.I)
-_POP_CULTURE = re.compile(r"\b(openai|anthropic|google|meta|apple|nvidia|tesla|microsoft|amazon|netflix|disney|marvel)\b", re.I)
-_NAMED_TOOL = re.compile(r"\b(chatgpt|claude|gemini|copilot|midjourney|dall[- ]?e|sora|cursor|devin|v0|bolt|replit|figma|notion)\b", re.I)
-_NOSTALGIA = re.compile(r"\b(remember when|throwback|used to|back in|before [\w]+ existed|old school)\b", re.I)
-_DOLLAR = re.compile(r"\$\s?\d+|\b\d+[BMK]\b|\bfunding\b|\brevenue\b|\bvaluation\b", re.I)
-_BEFORE_AFTER = re.compile(r"\b(before|after|vs\.?|versus|compared to|transformation|went from)\b", re.I)
-_CONTROVERSY = re.compile(r"\b(controversial|debate|backlash|outrage|divided|drama|scandal|accused|fired|banned|cancelled)\b", re.I)
-_TUTORIAL = re.compile(r"\b(how to|tutorial|step[- ]by[- ]step|guide|learn|beginner|masterclass|tips|hack|trick)\b", re.I)
-_LISTICLE = re.compile(r"\b(top\s+\d+|\d+\s+(ways|reasons|tips|tools|things|mistakes|secrets|hacks|steps|rules|signs))\b", re.I)
+DEFAULT_PATTERNS: dict[str, str] = {
+    "hook_format_question": r"^(what|why|how|when|where|who|which|is|are|do|does|can|could|will|would|should|did)\b",
+    "pop_culture_reference": r"\b(openai|anthropic|google|meta|apple|nvidia|tesla|microsoft|amazon|netflix|disney|marvel)\b",
+    "named_tool": r"\b(chatgpt|claude|gemini|copilot|midjourney|dall[- ]?e|sora|cursor|devin|v0|bolt|replit|figma|notion)\b",
+    "nostalgia_angle": r"\b(remember when|throwback|used to|back in|before [\w]+ existed|old school)\b",
+    "dollar_amount": r"\$\s?\d+|\b\d+[BMK]\b|\bfunding\b|\brevenue\b|\bvaluation\b",
+    "before_after": r"\b(before|after|vs\.?|versus|compared to|transformation|went from)\b",
+    "controversy_debate": r"\b(controversial|debate|backlash|outrage|divided|drama|scandal|accused|fired|banned|cancelled)\b",
+    "tutorial_how_to": r"\b(how to|tutorial|step[- ]by[- ]step|guide|learn|beginner|masterclass|tips|hack|trick)\b",
+    "listicle_number": r"\b(top\s+\d+|\d+\s+(ways|reasons|tips|tools|things|mistakes|secrets|hacks|steps|rules|signs))\b",
+}
 
 # Default weights (overridden by niche_config scoring_weights.virality_scoring)
 DEFAULT_WEIGHTS: dict[str, float] = {
@@ -50,6 +66,37 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "tutorial_how_to": 0.13,
     "listicle_number": 0.10,
 }
+
+
+def _compile_patterns(overrides: dict[str, str] | None) -> dict[str, re.Pattern[str]]:
+    """Merge niche-specific pattern overrides with defaults and compile.
+
+    Invalid regex patterns in a niche override log a warning and fall back
+    to the default for that feature — a bad config should never crash
+    the pipeline.
+    """
+    merged = dict(DEFAULT_PATTERNS)
+    if overrides:
+        for name, pat in overrides.items():
+            if name not in DEFAULT_PATTERNS:
+                logger.warning(
+                    "[ViralityScoring] Unknown pattern key in niche override: %s", name,
+                )
+                continue
+            if not isinstance(pat, str) or not pat:
+                continue
+            merged[name] = pat
+    compiled: dict[str, re.Pattern[str]] = {}
+    for name, pat in merged.items():
+        try:
+            compiled[name] = re.compile(pat, re.I)
+        except re.error as exc:
+            logger.warning(
+                "[ViralityScoring] Invalid regex for %s (%s) — using default",
+                name, exc,
+            )
+            compiled[name] = re.compile(DEFAULT_PATTERNS[name], re.I)
+    return compiled
 
 
 class ViralityScoring:
@@ -66,16 +113,23 @@ class ViralityScoring:
             return context
 
         config = context.get("niche_config", {})
-        weights = (
-            config.get("scoring_weights", {}).get("virality_scoring", DEFAULT_WEIGHTS)
+        virality_cfg = config.get("virality_scoring") or (
+            config.get("scoring_weights", {}).get("virality_scoring", {})
         )
+        if not isinstance(virality_cfg, dict):
+            virality_cfg = {}
+        weights = virality_cfg.get("weights") or (
+            virality_cfg if all(isinstance(v, (int, float)) for v in virality_cfg.values())
+            else DEFAULT_WEIGHTS
+        )
+        patterns = _compile_patterns(virality_cfg.get("patterns"))
 
         scored = 0
         total_score = 0.0
 
         for bp in blueprints:
             try:
-                features, score = self._score(bp, weights)
+                features, score = self._score(bp, weights, patterns)
                 bp["virality_score"] = round(score, 4)
                 bp["virality_features"] = features
                 scored += 1
@@ -101,28 +155,32 @@ class ViralityScoring:
         return context
 
     @staticmethod
-    def _extract_features(text: str) -> list[tuple[str, bool]]:
-        """Extract all 9 binary features from text."""
-        return [
-            ("hook_format_question", bool(_QUESTION.search(text))),
-            ("pop_culture_reference", bool(_POP_CULTURE.search(text))),
-            ("named_tool", bool(_NAMED_TOOL.search(text))),
-            ("nostalgia_angle", bool(_NOSTALGIA.search(text))),
-            ("dollar_amount", bool(_DOLLAR.search(text))),
-            ("before_after", bool(_BEFORE_AFTER.search(text))),
-            ("controversy_debate", bool(_CONTROVERSY.search(text))),
-            ("tutorial_how_to", bool(_TUTORIAL.search(text))),
-            ("listicle_number", bool(_LISTICLE.search(text))),
-        ]
+    def _extract_features(
+        text: str,
+        patterns: dict[str, re.Pattern[str]],
+    ) -> list[tuple[str, bool]]:
+        """Extract all binary features from text using the active pattern set."""
+        return [(name, bool(pat.search(text))) for name, pat in patterns.items()]
 
     def _score(
-        self, bp: dict[str, Any], weights: dict[str, float],
+        self,
+        bp: dict[str, Any],
+        weights: dict[str, float],
+        patterns: dict[str, re.Pattern[str]],
     ) -> tuple[list[str], float]:
-        hook = bp.get("hook", "")
-        body = bp.get("body", bp.get("caption", ""))
-        text = f"{hook} {body}" if isinstance(body, str) else str(hook)
+        content = bp.get("content") or {}
+        hook = content.get("hook") or bp.get("hook", "")
+        body = (
+            content.get("caption")
+            or bp.get("body")
+            or bp.get("caption", "")
+        )
+        title = bp.get("title", "")
+        text = " ".join(
+            s for s in (hook, body, title) if isinstance(s, str) and s
+        )
 
-        features = self._extract_features(text)
+        features = self._extract_features(text, patterns)
         matched = [name for name, hit in features if hit]
         score = sum(weights.get(name, 0.1) for name in matched)
 
