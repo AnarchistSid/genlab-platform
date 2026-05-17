@@ -238,7 +238,11 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
     token = meta_creds.get("ig_access_token", "")
     ig_user_id = meta_creds.get("ig_user_id", "")
     if not token:
-        logger.debug("IG token not set for niche '%s' — skipping", niche_id)
+        logger.warning(
+            "[fetch_insights] IG token not set for niche '%s' — "
+            "analytics data for this platform will be missing",
+            niche_id,
+        )
         return None
 
     # Resolve shortcode to numeric media ID if needed
@@ -296,7 +300,10 @@ def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
     """Fetch YT metrics via Data API v3."""
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     if not api_key:
-        logger.debug("YOUTUBE_API_KEY not set — skipping YT")
+        logger.warning(
+            "[fetch_insights] YOUTUBE_API_KEY not set — "
+            "YouTube analytics data will be missing"
+        )
         return None
 
     import requests
@@ -329,7 +336,11 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
 
     token, _page_id = resolve_fb_credentials(niche_id)
     if not token:
-        logger.debug("FB token not set for niche '%s' — skipping", niche_id)
+        logger.warning(
+            "[fetch_insights] FB token not set for niche '%s' — "
+            "Facebook analytics data for this platform will be missing",
+            niche_id,
+        )
         return None
 
     import requests
@@ -370,7 +381,10 @@ def _fetch_twitter(post_id: str) -> dict[str, Any] | None:
     """Fetch X metrics via API v2."""
     bearer = os.getenv("X_BEARER_TOKEN", "")
     if not bearer:
-        logger.debug("X_BEARER_TOKEN not set — skipping X")
+        logger.warning(
+            "[fetch_insights] X_BEARER_TOKEN not set — "
+            "X/Twitter analytics data will be missing"
+        )
         return None
 
     import requests
