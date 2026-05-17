@@ -156,7 +156,10 @@ def _next_available_slot(niche_id: str = "") -> str | None:
             if niche_id:
                 key = f"{candidate.strftime('%Y-%m-%d %H:%M')} {niche_id}"
                 if key in occupied_slots:
-                    logger.debug("[QUEUE] Slot %s occupied for %s, trying next", slot_str, niche_id)
+                    logger.info(
+                        "[QUEUE] Slot %s occupied for %s, trying next",
+                        slot_str, niche_id,
+                    )
                     continue
             return candidate.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
