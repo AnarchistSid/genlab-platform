@@ -440,6 +440,104 @@ def compute_reward(
     return shaper.compute_reward(platform=platform, metrics=metrics)
 
 
+# Map platform → variant arm_id prefix used in cta_variants.yaml.
+# Only platforms with configured CTA variants appear here.
+_CTA_PLATFORM_PREFIX: dict[str, str] = {
+    "instagram": "ig_",
+    "youtube": "yt_",
+    "facebook": "fb_",
+}
+
+
+def _match_variant_for_platform(variant_field: str, platform: str) -> str | None:
+    """Pick the variant arm_id that belongs to ``platform``.
+
+    ``variant_field`` is the comma-separated string stored at publish time in
+    blueprints.affiliate_cta_variant — e.g. "ig_link_in_bio,yt_get_here,fb_check_out".
+    """
+    prefix = _CTA_PLATFORM_PREFIX.get(platform)
+    if not prefix:
+        return None
+    for raw in variant_field.split(","):
+        arm = raw.strip()
+        if arm.startswith(prefix):
+            return arm
+    return None
+
+
+def _update_cta_bandit_from_clicks(
+    task_record: PendingFeedbackTask,
+    backlog_client: Any,
+) -> None:
+    """Update CTA bandit posterior using observed affiliate clicks.
+
+    At 48h, the published blueprint already stored which CTA variant arm_id
+    was selected per platform.  We look up that arm_id, count clicks in
+    ``affiliate_clicks`` for (blueprint_id, platform_source), and feed the
+    boolean signal to the CTA bandit.  Zero-click at 48h is treated as a
+    failure (β += 1.0) so the bandit can learn dud variants.
+
+    No-ops when:
+      * platform has no CTA variants (twitter, threads, tiktok)
+      * blueprint has no affiliate_cta_variant (no affiliate matched)
+      * backlog_client doesn't expose Postgres find() (Azure/SharePoint mode)
+    """
+    if task_record.platform not in _CTA_PLATFORM_PREFIX:
+        return
+
+    from genlab_core.monetization.cta_engine import get_bandit
+
+    bandit = get_bandit()
+    if bandit is None:
+        return
+
+    find = getattr(backlog_client, "find", None) if backlog_client else None
+    if find is None:
+        # SharePoint-mode backlog_client has no find(); skip rather than crash.
+        return
+
+    bp_rows = find(
+        "blueprints",
+        formula=f"{{task_id}} = '{task_record.content_id}'",
+        niche_id=task_record.niche_id,
+        max_records=1,
+        columns=["affiliate_cta_variant"],
+    )
+    if not bp_rows:
+        return
+
+    bp_fields = bp_rows[0].get("fields", bp_rows[0]) or {}
+    variant_field = (bp_fields.get("affiliate_cta_variant") or "").strip()
+    if not variant_field:
+        return
+
+    arm_id = _match_variant_for_platform(variant_field, task_record.platform)
+    if not arm_id:
+        return
+
+    click_rows = find(
+        "affiliate_clicks",
+        formula=(
+            f"AND({{blueprint_id}} = '{task_record.content_id}', "
+            f"{{platform_source}} = '{task_record.platform}')"
+        ),
+        niche_id=task_record.niche_id,
+        max_records=100,
+    )
+    click_count = len(click_rows)
+    clicked = click_count > 0
+
+    bandit.update(arm_id, task_record.platform, clicked)
+    logger.info(
+        "[metric_collector] CTA bandit updated: niche=%s platform=%s arm=%s clicks=%d clicked=%s",
+        task_record.niche_id,
+        task_record.platform,
+        arm_id,
+        click_count,
+        clicked,
+    )
+
+
 @task(name="process_pending_task")
 def process_pending_task(
     task_record: PendingFeedbackTask,
@@ -556,17 +654,15 @@ def process_pending_task(
                     exc,
                 )
 
-        # Update CTA bandit with engagement reward (Break 10 fix)
+        # Update CTA bandit using click attribution (NOT engagement reward).
+        # Engagement reward was the wrong signal: same shape of bug as Bug F
+        # (always-truthy float cast to clicked: bool).  Real signal lives in
+        # the affiliate_clicks table, keyed by blueprint_id + platform_source.
         try:
-            from genlab_core.monetization.cta_engine import get_bandit
-            cta_bandit = get_bandit()
-            if cta_bandit is not None:
-                cta_bandit.update(task_record.platform, reward_48h)
-                logger.debug("[metric_collector] CTA bandit updated: platform=%s reward=%.3f",
-                             task_record.platform, reward_48h)
+            _update_cta_bandit_from_clicks(task_record, backlog_client)
         except Exception as exc:
             logger.warning(
-                "[metric_collector] CTA bandit update failed (learning loop degraded): %s",
+                "[metric_collector] CTA bandit update failed (degraded): %s",
                 exc,
             )
 

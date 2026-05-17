@@ -116,6 +116,7 @@ class CTABandit:
                 for v in variants:
                     key = f"{platform}:{v.arm_id}"
                     state[key] = {"alpha": v.alpha, "beta": v.beta}
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self._state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f, indent=2)
             logger.debug("[CTABandit] State saved to %s (%d arms)", self._state_path, len(state))

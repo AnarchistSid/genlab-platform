@@ -895,3 +895,231 @@ class TestSaveArmPreservesNPlays:
 
         written = proxy.create.call_args[0][0]
         assert written["n_plays"] == 0
+
+
+# ===========================================================================
+# CTA bandit click-attribution
+# ===========================================================================
+
+
+class TestCTABanditClickAttribution:
+    """The CTA bandit must learn from real click signal, not engagement reward.
+
+    Mirrors the audit-discovered Bug F shape: passing engagement reward
+    (always-truthy float) as ``clicked: bool`` corrupted α every cycle.
+    The fix attributes clicks via ``affiliate_clicks.blueprint_id`` instead.
+    """
+
+    def _setup_backlog_for_blueprint(
+        self,
+        variant_field: str = "ig_link_in_bio,yt_get_here,fb_check_out",
+        click_count: int = 0,
+    ) -> MagicMock:
+        """Build a fake backlog_client.find() that returns blueprint + clicks."""
+        backlog = MagicMock()
+
+        def fake_find(table: str, *, formula: str = "", niche_id: str = "",
+                      max_records: int | None = None, columns=None, **_):
+            if table == "blueprints":
+                return [{"affiliate_cta_variant": variant_field}]
+            if table == "affiliate_clicks":
+                return [{"id": f"click_{i}"} for i in range(click_count)]
+            return []
+
+        backlog.find.side_effect = fake_find
+        return backlog
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_clicks_present_increments_alpha(self, mock_get_bandit, mock_fetch):
+        """Click count > 0 → bandit.update called with clicked=True."""
+        mock_fetch.return_value = {"views": 5000, "likes": 200}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="instagram", niche_id="gaming")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.6)
+        backlog = self._setup_backlog_for_blueprint(click_count=3)
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        fake_bandit.update.assert_called_once_with("ig_link_in_bio", "instagram", True)
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_zero_clicks_increments_beta(self, mock_get_bandit, mock_fetch):
+        """Zero clicks at 48h → bandit.update called with clicked=False."""
+        mock_fetch.return_value = {"views": 1000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="youtube", niche_id="gaming")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.4)
+        backlog = self._setup_backlog_for_blueprint(click_count=0)
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        fake_bandit.update.assert_called_once_with("yt_get_here", "youtube", False)
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_picks_variant_matching_platform(self, mock_get_bandit, mock_fetch):
+        """Comma-separated variants → only the one matching platform is credited."""
+        mock_fetch.return_value = {"views": 5000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="facebook", niche_id="sports")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.5)
+        backlog = self._setup_backlog_for_blueprint(
+            variant_field="ig_best_deal,yt_recommended,fb_must_have",
+            click_count=1,
+        )
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        # FB arm gets credit, not IG or YT
+        fake_bandit.update.assert_called_once_with("fb_must_have", "facebook", True)
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_no_variant_field_skips_bandit(self, mock_get_bandit, mock_fetch):
+        """Blueprint without affiliate_cta_variant → no bandit update."""
+        mock_fetch.return_value = {"views": 5000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="instagram")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.6)
+        backlog = self._setup_backlog_for_blueprint(variant_field="", click_count=5)
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        fake_bandit.update.assert_not_called()
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_platform_without_variants_skips_bandit(self, mock_get_bandit, mock_fetch):
+        """Twitter/threads/tiktok have no CTA variants → no bandit update."""
+        mock_fetch.return_value = {"views": 5000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="twitter", niche_id="gaming")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.6)
+        backlog = self._setup_backlog_for_blueprint(click_count=10)
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        fake_bandit.update.assert_not_called()
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_no_engagement_reward_passed_to_cta_bandit(self, mock_get_bandit, mock_fetch):
+        """Regression: engagement reward must NEVER be the third arg to cta_bandit.update.
+
+        This is the Bug F shape: a float cast to clicked: bool that was
+        always truthy.  We verify the third positional is a bool, never the
+        reward.
+        """
+        mock_fetch.return_value = {"views": 5000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="instagram")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.73)
+        backlog = self._setup_backlog_for_blueprint(click_count=2)
+
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        call_args = fake_bandit.update.call_args[0]
+        assert call_args[2] is True or call_args[2] is False
+        assert call_args[2] != 0.73  # never the engagement reward
+
+    @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
+    @patch("genlab_core.monetization.cta_engine.get_bandit")
+    def test_backlog_without_find_skips_gracefully(self, mock_get_bandit, mock_fetch):
+        """SharePoint-mode backlog_client has no find() → skip, don't crash."""
+        mock_fetch.return_value = {"views": 5000}
+        fake_bandit = MagicMock()
+        mock_get_bandit.return_value = fake_bandit
+
+        task = _make_task(platform="instagram")
+        store = _mock_store(next_window="48h")
+        shaper = _mock_shaper(reward=0.6)
+
+        # Backlog client with no find() method (legacy SharePoint mode)
+        backlog = object()
+
+        # Must not raise
+        process_pending_task(task, store, shaper, backlog_client=backlog)
+
+        fake_bandit.update.assert_not_called()
+
+
+class TestCTABanditVariantMatching:
+    """Unit tests for the _match_variant_for_platform helper."""
+
+    def test_match_instagram(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        assert _match_variant_for_platform(
+            "ig_link_in_bio,yt_get_here,fb_check_out", "instagram"
+        ) == "ig_link_in_bio"
+
+    def test_match_youtube(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        assert _match_variant_for_platform(
+            "ig_link_in_bio,yt_best_price,fb_check_out", "youtube"
+        ) == "yt_best_price"
+
+    def test_match_facebook(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        assert _match_variant_for_platform(
+            "ig_link_in_bio,yt_get_here,fb_must_have", "facebook"
+        ) == "fb_must_have"
+
+    def test_no_match_for_unknown_platform(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        assert _match_variant_for_platform(
+            "ig_link_in_bio,yt_get_here,fb_check_out", "twitter"
+        ) is None
+
+    def test_no_match_when_variant_missing(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        # FB variant absent — facebook lookup returns None
+        assert _match_variant_for_platform(
+            "ig_link_in_bio,yt_get_here", "facebook"
+        ) is None
+
+    def test_handles_whitespace(self):
+        from genlab_core.learning.metric_collector import _match_variant_for_platform
+
+        assert _match_variant_for_platform(
+            " ig_link_in_bio , yt_get_here ", "instagram"
+        ) == "ig_link_in_bio"
+
+
+class TestCTABanditSaveStateCreatesDir:
+    """The state file path may include a .tmp/ parent that doesn't exist."""
+
+    def test_save_state_creates_parent_dir(self, tmp_path):
+        from genlab_core.monetization.cta_bandit import CTABandit
+
+        nested = tmp_path / "deep" / "nested" / "cta_state.json"
+        assert not nested.parent.exists()
+
+        bandit = CTABandit(state_path=nested)
+        bandit.save_state()
+
+        assert nested.exists()
