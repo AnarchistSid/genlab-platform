@@ -196,18 +196,35 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
 
 
 def check_qc_collapse(reports: list[dict], niche_id: str) -> list[Alert]:
-    """Check for QC pass rate at 0% for multiple runs."""
+    """Check for QC pass rate at 0% across the most recent consecutive runs.
+
+    Uses the same "break on first non-failing run" pattern as
+    check_download_failures.  A previous version summed 0% runs from a
+    5-run sliding window which made the alert sticky — historical 0% runs
+    kept it firing for days after recovery (the 2026-05-17 sports
+    incident: latest run 25% pass, but two pre-WARP 0% runs in the window
+    kept qc_collapse alerting until manually cleared).
+
+    With this shape, a single non-zero QC run automatically clears the
+    alert.  Reflects the fact that the most recent run state is what
+    matters for triage — fixing the upstream issue should be visible
+    immediately.
+    """
     alerts = []
-    zero_qc_runs = sum(
-        1 for r in reports[:5]
-        if r.get("metrics", {}).get("qc", {}).get("pass_rate") == "0.0%"
-    )
-    if zero_qc_runs >= 2:
+    consecutive_zero = 0
+    for r in reports:
+        if r.get("metrics", {}).get("qc", {}).get("pass_rate") == "0.0%":
+            consecutive_zero += 1
+        else:
+            break
+
+    if consecutive_zero >= 2:
         alerts.append(Alert(
             check="qc_collapse",
             severity="critical",
-            message=f"QC at 0% for {zero_qc_runs} of last {min(5, len(reports))} runs",
+            message=f"QC at 0% for {consecutive_zero} consecutive runs",
             niche_id=niche_id,
+            details={"consecutive_zero_qc": consecutive_zero},
         ))
     return alerts
 
