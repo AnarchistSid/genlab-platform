@@ -65,3 +65,38 @@ class TestBanditListNames:
             assert isinstance(list_name, str)
             assert list_name.endswith("_BanditArms"), f"{niche_id}: {list_name}"
             assert len(list_name) > len("_BanditArms")
+
+
+class TestLoadAllArmsNicheFilter:
+    """PG-backed deployment shares one bandit_arms table across all
+    niches. load_all_arms must filter in Python so callers get only
+    their niche's arms, even when RLS isn't set on the session.
+    """
+
+    def test_drops_rows_for_other_niches(self):
+        mock_proxy = MagicMock()
+        mock_proxy.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "gameplay_clip",
+                                   "niche_id": "gaming",
+                                   "alpha": 3.0, "beta": 5.0}},
+            {"id": "2", "fields": {"arm_id": "cast_reveal",
+                                   "niche_id": "movies",
+                                   "alpha": 2.0, "beta": 4.0}},
+            {"id": "3", "fields": {"arm_id": "patch_news",
+                                   "niche_id": "gaming",
+                                   "alpha": 1.5, "beta": 1.5}},
+        ]
+        arms = load_all_arms(mock_proxy, "gaming")
+        assert set(arms) == {"gameplay_clip", "patch_news"}
+        assert arms["gameplay_clip"] == (3.0, 5.0)
+
+    def test_keeps_rows_without_niche_id_legacy(self):
+        """SharePoint-backed proxies don't carry niche_id on the row —
+        the proxy itself is per-niche. Those rows must still load."""
+        mock_proxy = MagicMock()
+        mock_proxy.all.return_value = [
+            {"id": "1", "fields": {"arm_id": "legacy_arm",
+                                   "alpha": 2.0, "beta": 3.0}},
+        ]
+        arms = load_all_arms(mock_proxy, "gaming")
+        assert "legacy_arm" in arms

@@ -30,24 +30,30 @@ BANDIT_LIST_NAMES = {
 
 
 def load_all_arms(proxy, niche_id: str) -> dict[str, tuple[float, float]]:
-    """Load all bandit arms for a niche. Returns {arm_id: (alpha, beta)}.
+    """Load bandit arms for ``niche_id``. Returns {arm_id: (alpha, beta)}.
 
     Args:
-        proxy: Object with `.all()` returning list of {id, fields} dicts
-               (e.g. GraphTableProxy or mock). Should already be pointed at
-               the correct list for this niche.
-        niche_id: Used only for logging; caller is responsible for
-                  constructing the proxy against the right list.
+        proxy: Object with ``.all()`` returning list of ``{id, fields}`` dicts.
+               In the PG-backed deployment the proxy maps to the global
+               ``bandit_arms`` table — RLS only filters when
+               ``app.niche_id`` is set on the session, which is not
+               guaranteed at every call site. So we always filter by
+               ``niche_id`` in Python as a defense-in-depth measure.
+        niche_id: Rows with a different ``niche_id`` field are dropped.
+                  Rows with no ``niche_id`` field at all are kept (legacy
+                  SharePoint single-list backend).
     """
     try:
         items = proxy.all()
         arms: dict[str, tuple[float, float]] = {}
         for item in items:
             fields = item.get("fields", item)
+            row_niche = fields.get("niche_id")
+            if row_niche and row_niche != niche_id:
+                continue
             arm_id = fields.get("arm_id") or fields.get("Title") or ""
             alpha = float(fields.get("alpha") if "alpha" in fields else fields.get("Alpha", 1.0))
             beta = float(fields.get("beta") if "beta" in fields else fields.get("Beta", 1.0))
-            n_plays = int(fields.get("n_plays") if "n_plays" in fields else fields.get("NPlays", 0))
             if arm_id:
                 arms[arm_id] = (alpha, beta)
         return arms
@@ -60,9 +66,13 @@ def load_all_arms_extended(
     proxy,
     niche_id: str,
 ) -> dict[str, dict[str, Any]]:
-    """Load all bandit arms with optional LinUCB state.
+    """Load bandit arms for ``niche_id`` with optional LinUCB state.
 
     Returns {arm_id: {"alpha": float, "beta": float, "linucb_state": dict|None}}.
+
+    Same niche-filtering semantics as ``load_all_arms``: rows with a
+    different ``niche_id`` are dropped; rows lacking the field (legacy
+    backends) are kept.
 
     The ``LinUCB_State`` column stores a JSON string produced by
     ``LinUCBArm.to_dict()``. When the field is absent or empty the
@@ -74,6 +84,9 @@ def load_all_arms_extended(
         arms: dict[str, dict[str, Any]] = {}
         for item in items:
             fields = item.get("fields", item)
+            row_niche = fields.get("niche_id")
+            if row_niche and row_niche != niche_id:
+                continue
             arm_id = fields.get("arm_id") or fields.get("Title") or ""
             if not arm_id:
                 continue
