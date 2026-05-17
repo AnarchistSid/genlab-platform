@@ -136,6 +136,69 @@ def _is_published(run_dir: Path) -> bool:
     return False
 
 
+def _get_pending_publish_run_ids() -> set[str]:
+    """Return run_ids referenced by scheduled-but-unpublished blueprints.
+
+    These runs must be protected from eviction even though they don't yet
+    have a `publish_all_summary.json` — losing their visuals turns the
+    blueprint into a dead schedule. Mac/Hetzner split-brain on 2026-04-29
+    surfaced this: 75 scheduled blueprints had Hetzner-resident visuals
+    purged because the host run hadn't published yet.
+
+    Returns an empty set on any DB failure — better to risk eviction of a
+    pending run than to crash the cleanup loop and let the disk fill up.
+    """
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        return set()
+    try:
+        import psycopg
+    except ImportError:
+        return set()
+    try:
+        with psycopg.connect(db_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT extra->>'visual_paths'
+                    FROM blueprints
+                    WHERE scheduled_for IS NOT NULL
+                      AND status NOT IN ('PUBLISHED', 'ARCHIVED', 'PUBLISH_FAILED')
+                      AND extra ? 'visual_paths'
+                    """
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        logger.warning("[QUOTA] Could not query pending blueprints (%s) — pending runs unprotected this pass", exc)
+        return set()
+
+    run_ids: set[str] = set()
+    for (vp_raw,) in rows:
+        if not vp_raw:
+            continue
+        try:
+            paths = json.loads(vp_raw) if vp_raw.startswith("[") else [vp_raw]
+        except (json.JSONDecodeError, ValueError):
+            paths = [vp_raw]
+        for p in paths:
+            if not isinstance(p, str):
+                continue
+            # Extract <run_id> from any segment after a /runs/ or /rendered/
+            # marker — covers both /opt/genlab/.tmp/runs/<id>/... and the
+            # CriticalRush /<x>/.tmp/rendered/<id>/... layout.
+            for marker in ("/runs/", "/rendered/"):
+                idx = p.find(marker)
+                if idx >= 0:
+                    rest = p[idx + len(marker):]
+                    run_id = rest.split("/", 1)[0]
+                    if run_id:
+                        run_ids.add(run_id)
+                    break
+    if run_ids:
+        logger.info("[QUOTA] Protecting %d run(s) referenced by pending scheduled blueprints", len(run_ids))
+    return run_ids
+
+
 def _filesystem_free_bytes(path: Path) -> int:
     """Free bytes on the filesystem containing *path*, or -1 if unknown."""
     try:
@@ -205,6 +268,11 @@ class DiskQuotaManager:
         if not runs_dir.is_dir():
             return []
 
+        # Treat runs referenced by pending scheduled blueprints as published —
+        # evicting them would orphan an active schedule and the publisher would
+        # later auto-archive the blueprint with `auto_archived_missing_media`.
+        pending_run_ids = _get_pending_publish_run_ids()
+
         records: list[RunRecord] = []
         for entry in runs_dir.iterdir():
             if not entry.is_dir():
@@ -222,7 +290,7 @@ class DiskQuotaManager:
                     size_bytes=_dir_size(entry),
                     created_at=created,
                     score=_extract_score(entry),
-                    is_published=_is_published(entry),
+                    is_published=_is_published(entry) or entry.name in pending_run_ids,
                     clips_bytes=_dir_size(entry / "clips"),
                     rendered_bytes=_dir_size(entry / "rendered"),
                 )
