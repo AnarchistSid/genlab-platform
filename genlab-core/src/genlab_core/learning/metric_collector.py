@@ -671,22 +671,21 @@ def _default_bandit_updater(
       * Fractional Thompson update preserves signal magnitude:
             alpha += clip(reward, 0, 1)
             beta  += 1 - clip(reward, 0, 1)
-        A reward of 0.49 contributes "almost a success" instead of a
-        hard failure (the previous threshold-binarized update lost
-        ~half the gradient information).
-      * n_plays is incremented per observation — previously hardcoded
-        to 0 in save_arm, leaving the column permanently lying.
+      * n_plays is incremented per observation.
+
+    Multi-arm credit (2026-05-17 closure):
+      The primary arm is ``content_type``. Additional arms listed in
+      ``bandit_context["extra_arms"]`` get the SAME reward applied —
+      this is how the hook-style consumer (style:{niche}:{name})
+      receives feedback. LinUCB context is only applied to the
+      primary arm because the 12-dim feature vector is content-shape
+      specific, not style-shape specific.
 
     Idempotency:
-      * No explicit dedupe cache. The pending_feedback state machine
-        in process_pending_task guarantees a single bandit_updater fire
-        per (task_id, window).  PerformanceLearner's parallel update
-        path (which DID cause duplicate writes via historical replay)
-        was deleted in the same audit fix.
-
-    LinUCB:
-      * Same fractional reward is fed into LinUCB's update.
-        bandit_context["linucb_context"] is a CONTEXT_DIM-length list.
+      The pending_feedback state machine in process_pending_task
+      guarantees a single bandit_updater fire per (task_id, window).
+      The audit-removed PerformanceLearner parallel update path is
+      not coming back.
     """
     try:
         import json as _json
@@ -705,45 +704,65 @@ def _default_bandit_updater(
 
         reward_clipped = max(0.0, min(1.0, float(reward)))
 
+        # Build the target set: primary arm (content_type) plus any
+        # extra arms the publisher recorded for this task.
+        target_arms: set[str] = {content_type}
+        if bandit_context:
+            extra = bandit_context.get("extra_arms", [])
+            if isinstance(extra, list):
+                target_arms.update(a for a in extra if isinstance(a, str) and a)
+
+        # Pre-load linucb context once (shared across primary update).
+        linucb_ctx_array: np.ndarray | None = None
+        if bandit_context and "linucb_context" in bandit_context:
+            try:
+                ctx_list = bandit_context["linucb_context"]
+                if len(ctx_list) == CONTEXT_DIM:
+                    linucb_ctx_array = np.array(ctx_list, dtype=np.float64)
+            except Exception:
+                linucb_ctx_array = None
+
         existing = proxy.all()
+        updated: list[str] = []
         for item in existing:
             fields = item.get("fields", item)
             item_arm = fields.get("arm_id", "") or fields.get("Title", "")
             item_niche = fields.get("niche_id", "")
-            if item_niche != niche_id or item_arm != content_type:
+            if item_niche != niche_id or item_arm not in target_arms:
                 continue
+            if item_arm in updated:
+                continue  # Defensive: skip if the proxy returns duplicates.
 
             alpha = float(fields.get("alpha", 1.0) or 1.0)
             beta = float(fields.get("beta", 1.0) or 1.0)
             n_plays = int(fields.get("n_plays", 0) or 0)
 
-            # Fractional Beta update — preserves reward magnitude.
             alpha += reward_clipped
             beta += 1.0 - reward_clipped
             n_plays += 1
 
-            # Update LinUCB arm with context vector if provided.
+            # LinUCB lives only on the primary content_type arm. The
+            # 12-dim feature vector encodes content properties, not
+            # style; mixing it into the style arm's posterior would
+            # learn a confounded model.
             linucb_state_dict = None
-            if bandit_context and "linucb_context" in bandit_context:
+            if item_arm == content_type and linucb_ctx_array is not None:
                 try:
-                    ctx_list = bandit_context["linucb_context"]
-                    if len(ctx_list) == CONTEXT_DIM:
-                        ctx = np.array(ctx_list, dtype=np.float64)
-                        raw_state = (
-                            fields.get("linucb_state")
-                            or fields.get("LinUCB_State")
-                            or ""
-                        )
-                        if raw_state:
-                            arm = LinUCBArm.from_dict(_json.loads(raw_state))
-                        else:
-                            arm = LinUCBArm(d=CONTEXT_DIM)
-                        arm.update(ctx, reward_clipped)
-                        linucb_state_dict = arm.to_dict()
-                        logger.info(
-                            "[bandit_updater] LinUCB updated: %s/%s n_obs=%d",
-                            niche_id, item_arm, arm.n_obs,
-                        )
+                    raw_state = (
+                        fields.get("linucb_state")
+                        or fields.get("LinUCB_State")
+                        or ""
+                    )
+                    if raw_state:
+                        arm = LinUCBArm.from_dict(_json.loads(raw_state))
+                    else:
+                        arm = LinUCBArm(d=CONTEXT_DIM)
+                    arm.update(linucb_ctx_array, reward_clipped)
+                    linucb_state_dict = arm.to_dict()
+                    logger.info(
+                        "[bandit_updater] LinUCB updated: %s/%s n_obs=%d",
+                        niche_id, item_arm, arm.n_obs,
+                    )
                 except Exception as linucb_exc:
                     logger.warning(
                         "[bandit_updater] LinUCB update failed for %s/%s "
@@ -759,11 +778,22 @@ def _default_bandit_updater(
                 linucb_state=linucb_state_dict,
                 n_plays=n_plays,
             )
+            updated.append(item_arm)
             logger.info(
                 "[bandit_updater] %s/%s reward=%.3f → a=%.2f b=%.2f n_plays=%d",
                 niche_id, item_arm, reward_clipped, alpha, beta, n_plays,
             )
-            return
+
+        # Sanity log: if we asked for N arms but updated fewer, surface
+        # the gap. Common cause: the arm doesn't exist in bandit_arms
+        # (e.g. style not yet seeded for this niche).
+        missing = target_arms - set(updated)
+        if missing:
+            logger.warning(
+                "[bandit_updater] %d arm(s) requested but not found in "
+                "bandit_arms (niche=%s): %s",
+                len(missing), niche_id, sorted(missing),
+            )
     except Exception as exc:
         logger.warning("[bandit_updater] Failed: %s", exc)
 

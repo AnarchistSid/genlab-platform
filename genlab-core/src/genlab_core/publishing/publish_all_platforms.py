@@ -81,6 +81,33 @@ def _to_registry_id(platform: str) -> str:
     return _PLATFORM_ID_MAP.get(platform, platform)
 
 
+# Error classes the retry loop refuses to retry — these mean human attention is needed.
+_TERMINAL_ERROR_CLASSES = frozenset({"CREDENTIAL", "CONTENT", "PERMANENT"})
+# After this many attempts even retryable errors are considered terminal.
+_TERMINAL_ATTEMPT_THRESHOLD = 3
+
+
+def _terminal_failed_platforms(
+    platform_status: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Return platforms whose failure won't be auto-resolved by the retry loop.
+
+    A failure is terminal when error_class is non-retryable (CREDENTIAL/CONTENT/
+    PERMANENT) or attempts have hit the cap. Used to surface partial-publish
+    events to the dashboard so silent platform failures aren't lost behind the
+    blueprint's overall PUBLISHED status.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for plat, val in platform_status.items():
+        if not isinstance(val, dict) or val.get("status") != "FAILED":
+            continue
+        error_class = val.get("error_class", "TRANSIENT")
+        attempts = int(val.get("attempts", 0) or 0)
+        if error_class in _TERMINAL_ERROR_CLASSES or attempts >= _TERMINAL_ATTEMPT_THRESHOLD:
+            out[plat] = val
+    return out
+
+
 def _normalize_niche(niche_id: str) -> str:
     niche_id = niche_id.strip()
     if niche_id in ("ai_tech", "ai_news"):
@@ -194,8 +221,13 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
                     enc_config = _yaml.safe_load(f) or {}
                 durations = enc_config.get("platform_durations", {}).get(platform, {})
                 max_duration = durations.get("max_seconds")
-        except Exception:
-            pass
+        except Exception as exc:
+            # Non-critical: we just fall through to the default (no trim).
+            # Logged at debug because transcode_specs is optional.
+            logger.debug(
+                "[publish] Could not load platform_encode_specs for %s: %s",
+                platform, exc,
+            )
 
         cmd = [ffmpeg, "-y", "-i", str(source)]
 
@@ -308,8 +340,11 @@ def _post_affiliate_reply(
         # YouTube: affiliate URL is already in the video description
         # (injected by cta_engine into youtube_content). No separate comment needed.
 
-    except Exception:
-        logger.debug("[affiliate] Reply failed for %s/%s (non-blocking)", platform, post_id)
+    except Exception as exc:
+        logger.warning(
+            "[affiliate] Reply failed for %s/%s (non-blocking): %s",
+            platform, post_id, exc,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -584,7 +619,7 @@ def run_publish(
                 except (ValueError, TypeError):
                     pass
     except Exception as e:
-        logger.debug("[publish] PUBLISHING recovery check failed: %s", e)
+        logger.warning("[publish] PUBLISHING recovery check failed: %s", e)
 
     # Auto-recover PUBLISH_FAILED blueprints after 24h cooldown
     try:
@@ -606,7 +641,7 @@ def run_publish(
                 except (ValueError, TypeError):
                     pass
     except Exception as e:
-        logger.debug("[publish] PUBLISH_FAILED recovery check failed: %s", e)
+        logger.warning("[publish] PUBLISH_FAILED recovery check failed: %s", e)
 
     # 1. Query VISUAL_READY blueprints for this niche
     all_blueprints = backlog_client.get_blueprints_by_status(
@@ -634,9 +669,10 @@ def run_publish(
         if gate.allowed:
             eligible.append(bp)
         else:
-            logger.debug(
-                "[publish] Blueprint %s blocked by %s: %s",
-                bp.get("id", "?"), gate.gate_name, gate.reason,
+            logger.info(
+                "[publish] Blueprint %s blocked by %s: %s (title='%s')",
+                bp.get("id", "?")[:8], gate.gate_name, gate.reason,
+                (fields.get("title") or "")[:50],
             )
 
     if not eligible:
@@ -743,8 +779,15 @@ def run_publish(
                         record_id,
                         {"platform_publish_status": json.dumps(platform_status)},
                     )
-                except Exception:
-                    pass  # best-effort — final update at step 7 will catch up
+                except Exception as exc:
+                    # Best-effort: final update at step 7 will re-try. Log at
+                    # warning so if step 7 also fails and we crash mid-publish,
+                    # the debug trail makes the double-post risk visible.
+                    logger.warning(
+                        "[publish] Mid-publish state persistence failed for %s "
+                        "(will retry at final update): %s",
+                        platform, exc,
+                    )
             else:
                 error_class = classify(result.error, platform)
                 attempt_data = platform_status.get(platform, {})
@@ -808,7 +851,22 @@ def run_publish(
         from genlab_core.observability.dashboard_events import push_event
         hook_text = (fields.get("hook_text") or fields.get("hook") or fields.get("title") or "")[:50]
         success_platforms = [p for p, s in platform_status.items() if s == "PUBLISHED"]
-        if any_success:
+        terminal_failed = _terminal_failed_platforms(platform_status)
+        if any_success and terminal_failed:
+            # Some platforms succeeded, but others are PERMANENTLY failed (won't auto-retry).
+            # Surface to the dashboard so the user knows publishing was partial.
+            failed_summary = ", ".join(
+                f"{p}({d.get('error_class','?')})" for p, d in terminal_failed.items()
+            )
+            push_event(
+                "publish_partial",
+                f"Partial publish: {hook_text}",
+                f"OK: {', '.join(success_platforms) or 'none'}; permanent failures: {failed_summary}",
+                entity_id=record_id,
+                entity_type="blueprint",
+                niche_id=niche_id,
+            )
+        elif any_success:
             push_event(
                 "publish_success",
                 f"Published: {hook_text}",
@@ -861,6 +919,15 @@ def run_publish(
                             "hook_features": hook_feats,
                             "linucb_context": linucb_ctx,
                         }
+                        # Carry the bandit-picked hook style so the
+                        # metric_collector update can also credit the
+                        # style arm at 48h (closes the loop opened in
+                        # commit 84b7801).
+                        hook_style = fields.get("hook_style", "")
+                        if hook_style:
+                            bandit_ctx["extra_arms"] = [
+                                f"style:{niche_id}:{hook_style}"
+                            ]
                     except Exception as ctx_exc:
                         logger.debug("[publish] bandit_context build failed: %s", ctx_exc)
 
@@ -919,7 +986,7 @@ def run_publish(
                             pass
                     # Check daily cap before retrying
                     if daily_cap and not daily_cap.can_publish(plat):
-                        logger.debug("[publish] Retry skipped for %s — daily cap reached", plat)
+                        logger.info("[publish] Retry skipped for %s — daily cap reached", plat)
                         continue
                     retry_platforms.append(plat)
 
@@ -988,6 +1055,37 @@ def run_publish(
                 backlog_client.blueprints.update(record_id, {
                     "platform_publish_status": json.dumps(pps),
                 })
+
+                # If any platforms remain terminally failed after retries, surface
+                # to the dashboard. Without this, partial-publish failures are
+                # only visible by inspecting platform_publish_status by hand.
+                terminal_failed = _terminal_failed_platforms(pps)
+                if terminal_failed:
+                    try:
+                        from genlab_core.observability.dashboard_events import push_event
+                        hook_text = (
+                            fields.get("hook_text") or fields.get("hook")
+                            or fields.get("title") or ""
+                        )[:50]
+                        ok_plats = [
+                            p for p, s in pps.items()
+                            if s == "PUBLISHED"
+                            or (isinstance(s, dict) and s.get("status") == "PUBLISHED")
+                        ]
+                        failed_summary = ", ".join(
+                            f"{p}({d.get('error_class','?')},{d.get('attempts','?')}x)"
+                            for p, d in terminal_failed.items()
+                        )
+                        push_event(
+                            "publish_partial",
+                            f"Retries exhausted: {hook_text}",
+                            f"OK: {', '.join(ok_plats) or 'none'}; permanent: {failed_summary}",
+                            entity_id=bp["id"],
+                            entity_type="blueprint",
+                            niche_id=niche_id,
+                        )
+                    except Exception:
+                        pass  # non-fatal
             except Exception as e:
                 logger.warning("[publish] Retry processing failed for blueprint %s: %s", bp["id"][:8], e)
 

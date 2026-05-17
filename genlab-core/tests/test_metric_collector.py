@@ -659,6 +659,197 @@ class TestDefaultBanditUpdaterFractionalMath:
         assert fields["n_plays"] == 11
 
 
+class TestMultiArmUpdate:
+    """Closing the loop (2026-05-17): _default_bandit_updater applies
+    the same reward to multiple arms when bandit_context carries
+    extra_arms. This is how hook-style arms receive feedback."""
+
+    def _proxy_with_arms(self, *arms):
+        """Build a proxy whose .all() returns one row per arm spec.
+
+        Each arm spec is (arm_id, niche_id, alpha, beta, n_plays).
+        """
+        proxy = MagicMock()
+        proxy.all.return_value = [
+            {
+                "id": f"row_{i}",
+                "fields": {
+                    "arm_id": arm_id,
+                    "niche_id": niche,
+                    "alpha": a,
+                    "beta": b,
+                    "n_plays": n,
+                },
+            }
+            for i, (arm_id, niche, a, b, n) in enumerate(arms)
+        ]
+        return proxy
+
+    def test_extra_arms_get_same_reward_applied(self):
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = self._proxy_with_arms(
+            ("gameplay_clip",            "gaming", 1.0, 1.0, 0),
+            ("style:gaming:bold_claim",  "gaming", 1.0, 1.0, 0),
+        )
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.5,
+                bandit_context={"extra_arms": ["style:gaming:bold_claim"]},
+            )
+
+        # save_arm called once per matched target — twice total
+        assert proxy.update.call_count == 2
+        written_by_arm = {
+            call.args[1]["arm_id"]: call.args[1]
+            for call in proxy.update.call_args_list
+        }
+        assert "gameplay_clip" in written_by_arm
+        assert "style:gaming:bold_claim" in written_by_arm
+        for arm_id, fields in written_by_arm.items():
+            assert abs(fields["alpha"] - 1.5) < 1e-9, arm_id
+            assert abs(fields["beta"] - 1.5) < 1e-9, arm_id
+            assert fields["n_plays"] == 1
+
+    def test_linucb_state_only_written_to_primary_arm(self):
+        """The 12-dim feature vector describes the content. Mixing it
+        into the style arm's posterior would learn confounded signal."""
+        from genlab_core.learning.linucb import CONTEXT_DIM
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = self._proxy_with_arms(
+            ("gameplay_clip",            "gaming", 1.0, 1.0, 0),
+            ("style:gaming:bold_claim",  "gaming", 1.0, 1.0, 0),
+        )
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        ctx_vec = [0.5] * CONTEXT_DIM
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.6,
+                bandit_context={
+                    "extra_arms": ["style:gaming:bold_claim"],
+                    "linucb_context": ctx_vec,
+                },
+            )
+
+        # Inspect save_arm calls — only the primary should carry
+        # linucb_state in its fields dict.
+        primary_linucb = None
+        style_linucb = "PRESENT"  # sentinel; we expect None
+        for call in proxy.update.call_args_list:
+            fields = call.args[1]
+            if fields["arm_id"] == "gameplay_clip":
+                primary_linucb = fields.get("linucb_state")
+            elif fields["arm_id"] == "style:gaming:bold_claim":
+                style_linucb = fields.get("linucb_state", None)
+        assert primary_linucb is not None, \
+            "Primary arm should have LinUCB state written"
+        assert style_linucb is None, \
+            "Style arm must NOT receive LinUCB state"
+
+    def test_missing_extra_arm_logs_warning_but_does_not_fail(self):
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = self._proxy_with_arms(
+            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
+            # No style arm row — represents not-yet-seeded scenario
+        )
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            # Should not raise even though style arm is missing
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.3,
+                bandit_context={"extra_arms": ["style:gaming:bold_claim"]},
+            )
+
+        # Primary arm still updated
+        assert proxy.update.call_count == 1
+        assert proxy.update.call_args.args[1]["arm_id"] == "gameplay_clip"
+
+    def test_no_extra_arms_still_works_legacy(self):
+        """Backwards-compat: bandit_context without extra_arms still
+        updates only the primary arm."""
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = self._proxy_with_arms(
+            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
+            ("style:gaming:bold_claim", "gaming", 5.0, 5.0, 10),
+        )
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.4,
+                bandit_context=None,
+            )
+
+        # Only the primary arm should be touched
+        assert proxy.update.call_count == 1
+        assert proxy.update.call_args.args[1]["arm_id"] == "gameplay_clip"
+
+    def test_other_niche_arms_not_touched(self):
+        """Even if extra_arms references an arm name that exists in
+        another niche, the niche_id filter must prevent updating it."""
+        from genlab_core.learning.metric_collector import _default_bandit_updater
+
+        proxy = self._proxy_with_arms(
+            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
+            # Same arm name but in a different niche
+            ("style:gaming:bold_claim", "movies", 1.0, 1.0, 0),
+        )
+        client = MagicMock()
+        client.bandit_arms = proxy
+
+        with patch(
+            "genlab_core.http.backlog_client.BacklogClient",
+            return_value=client,
+        ):
+            _default_bandit_updater(
+                niche_id="gaming",
+                content_type="gameplay_clip",
+                platform="youtube",
+                reward=0.5,
+                bandit_context={"extra_arms": ["style:gaming:bold_claim"]},
+            )
+
+        # Only the gaming arm gets touched (the movies-niche row
+        # with the same arm_id is filtered out)
+        assert proxy.update.call_count == 1
+        assert proxy.update.call_args.args[1]["arm_id"] == "gameplay_clip"
+
+
 class TestSaveArmPreservesNPlays:
     """Bug D (2026-05-16): save_arm hardcoded n_plays=0 on every write,
     overwriting prior counts. Fix: accept optional n_plays; if None,
