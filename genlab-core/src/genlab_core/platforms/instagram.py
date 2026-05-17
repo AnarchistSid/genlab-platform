@@ -363,6 +363,16 @@ class InstagramClient:
             max_poll_seconds=max_poll_seconds,
         )
         if already_published is None:
+            # 2207077 = "media upload failed". Meta keys this off the URL we
+            # gave it; another attempt against the same URL almost always
+            # fails the same way. Bail out so the publisher's outer retry
+            # loop can re-upload to a fresh CDN URL instead of burning 30s.
+            if "2207077" in (self._last_error or ""):
+                logger.warning(
+                    "Reel container failed with 2207077 — skipping in-client retry "
+                    "(outer publisher loop will retry with a fresh CDN URL)"
+                )
+                return None
             # Container ERROR or timeout — retry once after 30s
             # Meta's processor sometimes returns ERROR immediately on
             # transient overload, but succeeds on a second attempt.
