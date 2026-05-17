@@ -108,8 +108,11 @@ class BBScoringStrategy(ScoringStrategy):
                 )
         context["stories"] = visual_passed
 
-        # Trim to top N by score (from context stories — YouTube trending + RSS)
-        top_n = 5
+        # Trim to top N by score (from context stories — YouTube trending + RSS).
+        # Configurable via niche_config.pipeline.top_n_stories; defaults to 5.
+        niche_config = context.get("niche_config", {}) or {}
+        pipeline_cfg = niche_config.get("pipeline", {}) or {}
+        top_n = int(pipeline_cfg.get("top_n_stories", 5))
         if len(context["stories"]) > top_n:
             context["stories"] = context["stories"][:top_n]
 
