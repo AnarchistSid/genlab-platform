@@ -28,6 +28,11 @@ from typing import Any
 
 import yaml
 
+from genlab_core.cache.text_sanitizer import (
+    check_for_injection,
+    sanitize_text,
+)
+
 from .interfaces import WritingStrategy
 
 logger = logging.getLogger(__name__)
@@ -39,23 +44,34 @@ def _load_yaml(path: Path) -> dict:
 
 
 def _build_extra_instructions(writing_cfg: dict) -> str:
-    """Build extra_instructions string from writing.yaml config."""
+    """Build extra_instructions string from writing.yaml config.
+
+    Reads banned_phrases, hook_examples, caption_examples, tone_notes.
+    Each section is stitched together with double-newline separators so
+    the LLM sees them as distinct blocks.
+    """
     parts: list[str] = []
     banned = writing_cfg.get("banned_phrases", [])
     if banned:
         parts.append(
-            "BANNED PHRASES (never use these):\n"
+            "NICHE-SPECIFIC BANNED PHRASES (in addition to the universal list above):\n"
             + "\n".join(f"  - {p}" for p in banned)
         )
     examples = writing_cfg.get("hook_examples", [])
     if examples:
         parts.append(
-            "HOOK EXAMPLES (for style reference, do not copy verbatim):\n"
+            "NICHE HOOK EXAMPLES (style reference — match the voice, don't copy):\n"
             + "\n".join(f"  - {e}" for e in examples)
+        )
+    caption_examples = writing_cfg.get("caption_examples", [])
+    if caption_examples:
+        parts.append(
+            "NICHE CAPTION EXAMPLES (reaction voice — match the tone + brevity):\n"
+            + "\n".join(f"  - {e}" for e in caption_examples)
         )
     tone = writing_cfg.get("tone_notes", "")
     if tone:
-        parts.append(f"TONE: {tone.strip()}")
+        parts.append(f"NICHE TONE: {tone.strip()}")
     return "\n\n".join(parts)
 
 
@@ -99,21 +115,62 @@ class BaseWritingStrategy(WritingStrategy):
     def _story_to_video_dict(
         self, story: dict, clip_index: dict | None = None
     ) -> dict:
-        """Convert a pipeline story dict to the video dict expected by write_video_content."""
+        """Convert a pipeline story dict to the video dict expected by write_video_content.
+
+        External text (title, summary, tags, channel name) is sanitized before
+        leaving this boundary. Scraped YouTube/RSS content is treated as
+        untrusted — adversarial creators could craft titles containing
+        "ignore previous instructions" to hijack the LLM prompt. See
+        .claude/rules/security.md for the full rule set.
+        """
         story_id = story.get("story_id", "")
         clip_info = {}
         if clip_index:
             clip_info = clip_index.get("clips", {}).get(story_id, {})
 
+        raw_title = story.get("title", "")
+        raw_summary = story.get("summary", "")
+        raw_channel = story.get("source", "")
+        raw_tags = story.get("tags", []) or []
+
+        # Sanitize: strip HTML, collapse whitespace, drop control chars
+        clean_title = sanitize_text(raw_title, max_length=500)
+        clean_summary = sanitize_text(raw_summary, max_length=1000)
+        clean_channel = sanitize_text(raw_channel, max_length=200)
+        clean_tags = [sanitize_text(t, max_length=60) for t in raw_tags[:16] if t]
+
+        # Injection detection: if any field trips the heuristics, log and
+        # drop THAT field's value. We don't raise because a single injection
+        # pattern shouldn't kill the whole pipeline — the LLM prompt will
+        # just miss one field, and the downstream hook generator has its
+        # own safeguards (HookValidator).
+        for field_name, value in (
+            ("title", clean_title),
+            ("summary", clean_summary),
+            ("channel_name", clean_channel),
+        ):
+            hits = check_for_injection(value)
+            if hits:
+                logger.warning(
+                    "[%s] Injection heuristic hit in %s for story %s: %s",
+                    self._niche_id, field_name, story_id[:16], hits,
+                )
+                if field_name == "title":
+                    clean_title = ""
+                elif field_name == "summary":
+                    clean_summary = ""
+                elif field_name == "channel_name":
+                    clean_channel = ""
+
         return {
             "video_id": clip_info.get("video_id", story.get("video_id", story_id)),
-            "title": story.get("title", ""),
-            "channel_name": story.get("source", ""),
+            "title": clean_title,
+            "channel_name": clean_channel,
             "view_count": story.get("view_count", 0),
             "view_velocity": story.get("view_velocity", 0),
             "age_hours": story.get("age_hours", 1),
-            "description_snippet": story.get("summary", "")[:300],
-            "tags": story.get("tags", []),
+            "description_snippet": clean_summary[:300],
+            "tags": clean_tags,
         }
 
     # ------------------------------------------------------------------
