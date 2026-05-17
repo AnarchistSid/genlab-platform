@@ -438,6 +438,7 @@ class ThreadsClient:
 
     def _poll_container(self, container_id: str, max_seconds: int = 120) -> str:
         """Poll Threads container status until FINISHED, ERROR, or timeout."""
+        consecutive_errors = 0
         for _ in range(max_seconds // 5):
             try:
                 resp = requests.get(
@@ -446,20 +447,40 @@ class ThreadsClient:
                     timeout=10,
                 )
                 if resp.ok:
+                    consecutive_errors = 0
                     status = resp.json().get("status", "")
                     if status == "FINISHED":
                         return "FINISHED"
                     if status == "ERROR":
+                        logger.error(
+                            "[Threads] container %s returned ERROR state",
+                            container_id[:16],
+                        )
                         return "ERROR"
-            except Exception:
-                pass  # retry on network error
+                else:
+                    logger.warning(
+                        "[Threads] container poll HTTP %d for %s",
+                        resp.status_code, container_id[:16],
+                    )
+            except Exception as exc:
+                consecutive_errors += 1
+                logger.warning(
+                    "[Threads] container poll request error for %s (%d/3): %s",
+                    container_id[:16], consecutive_errors, exc,
+                )
+                if consecutive_errors >= 3:
+                    logger.error(
+                        "[Threads] container poll gave up after 3 consecutive errors"
+                    )
+                    return "ERROR"
             time.sleep(5)  # uses module-level time import (mockable in tests)
         return "TIMEOUT"
 
     def _get_permalink(self, post_id: str) -> str:
         """Fetch the permalink for a published Threads post.
 
-        Returns empty string on any failure (non-critical).
+        Returns empty string on any failure (non-critical — post IS
+        already published, the permalink is just for dashboard display).
         """
         try:
             resp = requests.get(
@@ -469,8 +490,8 @@ class ThreadsClient:
             )
             if resp.ok:
                 return _safe_json(resp).get("permalink", "")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[Threads] permalink fetch failed (non-critical): %s", exc)
         return ""
 
     def _resolve_url(self, path: Path | str) -> str:
@@ -534,9 +555,24 @@ class ThreadsClient:
                 new_token = data.get("access_token", "")
                 if new_token:
                     self._access_token = new_token
-                    # Update env var so other modules in the same process see the new token
+                    issued_at = datetime.now(UTC).isoformat()
+                    # In-process: refresh env so sibling modules see the new token
                     os.environ["THREADS_ACCESS_TOKEN"] = new_token
-                    os.environ["THREADS_TOKEN_ISSUED_AT"] = datetime.now(UTC).isoformat()
+                    os.environ["THREADS_TOKEN_ISSUED_AT"] = issued_at
+                    # Persist across process boundaries: write back to .env so
+                    # subsequent pipeline oneshot runs don't re-read the stale
+                    # token and trigger refresh every single time.
+                    try:
+                        from genlab_core.utils.env_writer import update_env_file
+                        update_env_file({
+                            "THREADS_ACCESS_TOKEN": new_token,
+                            "THREADS_TOKEN_ISSUED_AT": issued_at,
+                        })
+                    except Exception as exc:
+                        logger.warning(
+                            "[Threads] Token refreshed but .env persistence failed: %s",
+                            exc,
+                        )
                     logger.info("[Threads] Token refreshed successfully (expires in %ds)", data.get("expires_in", 0))
                     return True
             logger.warning("[Threads] Token refresh failed: %s", resp.text[:200])
