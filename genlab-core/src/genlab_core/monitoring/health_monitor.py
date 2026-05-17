@@ -905,14 +905,24 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
             )
         """)
 
+        # Grace period after manual resolve.  Configurable via env var; default
+        # 1 hour.  When an operator resolves an alert, the next health monitor
+        # tick would normally re-create it immediately if the underlying
+        # condition is still observed (e.g. zero-download runs from this morning
+        # still in the 3-day _load_recent_reports window).  The grace period
+        # treats recently-resolved alerts as still-suppressed so manual
+        # resolutions stick long enough for the underlying condition to clear.
+        grace = os.environ.get("ALERT_RESOLVE_GRACE", "1 hour")
+
         written = 0
         for alert in alerts:
-            # Deduplicate: don't create if an unresolved alert for same check+niche exists
+            # Deduplicate: skip if an unresolved alert exists OR a same-shape
+            # alert was resolved within the grace window.
             cur.execute(
                 "SELECT id FROM pipeline_alerts "
                 "WHERE check_name = %s AND niche_id IS NOT DISTINCT FROM %s "
-                "AND resolved_at IS NULL",
-                (alert.check, alert.niche_id or None),
+                "AND (resolved_at IS NULL OR resolved_at > NOW() - %s::interval)",
+                (alert.check, alert.niche_id or None, grace),
             )
             if cur.fetchone():
                 continue
