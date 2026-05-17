@@ -8,9 +8,16 @@ from __future__ import annotations
 
 import re
 
-# Patterns that indicate potential prompt injection
+# Patterns that indicate potential prompt injection.
+# Broadened to catch the canonical phrase "ignore all previous instructions"
+# and common variants. The prior version required the adjectives to appear
+# in a specific single-alternative order, which missed the most common
+# jailbreak phrasings.
 SUSPICIOUS_PATTERNS = [
-    r'ignore (previous|all|above) instructions?',
+    # "ignore [any combo of previous/all/above] instructions"
+    r'ignore\s+(?:all\s+)?(?:previous|prior|above|earlier)?\s*instructions?',
+    r'ignore\s+all\s+instructions?',
+    r'disregard\s+(?:the\s+)?(?:previous|prior|above|earlier|all)?\s*instructions?',
     r'system:?\s*you are',
     r'<\s*/?prompt\s*>',
     r'jailbreak',
@@ -27,6 +34,9 @@ SUSPICIOUS_PATTERNS = [
     r'forget (everything|all|your)',
     r'</?system\s*>',
     r'\[INST\]|\[/INST\]',
+    # Common LLM prompt-hijack preambles
+    r'(?:start|begin)\s+(?:your|a)\s+(?:response|reply)\s+with',
+    r'do\s+not\s+(?:follow|obey)\s+(?:previous|prior|the\s+above)',
 ]
 
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in SUSPICIOUS_PATTERNS]
