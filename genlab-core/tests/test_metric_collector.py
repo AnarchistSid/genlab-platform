@@ -226,6 +226,7 @@ class TestFetchFacebook:
     def test_includes_video_views_when_present(self, monkeypatch):
         monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = {
             "data": [
                 {"name": "post_impressions", "values": [{"value": 10000}]},
@@ -249,17 +250,20 @@ class TestFetchFacebook:
             "avg_watch_time": 12.5,
             "reach": 10000,  # falls back to impressions when post_impressions_unique absent
             "minutes_viewed": 1.67,
+            "likes": 0,  # video object query gets 0 since mock doesn't include likes field
+            "comments": 0,
             "shares": 0,
             "completion_rate": 0.0,
         }
-        # Verify the metric param includes video metrics
-        params = mock_get.call_args[1]["params"]
+        # Verify the metric param includes video metrics (first call = /insights)
+        params = mock_get.call_args_list[0][1]["params"]
         assert "post_video_views" in params["metric"]
         assert "post_video_avg_time_watched" in params["metric"]
 
     def test_omits_video_keys_when_not_present(self, monkeypatch):
         monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
+        mock_resp.status_code = 200
         mock_resp.json.return_value = {
             "data": [
                 {"name": "post_impressions", "values": [{"value": 2000}]},
@@ -271,16 +275,167 @@ class TestFetchFacebook:
 
         # video keys absent → minutes_viewed=0 stub. reach falls back to
         # impressions when post_impressions_unique not present.
+        # Note: video_views gets added from the video object fallback path
+        # even when insights didn't include it. Same for likes/comments.
         assert result == {
             "impressions": 2000,
             "engaged_users": 100,
             "reach": 2000,
             "minutes_viewed": 0.0,
+            "likes": 0,
+            "comments": 0,
+            "video_views": 0,
             "shares": 0,
             "completion_rate": 0.0,
         }
-        assert "video_views" not in result
         assert "avg_watch_time" not in result
+
+
+class TestFetchFacebookVideoObject:
+    """Reel-era FB fetch — recovers engagement from the video object directly
+    when the legacy page-post /insights endpoint 400s on a Reel ID.
+    """
+
+    def _video_object_response(
+        self,
+        views: int = 99,
+        likes: int = 0,
+        comments: int = 1,
+        length_s: float = 40.0,
+    ) -> dict:
+        return {
+            "views": views,
+            "length": length_s,
+            "likes": {"data": [], "summary": {"total_count": likes}},
+            "comments": {"data": [], "summary": {"total_count": comments}},
+            "id": "1579623663118068",
+        }
+
+    def test_video_object_fills_in_when_insights_returns_400(self, monkeypatch):
+        """Critical resilience test mirroring observed Hetzner behavior:
+        /insights 400s on every Reel ID. The video object query recovers
+        real views/likes/comments so the engagement bandit gets signal.
+        """
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        vobj = self._video_object_response(views=99, likes=0, comments=1, length_s=40.0)
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "/insights" in url:
+                r.status_code = 400  # observed in production
+                r.json.return_value = {"error": {"message": "deprecated"}}
+            else:
+                # Video object query: likes.summary + comments.summary + views + length
+                r.status_code = 200
+                r.json.return_value = vobj
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook("1579623663118068", niche_id="gaming")
+
+        # Engagement counts recovered from the video object
+        assert result["likes"] == 0
+        assert result["comments"] == 1
+        assert result["impressions"] == 99  # falls back to views since /insights empty
+        assert result["reach"] == 99
+        assert result["video_views"] == 99
+        assert result["video_length_s"] == 40.0
+        # Shares + completion_rate stay at stub 0 (architecturally unavailable)
+        assert result["shares"] == 0
+        assert result["completion_rate"] == 0.0
+
+    def test_insights_data_preferred_when_available(self, monkeypatch):
+        """When /insights succeeds, don't overwrite its values with video-object
+        data (insights is more granular for impressions vs. views).
+        """
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            r.status_code = 200
+            if "/insights" in url:
+                r.json.return_value = {
+                    "data": [
+                        {"name": "post_impressions", "values": [{"value": 5000}]},
+                        {"name": "post_video_views", "values": [{"value": 4000}]},
+                    ]
+                }
+            else:
+                r.json.return_value = self._video_object_response(views=99)
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook("fb_both", niche_id="gaming")
+
+        # /insights wins for impressions (real impressions metric, not view count)
+        assert result["impressions"] == 5000
+        # video_views still uses the insights value (was set during loop)
+        assert result["video_views"] == 4000
+        # likes/comments come from the video object (insights doesn't return them)
+        assert result["likes"] == 0
+        assert result["comments"] == 1
+
+    def test_video_object_helper_returns_empty_on_403(self):
+        """Token without permission → empty, caller keeps stub zeros."""
+        from genlab_core.learning.metric_collector import _fetch_facebook_video_object
+
+        def fake_get(*_a, **_k):
+            r = MagicMock()
+            r.status_code = 403
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook_video_object("p1", "tok")
+
+        assert result == {}
+
+    def test_video_object_helper_parses_summaries_correctly(self):
+        """Direct parse of likes.summary.total_count + comments.summary.total_count."""
+        from genlab_core.learning.metric_collector import _fetch_facebook_video_object
+
+        def fake_get(*_a, **_k):
+            r = MagicMock()
+            r.status_code = 200
+            r.json.return_value = {
+                "views": 100,
+                "length": 30.5,
+                "likes": {"summary": {"total_count": 12}},
+                "comments": {"summary": {"total_count": 3}},
+            }
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook_video_object("p1", "tok")
+
+        assert result == {
+            "views": 100,
+            "likes": 12,
+            "comments": 3,
+            "video_length_s": 30.5,
+        }
+
+    def test_both_endpoints_fail_returns_safe_dict(self, monkeypatch):
+        """Worst case — both /insights and video object 400. Return zeros, no crash."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+
+        def fake_get(url, *_a, **_k):
+            r = MagicMock()
+            r.status_code = 400
+            r.raise_for_status.return_value = None
+            r.json.return_value = {"error": {"message": "x"}}
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook("fb_dead", niche_id="gaming")
+
+        # Doesn't crash, returns a stable shape with zeros
+        assert result["impressions"] == 0
+        assert result["reach"] == 0
+        assert result["minutes_viewed"] == 0.0
+        assert result["shares"] == 0
+        assert result["completion_rate"] == 0.0
 
 
 # ===========================================================================
