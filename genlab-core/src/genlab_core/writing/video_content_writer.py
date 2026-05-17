@@ -115,6 +115,53 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
 }
 
 
+def _complete_and_parse_json(
+    llm_client: Any,
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    niche_id: str,
+) -> dict:
+    """Call the LLM and parse its JSON response, retrying once on parse failure.
+
+    Claude occasionally emits malformed JSON (unescaped quotes/colons inside
+    string values). A single retry with an explicit reminder of the prior
+    parse error fixes the vast majority of these. On a second failure we let
+    the JSONDecodeError propagate so ``write_video_content`` can return its
+    title-derived fallback content.
+    """
+    last_err: Exception | None = None
+    for attempt in range(2):
+        retry_user = user
+        if attempt > 0 and last_err is not None:
+            retry_user = (
+                f"{user}\n\n"
+                f"IMPORTANT: your previous response was not valid JSON "
+                f"({type(last_err).__name__}: {last_err}). "
+                "Return ONLY a valid JSON object. Escape any quotes or colons "
+                "inside string values. No markdown, no prose, no code fences."
+            )
+        response = llm_client.complete(
+            system=system,
+            user=retry_user,
+            max_tokens=max_tokens,
+            temperature=temperature if attempt == 0 else max(0.2, temperature - 0.3),
+        )
+        clean = re.sub(r"```(?:json)?|```", "", response).strip()
+        try:
+            return json.loads(clean)
+        except json.JSONDecodeError as exc:
+            last_err = exc
+            if attempt == 0:
+                logger.info(
+                    "[%s] LLM JSON parse failed (attempt 1/2): %s — retrying",
+                    niche_id, exc,
+                )
+                continue
+            raise
+
+
 def write_video_content(
     video: dict,
     niche_id: str,
@@ -146,32 +193,97 @@ def write_video_content(
         vel = video.get("view_velocity", 1)
         age_hours = video.get("view_count", 0) / vel if vel else 1
 
+    # Pick 3 CTAs from the niche's rotation and SHOW them to the LLM so it
+    # uses natural ones instead of pattern-matching on whatever example we
+    # put in the prompt. The three choices here become the LLM's menu.
+    cta_menu = random.sample(voice["ctas"], min(3, len(voice["ctas"])))
+    cta_menu_text = "\n".join(f'    - "{c}"' for c in cta_menu)
+
     system = (
         f"You write viral short-form social media content for {voice['account']}.\n"
-        f"Style: {voice['style']}\n"
+        f"Voice: {voice['style']}\n"
         f"Audience: {voice['audience']}\n\n"
-        "You are writing content FOR a video that's already going viral.\n"
-        "Reference what's actually happening in the video — be specific.\n"
-        "Never use generic templates like \"something big happened\".\n"
-        "If the video is NOT relevant to the channel's niche, return an empty hook\n"
-        "to signal it should be skipped. Do NOT force irrelevant content.\n\n"
-        "STRICT CHARACTER LIMITS (enforced — content will be truncated if exceeded):\n"
-        "- hook: ≤60 characters. Story-specific, creates curiosity. NO generic phrases.\n"
-        "- instagram_caption: EXACTLY 150-180 characters of body text, then a line break,\n"
-        "  then a CTA (e.g. 'Follow for daily sports'), then a line break,\n"
-        "  then EXACTLY 3-5 relevant hashtags. Total must be under 200 chars.\n"
-        "- twitter_content: ≤280 chars. Punchy, conversational. NO external links.\n"
+        "CORE PRINCIPLE: you are writing for a video that's already going viral.\n"
+        "Your job is to make someone stop scrolling. Every word earns its place.\n"
+        "Reference what's actually IN the video — specific tools, names, claims.\n"
+        "If the video isn't relevant to the channel's niche, return an empty\n"
+        "hook to signal skip. Do NOT force irrelevant content.\n"
+        "\n"
+        "HOOK RULES (≤60 chars, the single most important field):\n"
+        "  - Create curiosity — don't resolve it. A hook makes someone NEED\n"
+        "    to watch. A headline SUMMARIZES what happened.\n"
+        "  - ✅ GOOD: 'Anthropic built a Claude so dangerous they won't release it'\n"
+        "  - ✅ GOOD: 'The AI company everyone feared just got scared of itself'\n"
+        "  - ✅ GOOD: 'This tool just made 3 million designers redundant'\n"
+        "  - ❌ BAD:  'Claude just found a loophole' (resolves curiosity)\n"
+        "  - ❌ BAD:  'New AI model released today' (generic headline)\n"
+        "  - ❌ BAD:  'Google deleted them but footage lives forever' (too explained)\n"
+        "  - Use concrete nouns from the source. NO vague phrases like\n"
+        "    'something big', 'this could change everything', 'you won't believe'.\n"
+        "  - NEVER start a hook with '[Company/Person] just [did something]'.\n"
+        "    That's a headline, not a hook. Instead use one of these patterns:\n"
+        "    • PARADOX: 'The AI company everyone feared just got scared of itself'\n"
+        "    • QUESTION: 'Why did Anthropic lock their own AI in a vault?'\n"
+        "    • STAKES: 'One tool just made 3 million designers redundant'\n"
+        "    • REVEAL: 'The phone LG built, finished, and then buried'\n"
+        "    • CONTRAST: 'Open source is beating the $100B labs at their own game'\n"
+        "  - If your hook could be a CNN headline, rewrite it as a group chat\n"
+        "    message instead.\n"
+        "\n"
+        "CAPTION VOICE (Instagram):\n"
+        "  - Write like a reaction in a group chat, NOT a news recap.\n"
+        "  - ✅ GOOD: 'wait so claude is smarter than the people training it??'\n"
+        "  - ✅ GOOD: 'LG literally had the rollable phone working. and shelved it 😭'\n"
+        "  - ❌ BAD:  'Anthropic's new Claude model literally found ways to...'\n"
+        "    (reads like Reuters)\n"
+        "  - Short sentences. Lowercase where natural. Emoji where it fits (1-2\n"
+        "    max, not every sentence). Strong opinion in the first 6 words.\n"
+        "  - Body 150-170 chars. Do NOT describe the video like a news summary.\n"
+        "\n"
+        "CTA — pick ONE verbatim from this list. Do NOT invent new CTAs:\n"
+        f"{cta_menu_text}\n"
+        "\n"
+        "HASHTAGS: exactly 3-5 tags. Each tag must be a full word (no '#AI #Cl').\n"
+        "Pick tags that are actually searched for — niche-specific over generic.\n"
+        "\n"
+        "STRICT CHARACTER LIMITS (content will be truncated if exceeded):\n"
+        "- hook: ≤60 characters, single line, no trailing punctuation unless ?\n"
+        "- instagram_caption: EXACTLY 150-170 chars body + blank line + CTA +\n"
+        "  blank line + 3-5 hashtags. TOTAL ≤ 200 chars including hashtags.\n"
+        "- twitter_content: ≤280 chars. Punchy, conversational. NO links.\n"
         "- youtube_content: Question format, ≤40 characters total.\n"
-        "- facebook_content: 200-300 chars. Ask an engaging question.\n"
-        "- threads_content: 150-300 chars. Text-first, conversational, opinion-forward.\n"
-        "  No hashtags needed. Write like a hot take in a group chat.\n\n"
+        "- facebook_content: 200-300 chars ending in an engaging question.\n"
+        "- threads_content: 150-300 chars. Text-first, opinion-forward.\n"
+        "  No hashtags. Write like a hot take in a group chat.\n"
+        "\n"
+        "BANNED PHRASES (never use — these are the #1 'AI-generated' tells):\n"
+        "  - 'something big happened'\n"
+        "  - 'you won't believe'\n"
+        "  - 'this could change everything'\n"
+        "  - 'here's why' (as a closer)\n"
+        "  - 'the community is going wild'\n"
+        "  - 'players are saying'\n"
+        "  - 'what do you think' — the CTA above is your engagement prompt\n"
+        "  - 'let us know in the comments'\n"
+        "  - 'don't miss out'\n"
+        "  - 'the future is here'\n"
+        "  - 'game changer' / 'game-changer'\n"
+        "  - 'literally' (overused by LLMs)\n"
+        "  - ANY sentence starting with 'Imagine'\n"
+        "  - Generic superlatives: 'insane', 'crazy', 'mind-blowing' (use a\n"
+        "    SPECIFIC reaction instead)\n"
+        "\n"
         + (
-            "These hooks are already used — DO NOT duplicate:\n"
-            f"{existing_hooks_text}\n\n"
+            "HOOK DEDUP — these have been used recently, produce a DIFFERENT "
+            "angle (not just synonyms):\n"
+            f"{existing_hooks_text}\n"
+            "\n"
             if existing_hooks_text else ""
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
-        + "Respond ONLY with valid JSON. No markdown, no explanation."
+        + "Respond ONLY with valid JSON with these exact keys: "
+        "hook, instagram_caption, twitter_content, youtube_content, "
+        "facebook_content, threads_content. No markdown, no explanation."
     )
 
     user = (
@@ -186,16 +298,14 @@ def write_video_content(
     )
 
     try:
-        response = llm_client.complete(
+        content = _complete_and_parse_json(
+            llm_client=llm_client,
             system=system,
             user=user,
             max_tokens=800,
-            temperature=0.8,
+            temperature=0.65,
+            niche_id=niche_id,
         )
-
-        # Strip markdown code fences if present
-        clean = re.sub(r"```(?:json)?|```", "", response).strip()
-        content = json.loads(clean)
 
         # Normalize smart quotes to ASCII equivalents (prevents FFmpeg drawtext issues)
         hook = content.get("hook", "")
@@ -215,6 +325,37 @@ def write_video_content(
                 "[%s] Rejected banned hook: %s", niche_id, hook[:60],
             )
             content["hook"] = ""
+
+        # Defense-in-depth: check LLM OUTPUT for injection patterns and
+        # suspicious URLs. A well-crafted input might slip past the input
+        # sanitizer in base_writing, and if the LLM then reproduces the
+        # attacker's instructions in the hook/caption, we should drop it
+        # rather than render it onto a video that ships to 5 channels.
+        from genlab_core.cache.text_sanitizer import check_for_injection
+        import re as _re
+        _url_re = _re.compile(r"https?://|www\.|bit\.ly|tinyurl|goo\.gl")
+        for field_name in ("hook", "instagram_caption", "twitter_content",
+                           "youtube_content", "facebook_content", "threads_content"):
+            val = content.get(field_name, "")
+            if not isinstance(val, str) or not val:
+                continue
+            hits = check_for_injection(val)
+            if hits:
+                logger.warning(
+                    "[%s] LLM output tripped injection heuristic in %s: %s",
+                    niche_id, field_name, hits,
+                )
+                content[field_name] = ""
+                continue
+            # Reject raw URLs in LLM output — the writer should never
+            # emit URLs unprompted. If it does, it's either a hallucination
+            # or an attacker-controlled instruction bleeding through.
+            if _url_re.search(val):
+                logger.warning(
+                    "[%s] LLM output contains unexpected URL in %s — dropping",
+                    niche_id, field_name,
+                )
+                content[field_name] = ""
 
         # ── Enforce Instagram caption standards ──────────────
         ig = content.get("instagram_caption", "")

@@ -119,8 +119,11 @@ class TestVideoContentWriter:
         result = write_video_content(_make_video(), "sports", llm, extra_instructions="")
         call_args = llm.complete.call_args
         system_prompt = call_args.kwargs.get("system", "")
-        # Should not have a stray double newline before the JSON instruction
-        assert "BANNED" not in system_prompt
+        # When extra_instructions is empty, the sports-specific phrase must
+        # NOT be in the prompt. (The built-in BANNED PHRASES section IS
+        # always in the prompt now — that's intentional, it's the generic
+        # LLM-tic block from the quality rewrite.)
+        assert "the sports world is watching" not in system_prompt
         assert result["hook"] == "Test"
 
     def test_extra_instructions_before_json_instruction(self):
