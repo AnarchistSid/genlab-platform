@@ -544,6 +544,99 @@ def check_services() -> list[Alert]:
     return alerts
 
 
+def check_warp_health() -> list[Alert]:
+    """Detect WARP SOCKS proxy outages within minutes, not days.
+
+    yt-dlp routes all video downloads through Cloudflare WARP at
+    127.0.0.1:40000 to bypass YouTube's bot-detection on Hetzner
+    datacenter IPs. When WARP goes down (daemon stops, mode flips
+    away from proxy, port closes), every pipeline that runs in the
+    next 24h fails downloads silently, then 6h later the existing
+    ``check_download_failures`` fires with a misleading "yt-dlp
+    update: success" auto-fix message that doesn't address the
+    real network-layer issue.
+
+    History: 2026-05-11 17:33 IST WARP stopped, was disabled at the
+    systemd level, never restarted. 5 days of pipeline runs failed
+    downloads (4/5 niches at zero blueprints/day) before the audit
+    caught it on 2026-05-17.
+
+    This check fires CRITICAL immediately on either:
+      * ``warp-svc`` systemd unit not active
+      * 127.0.0.1:40000 not in LISTEN state
+
+    Skipped silently when ``warp-svc`` isn't installed at all (dev
+    environments don't need WARP — only the Hetzner production
+    host routes through it).
+    """
+    alerts: list[Alert] = []
+    try:
+        # Is warp-svc installed?  list-unit-files exits 0 even when
+        # the unit is missing; check via show + LoadState instead.
+        show = subprocess.run(
+            ["systemctl", "show", "warp-svc.service",
+             "--property=LoadState,ActiveState,SubState",
+             "--no-pager"],
+            capture_output=True, text=True, timeout=10,
+        )
+        kv = dict(
+            (line.split("=", 1)[0], line.split("=", 1)[1])
+            for line in show.stdout.strip().split("\n")
+            if "=" in line
+        )
+        if kv.get("LoadState") in ("not-found", "masked", ""):
+            # WARP not installed — skip silently (dev environments).
+            return alerts
+
+        active = kv.get("ActiveState") == "active"
+        if not active:
+            alerts.append(Alert(
+                check="warp_down",
+                severity="critical",
+                message=(
+                    f"warp-svc not active (ActiveState={kv.get('ActiveState')}, "
+                    f"SubState={kv.get('SubState')}). All yt-dlp downloads "
+                    "will fail with 'curl: (7) connection refused' until "
+                    "the daemon is restored. Run: systemctl restart warp-svc"
+                ),
+                details={
+                    "load_state": kv.get("LoadState"),
+                    "active_state": kv.get("ActiveState"),
+                    "sub_state": kv.get("SubState"),
+                },
+                auto_fix="not attempted (would need warp-cli mode/port reconfig)",
+            ))
+            # Don't bother checking port if daemon is down.
+            return alerts
+
+        # Daemon is up — verify the SOCKS port is actually listening.
+        # WARP defaults to whole-OS tunnel mode; needs explicit
+        # `warp-cli mode proxy` + `warp-cli proxy port 40000` to
+        # surface the SOCKS endpoint.
+        ss = subprocess.run(
+            ["ss", "-tln"], capture_output=True, text=True, timeout=10,
+        )
+        port_listening = any(
+            "127.0.0.1:40000" in line and "LISTEN" in line
+            for line in ss.stdout.split("\n")
+        )
+        if not port_listening:
+            alerts.append(Alert(
+                check="warp_port_closed",
+                severity="critical",
+                message=(
+                    "warp-svc is active but SOCKS port 40000 is not "
+                    "listening. WARP likely flipped to whole-OS tunnel "
+                    "mode. Run: warp-cli mode proxy && warp-cli proxy "
+                    "port 40000 && warp-cli connect"
+                ),
+                details={"active_state": "active", "port_40000_listening": False},
+            ))
+    except Exception as e:
+        logger.debug("WARP health check failed: %s", e)
+    return alerts
+
+
 def check_git_drift() -> list[Alert]:
     """Detect uncommitted working-tree changes on the production host.
 
@@ -743,6 +836,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_swap())
         all_alerts.extend(check_foreign_host_writes())
         all_alerts.extend(check_git_drift())
+        all_alerts.extend(check_warp_health())
 
     return all_alerts
 
