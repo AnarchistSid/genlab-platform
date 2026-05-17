@@ -141,15 +141,16 @@ class _FeedHealthTracker:
         try:
             if self._HEALTH_PATH.exists():
                 self._health = json.loads(self._HEALTH_PATH.read_text())
-        except Exception:
+        except Exception as exc:
+            logger.debug("[FeedHealth] Could not load %s: %s", self._HEALTH_PATH, exc)
             self._health = {}
 
     def save(self) -> None:
         try:
             self._HEALTH_PATH.parent.mkdir(parents=True, exist_ok=True)
             self._HEALTH_PATH.write_text(json.dumps(self._health, indent=2, default=str))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("[FeedHealth] Could not save %s: %s", self._HEALTH_PATH, exc)
 
     def is_disabled(self, url: str) -> bool:
         entry = self._health.get(url, {})
@@ -296,6 +297,10 @@ class SharedIngestionPipeline:
                         pass
 
                 if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
+                    logger.debug(
+                        "[SharedIngestion] Skipping stale entry (>48h) from %s: %s",
+                        ftype, link[:80],
+                    )
                     continue
 
                 platform = {"yt_channel": "youtube", "reddit": "reddit", "rss": "rss"}[ftype]

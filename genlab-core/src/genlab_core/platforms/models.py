@@ -1,6 +1,7 @@
 """Data models for the unified platform client package."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -8,12 +9,28 @@ from typing import Any, Literal, Union
 
 import requests
 
+logger = logging.getLogger(__name__)
+
 
 def safe_json(resp: requests.Response) -> dict[str, Any]:
-    """Safely parse a requests.Response as JSON, returning {} on failure."""
+    """Safely parse a requests.Response as JSON.
+
+    Returns ``{}`` on parse failure. Unlike the previous version, failures
+    are now logged at WARNING level with the response status code and a
+    truncated body snippet so malformed API responses don't vanish
+    silently. Downstream callers still need to treat ``{}`` as a
+    "failed-to-parse" signal.
+    """
     try:
         return resp.json()
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "[safe_json] parse failure (status=%s, url=%s): %s | body=%r",
+            getattr(resp, "status_code", "?"),
+            getattr(resp, "url", "?"),
+            exc,
+            (getattr(resp, "text", "") or "")[:200],
+        )
         return {}
 
 # --- Platform-specific payload configs ---

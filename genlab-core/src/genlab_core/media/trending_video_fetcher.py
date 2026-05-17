@@ -358,14 +358,19 @@ class TrendingVideoFetcher:
         for v in detailed:
             candidates[v.video_id] = v
 
-        # Filter and score
+        # Filter and score. Track per-reason rejection counts so the summary
+        # log tells us WHY candidates were dropped, not just how many.
         results = []
+        dropped_short = dropped_long = dropped_slow = 0
         for video in candidates.values():
             if video.duration_seconds < MIN_DURATION_SECONDS:
+                dropped_short += 1
                 continue
             if video.duration_seconds > MAX_DURATION_SECONDS:
+                dropped_long += 1
                 continue
             if video.view_velocity < min_velocity:
+                dropped_slow += 1
                 continue
             results.append(video)
 
@@ -373,9 +378,11 @@ class TrendingVideoFetcher:
         with _QUOTA_LOCK:
             quota_snapshot = QUOTA_TRACKER["units_used"]
         logger.info(
-            "[%s] %d/%d passed filters (velocity≥%.0f, %d–%ds) | quota: %d units",
+            "[%s] %d/%d passed filters (velocity≥%.0f, %d–%ds) "
+            "[dropped: %d too-short, %d too-long, %d too-slow] | quota: %d units",
             niche_id, len(results), len(candidates),
             min_velocity, MIN_DURATION_SECONDS, MAX_DURATION_SECONDS,
+            dropped_short, dropped_long, dropped_slow,
             quota_snapshot,
         )
         return results[:limit]
