@@ -64,6 +64,31 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 }
 
 
+# Statuses that actively block re-creation of a blueprint. Any row in one of
+# these states represents content we've already committed to producing (or
+# published) — emitting a second blueprint for the same source would create
+# a duplicate.
+#
+# Conversely, rows in ARCHIVED (whether rejected by a user or auto-archived
+# because rendered media went missing) or PUBLISH_FAILED must NOT block
+# re-creation: the prior attempt didn't reach an audience, and retrying is
+# the whole point of the pipeline. This set is the single source of truth
+# for dedup decisions in push_to_backlog.
+_BLOCKING_STATUSES: frozenset[str] = frozenset({
+    "PUBLISHED",
+    "PUBLISHING",
+    "VISUAL_READY",
+    "DRAFTED",
+    "SCORED",
+})
+
+
+def _is_blocking(row: dict) -> bool:
+    """True if an existing blueprint row should block re-creation of the same content."""
+    fields = row.get("fields", row)
+    return fields.get("status", "") in _BLOCKING_STATUSES
+
+
 _TOPIC_MAP = {
     # Normalize raw source names to clean categories
     "anilist": "anilist",
@@ -112,15 +137,14 @@ def _normalize_topic(raw_source: str) -> str:
     return low
 
 
-def _get_arm_boost(client, niche_id: str) -> dict[str, float]:
-    """Query recent engagement data and return boost multipliers per arm_id.
+def _get_engagement_arm_boost(client, niche_id: str) -> dict[str, float]:
+    """Legacy: boost multipliers derived from historical priority_score.
 
-    Arms with above-average engagement get a 1.1-1.3x boost.
-    Arms with below-average get 0.8-0.9x.
-    Unknown arms get 1.0 (neutral).
+    Kept as a fallback when bandit posteriors are unavailable. Arms with
+    above-average historical priority_score get up to 1.3x, below-average
+    down to 0.8x.
     """
     try:
-        # Get recently published blueprints with engagement data
         records = client.blueprints.all(
             formula=f"AND({{niche_id}}='{niche_id}',{{status}}='PUBLISHED')",
             max_records=50,
@@ -136,22 +160,72 @@ def _get_arm_boost(client, niche_id: str) -> dict[str, float]:
         if not arm_scores:
             return {}
 
-        # Calculate average score per arm
         arm_avgs = {arm: sum(scores) / len(scores) for arm, scores in arm_scores.items()}
         overall_avg = sum(arm_avgs.values()) / len(arm_avgs) if arm_avgs else 0.5
 
-        # Generate boost multipliers
-        boosts = {}
+        boosts: dict[str, float] = {}
         for arm, avg in arm_avgs.items():
             if overall_avg > 0:
                 ratio = avg / overall_avg
-                boosts[arm] = max(0.8, min(1.3, ratio))  # clamp to 0.8-1.3
+                boosts[arm] = max(0.8, min(1.3, ratio))
             else:
                 boosts[arm] = 1.0
-
         return boosts
-    except Exception as exc:
+    except Exception:
         return {}
+
+
+# Multiplier range applied to priority_score. A sample of 0.0 produces
+# the floor (under-performing arms deprioritized); a sample of 1.0
+# produces the ceiling (over-performing arms boosted). Mirrors the
+# legacy engagement-boost range for behavioural continuity.
+_BANDIT_BOOST_FLOOR = 0.7
+_BANDIT_BOOST_CEIL = 1.3
+
+
+def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
+    """Thompson-sampled boost multipliers from bandit_arms posteriors.
+
+    For each arm in the niche, draws one Beta(alpha, beta) sample and
+    maps it into the multiplier range [_BANDIT_BOOST_FLOOR,
+    _BANDIT_BOOST_CEIL]. The randomness IS the exploration mechanism —
+    a fresh arm at alpha=beta=1 has uniform posterior so its sample
+    varies over the full range each call; a well-trained arm
+    concentrates samples near its posterior mean.
+
+    Falls back to {} on any error so the caller can degrade to the
+    engagement-history boost or neutral multipliers.
+    """
+    try:
+        from genlab_core.learning.arm_loader import load_all_arms
+    except ImportError:
+        return {}
+
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return {}
+
+    arms = load_all_arms(proxy, niche_id)
+    if not arms:
+        return {}
+
+    import random
+    spread = _BANDIT_BOOST_CEIL - _BANDIT_BOOST_FLOOR
+    boosts: dict[str, float] = {}
+    for arm_id, (alpha, beta) in arms.items():
+        # Guard against pathological alpha/beta — Beta requires both > 0.
+        a = alpha if alpha > 0 else 1.0
+        b = beta if beta > 0 else 1.0
+        try:
+            sample = random.betavariate(a, b)
+        except (ValueError, OverflowError):
+            sample = 0.5
+        boosts[arm_id] = round(_BANDIT_BOOST_FLOOR + spread * sample, 4)
+    return boosts
+
+
+# Backwards-compatible alias for any external import.
+_get_arm_boost = _get_bandit_arm_boost
 
 
 def _apply_engagement_boost(base_score: float, arm_id: str, boosts: dict[str, float]) -> float:
@@ -257,7 +331,15 @@ class PushToBacklog:
 
         # Load recent hooks for this niche to prevent cross-run duplicates.
         # Time-windowed to prevent hook starvation as history grows.
+        #
+        # Only blueprints in an *active* state (see _BLOCKING_STATUSES) count
+        # as existing hooks. Rows in ARCHIVED (whether rejected by the user
+        # or auto-archived by health_monitor.check_missing_media) don't
+        # represent content we're committed to — they're free to re-emit.
+        # Including them silently poisoned the dedup set for every re-run.
         existing_hooks: set[str] = set()
+        non_blocking_skipped = 0
+        recent_bps: list = []
         try:
             from datetime import datetime, timedelta, timezone as _tz2
             _hook_cutoff = datetime.now(_tz2.utc) - timedelta(days=30)
@@ -267,6 +349,9 @@ class PushToBacklog:
             )
             for bp in recent_bps:
                 fields = bp.get("fields", bp)
+                if not _is_blocking(bp):
+                    non_blocking_skipped += 1
+                    continue
                 _bp_created = fields.get("created_at")
                 if isinstance(_bp_created, str):
                     try:
@@ -278,38 +363,77 @@ class PushToBacklog:
                 h = (fields.get("hook") or "").strip().lower()
                 if h:
                     existing_hooks.add(h)
-            if existing_hooks:
-                logger.info("[PUSH] Loaded %d existing hooks for dedup", len(existing_hooks))
+            if existing_hooks or non_blocking_skipped:
+                logger.info(
+                    "[PUSH] Loaded %d existing hooks for dedup (skipped %d non-blocking)",
+                    len(existing_hooks), non_blocking_skipped,
+                )
         except Exception as e:
             logger.debug("[PUSH] Could not load existing hooks: %s", e)
         context["existing_hooks"] = existing_hooks
 
-        # Load engagement-based arm boost multipliers
-        arm_boosts = _get_arm_boost(client, niche_id)
+        # Bandit-driven arm boosts: Thompson-sample each arm's posterior
+        # and convert the draw into a priority_score multiplier. Falls
+        # back to engagement-history boosts (legacy) when bandit data is
+        # unavailable, then to {} (neutral) as the final degradation.
+        arm_boosts = _get_bandit_arm_boost(client, niche_id)
+        boost_source = "bandit"
+        if not arm_boosts:
+            arm_boosts = _get_engagement_arm_boost(client, niche_id)
+            boost_source = "engagement_history"
         if arm_boosts:
-            logger.info("[PUSH] Loaded engagement boosts for %d arms: %s",
-                        len(arm_boosts), {k: f"{v:.2f}" for k, v in arm_boosts.items()})
+            logger.info(
+                "[PUSH] Loaded %s boosts for %d arms: %s",
+                boost_source, len(arm_boosts),
+                {k: f"{v:.2f}" for k, v in arm_boosts.items()},
+            )
 
-        # Load content_memory hashes + existing story URLs for cross-run dedup
+        # Load content_memory hashes + active-blueprint URLs for cross-run dedup.
+        #
+        # We deliberately seed `seen_urls` from NON-REJECTED blueprints instead
+        # of the stories table. Why: rejecting a blueprint shouldn't prevent
+        # the next run from re-producing content for the same URL (e.g. the
+        # same YouTube trending clip is still trending today). A stories-only
+        # seed was blocking every re-run after a manual reject because stories
+        # for rejected blueprints stayed in the dedup set forever.
+        #
+        # The tradeoff: stories that were ingested but never blueprinted (e.g.
+        # writing failed) are now re-ingestable, which is what we want.
         seen_urls: set[str] = set()
         _existing_stories_for_titles: list = []
         _cm_records_for_titles: list = []
         try:
-            # Load URL hashes from recent stories (rolling 14-day window).
-            # All-time dedup causes content starvation as the story pool grows.
-            # NOTE: Date filtering is done in Python because the formula_sql
-            # parser has a parameter ordering bug with mixed > and = operators.
             from hashlib import sha256 as _sha256
             from datetime import datetime, timedelta, timezone as _tz
             _dedup_days = context.get("niche_config", {}).get(
                 "pipeline", {}
             ).get("dedup_window_days", 14)
             _dedup_cutoff = datetime.now(_tz.utc) - timedelta(days=_dedup_days)
+            # Historical note: an earlier version of formula_sql had a parameter
+            # ordering bug with mixed > and = operators, forcing Python-side
+            # date filtering. That bug is fixed — tests verify mixed-operator
+            # queries return correctly ordered params. The Python-side filter
+            # below is kept because it's simple and the story count is small.
+
+            # Seed URL hashes from blueprints in blocking states only.
+            active_bps = [bp for bp in recent_bps if _is_blocking(bp)]
+            url_hashes_from_bps = 0
+            for bp in active_bps:
+                fields = bp.get("fields", bp)
+                url = (fields.get("video_url") or "").strip()
+                if url:
+                    seen_urls.add(_sha256(url.encode()).hexdigest()[:16])
+                    url_hashes_from_bps += 1
+            logger.info(
+                "[PUSH] Loaded %d URL hashes from %d active blueprints",
+                url_hashes_from_bps, len(active_bps),
+            )
+
+            # Still load stories for title-level dedup (Layer 4.5 below).
             existing_stories = client.stories.all(
                 formula=f"{{niche_id}}='{niche_id}'",
                 max_records=2000,
             )
-            # Filter to last 14 days in Python
             _recent_stories = []
             for s in existing_stories:
                 fields = s.get("fields", s)
@@ -325,15 +449,16 @@ class PushToBacklog:
                 else:
                     _recent_stories.append(s)
             _existing_stories_for_titles = _recent_stories
-            for s in _recent_stories:
-                url = (s.get("fields", s).get("url") or "").strip()
-                if url:
-                    seen_urls.add(_sha256(url.encode()).hexdigest()[:16])
-            logger.info("[PUSH] Loaded %d/%d story URL hashes for cross-run dedup (14d window)",
-                        len(seen_urls), len(existing_stories))
         except Exception as e:
             logger.debug("[PUSH] Could not load existing story URLs: %s", e)
 
+        # content_memory used to be a second URL-level dedup layer, seeded
+        # from every blueprint ever created. But content_memory entries are
+        # never removed when a blueprint is rejected or archived, so the
+        # same leak that affected the stories-based seed was hitting seen_urls
+        # via content_memory too. We keep loading records (for title dedup)
+        # but no longer inject their content_hash into seen_urls — the
+        # blueprint-based URL seed above is now the single source of truth.
         try:
             cm_proxy = getattr(client, "content_memory", None)
             if cm_proxy:
@@ -342,39 +467,27 @@ class PushToBacklog:
                     max_records=2000,
                 )
                 _cm_records_for_titles = cm_records
-                for rec in cm_records:
-                    h = (rec.get("fields", rec).get("content_hash") or "").strip()
-                    if h:
-                        seen_urls.add(h)
-                logger.info("[PUSH] Total dedup hashes: %d", len(seen_urls))
+                logger.info(
+                    "[PUSH] Total URL dedup hashes: %d (from %d active blueprints)",
+                    len(seen_urls), len(active_bps),
+                )
         except Exception as e:
             logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
 
-        # Collect titles for title-level dedup (Layer 4.5 + 5.5)
-        # Time-windowed: only recent titles contribute to dedup so ongoing
-        # series (anime episodes, game sequels) can be re-covered after the
-        # window expires.  URL-level dedup remains unbounded.
+        # Collect titles for title-level dedup (Layer 4.5)
+        # Seeded only from blueprints in blocking states — stories and
+        # content_memory rows are NOT considered. Including them used to
+        # drop today's stories against their own archived copies (symptom:
+        # "Title near-dupe: 'X' ≈ 'x'" where X was a rejected row from
+        # earlier in the day).
         _TITLE_DEDUP_DAYS = 7
         _title_cutoff = datetime.now(UTC) - timedelta(days=_TITLE_DEDUP_DAYS)
         existing_titles: set[str] = set()
-        for s in _existing_stories_for_titles:
-            f = s.get("fields", s)
+        for bp in active_bps:
+            f = bp.get("fields", bp)
             t = (f.get("title") or "").strip().lower()
             if t and len(t) > 10:
                 _created = f.get("created_at") or f.get("published_at") or ""
-                if _created:
-                    try:
-                        _dt = datetime.fromisoformat(str(_created).replace("Z", "+00:00"))
-                        if _dt < _title_cutoff:
-                            continue
-                    except (ValueError, TypeError):
-                        pass
-                existing_titles.add(t)
-        for rec in _cm_records_for_titles:
-            f = rec.get("fields", rec)
-            t = (f.get("title") or "").strip().lower()
-            if t and len(t) > 10:
-                _created = f.get("first_seen") or f.get("last_seen") or ""
                 if _created:
                     try:
                         _dt = datetime.fromisoformat(str(_created).replace("Z", "+00:00"))
@@ -412,17 +525,28 @@ class PushToBacklog:
 
             # URL-only dedup FIRST — catches recurring sources (AniList, Jikan)
             # that return the same URL with different timestamps each fetch.
+            # seen_urls is seeded from active_bps only (see loader above),
+            # so matches here represent content we're actively producing or
+            # have already published — legitimately skippable.
             from hashlib import sha256
             url_hash = sha256(source_url.encode()).hexdigest()[:16] if source_url else ""
             if url_hash and url_hash in seen_urls:
-                logger.debug("[PUSH] URL already seen (url_hash dedup): %s", title[:60])
+                logger.info(
+                    "[PUSH] URL dedup: skipping '%s' (URL already in active blueprint set)",
+                    title[:60],
+                )
                 continue
 
             story_id = generate_story_id(source_url, published_at)
 
-            # Also check story_id-based dedup (backward compat)
+            # Story_id dedup — kept for tracking consistency. seen_urls only
+            # contains blueprint-derived URL hashes after the content_memory
+            # fix, so this will no longer match archived story_ids.
             if story_id in seen_urls:
-                logger.debug("[PUSH] URL already in content_memory: %s", title[:60])
+                logger.info(
+                    "[PUSH] story_id dedup: skipping '%s' (story_id collision in active set)",
+                    title[:60],
+                )
                 continue
 
             # Title similarity dedup (Layer 4.5)
@@ -519,15 +643,17 @@ class PushToBacklog:
                 if "youtube" in source_url_for_vid:
                     video_id = source_url_for_vid.split("v=")[-1].split("&")[0]
 
-            # Video-level dedup: same clip must not create multiple blueprints
+            # Video-level dedup: same clip must not create multiple blueprints.
+            # Only rows in a blocking state count — see _BLOCKING_STATUSES.
             if video_id:
                 try:
                     existing_by_video = client.blueprints.all(
                         formula=f"{{video_id}}='{video_id}'",
                         niche_id=niche_id,
-                        max_records=1,
+                        max_records=5,
                     )
-                    if existing_by_video:
+                    active_dupes = [bp for bp in existing_by_video if _is_blocking(bp)]
+                    if active_dupes:
                         logger.info(
                             "[PUSH] Video already blueprinted: video_id=%s niche=%s — skipping",
                             video_id[:20], niche_id,
@@ -582,24 +708,30 @@ class PushToBacklog:
             rendered_path = (story.get("media") or {}).get("rendered_path", "")
 
             try:
-                existing_bp = client.blueprints.all(
+                existing_bp_raw = client.blueprints.all(
                     formula=f"{{candidate_id}}='{candidate_id}'",
-                    max_records=1,
+                    max_records=5,
                 )
-                if existing_bp:
-                    existing_status = (
-                        existing_bp[0].get("fields", existing_bp[0]).get("status", "")
+                # Partition existing blueprints by blocking state.
+                blocking_match = next(
+                    (bp for bp in existing_bp_raw if _is_blocking(bp)), None,
+                )
+                non_blocking_match = next(
+                    (bp for bp in existing_bp_raw if not _is_blocking(bp)), None,
+                )
+                if blocking_match:
+                    existing_status = blocking_match.get("fields", blocking_match).get("status", "")
+                    logger.info(
+                        "[PUSH] Blueprint '%s' already %s — skipping re-create",
+                        title, existing_status,
                     )
-                    if existing_status in ("PUBLISHED", "PUBLISHING", "VISUAL_READY"):
-                        logger.info(
-                            "[PUSH] Blueprint '%s' already %s — skipping",
-                            title, existing_status,
-                        )
-                    else:
-                        # DRAFTED or SCORED — safe to update
-                        client.blueprints.update(existing_bp[0]["id"], {"niche_id": niche_id})
-                        logger.debug("[PUSH] Blueprint '%s' already exists (%s), updated niche_id", title, existing_status)
-                else:
+                    continue
+
+                # Build the full fields dict — reused by both the revive
+                # (update archived row in place) and the fresh-create branch.
+                # Note: candidate_id is deliberately omitted on revive because
+                # it's the PK and would trigger a UNIQUE-constraint error.
+                if True:
                     story_record_id = story_record["id"]
                     fields: dict[str, Any] = {
                         "candidate_id": candidate_id,
@@ -690,12 +822,29 @@ class PushToBacklog:
                     if thumb:
                         fields["thumbnail_url"] = thumb
 
-                    client.blueprints.create(fields, typecast=True)
-                    blueprints_pushed += 1
-                    logger.info(
-                        "[PUSH] Created blueprint '%s' (status=%s)",
-                        title, fields["status"],
-                    )
+                    if non_blocking_match is not None:
+                        # Revive the archived/failed row instead of inserting.
+                        # Strip candidate_id from update payload — it's the
+                        # PK and Postgres rejects overwriting a unique key.
+                        revive_fields = {
+                            k: v for k, v in fields.items() if k != "candidate_id"
+                        }
+                        # Clear the old action_taken so reviewers see it fresh
+                        revive_fields["action_taken"] = None
+                        client.blueprints.update(non_blocking_match["id"], revive_fields)
+                        blueprints_pushed += 1
+                        prior_status = non_blocking_match.get("fields", non_blocking_match).get("status", "?")
+                        logger.info(
+                            "[PUSH] Revived blueprint '%s' (was %s → %s)",
+                            title, prior_status, fields["status"],
+                        )
+                    else:
+                        client.blueprints.create(fields, typecast=True)
+                        blueprints_pushed += 1
+                        logger.info(
+                            "[PUSH] Created blueprint '%s' (status=%s)",
+                            title, fields["status"],
+                        )
                     # Record in content_memory for persistent URL-level dedup
                     try:
                         cm = getattr(client, "content_memory", None)

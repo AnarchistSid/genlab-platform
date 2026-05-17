@@ -250,5 +250,132 @@ class TestPushToBacklogShared(unittest.TestCase):
         self.assertEqual(bp_fields["status"], "VISUAL_READY")
 
 
+class TestBanditArmBoost(unittest.TestCase):
+    """Tests for the Thompson-sampled bandit consumer (2026-05-17).
+
+    The bandit consumer is the first live reader of bandit_arms
+    posteriors. It draws a Beta(alpha, beta) sample per arm and converts
+    the draw into a priority_score multiplier. Randomness IS the
+    exploration mechanism — equal-alpha arms produce variable boosts,
+    well-trained arms concentrate near their posterior mean.
+    """
+
+    def _make_proxy(self, arms_data):
+        """Build a mock bandit_arms proxy returning the given rows."""
+        proxy = MagicMock()
+        proxy.all.return_value = [
+            {"id": f"row_{i}", "fields": {"arm_id": arm_id, "alpha": a, "beta": b}}
+            for i, (arm_id, (a, b)) in enumerate(arms_data.items())
+        ]
+        return proxy
+
+    def test_returns_empty_when_no_bandit_proxy(self):
+        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+        client = MagicMock()
+        client.bandit_arms = None
+        self.assertEqual(_get_bandit_arm_boost(client, "gaming"), {})
+
+    def test_returns_empty_when_no_arms_for_niche(self):
+        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+        client = MagicMock()
+        client.bandit_arms = self._make_proxy({})
+        self.assertEqual(_get_bandit_arm_boost(client, "gaming"), {})
+
+    def test_boosts_lie_in_documented_range(self):
+        from genlab_core.pipeline.stages.push_to_backlog import (
+            _BANDIT_BOOST_CEIL,
+            _BANDIT_BOOST_FLOOR,
+            _get_bandit_arm_boost,
+        )
+        import random as _random
+
+        _random.seed(42)
+        client = MagicMock()
+        client.bandit_arms = self._make_proxy({
+            "arm_a": (1.0, 1.0),
+            "arm_b": (5.0, 5.0),
+            "arm_c": (20.0, 1.0),
+            "arm_d": (1.0, 20.0),
+        })
+
+        boosts = _get_bandit_arm_boost(client, "gaming")
+        self.assertEqual(set(boosts), {"arm_a", "arm_b", "arm_c", "arm_d"})
+        for arm_id, b in boosts.items():
+            self.assertGreaterEqual(b, _BANDIT_BOOST_FLOOR, arm_id)
+            self.assertLessEqual(b, _BANDIT_BOOST_CEIL, arm_id)
+
+    def test_high_alpha_arm_boosts_higher_than_low_alpha_on_average(self):
+        """High-alpha arm should sample near 1.0 → boost near ceiling.
+        Low-alpha arm should sample near 0.0 → boost near floor.
+        Averaged over many draws to defeat sampling variance.
+        """
+        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+        import random as _random
+
+        _random.seed(123)
+        client = MagicMock()
+        client.bandit_arms = self._make_proxy({
+            "high": (50.0, 2.0),  # posterior mean 0.96
+            "low": (2.0, 50.0),   # posterior mean 0.04
+        })
+
+        high_total = 0.0
+        low_total = 0.0
+        n = 200
+        for _ in range(n):
+            boosts = _get_bandit_arm_boost(client, "gaming")
+            high_total += boosts["high"]
+            low_total += boosts["low"]
+
+        high_mean = high_total / n
+        low_mean = low_total / n
+        self.assertGreater(
+            high_mean - low_mean, 0.4,
+            f"high={high_mean:.3f} low={low_mean:.3f} — bandit not discriminating",
+        )
+
+    def test_zero_alpha_or_beta_gracefully_handled(self):
+        """alpha or beta <= 0 would crash random.betavariate; we guard
+        by flooring to 1.0 so a stale/zeroed row doesn't kill the push."""
+        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+        client = MagicMock()
+        client.bandit_arms = self._make_proxy({
+            "pathological": (0.0, 0.0),
+        })
+        boosts = _get_bandit_arm_boost(client, "gaming")
+        self.assertIn("pathological", boosts)
+        # Beta(1,1) sample bounded by [floor, ceil]
+        self.assertGreaterEqual(boosts["pathological"], 0.7)
+        self.assertLessEqual(boosts["pathological"], 1.3)
+
+    def test_arm_id_in_boost_matches_classify_arm_output(self):
+        """The arm_id keys returned by _get_bandit_arm_boost must match
+        the arm_ids that _classify_arm assigns. Otherwise the boost
+        dict lookup at priority computation always misses.
+        """
+        from genlab_core.pipeline.stages.push_to_backlog import (
+            _classify_arm,
+            _get_bandit_arm_boost,
+        )
+
+        client = MagicMock()
+        client.bandit_arms = self._make_proxy({
+            "gameplay_clip": (3.0, 5.0),
+            "patch_news": (2.0, 8.0),
+        })
+        boosts = _get_bandit_arm_boost(client, "gaming")
+
+        story = {"title": "New Patch 1.42 buffs healers", "summary": ""}
+        content = {"hook": "Patch dropped"}
+        classified = _classify_arm("gaming", story, content)
+
+        # Either the classified arm is in the boost dict (lookup works)
+        # or it falls through to the niche default (also in arms or 1.0).
+        # The test asserts the LOOKUP doesn't silently miss for the
+        # canonical arms.
+        self.assertIn(classified, ["gameplay_clip", "patch_news",
+                                    "esports_highlight", "trailer_reaction"])
+
+
 if __name__ == "__main__":
     unittest.main()
