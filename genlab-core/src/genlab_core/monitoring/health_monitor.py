@@ -544,6 +544,115 @@ def check_services() -> list[Alert]:
     return alerts
 
 
+def check_git_drift() -> list[Alert]:
+    """Detect uncommitted working-tree changes on the production host.
+
+    Without this check, ad-hoc edits accumulate in the working tree
+    indefinitely.  History from 2026-05-17 audit: 25+ Python source
+    files had real forward-fixes (LinUCB numerical guards,
+    frame_compositor drawtext escaping, etc.) sitting uncommitted for
+    months — invisible to ``systemctl`` and ``journalctl``.
+
+    Categories matter more than raw counts:
+      * YAML config drift is expected — production has prefix env values
+        and per-host overrides that won't be in git (the ``assume-unchanged``
+        pattern). Limit yaml-drift alerts to "very many" to avoid noise.
+      * Python source drift is the real signal. Any uncommitted .py
+        accumulation in genlab-core/, scripts/, or dashboard/ means an
+        edit happened directly on prod and never made it back to the repo.
+
+    Thresholds (tunable per-deployment):
+      * ≥ 5 modified python source files → warning
+      * ≥ 15 modified python source files → critical
+      * ≥ 30 yaml configs modified → warning (well above normal override count)
+    """
+    alerts: list[Alert] = []
+    project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", project_root, "status", "--porcelain"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            # Not a git repo, or git not available — silently skip.
+            return alerts
+
+        lines = [ln for ln in result.stdout.split("\n") if ln.strip()]
+        if not lines:
+            return alerts
+
+        # Each line: 'XY filename' where XY is the two-char status.
+        py_src_modified: list[str] = []
+        yaml_modified: list[str] = []
+        for ln in lines:
+            if len(ln) < 4:
+                continue
+            status, _, path = ln[:2], ln[2], ln[3:]
+            # Skip untracked-only entries (??) — those are noisier and
+            # often legitimate (.tmp files, local notes, etc.).
+            if status.strip() == "??":
+                continue
+            if path.endswith(".py") and (
+                path.startswith("genlab-core/")
+                or path.startswith("scripts/")
+                or path.startswith("dashboard/")
+                or path.startswith("BlackboxBrief/")
+                or path.startswith("CriticalRush/")
+            ):
+                py_src_modified.append(path)
+            elif path.endswith(".yaml") or path.endswith(".yml"):
+                yaml_modified.append(path)
+
+        py_count = len(py_src_modified)
+        yaml_count = len(yaml_modified)
+
+        if py_count >= 15:
+            alerts.append(Alert(
+                check="git_drift",
+                severity="critical",
+                message=(
+                    f"{py_count} uncommitted .py files on prod — edits "
+                    f"are being made directly on the production host and "
+                    f"never reaching the repo. Top 3: "
+                    f"{', '.join(py_src_modified[:3])}"
+                ),
+                details={
+                    "py_count": py_count,
+                    "yaml_count": yaml_count,
+                    "py_files": py_src_modified[:10],
+                },
+            ))
+        elif py_count >= 5:
+            alerts.append(Alert(
+                check="git_drift",
+                severity="warning",
+                message=(
+                    f"{py_count} uncommitted .py files on prod. Top 3: "
+                    f"{', '.join(py_src_modified[:3])}"
+                ),
+                details={
+                    "py_count": py_count,
+                    "yaml_count": yaml_count,
+                    "py_files": py_src_modified[:10],
+                },
+            ))
+
+        if yaml_count >= 30:
+            alerts.append(Alert(
+                check="git_drift_yaml",
+                severity="warning",
+                message=(
+                    f"{yaml_count} uncommitted yaml configs on prod — well "
+                    "above expected per-host override count."
+                ),
+                details={"yaml_count": yaml_count, "yaml_files": yaml_modified[:10]},
+            ))
+    except Exception as e:
+        logger.debug("Git drift check failed: %s", e)
+    return alerts
+
+
 def check_swap() -> list[Alert]:
     """Check if swap usage is high (memory pressure)."""
     alerts = []
@@ -633,6 +742,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_services())
         all_alerts.extend(check_swap())
         all_alerts.extend(check_foreign_host_writes())
+        all_alerts.extend(check_git_drift())
 
     return all_alerts
 
