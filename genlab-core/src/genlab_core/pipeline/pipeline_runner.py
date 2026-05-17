@@ -7,12 +7,15 @@ hooks for dry-run output or pre-run credential checks.
 
 Architecture:
     1. Resolve niche root from ``niche_roots`` dict
-    2. Load niche config + feature flags via ``genlab_core.niche_loader``
-    3. Build ``PipelineContext``
-    4. Load stages via importlib from ``pipeline.stages`` in niche.yaml
-    5. Group consecutive stages by ``parallel_group`` for concurrency
-    6. Execute through ``StageRunnerFactory`` (local or sandboxed)
-    7. Sync results back to context, teardown log handler
+    2. Acquire a per-niche file lock to prevent concurrent runs for the
+       same niche from racing on .tmp/runs/ dirs, Postgres stories upserts,
+       and content_memory writes. Different niches can still run in parallel.
+    3. Load niche config + feature flags via ``genlab_core.niche_loader``
+    4. Build ``PipelineContext``
+    5. Load stages via importlib from ``pipeline.stages`` in niche.yaml
+    6. Group consecutive stages by ``parallel_group`` for concurrency
+    7. Execute through ``StageRunnerFactory`` (local or sandboxed)
+    8. Sync results back to context, teardown log handler, release lock
 
 Usage::
 
@@ -27,8 +30,10 @@ Usage::
 """
 from __future__ import annotations
 
+import fcntl
 import importlib
 import logging
+import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -42,6 +47,74 @@ from genlab_core.pipeline.log_streamer import install_log_handler, remove_log_ha
 from genlab_core.pipeline.stage_runner import StageRunnerFactory
 
 logger = logging.getLogger(__name__)
+
+
+class _NicheLockError(RuntimeError):
+    """Raised when a niche lock is already held by another process."""
+
+
+class _NicheLock:
+    """Flock-based per-niche mutex.
+
+    Uses ``fcntl.LOCK_EX | LOCK_NB`` so the acquire is non-blocking — if
+    another pipeline instance already holds the lock, we raise immediately
+    rather than wait. Different niches get different lock files, so they
+    can run in parallel. Stores holder PID inside the file for debugging.
+
+    The lock is released automatically on file-descriptor close (via
+    context-manager ``__exit__``) or when the process exits.
+    """
+
+    def __init__(self, niche_id: str, genlab_root: Path) -> None:
+        self._niche_id = niche_id
+        self._lock_dir = genlab_root / ".tmp" / "locks"
+        self._lock_path = self._lock_dir / f"pipeline-{niche_id}.lock"
+        self._fd: int | None = None
+
+    def __enter__(self) -> "_NicheLock":
+        self._lock_dir.mkdir(parents=True, exist_ok=True)
+        self._fd = os.open(
+            str(self._lock_path),
+            os.O_RDWR | os.O_CREAT,
+            0o644,
+        )
+        try:
+            fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            # Read existing PID for the error message (best-effort)
+            try:
+                with open(self._lock_path) as fh:
+                    holder = fh.read().strip() or "unknown"
+            except OSError:
+                holder = "unknown"
+            os.close(self._fd)
+            self._fd = None
+            raise _NicheLockError(
+                f"Niche '{self._niche_id}' is already running "
+                f"(lock held by pid {holder}). Refusing to race."
+            )
+        # Record our PID in the lock file so other processes can see who holds it
+        os.ftruncate(self._fd, 0)
+        os.write(self._fd, f"{os.getpid()}\n".encode())
+        os.fsync(self._fd)
+        logger.info(
+            "[Pipeline] Acquired niche lock '%s' (pid=%d, lock=%s)",
+            self._niche_id, os.getpid(), self._lock_path,
+        )
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._fd is not None:
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                os.close(self._fd)
+            except OSError:
+                pass
+            self._fd = None
+            logger.info("[Pipeline] Released niche lock '%s'", self._niche_id)
 
 
 class GenericPipelineRunner:
@@ -113,6 +186,16 @@ class GenericPipelineRunner:
                 f"Unsupported niche '{niche_id}'. "
                 f"Supported: {self.supported_niches}"
             )
+
+        # Acquire per-niche file lock. Non-blocking: if another pipeline
+        # instance is already running this niche we raise immediately
+        # rather than race. Different niches can still run in parallel.
+        lock = _NicheLock(niche_id, self._genlab_root)
+        try:
+            lock.__enter__()
+        except _NicheLockError as exc:
+            logger.warning("[Pipeline] %s", exc)
+            raise
 
         niche_root = self._niche_roots[niche_id]
         config = load_niche_config(niche_id, niche_root)
@@ -228,6 +311,15 @@ class GenericPipelineRunner:
         finally:
             remove_log_handler(log_handler)
             _current_context.reset(token)
+            # Release the niche lock. Safe to call even if acquire failed
+            # (the __enter__ path raises before reaching here in that case).
+            try:
+                lock.__exit__(None, None, None)
+            except Exception as exc:
+                logger.warning(
+                    "[Pipeline] Lock release failed for niche '%s': %s",
+                    niche_id, exc,
+                )
 
     @staticmethod
     def _group_stages(
