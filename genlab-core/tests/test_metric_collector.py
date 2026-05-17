@@ -1123,3 +1123,219 @@ class TestCTABanditSaveStateCreatesDir:
         bandit.save_state()
 
         assert nested.exists()
+
+
+# ===========================================================================
+# YouTube Analytics extras (avg_view_duration, subscriber_gained, ...)
+# ===========================================================================
+
+
+class TestFetchYouTubeAnalyticsExtras:
+    """The Analytics layer fills RewardShaper keys the Data API can't reach."""
+
+    def _patch_creds(self, monkeypatch):
+        """Stub niche credential resolver to a known good triple."""
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_credentials",
+            lambda niche_id: {
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "rtok",
+            },
+        )
+
+    def _clear_caches(self):
+        """Reset module-level YouTube token + channel caches."""
+        from genlab_core.learning import metric_collector as mc
+
+        mc._yt_token_cache.update({"token": "", "niche": "", "ts": 0.0})
+        mc._yt_channel_cache.clear()
+
+    def test_analytics_extras_merged_into_result(self, monkeypatch):
+        """Successful Analytics call replaces stub zeros."""
+        from genlab_core.learning.metric_collector import _fetch_youtube
+
+        self._patch_creds(monkeypatch)
+        self._clear_caches()
+
+        def fake_post(url, data=None, timeout=None, **_):
+            r = MagicMock()
+            r.json.return_value = {"access_token": "ya29.fake"}
+            r.raise_for_status.return_value = None
+            return r
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "youtube/v3/videos" in url:
+                r.json.return_value = {
+                    "items": [{"statistics": {
+                        "viewCount": "10000", "likeCount": "500", "commentCount": "50",
+                    }}]
+                }
+            elif "youtube/v3/channels" in url:
+                r.json.return_value = {"items": [{"id": "UC_test_channel"}]}
+            elif "youtubeanalytics.googleapis.com" in url:
+                r.status_code = 200
+                r.json.return_value = {
+                    "columnHeaders": [
+                        {"name": "video"},
+                        {"name": "estimatedMinutesWatched"},
+                        {"name": "averageViewDuration"},
+                        {"name": "subscribersGained"},
+                        {"name": "shares"},
+                    ],
+                    "rows": [["vid_abc", 320.5, 18.7, 12, 5]],
+                }
+            return r
+
+        with patch("requests.post", side_effect=fake_post):
+            with patch("requests.get", side_effect=fake_get):
+                result = _fetch_youtube("vid_abc", niche_id="gaming")
+
+        # Data API snapshot
+        assert result["views"] == 10000
+        assert result["likes"] == 500
+        assert result["like_rate"] == 0.05
+        # Analytics-filled fields (no longer stub zeros)
+        assert result["avg_view_duration"] == 18.7
+        assert result["subscriber_gained"] == 12
+        assert result["minutes_viewed"] == 320.5
+        assert result["shares"] == 5
+
+    def test_analytics_empty_rows_keeps_stub_zeros(self, monkeypatch):
+        """Early window: Analytics returns no rows → stub keys remain at 0."""
+        from genlab_core.learning.metric_collector import _fetch_youtube
+
+        self._patch_creds(monkeypatch)
+        self._clear_caches()
+
+        def fake_post(url, data=None, timeout=None, **_):
+            r = MagicMock()
+            r.json.return_value = {"access_token": "ya29.fake"}
+            r.raise_for_status.return_value = None
+            return r
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "youtube/v3/videos" in url:
+                r.json.return_value = {
+                    "items": [{"statistics": {
+                        "viewCount": "100", "likeCount": "5", "commentCount": "1",
+                    }}]
+                }
+            elif "youtube/v3/channels" in url:
+                r.json.return_value = {"items": [{"id": "UC_test"}]}
+            elif "youtubeanalytics.googleapis.com" in url:
+                r.status_code = 200
+                r.json.return_value = {"columnHeaders": [], "rows": []}
+            return r
+
+        with patch("requests.post", side_effect=fake_post):
+            with patch("requests.get", side_effect=fake_get):
+                result = _fetch_youtube("vid_new", niche_id="gaming")
+
+        assert result["views"] == 100  # Data API still works
+        assert result["avg_view_duration"] == 0.0  # stub kept
+        assert result["subscriber_gained"] == 0  # stub kept
+        # Optional fields not added when empty
+        assert "minutes_viewed" not in result
+
+    def test_analytics_403_scope_missing_soft_fails(self, monkeypatch):
+        """If yt-analytics.readonly scope is missing, fetch returns Data API only."""
+        from genlab_core.learning.metric_collector import _fetch_youtube
+
+        self._patch_creds(monkeypatch)
+        self._clear_caches()
+
+        def fake_post(url, data=None, timeout=None, **_):
+            r = MagicMock()
+            r.json.return_value = {"access_token": "ya29.fake"}
+            r.raise_for_status.return_value = None
+            return r
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "youtube/v3/videos" in url:
+                r.json.return_value = {
+                    "items": [{"statistics": {"viewCount": "200", "likeCount": "10", "commentCount": "2"}}]
+                }
+            elif "youtube/v3/channels" in url:
+                r.json.return_value = {"items": [{"id": "UC_test"}]}
+            elif "youtubeanalytics.googleapis.com" in url:
+                r.status_code = 403  # scope rejected
+                r.json.return_value = {"error": {"message": "insufficient scope"}}
+            return r
+
+        with patch("requests.post", side_effect=fake_post):
+            with patch("requests.get", side_effect=fake_get):
+                result = _fetch_youtube("vid_x", niche_id="gaming")
+
+        assert result["views"] == 200
+        assert result["avg_view_duration"] == 0.0
+        assert result["subscriber_gained"] == 0
+
+    def test_channel_id_cached_per_niche(self, monkeypatch):
+        """Channel lookup happens once per niche per process."""
+        from genlab_core.learning.metric_collector import _get_yt_channel_id, _yt_channel_cache
+
+        _yt_channel_cache.clear()
+        call_count = {"channels": 0}
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "youtube/v3/channels" in url:
+                call_count["channels"] += 1
+                r.json.return_value = {"items": [{"id": "UC_x"}]}
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            cid1 = _get_yt_channel_id("tok", "gaming")
+            cid2 = _get_yt_channel_id("tok", "gaming")  # cached
+            cid3 = _get_yt_channel_id("tok", "sports")  # new niche → new lookup
+
+        assert cid1 == "UC_x"
+        assert cid2 == "UC_x"
+        assert cid3 == "UC_x"
+        assert call_count["channels"] == 2  # gaming once, sports once
+
+    def test_analytics_extras_helper_parses_columns_correctly(self):
+        """Direct test of column-header → field-name mapping."""
+        from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.status_code = 200
+            r.raise_for_status.return_value = None
+            r.json.return_value = {
+                "columnHeaders": [
+                    {"name": "video"},
+                    {"name": "estimatedMinutesWatched"},
+                    {"name": "averageViewDuration"},
+                    {"name": "subscribersGained"},
+                    {"name": "shares"},
+                ],
+                "rows": [["v1", 1000.0, 25.4, 50, 12]],
+            }
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            extras = _fetch_youtube_analytics_extras("tok", "v1", "UC_x")
+
+        assert extras["minutes_viewed"] == 1000.0
+        assert extras["avg_view_duration"] == 25.4
+        assert extras["subscriber_gained"] == 50
+        assert extras["shares"] == 12
+
+    def test_analytics_extras_returns_empty_without_channel_id(self):
+        """No channel_id → no API call, returns {}."""
+        from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
+
+        with patch("requests.get") as mock_get:
+            extras = _fetch_youtube_analytics_extras("tok", "v1", "")
+
+        assert extras == {}
+        mock_get.assert_not_called()

@@ -83,15 +83,112 @@ def fetch_platform_metrics(
 _yt_token_cache: dict[str, Any] = {"token": "", "niche": "", "ts": 0.0}
 _YT_TOKEN_TTL = 2400.0  # 40 minutes (tokens last ~60 min)
 
+# Per-niche YouTube channel ID cache — channels never change for a given OAuth
+# token, so we cache forever within the process lifetime.
+_yt_channel_cache: dict[str, str] = {}
+
+
+def _get_yt_channel_id(access_token: str, niche_id: str) -> str:
+    """Fetch and cache the channel ID owned by this OAuth token."""
+    import requests
+
+    cached = _yt_channel_cache.get(niche_id, "")
+    if cached:
+        return cached
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"part": "id", "mine": "true"},
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        if items:
+            channel_id = items[0].get("id", "")
+            if channel_id:
+                _yt_channel_cache[niche_id] = channel_id
+            return channel_id
+    except Exception as exc:
+        logger.debug("[metric_collector] yt channel-id fetch failed for %s: %s", niche_id, exc)
+    return ""
+
+
+def _fetch_youtube_analytics_extras(
+    access_token: str, video_id: str, channel_id: str,
+) -> dict:
+    """Pull avg_view_duration + subscribers_gained from YouTube Analytics v2.
+
+    Returns a dict with keys ``avg_view_duration``, ``subscriber_gained``,
+    ``minutes_viewed``, ``shares``.  Empty dict if data not propagated yet
+    (the API has a 24-48h aggregation lag) or any error.
+
+    Uses a wide 90-day startDate window since the ``video==`` filter scopes
+    the result to a single video.
+    """
+    import requests
+    from datetime import timedelta
+
+    if not channel_id:
+        return {}
+
+    now = datetime.now(UTC)
+    start_date = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    end_date = now.strftime("%Y-%m-%d")
+
+    try:
+        resp = requests.get(
+            "https://youtubeanalytics.googleapis.com/v2/reports",
+            params={
+                "ids": f"channel=={channel_id}",
+                "startDate": start_date,
+                "endDate": end_date,
+                "metrics": (
+                    "estimatedMinutesWatched,averageViewDuration,"
+                    "subscribersGained,shares"
+                ),
+                "filters": f"video=={video_id}",
+                "dimensions": "video",
+            },
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=20,
+        )
+        # 403 = scope missing; 400 = video too new; treat as soft fail.
+        if resp.status_code in (400, 403):
+            logger.debug(
+                "[metric_collector] yt analytics soft-fail %d for %s",
+                resp.status_code, video_id,
+            )
+            return {}
+        resp.raise_for_status()
+        body = resp.json()
+        rows = body.get("rows", [])
+        if not rows:
+            return {}
+        headers_meta = [col.get("name") for col in body.get("columnHeaders", [])]
+        data = dict(zip(headers_meta, rows[0]))
+        return {
+            "minutes_viewed": float(data.get("estimatedMinutesWatched", 0)),
+            "avg_view_duration": float(data.get("averageViewDuration", 0)),
+            "subscriber_gained": int(data.get("subscribersGained", 0)),
+            "shares": int(data.get("shares", 0)),
+        }
+    except Exception as exc:
+        logger.debug("[metric_collector] yt analytics fetch failed for %s: %s", video_id, exc)
+        return {}
+
 
 def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
-    """YouTube Data API v3 basic stats (per-niche credentials).
+    """YouTube Data API v3 snapshot + Analytics v2 aggregates.
 
     Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["youtube"]``:
     ``views, avg_view_duration, subscriber_gained, like_rate, comment_rate``.
-    avg_view_duration and subscriber_gained require the YouTube Analytics
-    API (separate OAuth scope); they're stubbed as 0 here. Wiring those
-    in is tracked in the learning-loop follow-up.
+
+    Data API gives the always-current viewCount/likeCount/commentCount.
+    Analytics API fills in avg_view_duration + subscriber_gained from
+    aggregated reports.  If Analytics hasn't propagated yet (typical at
+    the 6h/24h windows), those keys stay at 0 and the engagement bandit
+    learns from the snapshot signals only.
     """
     import time as _time
 
@@ -148,16 +245,30 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
     comments = int(stats.get("commentCount", 0))
     like_rate = (likes / views) if views > 0 else 0.0
     comment_rate = (comments / views) if views > 0 else 0.0
-    return {
+
+    result: dict[str, Any] = {
         "views": views,
         "likes": likes,
         "comments": comments,
         "like_rate": round(like_rate, 4),
         "comment_rate": round(comment_rate, 4),
-        # Stubs — require YouTube Analytics API (yt-analytics.readonly scope)
+        # Stubs — will be overwritten by Analytics call below when data has
+        # propagated (typically ≥48h post-publish).
         "avg_view_duration": 0.0,
         "subscriber_gained": 0,
     }
+
+    # Layer Analytics extras on top.  Empty dict on early-window calls or
+    # scope/API failures — keeps the stub zeros, never crashes the fetch.
+    channel_id = _get_yt_channel_id(access_token, niche_id)
+    extras = _fetch_youtube_analytics_extras(access_token, post_id, channel_id)
+    if extras:
+        result["avg_view_duration"] = round(extras.get("avg_view_duration", 0.0), 2)
+        result["subscriber_gained"] = extras.get("subscriber_gained", 0)
+        result["minutes_viewed"] = extras.get("minutes_viewed", 0.0)
+        result["shares"] = extras.get("shares", 0)
+
+    return result
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
