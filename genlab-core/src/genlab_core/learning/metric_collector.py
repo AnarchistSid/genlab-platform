@@ -395,6 +395,67 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
     return metrics
 
 
+def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
+    """Pull Reel-specific metrics via /{reel_id}/video_insights.
+
+    Three Reels metrics that the page-post insights endpoint never
+    returned (and that the /{video_id}?fields= query can't reach):
+      * post_video_view_time — total ms watched across all viewers
+      * post_video_avg_time_watched — avg ms per play
+      * post_video_social_actions — dict like {"COMMENT": N, "SHARE": N,
+        "REACTION": N} of lifetime engagement actions
+
+    Returns a dict with the parsed values; empty dict on failure.
+    Used to compute completion_rate (avg_time / length) and recover
+    the shares signal that's not exposed on the video object directly.
+    """
+    import requests
+
+    metrics_param = (
+        "post_video_view_time,"
+        "post_video_avg_time_watched,"
+        "post_video_social_actions"
+    )
+    try:
+        resp = requests.get(
+            f"https://graph.facebook.com/v21.0/{reel_id}/video_insights",
+            params={"metric": metrics_param, "access_token": token},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.debug(
+                "[metric_collector] fb reel insights soft-fail %d for %s",
+                resp.status_code, reel_id,
+            )
+            return {}
+        body = resp.json()
+    except Exception as exc:
+        logger.debug(
+            "[metric_collector] fb reel insights fetch failed for %s: %s",
+            reel_id, exc,
+        )
+        return {}
+
+    out: dict[str, Any] = {}
+    for item in body.get("data", []):
+        name = item.get("name", "")
+        vals = item.get("values", [{}])
+        val = vals[0].get("value", 0) if vals else 0
+        if name == "post_video_view_time":
+            out["total_view_time_ms"] = float(val)
+        elif name == "post_video_avg_time_watched":
+            out["avg_view_time_ms"] = float(val)
+        elif name == "post_video_social_actions":
+            # val is a dict keyed by action type: COMMENT, SHARE, REACTION, ...
+            if isinstance(val, dict):
+                out["shares"] = int(val.get("SHARE", 0))
+                out["reactions"] = int(val.get("REACTION", 0))
+                # COMMENT here matches comments.summary on the video object;
+                # keep both for cross-validation but prefer the explicit one.
+                out["social_comments"] = int(val.get("COMMENT", 0))
+    return out
+
+
 def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
     """Fetch views/likes/comments/length directly from the FB video object.
 
@@ -528,16 +589,33 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
             metrics["video_views"] = video_obj.get("views", 0)
         metrics["likes"] = video_obj.get("likes", 0)
         metrics["comments"] = video_obj.get("comments", 0)
-        # Completion rate from video object: views × length proxy for
-        # total watch time isn't available, so leave the stub at 0 until
-        # we wire the Reels Insights API (separate task).
-        # Track length for future use.
         if video_obj.get("video_length_s", 0) > 0:
             metrics["video_length_s"] = video_obj["video_length_s"]
 
-    # Shares + completion_rate: not available on the video object for
-    # Reels.  Needs the page-level Reels Insights API which uses a
-    # different metric set (e.g. post_reel_shares).  Tracked separately.
+    # Reel-specific insights — shares, total watch time, avg watch time.
+    # These come from a third endpoint (/video_insights with reel-specific
+    # metric set), separate from the page-post /insights and the video
+    # object query.  Without these the FB reward computed only from reach
+    # (~10% of full BASE_WEIGHTS magnitude).
+    reel_insights = _fetch_facebook_reel_insights(post_id, token)
+    if reel_insights:
+        metrics["shares"] = reel_insights.get("shares", 0)
+        # minutes_viewed: prefer total_view_time over the (views × avg)
+        # estimate since it's the authoritative total.
+        if reel_insights.get("total_view_time_ms", 0) > 0:
+            metrics["minutes_viewed"] = round(
+                reel_insights["total_view_time_ms"] / 60_000.0, 2,
+            )
+        # completion_rate: avg_watch_ms / (length_s × 1000), clamped [0,1].
+        avg_ms = reel_insights.get("avg_view_time_ms", 0.0)
+        length_s = metrics.get("video_length_s", 0)
+        if avg_ms > 0 and length_s > 0:
+            completion = min(1.0, (avg_ms / 1000.0) / length_s)
+            metrics["completion_rate"] = round(completion, 4)
+        # Surface reactions as a bonus signal (not in RewardShaper yet).
+        if "reactions" in reel_insights:
+            metrics["reactions"] = reel_insights["reactions"]
+
     metrics.setdefault("shares", 0)
     metrics.setdefault("completion_rate", 0.0)
 

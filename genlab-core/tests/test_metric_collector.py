@@ -243,6 +243,8 @@ class TestFetchFacebook:
         # avg_watch_time is treated as milliseconds → minutes_viewed
         # = video_views * avg_watch_time / 60_000.
         # 8000 * 12.5 / 60000 = 1.666... → rounded to 1.67
+        # video_insights helper now also runs; the mocked response has
+        # no reel-insights fields → returns nothing → stub defaults stay.
         assert result == {
             "impressions": 10000,
             "engaged_users": 500,
@@ -436,6 +438,183 @@ class TestFetchFacebookVideoObject:
         assert result["minutes_viewed"] == 0.0
         assert result["shares"] == 0
         assert result["completion_rate"] == 0.0
+
+
+class TestFetchFacebookReelInsights:
+    """The third FB endpoint that actually works for Reels.
+
+    /{reel_id}/video_insights returns: post_video_view_time,
+    post_video_avg_time_watched, post_video_social_actions.
+    Together with the video object, these give us shares,
+    completion_rate, and authoritative minutes_viewed.
+    """
+
+    def _build_fake_get(
+        self,
+        *,
+        total_view_time_ms: float = 433778.0,
+        avg_view_time_ms: float = 4819.0,
+        social_actions: dict | None = None,
+        video_length_s: float = 40.0,
+        views: int = 99,
+        insights_fails: bool = True,
+    ):
+        """All 3 endpoints stubbed; production shape (insights fails, others succeed)."""
+        if social_actions is None:
+            social_actions = {"COMMENT": 1, "SHARE": 0, "REACTION": 0}
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "/insights" in url and "/video_insights" not in url:
+                # Legacy page-post /insights — production reality
+                r.status_code = 400 if insights_fails else 200
+                r.json.return_value = {"error": {"message": "x"}}
+            elif "/video_insights" in url:
+                r.status_code = 200
+                r.json.return_value = {
+                    "data": [
+                        {"name": "post_video_view_time", "values": [{"value": total_view_time_ms}]},
+                        {"name": "post_video_avg_time_watched", "values": [{"value": avg_view_time_ms}]},
+                        {"name": "post_video_social_actions", "values": [{"value": social_actions}]},
+                    ]
+                }
+            else:
+                # Video object query
+                r.status_code = 200
+                r.json.return_value = {
+                    "views": views,
+                    "length": video_length_s,
+                    "likes": {"summary": {"total_count": 0}},
+                    "comments": {"summary": {"total_count": 1}},
+                }
+            return r
+
+        return fake_get
+
+    def test_full_reel_signal_recovered(self, monkeypatch):
+        """All three endpoints succeed (modulo insights 400) → bandit gets
+        shares, completion_rate, and authoritative minutes_viewed.
+        """
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        with patch(
+            "requests.get",
+            side_effect=self._build_fake_get(
+                total_view_time_ms=433778.0,  # 7.23 min total
+                avg_view_time_ms=4819.0,      # 4.819s avg
+                social_actions={"COMMENT": 1, "SHARE": 5, "REACTION": 12},
+                video_length_s=40.0,
+            ),
+        ):
+            result = _fetch_facebook("real_reel_id", niche_id="gaming")
+
+        assert result["shares"] == 5
+        assert result["reactions"] == 12
+        # 4819ms / 40000ms = 0.1205
+        assert result["completion_rate"] == 0.1205
+        # 433778 / 60000 = 7.2296... → 7.23
+        assert result["minutes_viewed"] == 7.23
+
+    def test_share_only_in_dict_when_present(self, monkeypatch):
+        """Reels with no shares yet: social_actions has no SHARE key → 0."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        with patch(
+            "requests.get",
+            side_effect=self._build_fake_get(social_actions={"COMMENT": 2}),
+        ):
+            result = _fetch_facebook("reel_no_shares", niche_id="gaming")
+
+        assert result["shares"] == 0
+
+    def test_completion_rate_clamped_to_one(self, monkeypatch):
+        """avg_watch > length (looping replays) → completion capped at 1.0."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        with patch(
+            "requests.get",
+            side_effect=self._build_fake_get(
+                avg_view_time_ms=50000.0,  # 50s avg
+                video_length_s=40.0,        # 40s length
+            ),
+        ):
+            result = _fetch_facebook("reel_loop", niche_id="gaming")
+
+        assert result["completion_rate"] == 1.0
+
+    def test_video_insights_failure_keeps_stubs(self, monkeypatch):
+        """If /video_insights also fails, shares + completion_rate stay 0."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+
+        def fake_get(url, params=None, headers=None, timeout=None, **_):
+            r = MagicMock()
+            r.raise_for_status.return_value = None
+            if "/video_insights" in url:
+                r.status_code = 403
+                r.json.return_value = {"error": {"message": "no permission"}}
+            elif "/insights" in url:
+                r.status_code = 400
+                r.json.return_value = {"error": {}}
+            else:
+                r.status_code = 200
+                r.json.return_value = {
+                    "views": 50,
+                    "length": 30.0,
+                    "likes": {"summary": {"total_count": 0}},
+                    "comments": {"summary": {"total_count": 0}},
+                }
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook("reel_no_perm", niche_id="gaming")
+
+        # Still get reach from video object, but shares/completion_rate stub
+        assert result["reach"] == 50
+        assert result["shares"] == 0
+        assert result["completion_rate"] == 0.0
+        # minutes_viewed stays at the insights-derived value (0 here since both failed)
+        assert result["minutes_viewed"] == 0.0
+
+    def test_reel_insights_helper_parses_social_actions_dict(self):
+        """Direct test of the COMMENT/SHARE/REACTION dict parsing."""
+        from genlab_core.learning.metric_collector import _fetch_facebook_reel_insights
+
+        def fake_get(*_a, **_k):
+            r = MagicMock()
+            r.status_code = 200
+            r.json.return_value = {
+                "data": [
+                    {"name": "post_video_view_time", "values": [{"value": 100000}]},
+                    {"name": "post_video_avg_time_watched", "values": [{"value": 2500}]},
+                    {"name": "post_video_social_actions",
+                     "values": [{"value": {"COMMENT": 3, "SHARE": 7, "REACTION": 22}}]},
+                ]
+            }
+            return r
+
+        with patch("requests.get", side_effect=fake_get):
+            result = _fetch_facebook_reel_insights("reel_x", "tok")
+
+        assert result == {
+            "total_view_time_ms": 100000.0,
+            "avg_view_time_ms": 2500.0,
+            "shares": 7,
+            "reactions": 22,
+            "social_comments": 3,
+        }
+
+    def test_minutes_viewed_uses_authoritative_total(self, monkeypatch):
+        """minutes_viewed comes from post_video_view_time (total ms),
+        which is more authoritative than the (views × avg_watch) estimate
+        the /insights path would produce.
+        """
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        with patch(
+            "requests.get",
+            side_effect=self._build_fake_get(total_view_time_ms=600000.0),  # 10 min total
+        ):
+            result = _fetch_facebook("reel_total", niche_id="gaming")
+
+        # 600000 / 60000 = 10.0 min — exact, not an estimate
+        assert result["minutes_viewed"] == 10.0
 
 
 # ===========================================================================
