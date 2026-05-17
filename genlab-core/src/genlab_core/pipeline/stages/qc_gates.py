@@ -201,10 +201,14 @@ class QCGates:
             issues.append("Missing required field: hook")
             ok = False
 
-        # Caption or body text required
+        # Caption or body text required. Accept any of the shapes used by
+        # the writing stages: top-level caption/body (legacy), content.caption
+        # (base_writing.write_story_llm), or content.instagram.caption (the
+        # platform-adaptation nested form).
         body = (
             bp.get("caption", "")
             or bp.get("body", "")
+            or (content.get("caption", "") if isinstance(content, dict) else "")
             or (content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else "")
         )
         if not body:
