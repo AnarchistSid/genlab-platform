@@ -632,7 +632,16 @@ class FrameCompositor:
         delimited by '...' in a filter_complex string -- FFmpeg treats \\'
         as end-of-value.  Replace with Unicode RIGHT SINGLE QUOTATION MARK
         (U+2019) which is visually identical and harmless.
+
+        Newlines and tabs are stripped entirely — FFmpeg drawtext doesn't
+        support multi-line text in filter_complex strings, and leaving them
+        in can break the filter graph parser. Hooks are supposed to be
+        single-line anyway (≤60 chars) so this is belt-and-suspenders.
         """
+        # Strip control characters first (defense-in-depth against
+        # adversarial input — LLM hooks shouldn't have them, but scraped
+        # text might).
+        text = "".join(c for c in text if ord(c) >= 32 or c == " ")
         return (
             text
             .replace("\\", "\\\\")

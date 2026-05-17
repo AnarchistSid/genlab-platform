@@ -63,12 +63,41 @@ class LinUCBArm:
 
         p = theta^T x + alpha * sqrt(x^T A^{-1} x)
         where theta = A^{-1} b
+
+        Guards against two numerical edge cases:
+          1. Singular/near-singular matrix — np.linalg.inv raises LinAlgError.
+             Returns a neutral 0.5 so the Thompson fallback upstream picks
+             this arm's score into the normal ranking.
+          2. Negative value inside sqrt (can happen with floating-point
+             error on near-singular matrices even after inversion succeeds)
+             — clamp the inner product to >= 0 before sqrt so we never
+             propagate NaN into the reward signal.
         """
-        A_inv = np.linalg.inv(self.A)
+        try:
+            A_inv = np.linalg.inv(self.A)
+        except np.linalg.LinAlgError:
+            logger.warning(
+                "[LinUCB] singular matrix in arm predict (n_obs=%d) — "
+                "falling back to neutral score",
+                self.n_obs,
+            )
+            return 0.5
         theta = A_inv @ self.b
         exploitation = float(theta @ x)
-        exploration = self.alpha * float(np.sqrt(x @ A_inv @ x))
-        return exploitation + exploration
+        inner = float(x @ A_inv @ x)
+        # Clamp to 0 — a positive semi-definite matrix should always give
+        # x^T A^{-1} x >= 0, but floating-point drift on degenerate arms
+        # can tip it negative. NaN from sqrt(-eps) would then corrupt the
+        # reward signal downstream.
+        exploration = self.alpha * float(np.sqrt(max(0.0, inner)))
+        score = exploitation + exploration
+        if not np.isfinite(score):
+            logger.warning(
+                "[LinUCB] non-finite score (n_obs=%d) — neutral fallback",
+                self.n_obs,
+            )
+            return 0.5
+        return score
 
     def update(self, x: np.ndarray, reward: float) -> None:
         """Update arm with observed reward for context x.
