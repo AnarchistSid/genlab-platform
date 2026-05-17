@@ -11,7 +11,11 @@
 default_model: "claude-haiku-4-5-20251001"
 
 task_routing:
-  # CREATIVE tier — audience-facing, quality-critical (stays on Haiku)
+  # CREATIVE tier — audience-facing, quality-critical
+  # BB (ai_creators) writing upgraded to Sonnet: Haiku defaults to flat
+  # "X just Y" hooks despite prompt engineering. Sonnet follows creative
+  # constraints much better. Cost delta: ~$0.04/day ($1.20/month).
+  write_ai_creators_content: "claude-sonnet-4-6"
   generate_hooks: "claude-haiku-4-5-20251001"
   hook_generation: "claude-haiku-4-5-20251001"
   score_hook_quality: "claude-haiku-4-5-20251001"

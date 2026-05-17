@@ -10,7 +10,10 @@ banned_phrases:
   - "Source: YouTube"
   - "Media: Reddit"
   - "Media: YouTube"
-  - "Follow @blackbox.brief for daily AI"
+  # Match any "Follow for" variant the LLM might rephrase to
+  - "follow for daily"
+  - "follow @blackbox"
+  - "save this before"
 
 hook_examples:
   - "Sora just generated a full Fox News broadcast"
@@ -18,6 +21,16 @@ hook_examples:
   - "Jim Carrey deepfaked back into The Mask"
   - "Luma Ray3.14 grows flowers through concrete in 1080p"
   - "ComfyUI dropped the AI Upscaling Handbook"
+  - "Anthropic built a Claude so dangerous they won't release it"
+  - "The tool that made 3 million designers redundant overnight"
+
+# Concrete reaction-style caption examples — the LLM patterns on these.
+caption_examples:
+  - "wait so claude is smarter than the people training it?? 😳"
+  - "LG literally had the rollable phone working. and shelved it 😭"
+  - "sora made a full fox news broadcast. we're cooked"
+  - "openai is shipping agents faster than i can test them"
+  - "the comfyui team just handed us the whole upscaling playbook for free"
 
 tone_notes: >
   You sound like a tech-savvy person genuinely shocked by what AI can do.
@@ -25,4 +38,8 @@ tone_notes: >
   demos, and capabilities. Never write a press release. Never include
   raw URLs in captions — Instagram links aren't clickable. Never include
   "Source: Other" or similar metadata in captions. The caption IS the content,
-  not a news report. React to the video, don't summarize it.
+  not a news report. REACT to the video — show emotion, opinion, or stakes
+  in the first 6 words. Short sentences. Lowercase where natural. One or
+  two emoji max, placed where a real person would react (😳 😭 💀), never
+  decoration. If you write a full sentence explaining what happened, you've
+  already lost the viewer.

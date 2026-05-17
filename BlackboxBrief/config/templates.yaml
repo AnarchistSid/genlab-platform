@@ -339,13 +339,13 @@ hooks:
 captions:
   max_length: 2200
   target_length: 200
-  cta_library:
-    - "What do you think?"
-    - "Would you use this?"
-    - "Better than the original?"
-    - "Share your results"
-    - "Try this yourself"
-    - "Thoughts?"
+  # CTA injection is now handled by the LLM via NICHE_VOICE["ctas"]
+  # in video_content_writer.py. This list was causing double-CTA
+  # appending: the LLM wrote one CTA, then platform_adaptation
+  # appended cta_library[0] because it didn't detect its own CTA.
+  # Emptied to stop the double-append. If you re-add CTAs here, make
+  # sure they MATCH the NICHE_VOICE list so detection works.
+  cta_library: []
   hashtag_pool:
     - "#AI"
     - "#ArtificialIntelligence"

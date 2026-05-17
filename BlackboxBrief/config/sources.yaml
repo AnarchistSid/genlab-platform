@@ -722,9 +722,14 @@ sources:
       scroll_rounds: 5
 
 content_filter:
+  # Threshold 0.30: 1 keyword hit (0.33) passes. This lets through
+  # borderline content like "Allbirds switches to AI" (1 hit) but also
+  # ensures real AI content like "OpenAI's Super App" (1 hit) isn't
+  # blocked. The RelevanceGate stage plus dashboard review catches truly
+  # irrelevant content (0 hits = score 0.00, always blocked).
   relevance_threshold: 0.30
   positive_keywords:
-    # Core terms
+    # Core AI terms — these need to appear in combination, not alone
     - ai
     - artificial intelligence
     - machine learning
@@ -734,15 +739,10 @@ content_filter:
     - large language model
     - generative ai
     - gen ai
-    - automation
-    - robot
-    - robotics
     - computer vision
     - nlp
-    - prompt
     - prompt engineering
     - fine-tuning
-    - training
     - inference
     - model
     - transformer
