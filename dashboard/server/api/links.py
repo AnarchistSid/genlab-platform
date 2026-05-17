@@ -932,38 +932,20 @@ def link_go(product_slug: str):
     except Exception as e:
         logger.warning("[Links] log_click import/call failed: %s", e)
 
-    # Update CTA bandit with click reward signal
-    try:
-        from genlab_core.monetization.cta_engine import get_bandit
-        bandit = get_bandit()
-        if bandit and platform_source:
-            # Try to look up the CTA variant from the blueprint
-            cta_variant = ""
-            if blueprint_id:
-                try:
-                    import os as _os
-                    import psycopg as _psycopg
-                    from psycopg.rows import dict_row as _dict_row
-                    _dsn = _os.environ.get("DATABASE_URL", "")
-                    if _dsn:
-                        with _psycopg.connect(_dsn, row_factory=_dict_row) as _conn:
-                            row = _conn.execute(
-                                "SELECT affiliate_cta_variant FROM blueprints WHERE id = %s::uuid",
-                                (blueprint_id,),
-                            ).fetchone()
-                            if row and row.get("affiliate_cta_variant"):
-                                cta_variant = row["affiliate_cta_variant"]
-                except Exception as e:
-                    logger.debug("[Links] Blueprint CTA variant lookup failed: %s", e)
-
-            if cta_variant:
-                # Update each variant arm for the click
-                for arm_id in cta_variant.split(","):
-                    arm_id = arm_id.strip()
-                    if arm_id:
-                        bandit.update(arm_id=arm_id, platform=platform_source, clicked=True)
-    except Exception as e:
-        logger.debug("[Links] Bandit update failed: %s", e)
+    # NOTE: per-click CTA bandit updates were removed on 2026-05-17.  A Beta
+    # bandit needs both successes AND failures to converge — per-click events
+    # can only ever fire α (you can't observe an *absence* of a click as an
+    # event).  Without β updates the bandit drifts the same way Bug F drifted
+    # the engagement bandit (always-truthy signal).
+    #
+    # CTA bandit updates now flow exclusively through
+    # ``metric_collector._update_cta_bandit_from_clicks`` at the 48h window:
+    # it queries the click count for each (blueprint_id, platform_source),
+    # and calls ``bandit.update(arm_id, platform, clicked=count>0)`` once per
+    # post.  That gives the right binary signal for Thompson Sampling.
+    #
+    # log_click() above still writes to affiliate_clicks for attribution —
+    # we just don't double-touch the bandit here anymore.
 
     # Helper: redirect to channel link page instead of dashboard login
     _fallback_url = f"/links/{channel_id}" if channel_id and channel_id in _CHANNEL_META else "/links/blackboxbrief"
