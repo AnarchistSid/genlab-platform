@@ -96,7 +96,18 @@ class PublishGatekeeper:
 
     def _score_floor_gate(self, bp: dict, platform: str) -> GateResult:
         score = float(bp.get("priority_score", 0.5) or 0.5)
-        floor = 0.3  # minimum to publish
+        # Niche-level floor if config carries one, else fall back to the
+        # hardcoded 0.3. The config path is
+        # niche_config["publishing"]["score_floor"].
+        niche_cfg = self._config.get("niche_config") if self._config else None
+        floor = 0.3
+        if isinstance(niche_cfg, dict):
+            pub = niche_cfg.get("publishing") or {}
+            if isinstance(pub, dict):
+                try:
+                    floor = float(pub.get("score_floor", 0.3))
+                except (TypeError, ValueError):
+                    floor = 0.3
         if score < floor:
             return GateResult(
                 allowed=False,
