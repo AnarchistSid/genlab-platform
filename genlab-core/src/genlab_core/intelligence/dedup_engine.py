@@ -128,7 +128,7 @@ class DedupEngine:
             if url_hash in self._seen_url_hashes:
                 result.duplicates.append(item)
                 result.pass1_removed += 1
-                logger.debug("Pass 1 dup: %s", url[:80])
+                logger.info("[Dedup:url] dropped: %s", url[:100])
             else:
                 self._seen_url_hashes.add(url_hash)
                 after_pass1.append(item)
@@ -138,14 +138,21 @@ class DedupEngine:
         seen_texts: list[str] = []
         for item in after_pass1:
             text = item.get(self.text_field, "")
-            is_dup = any(
-                jaccard_similarity(text, seen) >= self.jaccard_threshold
-                for seen in seen_texts
-            )
-            if is_dup:
+            matched_against: str | None = None
+            best_score = 0.0
+            for seen in seen_texts:
+                score = jaccard_similarity(text, seen)
+                if score >= self.jaccard_threshold and score > best_score:
+                    best_score = score
+                    matched_against = seen
+            if matched_against is not None:
                 result.duplicates.append(item)
                 result.pass2_removed += 1
-                logger.debug("Pass 2 dup (Jaccard): %s", text[:80])
+                logger.info(
+                    "[Dedup:jaccard] %.2f threshold=%.2f: '%s' ≈ '%s'",
+                    best_score, self.jaccard_threshold,
+                    text[:70], matched_against[:70],
+                )
             else:
                 seen_texts.append(text)
                 after_pass2.append(item)
@@ -195,5 +202,10 @@ class DedupEngine:
                     keep[j] = False
                     result.duplicates.append(items[j])
                     result.pass3_removed += 1
+                    logger.info(
+                        "[Dedup:tfidf] %.2f threshold=%.2f: '%s' ≈ '%s'",
+                        float(cos_sim[i, j]), self.tfidf_threshold,
+                        texts[j][:70], texts[i][:70],
+                    )
 
         return [item for item, k in zip(items, keep) if k]
