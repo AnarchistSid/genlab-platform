@@ -1131,25 +1131,38 @@ class TestCTABanditSaveStateCreatesDir:
 
 
 class TestFetchYouTubeAnalyticsExtras:
-    """The Analytics layer fills RewardShaper keys the Data API can't reach."""
+    """The Analytics layer fills RewardShaper keys the Data API can't reach.
+
+    Uses shared super-account credentials + per-niche channel ID.
+    """
 
     def _patch_creds(self, monkeypatch):
-        """Stub niche credential resolver to a known good triple."""
+        """Stub both per-niche and shared analytics credential resolvers."""
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_credentials",
             lambda niche_id: {
-                "client_id": "cid",
-                "client_secret": "csec",
-                "refresh_token": "rtok",
+                "client_id": "cid", "client_secret": "csec", "refresh_token": "rtok",
             },
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
+            lambda: {
+                "client_id": "shared_cid",
+                "client_secret": "shared_csec",
+                "refresh_token": "shared_analytics_rtok",
+            },
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_channel_id",
+            lambda niche_id: f"UC_{niche_id}_test",
         )
 
     def _clear_caches(self):
-        """Reset module-level YouTube token + channel caches."""
+        """Reset module-level YouTube token caches."""
         from genlab_core.learning import metric_collector as mc
 
         mc._yt_token_cache.update({"token": "", "niche": "", "ts": 0.0})
-        mc._yt_channel_cache.clear()
+        mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
 
     def test_analytics_extras_merged_into_result(self, monkeypatch):
         """Successful Analytics call replaces stub zeros."""
@@ -1277,34 +1290,49 @@ class TestFetchYouTubeAnalyticsExtras:
         assert result["avg_view_duration"] == 0.0
         assert result["subscriber_gained"] == 0
 
-    def test_channel_id_cached_per_niche(self, monkeypatch):
-        """Channel lookup happens once per niche per process."""
-        from genlab_core.learning.metric_collector import _get_yt_channel_id, _yt_channel_cache
+    def test_analytics_token_cached_across_niches(self, monkeypatch):
+        """Shared super-account token: one refresh covers all 5 niches."""
+        from genlab_core.learning import metric_collector as mc
 
-        _yt_channel_cache.clear()
-        call_count = {"channels": 0}
+        self._clear_caches()
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
+            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+        )
 
-        def fake_get(url, params=None, headers=None, timeout=None, **_):
+        post_count = {"n": 0}
+
+        def fake_post(url, data=None, timeout=None, **_):
             r = MagicMock()
+            if "oauth2.googleapis.com" in url:
+                post_count["n"] += 1
+            r.json.return_value = {"access_token": "ya29.shared"}
             r.raise_for_status.return_value = None
-            if "youtube/v3/channels" in url:
-                call_count["channels"] += 1
-                r.json.return_value = {"items": [{"id": "UC_x"}]}
             return r
 
-        with patch("requests.get", side_effect=fake_get):
-            cid1 = _get_yt_channel_id("tok", "gaming")
-            cid2 = _get_yt_channel_id("tok", "gaming")  # cached
-            cid3 = _get_yt_channel_id("tok", "sports")  # new niche → new lookup
+        with patch("requests.post", side_effect=fake_post):
+            t1 = mc._get_yt_analytics_access_token()
+            t2 = mc._get_yt_analytics_access_token()  # cached
+            t3 = mc._get_yt_analytics_access_token()  # cached
 
-        assert cid1 == "UC_x"
-        assert cid2 == "UC_x"
-        assert cid3 == "UC_x"
-        assert call_count["channels"] == 2  # gaming once, sports once
+        assert t1 == t2 == t3 == "ya29.shared"
+        assert post_count["n"] == 1  # single token refresh shared
 
-    def test_analytics_extras_helper_parses_columns_correctly(self):
+    def test_analytics_extras_helper_parses_columns_correctly(self, monkeypatch):
         """Direct test of column-header → field-name mapping."""
         from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
+
+        self._clear_caches()
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
+            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+        )
+
+        def fake_post(url, data=None, timeout=None, **_):
+            r = MagicMock()
+            r.json.return_value = {"access_token": "ya29.shared"}
+            r.raise_for_status.return_value = None
+            return r
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
             r = MagicMock()
@@ -1322,8 +1350,9 @@ class TestFetchYouTubeAnalyticsExtras:
             }
             return r
 
-        with patch("requests.get", side_effect=fake_get):
-            extras = _fetch_youtube_analytics_extras("tok", "v1", "UC_x")
+        with patch("requests.post", side_effect=fake_post):
+            with patch("requests.get", side_effect=fake_get):
+                extras = _fetch_youtube_analytics_extras("v1", "UC_x")
 
         assert extras["minutes_viewed"] == 1000.0
         assert extras["avg_view_duration"] == 25.4
@@ -1335,7 +1364,24 @@ class TestFetchYouTubeAnalyticsExtras:
         from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
 
         with patch("requests.get") as mock_get:
-            extras = _fetch_youtube_analytics_extras("tok", "v1", "")
+            extras = _fetch_youtube_analytics_extras("v1", "")
+
+        assert extras == {}
+        mock_get.assert_not_called()
+
+    def test_analytics_extras_empty_when_no_shared_token(self, monkeypatch):
+        """No YOUTUBE_ANALYTICS_REFRESH_TOKEN → skip, no API call."""
+        from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
+        from genlab_core.learning import metric_collector as mc
+
+        mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
+            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": ""},
+        )
+
+        with patch("requests.get") as mock_get:
+            extras = _fetch_youtube_analytics_extras("v1", "UC_x")
 
         assert extras == {}
         mock_get.assert_not_called()

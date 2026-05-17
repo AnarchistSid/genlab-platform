@@ -83,53 +83,85 @@ def fetch_platform_metrics(
 _yt_token_cache: dict[str, Any] = {"token": "", "niche": "", "ts": 0.0}
 _YT_TOKEN_TTL = 2400.0  # 40 minutes (tokens last ~60 min)
 
-# Per-niche YouTube channel ID cache — channels never change for a given OAuth
-# token, so we cache forever within the process lifetime.
-_yt_channel_cache: dict[str, str] = {}
+# Shared Analytics token cache — same refresh_token across all niches in the
+# super-account model. Keyed on a sentinel ``__shared_analytics__`` slot.
+_yt_analytics_token_cache: dict[str, Any] = {"token": "", "ts": 0.0}
 
 
-def _get_yt_channel_id(access_token: str, niche_id: str) -> str:
-    """Fetch and cache the channel ID owned by this OAuth token."""
+def _get_yt_analytics_access_token() -> str:
+    """Mint and cache an access token from the shared Analytics refresh token.
+
+    Returns "" if the super-account credentials aren't configured —
+    _fetch_youtube_analytics_extras then short-circuits to {} and the
+    snapshot fields remain authoritative.
+    """
+    import time as _time
+
     import requests
 
-    cached = _yt_channel_cache.get(niche_id, "")
-    if cached:
-        return cached
+    from genlab_core.publishing.niche_credentials import (
+        resolve_youtube_analytics_credentials,
+    )
+
+    creds = resolve_youtube_analytics_credentials()
+    cid = creds.get("client_id", "")
+    csec = creds.get("client_secret", "")
+    rt = creds.get("refresh_token", "")
+    if not all([cid, csec, rt]):
+        return ""
+
+    now = _time.monotonic()
+    if (
+        _yt_analytics_token_cache["token"]
+        and (now - _yt_analytics_token_cache["ts"]) < _YT_TOKEN_TTL
+    ):
+        return _yt_analytics_token_cache["token"]
+
     try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/channels",
-            params={"part": "id", "mine": "true"},
-            headers={"Authorization": f"Bearer {access_token}"},
+        resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": cid,
+                "client_secret": csec,
+                "refresh_token": rt,
+                "grant_type": "refresh_token",
+            },
             timeout=15,
         )
         resp.raise_for_status()
-        items = resp.json().get("items", [])
-        if items:
-            channel_id = items[0].get("id", "")
-            if channel_id:
-                _yt_channel_cache[niche_id] = channel_id
-            return channel_id
+        token = resp.json().get("access_token", "")
+        _yt_analytics_token_cache["token"] = token
+        _yt_analytics_token_cache["ts"] = now
+        return token
     except Exception as exc:
-        logger.debug("[metric_collector] yt channel-id fetch failed for %s: %s", niche_id, exc)
-    return ""
+        logger.debug("[metric_collector] yt analytics token refresh failed: %s", exc)
+        return ""
 
 
-def _fetch_youtube_analytics_extras(
-    access_token: str, video_id: str, channel_id: str,
-) -> dict:
+def _fetch_youtube_analytics_extras(video_id: str, channel_id: str) -> dict:
     """Pull avg_view_duration + subscribers_gained from YouTube Analytics v2.
 
-    Returns a dict with keys ``avg_view_duration``, ``subscriber_gained``,
-    ``minutes_viewed``, ``shares``.  Empty dict if data not propagated yet
-    (the API has a 24-48h aggregation lag) or any error.
+    Uses the shared super-account access token so a single OAuth re-consent
+    unlocks analytics for all 5 channels at once. Per-niche isolation is
+    preserved at the ``channel==<channel_id>`` filter level rather than at
+    the credential level.
 
-    Uses a wide 90-day startDate window since the ``video==`` filter scopes
-    the result to a single video.
+    Returns a dict with keys ``avg_view_duration``, ``subscriber_gained``,
+    ``minutes_viewed``, ``shares``.  Empty dict if:
+      * no shared analytics refresh token configured (early state)
+      * channel_id missing (niche not provisioned)
+      * 400/403 (scope missing, video too new)
+      * empty row set (data not yet aggregated)
+      * any other exception
     """
     import requests
     from datetime import timedelta
 
     if not channel_id:
+        return {}
+
+    access_token = _get_yt_analytics_access_token()
+    if not access_token:
         return {}
 
     now = datetime.now(UTC)
@@ -153,7 +185,7 @@ def _fetch_youtube_analytics_extras(
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=20,
         )
-        # 403 = scope missing; 400 = video too new; treat as soft fail.
+        # 403 = scope missing or not a channel manager; 400 = video too new.
         if resp.status_code in (400, 403):
             logger.debug(
                 "[metric_collector] yt analytics soft-fail %d for %s",
@@ -258,10 +290,14 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
         "subscriber_gained": 0,
     }
 
-    # Layer Analytics extras on top.  Empty dict on early-window calls or
-    # scope/API failures — keeps the stub zeros, never crashes the fetch.
-    channel_id = _get_yt_channel_id(access_token, niche_id)
-    extras = _fetch_youtube_analytics_extras(access_token, post_id, channel_id)
+    # Layer Analytics extras on top.  Uses the shared super-account token
+    # plus per-niche {PREFIX}_YT_CHANNEL_ID for the channel== filter — so
+    # one re-consent unlocks analytics across all 5 channels.  Empty dict
+    # on early-window calls or scope/API failures keeps the stub zeros.
+    from genlab_core.publishing.niche_credentials import resolve_youtube_channel_id
+
+    channel_id = resolve_youtube_channel_id(niche_id)
+    extras = _fetch_youtube_analytics_extras(post_id, channel_id)
     if extras:
         result["avg_view_duration"] = round(extras.get("avg_view_duration", 0.0), 2)
         result["subscriber_gained"] = extras.get("subscriber_gained", 0)
