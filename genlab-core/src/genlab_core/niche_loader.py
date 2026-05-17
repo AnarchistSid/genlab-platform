@@ -30,6 +30,19 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
       1. {project_root}/config/niche.yaml       — standalone channel folders
       2. {project_root}/niches/{niche_id}/config/niche.yaml — CriticalRush nested
 
+    Additionally merges ``scoring_weights.yaml`` from the same config dir
+    under the ``scoring_weights`` key on the returned config (if present).
+    This means consumers like ``QCGates`` and ``base_content_research`` can
+    read ``niche_config["scoring_weights"]["dedup"]`` without having to load
+    a second file themselves.
+
+    If ``scoring_weights.yaml`` defines a top-level ``dedup:`` block AND the
+    niche config doesn't already have one, it is also promoted to
+    ``niche_config["dedup"]`` so existing callers that read the top-level
+    ``dedup`` block (like ``QCGates`` did with ``jaccard_threshold``) finally
+    pick up the intended thresholds. Also normalizes the legacy
+    ``similarity_threshold`` key to ``jaccard_threshold`` for consumers.
+
     Args:
         niche_id: The niche identifier (e.g. "gaming", "ai_creators").
         project_root: Absolute path to the calling agent's project root.
@@ -38,19 +51,55 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
         The parsed YAML as a dict. Returns an empty dict if the file
         does not exist.
     """
+    niche_config: dict = {}
+    config_dir: Path | None = None
+
     # Standalone channel folder: config/ is directly under project_root
     standalone_path = project_root / "config" / "niche.yaml"
     if standalone_path.exists():
         with open(standalone_path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+            niche_config = yaml.safe_load(f) or {}
+        config_dir = standalone_path.parent
+    else:
+        # CriticalRush nested pattern: niches/{id}/config/
+        nested_path = project_root / "niches" / niche_id / "config" / "niche.yaml"
+        if nested_path.exists():
+            with open(nested_path, encoding="utf-8") as f:
+                niche_config = yaml.safe_load(f) or {}
+            config_dir = nested_path.parent
 
-    # CriticalRush nested pattern: niches/{id}/config/
-    nested_path = project_root / "niches" / niche_id / "config" / "niche.yaml"
-    if nested_path.exists():
-        with open(nested_path, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+    if config_dir is None:
+        return niche_config
 
-    return {}
+    # Merge scoring_weights.yaml so consumers can read thresholds without
+    # reaching outside niche_config. See issue M: four niches had dedup
+    # blocks in scoring_weights.yaml that were never loaded.
+    sw_path = config_dir / "scoring_weights.yaml"
+    if sw_path.exists():
+        try:
+            with open(sw_path, encoding="utf-8") as f:
+                sw_data = yaml.safe_load(f) or {}
+            if isinstance(sw_data, dict):
+                niche_config.setdefault("scoring_weights", sw_data)
+                # Promote the dedup block to the top-level if the niche
+                # config doesn't already have one. Normalize the legacy
+                # similarity_threshold → jaccard_threshold key name.
+                dedup_block = sw_data.get("dedup") or {}
+                if dedup_block and "dedup" not in niche_config:
+                    normalized = dict(dedup_block)
+                    if (
+                        "jaccard_threshold" not in normalized
+                        and "similarity_threshold" in normalized
+                    ):
+                        normalized["jaccard_threshold"] = normalized[
+                            "similarity_threshold"
+                        ]
+                    niche_config["dedup"] = normalized
+        except yaml.YAMLError:
+            # Bad YAML in scoring_weights should NOT break niche loading.
+            pass
+
+    return niche_config
 
 
 def get_feature_flags(niche_id: str, project_root: Path) -> dict[str, Any]:
