@@ -88,10 +88,18 @@ class TestYouTubeCTA:
 
 
 class TestInstagramCTA:
-    def test_link_in_bio_used_not_direct_url(self):
+    # IG fallback CTA produced by _build_cta_text when bandit is None
+    # and no price is set on the affiliate match.  Includes the "off-caption"
+    # navigation hint "(1st comment)" — IG doesn't surface clickable links in
+    # post captions so we anchor users to the first pinned comment.
+    _IG_FALLBACK_NAV_HINT = "(1st comment)"
+    _IG_FALLBACK_CTA = "🔗 Get PS5 Console 👇 (1st comment)"
+
+    def test_off_caption_nav_hint_used_not_direct_url(self):
+        """IG caption must direct users off-caption (no raw URLs in IG)."""
         story = _make_story()
         fields = inject_cta({"caption": "Amazing reel content."}, story)
-        assert "link in bio" in fields["caption"]
+        assert self._IG_FALLBACK_NAV_HINT in fields["caption"]
         assert "amazon.in" not in fields["caption"]
 
     def test_cta_inserted_before_hashtags(self):
@@ -99,7 +107,7 @@ class TestInstagramCTA:
         caption = "Great gaming session. #gaming #ps5 #console"
         fields = inject_cta({"caption": caption}, story)
         result = fields["caption"]
-        cta_pos = result.index("🔗 PS5 Console — link in bio")
+        cta_pos = result.index(self._IG_FALLBACK_CTA)
         hashtag_pos = result.index("#gaming")
         assert cta_pos < hashtag_pos
 
@@ -113,7 +121,7 @@ class TestInstagramCTA:
         fields = inject_cta({"caption": "Pure caption text with no tags."}, story)
         result = fields["caption"]
         # CTA appears after the main body (before disclosure)
-        assert "🔗 PS5 Console — link in bio" in result
+        assert self._IG_FALLBACK_CTA in result
 
     def test_original_text_preserved(self):
         story = _make_story()
@@ -134,10 +142,10 @@ class TestInstagramCTA:
         fields = inject_cta({"caption": "Hot take content. #trending #viral"}, story)
         caption = fields["caption"]
         assert "#affiliate" in caption
-        assert "link in bio" in caption
+        assert self._IG_FALLBACK_NAV_HINT in caption
         # Disclosure should come BEFORE the CTA
         disc_pos = caption.find("#affiliate")
-        cta_pos = caption.find("link in bio")
+        cta_pos = caption.find(self._IG_FALLBACK_NAV_HINT)
         assert disc_pos < cta_pos, "Disclosure must appear before CTA"
 
     def test_custom_ig_disclosure(self):
@@ -335,7 +343,7 @@ class TestBanditIntegration:
             assert "test_youtube" in fields["affiliate_cta_variant"]
 
     def test_bandit_fallback_on_failure(self):
-        """If bandit.select() raises, hardcoded CTA is used."""
+        """If bandit.select() raises, hardcoded CTA from _build_cta_text is used."""
         with patch("genlab_core.monetization.cta_engine._get_bandit") as mock_get:
             mock_bandit = type("BrokenBandit", (), {
                 "select": lambda self, platform: (_ for _ in ()).throw(RuntimeError("boom")),
@@ -344,8 +352,9 @@ class TestBanditIntegration:
 
             story = _make_story()
             fields = inject_cta({"caption": "Test caption."}, story)
-            # Should fall back to hardcoded format
-            assert "🔗 PS5 Console — link in bio" in fields["caption"]
+            # Should fall back to the price-aware hardcoded format
+            # ("🔗 Get PS5 Console 👇" with no price + "(1st comment)" for IG)
+            assert "🔗 Get PS5 Console 👇 (1st comment)" in fields["caption"]
             # No variant stored because bandit failed
             assert "affiliate_cta_variant" not in fields
 
@@ -364,6 +373,7 @@ class TestCaptionLengthEnforcement:
         long_caption = "A" * 2200
         fields = inject_cta({"caption": long_caption}, story)
         assert len(fields["caption"]) <= 2200
-        # CTA should still be present (original text truncated, not the CTA)
-        assert "link in bio" in fields["caption"]
+        # CTA should still be present (original text truncated, not the CTA).
+        # Anchor on the off-caption nav hint to survive future CTA copy changes.
+        assert "(1st comment)" in fields["caption"]
         assert "#affiliate" in fields["caption"]
