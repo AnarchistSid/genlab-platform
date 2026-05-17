@@ -80,6 +80,11 @@ pipeline:
       retries: 1
       retry_delay_seconds: 30
     - class: niches.gaming.stages.filter_gaming_stories.FilterGamingStories
+    # NOTE: PreDownloadDedup is deliberately EXCLUDED from gaming.
+    # Gaming stories use recurring game/category URLs (Twitch "Just Chatting",
+    # Steam "GTA V") that stay the same across daily fetches. URL-level dedup
+    # would block ALL new clips for any game that was ever blueprinted.
+    # Gaming relies on clip-level video_id dedup at PushToBacklog instead.
     - class: niches.gaming.stages.enrich_with_igdb.EnrichWithIGDB
       retries: 1
       retry_delay_seconds: 15

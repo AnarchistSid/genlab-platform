@@ -67,8 +67,15 @@ pipeline:
       retries: 1
       retry_delay_seconds: 30
     - class: bb_strategies.scoring.BBScoringStrategy
+    # Relevance gate: drop stories that don't match AI/tech keywords.
+    # BB's broad source list (MKBHD, Verge, LTT) produces non-AI content
+    # that needs filtering before we spend time downloading + rendering.
+    - class: genlab_core.pipeline.stages.relevance_gate.RelevanceGate
 
     # Phase 2: Video download + gate
+    # Early dedup: drop stories whose URL/video_id already has an active
+    # blueprint BEFORE we spend 5+ min downloading + rendering them.
+    - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
     - class: genlab_core.media.download_top_videos.DownloadTopVideos
       retries: 1
       retry_delay_seconds: 30

@@ -66,6 +66,9 @@ pipeline:
       retries: 1
       retry_delay_seconds: 30
     - class: cw_strategies.scoring.SportScoringStrategy
+    # Early dedup: drop stories whose URL/video_id already has an active
+    # blueprint BEFORE we spend 5+ min downloading + rendering them.
+    - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
     - class: genlab_core.media.download_top_videos.DownloadTopVideos
       retries: 1
       retry_delay_seconds: 30
