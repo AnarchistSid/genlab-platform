@@ -496,6 +496,59 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
     return alerts
 
 
+def archive_orphan_drafts(niche_id: str) -> list[Alert]:
+    """Auto-archive DRAFTED blueprints with no video and no schedule, >7d old.
+
+    These are typically Steam-spike or RSS-source blueprints that never
+    found a downloadable video.  With ``video_gate: require`` they can
+    never reach VISUAL_READY, so they accumulate at DRAFTED indefinitely.
+
+    Safety: ``cleanup_safety.md`` forbids touching anything with
+    ``scheduled_for`` set, regardless of value — we explicitly filter
+    that out.  We also require >=7 days age so we don't race a pipeline
+    that is mid-flight on a fresh story.
+
+    Returns a warning Alert if anything was archived so the operator
+    sees the cleanup in the daily health report.
+    """
+    alerts = []
+    try:
+        import psycopg
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE blueprints
+            SET status = 'ARCHIVED',
+                action_taken = 'auto_archived_orphan',
+                reviewed_at = NOW(),
+                updated_at = NOW()
+            WHERE niche_id = %s
+              AND status = 'DRAFTED'
+              AND (video_id IS NULL OR video_id = '')
+              AND scheduled_for IS NULL
+              AND created_at < NOW() - INTERVAL '7 days'
+            RETURNING id
+            """,
+            (niche_id,),
+        )
+        archived = cur.fetchall()
+        conn.commit()
+        conn.close()
+        if archived:
+            alerts.append(Alert(
+                check="orphan_drafts_archived",
+                severity="warning",
+                message=f"auto-archived {len(archived)} stale DRAFTED orphans (>7d, no video, no schedule)",
+                niche_id=niche_id,
+                details={"count": len(archived)},
+                auto_fix="archived",
+            ))
+    except Exception as e:
+        logger.debug("Orphan-draft archive failed: %s", e)
+    return alerts
+
+
 def check_publish_failures(niche_id: str) -> list[Alert]:
     """Check for high publish failure rate in last 24h."""
     alerts = []
@@ -867,6 +920,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_stuck_publishing(nid))
         all_alerts.extend(check_content_gap(nid))
         all_alerts.extend(check_publish_failures(nid))
+        all_alerts.extend(archive_orphan_drafts(nid))
 
     # System-wide checks (only on full runs)
     if niche_id is None:
