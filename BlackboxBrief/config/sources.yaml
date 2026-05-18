@@ -54,6 +54,42 @@ youtube_channels:
     name: "The AI Advantage"
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCf4tGwyNQGyFWX3F-9rUk9A"
     name: "Prompt Engineering"
+  - name: MattVidPro AI
+    type: rss
+    category: ai_creator
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCXD9sGdcD3-l12dPo_PhTZQ
+    # handle: @MattVidProAI
+  - name: OpenAI
+    type: rss
+    category: ai_demo_official
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCXZCJLdBC09xxGZ6gcdrc6A
+    # handle: @OpenAI
+  - name: Anthropic
+    type: rss
+    category: ai_demo_official
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCrDwWp7EBBv4NwvScIpBDOA
+    # handle: @anthropic-ai
+  - name: Google DeepMind
+    type: rss
+    category: ai_demo_official
+    weight: 0.95
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCP7jMXSY2xbc3KCAE0MHQ-A
+    # handle: @Google_DeepMind
+  - name: Hugging Face
+    type: rss
+    category: ai_demo_official
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCHlNU7kIZhRgSbhHvFoy72w
+    # handle: @HuggingFace
+  - name: Theoretically Media
+    type: rss
+    category: ai_creator
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC9Ryt3XOGYBoAJVsBHNGDzA
+    # handle: @theoreticallymedia
 
 google_trends:
   stub_mode: false

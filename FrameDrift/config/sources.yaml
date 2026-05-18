@@ -139,6 +139,30 @@ youtube_channels:
     type: "rss"
     weight: 0.8
     category: "anime_official"
+  - name: GKIDS Films
+    type: rss
+    category: anime_official
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCJXUTDi2Lc8Qub4bxICcPCA
+    # handle: @GKIDSFilms
+  - name: Sentai Filmworks
+    type: rss
+    category: anime_official
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC-yGsMs0gQ7hK2QIrU95f_A
+    # handle: @Sentai
+  - name: Anime News Network
+    type: rss
+    category: anime_news
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCZYShIzcvrEBXqqjqYfMAsA
+    # handle: @animenewsnetwork
+  - name: Anime After Dark
+    type: rss
+    category: anime_clips
+    weight: 0.8
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UClxs_3mI9r1Xu7v8gHoquWw
+    # handle: @AnimeAfterDark
 
 jikan:
   enabled: true

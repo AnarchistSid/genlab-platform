@@ -88,6 +88,72 @@ youtube_channels:
     type: "rss"
     weight: 0.7
     category: "movie_commentary"
+  - name: Sony Pictures Entertainment
+    type: rss
+    category: movie_trailers
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCz97F7dMxBNOfGYu3rx8aCw
+    # handle: @sonypictures
+  - name: Universal Pictures
+    type: rss
+    category: movie_trailers
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCq0OueAsdxH6b8nyAspwViw
+    # handle: @UniversalPictures
+  - name: Warner Bros. Pictures
+    type: rss
+    category: movie_trailers
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCgKkNPU2Ib7_TcyAl8M2S-w
+    # handle: @WarnerBrosPictures
+  - name: Paramount Pictures
+    type: rss
+    category: movie_trailers
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCF9imwPMSGz4Vq1NiTWCC7g
+    # handle: @ParamountPictures
+  - name: 20th Century Studios
+    type: rss
+    category: movie_trailers
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC2-BeLxzUBSs0uSrmzWhJuQ
+    # handle: @20thCenturyStudios
+  - name: A24
+    type: rss
+    category: movie_trailers
+    weight: 0.95
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCuPivVjnfNo4mb3Oog_frZg
+    # handle: @A24
+  - name: Netflix
+    type: rss
+    category: movie_trailers
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCWOA1ZGywLbqmigxE4Qlvuw
+    # handle: @Netflix
+  - name: Movieclips
+    type: rss
+    category: movie_clips
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC3gNmTGu-TTbFPpfSs5kNkg
+    # handle: @MOVIECLIPS
+  - name: FilmIsNow Movie Trailers
+    type: rss
+    category: movie_trailers
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC6xK9VFU5S1fH64iW9Y3QPg
+    # handle: @FilmIsNowTrailers
+  - name: JoBlo Movie Trailers
+    type: rss
+    category: movie_trailers
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCEmhe4Ld81HT8HNPrRIIY_Q
+    # handle: @JoBloMovieTrailers
+  - name: Rotten Tomatoes Trailers
+    type: rss
+    category: movie_trailers
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCE0Wkd9Jcn2-TNo5G8bLQrA
+    # handle: @rottentomatoes
 
 tmdb_trailers:
   enabled: true

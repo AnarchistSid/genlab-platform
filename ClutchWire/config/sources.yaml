@@ -85,6 +85,72 @@ youtube_channels:
     type: "rss"
     weight: 0.8
     category: "sports_news"
+  - name: MLB
+    type: rss
+    category: sports_highlights
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCoLrcjPV5PbUrUyXq5mjc_A
+    # handle: @MLB
+  - name: NHL
+    type: rss
+    category: sports_highlights
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCqFMzb-4AUf6WAIbl132QKA
+    # handle: @NHL
+  - name: FIA Formula 1
+    type: rss
+    category: sports_highlights
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCB_qr75-ydFVKSF9Dmo6izg
+    # handle: @Formula1
+  - name: UFC
+    type: rss
+    category: sports_highlights
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCvgfXK4nTYKudb0rFR6noLA
+    # handle: @UFC
+  - name: WWE
+    type: rss
+    category: sports_highlights
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCJ5v_MCY6GNUBTO8-D3XoAg
+    # handle: @WWE
+  - name: ICC
+    type: rss
+    category: sports_highlights
+    weight: 0.95
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCt2JXOLNxqry7B_4rRZME3Q
+    # handle: @ICC
+  - name: ATP Tour
+    type: rss
+    category: sports_highlights
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCY_5h5zaSwN7Or4kIJDYNXA
+    # handle: @atptour
+  - name: Wimbledon
+    type: rss
+    category: sports_highlights
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCNa8NxMgSm7m4Ii9d4QGk1Q
+    # handle: @Wimbledon
+  - name: Bleacher Report
+    type: rss
+    category: sports_highlights
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC9-OpMMVoNP5o10_Iyq7Ndw
+    # handle: @BleacherReport
+  - name: B/R Football
+    type: rss
+    category: sports_highlights
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UClvow1RFSyeh5CRwRB_m5sA
+    # handle: @brfootball
+  - name: Sky Sports
+    type: rss
+    category: sports_highlights
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCTU_wC79Dgi9rh4e9-baTqA
+    # handle: @SkySports
 
 scorebat:
   enabled: true

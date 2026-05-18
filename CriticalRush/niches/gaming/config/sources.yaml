@@ -142,6 +142,42 @@ youtube_channels:
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKHa8fQX4VCrstGhHHPQ1nQ"
     weight: 0.7
     category: esports
+  - name: Asmongold Clips
+    type: rss
+    category: streamer_clips
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCQeRaTukNYft1_6AZPACnog
+    # handle: @AsmongoldTV
+  - name: penguinz0
+    type: rss
+    category: streamer_clips
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCq6VFHwMzcMXbuKyG7SQYIg
+    # handle: @penguinz0
+  - name: gameranx
+    type: rss
+    category: gaming_news
+    weight: 1.0
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCNvzD7Z-g64bPXxGzaQaa4g
+    # handle: @gameranx
+  - name: Game Informer
+    type: rss
+    category: gaming_news
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCK-65DO2oOxxMwphl2tYtcw
+    # handle: @gameinformer
+  - name: Skill Up
+    type: rss
+    category: gaming_reviews
+    weight: 0.9
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCZ7AeeVbyslLM_8-nVy2B8Q
+    # handle: @SkillUp
+  - name: Gamology
+    type: rss
+    category: gaming_clips
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCos3tlJstiRa3gnY5a1qQKw
+    # handle: @Gamology_
 
 twitch_clips:
   enabled: true
