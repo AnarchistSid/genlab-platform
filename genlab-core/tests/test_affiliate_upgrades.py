@@ -1,10 +1,18 @@
 """Tests for affiliate system upgrades (Sprint 69).
 
 Covers:
-- LLM-powered contextual matching (_llm_match_product)
 - UTM parameter appending (append_utm_params)
 - Product slug generation
 - QR code snippet generation
+- Match-product fails-closed behaviour when keywords miss
+
+Note: an earlier version of this file also covered an LLM-powered
+contextual matcher (``_llm_match_product``) used as a static-catalog
+fallback.  That code path was removed in the cluster D structural fix
+because the LLM was too willing to rationalise a match for unrelated
+content (it produced "Anime Figure Collection" for a Wistoria character
+moment with zero keyword overlap).  Static catalog now fails closed on
+zero hits; the dynamic Amazon-search matcher has its own quality gates.
 """
 from __future__ import annotations
 
@@ -13,11 +21,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from genlab_core.monetization.affiliate_matcher import (
-    _build_llm_product_list,
-    _llm_match_product,
-    match_product,
-)
+from genlab_core.monetization.affiliate_matcher import match_product
 from genlab_core.monetization.cta_engine import append_utm_params
 
 
@@ -76,191 +80,47 @@ class TestAppendUtmParams:
 # ---------------------------------------------------------------------------
 
 
-class TestBuildLLMProductList:
-    """Tests for the prompt product list builder."""
-
-    def test_builds_numbered_list(self):
-        """Products are formatted as numbered lines with name and category."""
-        products = [
-            {"name": "PS5 Console", "category": "hardware", "keywords": ["ps5", "playstation"]},
-            {"name": "Gaming Mouse", "category": "peripheral", "keywords": ["mouse", "logitech"]},
-        ]
-        result = _build_llm_product_list(products)
-        assert "0: PS5 Console [hardware]" in result
-        assert "1: Gaming Mouse [peripheral]" in result
-
-    def test_handles_empty_keywords(self):
-        """Products with no keywords still format correctly."""
-        products = [{"name": "Test", "category": "test", "keywords": []}]
-        result = _build_llm_product_list(products)
-        assert "0: Test [test]" in result
-
-    def test_truncates_keywords_to_five(self):
-        """Only the first 5 keywords are included in the prompt."""
-        products = [
-            {"name": "X", "category": "y", "keywords": ["a", "b", "c", "d", "e", "f", "g"]},
-        ]
-        result = _build_llm_product_list(products)
-        assert "f" not in result
-        assert "g" not in result
-
-
-# ---------------------------------------------------------------------------
-# LLM match product tests (mocked)
-# ---------------------------------------------------------------------------
-
-
-class TestLLMMatchProduct:
-    """Tests for the LLM contextual matcher with mocked API calls."""
-
-    _products = [
-        {"name": "PS5 Console", "category": "hardware", "keywords": ["ps5"], "enabled": True},
-        {"name": "Gaming Mouse", "category": "peripheral", "keywords": ["mouse"], "enabled": True},
-        {"name": "Gaming Chair", "category": "hardware", "keywords": ["chair"], "enabled": True},
-    ]
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": ""})
-    def test_no_api_key_returns_none(self):
-        """Without ANTHROPIC_API_KEY, LLM match returns None."""
-        result = _llm_match_product("some text about gaming", "gaming", self._products)
-        assert result is None
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("genlab_core.writing.llm_client.AnthropicLLMClient")
-    def test_llm_returns_valid_index(self, mock_llm_cls):
-        """LLM returning a valid product index selects that product."""
-        mock_client = MagicMock()
-        mock_client.complete.return_value = "1"
-        mock_llm_cls.return_value = mock_client
-
-        result = _llm_match_product("wireless logitech setup", "gaming", self._products)
-        assert result is not None
-        assert result["name"] == "Gaming Mouse"
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("httpx.post")
-    def test_llm_returns_none_string(self, mock_post):
-        """LLM returning 'none' means no match."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "content": [{"type": "text", "text": "none"}],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
-
-        result = _llm_match_product("weather forecast today", "gaming", self._products)
-        assert result is None
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("httpx.post")
-    def test_llm_returns_out_of_range_index(self, mock_post):
-        """LLM returning an out-of-range index returns None."""
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "content": [{"type": "text", "text": "99"}],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_post.return_value = mock_resp
-
-        result = _llm_match_product("something", "gaming", self._products)
-        assert result is None
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("httpx.post")
-    def test_llm_api_failure_returns_none(self, mock_post):
-        """API call failure is handled gracefully."""
-        mock_post.side_effect = Exception("network error")
-
-        result = _llm_match_product("something", "gaming", self._products)
-        assert result is None
-
-    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"})
-    @patch("genlab_core.writing.llm_client.AnthropicLLMClient")
-    def test_llm_parses_index_from_verbose_response(self, mock_llm_cls):
-        """LLM responding with '2 - Gaming Chair' still parses index 2."""
-        mock_client = MagicMock()
-        mock_client.complete.return_value = "2 - Gaming Chair seems most relevant"
-        mock_llm_cls.return_value = mock_client
-
-        result = _llm_match_product("ergonomic setup for long sessions", "gaming", self._products)
-        assert result is not None
-        assert result["name"] == "Gaming Chair"
-
-    def test_empty_products_returns_none(self):
-        """Empty product list returns None without calling API."""
-        result = _llm_match_product("some text", "gaming", [])
-        assert result is None
-
-    def test_disabled_products_filtered(self):
-        """Disabled products are excluded from LLM matching."""
-        products = [
-            {"name": "Disabled", "category": "test", "keywords": ["x"], "enabled": False},
-        ]
-        result = _llm_match_product("some text", "gaming", products)
-        assert result is None
-
-
-# ---------------------------------------------------------------------------
-# Integration: keyword fallback → LLM pipeline
-# ---------------------------------------------------------------------------
-
-
-class TestMatchProductWithLLMFallback:
-    """Tests that match_product falls back to LLM when keywords fail."""
+class TestMatchProductFailsClosed:
+    """match_product returns the keyword-best product, or None — never an LLM force-match."""
 
     def _make_catalog(self, products):
         return {"niches": {"gaming": {"products": products}}, "settings": {}}
 
-    @patch("genlab_core.monetization.affiliate_matcher._llm_match_product")
-    def test_keyword_match_skips_llm(self, mock_llm):
-        """When keyword matching succeeds, LLM is NOT called."""
+    def test_keyword_match_returns_product(self):
+        """Strong keyword overlap returns the matching product."""
         products = [
             {
                 "name": "PS5 Console",
                 "keywords": ["ps5", "playstation"],
                 "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
-            }
+            },
         ]
         catalog = self._make_catalog(products)
-        result = match_product("the ps5 playstation is great", "gaming", catalog, seasonal_config={})
+        result = match_product(
+            "the ps5 playstation is great", "gaming", catalog, seasonal_config={},
+        )
         assert result is not None
         assert result["name"] == "PS5 Console"
-        mock_llm.assert_not_called()
 
-    @patch("genlab_core.monetization.affiliate_matcher._llm_match_product")
-    def test_keyword_miss_triggers_llm(self, mock_llm):
-        """When keyword matching fails, LLM is called as fallback."""
-        mock_llm.return_value = {
-            "name": "PS5 Console",
-            "keywords": ["ps5"],
-            "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
-        }
+    def test_zero_keyword_hits_returns_none(self):
+        """Content with no keyword overlap returns None — no LLM force-match.
+
+        This is the closed-fail behaviour that replaces the old LLM contextual
+        fallback.  Previously, content like "weather in new york today" would
+        get a forced-but-irrelevant product match.  Now it returns None and
+        the caller's dynamic matcher (if eligible) can try a different path.
+        """
         products = [
             {
                 "name": "PS5 Console",
                 "keywords": ["ps5", "playstation"],
                 "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
-            }
+            },
         ]
         catalog = self._make_catalog(products)
-        # Text has NO keyword matches
-        result = match_product("next gen gaming experience review", "gaming", catalog, seasonal_config={})
-        assert result is not None
-        mock_llm.assert_called_once()
-
-    @patch("genlab_core.monetization.affiliate_matcher._llm_match_product")
-    def test_llm_returns_none_means_no_match(self, mock_llm):
-        """When LLM also returns None, match_product returns None."""
-        mock_llm.return_value = None
-        products = [
-            {
-                "name": "PS5 Console",
-                "keywords": ["ps5"],
-                "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
-            }
-        ]
-        catalog = self._make_catalog(products)
-        result = match_product("weather in new york today", "gaming", catalog, seasonal_config={})
+        result = match_product(
+            "weather in new york today", "gaming", catalog, seasonal_config={},
+        )
         assert result is None
 
 

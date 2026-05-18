@@ -35,96 +35,6 @@ logger = logging.getLogger(__name__)
 _CATALOG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "affiliate_catalog.yaml"
 
 
-# ── LLM-powered contextual matching ──────────────────────────────────────────
-
-def _build_llm_product_list(products: list[dict[str, Any]]) -> str:
-    """Build a compact product list string for the LLM prompt."""
-    lines = []
-    for i, p in enumerate(products):
-        name = p.get("name", "")
-        category = p.get("category", "")
-        keywords = ", ".join(str(k) for k in (p.get("keywords") or [])[:5])
-        lines.append(f"{i}: {name} [{category}] (keywords: {keywords})")
-    return "\n".join(lines)
-
-
-def _llm_match_product(
-    text: str,
-    niche_id: str,
-    products: list[dict[str, Any]],
-) -> dict[str, Any] | None:
-    """Use Claude Haiku to contextually match content to a product.
-
-    Only called when keyword matching fails. Returns the best product or None.
-
-    Cost: ~200 input tokens + ~20 output tokens = ~$0.00005 per call
-    at Claude Haiku pricing ($0.25/M input, $1.25/M output).
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        logger.debug("[AffiliateMatch] No ANTHROPIC_API_KEY — skipping LLM match")
-        return None
-
-    # Filter to enabled products only
-    enabled = [p for p in products if p.get("enabled", True)]
-    if not enabled:
-        return None
-
-    product_list = _build_llm_product_list(enabled)
-
-    # Truncate content to keep token count low (~150 tokens max)
-    content_truncated = text[:500]
-
-    prompt = (
-        f"You are a product matcher for a {niche_id} content channel.\n\n"
-        f"Content:\n\"{content_truncated}\"\n\n"
-        f"Products:\n{product_list}\n\n"
-        "Which product (if any) is most relevant to this content? "
-        "Reply with ONLY the product index number (e.g. '3') or 'none' if no product fits. "
-        "A product fits if the content topic naturally relates to it — "
-        "the viewer of this content would plausibly be interested in the product."
-    )
-
-    try:
-        from genlab_core.writing.llm_client import AnthropicLLMClient
-
-        client = AnthropicLLMClient(api_key=api_key, model="claude-haiku-4-5-20251001")
-        answer = client.complete(
-            system="You are a product matcher. Reply with ONLY a product index number or 'none'.",
-            user=prompt,
-            max_tokens=20,
-            temperature=0.0,
-        ).strip().lower()
-
-        if answer == "none" or not answer:
-            logger.debug("[AffiliateMatch] LLM returned 'none' — no contextual match")
-            return None
-
-        # Parse the index
-        # Handle responses like "3" or "3 - PS5 Console" or "Product 3"
-        idx_match = re.search(r"\d+", answer)
-        if not idx_match:
-            logger.debug("[AffiliateMatch] LLM response not parseable: %s", answer)
-            return None
-
-        idx = int(idx_match.group())
-        if 0 <= idx < len(enabled):
-            product = enabled[idx]
-            logger.info(
-                "[AffiliateMatch] LLM contextual match: '%s' (index=%d)",
-                product.get("name", ""),
-                idx,
-            )
-            return product
-
-        logger.debug("[AffiliateMatch] LLM returned out-of-range index: %d", idx)
-        return None
-
-    except Exception as e:
-        logger.warning("[AffiliateMatch] LLM match failed: %s", e)
-        return None
-
-
 def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
     """Load the affiliate catalog YAML from disk.
 
@@ -283,18 +193,13 @@ def match_product(
         )
         return best_product
 
-    # 3. LLM contextual fallback — only when keyword matching failed entirely.
-    # Use the same price-filtered list (impulse-buy zone only).
-    enabled_products = niche_products
-    if not enabled_products:
-        return None
-
-    # Only invoke LLM if the cleaned text has enough substance (>20 chars of content)
-    if len(text_lower.strip()) > 20:
-        llm_result = _llm_match_product(text_lower, niche_id, enabled_products)
-        if llm_result is not None:
-            return llm_result
-
+    # NOTE: a previous version invoked an LLM "contextual fallback" here when
+    # keyword matching returned zero hits.  That code is gone — the LLM was
+    # too willing to rationalize a match (e.g. surfacing "Anime Figure
+    # Collection" for a Wistoria character moment with no keyword overlap).
+    # Now we fail closed: if static keywords don't hit, the caller can try
+    # the dynamic Amazon-search matcher, but only if it has its own quality
+    # gates.  No silent LLM force-match.
     return None
 
 
@@ -412,17 +317,24 @@ class AffiliateMatch:
             title = story.get("title", "")
             search_text = f"{hook} {ig_caption} {title}"
 
-            # 1. Try dynamic LLM-based subject extraction first.
-            # This produces context-relevant Amazon search URLs that
-            # outperform generic catalog matches by ~10x conversion.
-            from genlab_core.monetization.dynamic_matcher import dynamic_match
-            from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
-            geo = NICHE_PRIMARY_GEO.get(niche_id, "IN")
-            product = dynamic_match(search_text, niche_id, geo=geo)
+            # 1. Static catalog FIRST.  Curated products (with real
+            #    networks, real prices, real keywords) beat LLM-extracted
+            #    Amazon search URLs almost every time — and crucially, the
+            #    static catalog has been hand-vetted for product fit.
+            #
+            #    Dynamic match falls back only when keyword matching against
+            #    the catalog finds nothing.  Previously this was reversed and
+            #    99% of blueprints got dynamic LLM matches, producing
+            #    "Gemini 3.5 Flash book" / "Apples and Oranges bluray" /
+            #    "AI-designed turbine book" — none of which exist.
+            product = match_product(search_text, niche_id, catalog, seasonal_config)
 
-            # 2. Fall back to static catalog if dynamic match fails
+            # 2. Dynamic LLM fallback when static catalog finds nothing
             if product is None:
-                product = match_product(search_text, niche_id, catalog, seasonal_config)
+                from genlab_core.monetization.dynamic_matcher import dynamic_match
+                from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
+                geo = NICHE_PRIMARY_GEO.get(niche_id, "IN")
+                product = dynamic_match(search_text, niche_id, geo=geo)
             if product is None:
                 skipped += 1
                 logger.debug(
