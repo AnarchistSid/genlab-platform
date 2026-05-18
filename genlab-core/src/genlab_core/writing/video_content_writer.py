@@ -318,11 +318,18 @@ def write_video_content(
             hook = hook[:57].rsplit(" ", 1)[0] + "..."
             content["hook"] = hook
 
-        # Reject hooks containing banned generic phrases
+        # Reject hooks containing banned generic phrases OR matching the
+        # banned "X just <verb>" lead-in template.
+        from genlab_core.writing.llm_hook_generator import _BANNED_PATTERNS
         hook_lower = hook.lower()
         if any(phrase in hook_lower for phrase in _BANNED_PHRASES):
             logger.warning(
-                "[%s] Rejected banned hook: %s", niche_id, hook[:60],
+                "[%s] Rejected banned hook (phrase): %s", niche_id, hook[:60],
+            )
+            content["hook"] = ""
+        elif any(pat.search(hook) for pat in _BANNED_PATTERNS):
+            logger.warning(
+                "[%s] Rejected banned hook (pattern): %s", niche_id, hook[:60],
             )
             content["hook"] = ""
 

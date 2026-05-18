@@ -143,26 +143,23 @@ youtube_channels:
     type: rss
     category: anime_official
     weight: 0.9
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCJXUTDi2Lc8Qub4bxICcPCA
-    # handle: @GKIDSFilms
-  - name: Sentai Filmworks
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCb9ME2w6Y_4jChUVlWdltVg
+    # handle: @GKIDSFilms  (corrected from UC0jaXxL_... which was a 1.9K-sub side acct)
+  - name: Sentai
     type: rss
     category: anime_official
     weight: 0.9
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC-yGsMs0gQ7hK2QIrU95f_A
-    # handle: @Sentai
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC2FwiPk6BYIpnBzN20lEhYA
+    # handle: @sentai  (real Sentai Filmworks — was resolving to @sentaitokusatsu, wrong genre)
   - name: Anime News Network
     type: rss
     category: anime_news
     weight: 0.85
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UCZYShIzcvrEBXqqjqYfMAsA
     # handle: @animenewsnetwork
-  - name: Anime After Dark
-    type: rss
-    category: anime_clips
-    weight: 0.8
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UClxs_3mI9r1Xu7v8gHoquWw
-    # handle: @AnimeAfterDark
+  # Anime After Dark removed — resolved to wrong 6-sub channel ('Michael Mona').
+  # No clean replacement found via search; consider Crunchyroll/HiDive sub-channels
+  # in a future expansion.
 
 jikan:
   enabled: true

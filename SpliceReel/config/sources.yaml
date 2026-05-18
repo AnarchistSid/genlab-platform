@@ -136,18 +136,18 @@ youtube_channels:
     weight: 0.9
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UC3gNmTGu-TTbFPpfSs5kNkg
     # handle: @MOVIECLIPS
-  - name: FilmIsNow Movie Trailers
+  - name: FilmIsNow Movies
     type: rss
     category: movie_trailers
     weight: 0.85
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UC6xK9VFU5S1fH64iW9Y3QPg
-    # handle: @FilmIsNowTrailers
-  - name: JoBlo Movie Trailers
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCOP-gP2WgKUKfFBMnkR3iaA
+    # handle: @FilmIsNowMovies  (was @FilmIsNowTrailers — 2 subs / 1 video squatter)
+  - name: JoBlo Movie Network
     type: rss
     category: movie_trailers
     weight: 0.85
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCEmhe4Ld81HT8HNPrRIIY_Q
-    # handle: @JoBloMovieTrailers
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCRX7UEyE8kp35mPrgC2sosA
+    # handle: @JoBloMovieNetwork  (was @JoBloMovieTrailers — 11 subs / 25 videos squatter)
   - name: Rotten Tomatoes Trailers
     type: rss
     category: movie_trailers

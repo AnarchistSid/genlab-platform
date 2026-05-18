@@ -232,7 +232,14 @@ source_filters:
   min_priority_score_for_render: 0.5
 
 content_filter:
-  relevance_threshold: 0.20
+  # Bumped from 0.20 to 0.25 (2026-05-18). User-rejection rate hit 32
+  # blueprints over 14 days on sports; review traced most rejections to
+  # vague/wisecrack content (e.g. "If Basketball Was Literal", "How
+  # Athletes USED To Throw Discus") that passed at 0.20 because the
+  # title contains 1 sports keyword. 0.25 needs 2 keyword hits (with
+  # the current denominator) and filters out the long-tail edutainment
+  # without rejecting actual game highlights.
+  relevance_threshold: 0.25
   positive_keywords:
     - goal
     - touchdown

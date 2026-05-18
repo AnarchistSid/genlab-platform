@@ -99,11 +99,14 @@ class TestGenerateHook:
         assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
 
     def test_falls_back_to_gaming_style_for_unknown_niche(self):
-        mock_cls = _mock_anthropic_success("Jokic just owned Game 7")
+        # Note: hook must not match _BANNED_PATTERNS (the "X just <verb>"
+        # lead-in template), otherwise it gets filtered out and the test
+        # ends up asserting against the fallback (None).
+        mock_cls = _mock_anthropic_success("Jokic owned Game 7 by himself")
         with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
             with patch("anthropic.Anthropic", mock_cls):
                 result = generate_hook(_make_story(), "unknown_niche")
-        assert result == "Jokic just owned Game 7"
+        assert result == "Jokic owned Game 7 by himself"
 
 
 class TestNicheStyle:

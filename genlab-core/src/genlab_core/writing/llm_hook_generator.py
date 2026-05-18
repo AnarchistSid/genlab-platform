@@ -16,9 +16,27 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# Regex patterns banned in addition to ``_BANNED_PHRASES`` exact-match list.
+#
+# The "X just <verb>" template — 80-90% saturated across published hooks
+# in 4 of 5 niches (audit 2026-05-18).  CLAUDE.md flagged this template
+# pattern as forbidden ("No generic templates") but the exact-phrase
+# banned list only catches specific suffixes ("nobody saw it coming"
+# etc.).  This pattern catches the lead-in itself so the LLM is forced
+# to find a different opening structure.
+#
+# Match condition: "just" appears within the first 4 words, followed by
+# any word — i.e. the hook OPENS with the "<entity> just <action>"
+# template.  A hook with "just" later in the sentence is fine.
+_BANNED_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^(\S+\s+){0,3}just\s+\w+", re.IGNORECASE),
+]
 
 
 # Hook style taxonomy. Each style maps to a one-line instruction that
@@ -310,6 +328,11 @@ def generate_hook(
         f"BAD example: \"{style['example_bad']}\"\n\n"
         "BANNED phrases (never use these or variations):\n"
         f"{banned_text}\n\n"
+        "BANNED OPENING TEMPLATE: Do NOT start the hook with "
+        "'<entity> just <verb>' (e.g. 'Lakers just got punched', "
+        "'SGA just won MVP', 'Anthropic just dropped a model'). "
+        "Find a different opening — question, comparison, revelation, "
+        "or contextual setup.\n\n"
         "No news language: BREAKING:, JUST IN:, announces, reveals\n"
         "No markdown. No quotes around your answer.\n"
         "Write ONE hook. Nothing else."
@@ -355,6 +378,9 @@ def generate_hook(
             if used_lower and hook.lower() in used_lower:
                 continue
             if any(bp.lower() in hook.lower() for bp in _BANNED_PHRASES):
+                continue
+            # Also reject the "X just <verb>" lead-in template
+            if any(pat.search(hook) for pat in _BANNED_PATTERNS):
                 continue
             candidates.append(hook)
         except Exception as exc:

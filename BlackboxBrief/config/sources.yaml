@@ -54,12 +54,9 @@ youtube_channels:
     name: "The AI Advantage"
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCf4tGwyNQGyFWX3F-9rUk9A"
     name: "Prompt Engineering"
-  - name: MattVidPro AI
-    type: rss
-    category: ai_creator
-    weight: 1.0
-    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCXD9sGdcD3-l12dPo_PhTZQ
-    # handle: @MattVidProAI
+  # MattVidPro AI entry removed (was UCXD9sGdcD3-l12dPo_PhTZQ — empty side-channel,
+  # 7 subs / 0 videos).  Real channel is already present above as line ~24
+  # (UC5Wz4fFacYuON6IKbhSa7Zw — 300K subs, custom URL @mattvidpro).
   - name: OpenAI
     type: rss
     category: ai_demo_official

@@ -54,13 +54,55 @@ def _parse_iso_duration_seconds(raw: str) -> int:
     return hours * 3600 + mins * 60 + secs
 
 
+_MIN_SUBSCRIBER_COUNT = 1000
+_MIN_VIDEO_COUNT = 5
+
+
+def _channel_meets_quality_bar(service: Any, channel_id: str) -> bool:
+    """Reject channels with too few subs/videos to be the real entity.
+
+    Handle squatters typically have <50 subs and 0-5 videos; the real
+    brand channel has thousands of each. Without this filter, audits
+    found 13% of resolved channels were 0-video side accounts (e.g.
+    @MattVidProAI = 7 subs / 0 videos, while the real @mattvidpro has
+    300K / 683).
+    """
+    try:
+        resp = service.channels().list(
+            part="statistics", id=channel_id, maxResults=1,
+        ).execute()
+        items = resp.get("items", [])
+        if not items:
+            return False
+        stats = items[0].get("statistics", {}) or {}
+        subs = int(stats.get("subscriberCount", 0) or 0)
+        videos = int(stats.get("videoCount", 0) or 0)
+        return subs >= _MIN_SUBSCRIBER_COUNT and videos >= _MIN_VIDEO_COUNT
+    except (ValueError, TypeError, KeyError):
+        return False
+    except Exception:
+        # Network or auth blip — fail-open so a transient API failure
+        # doesn't lock out a known-good channel. The audit-time check
+        # is the safety net.
+        return True
+
+
 def _resolve_channel_id(service: Any, seed: str) -> Optional[str]:
-    """Resolve a channel ID from a raw seed (id, handle, or text)."""
+    """Resolve a channel ID from a raw seed (id, handle, or text).
+
+    Returns ``None`` when the resolved channel fails the quality bar
+    (``_MIN_SUBSCRIBER_COUNT`` / ``_MIN_VIDEO_COUNT``) — prevents handle
+    squatters and empty side-channels from sneaking into sources.yaml
+    via the API's permissive ``forHandle`` lookup.
+    """
     clean = (seed or "").strip()
     if not clean:
         return None
 
     if clean.startswith("UC") and len(clean) >= 20:
+        # Already a channel_id — accept verbatim (caller's responsibility
+        # to verify). Skipping the quality check here lets manually
+        # curated entries pass without an extra API hit.
         return clean
 
     handle = clean[1:] if clean.startswith("@") else clean
@@ -70,7 +112,9 @@ def _resolve_channel_id(service: Any, seed: str) -> Optional[str]:
         resp = service.channels().list(part="id", forHandle=handle, maxResults=1).execute()
         items = resp.get("items", [])
         if items:
-            return items[0].get("id")
+            cid = items[0].get("id")
+            if cid and _channel_meets_quality_bar(service, cid):
+                return cid
     except Exception:
         pass
 
@@ -80,11 +124,14 @@ def _resolve_channel_id(service: Any, seed: str) -> Optional[str]:
             part="snippet",
             q=clean,
             type="channel",
-            maxResults=1,
+            maxResults=5,
         ).execute()
         items = resp.get("items", [])
-        if items:
-            return items[0].get("snippet", {}).get("channelId")
+        # Walk top-N candidates and return the first that meets the bar.
+        for it in items:
+            cid = it.get("snippet", {}).get("channelId")
+            if cid and _channel_meets_quality_bar(service, cid):
+                return cid
     except Exception:
         pass
 

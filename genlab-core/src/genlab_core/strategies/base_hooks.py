@@ -169,10 +169,12 @@ class BaseHookStrategy(HookStrategy):
 
     @staticmethod
     def _is_banned(hook: str) -> bool:
-        """Check if hook contains any banned phrase."""
-        from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
+        """Check if hook contains any banned phrase or matches a banned pattern."""
+        from genlab_core.writing.llm_hook_generator import _BANNED_PATTERNS, _BANNED_PHRASES
         hook_lower = hook.lower()
-        return any(phrase in hook_lower for phrase in _BANNED_PHRASES)
+        if any(phrase in hook_lower for phrase in _BANNED_PHRASES):
+            return True
+        return any(pat.search(hook) for pat in _BANNED_PATTERNS)
 
     # ------------------------------------------------------------------
     # execute() — shared pipeline entry point
