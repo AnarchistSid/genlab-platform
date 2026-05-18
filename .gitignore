@@ -138,3 +138,10 @@ genlab-core/config/affiliate_catalog.yaml
 *.wav
 BlackboxBrief/templates/fonts/
 BlackboxBrief/assets/music/
+
+# Generated cleanup scripts and BFG history-rewrite artifacts
+CLEANUP_PLAN.sh
+..bfg-report/
+
+# Trained ML model artifacts (regenerable from train_hook_classifier.py)
+genlab-core/models/
