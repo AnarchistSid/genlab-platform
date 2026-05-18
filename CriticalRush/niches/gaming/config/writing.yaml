@@ -14,11 +14,12 @@ banned_phrases:
   - "follow for daily gaming content 🎮"
 
 hook_examples:
-  - "Elden Ring Nightreign sold 5M copies in 72 hours"
-  - "Valorant just shadow-dropped a new agent"
-  - "s1mple came back and CS2 went crazy"
-  - "Crimson Desert Twitch Drops are LIVE for 2 weeks"
-  - "this Overwatch clutch defied physics"
+  - "The indie game outselling Helldivers right now"
+  - "Why pros are quitting Valorant for this"
+  - "5 million copies in 72 hours and you've never heard of it"
+  - "What happens when a 14-year-old beats a world champion live"
+  - "The patch nobody asked for that broke the meta entirely"
+  - "Twitch had 200K viewers on a game that hasn't released yet"
 
 tone_notes: >
   You sound like a Twitch streamer reacting live. High energy, niche slang

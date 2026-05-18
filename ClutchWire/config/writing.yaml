@@ -22,9 +22,12 @@ banned_phrases:
   - "The comeback of the year"
 
 hook_examples:
-  - "Nobody saw the Lakers doing THIS"
-  - "Mahomes just broke the playbook"
-  - "90th-minute stunner changes everything"
+  - "The contract nobody thought would buy a player this dangerous"
+  - "Why every Spurs fan in Minnesota stood up at once"
+  - "14-point lead, six minutes left — what happened next"
+  - "A rookie outscored the entire bench in 12 minutes flat"
+  - "Last season this team was eliminated by November"
+  - "What a goalkeeper does when he thinks nobody's watching"
 
 tone_notes: >
   Write like a passionate sports commentator who just witnessed

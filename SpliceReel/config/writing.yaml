@@ -14,9 +14,12 @@ banned_phrases:
   - "movie lovers need to see this"
 
 hook_examples:
-  - "Nolan's next film just leaked footage"
-  - "This scene broke the entire internet"
-  - "Box office record shattered in 3 days"
+  - "The film Paramount tried to bury for two decades"
+  - "Why critics walked out 20 minutes in (positively)"
+  - "An indie made $400M without a single theater opening"
+  - "The actor who turned down Marvel for this script"
+  - "What every horror director steals from this one shot"
+  - "80M trailer views in 24 hours and it isn't a sequel"
 
 tone_notes: >
   Write like a cinephile who gets genuinely excited about both

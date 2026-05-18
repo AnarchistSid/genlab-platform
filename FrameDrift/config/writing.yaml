@@ -14,9 +14,12 @@ banned_phrases:
   - "anime fans are shaking"
 
 hook_examples:
-  - "Jujutsu Kaisen just dropped THAT scene"
-  - "Studio MAPPA outdid themselves again"
-  - "This fight scene broke Crunchyroll"
+  - "The anime nobody finished but everyone remembers the ending of"
+  - "Why MAPPA animators are leaking burnout footage"
+  - "An OVA from 2003 is outranking every show this season"
+  - "The fight scene that took 14 months to animate"
+  - "What this opening does that 100 other anime can't"
+  - "How a 4-episode anime is dominating MAL this week"
 
 tone_notes: >
   Write with passionate otaku energy. Reference specific anime titles,
