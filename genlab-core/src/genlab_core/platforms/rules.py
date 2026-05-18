@@ -197,15 +197,32 @@ def _enforce_instagram_rules(
             f"Only {len(adapted.hashtags)} hashtags provided (need 3-5)"
         )
 
-    # 3. CTA at end of caption
+    # 3. CTA at end of caption — only append if the caption truly has no
+    #    CTA-shaped phrase. The LLM writer already includes one from
+    #    NICHE_VOICE (e.g. "Peak or mid?", "Drop your hot take 👇"); we must
+    #    detect those, not just the specific ``cta`` string or
+    #    ``_DEFAULT_CTAS``, otherwise every caption gets a duplicate CTA.
     cta_text = cta or _DEFAULT_CTAS[0]
-    # Check if caption already ends with a CTA-like phrase
-    has_cta = any(
-        c.lower() in caption.lower()
-        for c in (
-            [cta] if cta else _DEFAULT_CTAS
-        )
+    candidates = list(_DEFAULT_CTAS)
+    if cta:
+        candidates.append(cta)
+    caption_lower = caption.lower()
+    tail = caption.rstrip()[-160:]  # CTAs almost always live at the end
+    tail_lower = tail.lower()
+    has_known_cta = any(c.lower() in caption_lower for c in candidates)
+    # Generic CTA-shape detection: end with question, finger-pointing emoji,
+    # or an imperative verb commonly used as a CTA.
+    has_cta_shape = (
+        tail.endswith("?")
+        or any(emoji in tail for emoji in ("👇", "👉", "🔥"))
+        or bool(re.search(
+            r"\b(follow|tag|comment|save|share|drop|rate|sub or dub|peak or mid|"
+            r"w or l|caught up|watch or skip|hot take|are you watching|"
+            r"have you seen|what do you think)\b",
+            tail_lower,
+        ))
     )
+    has_cta = has_known_cta or has_cta_shape
     if not has_cta and caption:
         caption = f"{caption}\n\n{cta_text}"
         adapted.warnings.append("CTA appended to caption")

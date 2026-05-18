@@ -744,10 +744,16 @@ class PushToBacklog:
                         "title": title,
                         "caption": ig.get("caption", ""),
                         "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
-                        "youtube_content": json.dumps({
-                            "title": yt.get("title", ""),
-                            "description": (yt.get("description", "") + "\n\n" + content.get("youtube_attribution", "")).strip(),
-                        }),
+                        # YT publisher uses the `hook` column for the Shorts
+                        # title and this field for the description. Stored as a
+                        # plain string so the CTA engine's URL-prepend +
+                        # disclosure-append produces a well-formed value, not a
+                        # mangled JSON document.
+                        "youtube_content": (
+                            yt.get("description", "")
+                            + ("\n\n" + content.get("youtube_attribution", "")
+                               if content.get("youtube_attribution") else "")
+                        ).strip(),
                         "twitter_content": json.dumps({"tweet_text": tw.get("tweet", tw.get("tweet_text", "")), "routing": tw.get("routing", "single")}),
                         "facebook_content": fb.get("caption", ""),
                         "threads_content": content.get("threads", {}).get("caption", ""),

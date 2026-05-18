@@ -453,15 +453,27 @@ def _build_platform_specific(
         )
 
     if platform == "youtube":
-        yt_content = _parse_json_field(fields.get("youtube_content", ""))
+        # ``youtube_content`` is the plain-text Shorts description (after
+        # affiliate CTA + disclosure injection by the CTA engine). Shorts
+        # title comes from the ``hook`` column. Older rows may still carry
+        # a legacy ``{"title":...,"description":...}`` JSON dict-string —
+        # parse those defensively so historical blueprints still publish.
+        raw_yt = fields.get("youtube_content", "") or ""
+        legacy = _parse_json_field(raw_yt)
+        if isinstance(legacy, dict) and legacy:
+            description = legacy.get("description", "") or raw_yt
+            legacy_title = legacy.get("title", "")
+        else:
+            description = raw_yt
+            legacy_title = ""
         shorts_title = (
-            yt_content.get("title", "")
+            hook[:100]
+            or legacy_title
             or fields.get("topic", "")
-            or hook[:100]
         )
         return YouTubeSpecific(
             shorts_title=shorts_title[:100],
-            community_post_text=yt_content.get("community_post_text", "") or caption,
+            community_post_text=description or caption,
         )
 
     if platform == "twitter":

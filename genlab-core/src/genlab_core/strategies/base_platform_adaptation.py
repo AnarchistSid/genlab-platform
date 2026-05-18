@@ -77,16 +77,24 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
     # ------------------------------------------------------------------
 
     def _adapt_instagram(self, content: dict[str, Any], story: dict[str, Any]) -> None:
-        """Instagram: strip URLs, enforce 3-5 hashtags, append CTA."""
+        """Instagram: strip URLs, enforce 3-5 hashtags, append CTA only if missing.
+
+        Note: the LLM writer already includes a niche-appropriate CTA pulled
+        from ``NICHE_VOICE[niche].ctas`` (e.g. anime's "Peak or mid?"). We do
+        NOT force-append ``templates.yaml.cta_library[0]`` on top, because
+        that produced two CTAs per caption — the LLM's plus a generic one
+        like "Would you add this to your list?". ``enforce_platform_rules``
+        falls back to ``_DEFAULT_CTAS[0]`` only when the caption truly has
+        no CTA shape at all (no question mark, no LLM CTA pattern).
+        """
         ig = content.get("instagram", {})
         caption = ig.get("caption", "")
         if not caption:
             return
 
         hashtags = ig.get("hashtags", [])
-        cta = self._cta_pool[0] if self._cta_pool else None
         result = enforce_platform_rules(
-            "instagram", caption, caption, hashtags=hashtags, cta=cta,
+            "instagram", caption, caption, hashtags=hashtags, cta=None,
         )
         ig["caption"] = result.caption
         # Pad hashtags from pool if under 3

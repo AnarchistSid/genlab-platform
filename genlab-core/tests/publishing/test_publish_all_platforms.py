@@ -175,11 +175,48 @@ class TestBuildPayload:
         assert len(payload.media_paths) == 1
 
     def test_youtube_specific(self):
-        yt_content = json.dumps({"title": "Did this clutch win it all?"})
-        bp = _make_blueprint(youtube_content=yt_content)
+        """Plain-string youtube_content path (new contract).
+
+        ``shorts_title`` comes from the ``hook`` column; ``youtube_content``
+        is the plain-text description (after affiliate CTA + disclosure
+        injection by the CTA engine).
+        """
+        bp = _make_blueprint(
+            youtube_content="Subnautica 2 just dropped — Twitch is on fire.\n\n#affiliate",
+        )
         payload = build_payload(bp["fields"], "youtube")
         assert payload.platform_specific is not None
-        assert payload.platform_specific.shorts_title == "Did this clutch win it all?"
+        assert payload.platform_specific.shorts_title == (
+            "Insane clutch play wins the tournament"
+        )
+        assert (
+            "Subnautica 2 just dropped"
+            in payload.platform_specific.community_post_text
+        )
+
+    def test_youtube_legacy_json_field_still_publishable(self):
+        """Backward compat: pre-fix rows stored youtube_content as JSON dict.
+
+        New publisher must defensively parse those legacy values and use
+        the embedded description; the new hook column still wins for the
+        Shorts title.
+        """
+        legacy = json.dumps({
+            "title": "Did this clutch win it all?",
+            "description": "Full breakdown of the play.",
+        })
+        bp = _make_blueprint(youtube_content=legacy)
+        payload = build_payload(bp["fields"], "youtube")
+        assert payload.platform_specific is not None
+        # Hook drives shorts_title under the new contract
+        assert payload.platform_specific.shorts_title == (
+            "Insane clutch play wins the tournament"
+        )
+        # Legacy JSON description is unwrapped for the community post text
+        assert (
+            "Full breakdown of the play."
+            in payload.platform_specific.community_post_text
+        )
 
     def test_twitter_specific(self):
         tw_content = json.dumps({
