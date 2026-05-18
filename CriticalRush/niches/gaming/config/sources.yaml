@@ -178,6 +178,12 @@ youtube_channels:
     weight: 0.85
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UCos3tlJstiRa3gnY5a1qQKw
     # handle: @Gamology_
+  - name: Kotaku
+    type: rss
+    category: gaming_news
+    weight: 0.85
+    url: https://www.youtube.com/feeds/videos.xml?channel_id=UCVS9tA3PI8Gard_LrTx0YsQ
+    # handle: @kotaku  (resolver lookup: forHandle("kotaku"))
 
 twitch_clips:
   enabled: true
