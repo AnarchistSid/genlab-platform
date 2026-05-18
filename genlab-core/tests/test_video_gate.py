@@ -113,6 +113,141 @@ class TestVideoGate:
         assert result["run_stats"]["video_gate"]["skipped"] == 1
         assert result["run_stats"]["video_gate"]["passed"] == 0
 
+    def test_video_gate_rejects_low_bitrate_clip(self):
+        """A clip with real file size but ultra-low video bitrate (e.g. an
+        auto-generated article-preview card with static frames) should be
+        rejected as text-only/static content.
+        """
+        stories = [
+            {"story_id": "story-textonly", "title": "Schmitt leads Giants vs A's"},
+        ]
+        clip_index = _make_clip_index({
+            "story-textonly": {
+                "story_id": "story-textonly",
+                "success": True,
+                "clip_path": "/tmp/clips/textonly.mp4",
+                "source_url": "https://youtube.com/watch?v=espn-preview",
+                "backend": "yt-dlp",
+                "duration_seconds": 12.0,
+                "error": "",
+            },
+        })
+
+        # Mock Path so the file appears large enough to clear the size gate.
+        mock_stat = MagicMock()
+        mock_stat.st_size = 240 * 1024  # 240 KB
+
+        # Mock the probe to return Schmitt-shaped values: 26 kbps video,
+        # ~20 KB/s (well below both thresholds).
+        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
+             patch(
+                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                 return_value={
+                     "bitrate_bps": 26_000.0,
+                     "duration_sec": 12.0,
+                     "bytes_per_sec": 20 * 1024.0,
+                 },
+             ):
+            mock_path_instance = MagicMock()
+            mock_path_instance.exists.return_value = True
+            mock_path_instance.stat.return_value = mock_stat
+            MockPath.return_value = mock_path_instance
+
+            gate = VideoGate()
+            ctx = _make_context(stories, clip_index)
+            result = gate.execute(ctx)
+
+        # Story is marked for skip
+        assert result["stories"][0]["_skip_llm"] is True
+        assert result["run_stats"]["video_gate"]["skipped"] == 1
+        assert result["run_stats"]["video_gate"]["passed"] == 0
+        # Clip-index entry now reports failure so downstream render strategies
+        # fall through to the no-video path instead of compositing the clip.
+        rejected = result["clip_index"]["clips"]["story-textonly"]
+        assert rejected["success"] is False
+        assert "low_video_bitrate" in rejected["error"]
+
+    def test_video_gate_accepts_normal_bitrate_clip(self):
+        """A real video clip (e.g. 600 kbps, 100 KB/s) should pass."""
+        stories = [
+            {"story_id": "story-real", "title": "Actual highlight clip"},
+        ]
+        clip_index = _make_clip_index({
+            "story-real": {
+                "story_id": "story-real",
+                "success": True,
+                "clip_path": "/tmp/clips/real.mp4",
+                "source_url": "https://youtube.com/watch?v=highlights",
+                "backend": "yt-dlp",
+                "duration_seconds": 25.0,
+                "error": "",
+            },
+        })
+        mock_stat = MagicMock()
+        mock_stat.st_size = 3 * 1024 * 1024  # 3 MB
+
+        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
+             patch(
+                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                 return_value={
+                     "bitrate_bps": 600_000.0,
+                     "duration_sec": 25.0,
+                     "bytes_per_sec": 120 * 1024.0,
+                 },
+             ):
+            mock_path_instance = MagicMock()
+            mock_path_instance.exists.return_value = True
+            mock_path_instance.stat.return_value = mock_stat
+            MockPath.return_value = mock_path_instance
+
+            gate = VideoGate()
+            result = gate.execute(_make_context(stories, clip_index))
+
+        assert "_skip_llm" not in result["stories"][0]
+        assert result["run_stats"]["video_gate"]["passed"] == 1
+        assert result["run_stats"]["video_gate"]["skipped"] == 0
+
+    def test_video_gate_rejects_low_bytes_per_sec(self):
+        """When the container doesn't report stream bitrate (returns 0) but
+        bytes/sec is below the floor, the gate should still reject.
+        """
+        stories = [{"story_id": "story-static", "title": "Static slideshow"}]
+        clip_index = _make_clip_index({
+            "story-static": {
+                "story_id": "story-static",
+                "success": True,
+                "clip_path": "/tmp/clips/static.mp4",
+                "source_url": "https://youtube.com/watch?v=slideshow",
+                "backend": "yt-dlp",
+                "duration_seconds": 30.0,
+                "error": "",
+            },
+        })
+        mock_stat = MagicMock()
+        mock_stat.st_size = 400 * 1024  # 400 KB
+
+        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
+             patch(
+                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                 return_value={
+                     "bitrate_bps": 0.0,  # container lied
+                     "duration_sec": 30.0,
+                     "bytes_per_sec": (400 * 1024) / 30.0,  # ~13.6 KB/s
+                 },
+             ):
+            mock_path_instance = MagicMock()
+            mock_path_instance.exists.return_value = True
+            mock_path_instance.stat.return_value = mock_stat
+            MockPath.return_value = mock_path_instance
+
+            gate = VideoGate()
+            result = gate.execute(_make_context(stories, clip_index))
+
+        assert result["stories"][0]["_skip_llm"] is True
+        rejected = result["clip_index"]["clips"]["story-static"]
+        assert rejected["success"] is False
+        assert "low_bytes_per_sec" in rejected["error"]
+
     def test_video_gate_stats_in_context(self):
         """run_stats['video_gate'] should contain passed and skipped counts."""
         stories = [

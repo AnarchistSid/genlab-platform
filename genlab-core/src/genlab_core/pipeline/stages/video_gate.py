@@ -2,17 +2,91 @@
 
 Runs between DownloadTopVideos and Writing stages.
 Sets story["_skip_llm"] = True for stories with no valid clip.
+
+Also rejects clips whose contents are visually empty (auto-generated article
+preview cards, static slideshow images set to video, talking-head podcast
+audio with a single frame). These ship through yt-dlp as valid mp4 files
+but have tiny video bitrates and effectively zero motion. CLAUDE.md
+explicitly bans text-only renders; this gate is where we catch them.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _MIN_CLIP_SIZE_BYTES = 100 * 1024  # 100 KB default
+
+# Thresholds for the visual-content gate (D-cluster: text-only render fix).
+#
+# Real footage clips downloaded from YouTube/Twitch typically clock 500-2000
+# kbps video stream bitrate even at 480p.  An ESPN auto-generated article
+# preview card we saw in production was 26 kbps video bitrate — 20x lower
+# than the next-worst real clip.  150 kbps gives us a 3x margin to the
+# lowest legitimate clip we've observed (~510 kbps), so this threshold
+# rejects synthetic content without false-positives on real footage.
+#
+# bytes_per_sec is the defense-in-depth signal when ffprobe can't surface
+# a clean stream bitrate (some containers report bitrate as 0 even with
+# real content).  40 KB/s catches the same Schmitt clip (20 KB/s) while
+# leaving headroom for compressed 480p footage (~70-130 KB/s).
+_MIN_VIDEO_BITRATE_BPS = 150_000
+_MIN_BYTES_PER_SEC = 40 * 1024
+
+
+def _probe_video_quality(path: Path) -> dict[str, float]:
+    """Return ``{bitrate_bps, duration_sec, bytes_per_sec}`` for ``path``.
+
+    All keys present even on failure (zero values).  Self-contained so the
+    gate doesn't need to import ffmpeg_utils — keeps the failure mode
+    obvious if ffprobe is missing.
+    """
+    result = {"bitrate_bps": 0.0, "duration_sec": 0.0, "bytes_per_sec": 0.0}
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        return result
+
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_streams", "-show_format", str(path),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode != 0:
+            return result
+        data = json.loads(proc.stdout)
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, OSError):
+        return result
+
+    duration = 0.0
+    try:
+        duration = float(data.get("format", {}).get("duration", 0) or 0)
+    except (TypeError, ValueError):
+        duration = 0.0
+
+    video_bitrate = 0.0
+    for stream in data.get("streams", []):
+        if stream.get("codec_type") != "video":
+            continue
+        # ffprobe reports stream bitrate when the container has it.
+        try:
+            video_bitrate = float(stream.get("bit_rate", 0) or 0)
+        except (TypeError, ValueError):
+            video_bitrate = 0.0
+        break
+
+    result["bitrate_bps"] = video_bitrate
+    result["duration_sec"] = duration
+    result["bytes_per_sec"] = (size_bytes / duration) if duration > 0 else 0.0
+    return result
 
 
 class VideoGate:
@@ -50,6 +124,7 @@ class VideoGate:
                         logger.debug("VideoGate: found clip via story.media.clip for '%s'", story_id[:16])
 
             # Check if clip file exists and is large enough
+            clip_path = ""
             if has_valid_clip:
                 clip_path = (
                     clip_entry.get("clip_path")
@@ -64,6 +139,44 @@ class VideoGate:
                             "VideoGate: clip for %s too small (%d bytes)",
                             story_id[:16], p.stat().st_size,
                         )
+
+            # Visual-content gate: reject clips whose stream bitrate and/or
+            # bytes-per-second are below thresholds.  These are typically
+            # auto-generated article preview cards, podcast-audio-with-image,
+            # or slideshow content masquerading as video.  Without this check
+            # they would yt-dlp cleanly and FrameCompositor would happily
+            # re-encode the same text-only frames into a "rendered reel" with
+            # the channel branding overlay — exactly what CLAUDE.md bans.
+            visual_reject_reason = ""
+            if has_valid_clip and clip_path:
+                p = Path(clip_path)
+                if p.exists():
+                    metrics = _probe_video_quality(p)
+                    br = metrics["bitrate_bps"]
+                    bps = metrics["bytes_per_sec"]
+                    if br > 0 and br < _MIN_VIDEO_BITRATE_BPS:
+                        has_valid_clip = False
+                        visual_reject_reason = (
+                            f"low_video_bitrate ({int(br)} bps < "
+                            f"{_MIN_VIDEO_BITRATE_BPS} threshold)"
+                        )
+                    elif bps > 0 and bps < _MIN_BYTES_PER_SEC:
+                        has_valid_clip = False
+                        visual_reject_reason = (
+                            f"low_bytes_per_sec ({int(bps)} B/s < "
+                            f"{_MIN_BYTES_PER_SEC} threshold)"
+                        )
+                    if visual_reject_reason:
+                        logger.warning(
+                            "VideoGate: clip for '%s' rejected — %s "
+                            "(likely text-only or static content)",
+                            story.get("title", "")[:60], visual_reject_reason,
+                        )
+                        # Mark in clip_index so render strategies fall through
+                        # to the no-video path instead of compositing garbage.
+                        if story_id in clips:
+                            clips[story_id]["success"] = False
+                            clips[story_id]["error"] = visual_reject_reason
 
             if has_valid_clip:
                 # Set master_path for VMAF gate (validate_videos compares rendered vs master)
