@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab YouTube Session Keep-Warm Timer
+
+[Timer]
+# Fire every 90 minutes — slightly shorter than the average gap between
+# pipeline runs (~2h) so cookies never reach decay before a real download.
+# Also runs once on boot to guarantee fresh state after server restarts.
+OnBootSec=2min
+OnUnitActiveSec=90min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

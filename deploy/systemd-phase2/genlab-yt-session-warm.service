@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab YouTube Session Keep-Warm
+After=network-online.target warp-svc.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/scripts/keep_youtube_session_warm.sh
+TimeoutSec=120
