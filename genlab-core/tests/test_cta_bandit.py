@@ -27,13 +27,16 @@ class TestSelect:
 
     def test_select_default_for_unknown_platform(self):
         bandit = _fresh_bandit()
-        variant = bandit.select(platform="threads")
+        # ``snapchat`` has no variant config — falls back to the default arm.
+        # (Threads used to be the unknown platform but acquired variants
+        # in the cluster D stylistic fix.)
+        variant = bandit.select(platform="snapchat")
         assert variant.arm_id == "default"
-        assert variant.platform == "threads"
+        assert variant.platform == "snapchat"
 
     def test_all_platforms_have_variants(self):
         bandit = _fresh_bandit()
-        for platform in ("instagram", "youtube", "facebook"):
+        for platform in ("instagram", "youtube", "facebook", "threads"):
             variants = bandit.get_variants(platform)
             assert len(variants) > 0, f"Expected variants for {platform}"
 

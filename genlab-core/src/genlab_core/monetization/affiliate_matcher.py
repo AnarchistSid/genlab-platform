@@ -35,6 +35,46 @@ logger = logging.getLogger(__name__)
 _CATALOG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "affiliate_catalog.yaml"
 
 
+def _count_today_affiliate_blueprints(niche_id: str) -> int:
+    """Return the count of blueprints created today for ``niche_id`` that
+    already carry an affiliate match.
+
+    Used to enforce ``max_affiliate_posts_per_day`` as a true daily cap
+    across pipeline runs.  Without this, two scheduled runs for the same
+    niche (e.g. cron at 02:00 + manual triage at 14:00) each got their
+    own ``max_per_day`` allowance, doubling the real daily total.
+
+    Returns 0 on any DB failure — better to over-attribute affiliates
+    than to block the pipeline because of a transient query error.
+    """
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        return 0
+    try:
+        import psycopg
+    except ImportError:
+        return 0
+    try:
+        with psycopg.connect(db_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM blueprints
+                    WHERE niche_id = %s
+                      AND affiliate_product IS NOT NULL
+                      AND created_at::date = CURRENT_DATE
+                    """,
+                    (niche_id,),
+                )
+                row = cur.fetchone()
+                return int(row[0]) if row else 0
+    except Exception as exc:
+        logger.warning(
+            "[AffiliateMatch] Daily-cap query failed (%s) — treating as 0", exc,
+        )
+        return 0
+
+
 def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
     """Load the affiliate catalog YAML from disk.
 
@@ -285,19 +325,33 @@ class AffiliateMatch:
             seasonal_config = {}
 
         catalog_settings: dict[str, Any] = catalog.get("settings") or {}
+        # ``max_affiliate_posts_per_day`` is the per-niche-per-DAY cap.
+        # The in-loop counter handles this run; the already-affiliated
+        # blueprint count from the DB carries the rest of today.
         max_per_day: int = int(catalog_settings.get("max_affiliate_posts_per_day", 3))
         disclosure_map: dict[str, str] = catalog_settings.get("disclosure_text") or {}
 
-        matched = 0
+        # Pre-charge the in-loop counter with today's already-affiliated
+        # blueprints from the DB for this niche.  Without this, every
+        # pipeline run effectively reset the cap — gaming could run at
+        # 02:00 and 14:00 and produce 2*3=6 affiliated posts/day, not 3.
+        existing_today = _count_today_affiliate_blueprints(niche_id)
+        matched = existing_today
         skipped = 0
         cap_enforced = 0
+        if existing_today:
+            logger.info(
+                "[AffiliateMatch] %s: %d affiliate blueprint(s) already exist today — "
+                "cap remaining = %d/%d",
+                niche_id, existing_today, max(0, max_per_day - existing_today), max_per_day,
+            )
 
         for story in stories:
-            # Respect daily cap
+            # Respect daily cap (true daily, not per-run)
             if matched >= max_per_day:
                 cap_enforced += 1
                 logger.debug(
-                    "[AffiliateMatch] Cap of %d reached — skipping story '%s'",
+                    "[AffiliateMatch] Daily cap of %d reached — skipping story '%s'",
                     max_per_day,
                     story.get("title", "")[:60],
                 )
@@ -406,13 +460,16 @@ class AffiliateMatch:
                 commission_pct,
             )
 
+        # Subtract the pre-charged DB count so run_stats reflects this run.
+        run_matched = max(0, matched - existing_today)
         context.setdefault("run_stats", {})["affiliate"] = {
-            "matched": matched,
+            "matched": run_matched,
             "skipped": skipped,
             "cap_enforced": cap_enforced,
         }
         logger.info(
-            "[AffiliateMatch] %d matched, %d skipped, %d cap-enforced",
-            matched, skipped, cap_enforced,
+            "[AffiliateMatch] %d matched this run, %d skipped, %d cap-enforced "
+            "(daily total now %d/%d for %s)",
+            run_matched, skipped, cap_enforced, matched, max_per_day, niche_id,
         )
         return context

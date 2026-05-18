@@ -1,23 +1,26 @@
 # CTA variant definitions for A/B testing via Thompson Sampling.
 # Each platform has multiple variants. The bandit learns which converts best.
+#
+# IG variants migrated 2026-05-18: all "link in bio" templates replaced with
+# "link in 1st comment" because affiliate_matcher.py:469 already noted bio
+# links have near-zero CTR.  The old IG variants are kept disabled below as
+# a record of what was tried — the bandit state file may still reference
+# their arm_ids until it gets rebuilt.
 
 platforms:
   instagram:
     variants:
-      - arm_id: ig_link_in_bio
-        template: "{product_name} — link in bio"
+      - arm_id: ig_first_comment
+        template: "{product_name} — link in 1st comment"
         emoji: "🔗"
-      - arm_id: ig_get_yours
-        template: "Get yours — link in bio"
+      - arm_id: ig_get_yours_v2
+        template: "Get yours — link in 1st comment"
         emoji: "🔗"
-      - arm_id: ig_best_deal
-        template: "Best deal on {product_name} — link in bio"
+      - arm_id: ig_best_deal_v2
+        template: "Best deal on {product_name} — 1st comment"
         emoji: "🔥"
-      - arm_id: ig_limited
-        template: "Limited time — {product_name} in bio"
-        emoji: "⏳"
-      - arm_id: ig_we_use
-        template: "Top pick for {product_name} — link in bio"
+      - arm_id: ig_we_use_v2
+        template: "Top pick for {product_name} — 1st comment"
         emoji: "💯"
 
   youtube:
@@ -43,3 +46,15 @@ platforms:
       - arm_id: fb_must_have
         template: "Must-have {product_name}: {url}"
         emoji: "✨"
+
+  threads:
+    variants:
+      - arm_id: th_first_reply
+        template: "{product_name} — check first reply"
+        emoji: "🔗"
+      - arm_id: th_top_pick
+        template: "Top pick: {product_name} (first reply)"
+        emoji: "⭐"
+      - arm_id: th_what_we_use
+        template: "What we recommend: {product_name} — first reply"
+        emoji: "💯"
