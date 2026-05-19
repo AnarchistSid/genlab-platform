@@ -942,20 +942,27 @@ def process_pending_task(
             reward_48h,
         )
 
-        # Update content bandit with the 48h reward signal
-        if bandit_updater is not None:
+        # Update content bandit with the 48h reward signal.
+        # The arm name is the niche-specific classified arm (e.g.
+        # 'gameplay_clip', 'cast_reveal', 'season_announcement') —
+        # stored as task_record.bandit_arm by push_to_backlog._classify_arm.
+        # ``content_type`` is just the media kind ('video' / 'unknown')
+        # and won't match any row in bandit_arms.  Fall back to it only
+        # if bandit_arm is missing so legacy rows still flow.
+        arm_for_update = task_record.bandit_arm or task_record.content_type
+        if bandit_updater is not None and arm_for_update:
             try:
                 bandit_updater(
                     task_record.niche_id,
-                    task_record.content_type,
+                    arm_for_update,
                     task_record.platform,
                     reward_48h,
                     task_record.bandit_context,
                 )
                 logger.info(
-                    "[metric_collector] bandit updated: niche=%s type=%s platform=%s reward=%.3f",
+                    "[metric_collector] bandit updated: niche=%s arm=%s platform=%s reward=%.3f",
                     task_record.niche_id,
-                    task_record.content_type,
+                    arm_for_update,
                     task_record.platform,
                     reward_48h,
                 )

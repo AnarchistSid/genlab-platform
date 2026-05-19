@@ -184,8 +184,16 @@ class PendingFeedbackStore:
         fields = item.get("fields", item)
         _f = PendingFeedbackStore._f
 
-        bandit_ctx_raw = _f(fields, "BanditContext", "bandit_context", default="")
-        bandit_ctx = json.loads(bandit_ctx_raw) if bandit_ctx_raw else None
+        # Postgres JSONB columns are auto-parsed to dicts; SharePoint stores
+        # them as JSON strings. Handle both shapes — otherwise every Postgres
+        # row would fail to parse and the bandit never updates.
+        bandit_ctx_raw = _f(fields, "BanditContext", "bandit_context", default=None)
+        if isinstance(bandit_ctx_raw, dict):
+            bandit_ctx = bandit_ctx_raw
+        elif isinstance(bandit_ctx_raw, str) and bandit_ctx_raw:
+            bandit_ctx = json.loads(bandit_ctx_raw)
+        else:
+            bandit_ctx = None
 
         status = _f(fields, "Status", "status", "collection_status", default="awaiting_6h")
 
