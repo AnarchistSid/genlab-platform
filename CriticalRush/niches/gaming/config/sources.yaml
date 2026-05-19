@@ -79,15 +79,15 @@ youtube_channels:
     weight: 0.8
     category: trailers
   - name: "Xbox"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCXGgrKt94gR6lmN4aN3mYTg"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCjBp_7RuDBUYbd1LegWEJ8g"
     weight: 0.8
     category: trailers
   - name: "Nintendo of America"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCfAPTv1LgeEWevG8X_6PUOQ"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGIY_O-8vW4rfX98KlMkvRg"
     weight: 0.8
     category: trailers
   - name: "Riot Games"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC2t5bjwHdUX4vM2g8TRDq5g"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCkyi5MwbCz1TnV-Mq3c0yNg"
     weight: 0.7
     category: esports
   - name: "Valorant"
@@ -95,39 +95,35 @@ youtube_channels:
     weight: 0.7
     category: esports
   - name: "Epic Games"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0gAYVSEbOPSxkj3whKXfyA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UClG8odDC8TS6Zpqk9CGVQiQ"
     weight: 0.7
     category: trailers
   - name: "Ubisoft"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCBMvc6jvuTxH6TNo9ThpGhA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0KU8F9jJqSLS11LRXvFWmg"
     weight: 0.7
     category: trailers
   - name: "Rockstar Games"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIc3bAVSh0Kz4yP1BrhGlwg"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC6VcWc1rAoWdBCM0JxrRQ3A"
     weight: 0.8
     category: trailers
-  - name: "Steam"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
-    weight: 0.6
-    category: trailers
   - name: "Blizzard Entertainment"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3GriadTkVbsVDHiMUbo8NA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC3GriadTkHBnfgd2UFETGOA"
     weight: 0.7
     category: trailers
   - name: "EA"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIHBvYBsR-JODFLcpAEMHNQ"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCsR-oBB7cabU76oTguE17Qw"
     weight: 0.7
     category: trailers
-  - name: "Capcom"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCW_kDLGRnklMNX-q3Hl8ZOQ"
+  - name: "Capcom USA"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCW7h-1mymnJ96akzjrmiIgA"
     weight: 0.7
     category: trailers
-  - name: "BANDAI NAMCO"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCExqywGFWE1EZfqKVg0HLYg"
+  - name: "Bandai Namco America"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC_ntXHv-XdKCD7CPynVvnQw"
     weight: 0.7
     category: trailers
   - name: "Square Enix"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCeGGMPWkklGlRfr28VJttMQ"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCA5SLTAVA6unn1M-6lbo1NA"
     weight: 0.7
     category: trailers
   - name: "Shroud"
@@ -138,8 +134,8 @@ youtube_channels:
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCvqRdlKsE5Q8mf8YXbdIJLw"
     weight: 0.7
     category: esports
-  - name: "VALORANT Champions Tour"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKHa8fQX4VCrstGhHHPQ1nQ"
+  - name: "VALORANT Esports"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCxSuMtUApsMm_AAQM92LCnQ"
     weight: 0.7
     category: esports
   - name: Asmongold Clips

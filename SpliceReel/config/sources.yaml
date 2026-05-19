@@ -68,18 +68,18 @@ tier_3:
       weight: 0.7
 
 youtube_channels:
-  - name: "FilmSelect Trailer"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCY2qt3dw2TQJxvBrDiYGHdQ"
+  - name: "FilmSelect"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCT0hbLDa-unWsnZ6Rjzkfug"
     type: "rss"
     weight: 0.9
     category: "movie_trailers"
-  - name: "Screen Junkies Honest Trailers"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCi8e0iOVk1fEOogdfu4YgfA"
+  - name: "Honest Trailers"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A"
     type: "rss"
     weight: 0.8
     category: "movie_trailers"
   - name: "IGN"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCVtL1edhT8qqY-j2JIndMzg"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
     type: "rss"
     weight: 0.7
     category: "movie_reviews"

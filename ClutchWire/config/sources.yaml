@@ -76,7 +76,7 @@ youtube_channels:
     weight: 0.9
     category: "sports_highlights"
   - name: "House of Highlights"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC5qUhMoqke0mnJtgVoEn0aw"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCjvbQ_ZRQ0EH6qVYQ9ApXCw"
     type: "rss"
     weight: 0.8
     category: "sports_highlights"

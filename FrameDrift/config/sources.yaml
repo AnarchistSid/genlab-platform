@@ -62,7 +62,7 @@ youtube_channels:
     weight: 0.85
     category: "anime_official"
   - name: "Aniplex USA"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGbshtvS9t-8CW11W7TooQg"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCDb0peSmF5rLX7BvuTcJfCw"
     type: "rss"
     weight: 0.85
     category: "anime_official"
@@ -72,7 +72,7 @@ youtube_channels:
     weight: 0.85
     category: "anime_official"
   - name: "Bandai Namco Filmworks"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCeagNi3-wLiok3MWPIHAScw"
+    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCQ5URCSs1f5Cz9rh-cDGxNQ"
     type: "rss"
     weight: 0.80
     category: "anime_official"
