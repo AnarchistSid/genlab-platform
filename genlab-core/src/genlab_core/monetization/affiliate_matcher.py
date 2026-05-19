@@ -383,12 +383,26 @@ class AffiliateMatch:
             #    "AI-designed turbine book" — none of which exist.
             product = match_product(search_text, niche_id, catalog, seasonal_config)
 
-            # 2. Dynamic LLM fallback when static catalog finds nothing
+            # 2. Dynamic LLM fallback when static catalog finds nothing —
+            # gated on PA-API being configured. Without PA-API, dynamic_match
+            # generates plausible-sounding but non-existent product names
+            # ("Ronda Rousey vs Gina Carano jersey", "AI-designed turbine
+            # book", "Gemini 3.5 Flash book") that ship as affiliate CTAs
+            # pointing at Amazon search URLs that may return nothing. Setting
+            # PAAPI_ACCESS_KEY + PAAPI_SECRET_KEY auto-re-enables.
             if product is None:
-                from genlab_core.monetization.dynamic_matcher import dynamic_match
-                from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
-                geo = NICHE_PRIMARY_GEO.get(niche_id, "IN")
-                product = dynamic_match(search_text, niche_id, geo=geo)
+                from genlab_core.monetization.paapi_client import PaapiClient
+                if PaapiClient().is_configured:
+                    from genlab_core.monetization.dynamic_matcher import dynamic_match
+                    from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
+                    geo = NICHE_PRIMARY_GEO.get(niche_id, "IN")
+                    product = dynamic_match(search_text, niche_id, geo=geo)
+                else:
+                    logger.debug(
+                        "[AffiliateMatch] PA-API not configured — skipping "
+                        "dynamic fallback for '%s' (niche=%s)",
+                        title[:60], niche_id,
+                    )
             if product is None:
                 skipped += 1
                 logger.debug(
