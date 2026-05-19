@@ -119,6 +119,47 @@ _TOPIC_MAP = {
 }
 
 
+# Cross-niche source guard: per niche_id, sources matching any of these
+# prefixes indicate a contamination leak (e.g. ai_creators producing
+# tmdb_upcoming stories means BB ran SR stages). Stories matching are
+# dropped before write with structured telemetry.
+_FORBIDDEN_SOURCE_PREFIXES: dict[str, frozenset[str]] = {
+    "ai_creators": frozenset({
+        "tmdb_", "scorebat", "espn", "sport_", "twitch_clip",
+        "twitch_trending", "steam_", "igdb", "anilist", "jikan_",
+        "anime_promo",
+    }),
+    "gaming": frozenset({
+        "tmdb_", "scorebat", "espn", "sport_", "anilist", "jikan_",
+        "anime_promo",
+    }),
+    "sports": frozenset({
+        "tmdb_", "twitch_clip", "twitch_trending", "steam_", "igdb",
+        "anilist", "jikan_", "anime_promo",
+    }),
+    "movies": frozenset({
+        "scorebat", "espn", "sport_", "twitch_clip", "twitch_trending",
+        "steam_", "igdb", "anilist", "jikan_", "anime_promo",
+    }),
+    "anime": frozenset({
+        "tmdb_", "scorebat", "espn", "sport_", "twitch_clip",
+        "twitch_trending", "steam_", "igdb",
+    }),
+}
+
+
+def _is_foreign_source(niche_id: str, source: str) -> str | None:
+    """Return the matching forbidden prefix if `source` is foreign for `niche_id`, else None."""
+    if not source:
+        return None
+    forbidden = _FORBIDDEN_SOURCE_PREFIXES.get(niche_id, frozenset())
+    low = source.lower().strip()
+    for prefix in forbidden:
+        if low == prefix.rstrip("_") or low.startswith(prefix):
+            return prefix
+    return None
+
+
 def _normalize_topic(raw_source: str) -> str:
     """Normalize raw source identifiers to clean topic categories."""
     if not raw_source:
@@ -518,10 +559,27 @@ class PushToBacklog:
 
         existing_titles = context.get("existing_titles", set())
 
+        cross_niche_drops = 0
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
             published_at = story.get("published_at", datetime.now(UTC).isoformat())
+
+            # Cross-niche source guard. Catches contamination that slipped
+            # past the stage-prefix guard (e.g. story injected late in the
+            # pipeline). Log+drop with structured telemetry rather than
+            # aborting — the run is salvageable for legitimate stories.
+            story_source = story.get("source", "")
+            forbidden_prefix = _is_foreign_source(niche_id, story_source)
+            if forbidden_prefix:
+                cross_niche_drops += 1
+                logger.error(
+                    "[PUSH][CROSS_NICHE_LEAK_DROPPED] niche=%s source=%s "
+                    "forbidden_prefix=%s title=%r url=%s",
+                    niche_id, story_source, forbidden_prefix,
+                    title[:80], source_url,
+                )
+                continue
 
             # URL-only dedup FIRST — catches recurring sources (AniList, Jikan)
             # that return the same URL with different timestamps each fetch.
@@ -881,9 +939,18 @@ class PushToBacklog:
             "stories_pushed": stories_pushed,
             "blueprints_pushed": blueprints_pushed,
             "video_dedup_skipped": video_dedup_skipped,
+            "cross_niche_drops": cross_niche_drops,
             "errors": errors[:5],
             "status": "ok" if not errors else f"partial ({len(errors)} errors)",
         }
+
+        if cross_niche_drops:
+            logger.error(
+                "[PUSH] CROSS-NICHE LEAK DETECTED: dropped %d stories with foreign "
+                "sources from niche '%s'. niche.yaml may be contaminated — "
+                "investigate stage-prefix guard logs.",
+                cross_niche_drops, niche_id,
+            )
 
         logger.info(
             "[PUSH] %d stories, %d blueprints pushed to backlog (%d video-dedup skipped, %d errors)",

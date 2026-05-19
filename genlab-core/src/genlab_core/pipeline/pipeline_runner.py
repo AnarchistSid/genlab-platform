@@ -352,8 +352,62 @@ class GenericPipelineRunner:
 
         return batches
 
-    @staticmethod
+    # Per-niche foreign strategy/stage module prefixes. If a niche.yaml gets
+    # contaminated with another niche's stages (cluster A scp leak pattern),
+    # the foreign import is rejected at boot before any DB writes happen.
+    _FOREIGN_PREFIX_MAP: dict[str, frozenset[str]] = {
+        "ai_creators": frozenset({
+            "sr_strategies", "cw_strategies", "fd_strategies",
+            "CriticalRush.niches.gaming",
+            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+            "genlab_core.pipeline.stages.fetch_scorebat",
+            "genlab_core.pipeline.stages.fetch_anime_promos",
+            "genlab_core.pipeline.stages.fetch_twitch_clips",
+        }),
+        "gaming": frozenset({
+            "bb_strategies", "sr_strategies", "cw_strategies", "fd_strategies",
+            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+            "genlab_core.pipeline.stages.fetch_scorebat",
+            "genlab_core.pipeline.stages.fetch_anime_promos",
+        }),
+        "sports": frozenset({
+            "bb_strategies", "sr_strategies", "fd_strategies",
+            "CriticalRush.niches.gaming",
+            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+            "genlab_core.pipeline.stages.fetch_anime_promos",
+            "genlab_core.pipeline.stages.fetch_twitch_clips",
+        }),
+        "movies": frozenset({
+            "bb_strategies", "cw_strategies", "fd_strategies",
+            "CriticalRush.niches.gaming",
+            "genlab_core.pipeline.stages.fetch_scorebat",
+            "genlab_core.pipeline.stages.fetch_anime_promos",
+            "genlab_core.pipeline.stages.fetch_twitch_clips",
+        }),
+        "anime": frozenset({
+            "bb_strategies", "sr_strategies", "cw_strategies",
+            "CriticalRush.niches.gaming",
+            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+            "genlab_core.pipeline.stages.fetch_scorebat",
+            "genlab_core.pipeline.stages.fetch_twitch_clips",
+        }),
+    }
+
+    @classmethod
+    def _check_foreign_stage(cls, niche_id: str, module_path: str) -> None:
+        forbidden = cls._FOREIGN_PREFIX_MAP.get(niche_id, frozenset())
+        for prefix in forbidden:
+            if module_path == prefix or module_path.startswith(prefix + "."):
+                raise NicheConfigError(
+                    f"CROSS-NICHE LEAK BLOCKED: niche '{niche_id}' cannot load "
+                    f"stage from '{module_path}' (forbidden prefix '{prefix}'). "
+                    f"niche.yaml is contaminated with another niche's stages — "
+                    f"aborting before any DB writes. Verify "
+                    f"{cls.__module__.rsplit('.', 1)[0]}/.../{niche_id} config."
+                )
+
     def _load_stages(
+        self,
         niche_id: str, config: dict[str, Any],
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Dynamically load pipeline stages from niche configuration.
@@ -400,6 +454,10 @@ class GenericPipelineRunner:
 
             class_path = declaration["class"]
             module_path, class_name = class_path.rsplit(".", 1)
+
+            # Cross-niche guard: abort if niche.yaml was contaminated with
+            # another niche's strategy modules (cluster A scp leak pattern).
+            self._check_foreign_stage(niche_id, module_path)
 
             try:
                 module = importlib.import_module(module_path)
