@@ -1,6 +1,6 @@
 hooks:
   formulas:
-  - '{title} hit different this episode'
+  - '{title} stood out this episode'
   - The animation in {title} is on another level
   - '{title} deserves a spot on your list'
   - This fight scene broke the budget in the best way
@@ -15,7 +15,7 @@ hooks:
   - '{title} dropped the best episode this season'
   - The pacing in {title} is actually perfect
   - This transformation scene is pure sakuga
-  - Nobody expected {title} to go this hard
+  - '{title} went harder than anyone predicted'
   - The ending of this episode left me speechless
   - This studio doesn't know how to make a bad frame
   - '{title} deserves way more hype than it''s getting'
@@ -72,7 +72,7 @@ hooks:
       weight: 1.0
     default:
       formulas:
-      - '{title} hit different this episode'
+      - '{title} stood out this episode'
       - The animation in {title} is on another level
       - '{title} deserves way more attention'
       weight: 1.0

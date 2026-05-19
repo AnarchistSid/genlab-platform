@@ -250,7 +250,7 @@ hooks:
     # Tool launches
     - "{company} dropped {product}"
     - "{product} can now do {claim}"
-    - "The {product} update nobody expected"
+    - "The {product} update that caught everyone off guard"
     - "{company} quietly released {product}"
     - "{product} generated this in seconds"
     # Creator content
@@ -293,7 +293,7 @@ hooks:
       formulas:
         - "{company} dropped {product}"
         - "{product} can now do {claim}"
-        - "The {product} update nobody expected"
+        - "The {product} update that caught everyone off guard"
         - "{company} quietly released {product}"
     creator_showcase:
       formulas:
