@@ -248,7 +248,7 @@ templates:
 hooks:
   formulas:
     # Tool launches
-    - "{company} just dropped {product}"
+    - "{company} dropped {product}"
     - "{product} can now do {claim}"
     - "The {product} update nobody expected"
     - "{company} quietly released {product}"
@@ -258,12 +258,12 @@ hooks:
     - "This creator made a full {topic} with {product}"
     - "Creators are using {product} to make {topic}"
     # Milestones
-    - "{product} just hit {number}"
+    - "{product} hit {number}"
     - "{number} better than {comparison}"
     - "This AI demo has {number} views in {metric}"
     # Comparisons
-    - "{company} vs {comparison} just got real"
-    - "{product} just beat {comparison}"
+    - "{company} vs {comparison} got real"
+    - "{product} beat {comparison}"
     - "The {comparison} debate is officially over"
     # Controversy
     - "{company} CEO said {claim} and people are furious"
@@ -277,21 +277,21 @@ hooks:
     # Reactions
     - "This {product} output looks real"
     - "Watch what happens when you tell {product} to {claim}"
-    - "{product} just passed the {claim} test"
-    - "AI art just hit {number} quality"
+    - "{product} passed the {claim} test"
+    - "AI art hit {number} quality"
     - "Reddit is losing it over this {product} demo"
-    - "AI just made {topic} obsolete"
+    - "AI made {topic} obsolete"
     - "{number} people tried {product} and it broke"
     # Prediction
     - "{company} is about to change {topic}"
     - "{topic} in {number}: what it means"
     # Emotional reaction
-    - "This AI just out-performed real humans at {topic}"
+    - "This AI out-performed real humans at {topic}"
     - "Stop what you're doing — {claim}"
   story_categories:
     tool_launch:
       formulas:
-        - "{company} just dropped {product}"
+        - "{company} dropped {product}"
         - "{product} can now do {claim}"
         - "The {product} update nobody expected"
         - "{company} quietly released {product}"
@@ -302,12 +302,12 @@ hooks:
         - "Creators are using {product} to make {topic}"
     milestone:
       formulas:
-        - "{product} just hit {number}"
+        - "{product} hit {number}"
         - "{number} better than {comparison}"
         - "This AI demo has {number} views in {metric}"
     controversy:
       formulas:
-        - "{company} vs {comparison} just got real"
+        - "{company} vs {comparison} got real"
         - "{company} CEO said {claim} and people are furious"
         - "The {comparison} debate is officially over"
         - "The real problem with {product}"
@@ -321,11 +321,11 @@ hooks:
       formulas:
         - "This {product} output looks real"
         - "Watch what happens when you tell {product} to {claim}"
-        - "This AI just out-performed real humans at {topic}"
+        - "This AI out-performed real humans at {topic}"
     default:
       formulas:
         - "Reddit is losing it over this {product} demo"
-        - "AI just made {topic} obsolete"
+        - "AI made {topic} obsolete"
         - "{product} generated this in seconds"
         - "Stop what you're doing — {claim}"
   forbidden_styles:

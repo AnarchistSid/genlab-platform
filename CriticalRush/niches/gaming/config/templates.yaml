@@ -4,12 +4,12 @@ hooks:
   # Hook formulas — {game}, {detail}, {player}, {streamer} filled by _substitute_placeholders
   # Style: emotional, community-insider, never formal news language.
   formulas:
-    - "{game} just dropped something wild"
+    - "{game} dropped something wild"
     - "wait... {game} really did this??"
     - "this {game} play is unreal"
     - "{player} went absolutely OFF in {game}"
-    - "the {game} meta just shifted hard"
-    - "{streamer} can't believe what just happened"
+    - "the {game} meta shifted hard"
+    - "{streamer} can't believe what happened"
     - "they actually added THIS to {game}"
     - "{game} devs heard the community for once"
     - "this {game} clip has me speechless"
@@ -18,9 +18,9 @@ hooks:
     - "nobody expected THIS from {game}"
     - "this {game} update changes ranked forever"
     - "{player} pulled off the impossible in {game}"
-    - "{game} just hit different after this"
+    - "{game} hit different after this"
     - "the {game} community is eating rn"
-    - "competitive {game} just got interesting"
+    - "competitive {game} got interesting"
     - "{streamer} broke {game} in the funniest way"
     - "this {game} moment will be replayed forever"
     - "honestly {game} cooked with this one"
@@ -33,25 +33,25 @@ hooks:
         - "this {game} moment will be replayed forever"
     update_drop:
       formulas:
-        - "{game} just dropped something wild"
+        - "{game} dropped something wild"
         - "they actually added THIS to {game}"
         - "{game} devs heard the community for once"
         - "this {game} update changes ranked forever"
     streamer_moment:
       formulas:
-        - "{streamer} can't believe what just happened"
+        - "{streamer} can't believe what happened"
         - "{streamer} broke {game} in the funniest way"
         - "peak {game} content right here"
     meta_shift:
       formulas:
-        - "the {game} meta just shifted hard"
-        - "competitive {game} just got interesting"
+        - "the {game} meta shifted hard"
+        - "competitive {game} got interesting"
         - "{game} ranked is built different rn"
     default:
       formulas:
         - "wait... {game} really did this??"
         - "honestly {game} cooked with this one"
-        - "{game} just hit different after this"
+        - "{game} hit different after this"
         - "the {game} community is eating rn"
 
   # Never use these styles — too formal, too news-like

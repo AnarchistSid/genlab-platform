@@ -8,7 +8,7 @@ hooks:
   - The sound design in this scene is insane
   - This trailer is hiding something big
   - One shot. No cuts. Pure cinema.
-  - '{film} just raised the bar for the genre'
+  - '{film} raised the bar for the genre'
   - The villain in {film} might be the best this decade
   - This director doesn't miss
   - The opening sequence alone had me hooked
@@ -40,7 +40,7 @@ hooks:
   story_categories:
     trailer_drop:
       formulas:
-      - The {film_title} trailer just dropped and I'm not okay
+      - The {film_title} trailer dropped and I'm not okay
       - '{film_title} looks UNREAL. Director cooked'
       - '{film_title} looks like it could define the year'
       - Drop everything. The {film_title} trailer is here
@@ -50,7 +50,7 @@ hooks:
       formulas:
       - '{film_title} delivered at the box office'
       - Hollywood wanted a hit. {film_title} answered
-      - '{film_title} just proved people still go to the movies'
+      - '{film_title} proved people still go to the movies'
       weight: 1.2
       lifecycle: opening_weekend
     box_office_miss:
@@ -74,8 +74,8 @@ hooks:
       lifecycle: long_tail
     award_nomination:
       formulas:
-      - '{film_title} just picked up an Oscar nomination. Deserved?'
-      - Awards season just validated {film_title}. History incoming
+      - '{film_title} picked up an Oscar nomination. Deserved?'
+      - Awards season validated {film_title}. History incoming
       weight: 1.3
       lifecycle: long_tail
     franchise_news:
@@ -85,7 +85,7 @@ hooks:
       weight: 1.2
     streaming_premiere:
       formulas:
-      - '{film_title} just landed on streaming. Clear your weekend'
+      - '{film_title} landed on streaming. Clear your weekend'
       - '{film_title} is finally streaming. Worth the wait?'
       weight: 1.1
       lifecycle: long_tail

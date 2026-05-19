@@ -1,19 +1,19 @@
 hooks:
   formulas:
-  - '{player} just went OFF'
+  - '{player} went OFF'
   - '{team} came back from the dead'
   - '{player} in that moment was unreal'
   - '{team} fans are eating right now'
   - Not even {sport} fans expected this
   - That {play_type} will be replayed forever
-  - '{player} just made everyone look silly'
-  - '{team} defense just collapsed'
+  - '{player} made everyone look silly'
+  - '{team} defense collapsed'
   - This ref call changed the entire game
   - The crowd went SILENT after this
   - '{player} stat line is disgusting'
-  - '{team} just sent a message to the league'
+  - '{team} sent a message to the league'
   - Nobody is stopping {player} right now
-  - This rivalry just got personal
+  - This rivalry got personal
   - '{player} earned every dollar of that contract'
   - The bench reaction tells you everything
   - '{team} coach had NO answer for this'
@@ -42,14 +42,14 @@ hooks:
     upset:
       formulas:
       - Nobody expected {team} to pull this off
-      - '{team} just SHOCKED everyone'
+      - '{team} SHOCKED everyone'
       - The biggest upset of the season
       weight: 1.3
     record:
       formulas:
-      - '{player} just made HISTORY'
+      - '{player} made HISTORY'
       - A record that might never be broken
-      - We just witnessed something historic
+      - We witnessed something historic
       weight: 1.2
     injury:
       formulas:
@@ -59,7 +59,7 @@ hooks:
     trade:
       formulas:
       - '{player} to {team} — instant contenders?'
-      - '{player} to {team}. The league just shifted'
+      - '{player} to {team}. The league shifted'
       weight: 1.1
     clutch:
       formulas:
@@ -74,7 +74,7 @@ hooks:
       weight: 1.2
     default:
       formulas:
-      - '{team} just pulled off the impossible'
+      - '{team} pulled off the impossible'
       - '{player} in that moment was unreal'
       - That {play_type} will be replayed forever
       weight: 1.0
