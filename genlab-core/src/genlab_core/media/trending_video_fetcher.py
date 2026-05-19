@@ -312,8 +312,11 @@ class TrendingVideoFetcher:
             for v in channel_videos:
                 if v.video_id not in candidates:
                     candidates[v.video_id] = v
+            # NB: this used to say "(0 quota from RSS)" but that's only true
+            # when every channel's RSS endpoint works.  See the RSS-coverage
+            # line emitted by _fetch_from_channels for the real split.
             logger.info(
-                "[%s] Subscribed channels: %d videos (0 quota from RSS)",
+                "[%s] Subscribed channels: %d unique videos collected",
                 niche_id, len(channel_videos),
             )
 
@@ -557,6 +560,16 @@ class TrendingVideoFetcher:
         """
         all_video_ids: list[str] = []
         video_metadata: dict[str, dict] = {}  # video_id → metadata from RSS/playlist
+        # Track fallback usage so the "Subscribed channels: N videos (0 quota
+        # from RSS)" summary doesn't mislead.  Many YouTube channels (notably
+        # @anthropic-ai, @googledeepmind, @huggingface) selectively return 404
+        # on the public RSS endpoint while the playlistItems API works fine.
+        # Surfacing this delta tells us at-a-glance how much we're spending on
+        # quota to rescue broken RSS.
+        rss_success_count = 0
+        rss_fail_count = 0
+        playlist_fallback_count = 0
+        playlist_rescued_count = 0  # channels where fallback recovered items
 
         for ch in channels:
             rss_url = ch.get("url", "")
@@ -568,6 +581,10 @@ class TrendingVideoFetcher:
             items = []
             if rss_url:
                 items = self._fetch_channel_rss(rss_url)
+                if items:
+                    rss_success_count += 1
+                else:
+                    rss_fail_count += 1
                 logger.debug(
                     "[%s] RSS %s: %d items (0 quota)",
                     niche_id, ch.get("name", channel_id or "?"), len(items),
@@ -577,6 +594,9 @@ class TrendingVideoFetcher:
             # Tier 2: playlistItems fallback
             if len(items) < 3 and channel_id:
                 playlist_items = self._fetch_playlist_items(channel_id)
+                playlist_fallback_count += 1
+                if playlist_items:
+                    playlist_rescued_count += 1
                 # Merge — avoid duplicates
                 existing_ids = {i["video_id"] for i in items}
                 for pi in playlist_items:
@@ -659,6 +679,18 @@ class TrendingVideoFetcher:
                     license="youtube",
                     description_snippet=meta.get("description_snippet", ""),
                 ))
+
+        # Surface RSS-vs-fallback split so the operator can see when YouTube
+        # RSS is 404-flaking and we're spending Data API quota to rescue.
+        if rss_fail_count or playlist_fallback_count:
+            logger.info(
+                "[%s] RSS coverage: %d/%d channels succeeded, %d fell back to "
+                "playlistItems (%d rescued, %d still empty) | quota used: %d units",
+                niche_id, rss_success_count, rss_success_count + rss_fail_count,
+                playlist_fallback_count, playlist_rescued_count,
+                playlist_fallback_count - playlist_rescued_count,
+                playlist_fallback_count,
+            )
 
         return detailed
 
