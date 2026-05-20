@@ -276,7 +276,26 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
         # First-comment: the affiliate CTA itself, posted after main post
         fields["facebook_first_comment"] = fb_cta_text
 
-    # Twitter: no modification — link goes in reply thread
+    # ── Twitter / X first-reply ───────────────────────────────────────────────
+    # X links in the main tweet body get downranked; standard creator
+    # practice is to drop the affiliate URL as a self-reply. Main
+    # tweet_text stays clean (LLM-written).
+    if url and product_name:
+        tw_disclosure = disclosure_map.get("twitter", "#ad")
+        tw_cta_text = f"🔗 {product_name}: {url}"
+        if bandit:
+            try:
+                variant = bandit.select(platform="twitter")
+                if variant.arm_id != "default":
+                    tw_cta_text = variant.format(product_name=product_name, url=url)
+                    selected_variants.append(variant.arm_id)
+            except Exception as e:
+                logger.debug("[CTAEngine] Bandit select failed for twitter: %s", e)
+        # Build reply: disclosure on its own line, then CTA. Cap at 280.
+        reply_text = f"{tw_disclosure}\n{tw_cta_text}" if tw_disclosure else tw_cta_text
+        if len(reply_text) > 280:
+            reply_text = reply_text[:277].rstrip() + "..."
+        fields["twitter_first_comment"] = reply_text
 
     # ── Threads content ─────────────────────────────────────────────────────
     # Threads doesn't support clickable links in posts, but we mention the

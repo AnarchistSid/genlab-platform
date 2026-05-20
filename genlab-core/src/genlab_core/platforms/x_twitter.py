@@ -230,6 +230,23 @@ class XTwitterClient:
         if tweet_id is None:
             return _fail("create_tweet returned no id")
 
+        # First-reply for affiliate link: X downranks tweets with external
+        # URLs in the main body, so the standard creator pattern is to
+        # post the link as a self-reply. Non-fatal if it fails.
+        if payload.first_comment_text:
+            try:
+                self._post_single_tweet(
+                    text=payload.first_comment_text,
+                    reply_to=tweet_id,
+                )
+                logger.info(
+                    "X/Twitter: posted affiliate first-reply under %s", tweet_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "X/Twitter: first-reply exception (non-fatal): %s", exc,
+                )
+
         return PublishResult(
             platform=self.platform_id,
             success=True,

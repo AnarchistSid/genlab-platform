@@ -427,11 +427,14 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     # Platform-specific config
     platform_specific = _build_platform_specific(fields, platform, caption, hook)
 
-    # Per-platform follow-up comment text (currently FB only — affiliate
-    # URL kept out of main caption to avoid downranking).
+    # Per-platform follow-up comment text. Affiliate URLs ship as a
+    # comment/reply after the main post — keeps captions clean and avoids
+    # algorithmic downranking on Facebook and X/Twitter.
     first_comment_text = ""
     if platform == "facebook":
         first_comment_text = (fields.get("facebook_first_comment", "") or "").strip()
+    elif platform == "x_twitter":
+        first_comment_text = (fields.get("twitter_first_comment", "") or "").strip()
 
     return PublishPayload(
         caption=caption,
