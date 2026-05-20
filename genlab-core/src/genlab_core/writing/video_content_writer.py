@@ -38,9 +38,9 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "gamers aged 16-30",
         "ctas": [
-            "drop your take below 👇", "who else caught this?",
-            "tag someone who mains this", "thoughts? 💀",
-            "agree or disagree?", "name a better play 🎮",
+            "Drop your take below 👇", "Who else caught this?",
+            "Tag someone who mains this", "Thoughts? 💀",
+            "Agree or disagree?", "Name a better play 🎮",
         ],
         "hashtags": ["#Gaming", "#Gamer", "#GamingClips", "#VideoGames"],
     },
@@ -227,17 +227,23 @@ def write_video_content(
         "    • STAKES: 'One tool just made 3 million designers redundant'\n"
         "    • REVEAL: 'The phone LG built, finished, and then buried'\n"
         "    • CONTRAST: 'Open source is beating the $100B labs at their own game'\n"
-        "  - If your hook could be a CNN headline, rewrite it as a group chat\n"
-        "    message instead.\n"
+        "  - If your hook could be a CNN headline, rewrite it as a\n"
+        "    knowledgeable fan's reaction — opinion-forward, specific, but\n"
+        "    still in proper sentence case (not all-lowercase Twitter style).\n"
         "\n"
         "CAPTION VOICE (Instagram):\n"
-        "  - Write like a reaction in a group chat, NOT a news recap.\n"
-        "  - ✅ GOOD: 'wait so claude is smarter than the people training it??'\n"
-        "  - ✅ GOOD: 'LG literally had the rollable phone working. and shelved it 😭'\n"
+        "  - Opinion-forward, specific, conversational — but written with\n"
+        "    proper sentence case (capitalize the first word of each sentence\n"
+        "    and all proper nouns). Sentence case + casual tone = comparable\n"
+        "    accounts like House of Highlights, ScreenRant, MKBHD.\n"
+        "  - ✅ GOOD: 'Wait, so Claude is smarter than the people training it??'\n"
+        "  - ✅ GOOD: 'LG had the rollable phone working. And shelved it. 😭'\n"
         "  - ❌ BAD:  'Anthropic's new Claude model literally found ways to...'\n"
-        "    (reads like Reuters)\n"
-        "  - Short sentences. Lowercase where natural. Emoji where it fits (1-2\n"
-        "    max, not every sentence). Strong opinion in the first 6 words.\n"
+        "    (reads like Reuters — too dry)\n"
+        "  - ❌ BAD:  'wait so claude is smarter' (all-lowercase reads as Twitter\n"
+        "    shitpost, undercuts the niche's editorial credibility)\n"
+        "  - Short sentences. Emoji where it fits (1-2 max, not every sentence).\n"
+        "    Strong opinion in the first 6 words.\n"
         "  - Body 150-170 chars. Do NOT describe the video like a news summary.\n"
         "\n"
         "CTA — pick ONE verbatim from this list. Do NOT invent new CTAs:\n"
@@ -253,8 +259,9 @@ def write_video_content(
         "- twitter_content: ≤280 chars. Punchy, conversational. NO links.\n"
         "- youtube_content: Question format, ≤40 characters total.\n"
         "- facebook_content: 200-300 chars ending in an engaging question.\n"
-        "- threads_content: 150-300 chars. Text-first, opinion-forward.\n"
-        "  No hashtags. Write like a hot take in a group chat.\n"
+        "- threads_content: 150-300 chars. Text-first, opinion-forward,\n"
+        "  conversational hot-take energy — but proper sentence case (not\n"
+        "  all-lowercase). No hashtags.\n"
         "\n"
         "BANNED PHRASES (never use — these are the #1 'AI-generated' tells):\n"
         "  - 'something big happened'\n"
