@@ -86,26 +86,38 @@ function ThresholdsCard({ data }: { data: LearningStatus }) {
   const classifierPct = data.hook_classifier_threshold > 0
     ? Math.min(100, (data.hook_classifier_progress / data.hook_classifier_threshold) * 100)
     : 0;
+  // Config-update gate is per-niche in the backend; use the new
+  // config_update_progress (sum of 30-day reward-bearing PF rows
+  // across niches) and config_update_threshold (5 niches \u00d7 20 = 100)
+  // surfaced by the status endpoint. The previous formula here used
+  // total rewards_computed which double-counted historical data well
+  // outside the 30-day window \u2014 producing a misleading 516/100 display
+  // even though only 143 rows fell inside the actual gate window.
   const configPct = data.config_update_threshold > 0
-    ? Math.min(100, (data.rewards_computed / data.config_update_threshold) * 100)
+    ? Math.min(100, (data.config_update_progress / data.config_update_threshold) * 100)
     : 0;
+  const allNichesReady = data.niches_at_config_quota >= 5;
 
   const rows = [
     {
       label: "LinUCB",
-      sublabel: `${data.linucb_max_plays} of ${data.linucb_threshold} observations \u2014 after ${data.linucb_threshold}, content selection adapts to context`,
+      // LinUCB is collect-only in production; clearly mark observation
+      // collection rather than imply a mode switch we haven't shipped.
+      sublabel: `${data.linucb_max_plays} of ${data.linucb_threshold} observations on the busiest arm \u2014 contextual matrices update on every reward (data collected but not yet read at selection time)`,
       pct: linucbPct,
       color: "var(--color-blue)",
     },
     {
       label: "Hook Classifier",
-      sublabel: `${data.hook_classifier_progress} of ${data.hook_classifier_threshold} examples \u2014 after ${data.hook_classifier_threshold}, hooks are pre-scored before publishing`,
+      sublabel: `${data.hook_classifier_progress} reward-bearing rows available \u2014 trainer requires ${data.hook_classifier_threshold} examples per niche before fitting a model`,
       pct: classifierPct,
       color: "var(--color-purple)",
     },
     {
       label: "Config Updates",
-      sublabel: `${data.rewards_computed} of ${data.config_update_threshold} rewards \u2014 auto-tunes scoring weights`,
+      sublabel: allNichesReady
+        ? `All 5 niches at quota (${data.config_update_progress} reward-bearing rows in last 30d) \u2014 weekly auto-tuner runs Mon 09:00 UTC`
+        : `${data.niches_at_config_quota} / 5 niches at quota \u2014 auto-tuner needs \u226520 reward-bearing rows per niche in last 30 days`,
       pct: configPct,
       color: "var(--color-amber)",
     },
