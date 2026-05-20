@@ -427,6 +427,12 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     # Platform-specific config
     platform_specific = _build_platform_specific(fields, platform, caption, hook)
 
+    # Per-platform follow-up comment text (currently FB only — affiliate
+    # URL kept out of main caption to avoid downranking).
+    first_comment_text = ""
+    if platform == "facebook":
+        first_comment_text = (fields.get("facebook_first_comment", "") or "").strip()
+
     return PublishPayload(
         caption=caption,
         media_paths=media_paths,
@@ -435,6 +441,7 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         hook=hook,
         niche_id=niche_id,
         platform_specific=platform_specific,
+        first_comment_text=first_comment_text,
     )
 
 

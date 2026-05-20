@@ -108,7 +108,34 @@ class FacebookClient:
                 error="Video required — Facebook text-only posts disabled (video-first mandate)",
             )
 
-        return self._publish_video(video_url=video_url, message=message)
+        result = self._publish_video(video_url=video_url, message=message)
+
+        # Post affiliate link as first comment (FB downranks external URLs
+        # in the main caption). Best-effort: a failure here doesn't fail
+        # the publish itself.
+        if result.success and payload.first_comment_text and result.post_id:
+            try:
+                comment_ok = self.post_reply(
+                    parent_id=result.post_id,
+                    text=payload.first_comment_text,
+                    context_id=result.post_id,
+                )
+                if comment_ok:
+                    logger.info(
+                        "Facebook: affiliate first-comment posted under %s",
+                        result.post_id,
+                    )
+                else:
+                    logger.warning(
+                        "Facebook: first-comment post returned False for %s",
+                        result.post_id,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Facebook: first-comment exception (non-fatal): %s", exc,
+                )
+
+        return result
 
     def _validate_token_preflight(self) -> bool:
         """Quick /me check to catch expired or missing tokens before publish."""

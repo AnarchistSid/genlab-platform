@@ -98,6 +98,10 @@ class PublishPayload:
     hook: str
     niche_id: str
     platform_specific: PlatformSpecific | None = None
+    # Optional follow-up content posted as a comment/reply to the main post.
+    # Used to keep affiliate URLs out of the main caption on platforms that
+    # downrank external URLs (Facebook) or to thread links on Twitter.
+    first_comment_text: str = ""
 
 
 @dataclass

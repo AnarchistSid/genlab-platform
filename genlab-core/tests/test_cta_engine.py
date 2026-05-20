@@ -168,47 +168,54 @@ class TestInstagramCTA:
 
 
 class TestFacebookCTA:
-    def test_direct_url_in_content(self):
+    def test_direct_url_routed_to_first_comment(self):
+        """Affiliate URL must NOT be in main FB caption — FB downranks
+        external URLs in captions, so URL ships as a follow-up comment."""
         story = _make_story()
         fields = inject_cta({"facebook_content": "Check this out!"}, story)
-        # URL base is preserved (UTM params may be appended)
-        assert "amazon.in/dp/B0CY5QW186" in fields["facebook_content"]
+        assert "amazon.in/dp/B0CY5QW186" not in fields["facebook_content"]
+        assert "amazon.in/dp/B0CY5QW186" in fields["facebook_first_comment"]
 
-    def test_get_product_format(self):
+    def test_get_product_format_in_first_comment(self):
         story = _make_story()
         fields = inject_cta({"facebook_content": "Awesome deal."}, story)
-        assert "🔗 Get PS5 Console:" in fields["facebook_content"]
+        # 🔗 Get-product CTA lives in first_comment, not main caption
+        assert "🔗 Get PS5 Console:" in fields["facebook_first_comment"]
+        assert "🔗 Get PS5 Console:" not in fields["facebook_content"]
 
     def test_disclosure_added(self):
         story = _make_story()
         fields = inject_cta({"facebook_content": "Some Facebook post."}, story)
+        # Disclosure stays in the main caption for FTC compliance
         assert "#affiliate" in fields["facebook_content"]
 
-    def test_cta_appended_not_prepended(self):
-        """Facebook CTA goes at the end, unlike YouTube which prepends."""
+    def test_first_comment_emitted_when_affiliate_present(self):
+        """facebook_first_comment field must be set whenever there's a URL."""
         story = _make_story()
         content = "Original Facebook post content here."
         fields = inject_cta({"facebook_content": content}, story)
-        result = fields["facebook_content"]
-        original_pos = result.index("Original Facebook post content here.")
-        cta_pos = result.index("🔗 Get PS5 Console:")
-        assert original_pos < cta_pos
+        assert fields.get("facebook_first_comment", "")
+        # Main caption keeps the original body
+        assert "Original Facebook post content here." in fields["facebook_content"]
 
     def test_original_content_preserved(self):
         story = _make_story()
         fields = inject_cta({"facebook_content": "Gaming deal of the year."}, story)
         assert "Gaming deal of the year." in fields["facebook_content"]
 
-    def test_empty_facebook_content_still_gets_cta(self):
-        """Even with empty facebook_content, CTA is injected when URL exists."""
+    def test_empty_facebook_content_still_gets_first_comment(self):
+        """Even with empty facebook_content, the first-comment CTA exists when URL is present."""
         story = _make_story()
         fields = inject_cta({"facebook_content": ""}, story)
-        assert "🔗 Get PS5 Console:" in fields["facebook_content"]
+        # CTA in first_comment, not main caption
+        assert "🔗 Get PS5 Console:" in fields["facebook_first_comment"]
 
     def test_does_not_use_link_in_bio(self):
         story = _make_story()
         fields = inject_cta({"facebook_content": "Deal alert!"}, story)
+        # Neither main caption nor first-comment uses "link in bio" (FB-specific)
         assert "link in bio" not in fields["facebook_content"]
+        assert "link in bio" not in fields.get("facebook_first_comment", "")
 
     def test_custom_fb_disclosure(self):
         story = _make_story(
@@ -221,12 +228,15 @@ class TestFacebookCTA:
         fields = inject_cta({"facebook_content": "Check this deal."}, story)
         assert "#ad" in fields["facebook_content"]
 
-    def test_trailing_whitespace_stripped_before_cta(self):
+    def test_trailing_whitespace_stripped_before_disclosure(self):
+        """Trailing whitespace is stripped before appending #affiliate disclosure."""
         story = _make_story()
         fields = inject_cta({"facebook_content": "Some content.   "}, story)
         result = fields["facebook_content"]
-        # CTA should follow content without preserving trailing spaces
-        assert "\n\n🔗 Get PS5 Console:" in result
+        # No double-space between body and disclosure
+        assert "Some content.\n\n#affiliate" in result
+        # CTA itself lives in first_comment, not main caption
+        assert "🔗 Get PS5 Console:" in fields["facebook_first_comment"]
 
 
 class TestTwitterCTA:

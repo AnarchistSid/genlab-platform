@@ -247,6 +247,10 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
         fields["youtube_content"] = yt_content
 
     # ── Facebook content ───────────────────────────────────────────────────────
+    # Facebook downranks posts with external URLs in the main caption. Keep
+    # the main caption clean (body + disclosure only) and emit the affiliate
+    # CTA as facebook_first_comment so the FB publisher posts it as a
+    # comment after the main post lands.
     fb_content: str = fields.get("facebook_content", "") or ""
     if url and (fb_content or product_name):
         # Select CTA variant via bandit, fallback to hardcoded format
@@ -259,18 +263,18 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
             except Exception as e:
                 logger.debug("[CTAEngine] Bandit select failed for facebook: %s", e)
 
-        fb_cta_snippet = f"\n\n{fb_cta_text}"
-        fb_disclosure_snippet = f"\n{fb_disclosure}" if fb_disclosure else ""
-        fb_content = fb_content.rstrip() + fb_cta_snippet
+        # Main caption: body + disclosure only (no URL)
         if fb_disclosure:
+            fb_disclosure_snippet = f"\n\n{fb_disclosure}"
             fb_content = fb_content.rstrip() + fb_disclosure_snippet
-        # Enforce Facebook content length limit
-        fb_content = _enforce_length(
-            fb_content, "facebook",
-            len(fb_cta_snippet) + len(fb_disclosure_snippet),
-            len(fb_disclosure_snippet),
-        )
+            fb_content = _enforce_length(
+                fb_content, "facebook",
+                len(fb_disclosure_snippet), len(fb_disclosure_snippet),
+            )
         fields["facebook_content"] = fb_content
+
+        # First-comment: the affiliate CTA itself, posted after main post
+        fields["facebook_first_comment"] = fb_cta_text
 
     # Twitter: no modification — link goes in reply thread
 
