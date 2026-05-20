@@ -353,10 +353,18 @@ class TestInit:
         assert "v22.0" in client._base_url
 
     def test_max_poll_seconds_default(self):
-        """Default poll timeout is 120 seconds."""
-        from genlab_core.platforms.instagram import InstagramClient
+        """Default poll timeout matches _DEFAULT_MAX_POLL_SECONDS module constant.
+
+        IG container processing for video can legitimately take 5-8 min for
+        complex videos. The default was raised from 120 to 480 to reduce
+        spurious timeout failures on motion-heavy reels.
+        """
+        from genlab_core.platforms.instagram import (
+            InstagramClient,
+            _DEFAULT_MAX_POLL_SECONDS,
+        )
         client = InstagramClient(access_token="t", ig_user_id="u")
-        assert client._max_poll_seconds == 120
+        assert client._max_poll_seconds == _DEFAULT_MAX_POLL_SECONDS
 
     def test_max_poll_seconds_custom(self):
         """Custom poll timeout is stored on the instance."""
