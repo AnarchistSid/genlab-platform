@@ -32,20 +32,24 @@ class TestGetEncodeArgs:
         idx = args.index("-c:v")
         assert args[idx + 1] == "libx264"
 
-    def test_youtube_uses_libx265(self) -> None:
+    def test_youtube_uses_libx264(self) -> None:
+        """YouTube spec uses libx264 since x265 OOMs on the 4GB VPS
+        and YouTube re-encodes everything on its end anyway."""
         from genlab_core.media.video_compositor import _get_encode_args
 
         args = _get_encode_args("youtube")
         idx = args.index("-c:v")
-        assert args[idx + 1] == "libx265"
+        assert args[idx + 1] == "libx264"
 
     def test_tiktok_has_maxrate(self) -> None:
+        """TikTok keeps its maxrate cap (tightened to 6M in 2026-05-20
+        tuning — was 12M which produced uploads platforms struggled with)."""
         from genlab_core.media.video_compositor import _get_encode_args
 
         args = _get_encode_args("tiktok")
         assert "-maxrate" in args
         idx = args.index("-maxrate")
-        assert args[idx + 1] == "12M"
+        assert args[idx + 1] == "6M"
 
     def test_default_falls_back_to_instagram(self) -> None:
         from genlab_core.media.video_compositor import _get_encode_args
@@ -79,13 +83,16 @@ class TestGetEncodeArgs:
             idx = args.index("-movflags")
             assert args[idx + 1] == "+faststart"
 
-    def test_youtube_includes_hvc1_tag(self) -> None:
+    def test_youtube_does_not_include_hvc1_tag(self) -> None:
+        """hvc1 tag was for libx265 output. YouTube now uses libx264
+        (x265 OOMs the 4GB VPS), so the tag is no longer needed."""
         from genlab_core.media.video_compositor import _get_encode_args
 
         args = _get_encode_args("youtube")
-        assert "-tag:v" in args
-        idx = args.index("-tag:v")
-        assert args[idx + 1] == "hvc1"
+        # No hvc1 tag because we're not encoding to H.265 anymore
+        if "-tag:v" in args:
+            idx = args.index("-tag:v")
+            assert args[idx + 1] != "hvc1"
 
     def test_instagram_crf_matches_platform_spec(self) -> None:
         from genlab_core.media.video_compositor import _get_encode_args
@@ -231,13 +238,15 @@ class TestCompositorPlatformParam:
     @patch("genlab_core.media.video_compositor.probe_video_metadata")
     @patch("genlab_core.media.video_compositor.run_ffmpeg")
     @patch("genlab_core.media.video_compositor.get_ffmpeg_binary", return_value="ffmpeg")
-    def test_compose_vertical_youtube_uses_libx265(
+    def test_compose_vertical_youtube_uses_libx264(
         self,
         _mock_bin: MagicMock,
         mock_run: MagicMock,
         mock_probe: MagicMock,
         tmp_assets: dict[str, Path],
     ) -> None:
+        """YouTube path uses libx264. x265 was tried earlier but OOMed
+        on the 4GB Hetzner VPS, and YouTube re-encodes everything anyway."""
         from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
 
         mock_run.return_value = subprocess.CompletedProcess(
@@ -258,7 +267,7 @@ class TestCompositorPlatformParam:
 
         cmd = mock_run.call_args[0][0]
         cmd_str = " ".join(cmd)
-        assert "libx265" in cmd_str
+        assert "libx264" in cmd_str
 
 
 # ══════════════════════════════════════════════════════════════════════════════

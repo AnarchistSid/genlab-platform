@@ -103,10 +103,23 @@ HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 
 @dataclass
 class FFmpegConfig:
-    """FFmpeg render settings from visuals.yaml."""
-    preset: str = "slow"
+    """FFmpeg render settings from visuals.yaml.
+
+    Defaults tuned 2026-05-20 after discovering production masters
+    were running 8-15 Mbps for motion-heavy content (sports, gaming),
+    causing downstream IG/Threads/FB upload failures. Defaults now
+    cap the master at 6 Mbps with maxrate — still ample quality for
+    the per-platform transcode step to work from, but small enough
+    to ship without re-compression.
+    """
+    preset: str = "medium"
     fallback_preset: str = "fast"
-    timeout_seconds: int = 120
+    timeout_seconds: int = 600
+    # Bitrate ceiling for the master render (per-platform transcode
+    # at publish time may apply tighter caps). Empty string = no cap
+    # (legacy behavior; produces 8-15 Mbps on motion-heavy source).
+    maxrate: str = "6M"
+    bufsize: str = "12M"
 
 
 @dataclass
@@ -143,9 +156,11 @@ class ChannelBranding:
         # FFmpeg render config
         ff_cfg = cfg.get("ffmpeg", {})
         ffmpeg = FFmpegConfig(
-            preset=ff_cfg.get("preset", "slow"),
+            preset=ff_cfg.get("preset", "medium"),
             fallback_preset=ff_cfg.get("fallback_preset", "fast"),
-            timeout_seconds=int(ff_cfg.get("timeout_seconds", 120)),
+            timeout_seconds=int(ff_cfg.get("timeout_seconds", 600)),
+            maxrate=str(ff_cfg.get("maxrate", "6M") or ""),
+            bufsize=str(ff_cfg.get("bufsize", "12M") or ""),
         )
 
         # Resolve logo path — relative paths are resolved against niche_root
@@ -281,7 +296,7 @@ class FrameCompositor:
         output_path: str,
         duration_seconds: float | None = None,
         trim_start: float = 0.0,
-        crf: int = 15,
+        crf: int = 20,
         preset: str | None = None,
         force_fps: int = 30,
     ) -> str:
@@ -293,7 +308,10 @@ class FrameCompositor:
             output_path: Where to write the output .mp4.
             duration_seconds: Clip duration cap (None = use full clip).
             trim_start: Start trimming from this offset in seconds.
-            crf: H.264 CRF (15 for Instagram quality, 17 for FB, 18 for YT).
+            crf: H.264 CRF (20 default — high quality, paired with the
+                 maxrate cap from visuals.yaml. Was 15 historically, which
+                 produced 8-15 Mbps masters for motion-heavy content and
+                 broke downstream IG/Threads upload.)
             preset: FFmpeg preset. Defaults to visuals.yaml ffmpeg.preset.
             force_fps: Output frame rate.
 
@@ -660,13 +678,20 @@ class FrameCompositor:
             return ["-t", str(duration)]
         return []
 
-    @staticmethod
-    def _output_flags(crf: int, preset: str, fps: int) -> list[str]:
-        return [
+    def _output_flags(self, crf: int, preset: str, fps: int) -> list[str]:
+        flags = [
             "-c:v", "libx264",
             "-crf", str(crf),
             "-preset", preset,
             "-r", str(fps),
+        ]
+        # Master bitrate ceiling from visuals.yaml ffmpeg.maxrate.
+        # Empty string disables (legacy uncapped behavior).
+        maxrate = (self.branding.ffmpeg.maxrate or "").strip()
+        bufsize = (self.branding.ffmpeg.bufsize or "").strip()
+        if maxrate:
+            flags.extend(["-maxrate", maxrate, "-bufsize", bufsize or maxrate])
+        flags.extend([
             "-c:a", "aac",
             "-b:a", "320k",
             "-ar", "48000",
@@ -676,7 +701,8 @@ class FrameCompositor:
             "-color_primaries", "bt709",
             "-color_trc", "bt709",
             "-movflags", "+faststart",
-        ]
+        ])
+        return flags
 
     @staticmethod
     def _resolve_fonts() -> tuple[str, str, str]:
