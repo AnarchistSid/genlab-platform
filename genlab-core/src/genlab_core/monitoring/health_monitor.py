@@ -323,63 +323,87 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
         recent_rewards = cur.fetchone()[0] or 0
 
         if recent_rewards >= 5:
-            # Look for arms that should have been updated. We expect at
-            # least one play per ~5 rewarded PF rows (the content_type
-            # arm fires every time; style:* arms fire when extra_arms
-            # is populated).
+            # CONTENT ARMS: only flag arms that have *their own* PF
+            # rows but haven't moved. A cold arm with zero PF rows
+            # (e.g. esports_highlight when no esports content shipped)
+            # is not a bug — it's just unused. The previous version
+            # of this check counted niche-level rewards against every
+            # arm and produced false-positive ERRORs on unused arms.
             cur.execute(
                 """
-                SELECT arm_id, alpha, beta, n_plays, updated_at
+                SELECT b.arm_id, b.alpha, b.beta, b.n_plays,
+                       (SELECT COUNT(*) FROM pending_feedback p
+                        WHERE p.niche_id = b.niche_id
+                          AND p.arm_id = b.arm_id
+                          AND p.reward_48h IS NOT NULL
+                          AND p.updated_at > NOW() - INTERVAL '14 days'
+                       ) AS pf_for_arm
+                FROM bandit_arms b
+                WHERE b.niche_id = %s
+                  AND (b.alpha + b.beta) < 3.0
+                  AND b.arm_id NOT LIKE 'style:%%'
+                ORDER BY b.arm_id
+                """,
+                (niche_id,),
+            )
+            content_unmoved = [
+                (arm, alpha, beta, n_plays, pf_count)
+                for arm, alpha, beta, n_plays, pf_count in cur.fetchall()
+                if pf_count > 0
+            ]
+
+            if content_unmoved:
+                alerts.append(Alert(
+                    check="bandit_posterior_drift",
+                    severity="error",
+                    message=(
+                        f"{len(content_unmoved)} content arm(s) at uniform "
+                        f"prior despite arm-specific rewards in last 14 days"
+                    ),
+                    niche_id=niche_id,
+                    details={
+                        "unmoved_arms": [
+                            {"arm_id": a, "n_plays": n, "pf_rows_for_arm": p}
+                            for a, _, _, n, p in content_unmoved[:10]
+                        ],
+                    },
+                ))
+
+            # STYLE ARMS: bandit_context.extra_arms is the only path
+            # that credits them. Loop over rows separately because
+            # arm_id is in jsonb not a column.
+            cur.execute(
+                """
+                SELECT arm_id, alpha, beta, n_plays
                 FROM bandit_arms
                 WHERE niche_id = %s
                   AND (alpha + beta) < 3.0
+                  AND arm_id LIKE 'style:%%'
                 ORDER BY arm_id
                 """,
                 (niche_id,),
             )
-            unmoved = cur.fetchall()
-            unmoved_names = [r[0] for r in unmoved]
-
-            if unmoved_names:
-                # Distinguish style:* arms (might be cold-start) from
-                # content_type arms (should always receive reward).
-                content_unmoved = [a for a in unmoved_names if not a.startswith("style:")]
-                style_unmoved = [a for a in unmoved_names if a.startswith("style:")]
-
-                if content_unmoved:
-                    alerts.append(Alert(
-                        check="bandit_posterior_drift",
-                        severity="error",
-                        message=(
-                            f"{len(content_unmoved)} content arms at uniform "
-                            f"prior despite {recent_rewards} recent reward(s)"
-                        ),
-                        niche_id=niche_id,
-                        details={
-                            "unmoved_arms": content_unmoved[:10],
-                            "recent_rewards": recent_rewards,
-                        },
-                    ))
-                # Style arms are warning-level: extra_arms only fires
-                # when the publisher writes it. Persistent zero plays
-                # across multiple style arms after 50+ rewards is the
-                # signature of the 2026-05-20 hook_style-not-propagated
-                # bug — but a small number can legitimately be cold.
-                if style_unmoved and recent_rewards >= 50:
-                    alerts.append(Alert(
-                        check="bandit_posterior_drift",
-                        severity="warning",
-                        message=(
-                            f"{len(style_unmoved)} style:* arms unmoved after "
-                            f"{recent_rewards} rewards — check that publisher "
-                            "writes bandit_context.extra_arms"
-                        ),
-                        niche_id=niche_id,
-                        details={
-                            "unmoved_arms": style_unmoved[:10],
-                            "recent_rewards": recent_rewards,
-                        },
-                    ))
+            style_unmoved = [r[0] for r in cur.fetchall()]
+            # Style arms are warning-level: extra_arms only fires when
+            # the publisher writes it. Persistent zero plays across
+            # multiple style arms after 50+ rewards is the signature
+            # of the 2026-05-20 hook_style-not-propagated bug — but a
+            # small number can legitimately be cold.
+            if style_unmoved and recent_rewards >= 50:
+                alerts.append(Alert(
+                    check="bandit_posterior_drift",
+                    severity="warning",
+                    message=(
+                        f"{len(style_unmoved)} style:* arms unmoved after "
+                        f"{recent_rewards} rewards — check that publisher "
+                        "writes bandit_context.extra_arms"
+                    ),
+                    niche_id=niche_id,
+                    details={
+                        "unmoved_arms": style_unmoved[:10],
+                        "recent_rewards": recent_rewards,
+                    },
+                ))
         conn.close()
     except Exception as e:
         logger.debug("Bandit posterior drift check failed: %s", e)
