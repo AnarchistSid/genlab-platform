@@ -514,17 +514,35 @@ class ThreadsClient:
     def _token_needs_refresh(self) -> bool:
         """Return True if the token is >= 50 days old (60-day expiry).
 
-        Reads ``THREADS_TOKEN_ISSUED_AT`` env var (ISO datetime string).
-        Returns False if the var is absent or unparseable.
+        Reads ``THREADS_TOKEN_ISSUED_AT`` env var. Accepts both:
+          - ISO 8601 datetime string ('2026-03-08T12:34:56+00:00')
+          - Unix timestamp string ('1773047145')
+        Historical .env entries used Unix timestamps; fromisoformat()
+        chokes on them and silently returned False here, which is why
+        the auto-refresh quietly stopped working in May 2026 (token
+        expired 2026-05-08 with no refresh attempt).
         """
         issued_at_str = os.environ.get("THREADS_TOKEN_ISSUED_AT", "")
         if not issued_at_str:
             return False
 
+        issued_at: datetime | None = None
+        # 1) ISO 8601
         try:
             issued_at = datetime.fromisoformat(issued_at_str)
         except (ValueError, TypeError):
-            return False
+            pass
+        # 2) Unix timestamp fallback
+        if issued_at is None:
+            try:
+                issued_at = datetime.fromtimestamp(int(issued_at_str), tz=UTC)
+            except (ValueError, TypeError):
+                logger.warning(
+                    "[Threads] Cannot parse THREADS_TOKEN_ISSUED_AT=%r as ISO or Unix timestamp — "
+                    "auto-refresh disabled until format is fixed.",
+                    issued_at_str[:40],
+                )
+                return False
 
         if issued_at.tzinfo is None:
             issued_at = issued_at.replace(tzinfo=UTC)
