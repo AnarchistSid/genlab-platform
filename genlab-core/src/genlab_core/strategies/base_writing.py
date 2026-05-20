@@ -272,6 +272,17 @@ class BaseWritingStrategy(WritingStrategy):
         content["written"] = True
         content["written_by"] = "llm"
 
+        # Carry the bandit-picked hook style up to story level so
+        # push_to_backlog can promote it into the blueprint's extra
+        # JSONB. publish_all_platforms reads ``fields["hook_style"]``
+        # to populate ``bandit_context["extra_arms"]`` so the 48h
+        # reward can credit ``style:{niche}:{name}`` alongside the
+        # content_type arm. Without this propagation the style:* arms
+        # never accumulate plays (2026-05-20 root cause).
+        if result.get("hook_style"):
+            story["hook_style"] = result["hook_style"]
+            content["hook_style"] = result["hook_style"]
+
         ig_caption = result.get("instagram_caption", "")
         hashtags = re.findall(r"#\w+", ig_caption)
         content["instagram"] = {"caption": ig_caption, "hashtags": hashtags}

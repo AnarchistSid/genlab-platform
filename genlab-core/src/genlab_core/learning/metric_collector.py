@@ -1042,17 +1042,28 @@ def collect_metrics(
 
     logger.info("[metric_collector] Processing %d pending tasks", len(pending))
     processed = 0
+    not_due = 0
+    failed = 0
     now = datetime.now(UTC)
 
     for task_record in pending:
         try:
+            # A None next-window means "no collection window has elapsed yet"
+            # — not a failure. Track separately so the health check can
+            # distinguish "everything is too young" from "everything broke".
+            if store.next_collection_window(task_record, now=now) is None:
+                not_due += 1
+                continue
             if process_pending_task(
                 task_record, store, shaper, now=now,
                 bandit_updater=bandit_updater,
                 backlog_client=backlog_client,
             ):
                 processed += 1
+            else:
+                failed += 1
         except Exception as exc:
+            failed += 1
             logger.warning(
                 "[metric_collector] Failed to process %s/%s: %s",
                 task_record.platform,
@@ -1060,15 +1071,22 @@ def collect_metrics(
                 exc,
             )
 
-    logger.info("[metric_collector] Processed %d / %d tasks", processed, len(pending))
+    logger.info(
+        "[metric_collector] Processed %d / %d tasks (not_due=%d, failed=%d)",
+        processed, len(pending), not_due, failed,
+    )
 
-    # Health check: warn if no tasks have been processed and pending list is large
-    if processed == 0 and len(pending) > 10:
+    # Health check fires only when something *should* have processed but
+    # didn't. "All tasks waiting on their next window" is the happy path
+    # when posts are fresh — flagging it as stalled sends future audits
+    # chasing a non-bug (2026-05-20 RCA found this pattern wasted ~30 min).
+    due_tasks = len(pending) - not_due
+    if processed == 0 and due_tasks > 10:
         logger.warning(
-            "[metric_collector] HEALTH CHECK: 0/%d tasks processed — "
-            "learning loop may be stalled. Check publish_time values "
-            "and next_collection_window eligibility.",
-            len(pending),
+            "[metric_collector] HEALTH CHECK: 0/%d eligible tasks processed "
+            "(of %d total, %d not yet due) — learning loop may be stalled. "
+            "Check fetch_platform_metrics + next_collection_window logic.",
+            due_tasks, len(pending), not_due,
         )
 
     return processed

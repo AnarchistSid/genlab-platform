@@ -141,3 +141,63 @@ class TestVideoContentWriter:
         tone_pos = system_prompt.index("TONE: Be exciting")
         json_pos = system_prompt.index("Respond ONLY with valid JSON")
         assert tone_pos < json_pos
+
+
+class TestHookStylePropagation:
+    """The bandit-picked hook style must reach the returned content dict
+    so push_to_backlog can persist it and the metric_collector can credit
+    the ``style:{niche}:{name}`` arm at 48h. Regression guard for the
+    2026-05-20 silent failure where style:* arms were stuck at n_plays=0
+    because the writing stage never recorded the chosen style.
+    """
+
+    def test_hook_style_added_when_picker_returns_one(self, monkeypatch):
+        monkeypatch.setattr(
+            "genlab_core.writing.llm_hook_generator.pick_hook_style",
+            lambda _niche: "question",
+        )
+        # Avoid the "[entity] just [verb]" banned pattern by phrasing as
+        # a clean question with no "just".
+        llm = _make_llm(
+            '{"hook":"Why is the league panicking about Bam?",'
+            '"instagram_caption":"x #Sports",'
+            '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
+        )
+        result = write_video_content(_make_video(), "sports", llm)
+        assert result.get("hook_style") == "question"
+        # Style hint should also appear in the LLM system prompt
+        system = llm.complete.call_args.kwargs.get("system", "")
+        assert "STYLE TARGET" in system
+
+    def test_hook_style_omitted_when_picker_returns_none(self, monkeypatch):
+        monkeypatch.setattr(
+            "genlab_core.writing.llm_hook_generator.pick_hook_style",
+            lambda _niche: None,
+        )
+        llm = _make_llm(
+            '{"hook":"Cold start hook","instagram_caption":"x #Sports",'
+            '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
+        )
+        result = write_video_content(_make_video(), "sports", llm)
+        # No style picked = cold start → no hook_style key (would otherwise
+        # send false reward to a phantom arm).
+        assert "hook_style" not in result
+        system = llm.complete.call_args.kwargs.get("system", "")
+        assert "STYLE TARGET" not in system
+
+    def test_hook_style_omitted_when_hook_was_rejected(self, monkeypatch):
+        # Banned phrase trips the post-LLM filter and clears the hook;
+        # crediting the style arm for a hook that didn't actually ship
+        # would teach the bandit the wrong lesson.
+        monkeypatch.setattr(
+            "genlab_core.writing.llm_hook_generator.pick_hook_style",
+            lambda _niche: "bold_claim",
+        )
+        llm = _make_llm(
+            '{"hook":"This changes everything for sports",'
+            '"instagram_caption":"x #Sports","twitter_content":"x",'
+            '"youtube_content":"x","facebook_content":"x"}'
+        )
+        result = write_video_content(_make_video(), "sports", llm)
+        assert result.get("hook") == ""
+        assert "hook_style" not in result

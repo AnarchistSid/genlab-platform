@@ -682,8 +682,13 @@ class TestBanditUpdaterCalled:
 
         process_pending_task(task, store, shaper, bandit_updater=updater)
 
-        # Production passes 5 args: (niche_id, content_type, platform, reward, bandit_context)
-        updater.assert_called_once_with("sports", "highlight", "instagram", 0.65, None)
+        # Production passes 5 args:
+        # (niche_id, bandit_arm or content_type, platform, reward, bandit_context).
+        # _make_task sets bandit_arm = f"{content_type}__{platform}" to match
+        # the classified-arm shape that push_to_backlog._classify_arm writes.
+        updater.assert_called_once_with(
+            "sports", "highlight__instagram", "instagram", 0.65, None,
+        )
 
     @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
     def test_updater_receives_computed_reward(self, mock_fetch):

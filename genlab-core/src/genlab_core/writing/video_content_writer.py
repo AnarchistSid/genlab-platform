@@ -187,6 +187,18 @@ def write_video_content(
     voice = NICHE_VOICE.get(niche_id, NICHE_VOICE["gaming"])
     existing_hooks_text = "\n".join(f"  - {h}" for h in (existing_hooks or [])[-5:])
 
+    # Bandit-driven hook style pick. Lives here (not in BaseHookStrategy)
+    # because production runs the writing stage first: it produces the LLM
+    # hook directly, then BaseHookStrategy short-circuits on
+    # ``written_by == 'llm'`` and never invokes its own style picker. Without
+    # this call, the ``style:*`` bandit arms never receive any signal — see
+    # 2026-05-20 root cause analysis. None means cold-start / no arms seeded.
+    from genlab_core.writing.llm_hook_generator import _HOOK_STYLES, pick_hook_style
+    chosen_style = pick_hook_style(niche_id)
+    style_hint = ""
+    if chosen_style and chosen_style in _HOOK_STYLES:
+        style_hint = f"\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}\n"
+
     age_hours = video.get("age_hours", 1)
     if not age_hours:
         # Compute from view_count / view_velocity if available
@@ -288,6 +300,7 @@ def write_video_content(
             if existing_hooks_text else ""
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
+        + style_hint
         + "Respond ONLY with valid JSON with these exact keys: "
         "hook, instagram_caption, twitter_content, youtube_content, "
         "facebook_content, threads_content. No markdown, no explanation."
@@ -487,6 +500,14 @@ def write_video_content(
 
         # Mark as LLM-written for hook strategy dedup
         content["written_by"] = "llm"
+
+        # Record bandit-picked hook style so push_to_backlog can persist it
+        # and metric_collector can later credit the style:{niche}:{name} arm.
+        # Only record when the hook itself survived banned-phrase / pattern /
+        # injection filters; a rejected hook means the style didn't actually
+        # ship, so attributing reward to that arm would skew the posterior.
+        if chosen_style and content.get("hook"):
+            content["hook_style"] = chosen_style
 
         return content
 

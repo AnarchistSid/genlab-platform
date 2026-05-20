@@ -287,6 +287,105 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
     return alerts
 
 
+def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
+    """Flag bandit arms whose posteriors are stuck near the prior despite
+    reward signal being available.
+
+    Background: ``check_bandit_staleness`` reads ``updated_at`` — a row
+    can be touched (e.g. by config_writer) without its posterior moving.
+    The 2026-03-17 → 2026-05-19 outage looked healthy by that metric
+    because the rows existed, but ``alpha + beta == 2.0`` betrayed that
+    no rewards had been applied. This check catches that pattern by
+    cross-referencing recent ``pending_feedback`` activity with arm
+    posterior shape: if rewards are flowing into PF but arms remain at
+    the uniform prior, the update pipeline is broken somewhere between
+    ``update_window`` and ``_default_bandit_updater``.
+    """
+    alerts = []
+    try:
+        import psycopg
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+
+        # Count pending_feedback rows for this niche where reward_48h
+        # was computed in the last 14 days. If zero, the publisher
+        # hasn't fed the loop in two weeks — that's a separate issue
+        # (publish_failures / content_gap) and this check is moot.
+        cur.execute(
+            """
+            SELECT COUNT(*) FROM pending_feedback
+            WHERE niche_id = %s
+              AND reward_48h IS NOT NULL
+              AND updated_at > NOW() - INTERVAL '14 days'
+            """,
+            (niche_id,),
+        )
+        recent_rewards = cur.fetchone()[0] or 0
+
+        if recent_rewards >= 5:
+            # Look for arms that should have been updated. We expect at
+            # least one play per ~5 rewarded PF rows (the content_type
+            # arm fires every time; style:* arms fire when extra_arms
+            # is populated).
+            cur.execute(
+                """
+                SELECT arm_id, alpha, beta, n_plays, updated_at
+                FROM bandit_arms
+                WHERE niche_id = %s
+                  AND (alpha + beta) < 3.0
+                ORDER BY arm_id
+                """,
+                (niche_id,),
+            )
+            unmoved = cur.fetchall()
+            unmoved_names = [r[0] for r in unmoved]
+
+            if unmoved_names:
+                # Distinguish style:* arms (might be cold-start) from
+                # content_type arms (should always receive reward).
+                content_unmoved = [a for a in unmoved_names if not a.startswith("style:")]
+                style_unmoved = [a for a in unmoved_names if a.startswith("style:")]
+
+                if content_unmoved:
+                    alerts.append(Alert(
+                        check="bandit_posterior_drift",
+                        severity="error",
+                        message=(
+                            f"{len(content_unmoved)} content arms at uniform "
+                            f"prior despite {recent_rewards} recent reward(s)"
+                        ),
+                        niche_id=niche_id,
+                        details={
+                            "unmoved_arms": content_unmoved[:10],
+                            "recent_rewards": recent_rewards,
+                        },
+                    ))
+                # Style arms are warning-level: extra_arms only fires
+                # when the publisher writes it. Persistent zero plays
+                # across multiple style arms after 50+ rewards is the
+                # signature of the 2026-05-20 hook_style-not-propagated
+                # bug — but a small number can legitimately be cold.
+                if style_unmoved and recent_rewards >= 50:
+                    alerts.append(Alert(
+                        check="bandit_posterior_drift",
+                        severity="warning",
+                        message=(
+                            f"{len(style_unmoved)} style:* arms unmoved after "
+                            f"{recent_rewards} rewards — check that publisher "
+                            "writes bandit_context.extra_arms"
+                        ),
+                        niche_id=niche_id,
+                        details={
+                            "unmoved_arms": style_unmoved[:10],
+                            "recent_rewards": recent_rewards,
+                        },
+                    ))
+        conn.close()
+    except Exception as e:
+        logger.debug("Bandit posterior drift check failed: %s", e)
+    return alerts
+
+
 # ── Publishing checks ─────────────────────────────────────────────────
 
 
@@ -916,6 +1015,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_qc_collapse(reports, nid))
         all_alerts.extend(check_source_starvation(reports, nid))
         all_alerts.extend(check_bandit_staleness(nid))
+        all_alerts.extend(check_bandit_posterior_drift(nid))
         all_alerts.extend(check_missing_media(nid))
         all_alerts.extend(check_stuck_publishing(nid))
         all_alerts.extend(check_content_gap(nid))
