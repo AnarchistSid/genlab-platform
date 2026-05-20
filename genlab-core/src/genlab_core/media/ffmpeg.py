@@ -167,36 +167,55 @@ MASTER_SPEC = RenderSpec(
     preset=None,
 )
 
+# CRF + maxrate/bufsize tuned per platform's published spec.
+#
+# Lessons from 2026-05-20 publish failures: CRF alone is not enough.
+# Without a maxrate ceiling, high-motion source (sports, gaming) can
+# encode at 8-15 Mbps which IG/Threads/Facebook reject during upload
+# (container processing errors 2207082/2207085, "reduce data" errors).
+# Each platform's max-accepted bitrate is sourced from their developer
+# docs as of 2026:
+#   IG Reels:   ≤5 Mbps recommended, ~30MB sweet spot for 60s
+#   Threads:    follows IG specs (same backend)
+#   Facebook:   ≤6 Mbps recommended
+#   YouTube:    re-encodes everything; cap looser (≤8 Mbps)
+#   TikTok:     accepts up to 12 Mbps for Reels-style
 PLATFORM_SPECS: dict[Platform, RenderSpec] = {
     Platform.YOUTUBE: RenderSpec(
         codec="libx264",  # x265 OOMs on 4GB VPS; x264 is safe and YouTube re-encodes anyway
         fps="source",  # 60fps gaming preserved through to YouTube
         audio_bitrate="320k",
-        crf=18,
+        crf=20,
         preset="medium",  # slow + x264 is diminishing returns for YouTube
+        maxrate="8M",
+        bufsize="16M",
     ),
     Platform.INSTAGRAM: RenderSpec(
         codec="libx264",
         fps=30,
-        audio_bitrate="320k",
-        crf=15,
-        preset="slow",
+        audio_bitrate="192k",
+        crf=22,
+        preset="medium",
+        maxrate="4M",
+        bufsize="8M",
     ),
     Platform.TIKTOK: RenderSpec(
         codec="libx264",
         fps=30,
-        audio_bitrate="320k",
-        crf=15,
-        preset="slow",
-        maxrate="12M",
-        bufsize="24M",
+        audio_bitrate="192k",
+        crf=20,
+        preset="medium",
+        maxrate="6M",
+        bufsize="12M",
     ),
     Platform.FACEBOOK: RenderSpec(
         codec="libx264",
         fps=30,
-        audio_bitrate="256k",
-        crf=17,
+        audio_bitrate="192k",
+        crf=22,
         preset="medium",
+        maxrate="5M",
+        bufsize="10M",
         safe_zone_top_pct=0.14,
         safe_zone_bottom_pct=0.35,
     ),
@@ -205,25 +224,31 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         width=720,
         height=1280,
         fps=30,
-        audio_bitrate="192k",
-        crf=20,
+        audio_bitrate="128k",
+        crf=22,
         preset="medium",
+        maxrate="3M",
+        bufsize="6M",
     ),
     Platform.X_PREMIUM: RenderSpec(
         codec="libx264",
         width=1080,
         height=1920,
         fps=30,
-        audio_bitrate="256k",
-        crf=17,
-        preset="slow",
+        audio_bitrate="192k",
+        crf=20,
+        preset="medium",
+        maxrate="5M",
+        bufsize="10M",
     ),
     Platform.THREADS: RenderSpec(
         codec="libx264",
         fps=30,
-        audio_bitrate="320k",
-        crf=15,
-        preset="slow",
+        audio_bitrate="192k",
+        crf=22,
+        preset="medium",
+        maxrate="4M",
+        bufsize="8M",
     ),
 }
 

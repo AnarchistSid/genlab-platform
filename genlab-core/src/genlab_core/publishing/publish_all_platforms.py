@@ -238,12 +238,20 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         cmd.extend(["-c:v", spec.codec])
         if spec.crf is not None:
             cmd.extend(["-crf", str(spec.crf)])
-        cmd.extend(["-preset", "slow"])
+        # Use spec preset (was hardcoded to "slow" — overrode per-platform
+        # tuning and made 2-CPU VPS painfully slow on every transcode).
+        cmd.extend(["-preset", spec.preset or "medium"])
+        # Apply bitrate ceiling when configured. Critical for IG/Threads/FB
+        # which reject high-bitrate uploads with container-processing errors.
+        # Without maxrate, CRF=15-22 on motion-heavy source produces 8-15
+        # Mbps files that platforms refuse.
+        if spec.maxrate:
+            cmd.extend(["-maxrate", spec.maxrate, "-bufsize", spec.bufsize or spec.maxrate])
         if spec.width and spec.height:
             cmd.extend(["-vf", f"scale={spec.width}:{spec.height}"])
         cmd.extend([
             "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+            "-c:a", "aac", "-b:a", spec.audio_bitrate or "192k", "-ar", "48000",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
             str(variant_path),
