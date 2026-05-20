@@ -233,13 +233,27 @@ def match_product(
         )
         return best_product
 
-    # NOTE: a previous version invoked an LLM "contextual fallback" here when
-    # keyword matching returned zero hits.  That code is gone — the LLM was
-    # too willing to rationalize a match (e.g. surfacing "Anime Figure
-    # Collection" for a Wistoria character moment with no keyword overlap).
-    # Now we fail closed: if static keywords don't hit, the caller can try
-    # the dynamic Amazon-search matcher, but only if it has its own quality
-    # gates.  No silent LLM force-match.
+    # 3. Evergreen fallback: every niche may designate one product as
+    # `evergreen_default: true`. When specific keyword matching misses,
+    # we serve the evergreen so the post still gets a monetization slot
+    # instead of zero affiliate. Examples: gaming→Game Pass, anime→Figure
+    # Collection, movies→Prime Video, sports→Fitness Tracker,
+    # ai_creators→Claude Pro. These are niche-defining, broadly relevant
+    # products that work as CTAs regardless of the specific story.
+    evergreen = next(
+        (p for p in enabled if p.get("evergreen_default") is True),
+        None,
+    )
+    if evergreen is not None:
+        logger.info(
+            "[AffiliateMatch] Evergreen fallback for %s: '%s' (no keyword match)",
+            niche_id, evergreen.get("name", ""),
+        )
+        return evergreen
+
+    # No keyword match AND no evergreen configured. Caller can attempt
+    # dynamic match (only re-enabled when PA-API is configured — see
+    # affiliate_matcher.execute gate).
     return None
 
 

@@ -66,6 +66,7 @@ niches:
         discount: 10% off
         valid_until: '2026-12-31'
     - name: Xbox Game Pass Ultimate
+      evergreen_default: true
       keywords:
       - xbox
       - game pass
@@ -408,6 +409,7 @@ niches:
       image_url: https://example.com/images/fancode.jpg
       price_inr: 999
     - name: Fitness Tracker
+      evergreen_default: true
       keywords:
       - fitness tracker
       - smartwatch
@@ -600,6 +602,7 @@ niches:
       image_url: https://m.media-amazon.com/images/I/51BU2adIfsL._SL1500_.jpg
       price_inr: 649
     - name: Amazon Prime Video
+      evergreen_default: true
       keywords:
       - prime video
       - amazon prime
@@ -866,6 +869,7 @@ niches:
       image_url: https://m.media-amazon.com/images/I/91NxYvUNf6L._SL1500_.jpg
       price_inr: 4999
     - name: Anime Figure Collection
+      evergreen_default: true
       keywords:
       - figure
       - figurine
@@ -1299,6 +1303,7 @@ niches:
       image_url: https://m.media-amazon.com/images/I/71k5N-RKVgL._AC_SL1500_.jpg
       price_inr: 12999
     - name: Claude Pro Subscription
+      evergreen_default: true
       keywords:
       - claude
       - anthropic
