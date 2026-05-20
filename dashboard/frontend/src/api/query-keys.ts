@@ -106,6 +106,8 @@ export const queryKeys = {
   },
   learning: {
     status: () => ["learning", "status"] as const,
+    hookClassifierStatus: () => ["learning", "hook-classifier-status"] as const,
+    configUpdates: () => ["learning", "config-updates"] as const,
   },
   engagement: {
     recent: () => ["engagement", "recent"] as const,

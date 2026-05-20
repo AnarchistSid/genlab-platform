@@ -522,8 +522,32 @@ export interface LearningStatus {
   hook_classifier_progress: number;
   hook_classifier_threshold: number;
   config_update_threshold: number;
+  /** Total reward-bearing PF rows in the last 30 days across all niches. */
+  config_update_progress: number;
+  /** Niches whose 30-day reward-bearing PF count >= MIN_DATA_POINTS. */
+  niches_at_config_quota: number;
   linucb_threshold: number;
   linucb_max_plays: number;
+}
+
+export interface HookClassifierNicheStatus {
+  trained: boolean;
+  n_examples?: number;
+  pos_rate?: number;
+  n_features?: number;
+}
+
+export interface ConfigUpdateRow {
+  id: string;
+  niche_id: string;
+  file_path: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string | null;
+  n_records: number | null;
+  applied_at: string;
+  dry_run: boolean;
 }
 
 export interface BanditArm {

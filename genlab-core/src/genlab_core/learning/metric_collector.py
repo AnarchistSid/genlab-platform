@@ -31,6 +31,7 @@ from genlab_core.learning.pending_feedback_task import (
     PendingFeedbackTask,
 )
 from genlab_core.learning.reward_shaper import RewardShaper
+from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
@@ -352,9 +353,12 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
                     metrics["saves"] = val
                 elif name in ("reach", "likes", "comments", "shares"):
                     metrics[name] = val
-            # Stubs for fields RewardShaper expects but Graph API doesn't expose
-            metrics.setdefault("dm_send_rate", 0.0)
-            metrics.setdefault("skip_rate", 0.0)
+            # dm_send_rate and skip_rate aren't directly available from the
+            # basic insights endpoints. Leaving them OUT of the dict (rather
+            # than stubbing 0.0) lets compute_reward redistribute their
+            # weight to metrics we actually observe — otherwise their 0.3 +
+            # -0.05 weight share becomes a permanent dead zone in the IG
+            # reward signal.
             return metrics
         except Exception:
             continue
@@ -659,7 +663,9 @@ def _fetch_x(post_id: str, niche_id: str = "") -> dict:
         "replies": replies,
         "engagements": engagements,
         "reply_chain_rate": round(reply_chain_rate, 4),
-        "profile_clicks": 0,  # not in public_metrics; needs organic_tweet metrics
+        # profile_clicks is in organic_tweet_metrics which requires
+        # Twitter API Pro tier. Omit the key entirely so compute_reward
+        # redistributes its 0.10 weight instead of pinning to a fake 0.
     }
 
 
@@ -731,8 +737,10 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
             vals = item.get("values", [{}])
             val = vals[0].get("value", 0) if vals else 0
             metrics[name] = val
-        # discovery_share not exposed by Threads API
-        metrics.setdefault("discovery_share", 0.0)
+        # discovery_share isn't exposed by the Threads API; omit the key
+        # so compute_reward redistributes its 0.15 weight to observed
+        # metrics (views / replies / reposts) rather than treating it
+        # as a real zero contribution.
         return metrics
     except Exception as exc:
         logger.warning("[metric_collector] Threads fetch failed for %s: %s", post_id, exc)
@@ -743,14 +751,69 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 # Core flow
 # ---------------------------------------------------------------------------
 
+def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
+    """Return channel-level metrics from the monetisationprogress table.
+
+    Maps each row's ``metric_name`` to its ``current_value`` for the
+    given (niche_id, platform). RewardShaper uses this to detect when
+    a channel is within 20% of a monetisation threshold and boost the
+    relevant per-post reward metric accordingly.
+
+    Returns ``{}`` on any error — RewardShaper falls back to base
+    weights so the bandit keeps learning during outages.
+    """
+    try:
+        import os
+        import psycopg
+
+        db_url = os.environ.get("DATABASE_URL", "").strip()
+        if not db_url:
+            return {}
+        with psycopg.connect(db_url, connect_timeout=3) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT metric_name, current_value
+                    FROM monetisationprogress
+                    WHERE niche_id = %s AND platform = %s
+                      AND current_value IS NOT NULL
+                    """,
+                    (niche_id, platform),
+                )
+                return {
+                    str(name): float(val)
+                    for name, val in cur.fetchall()
+                    if val is not None
+                }
+    except Exception as exc:
+        logger.debug(
+            "[reward] get_channel_metrics failed for %s/%s: %s",
+            niche_id, platform, exc,
+        )
+        return {}
+
+
 @task(name="compute_reward")
 def compute_reward(
     metrics: dict[str, Any],
     platform: str,
     shaper: RewardShaper,
+    niche_id: str = "",
 ) -> float:
-    """Compute shaped reward from 48h metrics."""
-    return shaper.compute_reward(platform=platform, metrics=metrics)
+    """Compute shaped reward from 48h metrics.
+
+    Threshold-proximity boosting fires when ``niche_id`` is provided
+    and the channel is within 20% of any monetisation threshold for
+    this platform. Without ``niche_id``, falls back to base weights.
+    """
+    channel_metrics = (
+        get_channel_metrics(niche_id, platform) if niche_id else None
+    )
+    return shaper.compute_reward(
+        platform=platform,
+        metrics=metrics,
+        channel_metrics=channel_metrics,
+    )
 
 
 # Map platform → variant arm_id prefix used in cta_variants.yaml.
@@ -889,7 +952,6 @@ def process_pending_task(
     # Record lifecycle snapshot for content decay analysis
     if metrics:
         try:
-            from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
             record_lifecycle_snapshot(
                 post_id=task_record.platform_post_id,
                 platform=task_record.platform,
@@ -934,7 +996,12 @@ def process_pending_task(
 
     reward_48h: float | None = None
     if window == "48h" and metrics:
-        reward_48h = compute_reward(metrics, task_record.platform, shaper)
+        reward_48h = compute_reward(
+            metrics,
+            task_record.platform,
+            shaper,
+            niche_id=task_record.niche_id,
+        )
         logger.info(
             "[metric_collector] 48h reward for %s/%s: %.3f",
             task_record.platform,
@@ -1233,4 +1300,13 @@ def _default_bandit_updater(
 
 
 if __name__ == "__main__":
+    # Configure root logger so INFO lines surface to systemd journal.
+    # Without this, the root logger has no handler and every logger.info
+    # call (Processing N tasks, per-row bandit update, 48h reward, etc.)
+    # is silently dropped — only WARNING+ reaches journald. This made
+    # the May 2026 audit invisible to anyone reading systemctl status.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
     collect_metrics(bandit_updater=_default_bandit_updater)

@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { useLearningStatus } from "@/hooks/use-learning";
+import {
+  useHookClassifierStatus,
+  useLearningStatus,
+} from "@/hooks/use-learning";
+import { getNicheInfo } from "@/niches/registry";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { SectionHeader } from "@/components/shared/section-header";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
@@ -17,7 +21,9 @@ const FEATURES = [
   { key: "unique_word_ratio", label: "Unique Word Ratio",  desc: "Vocabulary diversity score" },
 ];
 
-const DAILY_POST_RATE = 15; // posts per day estimate
+// 5 niches × 1 reel/day = 5 posts/day. Earlier value (15) made the
+// "training data ready in ~N days" estimate off by 3×.
+const DAILY_POST_RATE = 5;
 
 // ── Sub-components ─────────────────────────────────────────
 
@@ -111,28 +117,60 @@ function FeatureList() {
   );
 }
 
-function ClassifierEmptyState({ progress }: { progress: number }) {
-  if (progress > 0) return null;
+function TrainingStatus({
+  status,
+  threshold,
+}: {
+  status: Record<string, { trained: boolean; n_examples?: number; pos_rate?: number }>;
+  threshold: number;
+}) {
+  // Surface per-niche training state from /hook-classifier-status.
+  // Previously the tab only watched "rewards collected" and silently
+  // implied the classifier was trained once that count went up — but
+  // training is a separate weekly cron that only runs when a niche
+  // crosses the example threshold, AND only succeeds when the bridge
+  // from PF -> hook_text works.
+  const niches = Object.keys(status);
+  if (niches.length === 0) return null;
+
+  const trainedCount = niches.filter((n) => status[n].trained).length;
   return (
-    <div className="bg-bg-surface border border-border rounded-lg p-3.5 flex items-center gap-3"
-      style={{
-        background: "rgba(139,92,246,0.06)",
-        borderColor: "rgba(139,92,246,0.18)",
-      }}
-    >
-      <div
-        className="w-8 h-8 rounded-sm flex items-center justify-center shrink-0 text-base"
-        style={{ background: "rgba(139,92,246,0.12)" }}
-      >
-        🧠
+    <div className="bg-bg-surface border border-border rounded-lg p-4">
+      <SectionHeader title="Trained Classifiers" />
+      <div className="text-xs text-text-muted mb-3">
+        {trainedCount} of {niches.length} niche classifier{niches.length === 1 ? "" : "s"} trained.
+        Weekly trainer fires Sunday 10:30 UTC and only persists a model
+        when a niche has ≥ {threshold} labelled examples.
       </div>
-      <div>
-        <div className="text-sm font-medium mb-0.5" style={{ color: "var(--color-purple)" }}>
-          Hook Classifier Not Yet Trained
-        </div>
-        <div className="text-xs text-text-muted">
-          The hook classifier will predict which hooks perform best once trained. It learns from published posts and their engagement outcomes.
-        </div>
+      <div className="grid grid-cols-2 gap-2">
+        {niches.map((n) => {
+          const s = status[n];
+          const info = getNicheInfo(n);
+          return (
+            <div
+              key={n}
+              className="flex items-center gap-2.5 p-2 rounded-sm border border-border-subtle bg-bg-elevated"
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ background: info.hex }}
+              />
+              <span className="text-sm text-text-secondary flex-1 truncate">
+                {info.label}
+              </span>
+              {s.trained ? (
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-green)" }}
+                >
+                  Trained · {s.n_examples ?? 0}
+                </span>
+              ) : (
+                <span className="text-xs text-text-ghost">Not trained</span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -142,21 +180,28 @@ function ClassifierEmptyState({ progress }: { progress: number }) {
 
 export function HookClassifier() {
   const { data: resp, isLoading } = useLearningStatus();
+  const { data: trainStatus, isLoading: trainLoading } =
+    useHookClassifierStatus();
 
+  // Fallback threshold matches MIN_EXAMPLES in
+  // genlab_core.learning.hook_classifier (Sprint 68 lowered to 50).
   const { progress, threshold } = useMemo(() => {
-    if (!resp) return { progress: 0, threshold: 200 };
+    if (!resp) return { progress: 0, threshold: 50 };
     return {
       progress: resp.hook_classifier_progress,
       threshold: resp.hook_classifier_threshold,
     };
   }, [resp]);
 
-  if (isLoading) return <LoadingSkeleton variant="card-list" rows={2} />;
+  if (isLoading || trainLoading)
+    return <LoadingSkeleton variant="card-list" rows={3} />;
 
   return (
     <div className="flex flex-col gap-4">
       <ProgressSection progress={progress} threshold={threshold} />
-      <ClassifierEmptyState progress={progress} />
+      {trainStatus ? (
+        <TrainingStatus status={trainStatus} threshold={threshold} />
+      ) : null}
       <FeatureList />
     </div>
   );

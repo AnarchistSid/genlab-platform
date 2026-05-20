@@ -227,12 +227,19 @@ _BANDIT_BOOST_CEIL = 1.3
 def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
     """Thompson-sampled boost multipliers from bandit_arms posteriors.
 
-    For each arm in the niche, draws one Beta(alpha, beta) sample and
-    maps it into the multiplier range [_BANDIT_BOOST_FLOOR,
-    _BANDIT_BOOST_CEIL]. The randomness IS the exploration mechanism —
-    a fresh arm at alpha=beta=1 has uniform posterior so its sample
-    varies over the full range each call; a well-trained arm
-    concentrates samples near its posterior mean.
+    Draws one Beta(alpha, beta) sample per arm and maps it into the
+    multiplier range [FLOOR, CEIL] *relative to the per-niche median
+    posterior mean*. Linear mapping to [0,1] (the previous behaviour)
+    was wrong here because real reward distributions live in 0.02–0.15
+    — every arm got deboosted below 1.0 and cold arms with the α=β=1
+    prior (mean 0.5) were systematically favoured. Median-relative
+    mapping keeps the boost centred at 1.0 so above-median arms get
+    boosted and below-median arms get demoted, regardless of the
+    absolute reward scale.
+
+    Confidence is implicit in Thompson sampling: high (α+β) tightens
+    the sample around the mean, so well-trained arms produce stable
+    boosts and fresh arms keep exploring.
 
     Falls back to {} on any error so the caller can degrade to the
     engagement-history boost or neutral multipliers.
@@ -251,17 +258,49 @@ def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
         return {}
 
     import random
-    spread = _BANDIT_BOOST_CEIL - _BANDIT_BOOST_FLOOR
+
+    means = [a / (a + b) for (a, b) in arms.values() if (a + b) > 0]
+    # Use median as the neutral reference. With α=β=1 priors mixed
+    # with trained arms, the simple mean is pulled by the priors;
+    # median is more robust to that skew. For even-count arrays we
+    # interpolate between the two middle values so the reference
+    # truly sits at the midpoint (otherwise with just two arms the
+    # median collapses to the upper value and the high arm always
+    # clamps to a boost of 1.0).
+    if means:
+        sorted_means = sorted(means)
+        n = len(sorted_means)
+        if n % 2 == 1:
+            median_mean = sorted_means[n // 2]
+        else:
+            median_mean = (sorted_means[n // 2 - 1] + sorted_means[n // 2]) / 2
+    else:
+        median_mean = 0.5
+    # Avoid divide-by-zero in the rare case where every arm has mean 0.
+    if median_mean <= 0:
+        median_mean = 0.5
+
     boosts: dict[str, float] = {}
     for arm_id, (alpha, beta) in arms.items():
-        # Guard against pathological alpha/beta — Beta requires both > 0.
         a = alpha if alpha > 0 else 1.0
         b = beta if beta > 0 else 1.0
         try:
             sample = random.betavariate(a, b)
         except (ValueError, OverflowError):
-            sample = 0.5
-        boosts[arm_id] = round(_BANDIT_BOOST_FLOOR + spread * sample, 4)
+            sample = median_mean
+
+        # Map sample so sample == median_mean -> boost = 1.0.
+        # Below median linearly approaches FLOOR at sample = 0.
+        # Above median linearly approaches CEIL at sample = 2 * median.
+        if sample <= median_mean:
+            ratio = sample / median_mean
+            boost = _BANDIT_BOOST_FLOOR + (1.0 - _BANDIT_BOOST_FLOOR) * ratio
+        else:
+            # 2 * median_mean as the "double the niche-average" headroom.
+            # Clamp to CEIL beyond that so the boost never blows out.
+            ratio = min(1.0, (sample - median_mean) / median_mean)
+            boost = 1.0 + (_BANDIT_BOOST_CEIL - 1.0) * ratio
+        boosts[arm_id] = round(boost, 4)
     return boosts
 
 
@@ -275,15 +314,50 @@ def _apply_engagement_boost(base_score: float, arm_id: str, boosts: dict[str, fl
     return round(base_score * multiplier, 4)
 
 
-def _classify_arm(niche_id: str, story: dict, content: dict) -> str:
-    """Classify content into a bandit arm_id based on keyword matching."""
+def _classify_arm(
+    niche_id: str,
+    story: dict,
+    content: dict,
+    arm_boosts: dict[str, float] | None = None,
+) -> str:
+    """Classify content into a bandit arm_id.
+
+    Keyword matching picks the candidate set: any arm whose keyword
+    list intersects the story+hook+summary text is a contender. When
+    only one arm matches, return it directly (the common case).
+
+    When MULTIPLE arms match — e.g. a story that's both a trailer and
+    a cast announcement — fall back to the bandit posterior to pick
+    between them. The arm with the highest current boost wins. This
+    is a soft form of bandit-driven classification: the keyword set
+    constrains the choice to semantically appropriate arms, and the
+    bandit breaks the tie based on which arm has historically driven
+    more engagement.
+
+    With ``arm_boosts=None``, behaviour matches the legacy first-
+    matching-arm-wins order so callers that don't pass boosts (tests,
+    pre-bandit code paths) keep their existing semantics.
+    """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
 
+    matches: list[str] = []
     for arm_id, keywords in _ARM_KEYWORDS.get(niche_id, []):
         if any(kw in text for kw in keywords):
-            return arm_id
+            matches.append(arm_id)
 
-    return _NICHE_ARM_DEFAULTS.get(niche_id, "default")
+    if not matches:
+        return _NICHE_ARM_DEFAULTS.get(niche_id, "default")
+    if len(matches) == 1 or not arm_boosts:
+        return matches[0]
+
+    # Multiple arms eligible — pick the one with the highest current
+    # Thompson-sampled boost. Falls back to the first match if no
+    # boost data is available for the matched arms.
+    best = max(
+        matches,
+        key=lambda a: arm_boosts.get(a, 1.0),
+    )
+    return best
 
 
 class PushToBacklog:
@@ -742,7 +816,7 @@ class PushToBacklog:
             hook = content.get("hook", "")
 
             # Classify content into a bandit arm_id for the learning loop
-            arm_id = _classify_arm(niche_id, story, content)
+            arm_id = _classify_arm(niche_id, story, content, arm_boosts=arm_boosts)
 
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
             if hook:

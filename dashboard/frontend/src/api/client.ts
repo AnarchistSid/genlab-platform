@@ -23,6 +23,8 @@ import type {
   QueueStats,
   ChannelHealth,
   TokenHealthResponse,
+  ConfigUpdateRow,
+  HookClassifierNicheStatus,
   LearningStatus,
   EngagementComment,
   TopPost,
@@ -356,6 +358,10 @@ export const monetisation = {
 
 export const learning = {
   status: () => get<LearningStatus>("/learning/status"),
+  hookClassifierStatus: () =>
+    get<Record<string, HookClassifierNicheStatus>>("/learning/hook-classifier-status"),
+  configUpdates: () =>
+    get<{ updates: ConfigUpdateRow[] }>("/learning/config-updates"),
 };
 
 export const engagementApi = {

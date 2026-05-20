@@ -99,9 +99,65 @@ def main() -> int:
         for change in changes:
             logger.info("  %s: %s → %s (was %s)", change["file"], change["field"], change["new"], change["old"])
 
+        if changes and not args.dry_run:
+            _persist_changes(niche_id, changes, dry_run=args.dry_run)
+        elif changes and args.dry_run:
+            # Still record dry-run rows so the dashboard can preview
+            # what *would* have changed had operators flipped the gate.
+            _persist_changes(niche_id, changes, dry_run=True)
+
     prefix = "[DRY RUN] " if args.dry_run else ""
     logger.info("%sDone: %d config changes across %d niches", prefix, total_changes, len(niches))
     return 0
+
+
+def _persist_changes(niche_id: str, changes: list[dict], dry_run: bool) -> None:
+    """Append config-update audit rows to the config_updates table.
+
+    Failure to persist is logged but non-fatal — the YAML write
+    already happened, and missing an audit row is recoverable. The
+    dashboard's Config Updates tab consumes these rows.
+    """
+    try:
+        import os
+        import json as _json
+        import psycopg
+
+        db_url = os.environ.get("DATABASE_URL", "").strip()
+        if not db_url:
+            logger.warning("[CONFIG_UPDATE] DATABASE_URL unset — skip persist")
+            return
+        with psycopg.connect(db_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                for change in changes:
+                    cur.execute(
+                        """
+                        INSERT INTO config_updates
+                            (niche_id, file_path, field, old_value,
+                             new_value, reason, n_records, dry_run, extra)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            niche_id,
+                            change.get("file", ""),
+                            change.get("field", ""),
+                            str(change.get("old", "")),
+                            str(change.get("new", "")),
+                            change.get("reason", ""),
+                            int(change.get("n", 0) or 0),
+                            dry_run,
+                            _json.dumps({
+                                k: v for k, v in change.items()
+                                if k not in (
+                                    "file", "field", "old", "new",
+                                    "reason", "n",
+                                )
+                            }),
+                        ),
+                    )
+            conn.commit()
+    except Exception as exc:
+        logger.warning("[CONFIG_UPDATE] persist failed: %s", exc)
 
 
 if __name__ == "__main__":

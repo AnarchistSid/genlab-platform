@@ -227,6 +227,23 @@ def train_and_save(
         model_path = save_dir / f"hook_classifier_{niche_id}.json"
         model.save_model(str(model_path))
 
+        # Sidecar meta file consumed by the dashboard's
+        # /api/v1/learning/hook-classifier-status endpoint. Without it
+        # the UI shows every niche as "Not trained" even when the model
+        # file is on disk. Track n_examples + pos_rate so operators can
+        # see the training distribution at a glance.
+        import json
+        from datetime import UTC, datetime
+        pos_rate = float(np.mean(y)) if len(y) > 0 else 0.0
+        meta_path = save_dir / f"hook_classifier_{niche_id}.meta.json"
+        meta_path.write_text(json.dumps({
+            "niche_id": niche_id,
+            "n_examples": len(examples),
+            "pos_rate": round(pos_rate, 4),
+            "feature_names": FEATURE_NAMES,
+            "trained_at": datetime.now(UTC).isoformat(),
+        }))
+
         logger.info(
             "[hook_clf] Trained on %d examples, saved to %s",
             len(examples),

@@ -101,31 +101,6 @@ function NicheBarChart({
   );
 }
 
-// ── Placeholder notice ────────────────────────────────────
-
-function TimeSeriesPlaceholder({ total }: { total: number }) {
-  const THRESHOLD = 50;
-  const remaining = Math.max(0, THRESHOLD - total);
-
-  return (
-    <div className="bg-bg-surface border border-border rounded-lg p-3.5 flex items-center gap-3">
-      <div className="w-8 h-8 rounded-sm bg-bg-elevated flex items-center justify-center shrink-0 text-base">
-        📈
-      </div>
-      <div>
-        <div className="text-sm text-text-secondary font-medium">
-          Reward time-series chart will appear once 50+ rewards are collected
-        </div>
-        {remaining > 0 && (
-          <div className="text-xs text-text-ghost mt-0.5">
-            {remaining} more reward{remaining !== 1 ? "s" : ""} needed to unlock
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── Main export ────────────────────────────────────────────
 
 export function RewardHistory() {
@@ -187,8 +162,6 @@ export function RewardHistory() {
           <NicheBarChart data={chartData} />
         </>
       )}
-
-      <TimeSeriesPlaceholder total={data.rewards_computed} />
     </div>
   );
 }

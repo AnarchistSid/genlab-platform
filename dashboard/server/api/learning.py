@@ -40,46 +40,104 @@ def _linucb_obs(arm_record: dict) -> int:
 
 _HOOK_NICHES = ["ai_creators", "gaming", "sports", "movies", "anime"]
 
-# Bandit state cache (60s TTL — 5 SP roundtrips are expensive)
-_bandit_cache: dict = {"data": None, "ts": 0.0}
-_BANDIT_TTL = 60.0
-
-# Learning status cache (60s TTL — multiple table queries are expensive)
+# Learning status cache (300s TTL — multiple DB aggregates are expensive
+# and the data only changes meaningfully when a pipeline / metric_collector
+# fires. 60s was tight enough to re-hit the DB on every dashboard nav.)
 _status_cache: dict = {"data": None, "ts": 0.0}
-_STATUS_TTL = 60.0
+_STATUS_TTL = 300.0
 
 
-@bp.route("/bandit-state")
-def bandit_state():
-    """Return bandit arm alpha/beta for all niches -- shown in dashboard learning panel."""
-    now = _time.time()
-    if _bandit_cache["data"] is not None and (now - _bandit_cache["ts"]) < _BANDIT_TTL:
-        return api_success(data=_bandit_cache["data"])
+# Backend gate parameters used to compute the real config_update_threshold
+# instead of the previous hardcoded 50 (which had no relation to the
+# actual ConfigUpdater.run gate). Must stay in sync with
+# genlab_core.learning.config_updater.MIN_DATA_POINTS.
+_CONFIG_UPDATER_MIN_RECORDS_PER_NICHE = 20
+
+
+def _learning_aggregates() -> dict:
+    """Aggregate learning-loop state via direct SQL.
+
+    Replaces the previous client.<table>.all(max_records=...) truncation
+    pattern (PF capped at 500, analytics capped at 50, bandit arms at
+    100) which silently underreported once any table grew past those
+    caps. Uses one connection + four aggregates.
+    """
+    import os
+    import psycopg
+    from psycopg.rows import dict_row
+
+    out: dict = {
+        "feedback_by_status": {},
+        "rewards_count": 0,
+        "avg_reward": None,
+        "max_reward": None,
+        "analytics_count": 0,
+        "config_update_progress": 0,
+        "config_update_threshold": _CONFIG_UPDATER_MIN_RECORDS_PER_NICHE * 5,
+        "niches_at_config_quota": 0,
+    }
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        return out
 
     try:
-        from genlab_core.learning.arm_loader import BANDIT_LIST_NAMES, load_all_arms
-
-        from server.core.graph_sync import get_sync_client
-
-        client = get_sync_client()
-        state = {}
-        for niche_id in BANDIT_LIST_NAMES:
-            arms = load_all_arms(client.bandit_arms, niche_id)
-            if arms:
-                state[niche_id] = {
-                    arm_id: {
-                        "alpha": round(a, 3),
-                        "beta": round(b, 3),
-                        "expected_reward": round(a / (a + b), 4),
-                    }
-                    for arm_id, (a, b) in arms.items()
+        with psycopg.connect(db_url, connect_timeout=5, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT collection_status, COUNT(*) AS n
+                    FROM pending_feedback
+                    GROUP BY collection_status
+                    """
+                )
+                out["feedback_by_status"] = {
+                    r["collection_status"]: int(r["n"]) for r in cur.fetchall()
                 }
-        _bandit_cache["data"] = state
-        _bandit_cache["ts"] = now
-        return api_success(data=state)
-    except Exception as e:
-        logger.warning("bandit_state failed: %s", e)
-        return api_error(error=str(e), code=500)
+
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS n,
+                           AVG(reward_48h) AS avg_r,
+                           MAX(reward_48h) AS max_r
+                    FROM pending_feedback
+                    WHERE reward_48h IS NOT NULL
+                    """
+                )
+                row = cur.fetchone() or {}
+                out["rewards_count"] = int(row.get("n") or 0)
+                if row.get("avg_r") is not None:
+                    out["avg_reward"] = round(float(row["avg_r"]), 4)
+                if row.get("max_r") is not None:
+                    out["max_reward"] = round(float(row["max_r"]), 4)
+
+                cur.execute("SELECT COUNT(*) AS n FROM analytics")
+                out["analytics_count"] = int((cur.fetchone() or {}).get("n") or 0)
+
+                # Real config-update gate: niches with at least
+                # MIN_DATA_POINTS reward-bearing PF rows in the last 30
+                # days (matches ConfigUpdater.run's per-niche cutoff).
+                cur.execute(
+                    """
+                    SELECT niche_id, COUNT(*) AS n
+                    FROM pending_feedback
+                    WHERE reward_48h IS NOT NULL
+                      AND publish_time > NOW() - INTERVAL '30 days'
+                    GROUP BY niche_id
+                    """
+                )
+                niche_counts = {r["niche_id"]: int(r["n"]) for r in cur.fetchall()}
+                out["niches_at_config_quota"] = sum(
+                    1 for n in niche_counts.values()
+                    if n >= _CONFIG_UPDATER_MIN_RECORDS_PER_NICHE
+                )
+                # Progress = total reward-bearing PF rows in last 30 days
+                # across all niches. The "threshold" UI compares against
+                # is 5 niches * MIN_DATA_POINTS = 100 (i.e. every niche
+                # has enough records to update independently).
+                out["config_update_progress"] = sum(niche_counts.values())
+    except Exception as exc:
+        logger.warning("[learning] aggregates query failed: %s", exc)
+    return out
 
 
 @bp.route("/status")
@@ -93,46 +151,50 @@ def learning_status():
         from server.core.graph_sync import get_sync_client
         client = get_sync_client()
 
-        # Bandit arms
-        arms = client.bandit_arms.all(max_records=100)
-        arm_data = {}
+        # Bandit arms — cap raised from 100 to 500. With 5 niches and
+        # ~12 arms each (content_type + 5 style:* + future expansion)
+        # ~60 arms is realistic; 100 was uncomfortably close.
+        arms = client.bandit_arms.all(max_records=500)
+        arm_data: dict[str, list[dict]] = {}
         for a in arms:
             f = a.get("fields", a)
             niche = f.get("niche_id", "")
+            alpha = float(f.get("alpha", 1) or 1)
+            beta = float(f.get("beta", 1) or 1)
             arm_data.setdefault(niche, []).append({
                 "arm_id": f.get("arm_id", ""),
-                "alpha": round(float(f.get("alpha", 1)), 3),
-                "beta": round(float(f.get("beta", 1)), 3),
+                "alpha": round(alpha, 3),
+                "beta": round(beta, 3),
                 "n_plays": _linucb_obs(a),
-                "mean": round(float(f.get("alpha", 1)) / (float(f.get("alpha", 1)) + float(f.get("beta", 1))), 4),
+                "mean": round(alpha / (alpha + beta), 4) if (alpha + beta) > 0 else 0.0,
             })
 
-        # Pending feedback pipeline
-        feedback = client.pending_feedback.all(max_records=500)
-        feedback_by_status = {}
-        rewards = []
-        for fb in feedback:
-            ff = fb.get("fields", fb)
-            status = ff.get("collection_status", "unknown")
-            feedback_by_status[status] = feedback_by_status.get(status, 0) + 1
-            r = ff.get("reward_48h")
-            if r is not None:
-                rewards.append(float(r))
+        # Everything else uses direct SQL aggregates so we don't
+        # silently truncate when PF > 500 or analytics > 50 (the
+        # previous caps both made the dashboard lie once data grew).
+        agg = _learning_aggregates()
 
-        # Analytics summary
-        analytics = client.analytics.all(max_records=50)
-        analytics_count = len(analytics)
-
+        # hook_classifier threshold mirrors MIN_EXAMPLES in
+        # genlab_core.learning.hook_classifier (Sprint 68 lowered to 50).
+        # Progress: the count actually usable for training (rows where
+        # we have hook_text + reward_48h), surfaced separately so the
+        # UI can distinguish "data exists" from "trained".
         result = {
             "bandit_arms": arm_data,
-            "feedback_pipeline": feedback_by_status,
-            "rewards_computed": len(rewards),
-            "avg_reward": round(sum(rewards) / len(rewards), 4) if rewards else None,
-            "max_reward": round(max(rewards), 4) if rewards else None,
-            "analytics_records": analytics_count,
+            "feedback_pipeline": agg["feedback_by_status"],
+            "rewards_computed": agg["rewards_count"],
+            "avg_reward": agg["avg_reward"],
+            "max_reward": agg["max_reward"],
+            "analytics_records": agg["analytics_count"],
             "hook_classifier_threshold": 50,
-            "hook_classifier_progress": len(rewards),
-            "config_update_threshold": 50,
+            "hook_classifier_progress": agg["rewards_count"],
+            # Real backend gate: each niche needs 20 reward-bearing PF
+            # rows in the last 30 days for ConfigUpdater.run to do
+            # anything. Threshold == 5 niches * 20 = 100 (all niches
+            # at quota). Progress is sum across niches.
+            "config_update_threshold": agg["config_update_threshold"],
+            "config_update_progress": agg["config_update_progress"],
+            "niches_at_config_quota": agg["niches_at_config_quota"],
             "linucb_threshold": 50,
             "linucb_max_plays": max((_linucb_obs(a) for a in arms), default=0),
         }
@@ -167,3 +229,44 @@ def hook_classifier_status():
             status[niche_id] = {"trained": False}
 
     return api_success(data=status)
+
+
+@bp.route("/config-updates")
+def config_updates():
+    """Recent config-updates audit history.
+
+    Reads the ``config_updates`` table populated by
+    ``genlab_core.scripts.run_config_update`` and surfaces it for the
+    Learning > Config Updates tab. Returns dry-run and applied rows
+    separately so the UI can label preview rows.
+    """
+    import os
+    import psycopg
+    from psycopg.rows import dict_row
+
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        return api_error(error="DATABASE_URL unset", code=500)
+
+    try:
+        with psycopg.connect(db_url, connect_timeout=5, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id::text, niche_id, file_path, field,
+                           old_value, new_value, reason, n_records,
+                           applied_at, dry_run
+                    FROM config_updates
+                    ORDER BY applied_at DESC
+                    LIMIT 100
+                    """
+                )
+                rows = cur.fetchall()
+        # ISO-stringify timestamps for the JSON response.
+        for r in rows:
+            if r.get("applied_at") is not None:
+                r["applied_at"] = r["applied_at"].isoformat()
+        return api_success(data={"updates": rows})
+    except Exception as exc:
+        logger.warning("[learning] config_updates query failed: %s", exc)
+        return api_error(error=str(exc), code=500)

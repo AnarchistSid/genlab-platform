@@ -36,10 +36,12 @@ function AiLearnedCard({ data }: { data: LearningStatus }) {
     const best = nicheAvgs[0];
     const label = getNicheInfo(best.niche).label;
     const armLabel = best.bestArm?.arm_id.replace(/_/g, " ") ?? "content";
-    const mode = data.linucb_max_plays >= data.linucb_threshold
-      ? "now using contextual signals (time, niche, content features) to optimize selections"
-      : "still in exploration mode, collecting more data before optimizing";
-    insight = `${label}'s "${armLabel}" content type is currently leading. The system has analyzed ${data.rewards_computed} posts across ${nicheAvgs.length} niches and is ${mode}.`;
+    // We currently re-rank via Thompson sampling on the keyword-classified
+    // arm. The boost is median-relative so above-average arms get pushed
+    // up; below-average ones get demoted. Honest description, not the
+    // previous "LinUCB contextual signals" claim which described a code
+    // path that didn't exist.
+    insight = `${label}'s "${armLabel}" content type leads on engagement. The bandit re-ranks new candidates with Thompson-sampled boosts derived from these posteriors — above-average arms get prioritised, below-average ones get demoted. ${data.rewards_computed} rewarded posts informing the posteriors across ${nicheAvgs.length} niches.`;
   }
 
   return (
@@ -51,8 +53,13 @@ function AiLearnedCard({ data }: { data: LearningStatus }) {
 }
 
 function StatusCard({ data }: { data: LearningStatus }) {
-  const isLinUCB = data.linucb_max_plays >= data.linucb_threshold && data.linucb_threshold > 0;
-
+  // Honest labelling: production currently selects via Thompson
+  // sampling only. LinUCB covariance matrices are persisted on each
+  // bandit_arms row and updated on every 48h reward, but no production
+  // code path queries them at decision time. The previous label
+  // "LinUCB Active" once linucb_max_plays >= 50 was aspirational —
+  // there was no mode switch behind it.
+  const linucbObs = data.linucb_max_plays ?? 0;
   return (
     <div className="bg-bg-surface border border-border rounded-lg p-4 flex items-center gap-2.5">
       <span
@@ -63,10 +70,10 @@ function StatusCard({ data }: { data: LearningStatus }) {
         }}
       />
       <span className="text-base font-semibold text-text-primary">
-        {isLinUCB ? "LinUCB Active" : "Thompson Sampling Active"}
+        Thompson Sampling Active
       </span>
       <span className="ml-auto text-xs text-text-muted bg-bg-elevated border border-border rounded-sm px-2 py-0.5">
-        {isLinUCB ? "Contextual Bandit" : "Cold-Start Fallback"}
+        LinUCB context collected · max n_obs={linucbObs}
       </span>
     </div>
   );
@@ -130,19 +137,25 @@ function ThresholdsCard({ data }: { data: LearningStatus }) {
 }
 
 function SummaryStatsRow({ data }: { data: LearningStatus }) {
+  // Reward values are in [0, 1] but real engagement-shaped rewards
+  // typically land in [0.02, 0.15]. The previous "x.x / 100" display
+  // multiplied by 100 and labelled it as a percentage \u2014 which made a
+  // perfectly healthy 0.07 reward look like "7 / 100" / a failing
+  // grade. Show the raw reward as-is so the values match the
+  // distributions surfaced elsewhere in this view.
   const stats = [
     {
       label: "Posts Analyzed",
       value: data.rewards_computed.toLocaleString(),
     },
     {
-      label: "Avg Content Score",
-      value: data.avg_reward != null ? `${(data.avg_reward * 100).toFixed(1)} / 100` : "\u2014",
+      label: "Avg Reward (0\u20131)",
+      value: data.avg_reward != null ? data.avg_reward.toFixed(3) : "\u2014",
       accentColor: "var(--color-green)",
     },
     {
-      label: "Best Content Score",
-      value: data.max_reward != null ? `${(data.max_reward * 100).toFixed(1)} / 100` : "\u2014",
+      label: "Max Reward (0\u20131)",
+      value: data.max_reward != null ? data.max_reward.toFixed(3) : "\u2014",
       accentColor: "var(--color-cyan)",
     },
     {

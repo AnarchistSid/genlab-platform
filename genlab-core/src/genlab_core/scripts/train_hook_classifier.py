@@ -71,9 +71,20 @@ def main() -> int:
                 logger.info("  Dry run — %d positive / %d negative", pos, len(labels) - pos)
                 continue
 
-            train_and_save(niche_id, examples, labels)
-            total_trained += 1
-            logger.info("  Trained and saved successfully")
+            # train_and_save signature is (examples, labels, niche_id=...)
+            # — the previous positional call (niche_id, examples, labels)
+            # passed the niche string as `examples`, so len(examples)
+            # collapsed to the string length and the function bailed
+            # at the MIN_EXAMPLES check while this script logged
+            # "Trained and saved successfully" anyway. We never noticed
+            # because there were 0 examples to train on (the ID-bridge
+            # bug above this).
+            ok = train_and_save(examples, labels, niche_id=niche_id)
+            if ok:
+                total_trained += 1
+                logger.info("  Trained and saved successfully")
+            else:
+                logger.info("  Training skipped or failed")
         except Exception:
             logger.exception("  Training failed for %s", niche_id)
 

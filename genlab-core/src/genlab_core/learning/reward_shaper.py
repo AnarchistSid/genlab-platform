@@ -258,6 +258,24 @@ class RewardShaper:
         """
         weights = self.get_adjusted_weights(platform, channel_metrics)
 
+        # Redistribute weight for metrics the fetcher couldn't produce.
+        # Some keys (IG dm_send_rate/skip_rate, Twitter profile_clicks,
+        # Threads discovery_share) require API tiers or webhook data we
+        # don't have. Rather than pinning those slices to 0 (which makes
+        # the bandit reward systematically max out below the theoretical
+        # 1.0 ceiling), reallocate their share to observed metrics so
+        # the reward fully describes the metrics we DO see. Negative
+        # weights (e.g. IG skip_rate's -0.05 penalty) are preserved
+        # only when the metric is present so the reweight stays bounded
+        # to [0, 1].
+        present_weights = {
+            k: w for k, w in weights.items() if k in metrics
+        }
+        weight_sum = sum(abs(w) for w in present_weights.values())
+        if weight_sum > 0:
+            scale = sum(abs(w) for w in weights.values()) / weight_sum
+            weights = {k: w * scale for k, w in present_weights.items()}
+
         raw_reward = 0.0
         for metric, weight in weights.items():
             value = metrics.get(metric, 0.0)

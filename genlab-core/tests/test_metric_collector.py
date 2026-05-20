@@ -102,13 +102,17 @@ class TestFetchThreads:
         with patch("requests.get", return_value=mock_resp) as mock_get:
             result = _fetch_threads("post456")
 
+        # discovery_share isn't surfaced by the Threads API; the fetcher
+        # used to default it to 0.0 but that pinned the bandit reward's
+        # 0.15 discovery_share weight to a permanent zero. Now omitted
+        # so RewardShaper.compute_reward redistributes that share to
+        # observed metrics (views/replies/reposts).
         assert result == {
             "views": 1200,
             "likes": 80,
             "replies": 12,
             "reposts": 5,
             "quotes": 3,
-            "discovery_share": 0.0,  # RewardShaper-aligned stub
         }
         mock_get.assert_called_once()
         call_args = mock_get.call_args
@@ -201,8 +205,12 @@ class TestFetchPlatformMetricsRouting:
         with patch("requests.get", return_value=regular_resp):
             result = fetch_platform_metrics("instagram", "post001", "48h")
 
-        # Regular fetcher always adds RewardShaper-aligned stubs
-        assert result == {"dm_send_rate": 0.0, "skip_rate": 0.0}
+        # dm_send_rate and skip_rate aren't exposed by the basic Graph
+        # API insights endpoints. The fetcher used to stub them at 0.0
+        # but that left their (0.30 + -0.05) reward weight permanently
+        # zeroed out. Omitting the keys lets compute_reward redistribute
+        # their share to observed metrics.
+        assert result == {}
 
     def test_instagram_6h_exception_returns_empty(self, monkeypatch):
         monkeypatch.setenv("META_ACCESS_TOKEN", "tok_meta")
