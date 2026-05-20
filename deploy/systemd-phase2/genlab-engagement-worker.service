@@ -10,6 +10,14 @@ Group=genlab
 WorkingDirectory=/opt/genlab/genlab-core
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# Engagement worker handles comments across all 5 niches and writes to
+# a shared .engagement_replied.jsonl idempotency log. AGENT_ROOT must
+# point to one consistent location — BlackboxBrief is the canonical
+# default agent root for shared state. Without this, every message
+# fails with RuntimeError: AGENT_ROOT not set, retry-exhausts, then
+# lands in the dead-letter queue. (2026-05-20 forensics: 29k DLQ
+# messages, 40 days of broken engagement.)
+Environment=AGENT_ROOT=/opt/genlab/BlackboxBrief
 Environment=REDIS_HOST=127.0.0.1
 Environment=REDIS_PORT=6379
 ExecStart=/opt/genlab/.venv/bin/python -m dramatiq \
