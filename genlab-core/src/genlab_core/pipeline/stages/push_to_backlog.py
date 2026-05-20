@@ -560,10 +560,24 @@ class PushToBacklog:
         existing_titles = context.get("existing_titles", set())
 
         cross_niche_drops = 0
+        skip_llm_drops = 0
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
             published_at = story.get("published_at", datetime.now(UTC).isoformat())
+
+            # Drop stories that base_writing+base_hooks couldn't write a
+            # hook for. _skip_llm=True means: LLM rejected as banned/off-
+            # topic AND title-fallback didn't recover. Publishing these
+            # would ship empty-hook reels — better to skip the slot.
+            content = story.get("content", {}) if isinstance(story.get("content"), dict) else {}
+            if story.get("_skip_llm") and not content.get("hook"):
+                skip_llm_drops += 1
+                logger.info(
+                    "[PUSH] Skipping story with no recoverable hook: %r",
+                    title[:60],
+                )
+                continue
 
             # Cross-niche source guard. Catches contamination that slipped
             # past the stage-prefix guard (e.g. story injected late in the
@@ -940,6 +954,7 @@ class PushToBacklog:
             "blueprints_pushed": blueprints_pushed,
             "video_dedup_skipped": video_dedup_skipped,
             "cross_niche_drops": cross_niche_drops,
+            "skip_llm_drops": skip_llm_drops,
             "errors": errors[:5],
             "status": "ok" if not errors else f"partial ({len(errors)} errors)",
         }

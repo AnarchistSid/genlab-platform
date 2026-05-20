@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from pathlib import Path
 from typing import Any
 
@@ -202,12 +203,32 @@ class BaseHookStrategy(HookStrategy):
         validator = HookValidator()
 
         for story in stories:
-            # Skip clipless stories — no video means no reel, no hook needed
+            # Stories marked _skip_llm by base_writing — LLM declined to
+            # write a hook (banned pattern, off-topic, etc.). Before giving
+            # up, try a title-derived fallback so we don't lose the slot.
+            # If the title can't yield a valid hook either, keep the skip
+            # flag set so push_to_backlog drops it.
             if story.get("_skip_llm"):
-                logger.debug(
-                    "[%s] Skipping hook for clipless story: %s",
-                    self._niche_id,
-                    story.get("title", "")[:40],
+                title = (story.get("title", "") or "").strip()
+                if title:
+                    cleaned = title.split("|")[0].strip()
+                    cleaned = re.sub(r"\s*\([^)]*\)\s*", " ", cleaned).strip()
+                    cleaned = re.sub(r"^#\w+\s*", "", cleaned).strip()
+                    if len(cleaned) > 60:
+                        cleaned = cleaned[:57].rsplit(" ", 1)[0] + "..."
+                    if cleaned and not self._is_banned(cleaned):
+                        story.setdefault("content", {})["hook"] = cleaned
+                        story.pop("_skip_llm", None)
+                        used_hooks.add(cleaned.lower())
+                        hooked_count += 1
+                        logger.info(
+                            "[%s] LLM skip recovered via title-derived hook: %s",
+                            self._niche_id, cleaned[:60],
+                        )
+                        continue
+                logger.info(
+                    "[%s] LLM skip not recoverable, leaving for push_to_backlog drop: %s",
+                    self._niche_id, story.get("title", "")[:40],
                 )
                 continue
 
