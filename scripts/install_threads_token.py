@@ -90,11 +90,23 @@ def exchange_for_long_lived(short_token: str, app_secret: str) -> str:
 
 
 def update_env(token: str) -> None:
-    """Rewrite THREADS_ACCESS_TOKEN + THREADS_TOKEN_ISSUED_AT atomically."""
+    """Rewrite THREADS_ACCESS_TOKEN + THREADS_TOKEN_ISSUED_AT atomically.
+
+    Preserves the original file's ownership + permissions so non-root
+    services (engagement-poller, dashboard) can still read .env after
+    the rewrite. Bug 2026-05-20: script ran as root and chmod 0o600
+    locked out the genlab user, breaking the dashboard.
+    """
     issued_iso = datetime.now(UTC).isoformat()
 
     if not ENV_PATH.exists():
         raise RuntimeError(f".env not found at {ENV_PATH}")
+
+    # Capture original ownership + permissions BEFORE rewriting
+    orig_stat = ENV_PATH.stat()
+    orig_uid = orig_stat.st_uid
+    orig_gid = orig_stat.st_gid
+    orig_mode = orig_stat.st_mode & 0o777
 
     lines = ENV_PATH.read_text().splitlines()
     new_lines = []
@@ -118,9 +130,20 @@ def update_env(token: str) -> None:
 
     tmp_path = ENV_PATH.with_suffix(".tmp")
     tmp_path.write_text("\n".join(new_lines) + "\n")
-    tmp_path.chmod(0o600)
+    # Restore original mode + ownership before atomic rename so we don't
+    # accidentally lock out service users.
+    tmp_path.chmod(orig_mode)
+    try:
+        os.chown(tmp_path, orig_uid, orig_gid)
+    except PermissionError:
+        # Non-root can't chown; the rename will keep the new file owned
+        # by the caller. Log it so the user knows to fix manually if so.
+        print(
+            f"  ⚠ Could not chown to uid={orig_uid} gid={orig_gid} — "
+            f"verify {ENV_PATH} is readable by service users.",
+        )
     tmp_path.replace(ENV_PATH)
-    print(f"  ✓ Updated {ENV_PATH}")
+    print(f"  ✓ Updated {ENV_PATH} (mode {oct(orig_mode)}, uid={orig_uid})")
     print(f"  ✓ THREADS_TOKEN_ISSUED_AT={issued_iso}")
 
 
