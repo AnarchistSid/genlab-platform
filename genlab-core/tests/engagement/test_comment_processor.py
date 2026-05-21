@@ -109,6 +109,8 @@ class TestRateLimitRetry:
     def test_rate_limit_raises_for_dramatiq_retry(
         self, mock_replied, mock_spam, agent_root
     ):
+        import dramatiq
+
         from genlab_core.engagement.comment_processor import process_reply_event
 
         mock_gate = MagicMock()
@@ -119,7 +121,12 @@ class TestRateLimitRetry:
         with patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate), \
              patch("genlab_core.engagement.comment_processor._rate_limiter") as mock_rl:
             mock_rl.acquire.return_value = False
-            with pytest.raises(RuntimeError, match="Rate limit exceeded"):
+            # The processor raises dramatiq.Retry (not RuntimeError) so the
+            # broker re-queues with a calibrated delay instead of letting
+            # Dramatiq's default exponential backoff chase a token bucket
+            # that refills on a slower cadence. See wave 2 fix in
+            # comment_processor.py line ~466.
+            with pytest.raises(dramatiq.Retry, match="rate_limited:youtube"):
                 process_reply_event(_make_event())
 
 
