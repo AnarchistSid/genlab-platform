@@ -28,105 +28,99 @@ def client():
 
 
 class TestBanditState:
-    """GET /api/v1/learning/bandit-state"""
+    """GET /api/v1/learning/status — comprehensive learning loop status.
+
+    Replaces the older /bandit-state endpoint. The dashboard learning view
+    now consumes a single endpoint that bundles bandit arms with the rest
+    of the feedback-pipeline metrics, so tests target /status directly.
+    """
+
+    def _fake_sync_client(self, arms_data):
+        """Build a fake SyncBacklogClient whose .bandit_arms.all() yields
+        the given arm dicts (alpha/beta/niche_id/arm_id shape)."""
+        client = MagicMock()
+        client.bandit_arms.all = MagicMock(return_value=arms_data)
+        return client
 
     def test_bandit_state_returns_json(self, client):
-        """Bandit state returns arm alpha/beta/expected_reward per niche."""
+        """Bandit state surfaces alpha/beta/n_plays/mean per niche."""
         import server.api.learning as lmod
 
         # Clear cache
-        lmod._bandit_cache["data"] = None
-        lmod._bandit_cache["ts"] = 0.0
+        lmod._status_cache["data"] = None
+        lmod._status_cache["ts"] = 0.0
 
-        fake_arms = {
-            "hook_dramatic": (10.0, 5.0),
-            "hook_question": (3.0, 7.0),
-        }
-
-        # Build fake modules for lazy imports inside the endpoint
-        fake_arm_loader = types.ModuleType("genlab_core.learning.arm_loader")
-        fake_arm_loader.load_all_arms = MagicMock(return_value=fake_arms)
-        fake_arm_loader.BANDIT_LIST_NAMES = ["gaming"]
-
-        fake_backlog_mod = types.ModuleType("genlab_core.http.backlog_client")
-        fake_backlog_mod.BacklogClient = MagicMock
+        fake_arms = [
+            {"fields": {"niche_id": "gaming", "arm_id": "hook_dramatic", "alpha": 10.0, "beta": 5.0}},
+            {"fields": {"niche_id": "gaming", "arm_id": "hook_question", "alpha": 3.0, "beta": 7.0}},
+        ]
 
         with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "genlab_core.learning.arm_loader": fake_arm_loader,
-                    "genlab_core.http.backlog_client": fake_backlog_mod,
-                },
-            ),
-            patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()),
+            patch("server.core.graph_sync.get_sync_client",
+                  return_value=self._fake_sync_client(fake_arms)),
+            patch("server.api.learning._learning_aggregates", return_value={
+                "feedback_by_status": {}, "rewards_count": 0, "avg_reward": 0.0,
+                "max_reward": 0.0, "analytics_count": 0,
+                "config_update_threshold": 100,
+                "config_update_progress": 0,
+                "niches_at_config_quota": [],
+            }),
         ):
-            resp = client.get("/api/v1/learning/bandit-state")
+            resp = client.get("/api/v1/learning/status")
 
         assert resp.status_code == 200
         data = resp.get_json()["data"]
-        assert "gaming" in data
-        assert "hook_dramatic" in data["gaming"]
-        arm = data["gaming"]["hook_dramatic"]
-        assert arm["alpha"] == 10.0
-        assert arm["beta"] == 5.0
-        assert arm["expected_reward"] == round(10.0 / 15.0, 4)
-
-        # Check second arm too
-        q_arm = data["gaming"]["hook_question"]
-        assert q_arm["alpha"] == 3.0
-        assert q_arm["beta"] == 7.0
+        assert "bandit_arms" in data
+        assert "gaming" in data["bandit_arms"]
+        arms = {a["arm_id"]: a for a in data["bandit_arms"]["gaming"]}
+        assert arms["hook_dramatic"]["alpha"] == 10.0
+        assert arms["hook_dramatic"]["beta"] == 5.0
+        assert arms["hook_dramatic"]["mean"] == round(10.0 / 15.0, 4)
+        assert arms["hook_question"]["alpha"] == 3.0
+        assert arms["hook_question"]["beta"] == 7.0
 
     def test_bandit_state_uses_cache(self, client):
-        """E1: Second call within TTL returns cached data (no extra SP roundtrips)."""
+        """Second call within TTL returns cached data without re-querying."""
         import server.api.learning as lmod
 
-        fake_arms = {"cached_arm": (5.0, 5.0)}
-        fake_arm_loader = types.ModuleType("genlab_core.learning.arm_loader")
-        fake_arm_loader.load_all_arms = MagicMock(return_value=fake_arms)
-        fake_arm_loader.BANDIT_LIST_NAMES = ["gaming"]
-
-        fake_backlog_mod = types.ModuleType("genlab_core.http.backlog_client")
-        fake_backlog_mod.BacklogClient = MagicMock
+        fake_arms = [
+            {"fields": {"niche_id": "gaming", "arm_id": "cached_arm", "alpha": 5.0, "beta": 5.0}},
+        ]
+        fake_client = self._fake_sync_client(fake_arms)
 
         # Clear cache
-        lmod._bandit_cache["data"] = None
-        lmod._bandit_cache["ts"] = 0.0
+        lmod._status_cache["data"] = None
+        lmod._status_cache["ts"] = 0.0
 
         with (
-            patch.dict(
-                "sys.modules",
-                {
-                    "genlab_core.learning.arm_loader": fake_arm_loader,
-                    "genlab_core.http.backlog_client": fake_backlog_mod,
-                },
-            ),
-            patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()),
+            patch("server.core.graph_sync.get_sync_client", return_value=fake_client),
+            patch("server.api.learning._learning_aggregates", return_value={
+                "feedback_by_status": {}, "rewards_count": 0, "avg_reward": 0.0,
+                "max_reward": 0.0, "analytics_count": 0,
+                "config_update_threshold": 100,
+                "config_update_progress": 0,
+                "niches_at_config_quota": [],
+            }),
         ):
-            resp1 = client.get("/api/v1/learning/bandit-state")
-            resp2 = client.get("/api/v1/learning/bandit-state")
+            resp1 = client.get("/api/v1/learning/status")
+            resp2 = client.get("/api/v1/learning/status")
 
         assert resp1.status_code == 200
         assert resp2.status_code == 200
-        # load_all_arms should only be called once (cached on second call)
-        assert fake_arm_loader.load_all_arms.call_count == 1
+        # bandit_arms.all should only be called once (cached on second call)
+        assert fake_client.bandit_arms.all.call_count == 1
 
     def test_bandit_state_handles_error_gracefully(self, client):
-        """When arm_loader import fails, endpoint returns 500 with error message."""
+        """When the sync client raises, endpoint returns 500 with error message."""
         import server.api.learning as lmod
 
         # Clear cache so error path is tested
-        lmod._bandit_cache["data"] = None
-        lmod._bandit_cache["ts"] = 0.0
+        lmod._status_cache["data"] = None
+        lmod._status_cache["ts"] = 0.0
 
-        # Setting module to None in sys.modules causes ImportError on import
-        with patch.dict(
-            "sys.modules",
-            {
-                "genlab_core.learning.arm_loader": None,
-            },
-        ):
-            resp = client.get("/api/v1/learning/bandit-state")
+        with patch("server.core.graph_sync.get_sync_client",
+                   side_effect=RuntimeError("backlog unreachable")):
+            resp = client.get("/api/v1/learning/status")
 
         assert resp.status_code == 500
         data = resp.get_json()
