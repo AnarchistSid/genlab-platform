@@ -84,15 +84,17 @@ def fetch_platform_metrics(
 _yt_token_cache: dict[str, Any] = {"token": "", "niche": "", "ts": 0.0}
 _YT_TOKEN_TTL = 2400.0  # 40 minutes (tokens last ~60 min)
 
-# Shared Analytics token cache — same refresh_token across all niches in the
-# super-account model. Keyed on a sentinel ``__shared_analytics__`` slot.
-_yt_analytics_token_cache: dict[str, Any] = {"token": "", "ts": 0.0}
+# Per-niche Analytics token cache. Each entry is keyed by niche_id and stores
+# the most recently minted access token + timestamp. YouTube Analytics requires
+# per-channel tokens (manager-relationship parent accounts get 403 on managed
+# channels' analytics — verified 2026-05-21), so the cache cannot be shared.
+_yt_analytics_token_cache: dict[str, dict[str, Any]] = {}
 
 
-def _get_yt_analytics_access_token() -> str:
-    """Mint and cache an access token from the shared Analytics refresh token.
+def _get_yt_analytics_access_token(niche_id: str = "") -> str:
+    """Mint and cache an access token from the per-niche Analytics refresh token.
 
-    Returns "" if the super-account credentials aren't configured —
+    Returns "" if no analytics refresh token is configured for the niche —
     _fetch_youtube_analytics_extras then short-circuits to {} and the
     snapshot fields remain authoritative.
     """
@@ -104,39 +106,40 @@ def _get_yt_analytics_access_token() -> str:
         resolve_youtube_analytics_credentials,
     )
 
-    creds = resolve_youtube_analytics_credentials()
+    creds = resolve_youtube_analytics_credentials(niche_id)
     cid = creds.get("client_id", "")
     csec = creds.get("client_secret", "")
     rt = creds.get("refresh_token", "")
     if not all([cid, csec, rt]):
-        # Log once per process, not per call, so operators see the
-        # gap on first metric_collector run without flooding the
-        # logs. Without the analytics refresh token the YT reward
-        # signal is missing avg_view_duration + subscribers_gained
-        # + minutes_viewed + shares — the most valuable engagement
-        # metrics. 2026-05-21 audit found this unset on Hetzner;
-        # YT rewards computed from views/likes/comments only.
+        # Warn once per niche-id per process so operators can see WHICH
+        # channels are missing tokens without flooding logs per-call.
+        # Without the analytics refresh token the YT reward signal is
+        # missing avg_view_duration + subscribers_gained + minutes_viewed
+        # + shares — the most valuable engagement metrics for the
+        # learning loop.
         global _yt_analytics_warning_emitted  # type: ignore[name-defined]
         try:
-            if not _yt_analytics_warning_emitted:
-                raise NameError
+            emitted = _yt_analytics_warning_emitted
         except NameError:
+            emitted = set()
+            globals()["_yt_analytics_warning_emitted"] = emitted
+        if niche_id not in emitted:
             logger.warning(
-                "[metric_collector] YouTube Analytics v2 disabled: "
-                "%s missing. YT rewards will use snapshot views/likes "
-                "only — avg_view_duration/subscribers_gained/"
-                "minutes_viewed/shares will be omitted.",
+                "[metric_collector] YouTube Analytics v2 disabled for "
+                "niche=%s: %s missing. YT rewards will use snapshot "
+                "views/likes only — avg_view_duration/"
+                "subscribers_gained/minutes_viewed/shares will be "
+                "omitted.",
+                niche_id or "<unset>",
                 "refresh_token" if (cid and csec) else "client_id+secret+refresh_token",
             )
-            globals()["_yt_analytics_warning_emitted"] = True
+            emitted.add(niche_id)
         return ""
 
     now = _time.monotonic()
-    if (
-        _yt_analytics_token_cache["token"]
-        and (now - _yt_analytics_token_cache["ts"]) < _YT_TOKEN_TTL
-    ):
-        return _yt_analytics_token_cache["token"]
+    slot = _yt_analytics_token_cache.get(niche_id)
+    if slot and slot.get("token") and (now - slot.get("ts", 0.0)) < _YT_TOKEN_TTL:
+        return slot["token"]
 
     try:
         resp = requests.post(
@@ -151,27 +154,32 @@ def _get_yt_analytics_access_token() -> str:
         )
         resp.raise_for_status()
         token = resp.json().get("access_token", "")
-        _yt_analytics_token_cache["token"] = token
-        _yt_analytics_token_cache["ts"] = now
+        _yt_analytics_token_cache[niche_id] = {"token": token, "ts": now}
         return token
     except Exception as exc:
-        logger.debug("[metric_collector] yt analytics token refresh failed: %s", exc)
+        logger.debug(
+            "[metric_collector] yt analytics token refresh failed for "
+            "niche=%s: %s", niche_id or "<unset>", exc,
+        )
         return ""
 
 
-def _fetch_youtube_analytics_extras(video_id: str, channel_id: str) -> dict:
+def _fetch_youtube_analytics_extras(
+    video_id: str, channel_id: str, niche_id: str = "",
+) -> dict:
     """Pull avg_view_duration + subscribers_gained from YouTube Analytics v2.
 
-    Uses the shared super-account access token so a single OAuth re-consent
-    unlocks analytics for all 5 channels at once. Per-niche isolation is
-    preserved at the ``channel==<channel_id>`` filter level rather than at
-    the credential level.
+    Uses the per-niche Analytics refresh token (see
+    resolve_youtube_analytics_credentials). Each channel needs its own
+    OAuth consent — manager relationships do NOT extend Analytics access
+    (verified 2026-05-21 with anarchistsid@gmail.com parent + brand
+    accounts: 403 on managed channels, 200 on owned channels).
 
     Returns a dict with keys ``avg_view_duration``, ``subscriber_gained``,
     ``minutes_viewed``, ``shares``.  Empty dict if:
-      * no shared analytics refresh token configured (early state)
+      * no analytics refresh token configured for the niche
       * channel_id missing (niche not provisioned)
-      * 400/403 (scope missing, video too new)
+      * 400/403 (scope missing, video too new, channel mismatch)
       * empty row set (data not yet aggregated)
       * any other exception
     """
@@ -181,7 +189,7 @@ def _fetch_youtube_analytics_extras(video_id: str, channel_id: str) -> dict:
     if not channel_id:
         return {}
 
-    access_token = _get_yt_analytics_access_token()
+    access_token = _get_yt_analytics_access_token(niche_id)
     if not access_token:
         return {}
 
@@ -311,14 +319,16 @@ def _fetch_youtube(post_id: str, niche_id: str = "") -> dict:
         "subscriber_gained": 0,
     }
 
-    # Layer Analytics extras on top.  Uses the shared super-account token
-    # plus per-niche {PREFIX}_YT_CHANNEL_ID for the channel== filter — so
-    # one re-consent unlocks analytics across all 5 channels.  Empty dict
-    # on early-window calls or scope/API failures keeps the stub zeros.
+    # Layer Analytics extras on top. Uses the per-niche analytics refresh
+    # token + per-niche {PREFIX}_YT_CHANNEL_ID for the channel== filter.
+    # Each channel needs its own OAuth consent (manager relationships
+    # don't extend Analytics API access — verified 2026-05-21). Empty
+    # dict on early-window calls or scope/API failures keeps the stub
+    # zeros.
     from genlab_core.publishing.niche_credentials import resolve_youtube_channel_id
 
     channel_id = resolve_youtube_channel_id(niche_id)
-    extras = _fetch_youtube_analytics_extras(post_id, channel_id)
+    extras = _fetch_youtube_analytics_extras(post_id, channel_id, niche_id)
     if extras:
         result["avg_view_duration"] = round(extras.get("avg_view_duration", 0.0), 2)
         result["subscriber_gained"] = extras.get("subscriber_gained", 0)

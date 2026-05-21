@@ -107,25 +107,35 @@ def resolve_youtube_credentials(niche_id: str) -> dict[str, str]:
     }
 
 
-def resolve_youtube_analytics_credentials() -> dict[str, str]:
-    """Resolve shared YouTube Analytics OAuth credentials.
+def resolve_youtube_analytics_credentials(niche_id: str = "") -> dict[str, str]:
+    """Resolve YouTube Analytics OAuth credentials for a niche.
 
-    Analytics is read-only and runs through a single "super-account"
-    refresh_token that has manager access on all 5 channels. Per-niche
-    isolation is preserved at the channel level via
-    ``{PREFIX}_YT_CHANNEL_ID`` (used as the ``ids=channel==<id>`` filter)
-    rather than at the credential level.
+    Verified 2026-05-21: YouTube Analytics API requires the OAuth token
+    to be issued *to the channel itself*, not to a manager of the channel.
+    The brand-account "manager" relationship that lets a parent Google
+    account upload + switch channels in YouTube Studio does NOT extend to
+    Analytics API access (returns 403 on managed-but-not-owned channels).
 
-    Falls back to the per-niche YouTube credentials if no shared
-    analytics token is configured — useful for niches that later
-    re-consent with the analytics scope individually.
+    Consequence: per-niche refresh tokens are mandatory.
+      * BlackboxBrief — channel owned directly by anarchistsid@gmail.com;
+        token issued under that account works.
+      * CriticalRush / ClutchWire / SpliceReel / FrameDrift — brand accounts;
+        each needs its own OAuth flow signed in as that brand account.
+
+    Reads ``{PREFIX}_YOUTUBE_ANALYTICS_REFRESH_TOKEN`` first, then falls
+    back to the legacy singular ``YOUTUBE_ANALYTICS_REFRESH_TOKEN`` for
+    accounts whose token happens to be the global one (e.g. BB historically).
     """
     return {
         "client_id": os.getenv("YOUTUBE_ANALYTICS_CLIENT_ID", "").strip()
                      or os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
         "client_secret": os.getenv("YOUTUBE_ANALYTICS_CLIENT_SECRET", "").strip()
                          or os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
-        "refresh_token": os.getenv("YOUTUBE_ANALYTICS_REFRESH_TOKEN", "").strip(),
+        "refresh_token": resolve_niche_env(
+            niche_id,
+            "YOUTUBE_ANALYTICS_REFRESH_TOKEN",
+            "YOUTUBE_ANALYTICS_REFRESH_TOKEN",
+        ),
     }
 
 
