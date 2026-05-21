@@ -109,6 +109,26 @@ def _get_yt_analytics_access_token() -> str:
     csec = creds.get("client_secret", "")
     rt = creds.get("refresh_token", "")
     if not all([cid, csec, rt]):
+        # Log once per process, not per call, so operators see the
+        # gap on first metric_collector run without flooding the
+        # logs. Without the analytics refresh token the YT reward
+        # signal is missing avg_view_duration + subscribers_gained
+        # + minutes_viewed + shares — the most valuable engagement
+        # metrics. 2026-05-21 audit found this unset on Hetzner;
+        # YT rewards computed from views/likes/comments only.
+        global _yt_analytics_warning_emitted  # type: ignore[name-defined]
+        try:
+            if not _yt_analytics_warning_emitted:
+                raise NameError
+        except NameError:
+            logger.warning(
+                "[metric_collector] YouTube Analytics v2 disabled: "
+                "%s missing. YT rewards will use snapshot views/likes "
+                "only — avg_view_duration/subscribers_gained/"
+                "minutes_viewed/shares will be omitted.",
+                "refresh_token" if (cid and csec) else "client_id+secret+refresh_token",
+            )
+            globals()["_yt_analytics_warning_emitted"] = True
         return ""
 
     now = _time.monotonic()

@@ -61,8 +61,16 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     project_root = os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")
 
     # Build extractor_args — combine player_client list with visitor_data if
-    # we have it from a real browser session (bypasses bot detection)
-    extractor_args = "youtube:player_client=android,ios,tv,web"
+    # we have it from a real browser session (bypasses bot detection).
+    # Client order tuned 2026-05-21 after YouTube enabled the "SABR-only
+    # streaming" experiment which strips https URLs from the android
+    # client formats. Every sports clip on 2026-05-21 failed with
+    # "Some android client https formats have been skipped... SABR-only
+    # streaming experiment". Putting ios + tv + web_safari first sidesteps
+    # the experiment until yt-dlp's stable channel catches up.
+    extractor_args = (
+        "youtube:player_client=ios,tv,web_safari,android,web"
+    )
     session_path = os.path.join(project_root, ".youtube_session.json")
     if os.path.exists(session_path):
         try:
