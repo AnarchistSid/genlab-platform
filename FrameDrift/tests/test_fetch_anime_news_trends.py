@@ -25,11 +25,13 @@ class TestFetchGoogleTrends:
         mock_trendreq_cls.return_value = mock_pytrends
 
         # Simulate interest_over_time returning a DataFrame
-        df = pd.DataFrame({
-            "Nike Air Max": [30, 60, 45],
-            "Yeezy Drop": [10, 20, 15],
-            "isPartial": [False, False, False],
-        })
+        df = pd.DataFrame(
+            {
+                "Nike Air Max": [30, 60, 45],
+                "Yeezy Drop": [10, 20, 15],
+                "isPartial": [False, False, False],
+            }
+        )
         mock_pytrends.interest_over_time.return_value = df
 
         config = {"google_trends": {"enabled": True, "timeframe": "now 7-d"}}
@@ -50,13 +52,9 @@ class TestFetchGoogleTrends:
         titles = [f"Title {i}" for i in range(8)]
 
         # First batch (5 titles): returns scores
-        df_batch1 = pd.DataFrame({
-            f"Title {i}": [i * 10] for i in range(5)
-        })
+        df_batch1 = pd.DataFrame({f"Title {i}": [i * 10] for i in range(5)})
         # Second batch (3 titles): returns scores
-        df_batch2 = pd.DataFrame({
-            f"Title {i}": [i * 10] for i in range(5, 8)
-        })
+        df_batch2 = pd.DataFrame({f"Title {i}": [i * 10] for i in range(5, 8)})
 
         mock_pytrends.interest_over_time.side_effect = [df_batch1, df_batch2]
 
@@ -133,8 +131,7 @@ class TestFetchGoogleTrends:
         ]
 
         config = {"google_trends": {"enabled": True}}
-        titles = ["Title 0", "Title 1", "Title 2", "Title 3", "Title 4",
-                   "Title 5", "Title 6"]
+        titles = ["Title 0", "Title 1", "Title 2", "Title 3", "Title 4", "Title 5", "Title 6"]
 
         result = _fetch_google_trends(config, titles)
 
@@ -224,9 +221,11 @@ class TestFetchAllWithTrends:
             {"title": "Nike Air Max 90 Drop", "trend_score": 75},
         ]
 
-        results = fetch_all_anime_news(config={
-            "google_trends": {"enabled": True, "stub_mode": False},
-        })
+        results = fetch_all_anime_news(
+            config={
+                "google_trends": {"enabled": True, "stub_mode": False},
+            }
+        )
 
         assert len(results) == 1
         assert results[0]["extra"]["google_trend_score"] == 75

@@ -43,7 +43,10 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
     ],
     "sports": [
         ("breaking_trade", ["trade", "transfer", "sign", "contract", "deal", "free agent"]),
-        ("record_milestone", ["record", "milestone", "history", "first ever", "youngest", "oldest"]),
+        (
+            "record_milestone",
+            ["record", "milestone", "history", "first ever", "youngest", "oldest"],
+        ),
         ("upset_reaction", ["upset", "shock", "underdog", "eliminated", "comeback"]),
     ],
     "movies": [
@@ -74,13 +77,15 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 # re-creation: the prior attempt didn't reach an audience, and retrying is
 # the whole point of the pipeline. This set is the single source of truth
 # for dedup decisions in push_to_backlog.
-_BLOCKING_STATUSES: frozenset[str] = frozenset({
-    "PUBLISHED",
-    "PUBLISHING",
-    "VISUAL_READY",
-    "DRAFTED",
-    "SCORED",
-})
+_BLOCKING_STATUSES: frozenset[str] = frozenset(
+    {
+        "PUBLISHED",
+        "PUBLISHING",
+        "VISUAL_READY",
+        "DRAFTED",
+        "SCORED",
+    }
+)
 
 
 def _is_blocking(row: dict) -> bool:
@@ -124,27 +129,70 @@ _TOPIC_MAP = {
 # tmdb_upcoming stories means BB ran SR stages). Stories matching are
 # dropped before write with structured telemetry.
 _FORBIDDEN_SOURCE_PREFIXES: dict[str, frozenset[str]] = {
-    "ai_creators": frozenset({
-        "tmdb_", "scorebat", "espn", "sport_", "twitch_clip",
-        "twitch_trending", "steam_", "igdb", "anilist", "jikan_",
-        "anime_promo",
-    }),
-    "gaming": frozenset({
-        "tmdb_", "scorebat", "espn", "sport_", "anilist", "jikan_",
-        "anime_promo",
-    }),
-    "sports": frozenset({
-        "tmdb_", "twitch_clip", "twitch_trending", "steam_", "igdb",
-        "anilist", "jikan_", "anime_promo",
-    }),
-    "movies": frozenset({
-        "scorebat", "espn", "sport_", "twitch_clip", "twitch_trending",
-        "steam_", "igdb", "anilist", "jikan_", "anime_promo",
-    }),
-    "anime": frozenset({
-        "tmdb_", "scorebat", "espn", "sport_", "twitch_clip",
-        "twitch_trending", "steam_", "igdb",
-    }),
+    "ai_creators": frozenset(
+        {
+            "tmdb_",
+            "scorebat",
+            "espn",
+            "sport_",
+            "twitch_clip",
+            "twitch_trending",
+            "steam_",
+            "igdb",
+            "anilist",
+            "jikan_",
+            "anime_promo",
+        }
+    ),
+    "gaming": frozenset(
+        {
+            "tmdb_",
+            "scorebat",
+            "espn",
+            "sport_",
+            "anilist",
+            "jikan_",
+            "anime_promo",
+        }
+    ),
+    "sports": frozenset(
+        {
+            "tmdb_",
+            "twitch_clip",
+            "twitch_trending",
+            "steam_",
+            "igdb",
+            "anilist",
+            "jikan_",
+            "anime_promo",
+        }
+    ),
+    "movies": frozenset(
+        {
+            "scorebat",
+            "espn",
+            "sport_",
+            "twitch_clip",
+            "twitch_trending",
+            "steam_",
+            "igdb",
+            "anilist",
+            "jikan_",
+            "anime_promo",
+        }
+    ),
+    "anime": frozenset(
+        {
+            "tmdb_",
+            "scorebat",
+            "espn",
+            "sport_",
+            "twitch_clip",
+            "twitch_trending",
+            "steam_",
+            "igdb",
+        }
+    ),
 }
 
 
@@ -378,6 +426,7 @@ def _apply_engagement_boost(
             arm = linucb_arms[arm_id]
             if arm.n_obs >= 5:
                 from genlab_core.learning.linucb import build_content_context
+
                 ctx = build_content_context(story, niche_id)
                 ucb = arm.predict(ctx)
                 # UCB lives roughly in [0, 1.5] for our reward scale.
@@ -489,13 +538,16 @@ class PushToBacklog:
             return context
 
         import os
+
         _use_postgres = os.getenv("GENLAB_USE_POSTGRES", "").lower() == "true"
-        if not _use_postgres and not all([
-            settings.azure_tenant_id,
-            settings.azure_client_id,
-            settings.azure_client_secret,
-            settings.sharepoint_site_id,
-        ]):
+        if not _use_postgres and not all(
+            [
+                settings.azure_tenant_id,
+                settings.azure_client_id,
+                settings.azure_client_secret,
+                settings.sharepoint_site_id,
+            ]
+        ):
             logger.warning("[PUSH] Azure/SharePoint credentials missing, skipping backlog push")
             context.setdefault("run_stats", {})["backlog_push"] = {
                 "stories_pushed": 0,
@@ -533,6 +585,7 @@ class PushToBacklog:
         recent_bps: list = []
         try:
             from datetime import datetime, timedelta
+
             _hook_cutoff = datetime.now(UTC) - timedelta(days=30)
             recent_bps = client.blueprints.all(
                 formula=f"{{niche_id}}='{niche_id}'",
@@ -557,7 +610,8 @@ class PushToBacklog:
             if existing_hooks or non_blocking_skipped:
                 logger.info(
                     "[PUSH] Loaded %d existing hooks for dedup (skipped %d non-blocking)",
-                    len(existing_hooks), non_blocking_skipped,
+                    len(existing_hooks),
+                    non_blocking_skipped,
                 )
         except Exception as e:
             logger.debug("[PUSH] Could not load existing hooks: %s", e)
@@ -575,7 +629,8 @@ class PushToBacklog:
         if arm_boosts:
             logger.info(
                 "[PUSH] Loaded %s boosts for %d arms: %s",
-                boost_source, len(arm_boosts),
+                boost_source,
+                len(arm_boosts),
                 {k: f"{v:.2f}" for k, v in arm_boosts.items()},
             )
 
@@ -588,7 +643,8 @@ class PushToBacklog:
             with_obs = sum(1 for a in linucb_arms.values() if a.n_obs >= 5)
             logger.info(
                 "[PUSH] Loaded LinUCB matrices for %d arms (%d with n_obs>=5)",
-                len(linucb_arms), with_obs,
+                len(linucb_arms),
+                with_obs,
             )
 
         # Load content_memory hashes + active-blueprint URLs for cross-run dedup.
@@ -608,9 +664,10 @@ class PushToBacklog:
         try:
             from datetime import datetime, timedelta
             from hashlib import sha256 as _sha256
-            _dedup_days = context.get("niche_config", {}).get(
-                "pipeline", {}
-            ).get("dedup_window_days", 14)
+
+            _dedup_days = (
+                context.get("niche_config", {}).get("pipeline", {}).get("dedup_window_days", 14)
+            )
             _dedup_cutoff = datetime.now(UTC) - timedelta(days=_dedup_days)
             # Historical note: an earlier version of formula_sql had a parameter
             # ordering bug with mixed > and = operators, forcing Python-side
@@ -629,7 +686,8 @@ class PushToBacklog:
                     url_hashes_from_bps += 1
             logger.info(
                 "[PUSH] Loaded %d URL hashes from %d active blueprints",
-                url_hashes_from_bps, len(active_bps),
+                url_hashes_from_bps,
+                len(active_bps),
             )
 
             # Still load stories for title-level dedup (Layer 4.5 below).
@@ -672,7 +730,8 @@ class PushToBacklog:
                 _cm_records_for_titles = cm_records
                 logger.info(
                     "[PUSH] Total URL dedup hashes: %d (from %d active blueprints)",
-                    len(seen_urls), len(active_bps),
+                    len(seen_urls),
+                    len(active_bps),
                 )
         except Exception as e:
             logger.debug("[PUSH] content_memory load failed (non-fatal): %s", e)
@@ -705,6 +764,7 @@ class PushToBacklog:
             db_url = os.environ.get("DATABASE_URL")
             if db_url:
                 import psycopg as _psycopg
+
                 with _psycopg.connect(db_url) as _conn:
                     with _conn.cursor() as _cur:
                         _cur.execute(
@@ -752,8 +812,11 @@ class PushToBacklog:
                 logger.error(
                     "[PUSH][CROSS_NICHE_LEAK_DROPPED] niche=%s source=%s "
                     "forbidden_prefix=%s title=%r url=%s",
-                    niche_id, story_source, forbidden_prefix,
-                    title[:80], source_url,
+                    niche_id,
+                    story_source,
+                    forbidden_prefix,
+                    title[:80],
+                    source_url,
                 )
                 continue
 
@@ -763,6 +826,7 @@ class PushToBacklog:
             # so matches here represent content we're actively producing or
             # have already published — legitimately skippable.
             from hashlib import sha256
+
             url_hash = sha256(source_url.encode()).hexdigest()[:16] if source_url else ""
             if url_hash and url_hash in seen_urls:
                 logger.info(
@@ -794,7 +858,9 @@ class PushToBacklog:
                         intersection = len(title_words & existing_words)
                         union = len(title_words | existing_words)
                         if union > 0 and intersection / union > 0.65:
-                            logger.info("[PUSH] Title near-dupe: '%s' ≈ '%s'", title[:40], existing[:40])
+                            logger.info(
+                                "[PUSH] Title near-dupe: '%s' ≈ '%s'", title[:40], existing[:40]
+                            )
                             title_is_dupe = True
                             break
             if title_is_dupe:
@@ -813,21 +879,25 @@ class PushToBacklog:
                     story_record = existing
                     logger.debug("[PUSH] Story '%s' already exists, updated niche_id", title)
                 else:
-                    record = client.stories.create({
-                        "story_id": story_id,
-                        "title": title,
-                        "url": source_url,
-                        "source": story.get("source", niche_id),
-                        "published_at": published_at,
-                        "summary": (story.get("summary") or "")[:255],
-                        "priority": (
-                            story.get("final_score") if story.get("final_score") is not None
-                            else story.get("composite_score") if story.get("composite_score") is not None
-                            else story.get("score", 0.5)
-                        ),
-                        "status": "INTAKE",
-                        "niche_id": niche_id,
-                    })
+                    record = client.stories.create(
+                        {
+                            "story_id": story_id,
+                            "title": title,
+                            "url": source_url,
+                            "source": story.get("source", niche_id),
+                            "published_at": published_at,
+                            "summary": (story.get("summary") or "")[:255],
+                            "priority": (
+                                story.get("final_score")
+                                if story.get("final_score") is not None
+                                else story.get("composite_score")
+                                if story.get("composite_score") is not None
+                                else story.get("score", 0.5)
+                            ),
+                            "status": "INTAKE",
+                            "niche_id": niche_id,
+                        }
+                    )
                     # Postgres create() returns UUID string; SharePoint returns dict
                     if isinstance(record, str):
                         story_record = {"id": record}
@@ -849,7 +919,11 @@ class PushToBacklog:
                         pub_dt = pub_dt.replace(tzinfo=UTC)
                     age_days = (datetime.now(UTC) - pub_dt).days
                     if age_days > 7:
-                        logger.info("[PUSH] Story too old (%d days), skipping blueprint: %s", age_days, title[:40])
+                        logger.info(
+                            "[PUSH] Story too old (%d days), skipping blueprint: %s",
+                            age_days,
+                            title[:40],
+                        )
                         continue
                 except (ValueError, TypeError):
                     pass  # unparseable date — allow through
@@ -857,7 +931,10 @@ class PushToBacklog:
             # Create blueprint from content
             content = story.get("content", {})
             if not content:
-                logger.info("[PUSH] No content for '%s' — skipping blueprint (story has no written content)", title[:60])
+                logger.info(
+                    "[PUSH] No content for '%s' — skipping blueprint (story has no written content)",
+                    title[:60],
+                )
                 continue
             # Content may be a JSON string from the writing stage
             if isinstance(content, str):
@@ -890,7 +967,8 @@ class PushToBacklog:
                     if active_dupes:
                         logger.info(
                             "[PUSH] Video already blueprinted: video_id=%s niche=%s — skipping",
-                            video_id[:20], niche_id,
+                            video_id[:20],
+                            niche_id,
                         )
                         video_dedup_skipped += 1
                         continue
@@ -898,7 +976,9 @@ class PushToBacklog:
                     logger.warning("[PUSH] Video dedup check failed: %s — allowing through", e)
 
             candidate_id = generate_candidate_id(
-                story_id, niche_id, video_id or title,
+                story_id,
+                niche_id,
+                video_id or title,
             )
             story["candidate_id"] = candidate_id
             hook = content.get("hook", "")
@@ -926,7 +1006,9 @@ class PushToBacklog:
                         if union > 0 and intersection / union > 0.6:
                             logger.info(
                                 "[PUSH] Near-dupe hook (%.0f%% similar), skipping: '%s' ≈ '%s'",
-                                100 * intersection / union, hook[:40], existing[:40],
+                                100 * intersection / union,
+                                hook[:40],
+                                existing[:40],
                             )
                             is_near_dupe = True
                             break
@@ -948,16 +1030,19 @@ class PushToBacklog:
                 )
                 # Partition existing blueprints by blocking state.
                 blocking_match = next(
-                    (bp for bp in existing_bp_raw if _is_blocking(bp)), None,
+                    (bp for bp in existing_bp_raw if _is_blocking(bp)),
+                    None,
                 )
                 non_blocking_match = next(
-                    (bp for bp in existing_bp_raw if not _is_blocking(bp)), None,
+                    (bp for bp in existing_bp_raw if not _is_blocking(bp)),
+                    None,
                 )
                 if blocking_match:
                     existing_status = blocking_match.get("fields", blocking_match).get("status", "")
                     logger.info(
                         "[PUSH] Blueprint '%s' already %s — skipping re-create",
-                        title, existing_status,
+                        title,
+                        existing_status,
                     )
                     continue
 
@@ -977,7 +1062,9 @@ class PushToBacklog:
                         "hook_text": hook,
                         "title": title,
                         "caption": ig.get("caption", ""),
-                        "hashtags": " ".join(ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))),
+                        "hashtags": " ".join(
+                            ig.get("hashtags", []) or re.findall(r"#\w+", ig.get("caption", ""))
+                        ),
                         # YT publisher uses the `hook` column for the Shorts
                         # title and this field for the description. Stored as a
                         # plain string so the CTA engine's URL-prepend +
@@ -985,17 +1072,28 @@ class PushToBacklog:
                         # mangled JSON document.
                         "youtube_content": (
                             yt.get("description", "")
-                            + ("\n\n" + content.get("youtube_attribution", "")
-                               if content.get("youtube_attribution") else "")
+                            + (
+                                "\n\n" + content.get("youtube_attribution", "")
+                                if content.get("youtube_attribution")
+                                else ""
+                            )
                         ).strip(),
-                        "twitter_content": json.dumps({"tweet_text": tw.get("tweet", tw.get("tweet_text", "")), "routing": tw.get("routing", "single")}),
+                        "twitter_content": json.dumps(
+                            {
+                                "tweet_text": tw.get("tweet", tw.get("tweet_text", "")),
+                                "routing": tw.get("routing", "single"),
+                            }
+                        ),
                         "facebook_content": fb.get("caption", ""),
                         "threads_content": content.get("threads", {}).get("caption", ""),
                         "priority_score": _apply_engagement_boost(
-                            story.get("final_score") if story.get("final_score") is not None
-                            else story.get("composite_score") if story.get("composite_score") is not None
+                            story.get("final_score")
+                            if story.get("final_score") is not None
+                            else story.get("composite_score")
+                            if story.get("composite_score") is not None
                             else story.get("score", 0.5),
-                            arm_id, arm_boosts,
+                            arm_id,
+                            arm_boosts,
                             linucb_arms=linucb_arms,
                             story=story,
                             niche_id=niche_id,
@@ -1016,7 +1114,12 @@ class PushToBacklog:
                         fields["hook_style"] = story["hook_style"]
 
                     # LinUCB context fields — store for publish-time context building
-                    for ctx_key in ("duration_seconds", "view_velocity", "source_type", "relevance_score"):
+                    for ctx_key in (
+                        "duration_seconds",
+                        "view_velocity",
+                        "source_type",
+                        "relevance_score",
+                    ):
                         if story.get(ctx_key) is not None:
                             fields[ctx_key] = story[ctx_key]
 
@@ -1027,8 +1130,11 @@ class PushToBacklog:
 
                     # Affiliate fields (if matched by AffiliateMatch stage)
                     for af_key in (
-                        "affiliate_product", "affiliate_url", "affiliate_network",
-                        "affiliate_commission_pct", "affiliate_cta",
+                        "affiliate_product",
+                        "affiliate_url",
+                        "affiliate_network",
+                        "affiliate_commission_pct",
+                        "affiliate_cta",
                     ):
                         if story.get(af_key):
                             fields[af_key] = story[af_key]
@@ -1036,6 +1142,7 @@ class PushToBacklog:
                     # Inject platform-specific CTAs into captions
                     if story.get("affiliate_product"):
                         from genlab_core.monetization.cta_engine import inject_cta
+
                         fields = inject_cta(fields, story)
 
                     if rendered_path:
@@ -1045,16 +1152,24 @@ class PushToBacklog:
                         # otherwise fall back to tomorrow.
                         now_utc = datetime.now(UTC)
                         today_slot = datetime(
-                            now_utc.year, now_utc.month, now_utc.day,
-                            6, 30, tzinfo=UTC,
+                            now_utc.year,
+                            now_utc.month,
+                            now_utc.day,
+                            6,
+                            30,
+                            tzinfo=UTC,
                         )
                         if today_slot > now_utc:
                             publish_time = today_slot
                         else:
                             next_day = now_utc.date() + timedelta(days=1)
                             publish_time = datetime(
-                                next_day.year, next_day.month, next_day.day,
-                                6, 30, tzinfo=UTC,
+                                next_day.year,
+                                next_day.month,
+                                next_day.day,
+                                6,
+                                30,
+                                tzinfo=UTC,
                             )
                         fields["scheduled_for"] = publish_time.isoformat()
                     # Store thumbnail_url for dashboard previews when local
@@ -1068,7 +1183,9 @@ class PushToBacklog:
                         # Steam header image fallback
                         app_id = story.get("steam_app_id")
                         if app_id:
-                            thumb = f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg"
+                            thumb = (
+                                f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg"
+                            )
                     if thumb:
                         fields["thumbnail_url"] = thumb
 
@@ -1076,37 +1193,42 @@ class PushToBacklog:
                         # Revive the archived/failed row instead of inserting.
                         # Strip candidate_id from update payload — it's the
                         # PK and Postgres rejects overwriting a unique key.
-                        revive_fields = {
-                            k: v for k, v in fields.items() if k != "candidate_id"
-                        }
+                        revive_fields = {k: v for k, v in fields.items() if k != "candidate_id"}
                         # Clear the old action_taken so reviewers see it fresh
                         revive_fields["action_taken"] = None
                         client.blueprints.update(non_blocking_match["id"], revive_fields)
                         blueprints_pushed += 1
-                        prior_status = non_blocking_match.get("fields", non_blocking_match).get("status", "?")
+                        prior_status = non_blocking_match.get("fields", non_blocking_match).get(
+                            "status", "?"
+                        )
                         logger.info(
                             "[PUSH] Revived blueprint '%s' (was %s → %s)",
-                            title, prior_status, fields["status"],
+                            title,
+                            prior_status,
+                            fields["status"],
                         )
                     else:
                         client.blueprints.create(fields, typecast=True)
                         blueprints_pushed += 1
                         logger.info(
                             "[PUSH] Created blueprint '%s' (status=%s)",
-                            title, fields["status"],
+                            title,
+                            fields["status"],
                         )
                     # Record in content_memory for persistent URL-level dedup
                     try:
                         cm = getattr(client, "content_memory", None)
                         if cm and story_id not in seen_urls:
-                            cm.create({
-                                "content_hash": story_id,
-                                "title": title[:200],
-                                "url": source_url,
-                                "niche_id": niche_id,
-                                "first_seen": datetime.now(UTC).isoformat(),
-                                "last_seen": datetime.now(UTC).isoformat(),
-                            })
+                            cm.create(
+                                {
+                                    "content_hash": story_id,
+                                    "title": title[:200],
+                                    "url": source_url,
+                                    "niche_id": niche_id,
+                                    "first_seen": datetime.now(UTC).isoformat(),
+                                    "last_seen": datetime.now(UTC).isoformat(),
+                                }
+                            )
                             seen_urls.add(story_id)
                     except Exception:
                         pass  # non-critical — other dedup layers cover it
@@ -1129,11 +1251,15 @@ class PushToBacklog:
                 "[PUSH] CROSS-NICHE LEAK DETECTED: dropped %d stories with foreign "
                 "sources from niche '%s'. niche.yaml may be contaminated — "
                 "investigate stage-prefix guard logs.",
-                cross_niche_drops, niche_id,
+                cross_niche_drops,
+                niche_id,
             )
 
         logger.info(
             "[PUSH] %d stories, %d blueprints pushed to backlog (%d video-dedup skipped, %d errors)",
-            stories_pushed, blueprints_pushed, video_dedup_skipped, len(errors),
+            stories_pushed,
+            blueprints_pushed,
+            video_dedup_skipped,
+            len(errors),
         )
         return context

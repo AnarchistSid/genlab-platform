@@ -75,9 +75,7 @@ class MonetisationTracker:
     ) -> None:
         self._client = backlog_client
         self._targets = _load_targets(config_path)
-        self._sp_list_id = (
-            self._targets.get("sharepoint", {}).get("list_id", "")
-        )
+        self._sp_list_id = self._targets.get("sharepoint", {}).get("list_id", "")
         self._proxy = None
 
     def _get_proxy(self):
@@ -92,16 +90,23 @@ class MonetisationTracker:
                 use_pg = os.environ.get("GENLAB_USE_POSTGRES", "").lower() == "true"
                 if dsn and use_pg:
                     from genlab_core.storage.postgres import PostgresBackend, PostgresTableProxy
+
                     pg = PostgresBackend(dsn=dsn)
                     self._proxy = PostgresTableProxy(pg, "monetisation_progress")
                 else:
                     from genlab_core.http.graph_proxy import GraphTableProxy
+
                     site_id = os.environ.get("SHAREPOINT_SITE_ID", "").strip()
-                    graph = getattr(self._client, "_graph", None) or getattr(self._client, "_graph_client", None)
+                    graph = getattr(self._client, "_graph", None) or getattr(
+                        self._client, "_graph_client", None
+                    )
                     if graph is None:
                         raise RuntimeError("BacklogClient has no _graph or _graph_client attribute")
                     self._proxy = GraphTableProxy(
-                        graph, site_id, self._sp_list_id, "GenLab_MonetisationProgress",
+                        graph,
+                        site_id,
+                        self._sp_list_id,
+                        "GenLab_MonetisationProgress",
                     )
         return self._proxy
 
@@ -145,17 +150,31 @@ class MonetisationTracker:
         creds = self._get_youtube_creds(niche_id)
         if not creds:
             result["status"] = "no_credentials"
-            self._upsert_progress(niche_id, "youtube", "subscribers", 0, None,
-                                  dry_run, data_source="unavailable",
-                                  error_log="No YouTube credentials")
+            self._upsert_progress(
+                niche_id,
+                "youtube",
+                "subscribers",
+                0,
+                None,
+                dry_run,
+                data_source="unavailable",
+                error_log="No YouTube credentials",
+            )
             return result
 
         access_token = self._get_youtube_access_token(creds)
         if not access_token:
             result["status"] = "token_error"
-            self._upsert_progress(niche_id, "youtube", "subscribers", 0, None,
-                                  dry_run, data_source="unavailable",
-                                  error_log="YouTube token refresh failed")
+            self._upsert_progress(
+                niche_id,
+                "youtube",
+                "subscribers",
+                0,
+                None,
+                dry_run,
+                data_source="unavailable",
+                error_log="YouTube token refresh failed",
+            )
             return result
 
         # Subscribers
@@ -172,11 +191,11 @@ class MonetisationTracker:
                     stats = items[0].get("statistics", {})
                     subs = int(stats.get("subscriberCount", 0))
                     result["metrics"]["subscribers"] = subs
-                    self._upsert_progress(niche_id, "youtube", "subscribers",
-                                          subs, None, dry_run)
+                    self._upsert_progress(niche_id, "youtube", "subscribers", subs, None, dry_run)
             else:
-                logger.warning("[%s] YouTube channels API: %d %s",
-                               niche_id, r.status_code, r.text[:200])
+                logger.warning(
+                    "[%s] YouTube channels API: %d %s", niche_id, r.status_code, r.text[:200]
+                )
                 result["status"] = "api_error"
         except Exception as e:
             logger.error("[%s] YouTube subscribers fetch failed: %s", niche_id, e)
@@ -203,8 +222,9 @@ class MonetisationTracker:
                 total_minutes = rows[0][0] if rows else 0
                 watch_hours = round(total_minutes / 60, 1)
                 result["metrics"]["watch_hours_12mo"] = watch_hours
-                self._upsert_progress(niche_id, "youtube", "watch_hours_12mo",
-                                      watch_hours, None, dry_run)
+                self._upsert_progress(
+                    niche_id, "youtube", "watch_hours_12mo", watch_hours, None, dry_run
+                )
         except Exception as e:
             logger.error("[%s] YouTube watch hours fetch failed: %s", niche_id, e)
 
@@ -228,8 +248,9 @@ class MonetisationTracker:
                 rows = r.json().get("rows", [])
                 shorts_views = rows[0][0] if rows else 0
                 result["metrics"]["shorts_views_90d"] = shorts_views
-                self._upsert_progress(niche_id, "youtube", "shorts_views_90d",
-                                      shorts_views, None, dry_run)
+                self._upsert_progress(
+                    niche_id, "youtube", "shorts_views_90d", shorts_views, None, dry_run
+                )
         except Exception as e:
             logger.error("[%s] YouTube shorts views fetch failed: %s", niche_id, e)
 
@@ -239,13 +260,18 @@ class MonetisationTracker:
         """Get YouTube OAuth credentials using per-niche prefix resolution."""
         prefix = _NICHE_ENV_PREFIX.get(niche_id, niche_id.upper())
         # Per-niche client_id/secret (fall back to global)
-        client_id = (os.environ.get(f"{prefix}_YOUTUBE_CLIENT_ID")
-                     or os.environ.get("YOUTUBE_CLIENT_ID", "")).strip()
-        client_secret = (os.environ.get(f"{prefix}_YOUTUBE_CLIENT_SECRET")
-                         or os.environ.get("YOUTUBE_CLIENT_SECRET", "")).strip()
+        client_id = (
+            os.environ.get(f"{prefix}_YOUTUBE_CLIENT_ID") or os.environ.get("YOUTUBE_CLIENT_ID", "")
+        ).strip()
+        client_secret = (
+            os.environ.get(f"{prefix}_YOUTUBE_CLIENT_SECRET")
+            or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        ).strip()
         # Per-niche refresh token (fall back to global)
-        refresh_token = (os.environ.get(f"{prefix}_YOUTUBE_REFRESH_TOKEN")
-                         or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")).strip()
+        refresh_token = (
+            os.environ.get(f"{prefix}_YOUTUBE_REFRESH_TOKEN")
+            or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
+        ).strip()
         if not all([client_id, client_secret, refresh_token]):
             return None
         return {
@@ -269,8 +295,7 @@ class MonetisationTracker:
             )
             if r.status_code == 200:
                 return r.json().get("access_token")
-            logger.warning("YouTube token refresh failed: %d %s",
-                           r.status_code, r.text[:200])
+            logger.warning("YouTube token refresh failed: %d %s", r.status_code, r.text[:200])
         except Exception as e:
             logger.error("YouTube token refresh error: %s", e)
         return None
@@ -284,14 +309,22 @@ class MonetisationTracker:
         result: dict[str, Any] = {"status": "ok", "metrics": {}}
         prefix = _NICHE_ENV_PREFIX.get(niche_id, niche_id.upper())
         page_id = os.environ.get(f"{prefix}_FB_PAGE_ID", "").strip()
-        token = os.environ.get("META_PAGE_ACCESS_TOKEN",
-                               os.environ.get("META_ACCESS_TOKEN", "")).strip()
+        token = os.environ.get(
+            "META_PAGE_ACCESS_TOKEN", os.environ.get("META_ACCESS_TOKEN", "")
+        ).strip()
 
         if not page_id or not token:
             result["status"] = "no_credentials"
-            self._upsert_progress(niche_id, "facebook", "followers", 0, None,
-                                  dry_run, data_source="unavailable",
-                                  error_log="No FB credentials")
+            self._upsert_progress(
+                niche_id,
+                "facebook",
+                "followers",
+                0,
+                None,
+                dry_run,
+                data_source="unavailable",
+                error_log="No FB credentials",
+            )
             return result
 
         api = "https://graph.facebook.com/v21.0"
@@ -307,8 +340,7 @@ class MonetisationTracker:
                 data = r.json()
                 followers = data.get("followers_count", data.get("fan_count", 0))
                 result["metrics"]["followers"] = followers
-                self._upsert_progress(niche_id, "facebook", "followers",
-                                      followers, None, dry_run)
+                self._upsert_progress(niche_id, "facebook", "followers", followers, None, dry_run)
         except Exception as e:
             logger.error("[%s] Facebook followers fetch failed: %s", niche_id, e)
             result["status"] = "error"
@@ -334,9 +366,15 @@ class MonetisationTracker:
                 # Rough proxy: avg 30s per view = minutes
                 minutes_est = round(total_views * 0.5, 0)
                 result["metrics"]["minutes_viewed_60d"] = minutes_est
-                self._upsert_progress(niche_id, "facebook", "minutes_viewed_60d",
-                                      minutes_est, None, dry_run,
-                                      data_source="estimated")
+                self._upsert_progress(
+                    niche_id,
+                    "facebook",
+                    "minutes_viewed_60d",
+                    minutes_est,
+                    None,
+                    dry_run,
+                    data_source="estimated",
+                )
         except Exception as e:
             logger.error("[%s] Facebook minutes viewed fetch failed: %s", niche_id, e)
 
@@ -354,14 +392,22 @@ class MonetisationTracker:
             f"{prefix}_IG_USER_ID",
             os.environ.get("META_IG_USER_ID", ""),
         ).strip()
-        token = os.environ.get("META_PAGE_ACCESS_TOKEN",
-                               os.environ.get("META_ACCESS_TOKEN", "")).strip()
+        token = os.environ.get(
+            "META_PAGE_ACCESS_TOKEN", os.environ.get("META_ACCESS_TOKEN", "")
+        ).strip()
 
         if not ig_user_id or not token:
             result["status"] = "no_credentials"
-            self._upsert_progress(niche_id, "instagram", "followers", 0, None,
-                                  dry_run, data_source="unavailable",
-                                  error_log="No IG credentials")
+            self._upsert_progress(
+                niche_id,
+                "instagram",
+                "followers",
+                0,
+                None,
+                dry_run,
+                data_source="unavailable",
+                error_log="No IG credentials",
+            )
             return result
 
         api = "https://graph.facebook.com/v21.0"
@@ -377,8 +423,7 @@ class MonetisationTracker:
                 data = r.json()
                 followers = data.get("followers_count", 0)
                 result["metrics"]["followers"] = followers
-                self._upsert_progress(niche_id, "instagram", "followers",
-                                      followers, None, dry_run)
+                self._upsert_progress(niche_id, "instagram", "followers", followers, None, dry_run)
         except Exception as e:
             logger.error("[%s] Instagram followers fetch failed: %s", niche_id, e)
             result["status"] = "error"
@@ -424,9 +469,15 @@ class MonetisationTracker:
                     except Exception:
                         pass
                 result["metrics"]["dm_sends_7d"] = total_shares
-                self._upsert_progress(niche_id, "instagram", "dm_sends_7d",
-                                      total_shares, None, dry_run,
-                                      data_source="estimated")
+                self._upsert_progress(
+                    niche_id,
+                    "instagram",
+                    "dm_sends_7d",
+                    total_shares,
+                    None,
+                    dry_run,
+                    data_source="estimated",
+                )
         except Exception as e:
             logger.error("[%s] Instagram shares/DM proxy fetch failed: %s", niche_id, e)
 
@@ -485,8 +536,13 @@ class MonetisationTracker:
         if dry_run:
             logger.info(
                 "[DRY RUN] %s/%s/%s: %.0f (target=%s, pct=%s, src=%s)",
-                niche_id, platform, metric_name, current_value,
-                target, pct, data_source,
+                niche_id,
+                platform,
+                metric_name,
+                current_value,
+                target,
+                pct,
+                data_source,
             )
             return
 
@@ -506,5 +562,8 @@ class MonetisationTracker:
         except Exception as e:
             logger.error(
                 "SP upsert failed for %s/%s/%s: %s",
-                niche_id, platform, metric_name, e,
+                niche_id,
+                platform,
+                metric_name,
+                e,
             )

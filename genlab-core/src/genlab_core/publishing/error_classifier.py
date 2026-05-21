@@ -7,28 +7,43 @@ Categories:
   CONTENT — don't retry, content issue (too large, format rejected)
   PERMANENT — don't retry ever (account suspended)
 """
+
 from __future__ import annotations
 
 import re
 
 _PATTERNS: dict[str, list[re.Pattern]] = {
     "CREDENTIAL": [
-        re.compile(p, re.I) for p in [
-            r"\b401\b", r"unauthorized", r"token.*(?:invalid|expired|revoked)",
-            r"invalid.?grant", r"OAuthException", r"No.*credentials",
-            r"token.*missing", r"authentication.*fail",
+        re.compile(p, re.I)
+        for p in [
+            r"\b401\b",
+            r"unauthorized",
+            r"token.*(?:invalid|expired|revoked)",
+            r"invalid.?grant",
+            r"OAuthException",
+            r"No.*credentials",
+            r"token.*missing",
+            r"authentication.*fail",
         ]
     ],
     "QUOTA": [
-        re.compile(p, re.I) for p in [
-            r"quota", r"rate.?limit", r"\b429\b", r"too many requests",
-            r"daily.*limit", r"quota near limit",
-            r"quotaExceeded", r"uploadLimitExceeded",
+        re.compile(p, re.I)
+        for p in [
+            r"quota",
+            r"rate.?limit",
+            r"\b429\b",
+            r"too many requests",
+            r"daily.*limit",
+            r"quota near limit",
+            r"quotaExceeded",
+            r"uploadLimitExceeded",
         ]
     ],
     "CONTENT": [
-        re.compile(p, re.I) for p in [
-            r"caption.*too.*long", r"title.*too.*long",
+        re.compile(p, re.I)
+        for p in [
+            r"caption.*too.*long",
+            r"title.*too.*long",
             r"video.*too.*(?:large|small|long|short)",
             r"media.*(?:not.*found|not.*supported)",
             r"format.*(?:not.*supported|invalid|rejected)",
@@ -55,14 +70,20 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
         ]
     ],
     "TRANSIENT": [
-        re.compile(p, re.I) for p in [
-            r"timed?\s*out", r"timeout",
+        re.compile(p, re.I)
+        for p in [
+            r"timed?\s*out",
+            r"timeout",
             r"connection.*(?:reset|refused|error|closed)",
-            r"\b50[0-3]\b", r"temporary", r"try again",
+            r"\b50[0-3]\b",
+            r"temporary",
+            r"try again",
             r"CDN.*(?:unavailable|failed|upload.*failed)",
             r"Reel.*publish.*failed",
-            r"Broken pipe", r"Read timed out",
-            r"SSLError", r"certificate.*verify.*failed",
+            r"Broken pipe",
+            r"Read timed out",
+            r"SSLError",
+            r"certificate.*verify.*failed",
             r"JSONDecodeError",
             r"2207026",  # IG container expired
             r"2207076",  # IG "video file not supported" — transient Meta processor issue

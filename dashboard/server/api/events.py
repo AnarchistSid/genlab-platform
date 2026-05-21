@@ -3,6 +3,7 @@
 Routes:
     GET /api/v1/events/recent  — last 50 events for notification center
 """
+
 import logging
 import os
 

@@ -8,6 +8,7 @@ Phase 6: Templates + Sources tables with Row Level Security.
 Templates stores niche video templates with duration/category.
 Sources stores configured content sources per niche with tier/weight.
 """
+
 from collections.abc import Sequence
 
 from alembic import op

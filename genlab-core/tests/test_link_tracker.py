@@ -1,4 +1,5 @@
 """Tests for genlab_core.monetization.link_tracker."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 

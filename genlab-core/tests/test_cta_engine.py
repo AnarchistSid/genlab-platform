@@ -34,7 +34,10 @@ class TestYouTubeCTA:
         story = _make_story()
         fields = inject_cta({"youtube_content": "Great gaming session today."}, story)
         # URL now includes UTM params appended by append_utm_params()
-        assert "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21" in fields["youtube_content"]
+        assert (
+            "🔗 PS5 Console: https://www.amazon.in/dp/B0CY5QW186?tag=test-tag-21"
+            in fields["youtube_content"]
+        )
         assert fields["youtube_content"].index("🔗 PS5 Console:") == 0  # still prepended
 
     def test_disclosure_appended(self):
@@ -334,15 +337,21 @@ class TestBanditIntegration:
         # Don't use the autouse fixture — let the real bandit run
         with patch("genlab_core.monetization.cta_engine._get_bandit") as mock_get:
             from genlab_core.monetization.cta_bandit import CTAVariant
-            mock_bandit = type("MockBandit", (), {
-                "select": lambda self, platform: CTAVariant(
-                    arm_id=f"test_{platform}",
-                    platform=platform,
-                    template="{product_name} — link in bio" if platform == "instagram"
-                    else "Get {product_name} here: {url}",
-                    emoji="🔗",
-                ),
-            })()
+
+            mock_bandit = type(
+                "MockBandit",
+                (),
+                {
+                    "select": lambda self, platform: CTAVariant(
+                        arm_id=f"test_{platform}",
+                        platform=platform,
+                        template="{product_name} — link in bio"
+                        if platform == "instagram"
+                        else "Get {product_name} here: {url}",
+                        emoji="🔗",
+                    ),
+                },
+            )()
             mock_get.return_value = mock_bandit
 
             story = _make_story()
@@ -354,9 +363,13 @@ class TestBanditIntegration:
     def test_bandit_fallback_on_failure(self):
         """If bandit.select() raises, hardcoded CTA from _build_cta_text is used."""
         with patch("genlab_core.monetization.cta_engine._get_bandit") as mock_get:
-            mock_bandit = type("BrokenBandit", (), {
-                "select": lambda self, platform: (_ for _ in ()).throw(RuntimeError("boom")),
-            })()
+            mock_bandit = type(
+                "BrokenBandit",
+                (),
+                {
+                    "select": lambda self, platform: (_ for _ in ()).throw(RuntimeError("boom")),
+                },
+            )()
             mock_get.return_value = mock_bandit
 
             story = _make_story()

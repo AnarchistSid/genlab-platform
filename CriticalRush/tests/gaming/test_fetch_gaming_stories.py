@@ -12,6 +12,7 @@ def _now_utc():
 # Steam spike tests
 # ---------------------------------------------------------------------------
 
+
 class TestSteamSpike:
     @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
     def test_steam_spike_returns_stories(self, mock_get, tmp_path, monkeypatch):
@@ -42,9 +43,7 @@ class TestSteamSpike:
         from niches.gaming.stages.fetch_gaming_stories import SteamSpikeFetcher
 
         # Patch PROJECT_ROOT to use tmp_path for baseline file
-        monkeypatch.setattr(
-            "niches.gaming.stages.fetch_gaming_stories.PROJECT_ROOT", tmp_path
-        )
+        monkeypatch.setattr("niches.gaming.stages.fetch_gaming_stories.PROJECT_ROOT", tmp_path)
 
         fetcher = SteamSpikeFetcher({"spike_threshold_multiplier": 1.5, "max_stories": 5})
         fetcher._baseline_path = tmp_path / ".tmp" / "steam_baseline.json"
@@ -62,6 +61,7 @@ class TestSteamSpike:
 # Twitch skip test
 # ---------------------------------------------------------------------------
 
+
 class TestTwitchSkip:
     def test_twitch_skipped_without_credentials(self, monkeypatch):
         """When TWITCH_CLIENT_ID is unset, fetch returns empty list."""
@@ -69,17 +69,21 @@ class TestTwitchSkip:
         monkeypatch.delenv("TWITCH_CLIENT_SECRET", raising=False)
 
         from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
         fetcher = TwitchTrendingFetcher()
         stories = fetcher.fetch()
         # Without Twitch creds, Twitch clips are skipped but IGDB/other sources may return results.
         # Verify no story has source_type == "twitch_clip"
         twitch_stories = [s for s in stories if s.get("source_type") == "twitch_clip"]
-        assert twitch_stories == [], f"Expected no Twitch clips without credentials, got {len(twitch_stories)}"
+        assert twitch_stories == [], (
+            f"Expected no Twitch clips without credentials, got {len(twitch_stories)}"
+        )
 
 
 # ---------------------------------------------------------------------------
 # RSS tests
 # ---------------------------------------------------------------------------
+
 
 class TestRSSFiltering:
     def test_rss_filters_old_articles(self):
@@ -99,7 +103,9 @@ class TestRSSFiltering:
 
             mock_parse.return_value = MagicMock(entries=[entry])
 
-            agg = RSSFeedAggregator([{"name": "Test", "url": "https://test.com/rss", "weight": 1.0}])
+            agg = RSSFeedAggregator(
+                [{"name": "Test", "url": "https://test.com/rss", "weight": 1.0}]
+            )
             stories = agg.fetch(trending_titles=[])
             assert len(stories) == 0
 
@@ -137,6 +143,7 @@ class TestCrossSourceBoost:
 # Deduplication test
 # ---------------------------------------------------------------------------
 
+
 class TestDeduplication:
     def test_deduplication_keeps_highest_score(self, monkeypatch):
         """Two stories with same title from different sources — highest wins."""
@@ -169,11 +176,12 @@ class TestDeduplication:
             }
         ]
 
-        with patch.object(FetchGamingStories, "_load_sources_config", return_value={}), \
-             patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam, \
-             patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch, \
-             patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS:
-
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
             MockSteam.return_value.fetch.return_value = steam_stories
             MockTwitch.return_value.fetch.return_value = []
             MockRSS.return_value.fetch.return_value = rss_stories

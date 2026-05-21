@@ -1,4 +1,5 @@
 """Tests for genlab_core.media.download_top_videos."""
+
 from __future__ import annotations
 
 import json
@@ -62,10 +63,7 @@ class TestBuildClipIndex:
         assert result["clips"] == {}
 
     def test_build_clip_index_all_success(self):
-        entries = {
-            f"s{i}": {"story_id": f"s{i}", "success": True}
-            for i in range(3)
-        }
+        entries = {f"s{i}": {"story_id": f"s{i}", "success": True} for i in range(3)}
         result = build_clip_index("run_ok", entries)
         assert result["videos_downloaded"] == 3
         assert result["videos_failed"] == 0
@@ -78,35 +76,40 @@ class TestBuildClipIndex:
 
 class TestDownloadVideosForStories:
     def _make_stories(self, n: int) -> list:
-        return [
-            {"story_id": f"sid_{i}", "title": f"Story {i} about AI"}
-            for i in range(n)
-        ]
+        return [{"story_id": f"sid_{i}", "title": f"Story {i} about AI"} for i in range(n)]
 
     @patch("genlab_core.media.download_top_videos._download_video")
     @patch("genlab_core.media.download_top_videos._validate_download")
     @patch("genlab_core.media.download_top_videos._find_downloaded_file")
     def test_respects_max_stories(
-        self, mock_find, mock_validate, mock_dl, tmp_path,
+        self,
+        mock_find,
+        mock_validate,
+        mock_dl,
+        tmp_path,
     ):
         """Pass 5 stories with max_stories=2, verify only 2 processed."""
         mock_video_result = MagicMock()
         mock_video_result.url = "https://youtube.com/watch?v=test"
         mock_video_result.backend = "youtube"
 
-        with patch(
-            "genlab_core.media.video_sourcer.VideoSourcer"
-        ) as MockSourcer:
+        with patch("genlab_core.media.video_sourcer.VideoSourcer") as MockSourcer:
             instance = MockSourcer.return_value
             instance.find_video_for_story.return_value = mock_video_result
             instance.get_stats.return_value = {
-                "direct_url": 0, "youtube": 2, "reddit": 0, "tmdb": 0, "none": 0,
+                "direct_url": 0,
+                "youtube": 2,
+                "reddit": 0,
+                "tmdb": 0,
+                "none": 0,
             }
 
             mock_dl.return_value = {"success": True, "duration": 1.0, "error": ""}
             mock_find.return_value = str(tmp_path / "clip.mp4")
             mock_validate.return_value = {
-                "valid": True, "reason": "", "duration_seconds": 30.0,
+                "valid": True,
+                "reason": "",
+                "duration_seconds": 30.0,
             }
 
             stories = self._make_stories(5)
@@ -122,13 +125,15 @@ class TestDownloadVideosForStories:
 
     def test_handles_no_video_found(self, tmp_path):
         """VideoSourcer returning None produces success=False entry."""
-        with patch(
-            "genlab_core.media.video_sourcer.VideoSourcer"
-        ) as MockSourcer:
+        with patch("genlab_core.media.video_sourcer.VideoSourcer") as MockSourcer:
             instance = MockSourcer.return_value
             instance.find_video_for_story.return_value = None
             instance.get_stats.return_value = {
-                "direct_url": 0, "youtube": 0, "reddit": 0, "tmdb": 0, "none": 1,
+                "direct_url": 0,
+                "youtube": 0,
+                "reddit": 0,
+                "tmdb": 0,
+                "none": 1,
             }
 
             stories = [{"story_id": "no_vid", "title": "No video here"}]
@@ -151,13 +156,15 @@ class TestDownloadVideosForStories:
         mock_video_result.url = "https://youtube.com/watch?v=fail"
         mock_video_result.backend = "youtube"
 
-        with patch(
-            "genlab_core.media.video_sourcer.VideoSourcer"
-        ) as MockSourcer:
+        with patch("genlab_core.media.video_sourcer.VideoSourcer") as MockSourcer:
             instance = MockSourcer.return_value
             instance.find_video_for_story.return_value = mock_video_result
             instance.get_stats.return_value = {
-                "direct_url": 0, "youtube": 1, "reddit": 0, "tmdb": 0, "none": 0,
+                "direct_url": 0,
+                "youtube": 1,
+                "reddit": 0,
+                "tmdb": 0,
+                "none": 0,
             }
 
             mock_dl.return_value = {
@@ -180,13 +187,15 @@ class TestDownloadVideosForStories:
 
     def test_generates_story_id_when_missing(self, tmp_path):
         """Stories missing story_id get an auto-generated hash ID."""
-        with patch(
-            "genlab_core.media.video_sourcer.VideoSourcer"
-        ) as MockSourcer:
+        with patch("genlab_core.media.video_sourcer.VideoSourcer") as MockSourcer:
             instance = MockSourcer.return_value
             instance.find_video_for_story.return_value = None
             instance.get_stats.return_value = {
-                "direct_url": 0, "youtube": 0, "reddit": 0, "tmdb": 0, "none": 0,
+                "direct_url": 0,
+                "youtube": 0,
+                "reddit": 0,
+                "tmdb": 0,
+                "none": 0,
             }
 
             stories = [
@@ -210,20 +219,26 @@ class TestDownloadVideosForStories:
     @patch("genlab_core.media.download_top_videos._validate_download")
     @patch("genlab_core.media.download_top_videos._find_downloaded_file")
     def test_validation_failure(
-        self, mock_find, mock_validate, mock_dl, tmp_path,
+        self,
+        mock_find,
+        mock_validate,
+        mock_dl,
+        tmp_path,
     ):
         """Downloaded file that fails validation produces success=False."""
         mock_video_result = MagicMock()
         mock_video_result.url = "https://youtube.com/watch?v=bad"
         mock_video_result.backend = "youtube"
 
-        with patch(
-            "genlab_core.media.video_sourcer.VideoSourcer"
-        ) as MockSourcer:
+        with patch("genlab_core.media.video_sourcer.VideoSourcer") as MockSourcer:
             instance = MockSourcer.return_value
             instance.find_video_for_story.return_value = mock_video_result
             instance.get_stats.return_value = {
-                "direct_url": 0, "youtube": 1, "reddit": 0, "tmdb": 0, "none": 0,
+                "direct_url": 0,
+                "youtube": 1,
+                "reddit": 0,
+                "tmdb": 0,
+                "none": 0,
             }
 
             mock_dl.return_value = {"success": True, "duration": 1.0, "error": ""}

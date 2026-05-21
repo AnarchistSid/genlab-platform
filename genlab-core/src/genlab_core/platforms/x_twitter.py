@@ -7,6 +7,7 @@ Implements Publisher + Engageable + Trackable + HealthCheckable protocols.
 tweepy is an optional dependency.  When it is not installed the module still
 imports cleanly; any method that needs tweepy returns a graceful failure.
 """
+
 from __future__ import annotations
 
 import logging
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import tweepy as _tweepy  # noqa: F401
+
     _TWEEPY_AVAILABLE = True
 except ImportError:
     _tweepy = None  # type: ignore[assignment]
@@ -79,9 +81,7 @@ class XTwitterClient:
         Raises RuntimeError if tweepy is not installed.
         """
         if not _TWEEPY_AVAILABLE:
-            raise RuntimeError(
-                "tweepy is not installed. Install it with: pip install tweepy"
-            )
+            raise RuntimeError("tweepy is not installed. Install it with: pip install tweepy")
         import tweepy  # local import keeps things tidy
 
         return tweepy.Client(
@@ -97,9 +97,7 @@ class XTwitterClient:
         Raises RuntimeError if tweepy is not installed.
         """
         if not _TWEEPY_AVAILABLE:
-            raise RuntimeError(
-                "tweepy is not installed. Install it with: pip install tweepy"
-            )
+            raise RuntimeError("tweepy is not installed. Install it with: pip install tweepy")
         import tweepy
 
         auth = tweepy.OAuth1UserHandler(
@@ -119,6 +117,7 @@ class XTwitterClient:
         """Return True if *exc* is a tweepy TooManyRequests (429)."""
         if _TWEEPY_AVAILABLE:
             import tweepy
+
             cls = getattr(tweepy, "TooManyRequests", None)
             if cls is not None and isinstance(cls, type) and isinstance(exc, cls):
                 return True
@@ -128,6 +127,7 @@ class XTwitterClient:
         """Return True if *exc* is a tweepy Forbidden (403)."""
         if _TWEEPY_AVAILABLE:
             import tweepy
+
             cls = getattr(tweepy, "Forbidden", None)
             if cls is not None and isinstance(cls, type) and isinstance(exc, cls):
                 return True
@@ -137,6 +137,7 @@ class XTwitterClient:
         """Return True if *exc* is a tweepy Unauthorized (401)."""
         if _TWEEPY_AVAILABLE:
             import tweepy
+
             cls = getattr(tweepy, "Unauthorized", None)
             if cls is not None and isinstance(cls, type) and isinstance(exc, cls):
                 return True
@@ -240,11 +241,13 @@ class XTwitterClient:
                     reply_to=tweet_id,
                 )
                 logger.info(
-                    "X/Twitter: posted affiliate first-reply under %s", tweet_id,
+                    "X/Twitter: posted affiliate first-reply under %s",
+                    tweet_id,
                 )
             except Exception as exc:
                 logger.warning(
-                    "X/Twitter: first-reply exception (non-fatal): %s", exc,
+                    "X/Twitter: first-reply exception (non-fatal): %s",
+                    exc,
                 )
 
         return PublishResult(
@@ -273,7 +276,9 @@ class XTwitterClient:
                 media_ids.append(media.media_id_string)
                 logger.debug(
                     "X/Twitter: uploaded media %s → %s (chunked=%s)",
-                    path.name, media.media_id_string, use_chunked,
+                    path.name,
+                    media.media_id_string,
+                    use_chunked,
                 )
             except Exception as exc:
                 logger.error("X/Twitter: media upload failed for %s: %s", path.name, exc)
@@ -341,9 +346,7 @@ class XTwitterClient:
                     reply_to=reply_to,
                 )
             except Exception as exc:
-                logger.error(
-                    "X/Twitter: thread broken at position %d: %s", i, exc
-                )
+                logger.error("X/Twitter: thread broken at position %d: %s", i, exc)
                 if posted_ids:
                     # Partial thread published — treat as failure
                     return _fail(
@@ -379,9 +382,7 @@ class XTwitterClient:
     # Engageable protocol
     # ------------------------------------------------------------------
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool:
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
         """Post a reply to a tweet.
 
         Args:
@@ -393,25 +394,19 @@ class XTwitterClient:
             ``True`` on success, ``False`` on any failure.
         """
         if self._is_currently_rate_limited():
-            logger.warning(
-                "X/Twitter: post_reply skipped — rate limited (context=%s)", context_id
-            )
+            logger.warning("X/Twitter: post_reply skipped — rate limited (context=%s)", context_id)
             return False
 
         try:
             client = self._get_client()
             client.create_tweet(text=text, in_reply_to_tweet_id=parent_id)
-            logger.info(
-                "X/Twitter: replied to tweet %s (context=%s)", parent_id, context_id
-            )
+            logger.info("X/Twitter: replied to tweet %s (context=%s)", parent_id, context_id)
             return True
         except Exception as exc:
             if self._is_rate_limit_error(exc):
                 self._handle_rate_limit(exc)
             else:
-                logger.warning(
-                    "X/Twitter: post_reply failed for tweet %s: %s", parent_id, exc
-                )
+                logger.warning("X/Twitter: post_reply failed for tweet %s: %s", parent_id, exc)
             return False
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -427,14 +422,10 @@ class XTwitterClient:
         try:
             client = self._get_client()
             client.like(tweet_id=target_id)
-            logger.info(
-                "X/Twitter: liked tweet %s (context=%s)", target_id, context_id
-            )
+            logger.info("X/Twitter: liked tweet %s (context=%s)", target_id, context_id)
             return True
         except Exception as exc:
-            logger.warning(
-                "X/Twitter: like() failed for tweet %s: %s", target_id, exc
-            )
+            logger.warning("X/Twitter: like() failed for tweet %s: %s", target_id, exc)
             return False
 
     # ------------------------------------------------------------------
@@ -462,9 +453,7 @@ class XTwitterClient:
                 tweet_fields=["public_metrics"],
             )
             if response.data is None:
-                logger.warning(
-                    "X/Twitter: get_metrics — no data returned for tweet %s", tweet_id
-                )
+                logger.warning("X/Twitter: get_metrics — no data returned for tweet %s", tweet_id)
                 return None
 
             pm = response.data.public_metrics or {}
@@ -484,9 +473,7 @@ class XTwitterClient:
                 },
             )
         except Exception as exc:
-            logger.warning(
-                "X/Twitter: get_metrics failed for tweet %s: %s", tweet_id, exc
-            )
+            logger.warning("X/Twitter: get_metrics failed for tweet %s: %s", tweet_id, exc)
             return None
 
     # ------------------------------------------------------------------

@@ -10,8 +10,17 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 # Common tracking parameters to strip during URL normalization
 TRACKING_PARAMS = {
-    'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-    'ref', 'source', 'fbclid', 'gclid', 'mc_cid', 'mc_eid'
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "ref",
+    "source",
+    "fbclid",
+    "gclid",
+    "mc_cid",
+    "mc_eid",
 }
 
 
@@ -39,9 +48,7 @@ def normalize_url(url: str) -> str:
     )
 
     if not parsed.scheme or not parsed.netloc:
-        raise ValueError(
-            f"normalize_url requires a URL with scheme and host, got: {url!r}"
-        )
+        raise ValueError(f"normalize_url requires a URL with scheme and host, got: {url!r}")
 
     # Remove common tracking params
     if parsed.query:
@@ -49,10 +56,10 @@ def normalize_url(url: str) -> str:
         params = {k: v for k, v in params.items() if k not in TRACKING_PARAMS}
         query = urlencode(params, doseq=True)
     else:
-        query = ''
+        query = ""
 
     # Strip trailing slash for consistency (except root path)
-    path = parsed.path.rstrip('/') or '/'
+    path = parsed.path.rstrip("/") or "/"
 
     # Rebuild URL
     canonical = f"{parsed.scheme}://{parsed.netloc}{path}"
@@ -75,7 +82,7 @@ def generate_story_id(url: str, published_at: str) -> str:
         date_str = published_at.date().isoformat()
     else:
         try:
-            dt = datetime.fromisoformat(str(published_at).replace('Z', '+00:00'))
+            dt = datetime.fromisoformat(str(published_at).replace("Z", "+00:00"))
             date_str = dt.date().isoformat()
         except (ValueError, TypeError):
             date_str = str(published_at)[:10]  # Fallback to YYYY-MM-DD

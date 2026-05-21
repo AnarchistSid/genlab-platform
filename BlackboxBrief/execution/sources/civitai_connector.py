@@ -26,10 +26,7 @@ def _is_media_url(url: str) -> bool:
     if not url:
         return False
     lower = url.lower()
-    return bool(
-        re.search(r"\.(?:mp4|webm|mov|gif|jpg|jpeg|png|webp)(?:$|\?)", lower)
-        or "image.civitai.com" in lower
-    )
+    return bool(re.search(r"\.(?:mp4|webm|mov|gif|jpg|jpeg|png|webp)(?:$|\?)", lower) or "image.civitai.com" in lower)
 
 
 def _fetch_items(params: Dict[str, Any]) -> List[Dict[str, Any]]:

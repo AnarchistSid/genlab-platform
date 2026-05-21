@@ -4,6 +4,7 @@ All recurring operational tasks (publish ticks, token health, analytics,
 engagement polling, quota monitoring, daily intelligence) are registered here.
 This replaces the ad-hoc launchd plists for jobs that can run in-process.
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,6 +34,7 @@ def get_scheduler() -> GenLabScheduler:
 
 
 # ── Job stubs ─────────────────────────────────────────────────────────────────
+
 
 def _publish_tick() -> None:
     """Check for blueprints that are due for publishing."""
@@ -66,6 +68,7 @@ def _daily_intel() -> None:
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
+
 class GenLabScheduler:
     """APScheduler wrapper with SQLite-backed persistence.
 
@@ -90,7 +93,7 @@ class GenLabScheduler:
             "default": ThreadPoolExecutor(max_workers=4),
         }
         job_defaults = {
-            "coalesce": True,   # collapse missed runs into one
+            "coalesce": True,  # collapse missed runs into one
             "max_instances": 1,
         }
         self._scheduler = BackgroundScheduler(
@@ -199,14 +202,14 @@ class GenLabScheduler:
                 state = "paused"
             else:
                 state = "scheduled"
-            result.append({
-                "id": job.id,
-                "name": job.name,
-                "next_run_time": (
-                    job.next_run_time.isoformat() if job.next_run_time else None
-                ),
-                "state": state,
-            })
+            result.append(
+                {
+                    "id": job.id,
+                    "name": job.name,
+                    "next_run_time": (job.next_run_time.isoformat() if job.next_run_time else None),
+                    "state": state,
+                }
+            )
         return result
 
     def pause_job(self, job_id: str) -> None:
@@ -228,8 +231,10 @@ class GenLabScheduler:
             raise KeyError(f"Job not found: {job_id}")
         # Use reschedule with a one-off date trigger at "now"
         import datetime as _dt
+
         _dt.datetime.now(_dt.UTC)
         # Run in a thread to avoid blocking
         import threading
+
         threading.Thread(target=job.func, daemon=True).start()
         logger.info("Job %s triggered immediately", job_id)

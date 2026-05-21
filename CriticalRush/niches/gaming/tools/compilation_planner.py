@@ -46,9 +46,7 @@ def detect_clip_theme(clip: dict, theme_config: dict) -> str:
     Returns the first matching theme or "mixed" if none match.
     Skips themes with empty keyword lists.
     """
-    search_text = (
-        clip.get("title", "") + " " + clip.get("description", "")
-    ).lower()
+    search_text = (clip.get("title", "") + " " + clip.get("description", "")).lower()
 
     for theme_name in ["fails", "clutch", "funny"]:
         theme_def = theme_config.get(theme_name, {})
@@ -224,8 +222,12 @@ def calculate_trim_points(
     if total > target_duration and total > 0:
         scale = target_duration / total
         for clip in result:
-            clip["effective_duration_seconds"] = round(clip["effective_duration_seconds"] * scale, 2)
-            clip["end_trim_seconds"] = clip["start_trim_seconds"] + clip["effective_duration_seconds"]
+            clip["effective_duration_seconds"] = round(
+                clip["effective_duration_seconds"] * scale, 2
+            )
+            clip["end_trim_seconds"] = (
+                clip["start_trim_seconds"] + clip["effective_duration_seconds"]
+            )
 
     return result
 
@@ -239,13 +241,17 @@ def generate_commentary_slots(
         return []
 
     slots = []
-    total_dur = sum(c.get("effective_duration_seconds", c.get("duration_seconds", 0)) for c in clips)
+    total_dur = sum(
+        c.get("effective_duration_seconds", c.get("duration_seconds", 0)) for c in clips
+    )
 
-    slots.append({
-        "timestamp_seconds": 0.0,
-        "text": "",
-        "style": "intro",
-    })
+    slots.append(
+        {
+            "timestamp_seconds": 0.0,
+            "text": "",
+            "style": "intro",
+        }
+    )
 
     running_time = 0.0
     styles_cycle = ["hype", "reaction"]
@@ -253,19 +259,23 @@ def generate_commentary_slots(
     for _i, clip in enumerate(clips[:-1]):
         running_time += clip.get("effective_duration_seconds", clip.get("duration_seconds", 0))
         if len(slots) < min_lines - 1:
-            slots.append({
-                "timestamp_seconds": round(running_time, 2),
-                "text": "",
-                "style": styles_cycle[style_idx % len(styles_cycle)],
-            })
+            slots.append(
+                {
+                    "timestamp_seconds": round(running_time, 2),
+                    "text": "",
+                    "style": styles_cycle[style_idx % len(styles_cycle)],
+                }
+            )
             style_idx += 1
 
     outro_time = max(0.0, total_dur - 3.0)
-    slots.append({
-        "timestamp_seconds": round(outro_time, 2),
-        "text": "",
-        "style": "outro",
-    })
+    slots.append(
+        {
+            "timestamp_seconds": round(outro_time, 2),
+            "text": "",
+            "style": "outro",
+        }
+    )
 
     return slots
 
@@ -321,7 +331,9 @@ def build_compilation_plan(
         pacing_style = overrides.get("pacing", pacing_style)
         min_commentary = overrides.get("min_commentary_lines", min_commentary)
 
-    selected = select_clips_for_compilation(scored_clips, compilation_type, rules, overrides=overrides)
+    selected = select_clips_for_compilation(
+        scored_clips, compilation_type, rules, overrides=overrides
+    )
     if not selected:
         return None
 
@@ -336,15 +348,17 @@ def build_compilation_plan(
 
     plan_clips = []
     for i, clip in enumerate(trimmed):
-        plan_clips.append({
-            "clip_id": clip["clip_id"],
-            "order": i + 1,
-            "start_trim_seconds": clip["start_trim_seconds"],
-            "end_trim_seconds": clip["end_trim_seconds"],
-            "effective_duration_seconds": clip["effective_duration_seconds"],
-            "transition_in": clip["transition_in"],
-            "overlay_text": None,
-        })
+        plan_clips.append(
+            {
+                "clip_id": clip["clip_id"],
+                "order": i + 1,
+                "start_trim_seconds": clip["start_trim_seconds"],
+                "end_trim_seconds": clip["end_trim_seconds"],
+                "effective_duration_seconds": clip["effective_duration_seconds"],
+                "transition_in": clip["transition_in"],
+                "overlay_text": None,
+            }
+        )
 
     now = datetime.now(UTC)
     comp_id = _compilation_id(
@@ -430,10 +444,7 @@ def build_multi_compilation_plans(
 
     # Gather remaining clips (mixed group + unused themed clips)
     if len(plans) < max_compilations:
-        remaining = [
-            c for c in eligible
-            if c["clip_id"] not in used_clip_ids
-        ]
+        remaining = [c for c in eligible if c["clip_id"] not in used_clip_ids]
         if len(remaining) >= min_clips_per:
             plan = build_compilation_plan(
                 remaining,

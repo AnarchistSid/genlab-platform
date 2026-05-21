@@ -1,4 +1,5 @@
 """Tests for litellm-primary cost computation."""
+
 from unittest.mock import patch
 
 import pytest
@@ -7,6 +8,7 @@ from genlab_core.intelligence.cost_accumulator import _compute_cost
 _litellm_available = False
 try:
     import litellm  # noqa: F401
+
     _litellm_available = True
 except ImportError:
     pass

@@ -15,6 +15,7 @@ Why this beats full re-render via FrameCompositor:
   - Layout/branding/hook preservation guaranteed (we don't touch the
     rendered frame contents, just re-encode the bitstream)
 """
+
 from __future__ import annotations
 
 import json
@@ -64,12 +65,18 @@ def probe(path: Path) -> tuple[int, int] | None:
         size_mb = size_bytes // (1024 * 1024)
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=bit_rate",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=bit_rate",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 str(path),
             ],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         bitrate = int(result.stdout.strip()) if result.stdout.strip().isdigit() else 0
         bitrate_mbps = bitrate // 1_000_000
@@ -90,20 +97,32 @@ def recompress(path: Path) -> bool:
     """Re-encode in-place with bitrate cap. Atomic via temp file."""
     tmp = path.with_suffix(".recompress.mp4")
     cmd = [
-        "ffmpeg", "-y",
-        "-i", str(path),
-        "-c:v", "libx264",
-        "-crf", str(TARGET_CRF),
-        "-maxrate", TARGET_MAXRATE,
-        "-bufsize", TARGET_BUFSIZE,
-        "-preset", "medium",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-c:v",
+        "libx264",
+        "-crf",
+        str(TARGET_CRF),
+        "-maxrate",
+        TARGET_MAXRATE,
+        "-bufsize",
+        TARGET_BUFSIZE,
+        "-preset",
+        "medium",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
         str(tmp),
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=FFMPEG_TIMEOUT,
         )
         if result.returncode != 0:
             logger.error("ffmpeg failed for %s: %s", path.name, result.stderr[-300:])
@@ -149,7 +168,11 @@ def main() -> int:
         sz_mb, br_mbps = before
         logger.info(
             "[%s] %s/%s  before: %d MB / %d Mbps  re-encoding...",
-            str(bp["id"])[:8], bp["niche_id"], path.name, sz_mb, br_mbps,
+            str(bp["id"])[:8],
+            bp["niche_id"],
+            path.name,
+            sz_mb,
+            br_mbps,
         )
         if not recompress(path):
             failed += 1
@@ -158,13 +181,17 @@ def main() -> int:
         if after:
             logger.info(
                 "[%s]   after:  %d MB / %d Mbps",
-                str(bp["id"])[:8], after[0], after[1],
+                str(bp["id"])[:8],
+                after[0],
+                after[1],
             )
         succeeded += 1
 
     logger.info(
         "V5 done: %d re-encoded, %d already OK, %d failed",
-        succeeded, skipped_already_ok, failed,
+        succeeded,
+        skipped_already_ok,
+        failed,
     )
     return 0 if failed == 0 else 1
 

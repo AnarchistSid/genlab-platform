@@ -6,6 +6,7 @@ EAA Page Tokens do NOT use ig_refresh_token — they are permanent.
 
 Implements Publisher + Engageable + Trackable + HealthCheckable protocols.
 """
+
 from __future__ import annotations
 
 import logging
@@ -134,7 +135,8 @@ class FacebookClient:
                     )
             except Exception as exc:
                 logger.warning(
-                    "Facebook: first-comment exception (non-fatal): %s", exc,
+                    "Facebook: first-comment exception (non-fatal): %s",
+                    exc,
                 )
 
         return result
@@ -149,8 +151,7 @@ class FacebookClient:
             return False
         if not self._page_id:
             logger.error(
-                "Facebook: no page ID configured — "
-                "set META_FB_PAGE_ID or FB_PAGE_ID in .env"
+                "Facebook: no page ID configured — set META_FB_PAGE_ID or FB_PAGE_ID in .env"
             )
             return False
         try:
@@ -303,9 +304,7 @@ class FacebookClient:
     # Engageable protocol
     # ------------------------------------------------------------------
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool:
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
         """Reply to a Facebook comment.
 
         Unlike Instagram (which uses ``/replies``), Facebook comments use the
@@ -328,9 +327,7 @@ class FacebookClient:
             )
             data = _safe_json(resp)
             if resp.status_code == 200 and "id" in data:
-                logger.info(
-                    "Facebook: replied to comment %s", parent_id
-                )
+                logger.info("Facebook: replied to comment %s", parent_id)
                 return True
             logger.warning(
                 "Facebook: reply failed (HTTP %d): %s",
@@ -376,9 +373,7 @@ class FacebookClient:
     # Trackable protocol
     # ------------------------------------------------------------------
 
-    def get_metrics(
-        self, post_id: str, published_at: datetime
-    ) -> PlatformMetrics | None:
+    def get_metrics(self, post_id: str, published_at: datetime) -> PlatformMetrics | None:
         """Fetch post-level insights from the Facebook Graph API.
 
         Uses ``/{post_id}/insights`` with video or feed metric names.
@@ -435,10 +430,7 @@ class FacebookClient:
                 or metric_lookup.get("post_impressions")
                 or 0
             )
-            likes = (
-                metric_lookup.get("post_reactions_like_total")
-                or 0
-            )
+            likes = metric_lookup.get("post_reactions_like_total") or 0
             comments = metric_lookup.get("post_comments", 0)
             shares = metric_lookup.get("post_shares", 0)
 
@@ -484,10 +476,7 @@ class FacebookClient:
                     message=f"Token valid for page '{name}' (id={data['id']})",
                     details=data,
                 )
-            error_msg = (
-                data.get("error", {}).get("message", "")
-                or f"HTTP {resp.status_code}"
-            )
+            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,
@@ -509,7 +498,6 @@ class FacebookClient:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
-
 
 
 # _safe_json imported from genlab_core.platforms.models

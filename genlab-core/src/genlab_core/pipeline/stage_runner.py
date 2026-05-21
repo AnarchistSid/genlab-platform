@@ -115,7 +115,10 @@ class LocalStageRunner:
             if attempt > 0:
                 logger.info(
                     "[Pipeline] Retrying stage %s (attempt %d/%d) after %.0fs",
-                    stage_name, attempt + 1, 1 + self._max_retries, self._retry_delay,
+                    stage_name,
+                    attempt + 1,
+                    1 + self._max_retries,
+                    self._retry_delay,
                 )
                 if self._retry_delay > 0:
                     time.sleep(self._retry_delay)
@@ -129,15 +132,20 @@ class LocalStageRunner:
                 elapsed = time.monotonic() - t0
                 logger.info(
                     "[Pipeline] Stage %s completed in %.1fs%s",
-                    stage_name, elapsed,
+                    stage_name,
+                    elapsed,
                     f" (attempt {attempt + 1})" if attempt > 0 else "",
                 )
                 if self._metrics is not None:
                     self._metrics.record_stage(
-                        stage_name, duration_ms=elapsed * 1000.0, status="ok",
+                        stage_name,
+                        duration_ms=elapsed * 1000.0,
+                        status="ok",
                     )
                 return StageResult(
-                    stage_name=stage_name, success=True, elapsed_seconds=elapsed,
+                    stage_name=stage_name,
+                    success=True,
+                    elapsed_seconds=elapsed,
                 )
             except Exception as e:
                 last_error = e
@@ -145,14 +153,21 @@ class LocalStageRunner:
                 if attempt < self._max_retries:
                     logger.warning(
                         "[Pipeline] Stage %s failed (attempt %d/%d, %.1fs): %s — will retry",
-                        stage_name, attempt + 1, 1 + self._max_retries, elapsed, e,
+                        stage_name,
+                        attempt + 1,
+                        1 + self._max_retries,
+                        elapsed,
+                        e,
                     )
                     continue
                 # Final attempt failed
                 pipeline_ctx.record_error(stage_name, e, fatal=False)
                 logger.error(
                     "[Pipeline] Stage %s failed after %d attempt(s) (%.1fs): %s",
-                    stage_name, attempt + 1, elapsed, e,
+                    stage_name,
+                    attempt + 1,
+                    elapsed,
+                    e,
                 )
                 if self._metrics is not None:
                     self._metrics.record_stage(
@@ -170,8 +185,10 @@ class LocalStageRunner:
 
         # Should not reach here, but safety fallback
         return StageResult(
-            stage_name=stage_name, success=False,
-            elapsed_seconds=0.0, error=last_error,
+            stage_name=stage_name,
+            success=False,
+            elapsed_seconds=0.0,
+            error=last_error,
         )
 
 
@@ -221,7 +238,9 @@ class SandboxAwareStageRunner:
                 stage_name,
             )
             return LocalStageRunner(metrics=self._metrics).run_stage(
-                stage, context, pipeline_ctx,
+                stage,
+                context,
+                pipeline_ctx,
             )
 
         logger.info("[Pipeline] Running stage: %s (sandboxed)", stage_name)
@@ -244,21 +263,28 @@ class SandboxAwareStageRunner:
             elapsed = time.monotonic() - t0
             logger.info(
                 "[Pipeline] Stage %s completed in %.1fs (sandboxed)",
-                stage_name, elapsed,
+                stage_name,
+                elapsed,
             )
             if self._metrics is not None:
                 self._metrics.record_stage(
-                    stage_name, duration_ms=elapsed * 1000.0, status="ok",
+                    stage_name,
+                    duration_ms=elapsed * 1000.0,
+                    status="ok",
                 )
             return StageResult(
-                stage_name=stage_name, success=True, elapsed_seconds=elapsed,
+                stage_name=stage_name,
+                success=True,
+                elapsed_seconds=elapsed,
             )
         except Exception as e:
             elapsed = time.monotonic() - t0
             pipeline_ctx.record_error(stage_name, e, fatal=False)
             logger.error(
                 "[Pipeline] Stage %s failed after %.1fs (sandboxed): %s",
-                stage_name, elapsed, e,
+                stage_name,
+                elapsed,
+                e,
             )
             if self._metrics is not None:
                 self._metrics.record_stage(
@@ -355,7 +381,9 @@ class StageRunnerFactory:
         """
         names = [s.__class__.__name__ for _, s in batch]
         logger.info(
-            "[Pipeline] Running %d stages in parallel: %s", len(batch), names,
+            "[Pipeline] Running %d stages in parallel: %s",
+            len(batch),
+            names,
         )
 
         t0 = time.monotonic()
@@ -389,7 +417,9 @@ class StageRunnerFactory:
                 status = "OK" if result.success else "FAIL"
                 logger.info(
                     "[Pipeline] Parallel stage %s finished (%s, %.1fs)",
-                    stage_name, status, result.elapsed_seconds,
+                    stage_name,
+                    status,
+                    result.elapsed_seconds,
                 )
 
         # Merge new/modified keys from each copy back into original context
@@ -401,7 +431,8 @@ class StageRunnerFactory:
 
         elapsed = time.monotonic() - t0
         logger.info(
-            "[Pipeline] Parallel group completed in %.1fs (wall-clock)", elapsed,
+            "[Pipeline] Parallel group completed in %.1fs (wall-clock)",
+            elapsed,
         )
 
         return [results[i] for i in range(len(batch))]
@@ -428,7 +459,8 @@ class StageRunnerFactory:
         if sandbox_cfg is True:
             # Simple flag — deny-all egress (render stages)
             return SandboxAwareStageRunner(
-                genlab_root=self._genlab_root, metrics=self._metrics,
+                genlab_root=self._genlab_root,
+                metrics=self._metrics,
             )
 
         if isinstance(sandbox_cfg, dict):

@@ -42,11 +42,13 @@ class TestEnrichment:
     @patch("niches.gaming.stages.enrich_with_igdb.time.sleep")
     def test_enriches_stories_missing_igdb_id(self, mock_sleep):
         """search_game result fields are merged into the story dict."""
-        stage, mock_client = _make_stage_with_mock_client(search_return={
-            "igdb_game_id": "119133",
-            "steam_app_id": "1245620",
-            "developer": "FromSoftware",
-        })
+        stage, mock_client = _make_stage_with_mock_client(
+            search_return={
+                "igdb_game_id": "119133",
+                "steam_app_id": "1245620",
+                "developer": "FromSoftware",
+            }
+        )
 
         stories = [
             {"title": "Elden Ring", "source": "rss", "score": 0.8},

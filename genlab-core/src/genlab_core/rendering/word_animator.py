@@ -28,6 +28,7 @@ try:
         calculate_optimal_font_size,
         calculate_safe_position,
     )
+
     _HAS_TEXT_OPTIMIZER = True
 except ImportError:
     _HAS_TEXT_OPTIMIZER = False
@@ -55,12 +56,15 @@ def get_wbw_config() -> dict:
     candidates = [
         # BlackboxBrief root (when sys.path includes it)
         Path(__file__).resolve().parent.parent.parent.parent.parent
-        / "BlackboxBrief" / "config" / "instagram_specs.yaml",
+        / "BlackboxBrief"
+        / "config"
+        / "instagram_specs.yaml",
     ]
     wbw: dict = {}
     for specs_path in candidates:
         if specs_path.exists():
             import yaml
+
             with open(specs_path) as f:
                 specs = yaml.safe_load(f) or {}
             wbw = specs.get("animation", {}).get("word_by_word", {})
@@ -86,21 +90,23 @@ def get_wbw_config() -> dict:
 # Word-by-Word Animation Engine
 # ══════════════════════════════════════════════════════════════
 
+
 @dataclass
 class WordTiming:
     """Timing + position data for a single animated word."""
+
     word: str
-    index: int              # 0-based word index
-    line: int               # 0-based line index
-    col: int                # 0-based word-in-line index
+    index: int  # 0-based word index
+    line: int  # 0-based line index
+    col: int  # 0-based word-in-line index
     # Pixel positions (pre-calculated for centered line layout)
-    x: int = 0              # left edge of this word (pixels)
-    y: int = 0              # top edge of the line (pixels)
+    x: int = 0  # left edge of this word (pixels)
+    y: int = 0  # top edge of the line (pixels)
     word_width_px: int = 0  # estimated pixel width of this word
     # Timing (seconds from video start)
-    appear_time: float = 0.0    # word becomes visible
+    appear_time: float = 0.0  # word becomes visible
     highlight_end: float = 0.0  # gold->white transition starts
-    fade_end: float = 0.0       # word is fully white
+    fade_end: float = 0.0  # word is fully white
 
 
 class WordByWordAnimator:
@@ -250,15 +256,17 @@ class WordByWordAnimator:
             else:
                 highlight_end = appear + seconds_per_word
 
-            timings.append(WordTiming(
-                word=word,
-                index=i,
-                line=line,
-                col=col,
-                appear_time=round(appear, 3),
-                highlight_end=round(highlight_end, 3),
-                fade_end=round(highlight_end + fade_duration, 3),
-            ))
+            timings.append(
+                WordTiming(
+                    word=word,
+                    index=i,
+                    line=line,
+                    col=col,
+                    appear_time=round(appear, 3),
+                    highlight_end=round(highlight_end, 3),
+                    fade_end=round(highlight_end + fade_duration, 3),
+                )
+            )
 
             col += 1
             if col >= self.MAX_WORDS_PER_LINE:
@@ -300,10 +308,7 @@ class WordByWordAnimator:
             List of WordTiming with timing + line/col set.
             Pixel positions (x, y) are NOT set — call layout_words() next.
         """
-        fade_duration = (
-            fade_duration if fade_duration is not None
-            else self.DEFAULT_FADE_DURATION
-        )
+        fade_duration = fade_duration if fade_duration is not None else self.DEFAULT_FADE_DURATION
 
         words = text.split()
         if not words:
@@ -331,15 +336,17 @@ class WordByWordAnimator:
                 appear = last_end + offset
                 highlight_end = appear + spw
 
-            timings.append(WordTiming(
-                word=word,
-                index=i,
-                line=line,
-                col=col,
-                appear_time=round(appear, 3),
-                highlight_end=round(highlight_end, 3),
-                fade_end=round(highlight_end + fade_duration, 3),
-            ))
+            timings.append(
+                WordTiming(
+                    word=word,
+                    index=i,
+                    line=line,
+                    col=col,
+                    appear_time=round(appear, 3),
+                    highlight_end=round(highlight_end, 3),
+                    fade_end=round(highlight_end + fade_duration, 3),
+                )
+            )
 
             col += 1
             if col >= self.MAX_WORDS_PER_LINE:
@@ -389,7 +396,9 @@ class WordByWordAnimator:
         if not timings:
             return timings
 
-        line_height_factor = line_height_factor if line_height_factor is not None else self.LINE_HEIGHT_FACTOR
+        line_height_factor = (
+            line_height_factor if line_height_factor is not None else self.LINE_HEIGHT_FACTOR
+        )
         char_w = font_size * self.CHAR_WIDTH_FACTOR
         space_w = font_size * self.SPACE_WIDTH_FACTOR
         line_h = int(font_size * line_height_factor)
@@ -606,7 +615,10 @@ class WordByWordAnimator:
         # Get font size and position from text_optimizer
         if _HAS_TEXT_OPTIMIZER:
             font_size = calculate_optimal_font_size(
-                text, text_type, canvas_width, canvas_height,
+                text,
+                text_type,
+                canvas_width,
+                canvas_height,
             )
             if max_font_size is not None:
                 font_size = min(font_size, max_font_size)
@@ -621,26 +633,39 @@ class WordByWordAnimator:
                 font_size = min(font_size, max_font_size)
             area_x = override_x if override_x is not None else SAFE_LEFT
             area_y = override_y if override_y is not None else (SAFE_TOP + 100)
-            area_w = override_width if override_width is not None else (canvas_width - SAFE_LEFT - SAFE_RIGHT)
+            area_w = (
+                override_width
+                if override_width is not None
+                else (canvas_width - SAFE_LEFT - SAFE_RIGHT)
+            )
 
         # Shadow offset scales with font size
         shadow_offset = max(4, font_size // 25)
 
         if whisper_words is not None:
             timings = self.calculate_word_timings_from_whisper(
-                text, whisper_words,
+                text,
+                whisper_words,
             )
         else:
             timings = self.calculate_word_timings(
-                text, wpm=wpm, start_time=start_time,
+                text,
+                wpm=wpm,
+                start_time=start_time,
             )
         timings = self.layout_words(
-            timings, font_size=font_size,
-            x=area_x, y=area_y, max_width=area_w, align_left=align_left,
+            timings,
+            font_size=font_size,
+            x=area_x,
+            y=area_y,
+            max_width=area_w,
+            align_left=align_left,
         )
 
         filters = self.generate_ffmpeg_filters(
-            timings, font_size=font_size, shadow_offset=shadow_offset,
+            timings,
+            font_size=font_size,
+            shadow_offset=shadow_offset,
         )
 
         # Total duration: last word's fade_end

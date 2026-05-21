@@ -10,6 +10,7 @@ Usage:
     uv run --package genlab-core python scripts/viral_detector.py --json
     uv run --package genlab-core python scripts/viral_detector.py --threshold 5
 """
+
 # NOTE: Run via: uv run --package genlab-core python scripts/viral_detector.py
 import argparse
 import json
@@ -32,17 +33,22 @@ BASELINE_FILE = Path.home() / ".genlab" / "engagement_baselines.json"
 
 # Engagement thresholds (multiplier over baseline to trigger alert)
 DEFAULT_VIRAL_THRESHOLD = 5.0  # 5x normal engagement = viral
-TRENDING_THRESHOLD = 2.5       # 2.5x = trending
+TRENDING_THRESHOLD = 2.5  # 2.5x = trending
 
 
 def _send_notification(title: str, message: str):
     """Send desktop notification (macOS) or log alert (Linux)."""
     if sys.platform == "darwin":
         try:
-            subprocess.run([
-                "osascript", "-e",
-                f'display notification "{message}" with title "{title}" sound name "Glass"'
-            ], capture_output=True, timeout=5)
+            subprocess.run(
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "{message}" with title "{title}" sound name "Glass"',
+                ],
+                capture_output=True,
+                timeout=5,
+            )
         except Exception as e:
             logger.warning("Failed to send notification: %s", e)
     else:
@@ -158,8 +164,10 @@ def compute_baselines(days: int = 30, niche_id: str | None = None) -> dict[str, 
                 # Use median to avoid skew from one viral post
                 sorted_eng = sorted(engagements)
                 mid = len(sorted_eng) // 2
-                median = sorted_eng[mid] if len(sorted_eng) % 2 else (
-                    (sorted_eng[mid - 1] + sorted_eng[mid]) / 2
+                median = (
+                    sorted_eng[mid]
+                    if len(sorted_eng) % 2
+                    else ((sorted_eng[mid - 1] + sorted_eng[mid]) / 2)
                 )
                 baselines[platform] = max(median, 1)  # Floor at 1
 
@@ -170,7 +178,9 @@ def compute_baselines(days: int = 30, niche_id: str | None = None) -> dict[str, 
     return baselines
 
 
-def detect_viral(threshold: float = DEFAULT_VIRAL_THRESHOLD, days: int = 7, niche_id: str | None = None) -> list[dict[str, Any]]:
+def detect_viral(
+    threshold: float = DEFAULT_VIRAL_THRESHOLD, days: int = 7, niche_id: str | None = None
+) -> list[dict[str, Any]]:
     """Detect posts that are performing significantly above baseline."""
     import hashlib
 
@@ -246,7 +256,9 @@ def detect_viral(threshold: float = DEFAULT_VIRAL_THRESHOLD, days: int = 7, nich
                         "level": level,
                         "niche_id": niche_id,
                         "detected_at": datetime.now(UTC).isoformat(),
-                        "posted_at": post.get("published") or post.get("posted") or post.get("created_at"),
+                        "posted_at": post.get("published")
+                        or post.get("posted")
+                        or post.get("created_at"),
                     }
                     new_alerts.append(alert)
 
@@ -259,10 +271,12 @@ def detect_viral(threshold: float = DEFAULT_VIRAL_THRESHOLD, days: int = 7, nich
 
                     _send_notification(
                         f"VIRAL on {platform.upper()}",
-                        f"{text[:60]}... — {likes} likes ({multiplier:.0f}x normal)"
+                        f"{text[:60]}... — {likes} likes ({multiplier:.0f}x normal)",
                     )
 
-                elif multiplier >= TRENDING_THRESHOLD and not _already_alerted(content_hash, alerts):
+                elif multiplier >= TRENDING_THRESHOLD and not _already_alerted(
+                    content_hash, alerts
+                ):
                     alert = {
                         "content_hash": content_hash,
                         "platform": platform,
@@ -287,7 +301,7 @@ def detect_viral(threshold: float = DEFAULT_VIRAL_THRESHOLD, days: int = 7, nich
 
                     _send_notification(
                         f"Trending on {platform.upper()}",
-                        f"{text[:60]}... — {likes} likes ({multiplier:.0f}x normal)"
+                        f"{text[:60]}... — {likes} likes ({multiplier:.0f}x normal)",
                     )
 
         except Exception as e:
@@ -331,18 +345,23 @@ def print_alerts(alerts: list[dict]) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Viral Detection & Alert System")
-    parser.add_argument("--threshold", type=float, default=DEFAULT_VIRAL_THRESHOLD,
-                        help=f"Viral threshold multiplier (default: {DEFAULT_VIRAL_THRESHOLD}x)")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=DEFAULT_VIRAL_THRESHOLD,
+        help=f"Viral threshold multiplier (default: {DEFAULT_VIRAL_THRESHOLD}x)",
+    )
     parser.add_argument("--baseline", action="store_true", help="Recompute baselines only")
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("--days", type=int, default=7, help="Lookback for detection")
-    parser.add_argument("--niche", type=str, default=None, help="Niche ID (e.g. gaming, ai_creators)")
+    parser.add_argument(
+        "--niche", type=str, default=None, help="Niche ID (e.g. gaming, ai_creators)"
+    )
     args = parser.parse_args()
 
     if args.baseline:
         baselines = compute_baselines(30, niche_id=args.niche)
-        print(json.dumps(baselines, indent=2) if args.json else
-              f"Baselines: {baselines}")
+        print(json.dumps(baselines, indent=2) if args.json else f"Baselines: {baselines}")
     else:
         alerts = detect_viral(threshold=args.threshold, days=args.days, niche_id=args.niche)
         if args.json:

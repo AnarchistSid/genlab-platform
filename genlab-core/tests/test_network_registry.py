@@ -1,4 +1,5 @@
 """Tests for the affiliate network adapter registry."""
+
 import os
 
 import pytest

@@ -5,6 +5,7 @@ After Wave 2 refactor, the shared _api_limiter lives in the base class module
 strategies via inheritance.  CW, SR, FD strategies inherit from
 BaseContentResearchStrategy which calls _api_limiter.acquire() in execute().
 """
+
 import importlib
 
 
@@ -12,19 +13,19 @@ class TestRateLimiterWiring:
     """The shared _api_limiter should be a TokenBucket in the base module."""
 
     def test_base_content_research_has_rate_limiter(self):
-        mod = importlib.import_module(
-            "genlab_core.strategies.base_content_research"
-        )
+        mod = importlib.import_module("genlab_core.strategies.base_content_research")
         assert hasattr(mod, "_api_limiter"), (
             "base_content_research missing _api_limiter TokenBucket"
         )
         from genlab_core.ratelimit.token_bucket import TokenBucket
+
         assert isinstance(mod._api_limiter, TokenBucket)
 
     def test_clutchwire_inherits_base(self):
         from genlab_core.strategies.base_content_research import (
             BaseContentResearchStrategy,
         )
+
         mod = importlib.import_module("cw_strategies.content_research")
         cls = mod.SportContentResearchStrategy
         assert issubclass(cls, BaseContentResearchStrategy)
@@ -33,6 +34,7 @@ class TestRateLimiterWiring:
         from genlab_core.strategies.base_content_research import (
             BaseContentResearchStrategy,
         )
+
         mod = importlib.import_module("sr_strategies.content_research")
         cls = mod.MovieContentResearchStrategy
         assert issubclass(cls, BaseContentResearchStrategy)
@@ -41,6 +43,7 @@ class TestRateLimiterWiring:
         from genlab_core.strategies.base_content_research import (
             BaseContentResearchStrategy,
         )
+
         mod = importlib.import_module("fd_strategies.content_research")
         cls = mod.AnimeContentResearchStrategy
         assert issubclass(cls, BaseContentResearchStrategy)
@@ -50,4 +53,5 @@ class TestRateLimiterWiring:
         from genlab_core.strategies.base_content_research import (
             _api_limiter,
         )
+
         assert _api_limiter.rate == 5.0

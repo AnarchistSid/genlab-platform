@@ -61,7 +61,10 @@ def resolve_niche_env(niche_id: str, global_var: str, niche_suffix: str) -> str:
             return os.getenv(global_var, "").strip()
         logger.debug(
             "Niche '%s' missing %s_%s — refusing fallback to global %s",
-            niche_id, prefix, niche_suffix, global_var,
+            niche_id,
+            prefix,
+            niche_suffix,
+            global_var,
         )
         return ""
 
@@ -73,7 +76,9 @@ def resolve_meta_credentials(niche_id: str) -> dict[str, str]:
     return {
         "ig_access_token": resolve_niche_env(niche_id, "META_ACCESS_TOKEN", "META_ACCESS_TOKEN"),
         "ig_user_id": resolve_niche_env(niche_id, "META_IG_USER_ID", "IG_USER_ID"),
-        "fb_access_token": resolve_niche_env(niche_id, "FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"),
+        "fb_access_token": resolve_niche_env(
+            niche_id, "FB_PAGE_ACCESS_TOKEN", "FB_PAGE_ACCESS_TOKEN"
+        ),
         "fb_page_id": resolve_niche_env(niche_id, "META_FB_PAGE_ID", "FB_PAGE_ID"),
     }
 
@@ -103,7 +108,9 @@ def resolve_youtube_credentials(niche_id: str) -> dict[str, str]:
     return {
         "client_id": os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
         "client_secret": os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
-        "refresh_token": resolve_niche_env(niche_id, "YOUTUBE_REFRESH_TOKEN", "YOUTUBE_REFRESH_TOKEN"),
+        "refresh_token": resolve_niche_env(
+            niche_id, "YOUTUBE_REFRESH_TOKEN", "YOUTUBE_REFRESH_TOKEN"
+        ),
     }
 
 
@@ -128,9 +135,9 @@ def resolve_youtube_analytics_credentials(niche_id: str = "") -> dict[str, str]:
     """
     return {
         "client_id": os.getenv("YOUTUBE_ANALYTICS_CLIENT_ID", "").strip()
-                     or os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
+        or os.getenv("YOUTUBE_CLIENT_ID", "").strip(),
         "client_secret": os.getenv("YOUTUBE_ANALYTICS_CLIENT_SECRET", "").strip()
-                         or os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
+        or os.getenv("YOUTUBE_CLIENT_SECRET", "").strip(),
         "refresh_token": resolve_niche_env(
             niche_id,
             "YOUTUBE_ANALYTICS_REFRESH_TOKEN",

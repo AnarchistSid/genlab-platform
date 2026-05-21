@@ -4,6 +4,7 @@ Verifies that all domain methods (create_story, find_blueprint_by_candidate_id,
 etc.) delegate to the StorageBackend layer instead of directly using
 GraphTableProxy instances.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -23,13 +24,16 @@ def _mock_heavy_imports():
 
     with (
         patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False),
-        patch.dict("sys.modules", {
-            "azure": MagicMock(),
-            "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
-            "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
-            "kiota_abstractions": MagicMock(),
-            "kiota_abstractions.api_error": MagicMock(),
-        }),
+        patch.dict(
+            "sys.modules",
+            {
+                "azure": MagicMock(),
+                "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
+                "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
+                "kiota_abstractions": MagicMock(),
+                "kiota_abstractions.api_error": MagicMock(),
+            },
+        ),
         patch("genlab_core.http.backlog_client.GraphTableProxy") as mock_proxy_cls,
     ):
         yield mock_proxy_cls
@@ -77,6 +81,7 @@ def _make_client(mock_config):
     mock_settings = _make_settings()
     with patch("genlab_core.settings.settings", mock_settings):
         from genlab_core.http.backlog_client import BacklogClient
+
         return BacklogClient(config_path=mock_config)
 
 
@@ -100,8 +105,13 @@ class TestBackendRouting:
     def test_sp_proxies_includes_core_tables(self, mock_config):
         client = _make_client(mock_config)
         expected = {
-            "Stories", "Blueprints", "Templates", "Assets",
-            "Sources", "Publishing_Analytics", "Analytics",
+            "Stories",
+            "Blueprints",
+            "Templates",
+            "Assets",
+            "Sources",
+            "Publishing_Analytics",
+            "Analytics",
         }
         assert expected.issubset(set(client._sp_proxies.keys()))
 
@@ -136,9 +146,7 @@ class TestStoriesBackendDelegation:
 
     def test_find_story_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.stories.all.return_value = [
-            {"id": "rec-1", "fields": {"story_id": "sid_1"}}
-        ]
+        client.stories.all.return_value = [{"id": "rec-1", "fields": {"story_id": "sid_1"}}]
 
         result = client.find_story_by_story_id("sid_1", niche_id="gaming")
 
@@ -150,9 +158,7 @@ class TestStoriesBackendDelegation:
 
     def test_update_story_status_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.stories.all.return_value = [
-            {"id": "rec-1", "fields": {"story_id": "sid_1"}}
-        ]
+        client.stories.all.return_value = [{"id": "rec-1", "fields": {"story_id": "sid_1"}}]
         client.stories.update.return_value = {"id": "rec-1"}
 
         client.update_story_status("sid_1", "VALIDATED")
@@ -165,7 +171,8 @@ class TestStoriesBackendDelegation:
     def test_batch_create_stories_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
         client.stories.batch_create.return_value = [
-            {"id": "r1"}, {"id": "r2"},
+            {"id": "r1"},
+            {"id": "r2"},
         ]
 
         stories = [
@@ -214,9 +221,7 @@ class TestBlueprintsBackendDelegation:
             {"id": "bp-1", "fields": {"candidate_id": "cid_1", "status": "DRAFTED"}}
         ]
         client.blueprints._proxy.update.return_value = {"id": "bp-1"}
-        client.blueprints._proxy.get.return_value = {
-            "id": "bp-1", "fields": {"status": "DRAFTED"}
-        }
+        client.blueprints._proxy.get.return_value = {"id": "bp-1", "fields": {"status": "DRAFTED"}}
 
         client.update_blueprint_status("cid_1", "VISUAL_READY")
 
@@ -241,7 +246,9 @@ class TestTemplatesBackendDelegation:
         client.templates.create.return_value = {"id": "tmpl-1"}
 
         template = {
-            "template_id": "t1", "name": "Test", "format": "reel",
+            "template_id": "t1",
+            "name": "Test",
+            "format": "reel",
         }
         result = client.create_template(template)
 
@@ -250,9 +257,7 @@ class TestTemplatesBackendDelegation:
 
     def test_find_template_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.templates.all.return_value = [
-            {"id": "tmpl-1", "fields": {"template_id": "t1"}}
-        ]
+        client.templates.all.return_value = [{"id": "tmpl-1", "fields": {"template_id": "t1"}}]
 
         result = client.find_template_by_template_id("t1")
 
@@ -273,9 +278,7 @@ class TestTemplatesBackendDelegation:
 class TestAssetsBackendDelegation:
     def test_find_asset_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.assets.all.return_value = [
-            {"id": "a-1", "fields": {"asset_id": "aid1"}}
-        ]
+        client.assets.all.return_value = [{"id": "a-1", "fields": {"asset_id": "aid1"}}]
 
         result = client.find_asset_by_asset_id("aid1", niche_id="gaming")
 
@@ -286,9 +289,7 @@ class TestAssetsBackendDelegation:
 
     def test_update_asset_status_goes_through_backend(self, mock_config):
         client = _make_client(mock_config)
-        client.assets.all.return_value = [
-            {"id": "a-1", "fields": {"asset_id": "aid1"}}
-        ]
+        client.assets.all.return_value = [{"id": "a-1", "fields": {"asset_id": "aid1"}}]
         client.assets.update.return_value = {"id": "a-1"}
 
         client.update_asset_status("aid1", "READY")
@@ -305,8 +306,10 @@ class TestSourcesBackendDelegation:
         client.sources.create.return_value = {"id": "src-1"}
 
         source = {
-            "source_id": "s1", "domain": "example.com",
-            "url": "https://example.com", "type": "rss",
+            "source_id": "s1",
+            "domain": "example.com",
+            "url": "https://example.com",
+            "type": "rss",
         }
         result = client.create_source(source)
 
@@ -331,7 +334,8 @@ class TestAnalyticsBackendDelegation:
         client.analytics.create.return_value = {"id": "an-1"}
 
         result = client.upsert_analytics(
-            post_id="post1", platform="instagram",
+            post_id="post1",
+            platform="instagram",
             insights={"reach": 100, "engagement": 10},
         )
 
@@ -346,7 +350,8 @@ class TestAnalyticsBackendDelegation:
         client.analytics.update.return_value = {"id": "an-1"}
 
         result = client.upsert_analytics(
-            post_id="post1", platform="instagram",
+            post_id="post1",
+            platform="instagram",
             insights={"reach": 200, "engagement": 20},
         )
 
@@ -361,8 +366,10 @@ class TestPublishingAnalyticsBackendDelegation:
         client.publishing_analytics.create.return_value = {"id": "pa-1"}
 
         result = client.log_publish_result(
-            candidate_id="cand-1", platform="instagram",
-            status="SUCCESS", niche_id="gaming",
+            candidate_id="cand-1",
+            platform="instagram",
+            status="SUCCESS",
+            niche_id="gaming",
         )
 
         assert result == "pa-1"
@@ -375,7 +382,8 @@ class TestPublishingAnalyticsBackendDelegation:
         client.publishing_analytics.all.return_value = []
 
         client.get_publishing_analytics(
-            platform="instagram", niche_id="gaming",
+            platform="instagram",
+            niche_id="gaming",
         )
 
         client.publishing_analytics.all.assert_called_once()
@@ -411,9 +419,12 @@ class TestEngagementBackendDelegation:
         mock_proxy.create.return_value = "pe-1"
         client.pending_engagement = mock_proxy
 
-        result = client.write_pending_engagement({
-            "comment_id": "cmt_1", "platform": "instagram",
-        })
+        result = client.write_pending_engagement(
+            {
+                "comment_id": "cmt_1",
+                "platform": "instagram",
+            }
+        )
 
         assert result == "pe-1"
         mock_proxy.create.assert_called_once()
@@ -472,9 +483,7 @@ class TestAttachmentBackendDelegation:
     def test_upload_attachment_goes_through_backend(self, mock_config, tmp_path):
         client = _make_client(mock_config)
         # ScheduleGuardedProxy.__getattr__ delegates upload_attachment
-        client.blueprints._proxy.upload_attachment.return_value = {
-            "filename": "test.png"
-        }
+        client.blueprints._proxy.upload_attachment.return_value = {"filename": "test.png"}
 
         test_file = tmp_path / "test.png"
         test_file.write_bytes(b"png data")

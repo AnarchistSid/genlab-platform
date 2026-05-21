@@ -63,8 +63,8 @@ def _content_hash(url: str) -> str:
 import re as _re  # noqa: E402 — kept adjacent to the regex constants it powers
 
 _YT_ID_RE = _re.compile(
-    r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)'
-    r'([a-zA-Z0-9_-]{11})'
+    r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)"
+    r"([a-zA-Z0-9_-]{11})"
 )
 
 
@@ -113,6 +113,7 @@ class _DomainRateLimiter:
 
     def wait(self, url: str) -> None:
         from urllib.parse import urlparse
+
         domain = urlparse(url).netloc
         with self._global_lock:
             if domain not in self._locks:
@@ -130,7 +131,9 @@ class _DomainRateLimiter:
 class _FeedHealthTracker:
     """Track consecutive failures per feed. Auto-disable after 5 failures (24h cooldown)."""
 
-    _HEALTH_PATH = Path(__file__).resolve().parent.parent.parent.parent / ".tmp" / "cache" / "feed_health.json"
+    _HEALTH_PATH = (
+        Path(__file__).resolve().parent.parent.parent.parent / ".tmp" / "cache" / "feed_health.json"
+    )
 
     def __init__(self) -> None:
         self._health: dict[str, dict] = {}
@@ -164,7 +167,10 @@ class _FeedHealthTracker:
         return False
 
     def record_success(self, url: str) -> None:
-        self._health[url] = {"consecutive_failures": 0, "last_success": datetime.now(UTC).isoformat()}
+        self._health[url] = {
+            "consecutive_failures": 0,
+            "last_success": datetime.now(UTC).isoformat(),
+        }
 
     def record_failure(self, url: str) -> None:
         entry = self._health.get(url, {"consecutive_failures": 0})
@@ -172,7 +178,11 @@ class _FeedHealthTracker:
         entry["last_failure"] = datetime.now(UTC).isoformat()
         if entry["consecutive_failures"] >= 5:
             entry["disabled_until"] = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-            logger.warning("[FeedHealth] Auto-disabled %s after %d consecutive failures", url, entry["consecutive_failures"])
+            logger.warning(
+                "[FeedHealth] Auto-disabled %s after %d consecutive failures",
+                url,
+                entry["consecutive_failures"],
+            )
         self._health[url] = entry
 
 
@@ -257,7 +267,9 @@ class SharedIngestionPipeline:
                     counts = future.result()
                     results.append(counts)
                 except Exception as exc:
-                    logger.warning("[SharedIngestion] Feed %s failed: %s", cfg.get("name", "?"), exc)
+                    logger.warning(
+                        "[SharedIngestion] Feed %s failed: %s", cfg.get("name", "?"), exc
+                    )
                     self._stats["errors"] += 1
 
         # Merge thread-local counts into main stats
@@ -265,7 +277,9 @@ class SharedIngestionPipeline:
             for key, val in counts.items():
                 self._stats[key] = self._stats.get(key, 0) + val
 
-    def _fetch_single_feed(self, ftype: str, cfg: dict, rate_limiter: _DomainRateLimiter) -> dict[str, int]:
+    def _fetch_single_feed(
+        self, ftype: str, cfg: dict, rate_limiter: _DomainRateLimiter
+    ) -> dict[str, int]:
         """Fetch a single feed. Returns local counts dict. Called from thread pool."""
         url = cfg.get("url", "")
         if not url:
@@ -298,7 +312,8 @@ class SharedIngestionPipeline:
                 if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
                     logger.debug(
                         "[SharedIngestion] Skipping stale entry (>48h) from %s: %s",
-                        ftype, link[:80],
+                        ftype,
+                        link[:80],
                     )
                     continue
 
@@ -321,8 +336,11 @@ class SharedIngestionPipeline:
                     # Extract YouTube video_id from Reddit post content (Layer 2.5)
                     for text_field in [
                         entry_data.get("summary", ""),
-                        (entry_data.get("content", [{}])[0].get("value", "")
-                         if entry_data.get("content") else ""),
+                        (
+                            entry_data.get("content", [{}])[0].get("value", "")
+                            if entry_data.get("content")
+                            else ""
+                        ),
                     ]:
                         yt_id = _extract_youtube_id(text_field)
                         if yt_id:
@@ -423,9 +441,7 @@ class SharedIngestionPipeline:
                         video_url=url,
                         video_id=video_id,
                         thumbnail_url=(
-                            snippet.get("thumbnails", {})
-                            .get("high", {})
-                            .get("url", "")
+                            snippet.get("thumbnails", {}).get("high", {}).get("url", "")
                         ),
                         published_at=published_at,
                         view_count=view_count,
@@ -452,9 +468,7 @@ class SharedIngestionPipeline:
     def _fetch_youtube_channels(self) -> None:
         """Fetch YouTube channel RSS feeds via feedparser."""
         channels = self._config.get("youtube_channels", [])
-        logger.info(
-            "[SharedIngestion] Fetching %d YouTube channel RSS feeds", len(channels)
-        )
+        logger.info("[SharedIngestion] Fetching %d YouTube channel RSS feeds", len(channels))
 
         for ch in channels:
             name = ch.get("name", "unknown")
@@ -481,16 +495,12 @@ class SharedIngestionPipeline:
                     published_at = None
                     if entry.get("published_parsed"):
                         try:
-                            published_at = datetime(
-                                *entry.published_parsed[:6], tzinfo=UTC
-                            )
+                            published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                         except (TypeError, ValueError):
                             pass
 
                     # Skip entries older than 48h
-                    if published_at and (datetime.now(UTC) - published_at) > timedelta(
-                        hours=48
-                    ):
+                    if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
                         continue
 
                     thumbnail = ""
@@ -514,9 +524,7 @@ class SharedIngestionPipeline:
                         self._stats["yt_channels"] += 1
 
             except Exception as exc:
-                logger.warning(
-                    "[SharedIngestion] YouTube RSS %s failed: %s", name, exc
-                )
+                logger.warning("[SharedIngestion] YouTube RSS %s failed: %s", name, exc)
                 self._stats["errors"] += 1
 
     # ── Reddit RSS ──────────────────────────────────────────────────
@@ -543,16 +551,12 @@ class SharedIngestionPipeline:
                     published_at = None
                     if entry.get("published_parsed"):
                         try:
-                            published_at = datetime(
-                                *entry.published_parsed[:6], tzinfo=UTC
-                            )
+                            published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                         except (TypeError, ValueError):
                             pass
 
                     # Skip entries older than 48h
-                    if published_at and (datetime.now(UTC) - published_at) > timedelta(
-                        hours=48
-                    ):
+                    if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
                         continue
 
                     pool_entry = PoolEntry(
@@ -569,9 +573,7 @@ class SharedIngestionPipeline:
                         self._stats["reddit"] += 1
 
             except Exception as exc:
-                logger.warning(
-                    "[SharedIngestion] Reddit RSS %s failed: %s", name, exc
-                )
+                logger.warning("[SharedIngestion] Reddit RSS %s failed: %s", name, exc)
                 self._stats["errors"] += 1
 
     # ── General RSS ─────────────────────────────────────────────────
@@ -598,16 +600,12 @@ class SharedIngestionPipeline:
                     published_at = None
                     if entry.get("published_parsed"):
                         try:
-                            published_at = datetime(
-                                *entry.published_parsed[:6], tzinfo=UTC
-                            )
+                            published_at = datetime(*entry.published_parsed[:6], tzinfo=UTC)
                         except (TypeError, ValueError):
                             pass
 
                     # Skip entries older than 48h
-                    if published_at and (datetime.now(UTC) - published_at) > timedelta(
-                        hours=48
-                    ):
+                    if published_at and (datetime.now(UTC) - published_at) > timedelta(hours=48):
                         continue
 
                     pool_entry = PoolEntry(
@@ -624,18 +622,14 @@ class SharedIngestionPipeline:
                         self._stats["rss"] += 1
 
             except Exception as exc:
-                logger.warning(
-                    "[SharedIngestion] RSS %s failed: %s", name, exc
-                )
+                logger.warning("[SharedIngestion] RSS %s failed: %s", name, exc)
                 self._stats["errors"] += 1
 
     # ── Classification ──────────────────────────────────────────────
 
     def _classify_all(self) -> None:
         """Run NicheClassifier on all entries and set routed_niches."""
-        logger.info(
-            "[SharedIngestion] Classifying %d entries", len(self._entries)
-        )
+        logger.info("[SharedIngestion] Classifying %d entries", len(self._entries))
 
         for entry in self._entries:
             scores, routed = self._classifier.classify_and_route(
@@ -659,9 +653,7 @@ class SharedIngestionPipeline:
     def _write_to_pool(self) -> None:
         """Upsert classified entries into content_pool via psycopg3."""
         if not self._db_url:
-            logger.warning(
-                "[SharedIngestion] No DATABASE_URL, skipping DB write"
-            )
+            logger.warning("[SharedIngestion] No DATABASE_URL, skipping DB write")
             return
 
         routed_entries = [e for e in self._entries if e.routed_niches]
@@ -775,9 +767,7 @@ class SharedIngestionPipeline:
                     conn.commit()
                     self._stats["expired"] = expired
                     if expired:
-                        logger.info(
-                            "[SharedIngestion] Expired %d old entries", expired
-                        )
+                        logger.info("[SharedIngestion] Expired %d old entries", expired)
         except Exception as exc:
             logger.warning("[SharedIngestion] Expire sweep failed: %s", exc)
 

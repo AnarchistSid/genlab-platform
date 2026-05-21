@@ -19,8 +19,10 @@ from genlab_core.scoring.composite_scorer import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _video(video_id: str = "abc123", title: str = "Test Video",
-           view_velocity: float = 1000.0, **extra) -> dict:
+
+def _video(
+    video_id: str = "abc123", title: str = "Test Video", view_velocity: float = 1000.0, **extra
+) -> dict:
     """Build a minimal video dict."""
     d = {"video_id": video_id, "title": title, "view_velocity": view_velocity}
     d.update(extra)
@@ -31,12 +33,18 @@ def _video(video_id: str = "abc123", title: str = "Test Video",
 # VideoScore
 # ---------------------------------------------------------------------------
 
+
 class TestVideoScore:
     def test_to_dict_roundtrip(self):
         vs = VideoScore(
-            video_id="v1", title="Hello", view_velocity=500.0,
-            velocity_score=0.333, trend_multiplier=2.0,
-            niche_relevance=1.0, composite=0.666, passed=True,
+            video_id="v1",
+            title="Hello",
+            view_velocity=500.0,
+            velocity_score=0.333,
+            trend_multiplier=2.0,
+            niche_relevance=1.0,
+            composite=0.666,
+            passed=True,
         )
         d = vs.to_dict()
         assert d["video_id"] == "v1"
@@ -46,9 +54,14 @@ class TestVideoScore:
 
     def test_to_dict_rounds_values(self):
         vs = VideoScore(
-            video_id="v2", title="X", view_velocity=123.456789,
-            velocity_score=0.12345678, trend_multiplier=1.5555,
-            niche_relevance=1.0, composite=0.123456789, passed=False,
+            video_id="v2",
+            title="X",
+            view_velocity=123.456789,
+            velocity_score=0.12345678,
+            trend_multiplier=1.5555,
+            niche_relevance=1.0,
+            composite=0.123456789,
+            passed=False,
         )
         d = vs.to_dict()
         assert d["view_velocity"] == 123.5
@@ -60,6 +73,7 @@ class TestVideoScore:
 # ---------------------------------------------------------------------------
 # CompositeScorer.score()
 # ---------------------------------------------------------------------------
+
 
 class TestScore:
     def test_basic_formula(self):
@@ -111,7 +125,7 @@ class TestScore:
     def test_passed_flag_uses_min_composite(self):
         scorer = CompositeScorer("gaming", min_composite=0.5)
         vs_pass = scorer.score(_video(view_velocity=1500.0))  # 1.0 >= 0.5
-        vs_fail = scorer.score(_video(view_velocity=300.0))   # 0.2 < 0.5
+        vs_fail = scorer.score(_video(view_velocity=300.0))  # 0.2 < 0.5
         assert vs_pass.passed is True
         assert vs_fail.passed is False
 
@@ -120,14 +134,18 @@ class TestScore:
 # Per-niche defaults
 # ---------------------------------------------------------------------------
 
+
 class TestNicheDefaults:
-    @pytest.mark.parametrize("niche,expected_vel,expected_min", [
-        ("gaming", 1500.0, 0.35),
-        ("sports", 2000.0, 0.35),
-        ("movies", 800.0, 0.30),
-        ("anime", 600.0, 0.30),
-        ("ai_creators", 400.0, 0.25),
-    ])
+    @pytest.mark.parametrize(
+        "niche,expected_vel,expected_min",
+        [
+            ("gaming", 1500.0, 0.35),
+            ("sports", 2000.0, 0.35),
+            ("movies", 800.0, 0.30),
+            ("anime", 600.0, 0.30),
+            ("ai_creators", 400.0, 0.25),
+        ],
+    )
     def test_default_thresholds(self, niche, expected_vel, expected_min):
         scorer = CompositeScorer(niche)
         assert scorer.velocity_threshold == expected_vel
@@ -148,13 +166,14 @@ class TestNicheDefaults:
 # CompositeScorer.score_and_rank()
 # ---------------------------------------------------------------------------
 
+
 class TestScoreAndRank:
     def test_filters_below_threshold(self):
         scorer = CompositeScorer("gaming", min_composite=0.5)
         videos = [
             _video("v1", view_velocity=1500.0),  # 1.0 → pass
-            _video("v2", view_velocity=300.0),    # 0.2 → fail
-            _video("v3", view_velocity=900.0),    # 0.6 → pass
+            _video("v2", view_velocity=300.0),  # 0.2 → fail
+            _video("v3", view_velocity=900.0),  # 0.6 → pass
         ]
         results = scorer.score_and_rank(videos)
         ids = [r.video_id for r in results]
@@ -213,11 +232,11 @@ class TestScoreAndRank:
         """Simulates a real scenario: 5 gaming videos, only the best survives."""
         scorer = CompositeScorer("gaming")  # threshold=1500, min=0.35
         videos = [
-            _video("viral", view_velocity=5000.0),     # 1.0 → 1.0
-            _video("decent", view_velocity=800.0),      # 0.533 → pass
-            _video("mediocre", view_velocity=400.0),     # 0.267 → fail
-            _video("weak", view_velocity=100.0),         # 0.067 → fail
-            _video("dead", view_velocity=10.0),          # 0.007 → fail
+            _video("viral", view_velocity=5000.0),  # 1.0 → 1.0
+            _video("decent", view_velocity=800.0),  # 0.533 → pass
+            _video("mediocre", view_velocity=400.0),  # 0.267 → fail
+            _video("weak", view_velocity=100.0),  # 0.067 → fail
+            _video("dead", view_velocity=10.0),  # 0.007 → fail
         ]
         results = scorer.score_and_rank(videos)
         assert len(results) == 2  # viral + decent pass

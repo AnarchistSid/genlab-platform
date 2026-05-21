@@ -1,4 +1,5 @@
 """Tests for genlab_core.media.video_sourcer."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -29,30 +30,22 @@ class TestIsDirectVideoUrl:
         assert is_direct_video_url("https://v.redd.it/abc123def")
 
     def test_reddit_comments(self):
-        assert is_direct_video_url(
-            "https://www.reddit.com/r/gaming/comments/abc123/cool_clip"
-        )
+        assert is_direct_video_url("https://www.reddit.com/r/gaming/comments/abc123/cool_clip")
 
     def test_vimeo(self):
         assert is_direct_video_url("https://vimeo.com/123456789")
 
     def test_tiktok(self):
-        assert is_direct_video_url(
-            "https://www.tiktok.com/@user.name/video/7123456789"
-        )
+        assert is_direct_video_url("https://www.tiktok.com/@user.name/video/7123456789")
 
     def test_tiktok_short(self):
         assert is_direct_video_url("https://vm.tiktok.com/ZMeabc123/")
 
     def test_twitter(self):
-        assert is_direct_video_url(
-            "https://twitter.com/user/status/123456789"
-        )
+        assert is_direct_video_url("https://twitter.com/user/status/123456789")
 
     def test_x_dot_com(self):
-        assert is_direct_video_url(
-            "https://x.com/user/status/123456789"
-        )
+        assert is_direct_video_url("https://x.com/user/status/123456789")
 
     def test_not_video_news_site(self):
         assert not is_direct_video_url("https://www.bbc.com/news/technology-12345")
@@ -73,19 +66,13 @@ class TestIsDirectVideoUrl:
         assert is_direct_video_url("https://clips.twitch.tv/FunnyClipName-abc123")
 
     def test_twitch_cdn_mp4(self):
-        assert is_direct_video_url(
-            "https://clips-media-assets2.twitch.tv/AT-cm%7C12345.mp4"
-        )
+        assert is_direct_video_url("https://clips-media-assets2.twitch.tv/AT-cm%7C12345.mp4")
 
     def test_direct_mp4_url(self):
-        assert is_direct_video_url(
-            "https://cdn.example.com/videos/clip.mp4"
-        )
+        assert is_direct_video_url("https://cdn.example.com/videos/clip.mp4")
 
     def test_direct_webm_url(self):
-        assert is_direct_video_url(
-            "https://cdn.example.com/videos/clip.webm"
-        )
+        assert is_direct_video_url("https://cdn.example.com/videos/clip.webm")
 
     def test_streamable(self):
         assert is_direct_video_url("https://streamable.com/abc123")
@@ -166,9 +153,7 @@ class TestScoreVideoResult:
         )
         s_short = score_video_result(short, "Test video", now)
         s_long = score_video_result(long, "Test video", now)
-        assert s_short > s_long, (
-            f"60s ({s_short:.3f}) should outscore 3600s ({s_long:.3f})"
-        )
+        assert s_short > s_long, f"60s ({s_short:.3f}) should outscore 3600s ({s_long:.3f})"
 
     def test_score_in_zero_one_range(self):
         result = VideoSearchResult(

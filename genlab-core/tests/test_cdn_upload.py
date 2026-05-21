@@ -1,4 +1,5 @@
 """Tests for genlab_core.platforms.cdn_upload."""
+
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +20,7 @@ class TestUploadToCdn(unittest.TestCase):
 
         # Create a temp file
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             f.write(b"x" * 1024)
             tmp_path = f.name
@@ -41,6 +43,7 @@ class TestUploadToCdn(unittest.TestCase):
         mock_tmp.return_value = None
 
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             f.write(b"x" * 1024)
             tmp_path = f.name

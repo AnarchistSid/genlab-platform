@@ -96,36 +96,46 @@ def test_non_blocking_statuses_excluded_from_hook_dedup():
     stage = PushToBacklog()
     client = MagicMock()
     client.blueprints.all.return_value = [
-        {"fields": {
-            "hook": "this hook was rejected",
-            "action_taken": "rejected",
-            "status": "ARCHIVED",
-            "created_at": _recent_iso(),
-        }},
-        {"fields": {
-            "hook": "this hook was auto-archived",
-            "action_taken": "auto_archived_missing_media",
-            "status": "ARCHIVED",
-            "created_at": _recent_iso(),
-        }},
-        {"fields": {
-            "hook": "this hook failed to publish",
-            "action_taken": "approved",
-            "status": "PUBLISH_FAILED",
-            "created_at": _recent_iso(),
-        }},
-        {"fields": {
-            "hook": "this hook shipped",
-            "action_taken": "approved",
-            "status": "PUBLISHED",
-            "created_at": _recent_iso(),
-        }},
-        {"fields": {
-            "hook": "this hook is drafted",
-            "action_taken": None,
-            "status": "DRAFTED",
-            "created_at": _recent_iso(),
-        }},
+        {
+            "fields": {
+                "hook": "this hook was rejected",
+                "action_taken": "rejected",
+                "status": "ARCHIVED",
+                "created_at": _recent_iso(),
+            }
+        },
+        {
+            "fields": {
+                "hook": "this hook was auto-archived",
+                "action_taken": "auto_archived_missing_media",
+                "status": "ARCHIVED",
+                "created_at": _recent_iso(),
+            }
+        },
+        {
+            "fields": {
+                "hook": "this hook failed to publish",
+                "action_taken": "approved",
+                "status": "PUBLISH_FAILED",
+                "created_at": _recent_iso(),
+            }
+        },
+        {
+            "fields": {
+                "hook": "this hook shipped",
+                "action_taken": "approved",
+                "status": "PUBLISHED",
+                "created_at": _recent_iso(),
+            }
+        },
+        {
+            "fields": {
+                "hook": "this hook is drafted",
+                "action_taken": None,
+                "status": "DRAFTED",
+                "created_at": _recent_iso(),
+            }
+        },
     ]
     # Minimal stories.all + content_memory stubs so execute() runs to completion
     client.stories.all.return_value = []
@@ -151,6 +161,7 @@ def test_non_blocking_statuses_excluded_from_hook_dedup():
     # Scope GENLAB_USE_POSTGRES to this test only — leaking it breaks
     # sibling tests that rely on the default credential-gate behavior.
     import os as _os
+
     _prev = _os.environ.get("GENLAB_USE_POSTGRES")
     _os.environ["GENLAB_USE_POSTGRES"] = "true"
     try:
@@ -172,9 +183,7 @@ def test_non_blocking_statuses_excluded_from_hook_dedup():
     assert "this hook was auto-archived" not in loaded, (
         "Auto-archived hooks (missing media) must not block future re-creation"
     )
-    assert "this hook failed to publish" not in loaded, (
-        "PUBLISH_FAILED hooks must not block retry"
-    )
+    assert "this hook failed to publish" not in loaded, "PUBLISH_FAILED hooks must not block retry"
 
 
 def test_seen_urls_seeded_from_active_blueprints_not_all_stories():
@@ -194,20 +203,24 @@ def test_seen_urls_seeded_from_active_blueprints_not_all_stories():
     # One active blueprint (should contribute to seen_urls) + one rejected
     # blueprint (should NOT contribute).
     client.blueprints.all.return_value = [
-        {"fields": {
-            "hook": "active hook",
-            "video_url": "https://www.youtube.com/watch?v=ACTIVE",
-            "action_taken": "approved",
-            "status": "PUBLISHED",
-            "created_at": _recent_iso(),
-        }},
-        {"fields": {
-            "hook": "rejected hook",
-            "video_url": "https://www.youtube.com/watch?v=REJECTED",
-            "action_taken": "rejected",
-            "status": "ARCHIVED",
-            "created_at": _recent_iso(),
-        }},
+        {
+            "fields": {
+                "hook": "active hook",
+                "video_url": "https://www.youtube.com/watch?v=ACTIVE",
+                "action_taken": "approved",
+                "status": "PUBLISHED",
+                "created_at": _recent_iso(),
+            }
+        },
+        {
+            "fields": {
+                "hook": "rejected hook",
+                "video_url": "https://www.youtube.com/watch?v=REJECTED",
+                "action_taken": "rejected",
+                "status": "ARCHIVED",
+                "created_at": _recent_iso(),
+            }
+        },
     ]
     client.stories.all.return_value = []
     client.content_memory = None
@@ -216,16 +229,19 @@ def test_seen_urls_seeded_from_active_blueprints_not_all_stories():
 
     ctx = {
         "niche_id": "ai_creators",
-        "stories": [{
-            "story_id": "dummy",
-            "title": "placeholder to trigger the loaders",
-            "source_url": "https://www.youtube.com/watch?v=SOMETHING_NEW",
-            "published_at": _recent_iso(),
-            "content": {"hook": "new hook"},
-        }],
+        "stories": [
+            {
+                "story_id": "dummy",
+                "title": "placeholder to trigger the loaders",
+                "source_url": "https://www.youtube.com/watch?v=SOMETHING_NEW",
+                "published_at": _recent_iso(),
+                "content": {"hook": "new hook"},
+            }
+        ],
         "niche_config": {},
     }
     import os as _os
+
     _prev = _os.environ.get("GENLAB_USE_POSTGRES")
     _os.environ["GENLAB_USE_POSTGRES"] = "true"
     try:
@@ -274,24 +290,30 @@ def test_candidate_id_non_blocking_statuses_do_not_block():
     # Return values: first is hooks (empty), then video_id (empty for none),
     # then candidate_id match that IS rejected (should be filtered out).
     non_blocking_matches = [
-        {"fields": {
-            "candidate_id": "some-candidate-id",
-            "status": "ARCHIVED",
-            "action_taken": "rejected",
-            "hook": "the rejected one",
-        }},
-        {"fields": {
-            "candidate_id": "some-candidate-id",
-            "status": "ARCHIVED",
-            "action_taken": "auto_archived_missing_media",
-            "hook": "the auto-archived one",
-        }},
-        {"fields": {
-            "candidate_id": "some-candidate-id",
-            "status": "PUBLISH_FAILED",
-            "action_taken": "approved",
-            "hook": "the publish-failed one",
-        }},
+        {
+            "fields": {
+                "candidate_id": "some-candidate-id",
+                "status": "ARCHIVED",
+                "action_taken": "rejected",
+                "hook": "the rejected one",
+            }
+        },
+        {
+            "fields": {
+                "candidate_id": "some-candidate-id",
+                "status": "ARCHIVED",
+                "action_taken": "auto_archived_missing_media",
+                "hook": "the auto-archived one",
+            }
+        },
+        {
+            "fields": {
+                "candidate_id": "some-candidate-id",
+                "status": "PUBLISH_FAILED",
+                "action_taken": "approved",
+                "hook": "the publish-failed one",
+            }
+        },
     ]
     client.blueprints.all.side_effect = [
         [],  # hook dedup loader
@@ -303,22 +325,25 @@ def test_candidate_id_non_blocking_statuses_do_not_block():
 
     ctx = {
         "niche_id": "ai_creators",
-        "stories": [{
-            "story_id": "s1",
-            "title": "A real new story title",
-            "source_url": "https://www.youtube.com/watch?v=NEWVID",
-            "video_id": "NEWVID",
-            "published_at": _recent_iso(),
-            "content": {
-                "hook": "fresh new hook that wasn't rejected",
-                "caption": "body",
-                "instagram": {"caption": "ig body"},
-            },
-            "media": {"rendered_path": "/tmp/r.mp4"},
-        }],
+        "stories": [
+            {
+                "story_id": "s1",
+                "title": "A real new story title",
+                "source_url": "https://www.youtube.com/watch?v=NEWVID",
+                "video_id": "NEWVID",
+                "published_at": _recent_iso(),
+                "content": {
+                    "hook": "fresh new hook that wasn't rejected",
+                    "caption": "body",
+                    "instagram": {"caption": "ig body"},
+                },
+                "media": {"rendered_path": "/tmp/r.mp4"},
+            }
+        ],
         "niche_config": {},
     }
     import os as _os
+
     _prev = _os.environ.get("GENLAB_USE_POSTGRES")
     _os.environ["GENLAB_USE_POSTGRES"] = "true"
     try:

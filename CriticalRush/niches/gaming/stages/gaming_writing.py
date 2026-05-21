@@ -3,6 +3,7 @@
 Migrated from WriteGamingContent (506 lines) to the shared path (Sprint 69).
 All gaming-specific config lives in config/writing.yaml and config/templates.yaml.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

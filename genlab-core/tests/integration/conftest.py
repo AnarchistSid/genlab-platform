@@ -103,7 +103,10 @@ def build_mock_niche_config(niche_id: str) -> dict[str, Any]:
                 # Real shared stages that should work with mock data:
                 {"class": "genlab_core.pipeline.stages.express_lane.ExpressLane", "enabled": True},
                 {"class": "genlab_core.pipeline.stages.qc_gates.QCGates", "enabled": True},
-                {"class": "genlab_core.pipeline.stages.virality_scoring.ViralityScoring", "enabled": True},
+                {
+                    "class": "genlab_core.pipeline.stages.virality_scoring.ViralityScoring",
+                    "enabled": True,
+                },
                 # Mock external-dependent stages:
                 {"class": f"{_MOCK_MODULE}.MockPushToBacklog", "enabled": True},
                 {"class": f"{_MOCK_MODULE}.MockFetchInsights", "enabled": True},

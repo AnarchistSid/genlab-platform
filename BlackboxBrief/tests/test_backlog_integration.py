@@ -45,6 +45,7 @@ pytestmark = pytest.mark.skipif(
 def client():
     """Create BacklogClient for tests."""
     from genlab_core.http.backlog_client import BacklogClient
+
     return BacklogClient()
 
 
@@ -52,9 +53,9 @@ def client():
 def test_story_id():
     """Generate a unique test story ID."""
     from genlab_core.cache.stable_ids import generate_story_id
+
     return generate_story_id(
-        f"https://test.example.com/integration-{datetime.now().timestamp()}",
-        datetime.now().isoformat()
+        f"https://test.example.com/integration-{datetime.now().timestamp()}", datetime.now().isoformat()
     )
 
 
@@ -65,17 +66,19 @@ class TestConnection:
 
 class TestStories:
     def test_create_story(self, client, test_story_id):
-        record_id = client.create_story({
-            "story_id": test_story_id,
-            "title": "[TEST] Integration Test Story - Safe to Delete",
-            "url": "https://test.example.com/integration",
-            "source": "Other",
-            "published_at": datetime.now().isoformat(),
-            "summary": "This is an automated integration test story. Safe to delete.",
-            "priority": 0.75,
-            "themes": ["llm", "agents"],
-            "scores": {"authority": 0.8, "recency": 1.0, "novelty": 0.9},
-        })
+        record_id = client.create_story(
+            {
+                "story_id": test_story_id,
+                "title": "[TEST] Integration Test Story - Safe to Delete",
+                "url": "https://test.example.com/integration",
+                "source": "Other",
+                "published_at": datetime.now().isoformat(),
+                "summary": "This is an automated integration test story. Safe to delete.",
+                "priority": 0.75,
+                "themes": ["llm", "agents"],
+                "scores": {"authority": 0.8, "recency": 1.0, "novelty": 0.9},
+            }
+        )
         assert record_id is not None
         assert len(record_id) > 0
 
@@ -99,26 +102,29 @@ class TestStories:
 class TestBlueprints:
     def test_create_blueprint(self, client, test_story_id):
         from genlab_core.cache.stable_ids import generate_candidate_id
+
         candidate_id = generate_candidate_id(test_story_id, "TPL_BRK1", "test_angle")
 
-        record_id = client.create_blueprint({
-            "candidate_id": candidate_id,
-            "story_id": test_story_id,
-            "topic": "AI News",
-            "angle": "test_angle",
-            "template_id": "TPL_BRK1",
-            "format": "carousel",
-            "hook": "[TEST] Integration test blueprint - safe to delete",
-            "structure": ["Hook", "Context", "Detail", "CTA"],
-            "cta": "Follow for more",
-            "priority_score": 0.85,
-            "why_this_will_work": "Automated test blueprint",
-            "validation_status": {
-                "constraints_passed": True,
-                "claims_passed": True,
-                "risk_acceptable": True,
-            },
-        })
+        record_id = client.create_blueprint(
+            {
+                "candidate_id": candidate_id,
+                "story_id": test_story_id,
+                "topic": "AI News",
+                "angle": "test_angle",
+                "template_id": "TPL_BRK1",
+                "format": "carousel",
+                "hook": "[TEST] Integration test blueprint - safe to delete",
+                "structure": ["Hook", "Context", "Detail", "CTA"],
+                "cta": "Follow for more",
+                "priority_score": 0.85,
+                "why_this_will_work": "Automated test blueprint",
+                "validation_status": {
+                    "constraints_passed": True,
+                    "claims_passed": True,
+                    "risk_acceptable": True,
+                },
+            }
+        )
         assert record_id is not None
 
     @pytest.mark.xfail(reason="Graph API eventual consistency — blueprint filter may lag after create")
@@ -126,6 +132,7 @@ class TestBlueprints:
         import time
 
         from genlab_core.cache.stable_ids import generate_candidate_id
+
         candidate_id = generate_candidate_id(test_story_id, "TPL_BRK1", "test_angle")
 
         # Graph API has eventual consistency — retry with increasing delay
@@ -166,9 +173,7 @@ class TestCleanup:
 
     def test_cleanup_test_records(self, client):
         """Delete all records with [TEST] in title/hook."""
-        test_stories = client.stories.all(
-            formula="FIND('[TEST]', {title})"
-        )
+        test_stories = client.stories.all(formula="FIND('[TEST]', {title})")
         assert len(test_stories) <= self.MAX_TEST_CLEANUP, (
             f"SAFETY: Found {len(test_stories)} test stories to delete "
             f"(max {self.MAX_TEST_CLEANUP}). Aborting to prevent data loss. "
@@ -177,9 +182,7 @@ class TestCleanup:
         for story in test_stories:
             client.stories.delete(story["id"])
 
-        test_blueprints = client.blueprints.all(
-            formula="FIND('[TEST]', {hook})"
-        )
+        test_blueprints = client.blueprints.all(formula="FIND('[TEST]', {hook})")
         assert len(test_blueprints) <= self.MAX_TEST_CLEANUP, (
             f"SAFETY: Found {len(test_blueprints)} test blueprints to delete "
             f"(max {self.MAX_TEST_CLEANUP}). Aborting to prevent data loss. "
@@ -190,6 +193,7 @@ class TestCleanup:
 
 
 # ===== Interactive runner =====
+
 
 def run_interactive():
     """Run tests interactively with colored output."""
@@ -211,8 +215,7 @@ def run_interactive():
 
     client = BacklogClient()
     test_story_id = generate_story_id(
-        f"https://test.example.com/interactive-{datetime.now().timestamp()}",
-        datetime.now().isoformat()
+        f"https://test.example.com/interactive-{datetime.now().timestamp()}", datetime.now().isoformat()
     )
     all_pass = True
 
@@ -228,17 +231,19 @@ def run_interactive():
     # Test 2: Create story
     print("\n[2] Create Story")
     try:
-        record_id = client.create_story({
-            "story_id": test_story_id,
-            "title": "[TEST] Interactive Test Story - Safe to Delete",
-            "url": "https://test.example.com/interactive",
-            "source": "Other",
-            "published_at": datetime.now().isoformat(),
-            "summary": "Automated interactive test. Safe to delete.",
-            "priority": 0.75,
-            "themes": ["llm"],
-            "scores": {"authority": 0.8, "recency": 1.0, "novelty": 0.9},
-        })
+        record_id = client.create_story(
+            {
+                "story_id": test_story_id,
+                "title": "[TEST] Interactive Test Story - Safe to Delete",
+                "url": "https://test.example.com/interactive",
+                "source": "Other",
+                "published_at": datetime.now().isoformat(),
+                "summary": "Automated interactive test. Safe to delete.",
+                "priority": 0.75,
+                "themes": ["llm"],
+                "scores": {"authority": 0.8, "recency": 1.0, "novelty": 0.9},
+            }
+        )
         print(f"  {PASS} Created story: {record_id}")
     except Exception as e:
         print(f"  {FAIL} {e}")
@@ -258,24 +263,26 @@ def run_interactive():
     print("\n[4] Create Blueprint")
     candidate_id = generate_candidate_id(test_story_id, "TPL_BRK1", "test")
     try:
-        record_id = client.create_blueprint({
-            "candidate_id": candidate_id,
-            "story_id": test_story_id,
-            "topic": "test",
-            "angle": "test",
-            "template_id": "TPL_BRK1",
-            "format": "carousel",
-            "hook": "[TEST] Interactive test blueprint",
-            "structure": ["Hook", "CTA"],
-            "cta": "Test",
-            "priority_score": 0.5,
-            "why_this_will_work": "Test",
-            "validation_status": {
-                "constraints_passed": True,
-                "claims_passed": True,
-                "risk_acceptable": True,
-            },
-        })
+        record_id = client.create_blueprint(
+            {
+                "candidate_id": candidate_id,
+                "story_id": test_story_id,
+                "topic": "test",
+                "angle": "test",
+                "template_id": "TPL_BRK1",
+                "format": "carousel",
+                "hook": "[TEST] Interactive test blueprint",
+                "structure": ["Hook", "CTA"],
+                "cta": "Test",
+                "priority_score": 0.5,
+                "why_this_will_work": "Test",
+                "validation_status": {
+                    "constraints_passed": True,
+                    "claims_passed": True,
+                    "risk_acceptable": True,
+                },
+            }
+        )
         print(f"  {PASS} Created blueprint: {record_id}")
     except Exception as e:
         print(f"  {FAIL} {e}")

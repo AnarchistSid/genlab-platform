@@ -25,7 +25,10 @@ def scorer_config():
                 "weights_path": "models/crispy/valorant.npz",
                 "game_names": ["Valorant", "VALORANT"],
                 "kill_feed_region": {
-                    "box_x": 100, "box_y": 0, "box_width": 120, "box_height": 60,
+                    "box_x": 100,
+                    "box_y": 0,
+                    "box_width": 120,
+                    "box_height": 60,
                 },
                 "preprocessing": "valorant_edge_mask",
                 "confidence_threshold": 0.90,
@@ -73,17 +76,16 @@ class TestModelLoading:
             scorer._load_model("valorant")
             mock_load.assert_called_once()
             _, kwargs = mock_load.call_args
-            assert kwargs.get("allow_pickle") is False, \
+            assert kwargs.get("allow_pickle") is False, (
                 "np.load must use allow_pickle=False to prevent arbitrary code execution"
+            )
 
     def test_npy_extension_swapped_to_npz(self, scorer, tmp_path):
         """Config paths ending in .npy must be swapped to .npz."""
         npz_path = tmp_path / "valorant.npz"
         np.savez(npz_path, layer_0=np.array([1.0]))
 
-        scorer.config["models"]["valorant"]["weights_path"] = str(
-            tmp_path / "valorant.npy"
-        )
+        scorer.config["models"]["valorant"]["weights_path"] = str(tmp_path / "valorant.npy")
         scorer.project_root = ""
 
         weights = scorer._load_model("valorant")

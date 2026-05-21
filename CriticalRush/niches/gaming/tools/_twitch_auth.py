@@ -44,8 +44,7 @@ class TwitchTokenManager:
         """
         if not self._client_id or not self._client_secret:
             raise TwitchAuthError(
-                "Twitch credentials not configured: "
-                "set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET"
+                "Twitch credentials not configured: set TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET"
             )
 
         if self._token and time.time() < self._expiry:

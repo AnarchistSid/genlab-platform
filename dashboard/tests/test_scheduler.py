@@ -1,4 +1,5 @@
 """Tests for GenLabScheduler."""
+
 from __future__ import annotations
 
 import tempfile

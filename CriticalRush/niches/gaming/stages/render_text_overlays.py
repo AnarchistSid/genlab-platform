@@ -40,6 +40,7 @@ class RenderTextOverlays:
 
         run_id = "unknown"
         from genlab_core.context import get_current_context
+
         ctx = get_current_context()
         if ctx:
             run_id = ctx.run_id
@@ -100,7 +101,9 @@ class RenderTextOverlays:
         context.setdefault("run_stats", {})["text_overlays"] = stats
         logger.info(
             "[CAPTIONS] %d captioned, %d failed (passthrough), %d skipped",
-            stats["captioned"], stats["failed"], stats["skipped"],
+            stats["captioned"],
+            stats["failed"],
+            stats["skipped"],
         )
         return context
 

@@ -97,11 +97,15 @@ def extract_audio_track(
     cmd = [
         ffmpeg,
         "-y",
-        "-i", str(clip_path),
-        "-vn",                  # drop video
-        "-acodec", "pcm_s16le", # 16-bit signed little-endian
-        "-ar", "16000",         # 16 kHz sample rate (Whisper native)
-        "-ac", "1",             # mono
+        "-i",
+        str(clip_path),
+        "-vn",  # drop video
+        "-acodec",
+        "pcm_s16le",  # 16-bit signed little-endian
+        "-ar",
+        "16000",  # 16 kHz sample rate (Whisper native)
+        "-ac",
+        "1",  # mono
         str(output_path),
     ]
 
@@ -140,10 +144,14 @@ def _probe_audio_stream(clip_path: Path) -> dict | None:
 
     cmd = [
         ffprobe,
-        "-v", "error",
-        "-select_streams", "a",
-        "-show_entries", "stream=codec_name,channels,sample_rate",
-        "-of", "json",
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream=codec_name,channels,sample_rate",
+        "-of",
+        "json",
         str(clip_path),
     ]
 
@@ -179,9 +187,12 @@ def _measure_volume(clip_path: Path) -> float | None:
 
     cmd = [
         ffmpeg,
-        "-i", str(clip_path),
-        "-af", "volumedetect",
-        "-f", "null",
+        "-i",
+        str(clip_path),
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
         "-",
     ]
 

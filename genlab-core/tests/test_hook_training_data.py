@@ -3,6 +3,7 @@
 Tests verify the engagement label computation (75th percentile threshold)
 and the tiny-dataset fallback behavior.
 """
+
 from __future__ import annotations
 
 from genlab_core.learning.hook_training_data import (

@@ -71,20 +71,24 @@ def _fetch_movie_trailer_ids(api_key: str, movie_ids: list[dict]) -> list[dict]:
             if r.status_code != 200:
                 continue
             for video in r.json().get("results", []):
-                if (video.get("site") == "YouTube" and
-                        video.get("type") in ("Trailer", "Teaser") and
-                        video.get("official", False)):
+                if (
+                    video.get("site") == "YouTube"
+                    and video.get("type") in ("Trailer", "Teaser")
+                    and video.get("official", False)
+                ):
                     yt_id = video["key"]
-                    results.append({
-                        "title": f"{movie['title']} - {video.get('name', 'Trailer')}",
-                        "video_id": yt_id,
-                        "url": f"https://www.youtube.com/watch?v={yt_id}",
-                        "source_url": f"https://www.youtube.com/watch?v={yt_id}",
-                        "tmdb_id": movie_id,
-                        "release_date": movie.get("release_date", ""),
-                        "source": "tmdb_trailer",
-                        "_trending_video": True,
-                    })
+                    results.append(
+                        {
+                            "title": f"{movie['title']} - {video.get('name', 'Trailer')}",
+                            "video_id": yt_id,
+                            "url": f"https://www.youtube.com/watch?v={yt_id}",
+                            "source_url": f"https://www.youtube.com/watch?v={yt_id}",
+                            "tmdb_id": movie_id,
+                            "release_date": movie.get("release_date", ""),
+                            "source": "tmdb_trailer",
+                            "_trending_video": True,
+                        }
+                    )
                     break  # Take first official trailer per movie
             time.sleep(0.15)  # ~7 req/sec (TMDB limit is 40/10sec)
         except Exception as e:
@@ -123,7 +127,9 @@ class FetchTMDBTrailers:
             return context
 
         trailers = _fetch_movie_trailer_ids(api_key, movies)
-        logger.info("[TMDBTrailers] %d trailers from %d movies (0 YT quota)", len(trailers), len(movies))
+        logger.info(
+            "[TMDBTrailers] %d trailers from %d movies (0 YT quota)", len(trailers), len(movies)
+        )
 
         if trailers:
             from genlab_core.cache.stable_ids import generate_story_id
@@ -132,22 +138,24 @@ class FetchTMDBTrailers:
             new_stories = []
             for t in trailers:
                 sid = generate_story_id(t["url"], now_iso)
-                new_stories.append({
-                    "story_id": sid,
-                    "title": t["title"],
-                    "source": t["source"],
-                    "source_url": t["url"],
-                    "canonical_url": t["url"],
-                    "published_at": t.get("release_date") or now_iso,
-                    "fetched_at": now_iso,
-                    "summary": "",
-                    "video_id": t["video_id"],
-                    "video_source": "tmdb_trailer",
-                    "niche_id": niche_id,
-                    "_trending_video": True,
-                    "source_mention_count": 2,
-                    "tmdb_id": t.get("tmdb_id"),
-                })
+                new_stories.append(
+                    {
+                        "story_id": sid,
+                        "title": t["title"],
+                        "source": t["source"],
+                        "source_url": t["url"],
+                        "canonical_url": t["url"],
+                        "published_at": t.get("release_date") or now_iso,
+                        "fetched_at": now_iso,
+                        "summary": "",
+                        "video_id": t["video_id"],
+                        "video_source": "tmdb_trailer",
+                        "niche_id": niche_id,
+                        "_trending_video": True,
+                        "source_mention_count": 2,
+                        "tmdb_id": t.get("tmdb_id"),
+                    }
+                )
 
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}

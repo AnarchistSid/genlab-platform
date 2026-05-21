@@ -1,4 +1,5 @@
 """Tests for hybrid auto-reply confidence routing."""
+
 from __future__ import annotations
 
 from genlab_core.engagement.comment_processor import classify_reply_action

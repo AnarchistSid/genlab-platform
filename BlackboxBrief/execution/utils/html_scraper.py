@@ -91,13 +91,15 @@ def scrape_openai_blog(html: str) -> List[Dict[str, Any]]:
 
         # Dedup by URL
         if not any(e["link"] == full_url for e in entries):
-            entries.append({
-                "title": sanitize_text(title, max_length=300),
-                "link": full_url,
-                "summary": sanitize_text(summary, max_length=1000),
-                "published": date_text,
-                "author": "OpenAI",
-            })
+            entries.append(
+                {
+                    "title": sanitize_text(title, max_length=300),
+                    "link": full_url,
+                    "summary": sanitize_text(summary, max_length=1000),
+                    "published": date_text,
+                    "author": "OpenAI",
+                }
+            )
 
     logger.info("OpenAI HTML scraper: found %d entries", len(entries))
     return entries
@@ -141,13 +143,15 @@ def scrape_anthropic_news(html: str) -> List[Dict[str, Any]]:
             summary = summary_el.get_text(strip=True)
 
         if not any(e["link"] == full_url for e in entries):
-            entries.append({
-                "title": sanitize_text(title, max_length=300),
-                "link": full_url,
-                "summary": sanitize_text(summary, max_length=1000),
-                "published": date_text,
-                "author": "Anthropic",
-            })
+            entries.append(
+                {
+                    "title": sanitize_text(title, max_length=300),
+                    "link": full_url,
+                    "summary": sanitize_text(summary, max_length=1000),
+                    "published": date_text,
+                    "author": "Anthropic",
+                }
+            )
 
     logger.info("Anthropic HTML scraper: found %d entries", len(entries))
     return entries
@@ -179,9 +183,7 @@ def scrape_theverge_ai(html: str) -> List[Dict[str, Any]]:
         date_text = ""
         if date_match:
             try:
-                date_text = datetime.strptime(
-                    date_match.group(1), "%Y/%m/%d"
-                ).strftime("%a, %d %b %Y 00:00:00 +0000")
+                date_text = datetime.strptime(date_match.group(1), "%Y/%m/%d").strftime("%a, %d %b %Y 00:00:00 +0000")
             except ValueError:
                 pass
 
@@ -194,13 +196,15 @@ def scrape_theverge_ai(html: str) -> List[Dict[str, Any]]:
                 summary = p_el.get_text(strip=True)
 
         if not any(e["link"] == full_url for e in entries):
-            entries.append({
-                "title": sanitize_text(title, max_length=300),
-                "link": full_url,
-                "summary": sanitize_text(summary, max_length=1000),
-                "published": date_text,
-                "author": "",
-            })
+            entries.append(
+                {
+                    "title": sanitize_text(title, max_length=300),
+                    "link": full_url,
+                    "summary": sanitize_text(summary, max_length=1000),
+                    "published": date_text,
+                    "author": "",
+                }
+            )
 
     logger.info("The Verge HTML scraper: found %d entries", len(entries))
     return entries
@@ -237,13 +241,15 @@ def scrape_generic_news_page(html: str, base_url: str, path_pattern: str = r"/\d
                 summary = p_el.get_text(strip=True)
 
         if not any(e["link"] == full_url for e in entries):
-            entries.append({
-                "title": sanitize_text(title, max_length=300),
-                "link": full_url,
-                "summary": sanitize_text(summary, max_length=1000),
-                "published": "",
-                "author": "",
-            })
+            entries.append(
+                {
+                    "title": sanitize_text(title, max_length=300),
+                    "link": full_url,
+                    "summary": sanitize_text(summary, max_length=1000),
+                    "published": "",
+                    "author": "",
+                }
+            )
 
     logger.info("Generic HTML scraper (%s): found %d entries", base_url, len(entries))
     return entries
@@ -260,6 +266,7 @@ SCRAPERS = {
 def fetch_html_source(source_url: str) -> Dict[str, Any]:
     """Fetch a source via HTML scraping. Returns same format as RSS fetcher."""
     from urllib.parse import urlparse
+
     domain = urlparse(source_url).netloc.replace("www.", "")
 
     scraper_url, scraper_fn = None, None

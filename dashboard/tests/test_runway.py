@@ -1,4 +1,5 @@
 """Tests for runway monitor API endpoint."""
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch

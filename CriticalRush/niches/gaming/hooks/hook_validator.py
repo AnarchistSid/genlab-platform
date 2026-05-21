@@ -119,10 +119,7 @@ class GamingHookValidator:
         self._check_news_prefix(hook, result)
         self._check_gaming_length(hook, result)
 
-        result.passed = (
-            len(result.universal_failures) == 0
-            and len(result.gaming_failures) == 0
-        )
+        result.passed = len(result.universal_failures) == 0 and len(result.gaming_failures) == 0
         return result
 
     def clean(self, hook: str) -> str:

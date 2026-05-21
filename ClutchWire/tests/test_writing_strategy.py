@@ -77,9 +77,13 @@ class TestWriteExecute:
 
         mock_client = MagicMock()
 
-        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client), \
-             patch("genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"), \
-             patch("genlab_core.writing.video_content_writer.write_video_content") as mock_wvc:
+        with (
+            patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client),
+            patch(
+                "genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"
+            ),
+            patch("genlab_core.writing.video_content_writer.write_video_content") as mock_wvc,
+        ):
             mock_wvc.return_value = {
                 "hook": "LLM generated hook",
                 "instagram_caption": "Great game #Sports",
@@ -103,9 +107,16 @@ class TestWriteExecute:
 
         mock_client = MagicMock()
 
-        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client), \
-             patch("genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"), \
-             patch("genlab_core.writing.video_content_writer.write_video_content", side_effect=Exception("API error")):
+        with (
+            patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client),
+            patch(
+                "genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"
+            ),
+            patch(
+                "genlab_core.writing.video_content_writer.write_video_content",
+                side_effect=Exception("API error"),
+            ),
+        ):
             ctx = {"stories": [_make_story()]}
             result = strategy.execute(ctx)
 

@@ -1,4 +1,5 @@
 """Tests for scripts/run_engagement_poller.py runner functions."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -53,7 +54,12 @@ class TestClassifyPriority:
 
     def test_high_when_is_question_flag_true(self):
         """Comments with is_question=True should be classified as high priority."""
-        comment = {"text": "Nice clip", "is_question": True, "comment_id": "c2", "platform": "youtube"}
+        comment = {
+            "text": "Nice clip",
+            "is_question": True,
+            "comment_id": "c2",
+            "platform": "youtube",
+        }
         assert _classify_priority(comment) == "high"
 
     def test_normal_for_non_questions(self):
@@ -63,7 +69,12 @@ class TestClassifyPriority:
 
     def test_normal_when_is_question_false_and_no_qmark(self):
         """Comments with is_question=False and no '?' should be normal."""
-        comment = {"text": "Love it", "is_question": False, "comment_id": "c4", "platform": "twitter"}
+        comment = {
+            "text": "Love it",
+            "is_question": False,
+            "comment_id": "c4",
+            "platform": "twitter",
+        }
         assert _classify_priority(comment) == "normal"
 
     def test_high_when_text_missing_but_is_question_true(self):
@@ -146,7 +157,12 @@ class TestDispatchToDramatiq:
             comments = [
                 {"comment_id": "c1", "text": "What game?", "platform": "youtube", "post_id": "v1"},
                 {"comment_id": "c2", "text": "Nice", "platform": "youtube", "post_id": "v1"},
-                {"comment_id": "c3", "text": "How did you do that?", "platform": "youtube", "post_id": "v1"},
+                {
+                    "comment_id": "c3",
+                    "text": "How did you do that?",
+                    "platform": "youtube",
+                    "post_id": "v1",
+                },
             ]
 
             count = _dispatch_to_dramatiq(comments, "gaming")
@@ -183,7 +199,14 @@ class TestDispatchToDramatiq:
             _dispatch_to_dramatiq(comments, "gaming")
 
             event = mock_normal.send.call_args[0][0]
-            required_keys = {"comment_id", "comment_text", "platform", "niche_id", "post_id", "post_context"}
+            required_keys = {
+                "comment_id",
+                "comment_text",
+                "platform",
+                "niche_id",
+                "post_id",
+                "post_context",
+            }
             assert set(event.keys()) == required_keys
             assert event["comment_text"] == "Cool clip"
             assert event["post_context"] == ""
@@ -223,8 +246,13 @@ class TestDispatchObserveMode:
         """Observe mode should log each comment with [OBSERVE] prefix."""
         monkeypatch.setenv("ENGAGEMENT_DISPATCH", "false")
         comments = [
-            {"comment_id": "c1", "text": "Great video", "platform": "youtube",
-             "post_id": "v1", "author_name": "Alice"},
+            {
+                "comment_id": "c1",
+                "text": "Great video",
+                "platform": "youtube",
+                "post_id": "v1",
+                "author_name": "Alice",
+            },
         ]
         with caplog.at_level(logging.INFO, logger="engagement.poller"):
             _dispatch_to_dramatiq(comments, "gaming")

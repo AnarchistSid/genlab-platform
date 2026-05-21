@@ -10,6 +10,7 @@ Components:
     stouffer_composite — Weighted composite score via Stouffer's Z-score method
     ScoringWeightLoader — YAML weight loading with mtime-based cache invalidation
 """
+
 from __future__ import annotations
 
 import math
@@ -62,7 +63,7 @@ class WelfordNormalizer:
     @property
     def std(self) -> float:
         """Population standard deviation."""
-        return self.variance ** 0.5
+        return self.variance**0.5
 
     def normalise(self, value: float, clip: bool = True) -> float:
         """Z-score normalise value using running statistics, then rescale to [0, 1].

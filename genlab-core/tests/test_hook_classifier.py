@@ -3,6 +3,7 @@
 Tests verify graceful degradation when no model/xgboost is available,
 and correct behavior with mock models.
 """
+
 from __future__ import annotations
 
 from genlab_core.learning.hook_classifier import HookClassifier, train_and_save
@@ -41,9 +42,7 @@ class TestTrainSkipsWhenBelowMinExamples:
         ]
         labels = [0] * 25 + [1] * 25
 
-        result = train_and_save(
-            examples, labels, niche_id="test", models_dir=tmp_path
-        )
+        result = train_and_save(examples, labels, niche_id="test", models_dir=tmp_path)
         assert result is False
 
 

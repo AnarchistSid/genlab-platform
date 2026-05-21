@@ -163,7 +163,9 @@ class TikTokClient:
 
         logger.info(
             "[TIKTOK] Init upload: publish_id=%s, %d chunks, privacy=%s",
-            publish_id, total_chunks, self._privacy_level,
+            publish_id,
+            total_chunks,
+            self._privacy_level,
         )
 
         # Step 5: Upload chunks
@@ -189,9 +191,7 @@ class TikTokClient:
 
                 elapsed = time.monotonic() - start_time
                 if elapsed > 2700:  # 45 minutes
-                    logger.warning(
-                        "[TIKTOK] Upload taking >45min — upload_url may expire at 1hr"
-                    )
+                    logger.warning("[TIKTOK] Upload taking >45min — upload_url may expire at 1hr")
 
                 resp = requests.put(
                     upload_url,
@@ -205,12 +205,12 @@ class TikTokClient:
                 )
                 resp.raise_for_status()
 
-                rate_mbps = (
-                    (chunk_end + 1) / (1024 * 1024) / elapsed if elapsed > 0 else 0
-                )
+                rate_mbps = (chunk_end + 1) / (1024 * 1024) / elapsed if elapsed > 0 else 0
                 logger.info(
                     "[TIKTOK] Chunk %d/%d uploaded (%.1f MB/s)",
-                    chunk_idx + 1, total_chunks, rate_mbps,
+                    chunk_idx + 1,
+                    total_chunks,
+                    rate_mbps,
                 )
 
     def _poll_status(self, publish_id: str, max_wait_seconds: int = 300) -> str:
@@ -233,9 +233,7 @@ class TikTokClient:
                 return status
             if status == "FAILED":
                 error_code = data.get("fail_reason", "unknown")
-                raise RuntimeError(
-                    f"TikTok publish failed: {error_code} (publish_id={publish_id})"
-                )
+                raise RuntimeError(f"TikTok publish failed: {error_code} (publish_id={publish_id})")
 
             logger.debug("[TIKTOK] Status: %s (elapsed %ds)", status, elapsed)
             time.sleep(poll_interval)
@@ -273,9 +271,7 @@ class TikTokClient:
                 "TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET required for token refresh"
             )
         if not self._refresh_token:
-            raise ValueError(
-                "TIKTOK_REFRESH_TOKEN not set — cannot refresh access token"
-            )
+            raise ValueError("TIKTOK_REFRESH_TOKEN not set — cannot refresh access token")
 
         resp = requests.post(
             f"{TIKTOK_BASE_URL}/oauth/token/",
@@ -295,8 +291,10 @@ class TikTokClient:
         new_refresh = data.get("refresh_token")
 
         if not new_access:
-            redacted = {k: '***' if 'token' in k.lower() else v for k, v in data.items()}
-            raise RuntimeError(f"TikTok token refresh failed — no access_token in response: {redacted}")
+            redacted = {k: "***" if "token" in k.lower() else v for k, v in data.items()}
+            raise RuntimeError(
+                f"TikTok token refresh failed — no access_token in response: {redacted}"
+            )
 
         self._access_token = new_access
 
@@ -334,11 +332,17 @@ class TikTokClient:
         try:
             result = subprocess.run(
                 [
-                    "ffprobe", "-v", "quiet",
-                    "-print_format", "json",
-                    "-show_streams", video_path,
+                    "ffprobe",
+                    "-v",
+                    "quiet",
+                    "-print_format",
+                    "json",
+                    "-show_streams",
+                    video_path,
                 ],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode != 0:
                 return None
@@ -360,7 +364,7 @@ class TikTokClient:
             headers=self._headers(),
             params={
                 "fields": "id,title,create_time,cover_image_url,share_url,"
-                          "view_count,like_count,comment_count,share_count",
+                "view_count,like_count,comment_count,share_count",
             },
             timeout=15,
         )

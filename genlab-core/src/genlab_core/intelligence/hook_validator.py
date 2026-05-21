@@ -23,6 +23,7 @@ What does NOT belong here (niche-specific, content-based):
   - Whether the hook tone is appropriate for the niche audience
   Those stay in niches/*/strategies/HookStrategy.
 """
+
 from __future__ import annotations
 
 import re
@@ -56,21 +57,21 @@ class HookValidationResult:
 # Regex for detecting emoji characters (covers most common ranges)
 _EMOJI_RE = re.compile(
     "["
-    "\U0001F600-\U0001F64F"  # emoticons
-    "\U0001F300-\U0001F5FF"  # misc symbols & pictographs
-    "\U0001F680-\U0001F6FF"  # transport & map symbols
-    "\U0001F1E0-\U0001F1FF"  # flags
-    "\U00002702-\U000027B0"  # dingbats
-    "\U0001F900-\U0001F9FF"  # supplemental symbols
-    "\U0001FA00-\U0001FA6F"  # chess symbols
-    "\U0001FA70-\U0001FAFF"  # symbols extended
-    "\U00002600-\U000026FF"  # misc symbols
-    "\U0000FE00-\U0000FE0F"  # variation selectors
-    "\U0000200D"  # ZWJ
-    "\U00002B50"  # star
-    "\U00002B55"  # circle
-    "\U000023F0-\U000023FA"  # clocks
-    "\U0000203C-\U00003299"  # misc
+    "\U0001f600-\U0001f64f"  # emoticons
+    "\U0001f300-\U0001f5ff"  # misc symbols & pictographs
+    "\U0001f680-\U0001f6ff"  # transport & map symbols
+    "\U0001f1e0-\U0001f1ff"  # flags
+    "\U00002702-\U000027b0"  # dingbats
+    "\U0001f900-\U0001f9ff"  # supplemental symbols
+    "\U0001fa00-\U0001fa6f"  # chess symbols
+    "\U0001fa70-\U0001faff"  # symbols extended
+    "\U00002600-\U000026ff"  # misc symbols
+    "\U0000fe00-\U0000fe0f"  # variation selectors
+    "\U0000200d"  # ZWJ
+    "\U00002b50"  # star
+    "\U00002b55"  # circle
+    "\U000023f0-\U000023fa"  # clocks
+    "\U0000203c-\U00003299"  # misc
     "]+",
     flags=re.UNICODE,
 )
@@ -210,9 +211,7 @@ class HookValidator:
 
     # -- Private validation methods (logic extracted from CS generate_hooks.py) --
 
-    def _check_length(
-        self, hook: str, platform: str, result: HookValidationResult
-    ) -> None:
+    def _check_length(self, hook: str, platform: str, result: HookValidationResult) -> None:
         """Rule 1 & 2: Too short (<3 words) or too long (platform limit)."""
         words = hook.split()
         if len(words) < 3:
@@ -222,30 +221,22 @@ class HookValidator:
         if limit and len(hook) > limit:
             result.failures.append(HookFailure.TOO_LONG)
 
-    def _check_markdown_artifacts(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_markdown_artifacts(self, hook: str, result: HookValidationResult) -> None:
         """Rule 3: Markdown bold/italic/headers render as literal chars on social."""
         if _MARKDOWN_RE.search(hook):
             result.failures.append(HookFailure.MARKDOWN_ARTIFACTS)
 
-    def _check_reddit_formatting(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_reddit_formatting(self, hook: str, result: HookValidationResult) -> None:
         """Rule 4: Reddit /r/, /u/, ^superscript, [flair] patterns."""
         if _REDDIT_RE.search(hook):
             result.failures.append(HookFailure.REDDIT_FORMATTING)
 
-    def _check_excessive_punctuation(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_excessive_punctuation(self, hook: str, result: HookValidationResult) -> None:
         """Rule 5: Multiple ! or ? in sequence (3+) looks like spam."""
         if re.search(r"[!]{3,}|[?]{3,}", hook):
             result.failures.append(HookFailure.EXCESSIVE_PUNCT)
 
-    def _check_incomplete_sentence(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_incomplete_sentence(self, hook: str, result: HookValidationResult) -> None:
         """Rule 6: Trailing ..., dangling dash, stopword ending, or colon.
 
         Extracted from CS's validate_hook_grammar rules 6 and 9:
@@ -276,30 +267,35 @@ class HookValidator:
         if words:
             tail = words[-1].lower().strip(".,;:!?—-")
             _DANGLING = {
-                "and", "or", "for", "to", "in", "with", "of", "at",
-                "by", "on", "the", "a", "an",
+                "and",
+                "or",
+                "for",
+                "to",
+                "in",
+                "with",
+                "of",
+                "at",
+                "by",
+                "on",
+                "the",
+                "a",
+                "an",
             }
             if tail in _DANGLING:
                 result.failures.append(HookFailure.INCOMPLETE_SENTENCE)
 
-    def _check_url_presence(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_url_presence(self, hook: str, result: HookValidationResult) -> None:
         """Rule 7: URLs belong in platform-specific fields, not the hook text."""
         if _URL_RE.search(hook):
             result.failures.append(HookFailure.CONTAINS_URL)
 
-    def _check_emoji_density(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_emoji_density(self, hook: str, result: HookValidationResult) -> None:
         """Rule 8: >7 emoji sequences = engagement bait signal."""
         emoji_matches = _EMOJI_RE.findall(hook)
         if len(emoji_matches) > 7:
             result.failures.append(HookFailure.EMOJI_SPAM)
 
-    def _check_mixed_caps(
-        self, hook: str, result: HookValidationResult
-    ) -> None:
+    def _check_mixed_caps(self, hook: str, result: HookValidationResult) -> None:
         """Rule 9: Mixed ALL-CAPS and lowercase = broken template artifact.
 
         From CS's validate_hook_grammar rule 5: if >30% of alpha words are
@@ -314,10 +310,7 @@ class HookValidator:
         if not alpha_words:
             return
 
-        caps_words = [
-            w for w in alpha_words
-            if w.isupper() and w not in _INTENTIONAL_CAPS
-        ]
+        caps_words = [w for w in alpha_words if w.isupper() and w not in _INTENTIONAL_CAPS]
         lower_words = [w for w in alpha_words if w.islower() and len(w) > 2]
 
         caps_ratio = len(caps_words) / len(alpha_words)

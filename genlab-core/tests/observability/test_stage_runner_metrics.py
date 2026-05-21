@@ -45,7 +45,9 @@ class TestLocalStageRunnerMetrics:
         pipeline_ctx = MagicMock()
 
         result = runner.run_stage(
-            FakeStage(raise_exc=ValueError("boom")), {}, pipeline_ctx,
+            FakeStage(raise_exc=ValueError("boom")),
+            {},
+            pipeline_ctx,
         )
 
         assert result.success is False

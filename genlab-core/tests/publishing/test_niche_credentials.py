@@ -48,12 +48,16 @@ def test_ai_tech_uses_blackboxbrief():
 
 
 def test_resolve_meta_for_ai_creators():
-    with patch.dict(os.environ, {
-        "BLACKBOXBRIEF_META_ACCESS_TOKEN": "bb_ig_token",
-        "BLACKBOXBRIEF_IG_USER_ID": "bb_ig_user",
-        "BLACKBOXBRIEF_FB_PAGE_ACCESS_TOKEN": "bb_fb_token",
-        "BLACKBOXBRIEF_FB_PAGE_ID": "bb_fb_page",
-    }, clear=False):
+    with patch.dict(
+        os.environ,
+        {
+            "BLACKBOXBRIEF_META_ACCESS_TOKEN": "bb_ig_token",
+            "BLACKBOXBRIEF_IG_USER_ID": "bb_ig_user",
+            "BLACKBOXBRIEF_FB_PAGE_ACCESS_TOKEN": "bb_fb_token",
+            "BLACKBOXBRIEF_FB_PAGE_ID": "bb_fb_page",
+        },
+        clear=False,
+    ):
         creds = resolve_meta_credentials("ai_creators")
         assert creds["ig_access_token"] == "bb_ig_token"
         assert creds["ig_user_id"] == "bb_ig_user"
@@ -63,24 +67,32 @@ def test_resolve_meta_for_ai_creators():
 
 def test_resolve_meta_for_ai_tech():
     """ai_tech alias should resolve using BLACKBOXBRIEF_ prefix."""
-    with patch.dict(os.environ, {
-        "BLACKBOXBRIEF_META_ACCESS_TOKEN": "bb_token_via_alias",
-        "BLACKBOXBRIEF_IG_USER_ID": "bb_user_via_alias",
-        "BLACKBOXBRIEF_FB_PAGE_ACCESS_TOKEN": "bb_fb_via_alias",
-        "BLACKBOXBRIEF_FB_PAGE_ID": "bb_page_via_alias",
-    }, clear=False):
+    with patch.dict(
+        os.environ,
+        {
+            "BLACKBOXBRIEF_META_ACCESS_TOKEN": "bb_token_via_alias",
+            "BLACKBOXBRIEF_IG_USER_ID": "bb_user_via_alias",
+            "BLACKBOXBRIEF_FB_PAGE_ACCESS_TOKEN": "bb_fb_via_alias",
+            "BLACKBOXBRIEF_FB_PAGE_ID": "bb_page_via_alias",
+        },
+        clear=False,
+    ):
         creds = resolve_meta_credentials("ai_tech")
         assert creds["ig_access_token"] == "bb_token_via_alias"
         assert creds["fb_page_id"] == "bb_page_via_alias"
 
 
 def test_resolve_meta_for_gaming():
-    with patch.dict(os.environ, {
-        "CRITICALRUSH_META_ACCESS_TOKEN": "test_token",
-        "CRITICALRUSH_IG_USER_ID": "12345",
-        "CRITICALRUSH_FB_PAGE_ACCESS_TOKEN": "fb_token",
-        "CRITICALRUSH_FB_PAGE_ID": "67890",
-    }, clear=False):
+    with patch.dict(
+        os.environ,
+        {
+            "CRITICALRUSH_META_ACCESS_TOKEN": "test_token",
+            "CRITICALRUSH_IG_USER_ID": "12345",
+            "CRITICALRUSH_FB_PAGE_ACCESS_TOKEN": "fb_token",
+            "CRITICALRUSH_FB_PAGE_ID": "67890",
+        },
+        clear=False,
+    ):
         creds = resolve_meta_credentials("gaming")
         assert creds["ig_access_token"] == "test_token"
         assert creds["fb_page_id"] == "67890"

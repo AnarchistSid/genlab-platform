@@ -20,13 +20,16 @@ def _mock_heavy_imports():
 
     with (
         patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False),
-        patch.dict("sys.modules", {
-            "azure": MagicMock(),
-            "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
-            "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
-            "kiota_abstractions": MagicMock(),
-            "kiota_abstractions.api_error": MagicMock(),
-        }),
+        patch.dict(
+            "sys.modules",
+            {
+                "azure": MagicMock(),
+                "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
+                "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
+                "kiota_abstractions": MagicMock(),
+                "kiota_abstractions.api_error": MagicMock(),
+            },
+        ),
         patch("genlab_core.http.backlog_client.GraphTableProxy"),
     ):
         yield mock_cred_cls, mock_graph_cls
@@ -75,6 +78,7 @@ class TestSettingsFallback:
 
         with patch("genlab_core.settings.settings", mock_settings):
             from genlab_core.http.backlog_client import BacklogClient
+
             client = BacklogClient(config_path=mock_config)
 
         assert client._site_id == "site-from-settings"
@@ -85,6 +89,7 @@ class TestSettingsFallback:
 
         with patch("genlab_core.settings.settings", mock_settings):
             from genlab_core.http.backlog_client import BacklogClient
+
             client = BacklogClient(
                 config_path=mock_config,
                 tenant_id="tenant-explicit",
@@ -106,6 +111,7 @@ class TestSettingsFallback:
 
         with patch("genlab_core.settings.settings", mock_settings):
             from genlab_core.http.backlog_client import BacklogClient
+
             with pytest.raises(ValueError, match="AZURE_TENANT_ID"):
                 BacklogClient(config_path=mock_config)
 
@@ -115,6 +121,7 @@ class TestSettingsFallback:
 
         with patch("genlab_core.settings.settings", mock_settings):
             from genlab_core.http.backlog_client import BacklogClient
+
             client = BacklogClient(
                 config_path=mock_config,
                 site_id="site-override",

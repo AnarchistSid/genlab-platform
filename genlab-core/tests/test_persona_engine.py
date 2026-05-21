@@ -1,4 +1,5 @@
 """Tests for genlab_core.engagement.persona_engine."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 

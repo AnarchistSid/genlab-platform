@@ -31,8 +31,10 @@ except ImportError:
     # Prefect eliminated in Sprint 68 — decorators are no-ops
     def flow(fn=None, **kwargs):
         return fn if fn else lambda f: f
+
     def task(fn=None, **kwargs):
         return fn if fn else lambda f: f
+
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ NICHE_ID = "gaming"
 # ---------------------------------------------------------------------------
 # Stage loading — single source of truth: niche.yaml
 # ---------------------------------------------------------------------------
+
 
 def _load_stages_from_config() -> list[dict[str, Any]]:
     """Load pipeline stages from niche.yaml — single source of truth.
@@ -62,8 +65,7 @@ def _load_stages_from_config() -> list[dict[str, Any]]:
     stages = config.get("pipeline", {}).get("stages")
     if not stages:
         raise RuntimeError(
-            f"No pipeline.stages found in {niche_yaml}. "
-            "Check niche.yaml pipeline.stages list."
+            f"No pipeline.stages found in {niche_yaml}. Check niche.yaml pipeline.stages list."
         )
     return stages
 
@@ -74,6 +76,7 @@ def _make_task(stage_module: str, stage_class: str, **task_kwargs):
     @task(name=stage_class, **task_kwargs)
     def run(context: dict[str, Any]) -> dict[str, Any]:
         import importlib
+
         mod = importlib.import_module(stage_module)
         cls = getattr(mod, stage_class)
         stage = cls()
@@ -113,6 +116,7 @@ def _build_task_list() -> list:
 # ---------------------------------------------------------------------------
 # Main flow
 # ---------------------------------------------------------------------------
+
 
 @flow(
     name="gaming-pipeline",
@@ -157,7 +161,9 @@ def gaming_pipeline(
 
     logger.info(
         "[Flow] gaming-pipeline started (run_id=%s, trigger=%s, dry_run=%s)",
-        run_id, trigger, dry_run,
+        run_id,
+        trigger,
+        dry_run,
     )
 
     t0 = time.monotonic()

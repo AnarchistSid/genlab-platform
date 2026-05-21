@@ -6,8 +6,8 @@ P1.14: Clip pre-processing timeout must scale with duration.
 """
 
 
-
 # ── P1.5: FINAL_VIDEO_PARAMS must contain -r 30 ────────────────────
+
 
 def test_final_video_params_contains_framerate():
     """FINAL_VIDEO_PARAMS must include '-r' followed by '30'."""
@@ -16,9 +16,7 @@ def test_final_video_params_contains_framerate():
     assert "-r" in FINAL_VIDEO_PARAMS, "Missing '-r' flag in FINAL_VIDEO_PARAMS"
     idx = FINAL_VIDEO_PARAMS.index("-r")
     assert idx + 1 < len(FINAL_VIDEO_PARAMS), "'-r' flag has no value after it"
-    assert FINAL_VIDEO_PARAMS[idx + 1] == "30", (
-        f"Expected '-r' value '30', got '{FINAL_VIDEO_PARAMS[idx + 1]}'"
-    )
+    assert FINAL_VIDEO_PARAMS[idx + 1] == "30", f"Expected '-r' value '30', got '{FINAL_VIDEO_PARAMS[idx + 1]}'"
 
 
 def test_final_video_params_framerate_before_gop():
@@ -32,14 +30,13 @@ def test_final_video_params_framerate_before_gop():
 
 # ── P1.6: No 192k audio bitrate in pipeline files ──────────────────
 
+
 def test_final_audio_params_uses_256k():
     """FINAL_AUDIO_PARAMS must specify 256k audio bitrate."""
     from genlab_core.media.ffmpeg_utils import FINAL_AUDIO_PARAMS
 
     idx = FINAL_AUDIO_PARAMS.index("-b:a")
-    assert FINAL_AUDIO_PARAMS[idx + 1] == "256k", (
-        f"Expected '256k', got '{FINAL_AUDIO_PARAMS[idx + 1]}'"
-    )
+    assert FINAL_AUDIO_PARAMS[idx + 1] == "256k", f"Expected '256k', got '{FINAL_AUDIO_PARAMS[idx + 1]}'"
 
 
 def test_no_192k_in_render_text_overlays():
@@ -47,7 +44,15 @@ def test_no_192k_in_render_text_overlays():
     from pathlib import Path
 
     # Check genlab-core canonical version (BB execution/ copy archived in Sprint 66)
-    src = Path(__file__).resolve().parent.parent.parent / "genlab-core" / "src" / "genlab_core" / "pipeline" / "stages" / "render_text_overlays.py"
+    src = (
+        Path(__file__).resolve().parent.parent.parent
+        / "genlab-core"
+        / "src"
+        / "genlab_core"
+        / "pipeline"
+        / "stages"
+        / "render_text_overlays.py"
+    )
     if not src.exists():
         # Fall back to BB location for backward compat
         src = Path(__file__).resolve().parent.parent / "execution" / "render_text_overlays.py"
@@ -57,9 +62,7 @@ def test_no_192k_in_render_text_overlays():
         stripped = line.strip()
         if stripped.startswith("#"):
             continue
-        assert '"192k"' not in stripped, (
-            f"render_text_overlays.py line {lineno} still has hardcoded '192k': {stripped}"
-        )
+        assert '"192k"' not in stripped, f"render_text_overlays.py line {lineno} still has hardcoded '192k': {stripped}"
 
 
 def test_no_192k_in_assemble_video_reel():
@@ -72,6 +75,4 @@ def test_no_192k_in_assemble_video_reel():
         stripped = line.strip()
         if stripped.startswith("#"):
             continue
-        assert '"192k"' not in stripped, (
-            f"assemble_video_reel.py line {lineno} still has hardcoded '192k': {stripped}"
-        )
+        assert '"192k"' not in stripped, f"assemble_video_reel.py line {lineno} still has hardcoded '192k': {stripped}"

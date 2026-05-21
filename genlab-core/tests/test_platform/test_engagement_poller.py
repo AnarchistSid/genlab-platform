@@ -1,4 +1,5 @@
 """Tests for engagement_poller — poll_youtube_comments and poll_twitter_mentions."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,9 +22,7 @@ class TestPollYoutubeComments:
 
         fake_playlist_resp = MagicMock()
         fake_playlist_resp.raise_for_status = MagicMock()
-        fake_playlist_resp.json.return_value = {
-            "items": [{"contentDetails": {"videoId": "vid_1"}}]
-        }
+        fake_playlist_resp.json.return_value = {"items": [{"contentDetails": {"videoId": "vid_1"}}]}
 
         fake_comments_resp = MagicMock()
         fake_comments_resp.status_code = 200
@@ -70,7 +69,15 @@ class TestPollYoutubeComments:
             result = asyncio.run(poll_youtube_comments("gaming", "UC_test"))
 
         assert len(result) == 2
-        expected_keys = {"platform", "post_id", "comment_id", "author_id", "author_name", "text", "is_question"}
+        expected_keys = {
+            "platform",
+            "post_id",
+            "comment_id",
+            "author_id",
+            "author_name",
+            "text",
+            "is_question",
+        }
         for item in result:
             assert expected_keys.issubset(item.keys())
         assert result[0]["platform"] == "youtube"
@@ -139,7 +146,15 @@ class TestPollTwitterMentions:
             result = asyncio.run(poll_twitter_mentions("gaming", "12345"))
 
         assert len(result) == 1
-        expected_keys = {"platform", "post_id", "comment_id", "author_id", "author_name", "text", "is_question"}
+        expected_keys = {
+            "platform",
+            "post_id",
+            "comment_id",
+            "author_id",
+            "author_name",
+            "text",
+            "is_question",
+        }
         assert expected_keys.issubset(result[0].keys())
         assert result[0]["platform"] == "x_twitter"
         assert result[0]["author_name"] == "tweeter"

@@ -25,6 +25,7 @@ Why preserve FPS in master (especially important for CriticalRush):
   master stage throws away half the temporal information permanently.
   FPS decisions happen per-platform in the variant stage, not the master.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -111,9 +112,7 @@ class RenderSpec(BaseModel):
         if self.safe_zone_top_pct > 0 or self.safe_zone_bottom_pct > 0:
             top_px = int(self.height * self.safe_zone_top_pct)
             bot_px = int(self.height * self.safe_zone_bottom_pct)
-            vf_parts.append(
-                f"pad={self.width}:{self.height + top_px + bot_px}:0:{top_px}"
-            )
+            vf_parts.append(f"pad={self.width}:{self.height + top_px + bot_px}:0:{top_px}")
 
         if vf_parts:
             args += ["-vf", ",".join(vf_parts)]
@@ -337,9 +336,7 @@ def detect_hw_accel() -> HWAccel:
                 speedup_factor=6.0,
             )
         if "h264_videotoolbox" in encoders:
-            logger.info(
-                "GPU: Apple Silicon (h264_videotoolbox / hevc_videotoolbox)"
-            )
+            logger.info("GPU: Apple Silicon (h264_videotoolbox / hevc_videotoolbox)")
             return HWAccel(
                 h264_encoder="h264_videotoolbox",
                 h265_encoder="hevc_videotoolbox",
@@ -453,12 +450,8 @@ async def transcode_for_platforms(
     output_dir.mkdir(parents=True, exist_ok=True)
     hw = detect_hw_accel() if use_gpu else HWAccel()
 
-    h265_platforms = [
-        p for p in platforms if PLATFORM_SPECS[p].codec == "libx265"
-    ]
-    h264_platforms = [
-        p for p in platforms if PLATFORM_SPECS[p].codec == "libx264"
-    ]
+    h265_platforms = [p for p in platforms if PLATFORM_SPECS[p].codec == "libx265"]
+    h264_platforms = [p for p in platforms if PLATFORM_SPECS[p].codec == "libx264"]
 
     results: dict[Platform, Path] = {}
 
@@ -474,23 +467,17 @@ async def transcode_for_platforms(
             "[RENDER] Encoding %d H.264 variants (tee pass)",
             len(h264_platforms),
         )
-        outputs = await _encode_h264_tee(
-            master, h264_platforms, output_dir, hw
-        )
+        outputs = await _encode_h264_tee(master, h264_platforms, output_dir, hw)
         results.update(outputs)
 
     for platform, path in results.items():
         if not await _verify_output(path):
-            raise RuntimeError(
-                f"Platform variant failed verification: {platform} -> {path}"
-            )
+            raise RuntimeError(f"Platform variant failed verification: {platform} -> {path}")
 
     return results
 
 
-async def _encode_single(
-    master: Path, spec: RenderSpec, output: Path
-) -> None:
+async def _encode_single(master: Path, spec: RenderSpec, output: Path) -> None:
     """Encode one variant from the master."""
     ffmpeg = get_ffmpeg_binary()
     cmd = [
@@ -614,7 +601,9 @@ def render_master_sync(source: Path, output: Path) -> Path:
 
 
 def transcode_for_platforms_sync(
-    master: Path, output_dir: Path, platforms: list[Platform] | None = None,
+    master: Path,
+    output_dir: Path,
+    platforms: list[Platform] | None = None,
 ) -> dict[str, Path]:
     """Sync wrapper for transcode_for_platforms — safe to call from pipeline stages."""
     try:
@@ -624,7 +613,8 @@ def transcode_for_platforms_sync(
 
     if loop is not None:
         future = asyncio.run_coroutine_threadsafe(
-            transcode_for_platforms(master, output_dir, platforms), loop,
+            transcode_for_platforms(master, output_dir, platforms),
+            loop,
         )
         return future.result(timeout=600)
     else:

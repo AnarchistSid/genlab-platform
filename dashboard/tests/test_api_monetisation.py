@@ -1,4 +1,5 @@
 """Tests for /api/v1/monetisation/progress endpoint."""
+
 import json
 import sys
 from pathlib import Path

@@ -8,6 +8,7 @@ Reply: /comments insert with parentId.
 Like: no-op (YouTube Data API does not support liking comments programmatically).
 Metrics: YouTube Analytics API v2 (48h data lag guard).
 """
+
 from __future__ import annotations
 
 import logging
@@ -84,12 +85,8 @@ class YouTubeClient:
         enable_quota_gate: bool = True,
     ) -> None:
         self._client_id: str = client_id or os.environ.get("YOUTUBE_CLIENT_ID", "")
-        self._client_secret: str = client_secret or os.environ.get(
-            "YOUTUBE_CLIENT_SECRET", ""
-        )
-        self._refresh_token: str = refresh_token or os.environ.get(
-            "YOUTUBE_REFRESH_TOKEN", ""
-        )
+        self._client_secret: str = client_secret or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        self._refresh_token: str = refresh_token or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
         self._access_token: str | None = None
         self._token_refreshed_at: float = 0.0
         self._TOKEN_TTL_SECONDS: int = _TOKEN_TTL_SECONDS
@@ -220,9 +217,7 @@ class YouTubeClient:
 
         actual = self._get_channel_id(token)
         if not actual:
-            logger.error(
-                "YouTube: channel verification failed — could not resolve channel ID"
-            )
+            logger.error("YouTube: channel verification failed — could not resolve channel ID")
             return False
 
         if actual != self._expected_channel_id:
@@ -285,7 +280,7 @@ class YouTubeClient:
         if not title:
             title = payload.hook.strip() if payload.hook else ""
         if not title:
-            title = (payload.caption.split("\n")[0].strip() if payload.caption else "")
+            title = payload.caption.split("\n")[0].strip() if payload.caption else ""
         if not title:
             # Last resort: use first 40 chars of caption as title
             title = (payload.caption or "")[:37] + "?" if payload.caption else "New Video"
@@ -419,7 +414,7 @@ class YouTubeClient:
                 except Exception as chunk_exc:
                     if chunk_attempt == CHUNK_RETRIES - 1:
                         raise  # exhausted retries — propagate
-                    wait = 2 ** chunk_attempt
+                    wait = 2**chunk_attempt
                     logger.warning(
                         "YouTube chunk upload retry %d/%d in %ds: %s",
                         chunk_attempt + 1,
@@ -450,9 +445,7 @@ class YouTubeClient:
     # Engageable protocol
     # ------------------------------------------------------------------
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool:
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
         """Post a reply to a YouTube comment.
 
         Args:
@@ -487,9 +480,7 @@ class YouTubeClient:
             )
             return True
         except Exception as exc:
-            logger.warning(
-                "YouTube: failed to post reply to comment %s: %s", parent_id, exc
-            )
+            logger.warning("YouTube: failed to post reply to comment %s: %s", parent_id, exc)
             return False
 
     def post_comment(self, video_id: str, text: str) -> str | None:
@@ -535,9 +526,7 @@ class YouTubeClient:
             )
             return comment_id
         except Exception as exc:
-            logger.warning(
-                "YouTube: failed to post comment on video %s: %s", video_id, exc
-            )
+            logger.warning("YouTube: failed to post comment on video %s: %s", video_id, exc)
             return None
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -555,9 +544,7 @@ class YouTubeClient:
     # Trackable protocol
     # ------------------------------------------------------------------
 
-    def get_metrics(
-        self, video_id: str, published_at: datetime
-    ) -> PlatformMetrics | None:
+    def get_metrics(self, video_id: str, published_at: datetime) -> PlatformMetrics | None:
         """Fetch video-level analytics from the YouTube Analytics API.
 
         Returns ``None`` if the video was published < 48h ago (data lag guard),
@@ -571,11 +558,7 @@ class YouTubeClient:
             :class:`~genlab_core.platforms.models.PlatformMetrics` or ``None``.
         """
         now = datetime.now(UTC)
-        pub_utc = (
-            published_at.replace(tzinfo=UTC)
-            if published_at.tzinfo is None
-            else published_at
-        )
+        pub_utc = published_at.replace(tzinfo=UTC) if published_at.tzinfo is None else published_at
         age_hours = (now - pub_utc).total_seconds() / 3600
 
         if age_hours < _MIN_AGE_HOURS:
@@ -595,9 +578,7 @@ class YouTubeClient:
             token = self._get_access_token()
             channel_id = self._get_channel_id(token)
             if not channel_id:
-                logger.warning(
-                    "YouTube: cannot fetch metrics — channel ID unavailable"
-                )
+                logger.warning("YouTube: cannot fetch metrics — channel ID unavailable")
                 return None
 
             service = self._get_analytics_service()
@@ -642,9 +623,7 @@ class YouTubeClient:
             )
 
         except Exception as exc:
-            logger.warning(
-                "YouTube: failed to fetch metrics for %s: %s", video_id, exc
-            )
+            logger.warning("YouTube: failed to fetch metrics for %s: %s", video_id, exc)
             return None
 
     # ------------------------------------------------------------------
@@ -692,9 +671,7 @@ class YouTubeClient:
             get_resp.raise_for_status()
             items = get_resp.json().get("items", [])
             if not items:
-                logger.warning(
-                    "YouTube: video %s not found for metadata update", video_id
-                )
+                logger.warning("YouTube: video %s not found for metadata update", video_id)
                 return None
 
             snippet = items[0]["snippet"]
@@ -714,9 +691,7 @@ class YouTubeClient:
             logger.info("YouTube: video %s metadata updated", video_id)
             return {"video_id": video_id, "title": snippet["title"]}
         except Exception as exc:
-            logger.warning(
-                "YouTube: metadata update failed for %s: %s", video_id, exc
-            )
+            logger.warning("YouTube: metadata update failed for %s: %s", video_id, exc)
             return None
 
     # ------------------------------------------------------------------

@@ -1,4 +1,5 @@
 """Check EarnKaro affiliate URL status — reports placeholders vs real URLs."""
+
 from pathlib import Path
 
 import yaml

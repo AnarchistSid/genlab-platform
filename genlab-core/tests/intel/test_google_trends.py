@@ -1,4 +1,5 @@
 """Tests for GoogleTrendsIntel."""
+
 from unittest.mock import MagicMock, patch
 
 from genlab_core.intel.google_trends import (
@@ -12,11 +13,13 @@ class TestGoogleTrendsIntel:
     def test_fallback_to_seed_keywords(self):
         """When all tiers fail (RSS + pytrends + cache), returns static seed keywords."""
         intel = GoogleTrendsIntel()
-        with patch.object(intel, "_get_rss_trending", side_effect=Exception("no network")), \
-             patch.object(intel, "_get_realtime_trending", side_effect=Exception("no network")), \
-             patch.object(intel, "_get_daily_trending", side_effect=Exception("no network")), \
-             patch("genlab_core.intel.google_trends._read_cache", return_value=None), \
-             patch("genlab_core.intel.google_trends._read_stale_cache", return_value=None):
+        with (
+            patch.object(intel, "_get_rss_trending", side_effect=Exception("no network")),
+            patch.object(intel, "_get_realtime_trending", side_effect=Exception("no network")),
+            patch.object(intel, "_get_daily_trending", side_effect=Exception("no network")),
+            patch("genlab_core.intel.google_trends._read_cache", return_value=None),
+            patch("genlab_core.intel.google_trends._read_stale_cache", return_value=None),
+        ):
             topics = intel.get_trending_topics("gaming", top_n=5)
 
         assert len(topics) > 0
@@ -36,6 +39,7 @@ class TestGoogleTrendsIntel:
         # Mock pytrends client
         mock_pt = MagicMock()
         import pandas as pd
+
         mock_pt.trending_searches.return_value = pd.DataFrame(
             {0: ["Valorant update", "NBA Finals", "New Movie Trailer", "AI breakthrough"]}
         )
@@ -56,7 +60,8 @@ class TestGoogleTrendsIntel:
     def test_score_multiplier_trending(self):
         intel = GoogleTrendsIntel()
         with patch.object(
-            intel, "get_trending_topics",
+            intel,
+            "get_trending_topics",
             return_value=["GTA 6", "Valorant", "Minecraft"],
         ):
             score = intel.get_trending_score_multiplier("GTA 6 release", "gaming")

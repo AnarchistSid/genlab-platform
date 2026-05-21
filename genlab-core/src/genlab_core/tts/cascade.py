@@ -16,6 +16,7 @@ Usage:
     ])
     result = cascade.synthesize("Hello world", "output.mp3")
 """
+
 from __future__ import annotations
 
 import logging
@@ -144,7 +145,8 @@ class TTSCascade:
                 tried.append(f"{provider.name}(circuit-open)")
                 logger.debug(
                     "TTSCascade: skipping %s (circuit open, %d failures)",
-                    provider.name, breaker._failure_count,
+                    provider.name,
+                    breaker._failure_count,
                 )
                 continue
 
@@ -154,7 +156,9 @@ class TTSCascade:
 
             logger.debug(
                 "TTSCascade: trying %s (%d/%d)",
-                provider.name, len(tried) + 1, len(self._providers),
+                provider.name,
+                len(tried) + 1,
+                len(self._providers),
             )
 
             try:
@@ -164,19 +168,25 @@ class TTSCascade:
                     if tried:
                         logger.info(
                             "TTSCascade: %s succeeded (after %s failed: %s)",
-                            provider.name, len(tried), ", ".join(tried),
+                            provider.name,
+                            len(tried),
+                            ", ".join(tried),
                         )
                     return result
 
                 logger.warning(
-                    "TTSCascade: %s failed: %s", provider.name, result.error,
+                    "TTSCascade: %s failed: %s",
+                    provider.name,
+                    result.error,
                 )
                 tried.append(provider.name)
                 breaker.record_failure()
 
             except Exception as exc:
                 logger.warning(
-                    "TTSCascade: %s exception: %s", provider.name, exc,
+                    "TTSCascade: %s exception: %s",
+                    provider.name,
+                    exc,
                 )
                 tried.append(provider.name)
                 breaker.record_failure()

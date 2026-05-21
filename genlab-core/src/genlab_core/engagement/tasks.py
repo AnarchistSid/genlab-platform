@@ -15,6 +15,7 @@ To run workers:
 
 For tests, set DRAMATIQ_TEST=1 to use StubBroker (no Redis required).
 """
+
 from __future__ import annotations
 
 import logging

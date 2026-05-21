@@ -29,10 +29,12 @@ from urllib.parse import urlparse
 
 # GENLAB_PROJECT_ROOT defaults to the GenLab workspace root (parent of dashboard/)
 _DASHBOARD_ROOT = Path(__file__).resolve().parent.parent
-PROJECT_ROOT = Path(os.environ.get(
-    "GENLAB_PROJECT_ROOT",
-    str(_DASHBOARD_ROOT.parent),
-))
+PROJECT_ROOT = Path(
+    os.environ.get(
+        "GENLAB_PROJECT_ROOT",
+        str(_DASHBOARD_ROOT.parent),
+    )
+)
 # GenLab workspace root — media files for all niches live under their own dirs here
 GENLAB_ROOT = _DASHBOARD_ROOT.parent
 _DASHBOARD_DIST = _DASHBOARD_ROOT / "frontend" / "dist"
@@ -57,6 +59,7 @@ from flask_socketio import SocketIO
 logger = logging.getLogger(__name__)
 try:
     from genlab_core.observability.logging import configure_logging
+
     _is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
     configure_logging(json_output=_is_json, level=logging.INFO)
 except ImportError:
@@ -74,7 +77,7 @@ _LOGIN_RATE_LIMIT = 5
 _LOGIN_RATE_WINDOW = 60  # seconds
 
 # Strict run_id validation: alphanumeric, underscores, hyphens only, max 64 chars
-_SAFE_RUN_ID = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
+_SAFE_RUN_ID = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
 
 app = Flask(__name__)
 
@@ -82,6 +85,7 @@ app = Flask(__name__)
 _secret_key = os.getenv("FLASK_SECRET_KEY", "").strip()
 if not _secret_key:
     import secrets
+
     _secret_key = secrets.token_hex(32)
     logger.warning(
         "FLASK_SECRET_KEY not set — using random key (sessions won't persist across restarts). "
@@ -142,6 +146,7 @@ def _cleanup_pg_pool():
     """Close PostgreSQL connection pools to prevent __del__ errors."""
     try:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
         pg = getattr(client, "_pg", None)
         if pg and hasattr(pg, "close"):
@@ -215,12 +220,15 @@ def _start_auto_approve_timer(record_id: str, seconds: float) -> None:
                 "approved",
                 notes=f"Auto-approved after {int(seconds)}s timeout",
             )
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "approved",
-                "auto_approved": True,
-            })
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "approved",
+                    "auto_approved": True,
+                },
+            )
         except Exception as exc:
             logger.error("Auto-approve failed for %s: %s", record_id, exc)
 
@@ -261,7 +269,8 @@ def _enforce_localhost_when_no_auth():
     remote = request.remote_addr or ""
     if remote not in ("127.0.0.1", "::1"):
         logger.warning(
-            "Blocked non-localhost request from %s — auth is disabled", remote,
+            "Blocked non-localhost request from %s — auth is disabled",
+            remote,
         )
         return Response("Authentication required. Configure REVIEW_AUTH_USER/PASS.", status=403)
     return None
@@ -309,6 +318,7 @@ def _check_auth():
 def _login_page():
     """Form-based login page — sets session cookie on success."""
     from flask import session
+
     error = ""
     if request.method == "POST":
         # ── Rate limiting: 5 attempts per minute per IP ──
@@ -328,7 +338,9 @@ def _login_page():
 
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if hmac.compare_digest(username.encode(), _AUTH_USER.encode()) and hmac.compare_digest(password.encode(), _AUTH_PASS.encode()):
+        if hmac.compare_digest(username.encode(), _AUTH_USER.encode()) and hmac.compare_digest(
+            password.encode(), _AUTH_PASS.encode()
+        ):
             session["authenticated"] = True
             session.permanent = True
             return redirect("/")
@@ -371,6 +383,7 @@ button:hover{{background:#2563eb}}
 def _logout_page():
     """Clear session and redirect to login."""
     from flask import session
+
     session.clear()
     return redirect("/login")
 
@@ -433,7 +446,7 @@ def _add_security_headers(response):
 
 # ── Security: Record ID validation ───────────────
 # Integer (SharePoint) or UUID (Postgres) record IDs
-RECORD_RE = re.compile(r'^[\w-]+$')
+RECORD_RE = re.compile(r"^[\w-]+$")
 
 
 # ── Security: CSRF token for state-changing requests ───────
@@ -452,6 +465,7 @@ def _generate_csrf_token() -> str:
     across workers.
     """
     import secrets as _secrets
+
     if "csrf_nonce" not in session:
         session["csrf_nonce"] = _secrets.token_hex(16)
     return hmac.new(
@@ -474,9 +488,8 @@ def _enforce_csrf():
     # WebSocket upgrade requests don't need CSRF
     if request.environ.get("HTTP_UPGRADE", "").lower() == "websocket":
         return None
-    token = (
-        request.headers.get("X-CSRF-Token", "")
-        or (request.get_json(silent=True) or {}).get("_csrf_token", "")
+    token = request.headers.get("X-CSRF-Token", "") or (request.get_json(silent=True) or {}).get(
+        "_csrf_token", ""
     )
     if not hmac.compare_digest(token, _generate_csrf_token()):
         return _api_error(error="CSRF token missing or invalid", code=403)
@@ -577,7 +590,10 @@ BLUEPRINT_CACHE_TTL_SECONDS = max(
     float(os.getenv("REVIEW_BLUEPRINT_CACHE_TTL_SECONDS", "8")),
 )
 ALLOW_LOCAL_FALLBACK = str(os.getenv("REVIEW_ALLOW_LOCAL_FALLBACK", "0")).strip().lower() in {
-    "1", "true", "yes", "on",
+    "1",
+    "true",
+    "yes",
+    "on",
 }
 _blueprint_cache_lock = threading.Lock()
 _blueprint_cache: dict[str, Any] = {
@@ -659,6 +675,7 @@ def _get_backlog_blueprints_cached(
 # API Routes
 # ══════════════════════════════════════════════════════════════
 
+
 @app.route("/")
 def index():
     """Serve the React SPA."""
@@ -702,11 +719,13 @@ def get_blueprints():
     except Exception as e:
         if not ALLOW_LOCAL_FALLBACK:
             logger.error("Backlog unavailable; fail-closed mode active: %s", e)
-            response = jsonify({
-                "error": "Backlog unavailable",
-                "detail": "Internal error — check server logs",
-                "fail_closed": True,
-            })
+            response = jsonify(
+                {
+                    "error": "Backlog unavailable",
+                    "detail": "Internal error — check server logs",
+                    "fail_closed": True,
+                }
+            )
             response.headers["X-Review-Source"] = "backlog_unavailable"
             response.headers["X-Review-Stale"] = "1"
             response.headers["Cache-Control"] = "no-store"
@@ -729,6 +748,7 @@ def health():
     """
     # Check if request is authenticated (without enforcing — health always responds)
     from flask import session
+
     authenticated = session.get("authenticated", False)
 
     if not authenticated:
@@ -747,16 +767,18 @@ def health():
         }
         with _express_lock:
             _express_running = bool(express_state["running"])
-        return jsonify({
-            "status": "ok",
-            "mode": "local",
-            "uptime_seconds": uptime_seconds,
-            "data_source": "local",
-            "stale": False,
-            "blueprints": counts,
-            "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
-            "express_running": _express_running,
-        })
+        return jsonify(
+            {
+                "status": "ok",
+                "mode": "local",
+                "uptime_seconds": uptime_seconds,
+                "data_source": "local",
+                "stale": False,
+                "blueprints": counts,
+                "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
+                "express_running": _express_running,
+            }
+        )
 
     force_refresh = request.args.get("fresh", "0") == "1"
     try:
@@ -768,44 +790,50 @@ def health():
         }
         with _express_lock:
             _express_running = bool(express_state["running"])
-        return jsonify({
-            "status": "ok",
-            "version": "2.0.0",
-            "environment": "production",
-            "mode": "backlog",
-            "uptime_seconds": uptime_seconds,
-            "data_source": source,
-            "stale": stale,
-            "blueprints": counts,
-            "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
-            "express_running": _express_running,
-        })
+        return jsonify(
+            {
+                "status": "ok",
+                "version": "2.0.0",
+                "environment": "production",
+                "mode": "backlog",
+                "uptime_seconds": uptime_seconds,
+                "data_source": source,
+                "stale": stale,
+                "blueprints": counts,
+                "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
+                "express_running": _express_running,
+            }
+        )
     except Exception as exc:
         logger.error("Health check backlog error: %s", exc, exc_info=True)
         with _express_lock:
             _express_running = bool(express_state["running"])
         if not ALLOW_LOCAL_FALLBACK:
-            return jsonify({
-                "status": "error",
+            return jsonify(
+                {
+                    "status": "error",
+                    "mode": "backlog",
+                    "uptime_seconds": uptime_seconds,
+                    "data_source": "unavailable",
+                    "stale": True,
+                    "error": "Backlog unavailable",
+                    "fail_closed": True,
+                    "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
+                    "express_running": _express_running,
+                }
+            ), 503
+        return jsonify(
+            {
+                "status": "degraded",
                 "mode": "backlog",
                 "uptime_seconds": uptime_seconds,
                 "data_source": "unavailable",
                 "stale": True,
                 "error": "Backlog unavailable",
-                "fail_closed": True,
                 "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
                 "express_running": _express_running,
-            }), 503
-        return jsonify({
-            "status": "degraded",
-            "mode": "backlog",
-            "uptime_seconds": uptime_seconds,
-            "data_source": "unavailable",
-            "stale": True,
-            "error": "Backlog unavailable",
-            "cache_ttl_seconds": BLUEPRINT_CACHE_TTL_SECONDS,
-            "express_running": _express_running,
-        }), 503
+            }
+        ), 503
 
 
 def _execute_review_action(
@@ -843,6 +871,7 @@ def _execute_review_action(
         # on the same day would otherwise stack on the same slot (1 per niche
         # per day cap).
         from server.core.publishing_queue import _next_available_slot
+
         niche_id = ""
         try:
             bp_data = client.blueprints.get(record_id)
@@ -852,13 +881,16 @@ def _execute_review_action(
         next_slot = _next_available_slot(niche_id=niche_id)
         if next_slot:
             update_fields["scheduled_for"] = next_slot
-            logger.info("[REVIEW] Auto-scheduled %s → %s (niche=%s)", record_id, next_slot, niche_id)
+            logger.info(
+                "[REVIEW] Auto-scheduled %s → %s (niche=%s)", record_id, next_slot, niche_id
+            )
         else:
             logger.warning(
                 "[REVIEW] No available slot found for niche=%s — "
                 "approving %s without scheduled_for (will sit in queue until "
                 "a slot opens)",
-                niche_id, record_id[:16],
+                niche_id,
+                record_id[:16],
             )
     elif action == "rejected":
         update_fields["status"] = "ARCHIVED"
@@ -892,20 +924,28 @@ def review_blueprint(record_id):
     if action not in ("approved", "rejected", "skipped", "revised"):
         return _api_error(error=f"Invalid action: {action}", code=400)
 
-    logger.info("Review action: %s on %s (issue: %s, notes: %s)",
-                action, record_id, feedback_issue, notes[:50])
+    logger.info(
+        "Review action: %s on %s (issue: %s, notes: %s)",
+        action,
+        record_id,
+        feedback_issue,
+        notes[:50],
+    )
 
     # Cancel server-side auto-approve timer if one exists
     _cancel_auto_approve_timer(record_id)
 
     if dry_run:
         logger.info("[DRY RUN] Would update %s → %s", record_id, action)
-        socketio.emit("blueprint_updated", {
-            "id": record_id,
-            "record_id": record_id,
-            "action": action,
-            "dry_run": True,
-        })
+        socketio.emit(
+            "blueprint_updated",
+            {
+                "id": record_id,
+                "record_id": record_id,
+                "action": action,
+                "dry_run": True,
+            },
+        )
         return _api_success(data={"dry_run": True, "action": action})
 
     try:
@@ -917,11 +957,14 @@ def review_blueprint(record_id):
             feedback_notes=notes,
         )
 
-        socketio.emit("blueprint_updated", {
-            "id": record_id,
-            "record_id": record_id,
-            "action": action,
-        })
+        socketio.emit(
+            "blueprint_updated",
+            {
+                "id": record_id,
+                "record_id": record_id,
+                "action": action,
+            },
+        )
 
         return _api_success(data={"action": action})
     except Exception as e:
@@ -952,6 +995,7 @@ def batch_review():
     client = None
     if not dry_run:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
 
     for record_id in record_ids:
@@ -959,12 +1003,15 @@ def batch_review():
             if dry_run:
                 logger.info("[DRY RUN] Batch %s: %s", action, record_id)
                 results.append({"id": record_id, "status": "ok", "dry_run": True})
-                socketio.emit("blueprint_updated", {
-                    "id": record_id,
-                    "record_id": record_id,
-                    "action": action,
-                    "dry_run": True,
-                })
+                socketio.emit(
+                    "blueprint_updated",
+                    {
+                        "id": record_id,
+                        "record_id": record_id,
+                        "action": action,
+                        "dry_run": True,
+                    },
+                )
             else:
                 update_fields = {
                     "action_taken": action,
@@ -974,6 +1021,7 @@ def batch_review():
                 if action == "approved":
                     # Auto-schedule: find the next available publish slot for this niche
                     from server.core.publishing_queue import _next_available_slot
+
                     niche_id = ""
                     try:
                         bp_data = client.blueprints.get(record_id)
@@ -983,18 +1031,26 @@ def batch_review():
                     next_slot = _next_available_slot(niche_id=niche_id)
                     if next_slot:
                         update_fields["scheduled_for"] = next_slot
-                        logger.info("[BATCH] Auto-scheduled %s → %s (niche=%s)", record_id, next_slot, niche_id)
+                        logger.info(
+                            "[BATCH] Auto-scheduled %s → %s (niche=%s)",
+                            record_id,
+                            next_slot,
+                            niche_id,
+                        )
                 elif action == "rejected":
                     update_fields["feedback_issue"] = "rejected_in_review"
                     update_fields["feedback_notes"] = notes or f"Batch {action}"
 
                 client.blueprints.update(record_id, update_fields, typecast=True)
                 results.append({"id": record_id, "status": "ok"})
-                socketio.emit("blueprint_updated", {
-                    "id": record_id,
-                    "record_id": record_id,
-                    "action": action,
-                })
+                socketio.emit(
+                    "blueprint_updated",
+                    {
+                        "id": record_id,
+                        "record_id": record_id,
+                        "action": action,
+                    },
+                )
         except Exception as e:
             logger.error("Batch review failed for %s: %s", record_id, e)
             results.append({"id": record_id, "status": "error", "error": type(e).__name__})
@@ -1122,7 +1178,7 @@ def _resolve_video_url(blueprint: dict) -> str | None:
         rel_path = None
         for prefix in (str(GENLAB_ROOT), str(PROJECT_ROOT), "/opt/genlab"):
             if rendered_path.startswith(prefix):
-                rel_path = rendered_path[len(prefix):].lstrip("/")
+                rel_path = rendered_path[len(prefix) :].lstrip("/")
                 break
         if rel_path:
             return f"/api/media/{rel_path}"
@@ -1140,12 +1196,13 @@ def _placeholder_image():
     has no video and no thumbnail so the queue/schedule shows a styled
     'no preview' state instead of empty space or broken-image icons."""
     from flask import Response
+
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">'
         '<rect width="120" height="120" fill="#1a1a2e"/>'
         '<path d="M45 40v40l30-20z" fill="#333" stroke="#444" stroke-width="1.5"/>'
         '<text x="60" y="100" text-anchor="middle" fill="#555" font-size="10" font-family="sans-serif">No preview</text>'
-        '</svg>'
+        "</svg>"
     )
     return Response(
         svg.encode("utf-8"),
@@ -1158,11 +1215,12 @@ def _placeholder_image():
 def stream_video(blueprint_id):
     """Stream a blueprint's rendered video by looking up its path from SharePoint."""
     # Accept integer IDs (SharePoint) and hex candidate IDs
-    if not re.match(r'^[\w\-]+$', str(blueprint_id)):
+    if not re.match(r"^[\w\-]+$", str(blueprint_id)):
         return _api_error(error="Invalid blueprint ID", code=400)
 
     try:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
         record = client.blueprints.get(blueprint_id)
     except Exception as e:
@@ -1182,7 +1240,9 @@ def stream_video(blueprint_id):
             try:
                 paths = json.loads(vp_raw)
                 if isinstance(paths, list):
-                    video_path = next((p for p in paths if str(p).endswith((".mp4", ".webm", ".mov"))), None)
+                    video_path = next(
+                        (p for p in paths if str(p).endswith((".mp4", ".webm", ".mov"))), None
+                    )
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -1264,6 +1324,7 @@ def serve_media(filepath):
     """
     # Security: reject absolute paths, URL-encoded traversal, and backslashes
     from urllib.parse import unquote
+
     decoded = unquote(filepath)
     if decoded.startswith("/") or ".." in decoded or "\\" in decoded:
         logger.warning("Blocked path traversal attempt: %s", filepath[:200])
@@ -1278,9 +1339,7 @@ def serve_media(filepath):
         candidate = (root / filepath).resolve()
         # After resolving symlinks, the path may land in MEDIA_VOLUME
         if not any(
-            str(candidate).startswith(str(ar.resolve()))
-            for ar in allowed_roots
-            if ar.exists()
+            str(candidate).startswith(str(ar.resolve())) for ar in allowed_roots if ar.exists()
         ):
             continue
         if candidate.is_file():
@@ -1319,6 +1378,7 @@ def serve_media(filepath):
 # Express Pipeline Runner
 # ══════════════════════════════════════════════════════════════
 
+
 def run_express_pipeline(run_id: str, lock_fd=None):
     """Run express lane steps, emit WebSocket progress after each.
 
@@ -1332,30 +1392,54 @@ def run_express_pipeline(run_id: str, lock_fd=None):
     total_start = time.time()
 
     steps = [
-        ("classify_urgency", [
-            VENV_PYTHON, "execution/classify_urgency.py",
-            "--run-id", run_id,
-        ]),
-        ("compose_blueprints", [
-            VENV_PYTHON, "execution/compose_blueprints.py",
-            "--trend-pack", express_tp,
-            "--run-id", run_id,
-        ]),
-        ("generate_content", [
-            VENV_PYTHON, "execution/generate_content.py",
-            "--run-id", run_id,
-        ]),
-        ("run_qc_gates", [
-            VENV_PYTHON, "execution/run_qc_gates.py",
-            "--run-id", run_id,
-        ]),
+        (
+            "classify_urgency",
+            [
+                VENV_PYTHON,
+                "execution/classify_urgency.py",
+                "--run-id",
+                run_id,
+            ],
+        ),
+        (
+            "compose_blueprints",
+            [
+                VENV_PYTHON,
+                "execution/compose_blueprints.py",
+                "--trend-pack",
+                express_tp,
+                "--run-id",
+                run_id,
+            ],
+        ),
+        (
+            "generate_content",
+            [
+                VENV_PYTHON,
+                "execution/generate_content.py",
+                "--run-id",
+                run_id,
+            ],
+        ),
+        (
+            "run_qc_gates",
+            [
+                VENV_PYTHON,
+                "execution/run_qc_gates.py",
+                "--run-id",
+                run_id,
+            ],
+        ),
     ]
 
-    socketio.emit("express_progress", {
-        "type": "started",
-        "run_id": run_id,
-        "total_steps": len(steps),
-    })
+    socketio.emit(
+        "express_progress",
+        {
+            "type": "started",
+            "run_id": run_id,
+            "total_steps": len(steps),
+        },
+    )
 
     all_passed = True
     step_results = []
@@ -1363,12 +1447,15 @@ def run_express_pipeline(run_id: str, lock_fd=None):
     for i, (step_name, cmd) in enumerate(steps):
         with _express_lock:
             express_state["current_step"] = step_name
-        socketio.emit("express_progress", {
-            "type": "step_start",
-            "step": step_name,
-            "step_index": i,
-            "total_steps": len(steps),
-        })
+        socketio.emit(
+            "express_progress",
+            {
+                "type": "step_start",
+                "step": step_name,
+                "step_index": i,
+                "total_steps": len(steps),
+            },
+        )
 
         step_start = time.time()
         try:
@@ -1408,12 +1495,15 @@ def run_express_pipeline(run_id: str, lock_fd=None):
         with _express_lock:
             express_state["steps_completed"].append(step_result)
 
-        socketio.emit("express_progress", {
-            "type": "step_complete",
-            **step_result,
-            "step_index": i,
-            "total_steps": len(steps),
-        })
+        socketio.emit(
+            "express_progress",
+            {
+                "type": "step_complete",
+                **step_result,
+                "step_index": i,
+                "total_steps": len(steps),
+            },
+        )
 
     total_elapsed = time.time() - total_start
     with _express_lock:
@@ -1427,13 +1517,16 @@ def run_express_pipeline(run_id: str, lock_fd=None):
             "steps": step_results,
         }
 
-    socketio.emit("express_progress", {
-        "type": "complete",
-        "run_id": run_id,
-        "total_seconds": round(total_elapsed, 2),
-        "all_passed": all_passed,
-        "steps": step_results,
-    })
+    socketio.emit(
+        "express_progress",
+        {
+            "type": "complete",
+            "run_id": run_id,
+            "total_seconds": round(total_elapsed, 2),
+            "all_passed": all_passed,
+            "steps": step_results,
+        },
+    )
 
     socketio.emit("blueprints_updated", {})
 
@@ -1456,6 +1549,7 @@ def run_express_pipeline(run_id: str, lock_fd=None):
 # ══════════════════════════════════════════════════════════════
 # Helpers
 # ══════════════════════════════════════════════════════════════
+
 
 def load_local_blueprints():
     """Load blueprints from the most recent run directory."""
@@ -1564,7 +1658,7 @@ def _format_slides(slides):
                 text = s.get("text", s.get("content", str(s)))
             else:
                 text = str(s)
-            parts.append(f"Slide {i+1}: {text[:100]}")
+            parts.append(f"Slide {i + 1}: {text[:100]}")
         return " | ".join(parts)
     return str(slides) if slides else ""
 
@@ -1608,32 +1702,37 @@ def ws_health():
         rooms = list(socketio.server.manager.rooms.get("/", {}).keys())
     except Exception:
         rooms = []
-    return jsonify({
-        "socketio_initialized": socketio is not None,
-        "async_mode": _async_mode,
-        "cors_origins": socketio.server.cors_allowed_origins,
-        "rooms": rooms,
-    })
+    return jsonify(
+        {
+            "socketio_initialized": socketio is not None,
+            "async_mode": _async_mode,
+            "cors_origins": socketio.server.cors_allowed_origins,
+            "rooms": rooms,
+        }
+    )
 
 
 @app.route("/manifest.json")
 def pwa_manifest():
     """PWA manifest — eliminates console 404 on every page load."""
-    return jsonify({
-        "name": "Gen Lab",
-        "short_name": "GenLab",
-        "description": "Multi-niche content automation dashboard",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#08080D",
-        "theme_color": "#3B82F6",
-        "icons": [],
-    })
+    return jsonify(
+        {
+            "name": "Gen Lab",
+            "short_name": "GenLab",
+            "description": "Multi-niche content automation dashboard",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#08080D",
+            "theme_color": "#3B82F6",
+            "icons": [],
+        }
+    )
 
 
 # ══════════════════════════════════════════════════════════════
 # SPA catch-all (must be LAST route)
 # ══════════════════════════════════════════════════════════════
+
 
 @app.route("/<path:path>")
 def serve_spa(path):
@@ -1666,6 +1765,7 @@ def serve_spa(path):
 # ══════════════════════════════════════════════════════════════
 # Main
 # ══════════════════════════════════════════════════════════════
+
 
 def _watch_pipeline_progress():
     """Background thread: emit stage-change + log events via WebSocket.
@@ -1773,7 +1873,9 @@ def main():
     )
     parser.add_argument("--port", type=int, default=5151, help="Port (default: 5151)")
     parser.add_argument("--dry-run", action="store_true", help="No backlog writes")
-    parser.add_argument("--local", action="store_true", help="Use local blueprint files instead of backlog")
+    parser.add_argument(
+        "--local", action="store_true", help="Use local blueprint files instead of backlog"
+    )
     parser.add_argument("--debug", action="store_true", help="Flask debug mode")
     args = parser.parse_args()
 
@@ -1795,15 +1897,17 @@ def main():
         mode_flags.append("LOCAL MODE")
     mode_str = f" ({', '.join(mode_flags)})" if mode_flags else ""
 
-    print(f"\n  \u26A1 Express Lane Review Dashboard{mode_str}")
+    print(f"\n  \u26a1 Express Lane Review Dashboard{mode_str}")
     print(f"  http://localhost:{args.port}")
     print("  Press Ctrl+C to stop\n")
 
     host = "127.0.0.1"
     # Safety: refuse to bind on all interfaces without authentication
     if not _AUTH_ENABLED and host == "0.0.0.0":
-        logger.critical("Refusing to bind on 0.0.0.0 without authentication. "
-                        "Set REVIEW_AUTH_USER and REVIEW_AUTH_PASS in .env.")
+        logger.critical(
+            "Refusing to bind on 0.0.0.0 without authentication. "
+            "Set REVIEW_AUTH_USER and REVIEW_AUTH_PASS in .env."
+        )
         sys.exit(1)
     socketio.run(
         app,

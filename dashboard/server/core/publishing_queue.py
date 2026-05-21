@@ -39,6 +39,7 @@ QUEUE_STATUS_FAILED = "PUBLISH_FAILED"
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -148,8 +149,13 @@ def _next_available_slot(niche_id: str = "") -> str | None:
         for slot_str in slots:
             hour, minute = map(int, slot_str.split(":"))
             candidate = datetime(
-                candidate_date.year, candidate_date.month, candidate_date.day,
-                hour, minute, 0, tzinfo=tz,
+                candidate_date.year,
+                candidate_date.month,
+                candidate_date.day,
+                hour,
+                minute,
+                0,
+                tzinfo=tz,
             )
             if candidate <= earliest:
                 continue
@@ -159,7 +165,8 @@ def _next_available_slot(niche_id: str = "") -> str | None:
                 if key in occupied_slots:
                     logger.info(
                         "[QUEUE] Slot %s occupied for %s, trying next",
-                        slot_str, niche_id,
+                        slot_str,
+                        niche_id,
                     )
                     continue
             return candidate.astimezone(UTC).isoformat().replace("+00:00", "Z")
@@ -261,7 +268,8 @@ class PublishingQueueManager:
         # Client-side niche filter — skip when niche_id is "all"
         if niche_id != "all":
             records = [
-                r for r in records
+                r
+                for r in records
                 if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
             ]
 
@@ -363,7 +371,9 @@ class PublishingQueueManager:
                         update["scheduled_for"] = next_slot
                         logger.info(
                             "[QUEUE] Auto-scheduled %s (%s) → %s",
-                            record_id, niche_id, next_slot,
+                            record_id,
+                            niche_id,
+                            next_slot,
                         )
                 _update_blueprint_sync(record_id, update)
 

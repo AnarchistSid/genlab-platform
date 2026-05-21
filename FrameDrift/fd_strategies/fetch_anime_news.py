@@ -31,28 +31,80 @@ logger = logging.getLogger(__name__)
 NICHE_ROOT = Path(__file__).resolve().parent.parent
 
 # Story type detection keywords
-NEW_RELEASE_KEYWORDS = frozenset({
-    "premiere", "season", "episode", "simulcast", "dub", "sub",
-    "trailer", "teaser", "debut", "finale", "ova", "ona",
-})
-CREATOR_TRIGGER_WORDS = frozenset({
-    "directed", "starring", "voicing", "cast", "animation by",
-})
-KNOWN_CREATORS = frozenset({
-    "hayao miyazaki", "makoto shinkai", "mamoru hosoda", "satoshi kon",
-    "hideaki anno", "masashi kishimoto", "eiichiro oda", "akira toriyama",
-    "tatsuki fujimoto", "koyoharu gotouge", "gege akutami", "hajime isayama",
-    "hiroyuki sawano", "yuki kajiura", "linked horizon",
-    "mappa", "ufotable", "wit studio", "studio trigger", "bones",
-    "madhouse", "toei animation", "cloverworks", "a-1 pictures",
-})
-EVENT_KEYWORDS = frozenset({
-    "convention", "expo", "festival", "comiket", "anime expo",
-    "crunchyroll expo", "anime fest", "panel", "award ceremony",
-})
-COLLAB_KEYWORDS = frozenset({
-    "collab", "collaboration", "crossover", "partnership",
-})
+NEW_RELEASE_KEYWORDS = frozenset(
+    {
+        "premiere",
+        "season",
+        "episode",
+        "simulcast",
+        "dub",
+        "sub",
+        "trailer",
+        "teaser",
+        "debut",
+        "finale",
+        "ova",
+        "ona",
+    }
+)
+CREATOR_TRIGGER_WORDS = frozenset(
+    {
+        "directed",
+        "starring",
+        "voicing",
+        "cast",
+        "animation by",
+    }
+)
+KNOWN_CREATORS = frozenset(
+    {
+        "hayao miyazaki",
+        "makoto shinkai",
+        "mamoru hosoda",
+        "satoshi kon",
+        "hideaki anno",
+        "masashi kishimoto",
+        "eiichiro oda",
+        "akira toriyama",
+        "tatsuki fujimoto",
+        "koyoharu gotouge",
+        "gege akutami",
+        "hajime isayama",
+        "hiroyuki sawano",
+        "yuki kajiura",
+        "linked horizon",
+        "mappa",
+        "ufotable",
+        "wit studio",
+        "studio trigger",
+        "bones",
+        "madhouse",
+        "toei animation",
+        "cloverworks",
+        "a-1 pictures",
+    }
+)
+EVENT_KEYWORDS = frozenset(
+    {
+        "convention",
+        "expo",
+        "festival",
+        "comiket",
+        "anime expo",
+        "crunchyroll expo",
+        "anime fest",
+        "panel",
+        "award ceremony",
+    }
+)
+COLLAB_KEYWORDS = frozenset(
+    {
+        "collab",
+        "collaboration",
+        "crossover",
+        "partnership",
+    }
+)
 # Tier-1 sources are early movers — fresh single-source items are EMERGING
 TIER1_SOURCES = frozenset({"rss_ann", "rss_crunchyroll"})
 
@@ -146,7 +198,10 @@ class AnimeRSSFetcher:
 
     @staticmethod
     def _fetch_feed(
-        url: str, name: str, tier: str, now_iso: str,
+        url: str,
+        name: str,
+        tier: str,
+        now_iso: str,
     ) -> list[AnimeStoryItem]:
         feed = feedparser.parse(url)
         items: list[AnimeStoryItem] = []
@@ -161,21 +216,21 @@ class AnimeRSSFetcher:
                 published = entry.published
 
             story_type = _detect_story_type(title)
-            "anime_" + hashlib.sha256(
-                (name + title).encode()
-            ).hexdigest()[:16]
+            "anime_" + hashlib.sha256((name + title).encode()).hexdigest()[:16]
 
-            items.append(AnimeStoryItem(
-                title=title,
-                source=f"rss_{name.lower().replace(' ', '_')}",
-                source_url=entry.get("link", ""),
-                published_at=published or now_iso,
-                fetched_at=now_iso,
-                summary=entry.get("summary", ""),
-                trend_name=_normalize_title(title)[:60],
-                **story_type,
-                extra={"tier": tier},
-            ))
+            items.append(
+                AnimeStoryItem(
+                    title=title,
+                    source=f"rss_{name.lower().replace(' ', '_')}",
+                    source_url=entry.get("link", ""),
+                    published_at=published or now_iso,
+                    fetched_at=now_iso,
+                    summary=entry.get("summary", ""),
+                    trend_name=_normalize_title(title)[:60],
+                    **story_type,
+                    extra={"tier": tier},
+                )
+            )
 
         return items
 
@@ -194,7 +249,8 @@ class AnimeRSSFetcher:
         return trend_name[:20]
 
     def _apply_cross_mention_grouping(
-        self, items: list[AnimeStoryItem],
+        self,
+        items: list[AnimeStoryItem],
     ) -> list[AnimeStoryItem]:
         """Group items covering same trend across sources.
 
@@ -238,9 +294,7 @@ class AnimeRSSFetcher:
                 and representative.source in TIER1_SOURCES
                 and first_seen is not None
             ):
-                age_hours = (
-                    datetime.now(UTC) - first_seen
-                ).total_seconds() / 3600
+                age_hours = (datetime.now(UTC) - first_seen).total_seconds() / 3600
                 if age_hours <= 12:
                     cycle = TrendCycleStage.EMERGING
 
@@ -257,10 +311,12 @@ class AnimeRSSFetcher:
             "declining": 2,
             "unknown": 3,
         }
-        result.sort(key=lambda x: (
-            stage_priority.get(x.trend_cycle_stage, 3),
-            -x.source_mention_count,
-        ))
+        result.sort(
+            key=lambda x: (
+                stage_priority.get(x.trend_cycle_stage, 3),
+                -x.source_mention_count,
+            )
+        )
 
         emerging = sum(1 for i in result if i.trend_cycle_stage == "emerging")
         peak = sum(1 for i in result if i.trend_cycle_stage == "peak")
@@ -268,7 +324,11 @@ class AnimeRSSFetcher:
         logger.info(
             "[fetch] FrameDrift: %d grouped trends from %d raw items "
             "(EMERGING: %d, PEAK: %d, DECLINING: %d)",
-            len(result), len(items), emerging, peak, declining,
+            len(result),
+            len(items),
+            emerging,
+            peak,
+            declining,
         )
         return result
 

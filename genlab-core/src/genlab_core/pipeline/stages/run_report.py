@@ -55,7 +55,8 @@ class RunReport:
 
         # Determine run_id from context (top-level), then run_stats, then generate
         run_id = context.get("run_id") or run_stats.get(
-            "run_id", f"{niche_id}_{now.strftime('%Y%m%d_%H%M%S')}",
+            "run_id",
+            f"{niche_id}_{now.strftime('%Y%m%d_%H%M%S')}",
         )
 
         # Collect sub-stage stats
@@ -70,7 +71,8 @@ class RunReport:
 
         # SLO checks
         p95_target = niche_config.get("error_budgets", {}).get(
-            "duration_p95", DEFAULT_P95_TARGET,
+            "duration_p95",
+            DEFAULT_P95_TARGET,
         )
         slo_violations = []
         if total_duration > p95_target:
@@ -81,9 +83,7 @@ class RunReport:
         qc_total = qc.get("total", 0)
         qc_passed = qc.get("passed", 0)
         if qc_total > 0 and (qc_passed / qc_total) < 0.90:
-            slo_violations.append(
-                f"QC pass rate {qc_passed}/{qc_total} below 90% SLO"
-            )
+            slo_violations.append(f"QC pass rate {qc_passed}/{qc_total} below 90% SLO")
 
         # Zero-blueprint SLO: if we fetched stories but produced no blueprints,
         # the pipeline is broken in a hidden way (e.g. yt-dlp bot-detection
@@ -143,10 +143,12 @@ class RunReport:
 
         # Log summary
         logger.info(
-            "[RunReport] %s | %s | %.0fs | stories=%d blueprints=%d | "
-            "QC: %s | violations=%d",
-            niche_id, status, total_duration,
-            len(stories), blueprints_pushed,
+            "[RunReport] %s | %s | %.0fs | stories=%d blueprints=%d | QC: %s | violations=%d",
+            niche_id,
+            status,
+            total_duration,
+            len(stories),
+            blueprints_pushed,
             qc.get("pass_rate", "n/a"),
             len(slo_violations),
         )
@@ -158,6 +160,7 @@ class RunReport:
         # Push dashboard notification event
         try:
             from genlab_core.observability.dashboard_events import push_event
+
             push_event(
                 "pipeline_complete",
                 f"Pipeline Complete: {niche_id}",
@@ -176,6 +179,7 @@ class RunReport:
         """Find or create the run output directory."""
         # Try standard .tmp/runs/ location relative to workspace
         from genlab_core.settings import settings
+
         try:
             root = settings.get_project_root()
             return root / ".tmp" / "runs" / run_id

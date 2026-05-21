@@ -40,22 +40,24 @@ class MockFetchTrendingVideos:
             video_id = item.get("id", "")
             views = int(stats.get("viewCount", 0))
 
-            stories.append({
-                "story_id": f"yt_{video_id}",
-                "title": snippet.get("title", ""),
-                "summary": snippet.get("description", ""),
-                "source": "youtube",
-                "source_url": f"https://www.youtube.com/watch?v={video_id}",
-                "published_at": snippet.get("publishedAt", now.isoformat()),
-                "video_id": video_id,
-                "views": views,
-                "likes": int(stats.get("likeCount", 0)),
-                "comments_count": int(stats.get("commentCount", 0)),
-                "view_velocity": views / max(1, 24),
-                "score": min(1.0, views / 5_000_000),
-                "niche_id": niche_id,
-                "clip_path": None,
-            })
+            stories.append(
+                {
+                    "story_id": f"yt_{video_id}",
+                    "title": snippet.get("title", ""),
+                    "summary": snippet.get("description", ""),
+                    "source": "youtube",
+                    "source_url": f"https://www.youtube.com/watch?v={video_id}",
+                    "published_at": snippet.get("publishedAt", now.isoformat()),
+                    "video_id": video_id,
+                    "views": views,
+                    "likes": int(stats.get("likeCount", 0)),
+                    "comments_count": int(stats.get("commentCount", 0)),
+                    "view_velocity": views / max(1, 24),
+                    "score": min(1.0, views / 5_000_000),
+                    "niche_id": niche_id,
+                    "clip_path": None,
+                }
+            )
 
         context.setdefault("stories", []).extend(stories)
         context.setdefault("run_stats", {})["fetch_trending"] = {
@@ -80,9 +82,7 @@ class MockScoreAndFilter:
 
         context.setdefault("run_stats", {})["scoring"] = {
             "scored": scored,
-            "avg_score": sum(
-                s.get("composite_score", 0) for s in stories
-            ) / max(1, len(stories)),
+            "avg_score": sum(s.get("composite_score", 0) for s in stories) / max(1, len(stories)),
         }
         return context
 
@@ -126,11 +126,7 @@ class MockWriteContent:
             if story.get("_skip_llm"):
                 continue
             title_words = story.get("title", "").split()[:3]
-            hook = (
-                " ".join(title_words)
-                if title_words
-                else content_template.get("hook", "")
-            )
+            hook = " ".join(title_words) if title_words else content_template.get("hook", "")
             story["content"] = {
                 "hook": hook[:60],
                 "body": content_template.get("body", ""),
@@ -167,19 +163,21 @@ class MockRenderVisuals:
         for story in stories:
             if story.get("content") and story.get("media", {}).get("rendered_path"):
                 content = story["content"]
-                blueprints.append({
-                    "candidate_id": f"bp_{story.get('story_id', 'unknown')}",
-                    "story_id": story.get("story_id", ""),
-                    "hook": content.get("hook", ""),
-                    "body": content.get("body", ""),
-                    "caption": content.get("instagram", {}).get("caption", ""),
-                    "format": "reel",
-                    "sources": [story.get("source_url", "")],
-                    "source_urls": [story.get("source_url", "")],
-                    "priority_score": story.get("final_score", 0.5),
-                    "niche_id": context.get("niche_id", "unknown"),
-                    "media": story.get("media", {}),
-                })
+                blueprints.append(
+                    {
+                        "candidate_id": f"bp_{story.get('story_id', 'unknown')}",
+                        "story_id": story.get("story_id", ""),
+                        "hook": content.get("hook", ""),
+                        "body": content.get("body", ""),
+                        "caption": content.get("instagram", {}).get("caption", ""),
+                        "format": "reel",
+                        "sources": [story.get("source_url", "")],
+                        "source_urls": [story.get("source_url", "")],
+                        "priority_score": story.get("final_score", 0.5),
+                        "niche_id": context.get("niche_id", "unknown"),
+                        "media": story.get("media", {}),
+                    }
+                )
 
         context.setdefault("run_stats", {})["rendering"] = {
             "rendered": rendered,

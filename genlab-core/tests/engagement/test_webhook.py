@@ -1,4 +1,5 @@
 """Tests for the Meta webhook receiver (engagement/webhook.py)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -59,6 +60,7 @@ def test_verify_webhook_missing_mode_returns_403(client, monkeypatch):
 
 
 # -- POST event tests --------------------------------------------------------
+
 
 def _make_comment_payload(comment_id: str, text: str, media_id: str = "media_123") -> dict:
     """Build a Meta webhook payload with one comment change."""
@@ -175,8 +177,10 @@ def test_post_no_comment_field_ignored(client, monkeypatch):
     }
     body = json.dumps(payload).encode()
 
-    with patch("genlab_core.engagement.tasks.reply_to_comment_normal") as mock_normal, \
-         patch("genlab_core.engagement.tasks.reply_to_comment_high") as mock_high:
+    with (
+        patch("genlab_core.engagement.tasks.reply_to_comment_normal") as mock_normal,
+        patch("genlab_core.engagement.tasks.reply_to_comment_high") as mock_high,
+    ):
         resp = client.post("/webhooks/meta", content=body)
 
     assert resp.status_code == 200
@@ -185,6 +189,7 @@ def test_post_no_comment_field_ignored(client, monkeypatch):
 
 
 # -- Health endpoint ----------------------------------------------------------
+
 
 def test_health_endpoint(client):
     """GET /health returns 200 with status ok."""

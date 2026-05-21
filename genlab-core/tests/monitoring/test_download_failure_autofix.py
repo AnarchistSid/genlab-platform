@@ -11,6 +11,7 @@ After this fix:
     fix to "binary-level only"
   * If pip install fails → report the rc
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -23,10 +24,7 @@ from genlab_core.monitoring.health_monitor import (
 
 def _failing_reports(count: int = 3) -> list[dict]:
     """Build N consecutive zero-download run reports."""
-    return [
-        {"_run_dir": f"/fake/run_{i}"}
-        for i in range(count)
-    ]
+    return [{"_run_dir": f"/fake/run_{i}"} for i in range(count)]
 
 
 def _zero_clip_index() -> dict:
@@ -38,20 +36,25 @@ class TestAutoFixWarpAware:
         """When WARP is down, yt-dlp update is pointless — skip it
         and point at the real root cause.
         """
-        with patch(
-            "genlab_core.monitoring.health_monitor._load_clip_index",
-            return_value=_zero_clip_index(),
-        ), patch(
-            "genlab_core.monitoring.health_monitor.check_warp_health",
-            return_value=[Alert("warp_down", "critical", "warp inactive")],
-        ), patch("subprocess.run") as mock_run:
+        with (
+            patch(
+                "genlab_core.monitoring.health_monitor._load_clip_index",
+                return_value=_zero_clip_index(),
+            ),
+            patch(
+                "genlab_core.monitoring.health_monitor.check_warp_health",
+                return_value=[Alert("warp_down", "critical", "warp inactive")],
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
             alerts = check_download_failures(_failing_reports(3), "gaming")
 
         assert len(alerts) == 1
         assert alerts[0].check == "download_failure"
         # yt-dlp update should NOT have been attempted
         pip_calls = [
-            c for c in mock_run.call_args_list
+            c
+            for c in mock_run.call_args_list
             if c.args and len(c.args[0]) > 1 and "yt-dlp" in c.args[0][-1]
         ]
         assert pip_calls == []
@@ -65,13 +68,17 @@ class TestAutoFixWarpAware:
         """
         pip_result = MagicMock()
         pip_result.returncode = 0
-        with patch(
-            "genlab_core.monitoring.health_monitor._load_clip_index",
-            return_value=_zero_clip_index(),
-        ), patch(
-            "genlab_core.monitoring.health_monitor.check_warp_health",
-            return_value=[],  # WARP healthy
-        ), patch("subprocess.run", return_value=pip_result):
+        with (
+            patch(
+                "genlab_core.monitoring.health_monitor._load_clip_index",
+                return_value=_zero_clip_index(),
+            ),
+            patch(
+                "genlab_core.monitoring.health_monitor.check_warp_health",
+                return_value=[],  # WARP healthy
+            ),
+            patch("subprocess.run", return_value=pip_result),
+        ):
             alerts = check_download_failures(_failing_reports(3), "gaming")
 
         assert len(alerts) == 1
@@ -79,22 +86,23 @@ class TestAutoFixWarpAware:
         assert "success" not in alerts[0].auto_fix.lower()
         assert "binary-level" in alerts[0].auto_fix
         # Should mention what's NOT addressed
-        assert (
-            "network" in alerts[0].auto_fix
-            or "proxy" in alerts[0].auto_fix
-        )
+        assert "network" in alerts[0].auto_fix or "proxy" in alerts[0].auto_fix
 
     def test_pip_install_failure_reports_rc(self):
         """If pip install itself fails, surface the return code."""
         pip_result = MagicMock()
         pip_result.returncode = 2
-        with patch(
-            "genlab_core.monitoring.health_monitor._load_clip_index",
-            return_value=_zero_clip_index(),
-        ), patch(
-            "genlab_core.monitoring.health_monitor.check_warp_health",
-            return_value=[],
-        ), patch("subprocess.run", return_value=pip_result):
+        with (
+            patch(
+                "genlab_core.monitoring.health_monitor._load_clip_index",
+                return_value=_zero_clip_index(),
+            ),
+            patch(
+                "genlab_core.monitoring.health_monitor.check_warp_health",
+                return_value=[],
+            ),
+            patch("subprocess.run", return_value=pip_result),
+        ):
             alerts = check_download_failures(_failing_reports(3), "gaming")
 
         assert "failed" in alerts[0].auto_fix
@@ -102,13 +110,17 @@ class TestAutoFixWarpAware:
 
     def test_pip_install_exception_caught(self):
         """Exception during pip install doesn't crash the monitor."""
-        with patch(
-            "genlab_core.monitoring.health_monitor._load_clip_index",
-            return_value=_zero_clip_index(),
-        ), patch(
-            "genlab_core.monitoring.health_monitor.check_warp_health",
-            return_value=[],
-        ), patch("subprocess.run", side_effect=OSError("uv not found")):
+        with (
+            patch(
+                "genlab_core.monitoring.health_monitor._load_clip_index",
+                return_value=_zero_clip_index(),
+            ),
+            patch(
+                "genlab_core.monitoring.health_monitor.check_warp_health",
+                return_value=[],
+            ),
+            patch("subprocess.run", side_effect=OSError("uv not found")),
+        ):
             alerts = check_download_failures(_failing_reports(3), "gaming")
 
         assert "failed" in alerts[0].auto_fix

@@ -69,7 +69,8 @@ def _count_today_affiliate_blueprints(niche_id: str) -> int:
                 return int(row[0]) if row else 0
     except Exception as exc:
         logger.warning(
-            "[AffiliateMatch] Daily-cap query failed (%s) — treating as 0", exc,
+            "[AffiliateMatch] Daily-cap query failed (%s) — treating as 0",
+            exc,
         )
         return 0
 
@@ -96,7 +97,9 @@ def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
     return catalog
 
 
-def _keyword_hits(keywords: list, text_lower: str, *, return_matched: bool = False) -> int | tuple[int, list[str]]:
+def _keyword_hits(
+    keywords: list, text_lower: str, *, return_matched: bool = False
+) -> int | tuple[int, list[str]]:
     """Count keyword matches using word-boundary regex.
 
     Uses ``\\b`` word boundaries instead of substring containment to prevent
@@ -155,7 +158,9 @@ def match_product(
     clean_text = re.sub(r"🔗.*?link in bio", "", clean_text, flags=re.IGNORECASE)
     text_lower = clean_text.lower()
 
-    logger.debug("[AffiliateMatch] Search text (%d chars): %s...", len(text_lower), text_lower[:100])
+    logger.debug(
+        "[AffiliateMatch] Search text (%d chars): %s...", len(text_lower), text_lower[:100]
+    )
 
     best_product: dict[str, Any] | None = None
     best_hits = 0
@@ -203,16 +208,18 @@ def match_product(
     raw_niche_products = (catalog.get("niches") or {}).get(niche_id, {}).get("products", [])
     if not raw_niche_products:
         return None
-    niche_max_price = (
-        (catalog.get("niches") or {}).get(niche_id, {}).get("max_price_inr")
-        or _DEFAULT_MAX_PRICE_INR
-    )
+    niche_max_price = (catalog.get("niches") or {}).get(niche_id, {}).get(
+        "max_price_inr"
+    ) or _DEFAULT_MAX_PRICE_INR
     enabled = [p for p in raw_niche_products if p.get("enabled", True)]
     niche_products = _price_filter(enabled, niche_max_price)
     if len(niche_products) < len(enabled):
         logger.debug(
             "[AffiliateMatch] Price filter for %s: %d/%d products under ₹%d",
-            niche_id, len(niche_products), len(enabled), niche_max_price,
+            niche_id,
+            len(niche_products),
+            len(enabled),
+            niche_max_price,
         )
 
     for product in niche_products:
@@ -246,7 +253,8 @@ def match_product(
     if evergreen is not None:
         logger.info(
             "[AffiliateMatch] Evergreen fallback for %s: '%s' (no keyword match)",
-            niche_id, evergreen.get("name", ""),
+            niche_id,
+            evergreen.get("name", ""),
         )
         return evergreen
 
@@ -283,7 +291,8 @@ def select_best_network(product: dict[str, Any]) -> tuple[str, str, float]:
         if not _is_url_healthy(url):
             logger.debug(
                 "[AffiliateMatch] Skipping broken %s link for %s",
-                name, product.get("name", "?"),
+                name,
+                product.get("name", "?"),
             )
             continue
         commission = float(info.get("commission_pct", 0.0))
@@ -313,7 +322,9 @@ class AffiliateMatch:
         if not stories:
             logger.info("[AffiliateMatch] No stories to process")
             context.setdefault("run_stats", {})["affiliate"] = {
-                "matched": 0, "skipped": 0, "cap_enforced": 0,
+                "matched": 0,
+                "skipped": 0,
+                "cap_enforced": 0,
             }
             return context
 
@@ -325,7 +336,9 @@ class AffiliateMatch:
         except Exception as exc:
             logger.warning("[AffiliateMatch] Could not load catalog: %s — skipping", exc)
             context.setdefault("run_stats", {})["affiliate"] = {
-                "matched": 0, "skipped": len(stories), "cap_enforced": 0,
+                "matched": 0,
+                "skipped": len(stories),
+                "cap_enforced": 0,
                 "error": str(exc),
             }
             return context
@@ -356,7 +369,10 @@ class AffiliateMatch:
             logger.info(
                 "[AffiliateMatch] %s: %d affiliate blueprint(s) already exist today — "
                 "cap remaining = %d/%d",
-                niche_id, existing_today, max(0, max_per_day - existing_today), max_per_day,
+                niche_id,
+                existing_today,
+                max(0, max_per_day - existing_today),
+                max_per_day,
             )
 
         for story in stories:
@@ -375,6 +391,7 @@ class AffiliateMatch:
             if isinstance(content, str):
                 try:
                     import json
+
                     content = json.loads(content)
                 except (json.JSONDecodeError, TypeError):
                     content = {}
@@ -405,16 +422,19 @@ class AffiliateMatch:
             # PAAPI_ACCESS_KEY + PAAPI_SECRET_KEY auto-re-enables.
             if product is None:
                 from genlab_core.monetization.paapi_client import PaapiClient
+
                 if PaapiClient().is_configured:
                     from genlab_core.monetization.dynamic_matcher import dynamic_match
                     from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
+
                     geo = NICHE_PRIMARY_GEO.get(niche_id, "IN")
                     product = dynamic_match(search_text, niche_id, geo=geo)
                 else:
                     logger.debug(
                         "[AffiliateMatch] PA-API not configured — skipping "
                         "dynamic fallback for '%s' (niche=%s)",
-                        title[:60], niche_id,
+                        title[:60],
+                        niche_id,
                     )
             if product is None:
                 skipped += 1
@@ -441,6 +461,7 @@ class AffiliateMatch:
             from genlab_core.monetization.geo_link_resolver import (
                 resolve_affiliate_link_with_network,
             )
+
             blueprint_id = story.get("_candidate_id", story.get("story_id", ""))
             tracked_url, resolved_network = resolve_affiliate_link_with_network(
                 product=product,
@@ -497,6 +518,11 @@ class AffiliateMatch:
         logger.info(
             "[AffiliateMatch] %d matched this run, %d skipped, %d cap-enforced "
             "(daily total now %d/%d for %s)",
-            run_matched, skipped, cap_enforced, matched, max_per_day, niche_id,
+            run_matched,
+            skipped,
+            cap_enforced,
+            matched,
+            max_per_day,
+            niche_id,
         )
         return context

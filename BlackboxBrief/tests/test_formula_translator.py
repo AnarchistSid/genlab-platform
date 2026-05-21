@@ -30,9 +30,7 @@ class TestAND:
         assert " and " in result
 
     def test_three_conditions(self):
-        result = _formula_to_odata(
-            "AND({status}='DRAFTED', {format}='carousel', {platform}='instagram')"
-        )
+        result = _formula_to_odata("AND({status}='DRAFTED', {format}='carousel', {platform}='instagram')")
         assert result.count(" and ") == 2
 
 
@@ -75,9 +73,7 @@ class TestNestedLogic:
     """Pattern 5: AND(OR(...), {x}='y') → nested"""
 
     def test_and_with_or(self):
-        result = _formula_to_odata(
-            "AND(OR({status}='DRAFTED', {status}='VISUAL_READY'), {format}='carousel')"
-        )
+        result = _formula_to_odata("AND(OR({status}='DRAFTED', {status}='VISUAL_READY'), {format}='carousel')")
         assert "fields/format eq 'carousel'" in result
         assert " and " in result
         assert " or " in result
@@ -117,6 +113,7 @@ class TestFIND:
     def test_find_arrayjoin_calls_esc(self):
         """Verify _esc() is invoked in the FIND+ARRAYJOIN code path."""
         from unittest.mock import patch
+
         with patch("genlab_core.http.graph_proxy._esc", side_effect=lambda v: v) as mock_esc:
             _formula_to_odata("FIND('inject_test', ARRAYJOIN({story}))")
             mock_esc.assert_called_once_with("inject_test")
@@ -124,6 +121,7 @@ class TestFIND:
     def test_find_bare_calls_esc(self):
         """Verify _esc() is invoked in the bare FIND code path."""
         from unittest.mock import patch
+
         with patch("genlab_core.http.graph_proxy._esc", side_effect=lambda v: v) as mock_esc:
             _formula_to_odata("FIND('inject_test', {title})")
             mock_esc.assert_called_once_with("inject_test")

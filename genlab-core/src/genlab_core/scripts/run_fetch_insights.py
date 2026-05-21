@@ -53,10 +53,10 @@ ALL_NICHE_IDS = list(NICHE_ENV_DIRS.keys())
 # Wide ranges: catch ALL posts that haven't been collected yet.
 # Idempotency via insight_windows_completed prevents double-fetching.
 WINDOW_RANGES: dict[int, tuple[float, float]] = {
-    6: (4.0, 8760.0),     # Any post 4h+ old (effectively unlimited for backfill)
-    24: (20.0, 8760.0),   # Any post 20h+ old
-    48: (44.0, 8760.0),   # Any post 44h+ old (growth tracking)
-    168: (164.0, 8760.0), # Any post 164h+ old (final weekly snapshot)
+    6: (4.0, 8760.0),  # Any post 4h+ old (effectively unlimited for backfill)
+    24: (20.0, 8760.0),  # Any post 20h+ old
+    48: (44.0, 8760.0),  # Any post 44h+ old (growth tracking)
+    168: (164.0, 8760.0),  # Any post 164h+ old (final weekly snapshot)
 }
 
 
@@ -69,6 +69,7 @@ def _load_env_for_niche(niche_id: str) -> None:
     if env_path.exists():
         try:
             from dotenv import load_dotenv
+
             load_dotenv(env_path, override=True)
             logger.debug("Loaded env from %s", env_path)
         except ImportError:
@@ -147,7 +148,10 @@ def _get_eligible_records(
 
     logger.info(
         "Found %d eligible records for %sh window (niche=%s, total queried=%d)",
-        len(eligible), window, niche_id, len(records),
+        len(eligible),
+        window,
+        niche_id,
+        len(records),
     )
     return eligible
 
@@ -209,6 +213,7 @@ def _resolve_ig_media_id(shortcode_or_id: str, token: str, ig_user_id: str) -> s
         return None
 
     import requests as _req
+
     # Search recent media for the matching shortcode
     resp = _req.get(
         f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
@@ -252,6 +257,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
         return None
 
     import requests
+
     api_base = "https://graph.facebook.com/v21.0"
 
     # Basic metrics
@@ -301,12 +307,12 @@ def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
     api_key = os.getenv("YOUTUBE_API_KEY", "")
     if not api_key:
         logger.warning(
-            "[fetch_insights] YOUTUBE_API_KEY not set — "
-            "YouTube analytics data will be missing"
+            "[fetch_insights] YOUTUBE_API_KEY not set — YouTube analytics data will be missing"
         )
         return None
 
     import requests
+
     resp = requests.get(
         "https://www.googleapis.com/youtube/v3/videos",
         params={"part": "statistics", "id": post_id, "key": api_key},
@@ -382,12 +388,12 @@ def _fetch_twitter(post_id: str) -> dict[str, Any] | None:
     bearer = os.getenv("X_BEARER_TOKEN", "")
     if not bearer:
         logger.warning(
-            "[fetch_insights] X_BEARER_TOKEN not set — "
-            "X/Twitter analytics data will be missing"
+            "[fetch_insights] X_BEARER_TOKEN not set — X/Twitter analytics data will be missing"
         )
         return None
 
     import requests
+
     resp = requests.get(
         f"https://api.twitter.com/2/tweets/{post_id}",
         params={"tweet.fields": "public_metrics"},
@@ -462,7 +468,9 @@ def _write_back_to_blueprint(
             logger.debug("Blueprint field '%s' not in schema — skipping", field_name)
     logger.info(
         "Blueprint %s write-back: platform=%s fields=%s",
-        blueprint_record_id, platform, list(fields.keys()),
+        blueprint_record_id,
+        platform,
+        list(fields.keys()),
     )
 
 
@@ -519,8 +527,10 @@ def fetch_insights_for_window(
             age = _post_age_hours(f.get("published_at", ""))
             logger.info(
                 "  [DRY RUN] Would fetch: %s/%s (post_id=%s, age=%.0fh)",
-                f.get("platform"), f.get("candidate_id", "?"),
-                f.get("post_id", "?"), age or 0,
+                f.get("platform"),
+                f.get("candidate_id", "?"),
+                f.get("post_id", "?"),
+                age or 0,
             )
         return stats
 
@@ -578,19 +588,26 @@ def fetch_insights_for_window(
             if blueprint_record_id:
                 try:
                     _write_back_to_blueprint(
-                        client, blueprint_record_id, platform, insights, window,
+                        client,
+                        blueprint_record_id,
+                        platform,
+                        insights,
+                        window,
                     )
                 except Exception as wb_exc:
                     logger.warning(
                         "Blueprint write-back failed for %s (non-fatal): %s",
-                        blueprint_record_id, wb_exc,
+                        blueprint_record_id,
+                        wb_exc,
                     )
 
             logger.info(
                 "Fetched %s/%s: engagement=%s (age=%.0fh, window=%sh)",
-                platform, post_id[:15],
+                platform,
+                post_id[:15],
                 insights.get("engagement", "?"),
-                age_hours or 0, window,
+                age_hours or 0,
+                window,
             )
         except Exception as exc:
             logger.warning("Failed to write analytics for %s/%s: %s", platform, post_id, exc)
@@ -603,7 +620,11 @@ def fetch_insights_for_window(
     logger.info("=" * 50)
     logger.info(
         "INSIGHTS SUMMARY: niche=%s window=%sh | eligible=%d fetched=%d errors=%d",
-        niche_id, window, stats["eligible"], stats["fetched"], stats["errors"],
+        niche_id,
+        window,
+        stats["eligible"],
+        stats["fetched"],
+        stats["errors"],
     )
     for p, ps in stats["by_platform"].items():
         logger.info("  %s: %d fetched, %d errors", p, ps["fetched"], ps["errors"])
@@ -677,24 +698,30 @@ def main() -> None:
         description="Fetch post-publish engagement insights for a niche at a time window."
     )
     parser.add_argument(
-        "--niche-id", required=True,
+        "--niche-id",
+        required=True,
         choices=ALL_NICHE_IDS + ["all"],
         help="Niche to fetch insights for, or 'all' for all niches",
     )
     parser.add_argument(
-        "--window", required=True, type=int,
+        "--window",
+        required=True,
+        type=int,
         choices=list(WINDOW_RANGES.keys()),
         help="Time window in hours (6 or 24)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Preview what would be fetched without calling APIs or writing data",
     )
     args = parser.parse_args()
 
     logger.info(
         "Starting fetch_insights: niche=%s window=%sh dry_run=%s",
-        args.niche_id, args.window, args.dry_run,
+        args.niche_id,
+        args.window,
+        args.dry_run,
     )
 
     if args.niche_id == "all":

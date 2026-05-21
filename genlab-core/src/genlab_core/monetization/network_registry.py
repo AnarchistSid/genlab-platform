@@ -10,6 +10,7 @@ Usage:
     adapter = get_adapter("amazon_onelink")
     url = adapter.generate_url("B0CY5QW186", tag="your-tag-20")
 """
+
 from __future__ import annotations
 
 import os
@@ -20,6 +21,7 @@ from typing import Protocol
 
 class NetworkAdapter(Protocol):
     """Protocol for affiliate network adapters."""
+
     network_id: str
     display_name: str
 

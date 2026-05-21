@@ -3,6 +3,7 @@
 Migrated from BlackboxBrief/execution/parse_extract.py (Sprint 68).
 Used by content research strategies to parse fetch logs from RSS sources.
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,7 @@ def strip_html(raw_html: str) -> str:
 
     # Decode remaining HTML entities (&#32; etc.)
     import html
+
     text = html.unescape(text)
 
     # Strip Reddit metadata patterns
@@ -119,7 +121,9 @@ def _select_primary_url(entry_link: str, summary_raw: str) -> dict[str, Any]:
             primary = video_candidates[0]
             source_post_url = entry_link
         else:
-            external = [u for u in media_hints if not _is_reddit_permalink(u) and "reddit.com/" not in u]
+            external = [
+                u for u in media_hints if not _is_reddit_permalink(u) and "reddit.com/" not in u
+            ]
             if external:
                 primary = external[0]
                 source_post_url = entry_link

@@ -1,4 +1,5 @@
 """Tests for quota daemon and DiskQuotaManager config loading."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,6 +22,7 @@ def config_yaml(tmp_path):
         }
     }
     import yaml
+
     config_file = tmp_path / "disk_quota.yaml"
     config_file.write_text(yaml.dump(config))
     return config_file
@@ -76,17 +78,20 @@ class TestDiskQuotaManager:
 
     def test_evict_removes_lowest_score_first(self, config_yaml, runs_dir):
         # Create 4 run dirs, protect_recent=2, so 2 are evictable
-        for i, (name, _score, size) in enumerate([
-            ("run_old_low", 0.1, 500_000),   # evictable, low score
-            ("run_old_high", 0.9, 500_000),  # evictable, high score
-            ("run_recent_1", 0.5, 500_000),  # protected (recent)
-            ("run_recent_2", 0.5, 500_000),  # protected (recent)
-        ]):
+        for i, (name, _score, size) in enumerate(
+            [
+                ("run_old_low", 0.1, 500_000),  # evictable, low score
+                ("run_old_high", 0.9, 500_000),  # evictable, high score
+                ("run_recent_1", 0.5, 500_000),  # protected (recent)
+                ("run_recent_2", 0.5, 500_000),  # protected (recent)
+            ]
+        ):
             d = runs_dir / name
             d.mkdir()
             (d / "video.mp4").write_bytes(b"\x00" * size)
             # Set mtime so newer = higher index
             import os
+
             os.utime(d, (1000000 + i * 100, 1000000 + i * 100))
 
         mgr = DiskQuotaManager.from_yaml(config_yaml)

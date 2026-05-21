@@ -284,9 +284,7 @@ class TestScheduleGuardedProxy:
         )
 
         inner = MagicMock()
-        inner.get.return_value = {
-            "fields": {"scheduled_for": "2026-03-10T10:00:00Z"}
-        }
+        inner.get.return_value = {"fields": {"scheduled_for": "2026-03-10T10:00:00Z"}}
         proxy = ScheduleGuardedProxy(inner)
 
         with pytest.raises(ScheduledPostProtectionError, match="Cannot delete"):

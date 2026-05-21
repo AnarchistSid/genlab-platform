@@ -91,9 +91,7 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
                         "jaccard_threshold" not in normalized
                         and "similarity_threshold" in normalized
                     ):
-                        normalized["jaccard_threshold"] = normalized[
-                            "similarity_threshold"
-                        ]
+                        normalized["jaccard_threshold"] = normalized["similarity_threshold"]
                     niche_config["dedup"] = normalized
         except yaml.YAMLError:
             # Bad YAML in scoring_weights should NOT break niche loading.

@@ -56,6 +56,7 @@ def _csrf_headers(client=None):
         # Fall back for tests that construct their own test_client
         with app.test_request_context():
             from flask import session as _sess
+
             _sess["csrf_nonce"] = "test-static-nonce"
             token = _generate_csrf_token()
     return {"X-CSRF-Token": token, "Content-Type": "application/json"}
@@ -149,6 +150,7 @@ class TestMediaRoute:
         test_png.parent.mkdir(parents=True, exist_ok=True)
         # Minimal 1x1 PNG
         import base64
+
         png_data = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         )
@@ -166,6 +168,7 @@ class TestMediaRoute:
         test_png = PROJECT_ROOT / ".tmp" / "test_media_abs.png"
         test_png.parent.mkdir(parents=True, exist_ok=True)
         import base64
+
         png_data = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
         )
@@ -275,9 +278,13 @@ class TestBlueprintFeed:
             assert data[0]["id"] == "rec_cached"
         finally:
             with review_server_module._blueprint_cache_lock:
-                review_server_module._blueprint_cache["timestamp"] = cache_snapshot.get("timestamp", 0.0)
+                review_server_module._blueprint_cache["timestamp"] = cache_snapshot.get(
+                    "timestamp", 0.0
+                )
                 review_server_module._blueprint_cache["records"] = cache_records
-                review_server_module._blueprint_cache["source"] = cache_snapshot.get("source", "empty")
+                review_server_module._blueprint_cache["source"] = cache_snapshot.get(
+                    "source", "empty"
+                )
                 review_server_module._blueprint_cache["stale"] = cache_snapshot.get("stale", False)
 
     def test_health_degraded_without_cache(self, monkeypatch):
@@ -310,9 +317,13 @@ class TestBlueprintFeed:
             assert data["fail_closed"] is True
         finally:
             with review_server_module._blueprint_cache_lock:
-                review_server_module._blueprint_cache["timestamp"] = cache_snapshot.get("timestamp", 0.0)
+                review_server_module._blueprint_cache["timestamp"] = cache_snapshot.get(
+                    "timestamp", 0.0
+                )
                 review_server_module._blueprint_cache["records"] = cache_records
-                review_server_module._blueprint_cache["source"] = cache_snapshot.get("source", "empty")
+                review_server_module._blueprint_cache["source"] = cache_snapshot.get(
+                    "source", "empty"
+                )
                 review_server_module._blueprint_cache["stale"] = cache_snapshot.get("stale", False)
 
 
@@ -343,6 +354,7 @@ class TestReviewWrites:
                 self.blueprints = _FakeBlueprintTable()
 
         import server.core.graph_sync as graph_sync_module
+
         monkeypatch.setattr(graph_sync_module, "get_sync_client", _FakeSyncClient)
 
         app.config["TESTING"] = True
@@ -378,6 +390,7 @@ class TestReviewWrites:
                 self.blueprints = _FakeBlueprintTable()
 
         import server.core.graph_sync as graph_sync_module
+
         monkeypatch.setattr(graph_sync_module, "get_sync_client", _FakeSyncClient)
 
         app.config["TESTING"] = True
@@ -452,6 +465,7 @@ class TestReactSPA:
     def test_serves_static_assets(self, client):
         """The catch-all route serves files from dashboard/dist/."""
         from server.review_server import _DASHBOARD_DIST
+
         if not _DASHBOARD_DIST.exists():
             pytest.skip("dashboard/dist not built")
         # index.html should always exist when dist is built
@@ -461,12 +475,13 @@ class TestReactSPA:
     def test_spa_fallback_for_client_routes(self, client):
         """Non-API, non-file paths should return index.html for client-side routing."""
         from server.review_server import _DASHBOARD_DIST
+
         if not _DASHBOARD_DIST.exists():
             pytest.skip("dashboard/dist not built")
         resp = client.get("/review")
         assert resp.status_code == 200
         # Should serve index.html (the React SPA entry point)
-        assert b"<div id=\"root\">" in resp.data
+        assert b'<div id="root">' in resp.data
 
     def test_api_routes_not_caught_by_spa(self, client):
         """API paths that don't match any route should 404, not serve index.html."""
@@ -476,6 +491,7 @@ class TestReactSPA:
     def test_dashboard_not_built_fallback(self, client, monkeypatch):
         """When dashboard/dist doesn't exist, show a helpful fallback message."""
         from server import review_server as rs
+
         original = rs._DASHBOARD_DIST
         monkeypatch.setattr(rs, "_DASHBOARD_DIST", Path("/nonexistent/dashboard/dist"))
         try:
@@ -648,6 +664,7 @@ class TestSessionCookieSecure:
         monkeypatch.delenv("FLASK_COOKIE_SECURE", raising=False)
         # Re-evaluate the expression the same way review_server.py does at import
         import os
+
         result = os.getenv("FLASK_COOKIE_SECURE", "true").lower() == "true"
         assert result is True
 
@@ -655,6 +672,7 @@ class TestSessionCookieSecure:
         """Setting FLASK_COOKIE_SECURE=false disables the secure cookie flag."""
         monkeypatch.setenv("FLASK_COOKIE_SECURE", "false")
         import os
+
         result = os.getenv("FLASK_COOKIE_SECURE", "true").lower() == "true"
         assert result is False
 
@@ -662,6 +680,7 @@ class TestSessionCookieSecure:
         """Setting FLASK_COOKIE_SECURE=true enables the secure cookie flag."""
         monkeypatch.setenv("FLASK_COOKIE_SECURE", "true")
         import os
+
         result = os.getenv("FLASK_COOKIE_SECURE", "true").lower() == "true"
         assert result is True
 
@@ -669,6 +688,7 @@ class TestSessionCookieSecure:
         """FLASK_COOKIE_SECURE comparison should be case-insensitive."""
         monkeypatch.setenv("FLASK_COOKIE_SECURE", "True")
         import os
+
         result = os.getenv("FLASK_COOKIE_SECURE", "true").lower() == "true"
         assert result is True
 

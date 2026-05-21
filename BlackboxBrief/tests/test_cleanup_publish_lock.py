@@ -1,4 +1,5 @@
 """Tests for the publish lock mechanism in cleanup_runs.py."""
+
 from __future__ import annotations
 
 import sys

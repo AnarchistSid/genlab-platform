@@ -17,6 +17,7 @@ class TestPushToBacklogShared(unittest.TestCase):
 
     def _make_stage(self):
         from genlab_core.pipeline.stages.push_to_backlog import PushToBacklog
+
         return PushToBacklog()
 
     def _make_story(self, title="Test Story", source_url="https://example.com/story1"):
@@ -271,12 +272,14 @@ class TestBanditArmBoost(unittest.TestCase):
 
     def test_returns_empty_when_no_bandit_proxy(self):
         from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+
         client = MagicMock()
         client.bandit_arms = None
         self.assertEqual(_get_bandit_arm_boost(client, "gaming"), {})
 
     def test_returns_empty_when_no_arms_for_niche(self):
         from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+
         client = MagicMock()
         client.bandit_arms = self._make_proxy({})
         self.assertEqual(_get_bandit_arm_boost(client, "gaming"), {})
@@ -292,12 +295,14 @@ class TestBanditArmBoost(unittest.TestCase):
 
         _random.seed(42)
         client = MagicMock()
-        client.bandit_arms = self._make_proxy({
-            "arm_a": (1.0, 1.0),
-            "arm_b": (5.0, 5.0),
-            "arm_c": (20.0, 1.0),
-            "arm_d": (1.0, 20.0),
-        })
+        client.bandit_arms = self._make_proxy(
+            {
+                "arm_a": (1.0, 1.0),
+                "arm_b": (5.0, 5.0),
+                "arm_c": (20.0, 1.0),
+                "arm_d": (1.0, 20.0),
+            }
+        )
 
         boosts = _get_bandit_arm_boost(client, "gaming")
         self.assertEqual(set(boosts), {"arm_a", "arm_b", "arm_c", "arm_d"})
@@ -316,10 +321,12 @@ class TestBanditArmBoost(unittest.TestCase):
 
         _random.seed(123)
         client = MagicMock()
-        client.bandit_arms = self._make_proxy({
-            "high": (50.0, 2.0),  # posterior mean 0.96
-            "low": (2.0, 50.0),   # posterior mean 0.04
-        })
+        client.bandit_arms = self._make_proxy(
+            {
+                "high": (50.0, 2.0),  # posterior mean 0.96
+                "low": (2.0, 50.0),  # posterior mean 0.04
+            }
+        )
 
         high_total = 0.0
         low_total = 0.0
@@ -332,7 +339,8 @@ class TestBanditArmBoost(unittest.TestCase):
         high_mean = high_total / n
         low_mean = low_total / n
         self.assertGreater(
-            high_mean - low_mean, 0.4,
+            high_mean - low_mean,
+            0.4,
             f"high={high_mean:.3f} low={low_mean:.3f} — bandit not discriminating",
         )
 
@@ -340,10 +348,13 @@ class TestBanditArmBoost(unittest.TestCase):
         """alpha or beta <= 0 would crash random.betavariate; we guard
         by flooring to 1.0 so a stale/zeroed row doesn't kill the push."""
         from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
+
         client = MagicMock()
-        client.bandit_arms = self._make_proxy({
-            "pathological": (0.0, 0.0),
-        })
+        client.bandit_arms = self._make_proxy(
+            {
+                "pathological": (0.0, 0.0),
+            }
+        )
         boosts = _get_bandit_arm_boost(client, "gaming")
         self.assertIn("pathological", boosts)
         # Beta(1,1) sample bounded by [floor, ceil]
@@ -361,10 +372,12 @@ class TestBanditArmBoost(unittest.TestCase):
         )
 
         client = MagicMock()
-        client.bandit_arms = self._make_proxy({
-            "gameplay_clip": (3.0, 5.0),
-            "patch_news": (2.0, 8.0),
-        })
+        client.bandit_arms = self._make_proxy(
+            {
+                "gameplay_clip": (3.0, 5.0),
+                "patch_news": (2.0, 8.0),
+            }
+        )
         _get_bandit_arm_boost(client, "gaming")
 
         story = {"title": "New Patch 1.42 buffs healers", "summary": ""}
@@ -375,8 +388,9 @@ class TestBanditArmBoost(unittest.TestCase):
         # or it falls through to the niche default (also in arms or 1.0).
         # The test asserts the LOOKUP doesn't silently miss for the
         # canonical arms.
-        self.assertIn(classified, ["gameplay_clip", "patch_news",
-                                    "esports_highlight", "trailer_reaction"])
+        self.assertIn(
+            classified, ["gameplay_clip", "patch_news", "esports_highlight", "trailer_reaction"]
+        )
 
 
 if __name__ == "__main__":

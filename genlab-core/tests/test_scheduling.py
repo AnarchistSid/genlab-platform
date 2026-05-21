@@ -1,4 +1,5 @@
 """Tests for genlab_core.publishing.scheduling."""
+
 import unittest
 from datetime import UTC, datetime, timedelta
 

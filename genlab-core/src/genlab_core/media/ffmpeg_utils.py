@@ -10,6 +10,7 @@ genlab_core.media.ffmpeg for consistent FFmpeg location across all code.
 All functions are sync (subprocess.run) because both agents' pipelines
 are sync. The async rendering pipeline lives in genlab_core.media.ffmpeg.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,7 @@ REEL_WIDTH = 1080
 REEL_HEIGHT = 1920
 REEL_FPS = 30
 REEL_MAX_DURATION = 900  # Instagram Reels max 15 min
-FFMPEG_TIMEOUT = 120     # Default subprocess timeout
+FFMPEG_TIMEOUT = 120  # Default subprocess timeout
 
 # ── Landscape (16:9) spec constants ──────────────────────────────
 LANDSCAPE_WIDTH = 1920
@@ -38,38 +39,60 @@ LANDSCAPE_FPS = 30
 
 # ── Final encode params (Instagram competitive spec) ─────────────
 FINAL_VIDEO_PARAMS: list[str] = [
-    "-c:v", "libx264",
-    "-profile:v", "high",
-    "-level:v", "4.1",
-    "-preset", "slow",
-    "-crf", "17",
-    "-maxrate", "25M",
-    "-bufsize", "50M",
-    "-pix_fmt", "yuv420p",
-    "-r", "30",
-    "-g", "60",
-    "-bf", "2",
-    "-colorspace", "bt709",
-    "-color_primaries", "bt709",
-    "-color_trc", "bt709",
+    "-c:v",
+    "libx264",
+    "-profile:v",
+    "high",
+    "-level:v",
+    "4.1",
+    "-preset",
+    "slow",
+    "-crf",
+    "17",
+    "-maxrate",
+    "25M",
+    "-bufsize",
+    "50M",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    "30",
+    "-g",
+    "60",
+    "-bf",
+    "2",
+    "-colorspace",
+    "bt709",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
 ]
 
 FINAL_AUDIO_PARAMS: list[str] = [
-    "-c:a", "aac",
-    "-b:a", "256k",
-    "-ar", "48000",
-    "-ac", "2",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "256k",
+    "-ar",
+    "48000",
+    "-ac",
+    "2",
 ]
 
 # ── Lossless intermediate params ─────────────────────────────────
 LOSSLESS_VIDEO_PARAMS: list[str] = [
-    "-c:v", "ffv1",
-    "-level", "3",
-    "-threads", "4",
+    "-c:v",
+    "ffv1",
+    "-level",
+    "3",
+    "-threads",
+    "4",
 ]
 
 LOSSLESS_AUDIO_PARAMS: list[str] = [
-    "-c:a", "pcm_s16le",
+    "-c:a",
+    "pcm_s16le",
 ]
 
 
@@ -84,7 +107,9 @@ def check_ffmpeg() -> bool:
         ffmpeg = get_ffmpeg_binary()
         result = subprocess.run(
             [ffmpeg, "-version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -97,7 +122,9 @@ def check_ffprobe() -> bool:
         ffprobe = get_ffprobe_binary()
         result = subprocess.run(
             [ffprobe, "-version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired):
@@ -115,14 +142,20 @@ def probe_video_duration(video_path: Path | str) -> float:
         return 0.0
 
     cmd = [
-        ffprobe, "-v", "quiet",
-        "-print_format", "json",
+        ffprobe,
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_format",
         str(video_path),
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=10,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0:
             data = json.loads(result.stdout)
@@ -130,11 +163,11 @@ def probe_video_duration(video_path: Path | str) -> float:
             if dur <= 0:
                 logger.warning(
                     "probe_video_duration: non-positive duration (%.2f) for %s",
-                    dur, video_path,
+                    dur,
+                    video_path,
                 )
             return dur
-    except (subprocess.TimeoutExpired, json.JSONDecodeError,
-            FileNotFoundError, ValueError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError, ValueError):
         pass
     return 0.0
 
@@ -150,14 +183,21 @@ def probe_video_metadata(video_path: Path | str) -> dict[str, Any]:
         return {}
 
     cmd = [
-        ffprobe, "-v", "quiet",
-        "-print_format", "json",
-        "-show_format", "-show_streams",
+        ffprobe,
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
         str(video_path),
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=15,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if result.returncode != 0:
             return {}
@@ -191,8 +231,13 @@ def probe_video_metadata(video_path: Path | str) -> dict[str, Any]:
             "codec": video_stream.get("codec_name", ""),
             "format_name": data.get("format", {}).get("format_name", ""),
         }
-    except (subprocess.TimeoutExpired, json.JSONDecodeError,
-            FileNotFoundError, ValueError, ZeroDivisionError):
+    except (
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        FileNotFoundError,
+        ValueError,
+        ZeroDivisionError,
+    ):
         return {}
 
 
@@ -210,12 +255,18 @@ def probe_media(path: str | Path) -> dict | None:
     try:
         result = subprocess.run(
             [
-                ffprobe, "-v", "quiet",
-                "-print_format", "json",
-                "-show_streams", "-show_format",
+                ffprobe,
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_streams",
+                "-show_format",
                 str(path),
             ],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0:
             return None
@@ -252,15 +303,10 @@ def probe_media(path: str | Path) -> dict | None:
                 "channels": int(audio_stream.get("channels", 0) or 0),
                 "codec": audio_stream.get("codec_name", ""),
             },
-            "duration": float(
-                video_stream.get("duration", 0)
-                or fmt.get("duration", 0)
-                or 0
-            ),
+            "duration": float(video_stream.get("duration", 0) or fmt.get("duration", 0) or 0),
             "file_size_bytes": int(fmt.get("size", 0) or 0),
         }
-    except (FileNotFoundError, subprocess.TimeoutExpired,
-            json.JSONDecodeError) as e:
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
         logger.warning("probe_media error for %s: %s", path, e)
         return None
 
@@ -277,19 +323,25 @@ def probe_raw_ffprobe(video_path: Path | str) -> dict | None:
         return None
 
     cmd = [
-        ffprobe, "-v", "quiet",
-        "-print_format", "json",
-        "-show_format", "-show_streams",
+        ffprobe,
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
         str(video_path),
     ]
     try:
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=15,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if proc.returncode == 0:
             return json.loads(proc.stdout)
-    except (subprocess.TimeoutExpired, json.JSONDecodeError,
-            FileNotFoundError):
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         pass
     return None
 
@@ -467,18 +519,25 @@ def run_ffmpeg(
     """
     try:
         return subprocess.run(
-            cmd, timeout=timeout, check=True,
-            capture_output=True, text=True,
+            cmd,
+            timeout=timeout,
+            check=True,
+            capture_output=True,
+            text=True,
         )
     except subprocess.TimeoutExpired:
         logger.warning(
             "FFmpeg timed out after %ds, retrying with -preset %s",
-            timeout, fallback_preset,
+            timeout,
+            fallback_preset,
         )
         fallback_cmd = _swap_preset(cmd, fallback_preset)
         return subprocess.run(
-            fallback_cmd, timeout=timeout, check=True,
-            capture_output=True, text=True,
+            fallback_cmd,
+            timeout=timeout,
+            check=True,
+            capture_output=True,
+            text=True,
         )
 
 
@@ -499,15 +558,23 @@ def trim(
         ffmpeg = get_ffmpeg_binary()
         result = subprocess.run(
             [
-                ffmpeg, "-y",
-                "-ss", str(start),
-                "-to", str(end),
-                "-i", input_path,
-                "-c", "copy",
-                "-avoid_negative_ts", "make_zero",
+                ffmpeg,
+                "-y",
+                "-ss",
+                str(start),
+                "-to",
+                str(end),
+                "-i",
+                input_path,
+                "-c",
+                "copy",
+                "-avoid_negative_ts",
+                "make_zero",
                 output_path,
             ],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -536,14 +603,21 @@ def concat(
 
         result = subprocess.run(
             [
-                ffmpeg, "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", str(filelist_path),
-                "-c", "copy",
+                ffmpeg,
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(filelist_path),
+                "-c",
+                "copy",
                 output_path,
             ],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -569,22 +643,34 @@ def reencode(
     try:
         ffmpeg = get_ffmpeg_binary()
         cmd = [
-            ffmpeg, "-y",
-            "-i", input_path,
-            "-vf", f"scale={width}:{height},format=yuv420p",
-            "-r", str(fps),
-            "-c:v", "libx264",
-            "-b:v", f"{bitrate_kbps}k",
-            "-c:a", "aac",
-            "-ar", str(audio_sample_rate),
-            "-ac", str(audio_channels),
+            ffmpeg,
+            "-y",
+            "-i",
+            input_path,
+            "-vf",
+            f"scale={width}:{height},format=yuv420p",
+            "-r",
+            str(fps),
+            "-c:v",
+            "libx264",
+            "-b:v",
+            f"{bitrate_kbps}k",
+            "-c:a",
+            "aac",
+            "-ar",
+            str(audio_sample_rate),
+            "-ac",
+            str(audio_channels),
         ]
         if audio_bitrate_kbps is not None:
             cmd.extend(["-b:a", f"{audio_bitrate_kbps}k"])
         cmd.extend(["-movflags", "+faststart", output_path])
 
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -603,11 +689,17 @@ def get_loudness(path: str | Path) -> dict | None:
         result = subprocess.run(
             [
                 ffmpeg,
-                "-i", str(path),
-                "-af", "loudnorm=print_format=json",
-                "-f", "null", "-",
+                "-i",
+                str(path),
+                "-af",
+                "loudnorm=print_format=json",
+                "-f",
+                "null",
+                "-",
             ],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
 
         stderr = result.stderr
@@ -622,8 +714,13 @@ def get_loudness(path: str | Path) -> dict | None:
             "input_lra": float(data.get("input_lra", 0)),
             "input_thresh": float(data.get("input_thresh", 0)),
         }
-    except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired,
-            json.JSONDecodeError, ValueError) as e:
+    except (
+        RuntimeError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        ValueError,
+    ) as e:
         logger.warning("get_loudness failed for %s: %s", path, e)
         return None
 
@@ -640,14 +737,21 @@ def loudnorm(
         ffmpeg = get_ffmpeg_binary()
         result = subprocess.run(
             [
-                ffmpeg, "-y",
-                "-i", input_path,
-                "-af", af,
-                "-c:v", "copy",
-                "-movflags", "+faststart",
+                ffmpeg,
+                "-y",
+                "-i",
+                input_path,
+                "-af",
+                af,
+                "-c:v",
+                "copy",
+                "-movflags",
+                "+faststart",
                 output_path,
             ],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return result.returncode == 0
     except (RuntimeError, FileNotFoundError, subprocess.TimeoutExpired) as e:
@@ -693,15 +797,27 @@ def split_video_segments(
         ffmpeg = get_ffmpeg_binary()
         proc = subprocess.run(
             [
-                ffmpeg, "-y", "-i", str(video_path),
-                "-f", "segment",
-                "-segment_time", str(int(max_segment_seconds)),
-                "-reset_timestamps", "1",
-                "-map", "0:v:0", "-map", "0:a?",
-                "-c", "copy",
+                ffmpeg,
+                "-y",
+                "-i",
+                str(video_path),
+                "-f",
+                "segment",
+                "-segment_time",
+                str(int(max_segment_seconds)),
+                "-reset_timestamps",
+                "1",
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a?",
+                "-c",
+                "copy",
                 pattern,
             ],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if proc.returncode != 0:
             logger.error("split_video_segments failed: %s", proc.stderr[-500:])
@@ -710,14 +826,13 @@ def split_video_segments(
         return []
 
     part_pattern = re.compile(re.escape(stem) + r"_part\d+\.mp4$")
-    segments = sorted(
-        p for p in out_dir.glob(f"{stem}_part*.mp4")
-        if part_pattern.search(p.name)
-    )
+    segments = sorted(p for p in out_dir.glob(f"{stem}_part*.mp4") if part_pattern.search(p.name))
     paths = [str(s) for s in segments]
     logger.info(
         "Split %s (%.1fs) into %d segments",
-        video_path.name, duration, len(paths),
+        video_path.name,
+        duration,
+        len(paths),
     )
     return paths
 
@@ -749,16 +864,17 @@ def reencode_for_cdn(
 
     if target_bitrate_kbps <= 0:
         usable_mb = max_size_mb * 0.95
-        target_bitrate_kbps = int(
-            (usable_mb * 8 * 1024) / duration - audio_bitrate_kbps
-        )
+        target_bitrate_kbps = int((usable_mb * 8 * 1024) / duration - audio_bitrate_kbps)
 
     MIN_BITRATE_KBPS = 400
     target_bitrate_kbps = max(target_bitrate_kbps, MIN_BITRATE_KBPS)
 
     logger.info(
         "reencode_for_cdn: %s is %.1fMB (limit %.1fMB) — re-encoding at %d kbps",
-        video_path.name, size_mb, max_size_mb, target_bitrate_kbps,
+        video_path.name,
+        size_mb,
+        max_size_mb,
+        target_bitrate_kbps,
     )
 
     out_path = video_path.with_stem(video_path.stem + "_cdn")
@@ -767,21 +883,41 @@ def reencode_for_cdn(
         try:
             ffmpeg = get_ffmpeg_binary()
             cmd = [
-                ffmpeg, "-y", "-i", str(video_path),
-                "-map", "0:v:0", "-map", "0:a:0?",
-                "-c:v", "libx264",
-                "-profile:v", "high",
-                "-preset", "medium",
-                "-b:v", f"{v_kbps}k",
-                "-maxrate", f"{int(v_kbps * 1.5)}k",
-                "-bufsize", f"{v_kbps * 2}k",
-                "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", f"{audio_bitrate_kbps}k",
-                "-movflags", "+faststart",
+                ffmpeg,
+                "-y",
+                "-i",
+                str(video_path),
+                "-map",
+                "0:v:0",
+                "-map",
+                "0:a:0?",
+                "-c:v",
+                "libx264",
+                "-profile:v",
+                "high",
+                "-preset",
+                "medium",
+                "-b:v",
+                f"{v_kbps}k",
+                "-maxrate",
+                f"{int(v_kbps * 1.5)}k",
+                "-bufsize",
+                f"{v_kbps * 2}k",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                f"{audio_bitrate_kbps}k",
+                "-movflags",
+                "+faststart",
                 str(out_path),
             ]
             proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=600,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,
             )
             if proc.returncode != 0:
                 logger.error("reencode_for_cdn failed: %s", proc.stderr[-500:])
@@ -872,10 +1008,16 @@ def landscape_to_vertical(
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black"
         )
     cmd = [
-        ffmpeg, "-y", "-i", input_path,
-        "-vf", vf,
-        "-c:a", "copy",
-        "-movflags", "+faststart",
+        ffmpeg,
+        "-y",
+        "-i",
+        input_path,
+        "-vf",
+        vf,
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
         output_path,
     ]
     try:
@@ -916,12 +1058,26 @@ def normalize_clip(
         f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
     )
     cmd += [
-        "-vf", vf,
-        "-r", str(target_fps),
-        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-        "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-        "-pix_fmt", "yuv420p",
-        "-movflags", "+faststart",
+        "-vf",
+        vf,
+        "-r",
+        str(target_fps),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "18",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-ar",
+        "48000",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
         output_path,
     ]
     try:
@@ -950,6 +1106,7 @@ def add_text_overlay(
     """Burn text overlays onto a video. Used by compilation renderer."""
     if not overlays:
         import shutil
+
         shutil.copy2(input_path, output_path)
         return True
 
@@ -971,10 +1128,16 @@ def add_text_overlay(
 
     vf = ",".join(filters) if filters else "null"
     cmd = [
-        ffmpeg, "-y", "-i", input_path,
-        "-vf", vf,
-        "-c:a", "copy",
-        "-movflags", "+faststart",
+        ffmpeg,
+        "-y",
+        "-i",
+        input_path,
+        "-vf",
+        vf,
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
         output_path,
     ]
     try:

@@ -10,6 +10,7 @@ Usage:
     python3 scripts/trend_signals.py --niche gaming          # Niche-specific trends
     python3 scripts/trend_signals.py --json                  # Machine-readable output
 """
+
 import argparse
 import json
 import logging
@@ -26,24 +27,59 @@ TRENDS_CACHE = os.path.expanduser("~/.genlab/trend_cache.json")
 # Niche-specific seed keywords for trend discovery
 NICHE_SEEDS = {
     "gaming": [
-        "gaming", "PS5", "Xbox", "Nintendo", "Steam", "Elden Ring",
-        "GTA 6", "esports", "Twitch", "game release",
+        "gaming",
+        "PS5",
+        "Xbox",
+        "Nintendo",
+        "Steam",
+        "Elden Ring",
+        "GTA 6",
+        "esports",
+        "Twitch",
+        "game release",
     ],
     "ai_creators": [
-        "AI", "ChatGPT", "OpenAI", "Sora", "Runway", "Midjourney",
-        "deepfake", "machine learning", "LLM", "artificial intelligence",
+        "AI",
+        "ChatGPT",
+        "OpenAI",
+        "Sora",
+        "Runway",
+        "Midjourney",
+        "deepfake",
+        "machine learning",
+        "LLM",
+        "artificial intelligence",
     ],
     "sports": [
-        "NFL", "NBA", "Premier League", "UFC", "FIFA",
-        "Champions League", "cricket", "F1", "Olympics",
+        "NFL",
+        "NBA",
+        "Premier League",
+        "UFC",
+        "FIFA",
+        "Champions League",
+        "cricket",
+        "F1",
+        "Olympics",
     ],
     "movies": [
-        "Marvel", "movie trailer", "box office", "Netflix",
-        "Disney", "new movie", "Oscar", "blockbuster",
+        "Marvel",
+        "movie trailer",
+        "box office",
+        "Netflix",
+        "Disney",
+        "new movie",
+        "Oscar",
+        "blockbuster",
     ],
     "anime": [
-        "anime", "manga", "One Piece", "Jujutsu Kaisen",
-        "Dragon Ball", "Crunchyroll", "new anime", "Studio Ghibli",
+        "anime",
+        "manga",
+        "One Piece",
+        "Jujutsu Kaisen",
+        "Dragon Ball",
+        "Crunchyroll",
+        "new anime",
+        "Studio Ghibli",
     ],
 }
 
@@ -77,10 +113,12 @@ def get_realtime_trends(geo: str = "US") -> list[dict[str, Any]]:
                 title = row.get("title", row.get("entityNames", ""))
                 if isinstance(title, list):
                     title = ", ".join(title)
-                results.append({
-                    "query": str(title)[:100],
-                    "source": "google_trends_realtime",
-                })
+                results.append(
+                    {
+                        "query": str(title)[:100],
+                        "source": "google_trends_realtime",
+                    }
+                )
         return results
     except Exception as e:
         logger.warning("Failed to fetch realtime trends: %s", e)
@@ -99,7 +137,7 @@ def check_topic_interest(keywords: list[str], timeframe: str = "now 7-d") -> dic
     # Google Trends allows max 5 keywords at once
     results = {}
     for batch_start in range(0, len(keywords), 5):
-        batch = keywords[batch_start:batch_start + 5]
+        batch = keywords[batch_start : batch_start + 5]
         try:
             pytrends.build_payload(batch, cat=0, timeframe=timeframe, geo="", gprop="")
             interest = pytrends.interest_over_time()
@@ -116,8 +154,10 @@ def check_topic_interest(keywords: list[str], timeframe: str = "now 7-d") -> dic
                         if len(values) >= 4:
                             recent = sum(values[-2:]) / 2
                             earlier = sum(values[-4:-2]) / 2
-                            direction = "rising" if recent > earlier * 1.2 else (
-                                "falling" if recent < earlier * 0.8 else "stable"
+                            direction = (
+                                "rising"
+                                if recent > earlier * 1.2
+                                else ("falling" if recent < earlier * 0.8 else "stable")
                             )
                         else:
                             direction = "insufficient_data"
@@ -154,13 +194,15 @@ def score_story_topics(topics: list[str]) -> list[dict[str, Any]]:
         direction = data.get("direction", "stable")
         direction_bonus = {"rising": 30, "stable": 0, "falling": -20}.get(direction, 0)
 
-        scored.append({
-            "topic": topic,
-            "trend_score": min(round(base_score + direction_bonus, 1), 100.0),
-            "current_interest": data.get("current", 0),
-            "direction": direction,
-            "peak": data.get("peak", 0),
-        })
+        scored.append(
+            {
+                "topic": topic,
+                "trend_score": min(round(base_score + direction_bonus, 1), 100.0),
+                "current_interest": data.get("current", 0),
+                "direction": direction,
+                "peak": data.get("peak", 0),
+            }
+        )
 
     return sorted(scored, key=lambda x: x["trend_score"], reverse=True)
 
@@ -184,18 +226,11 @@ def get_niche_trends(niche: str) -> dict[str, Any]:
         "niche": niche,
         "checked_at": datetime.now(UTC).isoformat(),
         "trending_topics": [
-            {"keyword": kw, **data}
-            for kw, data in ranked
-            if data.get("direction") == "rising"
+            {"keyword": kw, **data} for kw, data in ranked if data.get("direction") == "rising"
         ],
-        "hot_topics": [
-            {"keyword": kw, **data}
-            for kw, data in ranked[:5]
-        ],
+        "hot_topics": [{"keyword": kw, **data} for kw, data in ranked[:5]],
         "cold_topics": [
-            {"keyword": kw, **data}
-            for kw, data in ranked
-            if data.get("direction") == "falling"
+            {"keyword": kw, **data} for kw, data in ranked if data.get("direction") == "falling"
         ],
     }
 
@@ -274,15 +309,21 @@ if __name__ == "__main__":
         else:
             print("\nTrend scores for queried topics:")
             for s in scored:
-                arrow = {"rising": "↑", "falling": "↓", "stable": "→"}.get(s.get("direction", ""), "?")
-                print(f"  {arrow} {s['topic']:30s}  score: {s['trend_score']:>6.1f}  interest: {s.get('current_interest', '?')}")
+                arrow = {"rising": "↑", "falling": "↓", "stable": "→"}.get(
+                    s.get("direction", ""), "?"
+                )
+                print(
+                    f"  {arrow} {s['topic']:30s}  score: {s['trend_score']:>6.1f}  interest: {s.get('current_interest', '?')}"
+                )
 
     elif args.niche:
         data = get_niche_trends(args.niche)
         if args.json:
             print(json.dumps(data, indent=2))
         else:
-            print_report({"generated_at": datetime.now(UTC).isoformat(), "niches": {args.niche: data}})
+            print_report(
+                {"generated_at": datetime.now(UTC).isoformat(), "niches": {args.niche: data}}
+            )
 
     elif args.full:
         report = build_full_report()
@@ -308,5 +349,7 @@ if __name__ == "__main__":
         if hot:
             print("\n  🎯 AI/Tech Hottest:")
             for t in hot[:5]:
-                arrow = {"rising": "↑", "falling": "↓", "stable": "→"}.get(t.get("direction", ""), "?")
+                arrow = {"rising": "↑", "falling": "↓", "stable": "→"}.get(
+                    t.get("direction", ""), "?"
+                )
                 print(f"    {arrow} {t['keyword']:20s}  score: {t['score']:.0f}")

@@ -1,4 +1,5 @@
 """Tests for JSON schema validation of CriticalRush pipeline outputs."""
+
 from __future__ import annotations
 
 import sys
@@ -10,6 +11,7 @@ from niches.gaming.tools.schema_validator import validate_against_schema
 # ---------------------------------------------------------------------------
 # Fixtures: valid data blobs
 # ---------------------------------------------------------------------------
+
 
 def _valid_written_content() -> dict[str, Any]:
     return {
@@ -73,6 +75,7 @@ def _valid_enriched_story() -> dict[str, Any]:
 # Tests: written_content.schema.json
 # ---------------------------------------------------------------------------
 
+
 class TestWrittenContentSchema:
     def test_valid_written_content_passes(self):
         data = _valid_written_content()
@@ -114,6 +117,7 @@ class TestWrittenContentSchema:
 # Tests: clip_sourcer_config.schema.json
 # ---------------------------------------------------------------------------
 
+
 class TestClipSourcerConfigSchema:
     def test_valid_clip_config_passes(self):
         data = _valid_clip_config()
@@ -147,6 +151,7 @@ class TestClipSourcerConfigSchema:
 # Tests: enriched_story.schema.json
 # ---------------------------------------------------------------------------
 
+
 class TestEnrichedStorySchema:
     def test_enriched_story_validates(self):
         data = _valid_enriched_story()
@@ -157,7 +162,8 @@ class TestEnrichedStorySchema:
     def test_minimal_story_validates(self):
         """Only title is required."""
         valid, err = validate_against_schema(
-            {"title": "Some headline"}, "enriched_story.schema.json",
+            {"title": "Some headline"},
+            "enriched_story.schema.json",
         )
         assert valid is True
         assert err is None
@@ -174,18 +180,22 @@ class TestEnrichedStorySchema:
 # Tests: graceful degradation
 # ---------------------------------------------------------------------------
 
+
 class TestGracefulDegradation:
     def test_missing_schema_file_passes_gracefully(self):
         """Non-existent schema file should pass (no schema = no validation)."""
         valid, err = validate_against_schema(
-            {"anything": "goes"}, "nonexistent_schema.schema.json",
+            {"anything": "goes"},
+            "nonexistent_schema.schema.json",
         )
         assert valid is True
         assert err is None
 
     def test_no_jsonschema_passes_gracefully(self):
         """If jsonschema is not importable, validation should pass."""
-        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        original_import = (
+            __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
+        )
 
         def _mock_import(name, *args, **kwargs):
             if name == "jsonschema":
@@ -201,7 +211,8 @@ class TestGracefulDegradation:
             try:
                 # The function does `import jsonschema` which will see None and raise ImportError
                 valid, err = validate_against_schema(
-                    {"hook": "test"}, "written_content.schema.json",
+                    {"hook": "test"},
+                    "written_content.schema.json",
                 )
                 assert valid is True
                 assert err is None

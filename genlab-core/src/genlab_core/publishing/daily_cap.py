@@ -17,8 +17,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CAPS: dict[str, int] = {
-    p: 1 for p in
-    ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
+    p: 1 for p in ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
 }
 
 
@@ -38,9 +37,7 @@ def _load_caps(config_path: Path | None = None) -> dict[str, int]:
             return dict(_DEFAULT_CAPS)
         return {k.lower(): int(v) for k, v in caps.items()}
     except FileNotFoundError:
-        logger.warning(
-            "platform_caps.yaml not found at %s. Using default cap of 1.", config_path
-        )
+        logger.warning("platform_caps.yaml not found at %s. Using default cap of 1.", config_path)
         return dict(_DEFAULT_CAPS)
     except Exception as e:
         logger.error("Error loading platform caps: %s. Using default cap of 1.", e)
@@ -89,16 +86,16 @@ class DailyCapEnforcer:
         platform = platform.lower()
         cap = self._caps.get(platform)
         if cap is None:
-            logger.warning(
-                "No daily cap configured for '%s', allowing publish.", platform
-            )
+            logger.warning("No daily cap configured for '%s', allowing publish.", platform)
             return True
 
         current = self._get_counts().get(platform, 0)
         if current >= cap:
             logger.info(
                 "Daily cap reached for %s: %d/%d posts today. Skipping.",
-                platform, current, cap,
+                platform,
+                current,
+                cap,
             )
             return False
 
@@ -116,7 +113,8 @@ class DailyCapEnforcer:
         self._session_counts[platform] = self._session_counts.get(platform, 0) + 1
         logger.debug(
             "Recorded publish for %s. Session total today: %d",
-            platform, self._session_counts[platform],
+            platform,
+            self._session_counts[platform],
         )
 
     def get_remaining(self, platform: str) -> int:
@@ -186,7 +184,8 @@ class DailyCapEnforcer:
         except Exception as e:
             logger.error(
                 "Failed to load today's publish counts from SharePoint: %s. "
-                "Starting from 0 (fail-open).", e
+                "Starting from 0 (fail-open).",
+                e,
             )
 
         niche_label = f" for {self._niche_id}" if self._niche_id else " (global)"

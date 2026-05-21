@@ -11,6 +11,7 @@ from genlab_core.media.quota_manager import QuotaManager, QuotaStatus, VideoWork
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_dir_with_file(base: Path, name: str, size: int, score: float | None = None) -> Path:
     """Create a subdirectory with a file of the given size and an optional .score file."""
     d = base / name
@@ -24,6 +25,7 @@ def _make_dir_with_file(base: Path, name: str, size: int, score: float | None = 
 # ---------------------------------------------------------------------------
 # QuotaStatus
 # ---------------------------------------------------------------------------
+
 
 class TestQuotaStatusLevels:
     def test_ok(self, tmp_path: Path) -> None:
@@ -53,6 +55,7 @@ class TestQuotaStatusLevels:
 # ---------------------------------------------------------------------------
 # VideoWorkspace
 # ---------------------------------------------------------------------------
+
 
 class TestVideoWorkspace:
     def test_creates_dir(self, tmp_path: Path) -> None:
@@ -85,6 +88,7 @@ class TestVideoWorkspace:
 # ---------------------------------------------------------------------------
 # Eviction
 # ---------------------------------------------------------------------------
+
 
 class TestEviction:
     def test_eviction_by_score(self, tmp_path: Path) -> None:
@@ -140,6 +144,7 @@ class TestEviction:
 # current_usage_bytes
 # ---------------------------------------------------------------------------
 
+
 class TestCurrentUsageBytes:
     def test_empty_dir(self, tmp_path: Path) -> None:
         qm = QuotaManager(tmp_path, max_bytes=1000)
@@ -160,13 +165,16 @@ class TestCurrentUsageBytes:
 # pressure_check
 # ---------------------------------------------------------------------------
 
+
 class TestPressureCheck:
     def test_critical_triggers_eviction(self, tmp_path: Path) -> None:
         qm = QuotaManager(tmp_path, max_bytes=1000, warning_pct=0.80, critical_pct=0.95)
         critical_status = QuotaStatus(used_bytes=960, max_bytes=1000, pct=0.96, level="critical")
 
-        with patch.object(qm, "check", return_value=critical_status), \
-             patch.object(qm, "evict_if_needed", return_value=200) as mock_evict:
+        with (
+            patch.object(qm, "check", return_value=critical_status),
+            patch.object(qm, "evict_if_needed", return_value=200) as mock_evict,
+        ):
             qm.pressure_check()
             mock_evict.assert_called_once()
 
@@ -174,8 +182,10 @@ class TestPressureCheck:
         qm = QuotaManager(tmp_path, max_bytes=1000, warning_pct=0.80, critical_pct=0.95)
         ok_status = QuotaStatus(used_bytes=500, max_bytes=1000, pct=0.50, level="ok")
 
-        with patch.object(qm, "check", return_value=ok_status), \
-             patch.object(qm, "evict_if_needed") as mock_evict:
+        with (
+            patch.object(qm, "check", return_value=ok_status),
+            patch.object(qm, "evict_if_needed") as mock_evict,
+        ):
             qm.pressure_check()
             mock_evict.assert_not_called()
 
@@ -183,7 +193,9 @@ class TestPressureCheck:
         qm = QuotaManager(tmp_path, max_bytes=1000, warning_pct=0.80, critical_pct=0.95)
         warning_status = QuotaStatus(used_bytes=850, max_bytes=1000, pct=0.85, level="warning")
 
-        with patch.object(qm, "check", return_value=warning_status), \
-             patch.object(qm, "evict_if_needed") as mock_evict:
+        with (
+            patch.object(qm, "check", return_value=warning_status),
+            patch.object(qm, "evict_if_needed") as mock_evict,
+        ):
             qm.pressure_check()
             mock_evict.assert_not_called()

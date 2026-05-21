@@ -5,6 +5,7 @@ Usage:
     cascade = build_tts_cascade()
     result = cascade.synthesize(text, output_path)
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,6 +29,7 @@ def build_tts_cascade():
     if os.environ.get("ELEVENLABS_API_KEY"):
         try:
             from genlab_core.tts.providers import ElevenLabsTTS
+
             providers.append(ElevenLabsTTS())
             logger.debug("TTS: ElevenLabs provider added")
         except Exception:
@@ -37,6 +39,7 @@ def build_tts_cascade():
     if os.environ.get("OPENAI_API_KEY"):
         try:
             from genlab_core.tts.providers import OpenAITTS
+
             providers.append(OpenAITTS())
             logger.debug("TTS: OpenAI provider added")
         except Exception:

@@ -3,6 +3,7 @@
 Searches for real source videos for stories across YouTube, Reddit,
 TMDB trailers, and direct URL detection.
 """
+
 from __future__ import annotations
 
 import json
@@ -68,9 +69,7 @@ def is_direct_video_url(url: str) -> bool:
 # ---------------------------------------------------------------------------
 # ISO 8601 duration parser (YouTube style: PT1H2M3S)
 # ---------------------------------------------------------------------------
-_ISO_DUR_RE = re.compile(
-    r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", re.IGNORECASE
-)
+_ISO_DUR_RE = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", re.IGNORECASE)
 
 
 def parse_iso_duration(raw: str) -> float:
@@ -135,9 +134,7 @@ def _relevance_score(story_title: str, video_title: str) -> float:
     return float(max(0.0, min(1.0, sim)))
 
 
-def _freshness_score(
-    video_published: datetime | None, story_published: datetime | None
-) -> float:
+def _freshness_score(video_published: datetime | None, story_published: datetime | None) -> float:
     """Exponential decay with 48-hour half-life relative to story publish."""
     if video_published is None:
         return 0.5  # unknown → neutral
@@ -162,9 +159,7 @@ def _duration_fit(duration_seconds: float) -> float:
     """Gaussian centred on 60 s, sigma 45 s."""
     if duration_seconds <= 0:
         return 0.5  # unknown → neutral
-    return math.exp(
-        -0.5 * ((duration_seconds - _DURATION_MU) / _DURATION_SIGMA) ** 2
-    )
+    return math.exp(-0.5 * ((duration_seconds - _DURATION_MU) / _DURATION_SIGMA) ** 2)
 
 
 def score_video_result(
@@ -221,9 +216,7 @@ class VideoSourcer:
     ) -> None:
         self.niche_id = niche_id
         self.niche_keywords = niche_keywords or []
-        self.youtube_api_key = youtube_api_key or os.environ.get(
-            "YOUTUBE_API_KEY", ""
-        )
+        self.youtube_api_key = youtube_api_key or os.environ.get("YOUTUBE_API_KEY", "")
         self.tmdb_api_key = tmdb_api_key or os.environ.get("TMDB_API_KEY", "")
         self.max_results = max_results_per_backend
         self.min_score = min_score
@@ -232,9 +225,7 @@ class VideoSourcer:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def find_video_for_story(
-        self, story: dict[str, Any]
-    ) -> VideoSearchResult | None:
+    def find_video_for_story(self, story: dict[str, Any]) -> VideoSearchResult | None:
         """Run the fallback chain and return the best-scoring result."""
         story_title: str = story.get("title", "")
         story_published_at = story.get("published_at")
@@ -392,9 +383,7 @@ class VideoSourcer:
             return []
 
         try:
-            youtube = yt_build(
-                "youtube", "v3", developerKey=self.youtube_api_key
-            )
+            youtube = yt_build("youtube", "v3", developerKey=self.youtube_api_key)
 
             # Step 1: search.list
             search_resp = (
@@ -436,25 +425,19 @@ class VideoSourcer:
                 pub = None
                 if snippet.get("publishedAt"):
                     try:
-                        pub = datetime.fromisoformat(
-                            snippet["publishedAt"].replace("Z", "+00:00")
-                        )
+                        pub = datetime.fromisoformat(snippet["publishedAt"].replace("Z", "+00:00"))
                     except (ValueError, TypeError):
                         pass
                 results.append(
                     VideoSearchResult(
                         url=f"https://www.youtube.com/watch?v={item['id']}",
                         title=snippet.get("title", ""),
-                        duration_seconds=parse_iso_duration(
-                            content.get("duration", "")
-                        ),
+                        duration_seconds=parse_iso_duration(content.get("duration", "")),
                         view_count=int(stats.get("viewCount", 0)),
                         like_count=int(stats.get("likeCount", 0)),
                         published_at=pub,
                         channel_name=snippet.get("channelTitle", ""),
-                        thumbnail_url=snippet.get("thumbnails", {})
-                        .get("high", {})
-                        .get("url", ""),
+                        thumbnail_url=snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
                         backend="youtube",
                     )
                 )
@@ -475,6 +458,7 @@ class VideoSourcer:
         # Use requests with a realistic User-Agent. Reddit blocks urllib's
         # default UA and short UA strings like "GenLab/1.0" from data center IPs.
         import requests as _req
+
         _ua = (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -494,7 +478,9 @@ class VideoSourcer:
                 resp = _req.get(url, headers={"User-Agent": _ua}, timeout=10)
                 if resp.status_code != 200:
                     logger.warning(
-                        "Reddit search HTTP %d for r/%s", resp.status_code, sub,
+                        "Reddit search HTTP %d for r/%s",
+                        resp.status_code,
+                        sub,
                     )
                     continue
                 data = resp.json()
@@ -506,16 +492,12 @@ class VideoSourcer:
                     pub = None
                     if post.get("created_utc"):
                         try:
-                            pub = datetime.fromtimestamp(
-                                post["created_utc"], tz=UTC
-                            )
+                            pub = datetime.fromtimestamp(post["created_utc"], tz=UTC)
                         except (ValueError, TypeError, OSError):
                             pass
                     permalink = post.get("permalink", "")
                     post_url = (
-                        f"https://www.reddit.com{permalink}"
-                        if permalink
-                        else post.get("url", "")
+                        f"https://www.reddit.com{permalink}" if permalink else post.get("url", "")
                     )
                     results.append(
                         VideoSearchResult(
@@ -545,11 +527,8 @@ class VideoSourcer:
             return []
         try:
             # Step 1: Search for the movie
-            search_url = (
-                "https://api.themoviedb.org/3/search/movie?"
-                + urlencode(
-                    {"api_key": self.tmdb_api_key, "query": query, "page": "1"}
-                )
+            search_url = "https://api.themoviedb.org/3/search/movie?" + urlencode(
+                {"api_key": self.tmdb_api_key, "query": query, "page": "1"}
             )
             req = Request(search_url, headers={"User-Agent": "GenLab/1.0"})
             with urlopen(req, timeout=10) as resp:
@@ -567,9 +546,8 @@ class VideoSourcer:
                     continue
 
                 # Step 2: Get videos for the movie
-                videos_url = (
-                    f"https://api.themoviedb.org/3/movie/{movie_id}/videos?"
-                    + urlencode({"api_key": self.tmdb_api_key})
+                videos_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?" + urlencode(
+                    {"api_key": self.tmdb_api_key}
                 )
                 vreq = Request(videos_url, headers={"User-Agent": "GenLab/1.0"})
                 with urlopen(vreq, timeout=10) as resp:
@@ -587,9 +565,7 @@ class VideoSourcer:
                     pub = None
                     if movie.get("release_date"):
                         try:
-                            pub = datetime.fromisoformat(
-                                movie["release_date"]
-                            ).replace(tzinfo=UTC)
+                            pub = datetime.fromisoformat(movie["release_date"]).replace(tzinfo=UTC)
                         except (ValueError, TypeError):
                             pass
                     results.append(
@@ -625,10 +601,7 @@ class VideoSourcer:
         """Score all results and return the best one above ``min_score``."""
         if not results:
             return None
-        scored = [
-            (r, score_video_result(r, story_title, story_published_at))
-            for r in results
-        ]
+        scored = [(r, score_video_result(r, story_title, story_published_at)) for r in results]
         scored.sort(key=lambda t: t[1], reverse=True)
         best_result, best_score = scored[0]
         if best_score < self.min_score:

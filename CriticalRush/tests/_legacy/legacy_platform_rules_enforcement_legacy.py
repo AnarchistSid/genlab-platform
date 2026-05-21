@@ -97,9 +97,7 @@ class TestInstagramCTA:
         adapt_story_content(content, story, OVERRIDES, TEMPLATES)
 
         caption = content["instagram"]["caption"]
-        assert any(
-            cta in caption for cta in OVERRIDES["instagram"]["cta_phrases"]
-        )
+        assert any(cta in caption for cta in OVERRIDES["instagram"]["cta_phrases"])
 
     def test_instagram_cta_not_doubled_when_already_present(self):
         cta = OVERRIDES["instagram"]["cta_phrases"][0]
@@ -135,9 +133,13 @@ class TestInstagramHashtags:
             "instagram": {
                 "caption": "Short caption",
                 "hashtags": [
-                    "#gaming", "#gamer", "#games",
-                    "#videogames", "#gamingcommunity",
-                    "#pcgaming", "#consolegaming",
+                    "#gaming",
+                    "#gamer",
+                    "#games",
+                    "#videogames",
+                    "#gamingcommunity",
+                    "#pcgaming",
+                    "#consolegaming",
                 ],
             }
         }
@@ -319,28 +321,33 @@ class TestStageExecute:
     def test_execute_adapts_stories(self):
         context = {
             "stories": [
-                _make_story(content={
-                    "instagram": {
-                        "caption": "Test caption https://link.com/x for gaming",
-                        "hashtags": ["#gaming"],
-                    },
-                    "x_twitter": {
-                        "tweet": "Test tweet",
-                        "hashtags": ["#gaming"],
-                    },
-                }),
+                _make_story(
+                    content={
+                        "instagram": {
+                            "caption": "Test caption https://link.com/x for gaming",
+                            "hashtags": ["#gaming"],
+                        },
+                        "x_twitter": {
+                            "tweet": "Test tweet",
+                            "hashtags": ["#gaming"],
+                        },
+                    }
+                ),
                 _make_story(content=None),  # no content — should be skipped
             ],
             "feature_flags": {},
             "run_stats": {},
         }
 
-        with patch(
-            "niches.gaming.stages.adapt_gaming_content._load_overrides",
-            return_value=OVERRIDES,
-        ), patch(
-            "niches.gaming.stages.adapt_gaming_content._load_templates",
-            return_value=TEMPLATES,
+        with (
+            patch(
+                "niches.gaming.stages.adapt_gaming_content._load_overrides",
+                return_value=OVERRIDES,
+            ),
+            patch(
+                "niches.gaming.stages.adapt_gaming_content._load_templates",
+                return_value=TEMPLATES,
+            ),
         ):
             stage = AdaptGamingContent()
             result = stage.execute(context)

@@ -6,6 +6,7 @@ Routes:
     POST /api/v1/engagement/pending-replies/<id>/approve  -- approve and send a queued reply
     POST /api/v1/engagement/pending-replies/<id>/reject   -- reject a queued reply
 """
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ _RECENT_CACHE_TTL = 120  # seconds
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -188,16 +190,19 @@ def list_pending_replies():
     status_filter = request.args.get("status", "pending")
 
     filtered = [
-        r for r in replies
+        r
+        for r in replies
         if (not niche_filter or r.get("niche_id") == niche_filter)
         and r.get("status", "pending") == status_filter
     ]
 
-    return api_success(data={
-        "replies": filtered,
-        "total": len(filtered),
-        "all_count": len(replies),
-    })
+    return api_success(
+        data={
+            "replies": filtered,
+            "total": len(filtered),
+            "all_count": len(replies),
+        }
+    )
 
 
 @bp.route("/pending-replies", methods=["POST"])
@@ -263,6 +268,7 @@ def approve_reply(reply_id: str):
             # Dispatch the approved reply to the platform
             try:
                 from genlab_core.platforms import get_client
+
                 client = get_client(reply["platform"])
                 if hasattr(client, "post_reply"):
                     client.post_reply(
@@ -370,20 +376,24 @@ def recent_comments():
             except Exception as exc:
                 logger.warning(
                     "recent_comments: comments fetch failed for media %s (%s): %s",
-                    item.get("id"), niche_id, exc,
+                    item.get("id"),
+                    niche_id,
+                    exc,
                 )
                 continue
 
             for comment in comments:
-                all_comments.append({
-                    "id": comment.get("id", ""),
-                    "text": comment.get("text", ""),
-                    "username": comment.get("username", ""),
-                    "timestamp": comment.get("timestamp", ""),
-                    "media_id": item["id"],
-                    "niche_id": niche_id,
-                    "platform": "instagram",
-                })
+                all_comments.append(
+                    {
+                        "id": comment.get("id", ""),
+                        "text": comment.get("text", ""),
+                        "username": comment.get("username", ""),
+                        "timestamp": comment.get("timestamp", ""),
+                        "media_id": item["id"],
+                        "niche_id": niche_id,
+                        "platform": "instagram",
+                    }
+                )
 
     # Sort by timestamp descending; ISO 8601 strings sort lexicographically
     all_comments.sort(key=lambda c: c.get("timestamp", ""), reverse=True)
@@ -432,7 +442,11 @@ def fetch_comments():
                 # Fetch comments for this media
                 comments_resp = _requests.get(
                     f"https://graph.facebook.com/v21.0/{item['id']}/comments",
-                    params={"fields": "id,text,username,timestamp", "limit": 50, "access_token": token},
+                    params={
+                        "fields": "id,text,username,timestamp",
+                        "limit": 50,
+                        "access_token": token,
+                    },
                     timeout=15,
                 )
                 comments = comments_resp.json().get("data", [])

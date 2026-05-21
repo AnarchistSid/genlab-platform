@@ -51,6 +51,7 @@ def _get_tts_cascade() -> TTSCascade:
     if _cascade is not None:
         return _cascade
     from genlab_core.tts.factory import build_tts_cascade
+
     _cascade = build_tts_cascade()
     return _cascade
 
@@ -90,6 +91,7 @@ class GenerateGamingAudio:
 
         run_id = "unknown"
         from genlab_core.context import get_current_context
+
         ctx = get_current_context()
         if ctx:
             run_id = ctx.run_id
@@ -139,7 +141,9 @@ class GenerateGamingAudio:
         context.setdefault("run_stats", {})["audio_generation"] = stats
         logger.info(
             "[AUDIO] %d generated, %d script failures, %d TTS failures, %d skipped",
-            stats["generated"], stats["failed_script"], stats["failed_tts"],
+            stats["generated"],
+            stats["failed_script"],
+            stats["failed_tts"],
             stats["skipped"],
         )
         return context

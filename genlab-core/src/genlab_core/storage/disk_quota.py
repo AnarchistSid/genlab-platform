@@ -94,11 +94,7 @@ def _extract_score(run_dir: Path) -> float:
         try:
             with open(report_path) as f:
                 report = json.load(f)
-            top5 = (
-                report.get("metrics", {})
-                .get("score_distribution", {})
-                .get("top5_avg")
-            )
+            top5 = report.get("metrics", {}).get("score_distribution", {}).get("top5_avg")
             if top5 is not None:
                 return float(top5)
         except (json.JSONDecodeError, OSError, TypeError, ValueError):
@@ -169,7 +165,10 @@ def _get_pending_publish_run_ids() -> set[str]:
                 )
                 rows = cur.fetchall()
     except Exception as exc:
-        logger.warning("[QUOTA] Could not query pending blueprints (%s) — pending runs unprotected this pass", exc)
+        logger.warning(
+            "[QUOTA] Could not query pending blueprints (%s) — pending runs unprotected this pass",
+            exc,
+        )
         return set()
 
     run_ids: set[str] = set()
@@ -189,13 +188,15 @@ def _get_pending_publish_run_ids() -> set[str]:
             for marker in ("/runs/", "/rendered/"):
                 idx = p.find(marker)
                 if idx >= 0:
-                    rest = p[idx + len(marker):]
+                    rest = p[idx + len(marker) :]
                     run_id = rest.split("/", 1)[0]
                     if run_id:
                         run_ids.add(run_id)
                     break
     if run_ids:
-        logger.info("[QUOTA] Protecting %d run(s) referenced by pending scheduled blueprints", len(run_ids))
+        logger.info(
+            "[QUOTA] Protecting %d run(s) referenced by pending scheduled blueprints", len(run_ids)
+        )
     return run_ids
 
 
@@ -443,17 +444,13 @@ class DiskQuotaManager:
             return True
 
         # Over quota — try eviction
-        logger.warning(
-            "[QUOTA] %s projected %.1f%% — triggering eviction", agent, projected_pct
-        )
+        logger.warning("[QUOTA] %s projected %.1f%% — triggering eviction", agent, projected_pct)
         self.evict(agent, target_free_bytes=estimated_bytes)
 
         # Re-check after eviction
         status_after = self.get_status(agent)
         projected_after = (
-            (status_after.used_bytes + estimated_bytes) / quota * 100
-            if quota > 0
-            else 0
+            (status_after.used_bytes + estimated_bytes) / quota * 100 if quota > 0 else 0
         )
 
         if projected_after >= self._evict_pct(agent):

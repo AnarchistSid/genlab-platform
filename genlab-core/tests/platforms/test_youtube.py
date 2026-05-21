@@ -1,4 +1,5 @@
 """Tests for YouTubeClient — mocks all HTTP and Google API calls."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -72,7 +73,7 @@ def _mock_upload_service():
     # Simulate resumable upload: first next_chunk returns (None, None) then response
     mock_request.next_chunk.side_effect = [
         (MagicMock(progress=lambda: 0.5), None),  # in-progress chunk
-        (None, {"id": "yt_video_abc123"}),          # final chunk with response
+        (None, {"id": "yt_video_abc123"}),  # final chunk with response
     ]
     mock_service.videos.return_value.insert.return_value = mock_request
     return mock_service
@@ -352,6 +353,7 @@ class TestEngagement:
         token_calls = []
 
         with patch("genlab_core.platforms.youtube.requests") as mock_req:
+
             def capture_post(url, *args, **kwargs):
                 token_calls.append(url)
                 resp = MagicMock(status_code=200)
@@ -490,8 +492,8 @@ class TestGetMetrics:
     def test_get_metrics_api_exception_returns_none(self, yt_client):
         """If Analytics API raises, get_metrics returns None (fail-safe)."""
         mock_service = MagicMock()
-        mock_service.reports.return_value.query.return_value.execute.side_effect = (
-            Exception("API error")
+        mock_service.reports.return_value.query.return_value.execute.side_effect = Exception(
+            "API error"
         )
 
         with (
@@ -793,6 +795,7 @@ class TestVerifyChannel:
 class TestPostComment:
     def test_post_comment_success(self, yt_client):
         """post_comment posts to /commentThreads and returns thread ID."""
+
         def mock_post(url, *args, **kwargs):
             resp = MagicMock(status_code=200)
             resp.raise_for_status.return_value = None
@@ -871,6 +874,7 @@ class TestPostComment:
 class TestUpdateVideoMetadata:
     def test_update_title_success(self, yt_client):
         """update_video_metadata updates the title and returns result dict."""
+
         def mock_http(method):
             def handler(url, *args, **kwargs):
                 resp = MagicMock(status_code=200)
@@ -884,6 +888,7 @@ class TestUpdateVideoMetadata:
                 else:
                     resp.json.return_value = {"id": "vid_upd"}
                 return resp
+
             return handler
 
         with patch("genlab_core.platforms.youtube.requests") as mock_req:
@@ -891,9 +896,7 @@ class TestUpdateVideoMetadata:
             mock_req.get.side_effect = mock_http("get")
             mock_req.put.side_effect = mock_http("put")
 
-            result = yt_client.update_video_metadata(
-                "vid_upd", title="New Title"
-            )
+            result = yt_client.update_video_metadata("vid_upd", title="New Title")
 
         assert result is not None
         assert result["video_id"] == "vid_upd"
@@ -901,6 +904,7 @@ class TestUpdateVideoMetadata:
 
     def test_update_description_success(self, yt_client):
         """update_video_metadata can update description only."""
+
         def mock_http(method):
             def handler(url, *args, **kwargs):
                 resp = MagicMock(status_code=200)
@@ -914,6 +918,7 @@ class TestUpdateVideoMetadata:
                 else:
                     resp.json.return_value = {"id": "vid_desc"}
                 return resp
+
             return handler
 
         with patch("genlab_core.platforms.youtube.requests") as mock_req:
@@ -921,9 +926,7 @@ class TestUpdateVideoMetadata:
             mock_req.get.side_effect = mock_http("get")
             mock_req.put.side_effect = mock_http("put")
 
-            result = yt_client.update_video_metadata(
-                "vid_desc", description="New description"
-            )
+            result = yt_client.update_video_metadata("vid_desc", description="New description")
 
         assert result is not None
         assert result["title"] == "Keep Title"
@@ -935,6 +938,7 @@ class TestUpdateVideoMetadata:
 
     def test_update_video_not_found(self, yt_client):
         """update_video_metadata returns None if video does not exist."""
+
         def mock_http(method):
             def handler(url, *args, **kwargs):
                 resp = MagicMock(status_code=200)
@@ -944,15 +948,14 @@ class TestUpdateVideoMetadata:
                 else:
                     resp.json.return_value = {"items": []}
                 return resp
+
             return handler
 
         with patch("genlab_core.platforms.youtube.requests") as mock_req:
             mock_req.post.side_effect = mock_http("post")
             mock_req.get.side_effect = mock_http("get")
 
-            result = yt_client.update_video_metadata(
-                "vid_notfound", title="New"
-            )
+            result = yt_client.update_video_metadata("vid_notfound", title="New")
 
         assert result is None
 
@@ -963,9 +966,7 @@ class TestUpdateVideoMetadata:
             resp.raise_for_status.side_effect = Exception("500 Internal")
             mock_req.post.return_value = resp
 
-            result = yt_client.update_video_metadata(
-                "vid_err", title="Fail"
-            )
+            result = yt_client.update_video_metadata("vid_err", title="Fail")
 
         assert result is None
 
@@ -1076,6 +1077,7 @@ class TestPerChunkRetry:
         # First attempt: fail. Second attempt: succeed (in-progress).
         # Third call: final chunk with response.
         call_count = {"n": 0}
+
         def next_chunk_with_retry():
             call_count["n"] += 1
             if call_count["n"] == 1:

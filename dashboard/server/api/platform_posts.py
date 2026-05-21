@@ -18,6 +18,7 @@ bp = Blueprint("platform_posts_api", __name__, url_prefix="/api/v1/platforms")
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -46,27 +47,33 @@ def tiktok_posts():
     posts = []
     for r in records:
         f = r.get("fields", {})
-        posts.append({
-            "id": r.get("id"),
-            "blueprint_id": f.get("blueprint_id"),
-            "published_at": f.get("published_at"),
-            "post_id": f.get("post_id"),
-            "views": f.get("impressions") or f.get("views") or 0,
-            "likes": f.get("likes", 0),
-            "comments": f.get("comments", 0),
-            "shares": f.get("shares", 0),
-            "engagement_rate": f.get("engagement_rate"),
-            "status": f.get("status"),
-        })
+        posts.append(
+            {
+                "id": r.get("id"),
+                "blueprint_id": f.get("blueprint_id"),
+                "published_at": f.get("published_at"),
+                "post_id": f.get("post_id"),
+                "views": f.get("impressions") or f.get("views") or 0,
+                "likes": f.get("likes", 0),
+                "comments": f.get("comments", 0),
+                "shares": f.get("shares", 0),
+                "engagement_rate": f.get("engagement_rate"),
+                "status": f.get("status"),
+            }
+        )
 
-    return api_success(data={
-        "data": posts,
-        "meta": {
-            "total": len(posts),
-            "audit_approved": audit_approved,
-            "note": None if audit_approved else "Posts published as SELF_ONLY (private) pending audit approval",
-        },
-    })
+    return api_success(
+        data={
+            "data": posts,
+            "meta": {
+                "total": len(posts),
+                "audit_approved": audit_approved,
+                "note": None
+                if audit_approved
+                else "Posts published as SELF_ONLY (private) pending audit approval",
+            },
+        }
+    )
 
 
 @bp.route("/threads/posts", methods=["GET"])
@@ -90,21 +97,25 @@ def threads_posts():
     posts = []
     for r in records:
         f = r.get("fields", {})
-        posts.append({
-            "id": r.get("id"),
-            "blueprint_id": f.get("blueprint_id"),
-            "published_at": f.get("published_at"),
-            "post_id": f.get("post_id"),
-            "permalink": f.get("permalink"),
-            "views": f.get("impressions") or f.get("views") or 0,
-            "likes": f.get("likes", 0),
-            "replies": f.get("comments", 0),
-            "reposts": f.get("shares", 0),
-            "quotes": f.get("quotes", 0),
-            "engagement_rate": f.get("engagement_rate"),
-        })
+        posts.append(
+            {
+                "id": r.get("id"),
+                "blueprint_id": f.get("blueprint_id"),
+                "published_at": f.get("published_at"),
+                "post_id": f.get("post_id"),
+                "permalink": f.get("permalink"),
+                "views": f.get("impressions") or f.get("views") or 0,
+                "likes": f.get("likes", 0),
+                "replies": f.get("comments", 0),
+                "reposts": f.get("shares", 0),
+                "quotes": f.get("quotes", 0),
+                "engagement_rate": f.get("engagement_rate"),
+            }
+        )
 
-    return api_success(data={
-        "data": posts,
-        "meta": {"total": len(posts)},
-    })
+    return api_success(
+        data={
+            "data": posts,
+            "meta": {"total": len(posts)},
+        }
+    )

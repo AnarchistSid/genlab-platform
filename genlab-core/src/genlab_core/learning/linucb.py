@@ -139,9 +139,7 @@ class LinUCBBandit:
     def __init__(self, arm_ids: list[str], d: int, alpha: float = 1.0) -> None:
         self.d = d
         self.alpha = alpha
-        self.arms: dict[str, LinUCBArm] = {
-            aid: LinUCBArm(d, alpha) for aid in arm_ids
-        }
+        self.arms: dict[str, LinUCBArm] = {aid: LinUCBArm(d, alpha) for aid in arm_ids}
 
     def select(self, context: np.ndarray) -> str:
         """Select the arm with the highest UCB score for the given context."""
@@ -203,17 +201,22 @@ def build_content_context(
     if isinstance(hashtags, str):
         hashtags = hashtags.split()
 
-    return np.array([
-        now.weekday() / 6.0,
-        now.hour / 23.0,
-        _SOURCE_TYPE_MAP.get(story.get("source_type", story.get("source", "")), _SOURCE_TYPE_DEFAULT),
-        min(story.get("duration_seconds", 30) / 60.0, 1.0),
-        min(story.get("view_velocity", 0) / 5000.0, 1.0),
-        story.get("relevance_score", story.get("composite_score", 0.5)),
-        min(len(hook) / 60.0, 1.0),
-        _NICHE_ENCODING.get(niche_id, 0.5),
-        1.0 if story.get("affiliate_product") else 0.0,
-        min(len(caption) / 200.0, 1.0),
-        min(len(hashtags) / 10.0, 1.0),
-        min(story.get("composite_score", story.get("score", 0.5)), 1.0),
-    ], dtype=np.float64)
+    return np.array(
+        [
+            now.weekday() / 6.0,
+            now.hour / 23.0,
+            _SOURCE_TYPE_MAP.get(
+                story.get("source_type", story.get("source", "")), _SOURCE_TYPE_DEFAULT
+            ),
+            min(story.get("duration_seconds", 30) / 60.0, 1.0),
+            min(story.get("view_velocity", 0) / 5000.0, 1.0),
+            story.get("relevance_score", story.get("composite_score", 0.5)),
+            min(len(hook) / 60.0, 1.0),
+            _NICHE_ENCODING.get(niche_id, 0.5),
+            1.0 if story.get("affiliate_product") else 0.0,
+            min(len(caption) / 200.0, 1.0),
+            min(len(hashtags) / 10.0, 1.0),
+            min(story.get("composite_score", story.get("score", 0.5)), 1.0),
+        ],
+        dtype=np.float64,
+    )

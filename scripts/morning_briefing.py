@@ -12,6 +12,7 @@ Usage:
     uv run --package genlab-core python3 scripts/morning_briefing.py --json
     uv run --package genlab-core python3 scripts/morning_briefing.py --niche gaming
 """
+
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ HEALTH_FILE = pathlib.Path.home() / ".genlab" / "token_health.json"
 
 
 # ── Infrastructure Checks ──────────────────────────────────────────
+
 
 def check_token_health() -> dict[str, Any]:
     if HEALTH_FILE.exists():
@@ -67,23 +69,27 @@ def check_recent_runs() -> dict[str, Any]:
         if status_file.exists():
             try:
                 status = json.loads(status_file.read_text())
-                recent.append({
-                    "run_id": d.name,
-                    "status": status.get("status", "unknown"),
-                    "started": status.get("started_at"),
-                    "stories": status.get("stories_processed", 0),
-                    "published": status.get("published", 0),
-                })
+                recent.append(
+                    {
+                        "run_id": d.name,
+                        "status": status.get("status", "unknown"),
+                        "started": status.get("started_at"),
+                        "stories": status.get("stories_processed", 0),
+                        "published": status.get("published", 0),
+                    }
+                )
             except (json.JSONDecodeError, KeyError):
                 recent.append({"run_id": d.name, "status": "parse_error"})
         else:
             logs = list(d.glob("*.log"))
-            recent.append({
-                "run_id": d.name,
-                "status": "no_status_file",
-                "has_logs": len(logs) > 0,
-                "modified": datetime.fromtimestamp(d.stat().st_mtime, tz=UTC).isoformat(),
-            })
+            recent.append(
+                {
+                    "run_id": d.name,
+                    "status": "no_status_file",
+                    "has_logs": len(logs) > 0,
+                    "modified": datetime.fromtimestamp(d.stat().st_mtime, tz=UTC).isoformat(),
+                }
+            )
     return {"recent_runs": recent, "total_run_dirs": len(run_dirs)}
 
 
@@ -110,6 +116,7 @@ def check_criticalrush_runs() -> dict[str, Any]:
 
 def check_disk_usage() -> dict[str, Any]:
     import shutil
+
     total, used, free = shutil.disk_usage("/")
     paths = {
         "GenLab": str(_ROOT),
@@ -135,17 +142,24 @@ def check_youtube_quota() -> dict[str, Any]:
     if not all([client_id, client_secret, refresh_token]):
         return {"status": "no_credentials"}
     try:
-        resp = requests.post("https://oauth2.googleapis.com/token", data={
-            "client_id": client_id, "client_secret": client_secret,
-            "refresh_token": refresh_token, "grant_type": "refresh_token",
-        }, timeout=10)
+        resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=10,
+        )
         if not resp.ok:
             return {"status": "token_refresh_failed"}
         token = resp.json().get("access_token")
         resp2 = requests.get(
             "https://www.googleapis.com/youtube/v3/channels",
             params={"part": "id", "mine": "true"},
-            headers={"Authorization": f"Bearer {token}"}, timeout=10,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
         )
         if resp2.ok:
             return {"status": "ok"}
@@ -157,6 +171,7 @@ def check_youtube_quota() -> dict[str, Any]:
 
 
 # ── Build Briefing ──────────────────────────────────────────────────
+
 
 def build_briefing(niche_id: str | None = None) -> dict[str, Any]:
     from intelligence_hub import (
@@ -225,6 +240,7 @@ def build_briefing(niche_id: str | None = None) -> dict[str, Any]:
 
 # ── Print ───────────────────────────────────────────────────────────
 
+
 def print_briefing(briefing: dict[str, Any]) -> None:
     from intelligence_hub import KNOWN_NICHES
 
@@ -286,8 +302,10 @@ def print_briefing(briefing: dict[str, Any]) -> None:
     if viral:
         print(f"\n  VIRAL ALERTS ({len(viral)})")
         for a in viral[-3:]:
-            print(f"    {a.get('level', '?'):8s} [{a.get('platform', '?').upper():10s}] "
-                  f"{a.get('multiplier', 0)}x — {a.get('text', '')[:45]}")
+            print(
+                f"    {a.get('level', '?'):8s} [{a.get('platform', '?').upper():10s}] "
+                f"{a.get('multiplier', 0)}x — {a.get('text', '')[:45]}"
+            )
 
     trends = intel.get("trends", {})
     daily = trends.get("daily_trending", [])
@@ -321,6 +339,7 @@ def print_briefing(briefing: dict[str, Any]) -> None:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Morning Briefing")
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("--niche", type=str, help="Filter by niche_id")

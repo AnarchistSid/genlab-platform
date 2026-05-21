@@ -57,7 +57,7 @@ def _config_dir_for_niche(niche_id: str) -> Path | None:
 
 # Per-niche credential env var prefixes
 _NICHE_CREDENTIAL_PREFIXES: dict[str, str] = {
-    "ai_creators": "",          # BB uses unprefixed env vars
+    "ai_creators": "",  # BB uses unprefixed env vars
     "gaming": "CRITICALRUSH_",
     "sports": "CLUTCHWIRE_",
     "movies": "SPLICEREEL_",
@@ -81,15 +81,17 @@ def list_niches():
     niches = _load_registry()
     result = []
     for niche in niches:
-        result.append({
-            "id": niche["id"],
-            "display_name": niche["display_name"],
-            "tagline": niche.get("tagline", ""),
-            "status": niche.get("status", "coming_soon"),
-            "accent_hex": niche.get("accent_hex", "#6366f1"),
-            "last_run": None,
-            "pending_review": 0,
-        })
+        result.append(
+            {
+                "id": niche["id"],
+                "display_name": niche["display_name"],
+                "tagline": niche.get("tagline", ""),
+                "status": niche.get("status", "coming_soon"),
+                "accent_hex": niche.get("accent_hex", "#6366f1"),
+                "last_run": None,
+                "pending_review": 0,
+            }
+        )
     return api_success(data=result)
 
 
@@ -102,9 +104,7 @@ def get_niche_config(niche_id: str):
 
     config_dir = _config_dir_for_niche(niche_id)
     if not config_dir:
-        return api_not_found(
-            message=f"Config directory not found for niche '{niche_id}'"
-        )
+        return api_not_found(message=f"Config directory not found for niche '{niche_id}'")
 
     merged: dict = {"niche_id": niche_id, "folder": niche["folder"]}
 
@@ -168,8 +168,10 @@ def check_niche_credentials(niche_id: str):
             "configured_vars": len(present),
         }
 
-    return api_success(data={
-        "niche_id": niche_id,
-        "display_name": niche["display_name"],
-        "platforms": result,
-    })
+    return api_success(
+        data={
+            "niche_id": niche_id,
+            "display_name": niche["display_name"],
+            "platforms": result,
+        }
+    )

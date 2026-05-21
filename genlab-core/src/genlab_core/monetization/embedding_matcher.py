@@ -8,6 +8,7 @@ Usage:
     if matcher.available:
         products = matcher.find_best_products("headphones for competitive gaming", "gaming")
 """
+
 from __future__ import annotations
 
 import json
@@ -42,6 +43,7 @@ class EmbeddingMatcher:
             return None
         try:
             import openai
+
             client = openai.OpenAI(api_key=self._api_key)
             response = client.embeddings.create(
                 model=EMBEDDING_MODEL,
@@ -52,8 +54,14 @@ class EmbeddingMatcher:
             logger.warning("[EmbeddingMatcher] Embed failed: %s", str(exc)[:60])
             return None
 
-    def index_product(self, product_id: str, name: str, category: str = "",
-                      niche_ids: list[str] | None = None, description: str = "") -> bool:
+    def index_product(
+        self,
+        product_id: str,
+        name: str,
+        category: str = "",
+        niche_ids: list[str] | None = None,
+        description: str = "",
+    ) -> bool:
         """Embed and upsert a product into product_embeddings."""
         text = f"{name} {category} {description}".strip()
         embedding = self.embed_text(text)
@@ -62,6 +70,7 @@ class EmbeddingMatcher:
 
         try:
             import psycopg
+
             conn = psycopg.connect(self._dsn, autocommit=True)
             conn.execute(
                 """INSERT INTO product_embeddings (product_id, product_name, product_category, niche_ids, embedding, updated_at)
@@ -78,8 +87,9 @@ class EmbeddingMatcher:
             logger.warning("[EmbeddingMatcher] Index failed for %s: %s", product_id, str(exc)[:60])
             return False
 
-    def find_best_products(self, content_text: str, niche_id: str = "",
-                           top_k: int = 3) -> list[dict[str, Any]]:
+    def find_best_products(
+        self, content_text: str, niche_id: str = "", top_k: int = 3
+    ) -> list[dict[str, Any]]:
         """Find the most semantically similar products to content text."""
         embedding = self.embed_text(content_text)
         if not embedding:
@@ -113,8 +123,12 @@ class EmbeddingMatcher:
             conn.close()
 
             if results:
-                logger.info("[EmbeddingMatcher] Found %d products for '%s' (best=%.2f)",
-                            len(results), content_text[:40], results[0]["similarity"])
+                logger.info(
+                    "[EmbeddingMatcher] Found %d products for '%s' (best=%.2f)",
+                    len(results),
+                    content_text[:40],
+                    results[0]["similarity"],
+                )
             return results
 
         except Exception as exc:

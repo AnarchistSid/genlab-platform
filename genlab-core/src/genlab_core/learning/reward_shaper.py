@@ -18,6 +18,7 @@ Thresholds (verified against platform docs, March 2026):
   Instagram: Invite-only (no fixed threshold) — DM send rate always highest
   X/Twitter: Premium + 5M impressions/3mo
 """
+
 from __future__ import annotations
 
 import logging
@@ -135,8 +136,14 @@ BASE_WEIGHTS: dict[str, dict[str, float]] = {
 # Original targets (for mature channels with 50K+ followers) were 10-100x higher
 # and produced near-zero rewards for new channels (Break 4 fix).
 _METRIC_TARGETS: dict[str, dict[str, float]] = {
-    "views": {"youtube": 200, "instagram": 500, "tiktok": 5000,
-              "facebook": 300, "twitter": 500, "x": 500},
+    "views": {
+        "youtube": 200,
+        "instagram": 500,
+        "tiktok": 5000,
+        "facebook": 300,
+        "twitter": 500,
+        "x": 500,
+    },
     "avg_view_duration": {"youtube": 30},
     "saves": {"instagram": 15},
     "dm_send_rate": {"instagram": 0.02},
@@ -187,7 +194,9 @@ class RewardShaper:
         self._channel_metrics_fn = channel_metrics_fn
 
     def get_adjusted_weights(
-        self, platform: str, channel_metrics: dict[str, float] | None = None,
+        self,
+        platform: str,
+        channel_metrics: dict[str, float] | None = None,
     ) -> dict[str, float]:
         """Compute reward weights adjusted for threshold proximity.
 
@@ -205,7 +214,8 @@ class RewardShaper:
             except Exception as e:
                 logger.warning(
                     "[REWARD] Channel metrics fetch failed for %s: %s",
-                    platform, e,
+                    platform,
+                    e,
                 )
                 channel_metrics = {}
 
@@ -268,9 +278,7 @@ class RewardShaper:
         # weights (e.g. IG skip_rate's -0.05 penalty) are preserved
         # only when the metric is present so the reweight stays bounded
         # to [0, 1].
-        present_weights = {
-            k: w for k, w in weights.items() if k in metrics
-        }
+        present_weights = {k: w for k, w in weights.items() if k in metrics}
         weight_sum = sum(abs(w) for w in present_weights.values())
         if weight_sum > 0:
             scale = sum(abs(w) for w in weights.values()) / weight_sum
@@ -290,7 +298,8 @@ class RewardShaper:
             raw_reward += monetization_bonus
             logger.debug(
                 "[REWARD] Monetization bonus: %d clicks → +%.2f",
-                int(affiliate_clicks), monetization_bonus,
+                int(affiliate_clicks),
+                monetization_bonus,
             )
 
         return max(0.0, min(1.0, raw_reward))
@@ -416,11 +425,14 @@ class MonetisationRewardShaper:
         """
         try:
             reward_config = self._config.get("reward", {})
-            weights = reward_config.get("weights", {
-                "completion_rate": 0.40,
-                "engagement": 0.35,
-                "shares": 0.25,
-            })
+            weights = reward_config.get(
+                "weights",
+                {
+                    "completion_rate": 0.40,
+                    "engagement": 0.35,
+                    "shares": 0.25,
+                },
+            )
 
             # Share normalisation scale from config with safe fallback matching
             # the previous hardcoded value exactly (zero behaviour change).
@@ -446,7 +458,12 @@ class MonetisationRewardShaper:
             logger.debug(
                 "RewardShaper: platform=%s window=%s base=%.4f boost=%.3f "
                 "shaped=%.4f normalised=%.4f",
-                platform, window, base, boost, shaped, normalised,
+                platform,
+                window,
+                base,
+                boost,
+                shaped,
+                normalised,
             )
             return normalised
 
@@ -465,7 +482,8 @@ class MonetisationRewardShaper:
         if self._multiplier_provider is not None:
             try:
                 mult = self._multiplier_provider.get_multiplier(
-                    self._niche_id, platform,
+                    self._niche_id,
+                    platform,
                 )
                 # Convert multiplier (1.0/1.5/3.0) to a boost additive
                 # 1.0 → 0.0 boost, 1.5 → 0.075 boost, 3.0 → 0.30 boost
@@ -475,13 +493,18 @@ class MonetisationRewardShaper:
                 if boost > 0:
                     logger.info(
                         "[REWARD] %s/%s: live SP multiplier=%.1f -> boost=%.3f",
-                        self._niche_id, platform, mult, boost,
+                        self._niche_id,
+                        platform,
+                        mult,
+                        boost,
                     )
                 return boost
             except Exception as e:
                 logger.warning(
                     "[REWARD] Provider failed for %s/%s: %s — falling back to YAML",
-                    self._niche_id, platform, e,
+                    self._niche_id,
+                    platform,
+                    e,
                 )
 
         # Fallback: static YAML path
@@ -494,9 +517,7 @@ class MonetisationRewardShaper:
             return 0.0
 
         primary_metric = _PLATFORM_PRIMARY_METRICS.get(platform, "engagement_rate")
-        metric_key, threshold_yaml_key = _THRESHOLD_KEYS.get(
-            primary_metric, (None, None)
-        )
+        metric_key, threshold_yaml_key = _THRESHOLD_KEYS.get(primary_metric, (None, None))
         if not metric_key or not threshold_yaml_key:
             return 0.0
 
@@ -539,6 +560,7 @@ class MonetisationRewardShaper:
 # MonetisationMultiplierProvider — live SP data for threshold proximity
 # ---------------------------------------------------------------------------
 
+
 def _get_targets_path() -> Path:
     """Resolve path to monetisation_targets.yaml.
 
@@ -547,6 +569,7 @@ def _get_targets_path() -> Path:
     source-tree relative path ``parents[3]`` would be meaningless.
     """
     from genlab_core.settings import _PROJECT_ROOT
+
     return _PROJECT_ROOT / "genlab-core" / "config" / "monetisation_targets.yaml"
 
 
@@ -599,12 +622,15 @@ class MonetisationMultiplierProvider:
             client = self._client
             if client is None:
                 from genlab_core.http.backlog_client import BacklogClient
+
                 client = BacklogClient()
                 self._client = client
 
             proxy = getattr(client, "monetisation_progress", None)
             if proxy is None:
-                logger.warning("MonetisationMultiplierProvider: no monetisation_progress proxy on BacklogClient")
+                logger.warning(
+                    "MonetisationMultiplierProvider: no monetisation_progress proxy on BacklogClient"
+                )
                 return
 
             records = proxy.all()
@@ -612,20 +638,26 @@ class MonetisationMultiplierProvider:
             new_cache: dict[str, dict] = {}
             for rec in records:
                 fields = rec.get("fields", rec)
-                key = f"{fields.get('niche_id')}/{fields.get('platform')}/{fields.get('metric_name')}"
+                key = (
+                    f"{fields.get('niche_id')}/{fields.get('platform')}/{fields.get('metric_name')}"
+                )
                 new_cache[key] = fields
 
             self._cache = new_cache
             self._cache_ts = now
             logger.debug(
-                "MonetisationMultiplierProvider: refreshed %d records", len(new_cache),
+                "MonetisationMultiplierProvider: refreshed %d records",
+                len(new_cache),
             )
 
         except Exception as e:
             logger.error("MonetisationMultiplierProvider: cache refresh failed: %s", e)
 
     def get_progress(
-        self, niche_id: str, platform: str, metric_name: str,
+        self,
+        niche_id: str,
+        platform: str,
+        metric_name: str,
     ) -> dict | None:
         """Get raw progress record for a specific metric."""
         self._ensure_cache()

@@ -10,6 +10,7 @@ Usage:
 Or via launchd:
     ~/Library/LaunchAgents/com.genlab.quota-monitor.plist
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,7 +63,9 @@ def main() -> None:
 
     manager = DiskQuotaManager.from_yaml(config_path)
     agents = list(manager._config.get("agents", {}).keys())
-    logger.info("Quota daemon started: config=%s agents=%s interval=%ds", config_path, agents, args.interval)
+    logger.info(
+        "Quota daemon started: config=%s agents=%s interval=%ds", config_path, agents, args.interval
+    )
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
@@ -74,7 +77,8 @@ def main() -> None:
                 if status.over_quota:
                     logger.warning(
                         "[%s] OVER QUOTA %.1f%% — triggering eviction",
-                        agent, status.pct_used,
+                        agent,
+                        status.pct_used,
                     )
                     evicted = manager.evict(agent)
                     if evicted:
@@ -82,11 +86,16 @@ def main() -> None:
                 elif status.over_warn:
                     logger.info(
                         "[%s] WARNING %.1f%% used (%d runs, %d evictable)",
-                        agent, status.pct_used, status.run_count, status.evictable_count,
+                        agent,
+                        status.pct_used,
+                        status.run_count,
+                        status.evictable_count,
                     )
                 else:
                     logger.debug(
-                        "[%s] OK %.1f%% used", agent, status.pct_used,
+                        "[%s] OK %.1f%% used",
+                        agent,
+                        status.pct_used,
                     )
             except Exception:
                 logger.exception("[%s] Quota check failed", agent)

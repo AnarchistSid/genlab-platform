@@ -15,6 +15,7 @@ Returns story dicts compatible with the pipeline context (same shape
 ``TrendingVideoFetcher.to_story()`` produces), so downstream stages
 (scoring, writing, hooks, render) consume them without changes.
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,8 +37,7 @@ _REDDIT_UA = "GenLab/0.1 (+https://aspirehub.ai/genlab) by aspirehub"
 # Without it, requests go direct (works fine from dev machines).
 _REDDIT_PROXY_URL = os.environ.get("GENLAB_HTTP_SOCKS_PROXY", "").strip()
 _REDDIT_PROXIES = (
-    {"http": _REDDIT_PROXY_URL, "https": _REDDIT_PROXY_URL}
-    if _REDDIT_PROXY_URL else None
+    {"http": _REDDIT_PROXY_URL, "https": _REDDIT_PROXY_URL} if _REDDIT_PROXY_URL else None
 )
 
 # Endpoints that surface high-engagement posts. "top" with t=day gives
@@ -154,8 +154,9 @@ def _normalise_post(post: dict, niche_id: str, subreddit: str) -> dict[str, Any]
         "channel_name": f"r/{subreddit}",
         "view_count": score * 100,  # synth proxy for the velocity field
         "view_velocity": round(view_velocity, 1),
-        "duration_seconds": int(data.get("media", {})
-                                .get("reddit_video", {}).get("duration", 0) or 0),
+        "duration_seconds": int(
+            data.get("media", {}).get("reddit_video", {}).get("duration", 0) or 0
+        ),
         "thumbnail_url": data.get("thumbnail") or "",
         "tags": [subreddit, niche_id],
         "niche_id": niche_id,
@@ -166,7 +167,8 @@ def _normalise_post(post: dict, niche_id: str, subreddit: str) -> dict[str, Any]
         "video_id": data.get("id", ""),
         "is_official_channel": False,
         "source_mention_count": max(
-            1, min(5, score // 1000 + (num_comments // 200)),
+            1,
+            min(5, score // 1000 + (num_comments // 200)),
         ),
         "_trending_video": True,
         # Reddit-specific signals downstream stages can use for context
@@ -219,8 +221,8 @@ def fetch_subreddit(
         )
         if resp.status_code == 429:
             logger.warning(
-                "[reddit] %s rate-limited (429) — skipping this subreddit "
-                "for this run", subreddit,
+                "[reddit] %s rate-limited (429) — skipping this subreddit for this run",
+                subreddit,
             )
             return []
         resp.raise_for_status()
@@ -237,7 +239,11 @@ def fetch_subreddit(
             stories.append(story)
     logger.info(
         "[reddit] r/%s yielded %d/%d video stories (listing=%s, t=%s)",
-        subreddit, len(stories), len(children), listing, time_window,
+        subreddit,
+        len(stories),
+        len(children),
+        listing,
+        time_window,
     )
 
     # Listing fallback: the sub responded but today's "top" happens to be
@@ -284,7 +290,10 @@ def _fetch_listing(
             stories.append(story)
     logger.info(
         "[reddit] r/%s fallback to %s yielded %d/%d video stories",
-        subreddit, listing, len(stories), len(children),
+        subreddit,
+        listing,
+        len(stories),
+        len(children),
     )
     return stories
 
@@ -335,8 +344,11 @@ def fetch_for_niche(
         if not name:
             continue
         for story in fetch_subreddit(
-            name, niche_id, listing=sub_listing,
-            time_window=sub_t, limit=sub_limit,
+            name,
+            niche_id,
+            listing=sub_listing,
+            time_window=sub_t,
+            limit=sub_limit,
         ):
             url = story["canonical_url"]
             if url in seen_urls:
@@ -347,6 +359,8 @@ def fetch_for_niche(
     all_stories.sort(key=lambda s: s.get("view_velocity", 0), reverse=True)
     logger.info(
         "[reddit] niche=%s aggregated %d unique video stories across %d subreddits",
-        niche_id, len(all_stories), len(subreddits),
+        niche_id,
+        len(all_stories),
+        len(subreddits),
     )
     return all_stories

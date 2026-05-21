@@ -21,8 +21,12 @@ class OMDbResult:
     """Enrichment data returned from OMDb for a single film."""
 
     __slots__ = (
-        "imdb_id", "imdb_rating", "rt_score",
-        "metacritic_score", "box_office", "awards",
+        "imdb_id",
+        "imdb_rating",
+        "rt_score",
+        "metacritic_score",
+        "box_office",
+        "awards",
     )
 
     def __init__(

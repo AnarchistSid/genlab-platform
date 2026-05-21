@@ -1,4 +1,5 @@
 """Engagement-specific rate limiter wrapping core TokenBucket."""
+
 from __future__ import annotations
 
 import logging
@@ -19,9 +20,7 @@ class EngagementRateLimiter:
         self._buckets: dict[str, TokenBucket] = {}
         for platform, actions_per_hour in rate_caps.items():
             rate = actions_per_hour / 3600.0  # tokens per second
-            self._buckets[platform] = TokenBucket(
-                rate=rate, burst=float(actions_per_hour)
-            )
+            self._buckets[platform] = TokenBucket(rate=rate, burst=float(actions_per_hour))
 
     def acquire(self, platform: str) -> bool:
         """Try to acquire a rate limit token. Returns False if rate-limited."""

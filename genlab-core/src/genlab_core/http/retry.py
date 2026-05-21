@@ -7,6 +7,7 @@ Usage:
     def call_api():
         ...
 """
+
 from __future__ import annotations
 
 import functools
@@ -30,6 +31,7 @@ def retry(
         initial_delay: Seconds to wait before the first retry.
         exceptions: Tuple of exception types that trigger a retry.
     """
+
     def decorator(fn):
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
@@ -44,10 +46,16 @@ def retry(
                         break
                     logger.warning(
                         "%s attempt %d/%d failed: %s — retrying in %.1fs",
-                        fn.__qualname__, attempt, max_attempts, exc, delay,
+                        fn.__qualname__,
+                        attempt,
+                        max_attempts,
+                        exc,
+                        delay,
                     )
                     time.sleep(delay)
                     delay *= backoff
             raise last_exc  # type: ignore[misc]
+
         return wrapper
+
     return decorator

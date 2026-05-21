@@ -8,6 +8,7 @@ Usage:
     backend = get_backend_for_table("Stories", sharepoint_proxies=proxies)
     records = backend.find("Stories", formula="{status}='INTAKE'")
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__)
 # Use reset_backends() in tests to clear all cached state.
 _config: dict[str, str] | None = None
 _sharepoint_backend: Any | None = None
-_sharepoint_proxies_id: int | None = None  # id() of the proxies dict used to create _sharepoint_backend
+_sharepoint_proxies_id: int | None = (
+    None  # id() of the proxies dict used to create _sharepoint_backend
+)
 _postgres_backend: Any | None = None
 _postgres_dsn_used: str | None = None  # DSN used to create _postgres_backend
 
@@ -57,9 +60,7 @@ def _load_config() -> dict[str, str]:
             logger.debug("Loaded storage_backends.yaml from %s", candidate)
             return _config
 
-    logger.info(
-        "storage_backends.yaml not found, defaulting all tables to 'sharepoint'"
-    )
+    logger.info("storage_backends.yaml not found, defaulting all tables to 'sharepoint'")
     _config = {}
     return _config
 
@@ -106,15 +107,18 @@ def get_backend_for_table(
             pg_kwargs = {}
             if dsn:
                 from urllib.parse import urlparse
+
                 parsed = urlparse(dsn)
                 pg_kwargs = {
-                    k: v for k, v in {
+                    k: v
+                    for k, v in {
                         "host": parsed.hostname,
                         "port": parsed.port,
                         "database": (parsed.path or "").lstrip("/") or None,
                         "user": parsed.username,
                         "password": parsed.password,
-                    }.items() if v is not None
+                    }.items()
+                    if v is not None
                 }
             _postgres_backend = PostgresBackend(**pg_kwargs)
             _postgres_dsn_used = dsn

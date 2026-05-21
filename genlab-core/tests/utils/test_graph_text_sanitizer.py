@@ -9,7 +9,6 @@ Covers:
   - Integration with GraphTableProxy._prepare_fields()
 """
 
-
 from genlab_core.utils.text_sanitizer import (
     sanitize_fields_for_graph_api,
     sanitize_for_graph_api,
@@ -41,7 +40,7 @@ class TestSanitizeForGraphApi:
         assert sanitize_for_graph_api("\u2018hello\u2019") == "'hello'"
 
     def test_replaces_curly_double_quotes(self):
-        result = sanitize_for_graph_api("\u201CHello\u201D")
+        result = sanitize_for_graph_api("\u201cHello\u201d")
         assert result == '"Hello"'
 
     def test_japanese_characters_pass_through(self):

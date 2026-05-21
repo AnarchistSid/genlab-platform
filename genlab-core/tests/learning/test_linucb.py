@@ -265,8 +265,12 @@ class TestBuildContentContext:
 
     def test_source_type_mapping(self):
         """Known source types should map to specific values."""
-        for source, expected in [("youtube", 0.0), ("reddit", 0.33),
-                                  ("rss", 0.66), ("twitch", 1.0)]:
+        for source, expected in [
+            ("youtube", 0.0),
+            ("reddit", 0.33),
+            ("rss", 0.66),
+            ("twitch", 1.0),
+        ]:
             story = {"source_type": source}
             ctx = build_content_context(story, "gaming")
             assert ctx[2] == pytest.approx(expected, abs=0.01)
@@ -282,9 +286,9 @@ class TestBuildContentContext:
         assert isinstance(ctx, np.ndarray)
         assert ctx.shape == (CONTEXT_DIM,)
         # duration default 30/60=0.5, velocity default 0, relevance default 0.5
-        assert ctx[3] == pytest.approx(0.5)   # duration_seconds=30
-        assert ctx[4] == pytest.approx(0.0)   # view_velocity=0
-        assert ctx[5] == pytest.approx(0.5)   # relevance_score=0.5
+        assert ctx[3] == pytest.approx(0.5)  # duration_seconds=30
+        assert ctx[4] == pytest.approx(0.0)  # view_velocity=0
+        assert ctx[5] == pytest.approx(0.5)  # relevance_score=0.5
 
     def test_duration_capped_at_1(self):
         """Duration > 60s should still cap at 1.0."""
@@ -394,19 +398,24 @@ class TestArmLoaderLinUCBIntegration:
         linucb_data = arm.to_dict()
 
         import json
-        mock_proxy = type("MockProxy", (), {
-            "all": lambda self: [
-                {
-                    "fields": {
-                        "Title": "hook:test",
-                        "Alpha": 2.0,
-                        "Beta": 3.0,
-                        "TotalPulls": 10,
-                        "LinUCB_State": json.dumps(linucb_data),
+
+        mock_proxy = type(
+            "MockProxy",
+            (),
+            {
+                "all": lambda self: [
+                    {
+                        "fields": {
+                            "Title": "hook:test",
+                            "Alpha": 2.0,
+                            "Beta": 3.0,
+                            "TotalPulls": 10,
+                            "LinUCB_State": json.dumps(linucb_data),
+                        }
                     }
-                }
-            ]
-        })()
+                ]
+            },
+        )()
 
         result = load_all_arms_extended(mock_proxy, "gaming")
         assert "hook:test" in result
@@ -419,17 +428,21 @@ class TestArmLoaderLinUCBIntegration:
         """Backward compat: arms without LinUCB_State should still load."""
         from genlab_core.learning.arm_loader import load_all_arms_extended
 
-        mock_proxy = type("MockProxy", (), {
-            "all": lambda self: [
-                {
-                    "fields": {
-                        "Title": "hook:test",
-                        "Alpha": 2.0,
-                        "Beta": 3.0,
+        mock_proxy = type(
+            "MockProxy",
+            (),
+            {
+                "all": lambda self: [
+                    {
+                        "fields": {
+                            "Title": "hook:test",
+                            "Alpha": 2.0,
+                            "Beta": 3.0,
+                        }
                     }
-                }
-            ]
-        })()
+                ]
+            },
+        )()
 
         result = load_all_arms_extended(mock_proxy, "gaming")
         assert "hook:test" in result
@@ -457,6 +470,7 @@ class TestArmLoaderLinUCBIntegration:
         assert "linucb_state" in saved_fields or "LinUCB_State" in saved_fields
 
         import json
+
         state_key = "linucb_state" if "linucb_state" in saved_fields else "LinUCB_State"
         state = json.loads(saved_fields[state_key])
         assert "A_matrix" in state

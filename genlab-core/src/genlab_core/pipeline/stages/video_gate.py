@@ -55,10 +55,18 @@ def _probe_video_quality(path: Path) -> dict[str, float]:
     try:
         proc = subprocess.run(
             [
-                "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_streams", "-show_format", str(path),
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-print_format",
+                "json",
+                "-show_streams",
+                "-show_format",
+                str(path),
             ],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if proc.returncode != 0:
             return result
@@ -104,10 +112,7 @@ class VideoGate:
             story_id = story.get("story_id", "")
             clip_entry = clips.get(story_id, {})
 
-            has_valid_clip = (
-                clip_entry.get("success", False)
-                and clip_entry.get("clip_path")
-            )
+            has_valid_clip = clip_entry.get("success", False) and clip_entry.get("clip_path")
 
             # Fallback: check story-level media (gaming ExtractGamingMedia style)
             if not has_valid_clip:
@@ -115,13 +120,17 @@ class VideoGate:
                 media_clip = (story.get("media") or {}).get("clip")
                 if local_path and Path(local_path).exists():
                     has_valid_clip = True
-                    logger.debug("VideoGate: found clip via story.local_path for '%s'", story_id[:16])
+                    logger.debug(
+                        "VideoGate: found clip via story.local_path for '%s'", story_id[:16]
+                    )
                 elif media_clip and media_clip.get("file_path"):
                     clip_file = media_clip["file_path"]
                     if Path(clip_file).exists():
                         has_valid_clip = True
                         story["local_path"] = clip_file
-                        logger.debug("VideoGate: found clip via story.media.clip for '%s'", story_id[:16])
+                        logger.debug(
+                            "VideoGate: found clip via story.media.clip for '%s'", story_id[:16]
+                        )
 
             # Check if clip file exists and is large enough
             clip_path = ""
@@ -137,7 +146,8 @@ class VideoGate:
                         has_valid_clip = False
                         logger.warning(
                             "VideoGate: clip for %s too small (%d bytes)",
-                            story_id[:16], p.stat().st_size,
+                            story_id[:16],
+                            p.stat().st_size,
                         )
 
             # Visual-content gate: reject clips whose stream bitrate and/or
@@ -163,14 +173,14 @@ class VideoGate:
                     elif bps > 0 and bps < _MIN_BYTES_PER_SEC:
                         has_valid_clip = False
                         visual_reject_reason = (
-                            f"low_bytes_per_sec ({int(bps)} B/s < "
-                            f"{_MIN_BYTES_PER_SEC} threshold)"
+                            f"low_bytes_per_sec ({int(bps)} B/s < {_MIN_BYTES_PER_SEC} threshold)"
                         )
                     if visual_reject_reason:
                         logger.warning(
                             "VideoGate: clip for '%s' rejected — %s "
                             "(likely text-only or static content)",
-                            story.get("title", "")[:60], visual_reject_reason,
+                            story.get("title", "")[:60],
+                            visual_reject_reason,
                         )
                         # Mark in clip_index so render strategies fall through
                         # to the no-video path instead of compositing garbage.

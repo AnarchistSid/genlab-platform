@@ -1,4 +1,5 @@
 """Tests for OData formula -> SQL WHERE translation."""
+
 from __future__ import annotations
 
 from genlab_core.storage.formula_sql import formula_to_sql
@@ -14,9 +15,7 @@ class TestFormulaToSQL:
         assert "$1" in sql
 
     def test_and_condition(self):
-        sql, params = formula_to_sql(
-            "AND({status}='DRAFTED', {niche_id}='gaming')"
-        )
+        sql, params = formula_to_sql("AND({status}='DRAFTED', {niche_id}='gaming')")
         assert "AND" in sql
         assert len(params) == 2
         assert "DRAFTED" in params
@@ -40,25 +39,19 @@ class TestFormulaToSQL:
 
     def test_and_two_conditions_format(self):
         """AND() should produce 'field1 = $1 AND field2 = $2'."""
-        sql, params = formula_to_sql(
-            "AND({status}='PUBLISHED', {niche_id}='sports')"
-        )
+        sql, params = formula_to_sql("AND({status}='PUBLISHED', {niche_id}='sports')")
         assert sql == "(status = $1 AND niche_id = $2)"
         assert params == ["PUBLISHED", "sports"]
 
     def test_and_three_conditions(self):
         """Three conditions inside AND()."""
-        sql, params = formula_to_sql(
-            "AND({status}='DRAFTED', {niche_id}='gaming', {hook}='test')"
-        )
+        sql, params = formula_to_sql("AND({status}='DRAFTED', {niche_id}='gaming', {hook}='test')")
         assert sql == "(status = $1 AND niche_id = $2 AND hook = $3)"
         assert params == ["DRAFTED", "gaming", "test"]
 
     def test_or_condition(self):
         """OR() should produce 'field1 = $1 OR field2 = $2'."""
-        sql, params = formula_to_sql(
-            "OR({status}='DRAFTED', {status}='PUBLISHED')"
-        )
+        sql, params = formula_to_sql("OR({status}='DRAFTED', {status}='PUBLISHED')")
         assert "OR" in sql
         assert len(params) == 2
 
@@ -81,9 +74,7 @@ class TestFormulaToSQL:
 
     def test_param_numbering_increments(self):
         """Each parameter should get a unique positional number."""
-        sql, params = formula_to_sql(
-            "AND({a}='1', {b}='2', {c}='3')"
-        )
+        sql, params = formula_to_sql("AND({a}='1', {b}='2', {c}='3')")
         assert "$1" in sql
         assert "$2" in sql
         assert "$3" in sql

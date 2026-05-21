@@ -1,4 +1,5 @@
 """Tests for /api/v1/pipeline endpoints — prefect_connected field and status."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -23,6 +24,7 @@ def client():
     app.config["LOCAL_MODE"] = True
     # Clear the module-level status cache between tests
     from server.api import pipeline as _pipe_mod
+
     _pipe_mod._status_cache["data"] = None
     _pipe_mod._status_cache["ts"] = 0.0
     with app.test_client() as c:
@@ -41,8 +43,10 @@ def test_status_includes_prefect_connected(client):
 
 def test_status_prefect_connected_true(client):
     """When Prefect is healthy, prefect_connected should be True."""
-    with patch("server.api.pipeline._prefect_healthy", return_value=True), \
-         patch("server.api.pipeline._merge_prefect_status", side_effect=lambda x: x):
+    with (
+        patch("server.api.pipeline._prefect_healthy", return_value=True),
+        patch("server.api.pipeline._merge_prefect_status", side_effect=lambda x: x),
+    ):
         resp = client.get("/api/v1/pipeline/status")
     assert resp.status_code == 200
     data = resp.get_json()["data"]

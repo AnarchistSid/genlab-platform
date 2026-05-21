@@ -3,6 +3,7 @@
 No ML model needed — spam comments on social media follow
 predictable patterns (URLs, promo language, repetition).
 """
+
 from __future__ import annotations
 
 import re
@@ -25,7 +26,7 @@ _SPAM_PATTERNS = [
     re.compile(r"(free|earn|make)\s+\$?\d+", re.IGNORECASE),
     re.compile(r"(dm|message)\s+(me|us)\s+(for|to)", re.IGNORECASE),
     re.compile(r"(follow|sub)\s+(me|back|4follow)", re.IGNORECASE),
-    re.compile(r"(.)\1{5,}"),                              # Repeated chars (aaaaaa)
+    re.compile(r"(.)\1{5,}"),  # Repeated chars (aaaaaa)
     re.compile(r"(promo|discount|giveaway|winner)", re.IGNORECASE),
 ]
 

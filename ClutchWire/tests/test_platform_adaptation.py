@@ -26,18 +26,14 @@ class TestXTwitterLinkRule:
         assert "https://example.com/clip" in content["x_twitter"]["first_reply"]
 
     def test_source_url_in_first_reply_when_no_inline_urls(self, strategy):
-        content = {
-            "x_twitter": {"tweet": "What a clutch moment"}
-        }
+        content = {"x_twitter": {"tweet": "What a clutch moment"}}
         story = {"content": content, "source_url": "https://espn.com/story"}
         strategy._adapt_x_twitter(content, story)
 
         assert content["x_twitter"]["first_reply"] == "https://espn.com/story"
 
     def test_tweet_text_preserved_without_url(self, strategy):
-        content = {
-            "x_twitter": {"tweet": "Nobody saw that coming https://clip.com/x"}
-        }
+        content = {"x_twitter": {"tweet": "Nobody saw that coming https://clip.com/x"}}
         story = {"content": content}
         strategy._adapt_x_twitter(content, story)
 
@@ -45,11 +41,7 @@ class TestXTwitterLinkRule:
         assert "https://" not in content["x_twitter"]["tweet"]
 
     def test_multiple_urls_all_moved(self, strategy):
-        content = {
-            "x_twitter": {
-                "tweet": "Check https://a.com and https://b.com"
-            }
-        }
+        content = {"x_twitter": {"tweet": "Check https://a.com and https://b.com"}}
         story = {"content": content}
         strategy._adapt_x_twitter(content, story)
 
@@ -62,9 +54,7 @@ class TestXTwitterLinkRule:
 
 class TestInstagramUrlStrip:
     def test_urls_stripped_from_instagram_caption(self, strategy):
-        content = {
-            "instagram": {"caption": "Amazing play https://link.com follow for more"}
-        }
+        content = {"instagram": {"caption": "Amazing play https://link.com follow for more"}}
         story = {"content": content}
         strategy._adapt_instagram(content, story)
         assert "https://" not in content["instagram"]["caption"]

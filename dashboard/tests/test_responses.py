@@ -1,4 +1,5 @@
 """Tests for standardized API response helpers."""
+
 from __future__ import annotations
 
 import json

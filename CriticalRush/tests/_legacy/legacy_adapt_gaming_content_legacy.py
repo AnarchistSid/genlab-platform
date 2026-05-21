@@ -1,4 +1,5 @@
 """Tests for gaming-specific platform adaptation."""
+
 from __future__ import annotations
 
 from niches.gaming.stages.adapt_gaming_content import (
@@ -11,7 +12,11 @@ from niches.gaming.stages.adapt_gaming_content import (
 class TestEnforceHashtagCount:
     def test_pads_from_pool(self):
         caption, hashtags = _enforce_hashtag_count(
-            "test", ["#gaming"], ["#esports", "#twitch", "#gamer"], 3, 5,
+            "test",
+            ["#gaming"],
+            ["#esports", "#twitch", "#gamer"],
+            3,
+            5,
         )
         assert len(hashtags) >= 3
 
@@ -22,33 +27,53 @@ class TestEnforceHashtagCount:
 
     def test_no_duplicates_when_padding(self):
         caption, hashtags = _enforce_hashtag_count(
-            "test", ["#gaming", "#esports"], ["#gaming", "#twitch", "#gamer"], 3, 5,
+            "test",
+            ["#gaming", "#esports"],
+            ["#gaming", "#twitch", "#gamer"],
+            3,
+            5,
         )
         # #gaming already exists, shouldn't be added again
         assert hashtags.count("#gaming") == 1
 
     def test_no_change_within_range(self):
         caption, hashtags = _enforce_hashtag_count(
-            "test", ["#a", "#b", "#c", "#d"], [], 3, 5,
+            "test",
+            ["#a", "#b", "#c", "#d"],
+            [],
+            3,
+            5,
         )
         assert len(hashtags) == 4
 
     def test_pads_to_exact_min(self):
         caption, hashtags = _enforce_hashtag_count(
-            "test", ["#a"], ["#b", "#c"], 3, 5,
+            "test",
+            ["#a"],
+            ["#b", "#c"],
+            3,
+            5,
         )
         assert len(hashtags) == 3
 
     def test_empty_pool_no_padding(self):
         caption, hashtags = _enforce_hashtag_count(
-            "test", ["#solo"], [], 3, 5,
+            "test",
+            ["#solo"],
+            [],
+            3,
+            5,
         )
         # Can't pad without pool — stays at 1
         assert len(hashtags) == 1
 
     def test_caption_returned_unchanged(self):
         caption, hashtags = _enforce_hashtag_count(
-            "my caption text", ["#a"], ["#b", "#c"], 3, 5,
+            "my caption text",
+            ["#a"],
+            ["#b", "#c"],
+            3,
+            5,
         )
         assert caption == "my caption text"
 
@@ -89,7 +114,10 @@ class TestAdaptStoryContent:
             "x_twitter": {"tweet": "News https://source.com here"},
         }
         result = adapt_story_content(
-            content, {"source_url": "https://source.com"}, {}, {},
+            content,
+            {"source_url": "https://source.com"},
+            {},
+            {},
         )
         assert "https://source.com" not in result["x_twitter"]["tweet"]
         assert result["x_twitter"].get("first_reply")
@@ -103,7 +131,10 @@ class TestAdaptStoryContent:
             "x_twitter": {"tweet": "Big https://link.com update"},
         }
         result = adapt_story_content(
-            content, {"source_url": "https://link.com"}, overrides, {},
+            content,
+            {"source_url": "https://link.com"},
+            overrides,
+            {},
         )
         assert result["x_twitter"]["first_reply"] == "Read more: https://link.com"
 

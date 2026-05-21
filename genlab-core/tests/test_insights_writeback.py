@@ -1,4 +1,5 @@
 """Tests for _write_back_to_blueprint in run_fetch_insights."""
+
 from __future__ import annotations
 
 import unittest
@@ -6,9 +7,9 @@ from unittest.mock import MagicMock
 
 
 class TestWriteBackToBlueprint(unittest.TestCase):
-
     def _call(self, client, bp_id, platform, insights, window=6):
         from genlab_core.scripts.run_fetch_insights import _write_back_to_blueprint
+
         _write_back_to_blueprint(client, bp_id, platform, insights, window)
 
     def test_instagram_fields_written(self):
@@ -63,6 +64,7 @@ class TestWriteBackToBlueprint(unittest.TestCase):
         import inspect
 
         from genlab_core.scripts import run_fetch_insights as mod
+
         source = inspect.getsource(mod.fetch_insights_for_window)
         self.assertIn("_write_back_to_blueprint", source)
         self.assertIn("except Exception as wb_exc", source)

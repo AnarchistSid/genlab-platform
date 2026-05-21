@@ -90,11 +90,7 @@ class PendingFeedbackTask(BaseModel):
             "post_id": self.platform_post_id,
             "platform": self.platform,
             "arm_id": self.bandit_arm or "",
-            "bandit_context": (
-                _json.dumps(self.bandit_context)
-                if self.bandit_context
-                else ""
-            ),
+            "bandit_context": (_json.dumps(self.bandit_context) if self.bandit_context else ""),
             "collection_status": self.collection_status,
             "publish_time": self.published_at.isoformat(),
             # Extra fields (go to JSONB)

@@ -65,9 +65,7 @@ class TestInstagramRules:
             caption="Amazing discovery about AI",
             hashtags=["AI", "Tech", "News"],
         )
-        assert "Save this for later!" in result.caption or any(
-            "CTA" in w for w in result.warnings
-        )
+        assert "Save this for later!" in result.caption or any("CTA" in w for w in result.warnings)
 
     def test_custom_cta_used(self):
         result = enforce_platform_rules(

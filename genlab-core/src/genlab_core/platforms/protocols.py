@@ -3,6 +3,7 @@
 Publisher is required. Engageable, Trackable, HealthCheckable are optional.
 Use isinstance() checks at dispatch time to determine capabilities.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -30,9 +31,7 @@ class Publisher(Protocol):
 class Engageable(Protocol):
     """Optional: reply to comments, like posts."""
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool: ...
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool: ...
 
     def like(self, target_id: str, *, context_id: str = "") -> bool: ...
 
@@ -41,9 +40,7 @@ class Engageable(Protocol):
 class Trackable(Protocol):
     """Optional: collect analytics/metrics for a published post."""
 
-    def get_metrics(
-        self, post_id: str, published_at: datetime
-    ) -> PlatformMetrics | None: ...
+    def get_metrics(self, post_id: str, published_at: datetime) -> PlatformMetrics | None: ...
 
 
 @runtime_checkable

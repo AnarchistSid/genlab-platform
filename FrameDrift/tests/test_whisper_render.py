@@ -16,23 +16,31 @@ def whisper_strategy(tmp_path):
     config_dir.mkdir()
 
     # sources.yaml (required by _ensure_config)
-    (config_dir / "sources.yaml").write_text(yaml.dump({
-        "media": {"pexels": {"anime_queries": ["anime aesthetic lifestyle urban"]}},
-    }))
+    (config_dir / "sources.yaml").write_text(
+        yaml.dump(
+            {
+                "media": {"pexels": {"anime_queries": ["anime aesthetic lifestyle urban"]}},
+            }
+        )
+    )
 
     # visuals.yaml with whisper_sync enabled
-    (config_dir / "visuals.yaml").write_text(yaml.dump({
-        "animation": {
-            "word_by_word": {
-                "whisper_sync": {
-                    "enabled": True,
-                    "model_size": "base",
-                    "silence_threshold_db": -40,
-                    "min_confidence": 0.3,
+    (config_dir / "visuals.yaml").write_text(
+        yaml.dump(
+            {
+                "animation": {
+                    "word_by_word": {
+                        "whisper_sync": {
+                            "enabled": True,
+                            "model_size": "base",
+                            "silence_threshold_db": -40,
+                            "min_confidence": 0.3,
+                        },
+                    },
                 },
-            },
-        },
-    }))
+            }
+        )
+    )
 
     with patch("fd_strategies.visual_render.NICHE_ROOT", tmp_path):
         s = AnimeVisualRenderStrategy()
@@ -46,7 +54,12 @@ class TestWhisperCaptionWiring:
     @patch("fd_strategies.visual_render.transcribe_words")
     @patch("fd_strategies.visual_render.align_words")
     def test_path_a_audio_clip(
-        self, mock_align, mock_transcribe, mock_extract, mock_has_audio, whisper_strategy,
+        self,
+        mock_align,
+        mock_transcribe,
+        mock_extract,
+        mock_has_audio,
+        whisper_strategy,
     ):
         mock_extract.return_value = Path("/tmp/audio.wav")
         mock_transcribe.return_value = [
@@ -68,7 +81,12 @@ class TestWhisperCaptionWiring:
     @patch("fd_strategies.visual_render.transcribe_words")
     @patch("fd_strategies.visual_render.align_words")
     def test_path_b_silent_generates_tts(
-        self, mock_align, mock_transcribe, mock_tts_cls, mock_has_audio, whisper_strategy,
+        self,
+        mock_align,
+        mock_transcribe,
+        mock_tts_cls,
+        mock_has_audio,
+        whisper_strategy,
     ):
         mock_tts = MagicMock()
         mock_tts.synthesize.return_value = MagicMock(success=True, output_path="/tmp/tts.wav")
@@ -89,7 +107,10 @@ class TestWhisperCaptionWiring:
     @patch("fd_strategies.visual_render.has_meaningful_audio", return_value=False)
     @patch("fd_strategies.visual_render.build_tts_cascade")
     def test_path_b_tts_failure_returns_none(
-        self, mock_tts_cls, mock_has_audio, whisper_strategy,
+        self,
+        mock_tts_cls,
+        mock_has_audio,
+        whisper_strategy,
     ):
         mock_tts = MagicMock()
         mock_tts.synthesize.return_value = MagicMock(success=False)

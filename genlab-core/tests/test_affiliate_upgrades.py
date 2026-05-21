@@ -14,6 +14,7 @@ content (it produced "Anime Figure Collection" for a Wistoria character
 moment with zero keyword overlap).  Static catalog now fails closed on
 zero hits; the dynamic Amazon-search matcher has its own quality gates.
 """
+
 from __future__ import annotations
 
 from genlab_core.monetization.affiliate_matcher import match_product
@@ -91,7 +92,10 @@ class TestMatchProductFailsClosed:
         ]
         catalog = self._make_catalog(products)
         result = match_product(
-            "the ps5 playstation is great", "gaming", catalog, seasonal_config={},
+            "the ps5 playstation is great",
+            "gaming",
+            catalog,
+            seasonal_config={},
         )
         assert result is not None
         assert result["name"] == "PS5 Console"
@@ -113,7 +117,10 @@ class TestMatchProductFailsClosed:
         ]
         catalog = self._make_catalog(products)
         result = match_product(
-            "weather in new york today", "gaming", catalog, seasonal_config={},
+            "weather in new york today",
+            "gaming",
+            catalog,
+            seasonal_config={},
         )
         assert result is None
 
@@ -128,11 +135,13 @@ class TestQRCodeSnippet:
 
     def test_snippet_contains_channel_url(self):
         from genlab_core.monetization.qr_generator import get_youtube_description_snippet
+
         snippet = get_youtube_description_snippet("clutchwire")
         assert "/links/clutchwire" in snippet
         assert "ref=yt_desc" in snippet
 
     def test_snippet_contains_scan_text(self):
         from genlab_core.monetization.qr_generator import get_youtube_description_snippet
+
         snippet = get_youtube_description_snippet("criticalrush")
         assert "Scan" in snippet or "scan" in snippet.lower()

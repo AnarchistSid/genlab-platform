@@ -8,6 +8,7 @@ Usage:
     predictor = RevenuePredictor()
     score = predictor.predict(story)
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,8 +62,12 @@ class RevenuePredictor:
 
         logger.debug(
             "[RevenuePred] %s: clicks=%.1f × conv=%.3f × price=%d × comm=%.3f = ₹%.2f",
-            product_name, estimated_clicks, self._conversion_rate,
-            price_inr, commission_pct, revenue,
+            product_name,
+            estimated_clicks,
+            self._conversion_rate,
+            price_inr,
+            commission_pct,
+            revenue,
         )
         return round(revenue, 2)
 

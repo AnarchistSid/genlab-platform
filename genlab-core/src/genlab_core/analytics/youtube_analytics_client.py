@@ -9,6 +9,7 @@ averageViewPercentage, likes, comments, shares, subscribersGained.
 Constraint: 2-3 day data lag. Skips videos < 48h old.
 Quota: 10,000 units/day. Each query = 1 unit.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,9 +25,17 @@ class YouTubeAnalyticsMetrics:
     """Analytics metrics for a single video at a single time window."""
 
     __slots__ = (
-        "video_id", "collected_at", "views", "watch_minutes",
-        "avg_view_duration_s", "avg_view_pct", "likes",
-        "comments", "shares", "subscribers_gained", "window_label",
+        "video_id",
+        "collected_at",
+        "views",
+        "watch_minutes",
+        "avg_view_duration_s",
+        "avg_view_pct",
+        "likes",
+        "comments",
+        "shares",
+        "subscribers_gained",
+        "window_label",
     )
 
     def __init__(
@@ -92,7 +101,9 @@ class YouTubeAnalyticsClient:
         if age_hours < self.MIN_AGE_HOURS:
             logger.debug(
                 "[yt_analytics] skip %s — too recent (%.1fh < %dh)",
-                video_id, age_hours, self.MIN_AGE_HOURS,
+                video_id,
+                age_hours,
+                self.MIN_AGE_HOURS,
             )
             return None
 

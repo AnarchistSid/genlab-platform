@@ -3,6 +3,7 @@
 Provides LocalCDNUpload class for backward compat with code that uses
 the upload()/cleanup() pattern. Delegates to platforms.cdn_upload.upload_to_cdn().
 """
+
 from __future__ import annotations
 
 import logging

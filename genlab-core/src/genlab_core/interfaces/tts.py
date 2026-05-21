@@ -14,6 +14,7 @@ Usage:
         def synthesize(self, text, output_path) -> TTSResult: ...
         def estimate_cost(self, text) -> float: return 0.0
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

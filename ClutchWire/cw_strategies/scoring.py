@@ -96,10 +96,7 @@ class SportScoringStrategy(ScoringStrategy):
             "novelty": self._score_novelty(item),
         }
 
-        weighted_sum = sum(
-            scores[dim] * self._weights.get(dim, 0)
-            for dim in scores
-        )
+        weighted_sum = sum(scores[dim] * self._weights.get(dim, 0) for dim in scores)
 
         game_type = item.get("game_type", "regular_season")
         magnitude_mult = self._multipliers.get(game_type, 1.0)
@@ -154,7 +151,9 @@ class SportScoringStrategy(ScoringStrategy):
             if vp >= min_visual:
                 visual_passed.append(s)
             else:
-                logger.info("[sports] Visual potential rejected (%.1f): %s", vp, s.get("title", "")[:60])
+                logger.info(
+                    "[sports] Visual potential rejected (%.1f): %s", vp, s.get("title", "")[:60]
+                )
         stories = visual_passed
 
         scored = [self.score_item(s) for s in stories]
@@ -184,6 +183,9 @@ class SportScoringStrategy(ScoringStrategy):
 
         logger.info(
             "[sports] Scored %d -> %d stories (dropped %d below %.2f)",
-            len(stories), len(above), dropped, min_score,
+            len(stories),
+            len(above),
+            dropped,
+            min_score,
         )
         return context

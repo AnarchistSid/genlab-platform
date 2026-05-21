@@ -37,9 +37,20 @@ query ($season: MediaSeason, $seasonYear: Int) {
 }
 """
 
-_SEASON_MAP = {1: "WINTER", 2: "WINTER", 3: "SPRING", 4: "SPRING", 5: "SPRING",
-               6: "SUMMER", 7: "SUMMER", 8: "SUMMER", 9: "FALL", 10: "FALL",
-               11: "FALL", 12: "WINTER"}
+_SEASON_MAP = {
+    1: "WINTER",
+    2: "WINTER",
+    3: "SPRING",
+    4: "SPRING",
+    5: "SPRING",
+    6: "SUMMER",
+    7: "SUMMER",
+    8: "SUMMER",
+    9: "FALL",
+    10: "FALL",
+    11: "FALL",
+    12: "WINTER",
+}
 
 
 def _get_current_anime_season() -> tuple[str, int]:
@@ -71,15 +82,17 @@ def _fetch_jikan_promos(max_promos: int = 20) -> list[dict]:
             if not yt_id:
                 continue
             title = entry.get("title", "")
-            results.append({
-                "title": title,
-                "video_id": yt_id,
-                "url": f"https://www.youtube.com/watch?v={yt_id}",
-                "source_url": f"https://www.youtube.com/watch?v={yt_id}",
-                "mal_id": entry.get("mal_id"),
-                "source": "jikan_promos",
-                "_trending_video": True,
-            })
+            results.append(
+                {
+                    "title": title,
+                    "video_id": yt_id,
+                    "url": f"https://www.youtube.com/watch?v={yt_id}",
+                    "source_url": f"https://www.youtube.com/watch?v={yt_id}",
+                    "mal_id": entry.get("mal_id"),
+                    "source": "jikan_promos",
+                    "_trending_video": True,
+                }
+            )
         return results
     except Exception as e:
         logger.warning("[AnimePromos] Jikan failed: %s", e)
@@ -92,8 +105,7 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
     try:
         r = requests.post(
             "https://graphql.anilist.co",
-            json={"query": _ANILIST_QUERY,
-                  "variables": {"season": season, "seasonYear": year}},
+            json={"query": _ANILIST_QUERY, "variables": {"season": season, "seasonYear": year}},
             timeout=10,
         )
         r.raise_for_status()
@@ -107,16 +119,18 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
                 continue
             title_obj = media.get("title") or {}
             title = title_obj.get("english") or title_obj.get("romaji", "")
-            results.append({
-                "title": title,
-                "video_id": yt_id,
-                "url": f"https://www.youtube.com/watch?v={yt_id}",
-                "source_url": f"https://www.youtube.com/watch?v={yt_id}",
-                "popularity": media.get("popularity", 0),
-                "trending": media.get("trending", 0),
-                "source": "anilist",
-                "_trending_video": True,
-            })
+            results.append(
+                {
+                    "title": title,
+                    "video_id": yt_id,
+                    "url": f"https://www.youtube.com/watch?v={yt_id}",
+                    "source_url": f"https://www.youtube.com/watch?v={yt_id}",
+                    "popularity": media.get("popularity", 0),
+                    "trending": media.get("trending", 0),
+                    "source": "anilist",
+                    "_trending_video": True,
+                }
+            )
         return sorted(results, key=lambda x: x.get("trending", 0), reverse=True)
     except Exception as e:
         logger.warning("[AnimePromos] AniList failed: %s", e)
@@ -176,21 +190,23 @@ class FetchAnimePromos:
             new_stories = []
             for p in unique:
                 sid = generate_story_id(p["url"], now_iso)
-                new_stories.append({
-                    "story_id": sid,
-                    "title": p["title"],
-                    "source": p["source"],
-                    "source_url": p["url"],
-                    "canonical_url": p["url"],
-                    "published_at": now_iso,
-                    "fetched_at": now_iso,
-                    "summary": "",
-                    "video_id": p["video_id"],
-                    "video_source": p["source"],
-                    "niche_id": niche_id,
-                    "_trending_video": True,
-                    "source_mention_count": 2,
-                })
+                new_stories.append(
+                    {
+                        "story_id": sid,
+                        "title": p["title"],
+                        "source": p["source"],
+                        "source_url": p["url"],
+                        "canonical_url": p["url"],
+                        "published_at": now_iso,
+                        "fetched_at": now_iso,
+                        "summary": "",
+                        "video_id": p["video_id"],
+                        "video_source": p["source"],
+                        "niche_id": niche_id,
+                        "_trending_video": True,
+                        "source_mention_count": 2,
+                    }
+                )
 
             existing = context.get("stories", [])
             # Avoid duplicates with existing stories

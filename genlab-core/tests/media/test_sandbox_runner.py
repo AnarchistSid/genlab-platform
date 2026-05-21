@@ -19,6 +19,7 @@ from genlab_core.media.sandbox_runner import (
 _opensandbox_available = False
 try:
     import opensandbox  # noqa: F401
+
     _opensandbox_available = True
 except ImportError:
     pass
@@ -76,9 +77,12 @@ class TestPathRewriting:
 
     def test_rewrite_ffmpeg_cmd(self):
         cmd = [
-            "/opt/homebrew/bin/ffmpeg", "-y",
-            "-i", str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "clip.mp4"),
-            "-c:v", "libx264",
+            "/opt/homebrew/bin/ffmpeg",
+            "-y",
+            "-i",
+            str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "clip.mp4"),
+            "-c:v",
+            "libx264",
             str(GENLAB_ROOT / "BlackboxBrief" / ".tmp" / "out.mp4"),
         ]
         rewritten = self.runner.rewrite_ffmpeg_cmd(cmd)
@@ -105,6 +109,7 @@ class TestSandboxRenderingEnabled:
         with patch.dict(os.environ, {"GENLAB_RENDER_SANDBOX": "true"}):
             # Only enabled if opensandbox is importable
             import genlab_core.media.sandbox_runner as mod
+
             mod._OPENSANDBOX_AVAILABLE = None  # reset cache
             result = sandbox_rendering_enabled()
             # Result depends on whether opensandbox is installed
@@ -119,6 +124,7 @@ class TestSandboxRenderingEnabled:
 def _server_running() -> bool:
     try:
         import requests
+
         r = requests.get("http://127.0.0.1:8080/health", timeout=2)
         return r.status_code == 200
     except Exception:
@@ -178,8 +184,7 @@ class TestSandboxedFFmpegRunnerIntegration:
             assert result.ok
             # GenLab directories should be visible
             assert any(
-                name in result.stdout
-                for name in ["CriticalRush", "genlab-core", "BlackboxBrief"]
+                name in result.stdout for name in ["CriticalRush", "genlab-core", "BlackboxBrief"]
             )
 
     def test_volume_mount_visible(self):
@@ -214,15 +219,12 @@ class TestSandboxedFFmpegRunnerIntegration:
         )
         with runner:
             result = runner.run_ffmpeg_sync(
-                ["bash", "-c",
-                 "getent hosts google.com 2>&1; echo DNS_EXIT=$?"],
+                ["bash", "-c", "getent hosts google.com 2>&1; echo DNS_EXIT=$?"],
                 timeout=15,
             )
             output = result.stdout + result.stderr
             # DNS resolution should fail (exit code 2 = not found)
-            assert "DNS_EXIT=2" in output, (
-                f"Expected DNS blocked (exit 2) but got: {output[:300]}"
-            )
+            assert "DNS_EXIT=2" in output, f"Expected DNS blocked (exit 2) but got: {output[:300]}"
 
     def test_egress_allow_specific_domain(self):
         """Verify allowlisted domain is reachable via bash /dev/tcp."""
@@ -234,11 +236,12 @@ class TestSandboxedFFmpegRunnerIntegration:
         with runner:
             # TCP connection to pypi.org:443 should succeed
             result = runner.run_ffmpeg_sync(
-                ["bash", "-c",
-                 "timeout 5 bash -c 'echo > /dev/tcp/pypi.org/443' 2>&1; echo EXIT=$?"],
+                [
+                    "bash",
+                    "-c",
+                    "timeout 5 bash -c 'echo > /dev/tcp/pypi.org/443' 2>&1; echo EXIT=$?",
+                ],
                 timeout=15,
             )
             output = result.stdout + result.stderr
-            assert "EXIT=0" in output, (
-                f"Expected pypi.org reachable but got: {output[:300]}"
-            )
+            assert "EXIT=0" in output, f"Expected pypi.org reachable but got: {output[:300]}"

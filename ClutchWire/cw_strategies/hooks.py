@@ -45,7 +45,9 @@ class SportHookStrategy(BaseHookStrategy):
     @staticmethod
     def _extract_teams_from_title(title: str) -> list[str]:
         """Try to extract team names from RSS headline patterns like 'X vs Y'."""
-        verbs = r"(?:vs\.?|beat|beats|top|tops|stun|stuns|defeat|defeats|rout|routs|over|downs|edges)"
+        verbs = (
+            r"(?:vs\.?|beat|beats|top|tops|stun|stuns|defeat|defeats|rout|routs|over|downs|edges)"
+        )
         match = re.search(
             rf"(\S+(?:\s+\S+){{0,2}})\s+{verbs}\s+(\S+(?:\s+\S+){{0,2}})(?:\s|[,;:\-]|$)",
             title,

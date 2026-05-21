@@ -25,20 +25,22 @@ def _fetch_highlights(max_items: int = 10, competitions: list[str] | None = None
         )
         r.raise_for_status()
         results = []
-        for item in r.json()[:max_items * 2]:  # Fetch extra, filter by competition
+        for item in r.json()[: max_items * 2]:  # Fetch extra, filter by competition
             comp = item.get("competition", {}).get("name", "")
             if competitions and not any(c.lower() in comp.lower() for c in competitions):
                 continue
-            results.append({
-                "title": item.get("title", ""),
-                "competition": comp,
-                "url": item.get("url", ""),
-                "embed": item.get("embed", ""),
-                "source": "scorebat",
-                # ScoreBat provides embeds, not MP4s. VideoGate will skip
-                # unless a matching YouTube clip is found downstream.
-                "clip_url": None,
-            })
+            results.append(
+                {
+                    "title": item.get("title", ""),
+                    "competition": comp,
+                    "url": item.get("url", ""),
+                    "embed": item.get("embed", ""),
+                    "source": "scorebat",
+                    # ScoreBat provides embeds, not MP4s. VideoGate will skip
+                    # unless a matching YouTube clip is found downstream.
+                    "clip_url": None,
+                }
+            )
             if len(results) >= max_items:
                 break
         return results
@@ -80,24 +82,30 @@ class FetchScoreBatHighlights:
             new_stories = []
             for h in highlights:
                 sid = generate_story_id(h["url"] or h["title"], now_iso)
-                new_stories.append({
-                    "story_id": sid,
-                    "title": h["title"],
-                    "source": "scorebat",
-                    "source_url": h.get("url", ""),
-                    "canonical_url": h.get("url", ""),
-                    "published_at": now_iso,
-                    "fetched_at": now_iso,
-                    "summary": f"{h.get('competition', '')} highlight",
-                    "niche_id": niche_id,
-                    "video_source": "scorebat",
-                    # No clip_url — VideoGate will gate this unless matched
-                    "source_mention_count": 1,
-                })
+                new_stories.append(
+                    {
+                        "story_id": sid,
+                        "title": h["title"],
+                        "source": "scorebat",
+                        "source_url": h.get("url", ""),
+                        "canonical_url": h.get("url", ""),
+                        "published_at": now_iso,
+                        "fetched_at": now_iso,
+                        "summary": f"{h.get('competition', '')} highlight",
+                        "niche_id": niche_id,
+                        "video_source": "scorebat",
+                        # No clip_url — VideoGate will gate this unless matched
+                        "source_mention_count": 1,
+                    }
+                )
 
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}
-            new_stories = [s for s in new_stories if s.get("source_url") and s["source_url"] not in existing_urls]
+            new_stories = [
+                s
+                for s in new_stories
+                if s.get("source_url") and s["source_url"] not in existing_urls
+            ]
             context["stories"] = existing + new_stories
 
         run_stats = context.setdefault("run_stats", {})

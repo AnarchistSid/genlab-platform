@@ -1,4 +1,5 @@
 """Tests for the FetchInsights pipeline stage."""
+
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -51,8 +52,13 @@ class TestFetchInsightsSharePoint:
         """Posts with metrics_fetched set should be skipped."""
         mock_client = MagicMock()
         mock_client.publishing_analytics.all.return_value = [
-            _make_pub_record("yt_abc", "youtube", "gaming", hours_ago=12,
-                             metrics_fetched="2026-03-16T12:00:00+00:00"),
+            _make_pub_record(
+                "yt_abc",
+                "youtube",
+                "gaming",
+                hours_ago=12,
+                metrics_fetched="2026-03-16T12:00:00+00:00",
+            ),
         ]
 
         context = {

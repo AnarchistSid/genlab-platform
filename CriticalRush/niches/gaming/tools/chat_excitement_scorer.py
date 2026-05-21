@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 # Signal 1: MESSAGE_RATE
 # ---------------------------------------------------------------------------
 
+
 def signal_message_rate(
     num_messages: int,
     duration_sec: float,
@@ -55,6 +56,7 @@ def signal_message_rate(
 # ---------------------------------------------------------------------------
 # Signal 2: EMOTE_DENSITY
 # ---------------------------------------------------------------------------
+
 
 def signal_emote_density(
     messages: list[str],
@@ -95,6 +97,7 @@ def signal_emote_density(
 # Signal 3: CAPS_RATIO
 # ---------------------------------------------------------------------------
 
+
 def signal_caps_ratio(messages: list[str]) -> float:
     """Compute caps-ratio signal.
 
@@ -127,6 +130,7 @@ def signal_caps_ratio(messages: list[str]) -> float:
 # Signal 4: KEYWORD_DENSITY
 # ---------------------------------------------------------------------------
 
+
 def signal_keyword_density(
     messages: list[str],
     keywords: list[str],
@@ -156,6 +160,7 @@ def signal_keyword_density(
 # Signal 5: BREVITY
 # ---------------------------------------------------------------------------
 
+
 def signal_brevity(messages: list[str]) -> float:
     """Compute brevity signal.
 
@@ -176,6 +181,7 @@ def signal_brevity(messages: list[str]) -> float:
 # ---------------------------------------------------------------------------
 # Composite scorers
 # ---------------------------------------------------------------------------
+
 
 def _compute_signals(
     chat_data: dict,
@@ -247,10 +253,7 @@ def compute_excitement(
         return 0.0
 
     weights = config.get("signal_weights", {})
-    composite = sum(
-        signals[name] * weights.get(name, 0.0)
-        for name in signals
-    )
+    composite = sum(signals[name] * weights.get(name, 0.0) for name in signals)
     return min(max(composite, 0.0), 1.0)
 
 
@@ -280,10 +283,7 @@ def compute_excitement_breakdown(
         }
 
     weights = config.get("signal_weights", {})
-    composite = sum(
-        signals[name] * weights.get(name, 0.0)
-        for name in signals
-    )
+    composite = sum(signals[name] * weights.get(name, 0.0) for name in signals)
     composite = min(max(composite, 0.0), 1.0)
 
     return {**signals, "composite": composite}

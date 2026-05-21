@@ -6,6 +6,7 @@ Cost: ~$0.005 per 60-second video.
 Gracefully degrades: if GOOGLE_API_KEY missing or Gemini fails,
 returns empty dict and pipeline continues with text-only metadata.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,8 +31,9 @@ class VideoAnalyzer:
     def available(self) -> bool:
         return self._available
 
-    def analyze(self, video_path: str | Path, niche_id: str = "",
-                max_duration_seconds: int = 60) -> dict[str, Any]:
+    def analyze(
+        self, video_path: str | Path, niche_id: str = "", max_duration_seconds: int = 60
+    ) -> dict[str, Any]:
         """Analyze a video file and return structured insights.
 
         Returns dict with: description, key_entities, visual_quality (0-1),
@@ -60,6 +62,7 @@ class VideoAnalyzer:
 
             # Wait for processing
             import time
+
             for _ in range(30):  # max 30 seconds wait
                 video_file = genai.get_file(video_file.name)
                 if video_file.state.name == "ACTIVE":
@@ -96,9 +99,12 @@ class VideoAnalyzer:
             except Exception:
                 pass
 
-            logger.info("[VideoAnalyzer] Analyzed %s: %d entities, quality=%.2f",
-                        video_path.name, len(result.get("key_entities", [])),
-                        result.get("visual_quality", 0))
+            logger.info(
+                "[VideoAnalyzer] Analyzed %s: %d entities, quality=%.2f",
+                video_path.name,
+                len(result.get("key_entities", [])),
+                result.get("visual_quality", 0),
+            )
             return result
 
         except ImportError:

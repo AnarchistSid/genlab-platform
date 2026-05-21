@@ -19,6 +19,7 @@ def _make_client(monkeypatch, client_id="test_id", client_secret="test_secret"):
             mock_settings.twitch_client_id = client_id
             mock_settings.twitch_client_secret = client_secret
             from niches.gaming.tools.igdb_client import IGDBClient
+
             client = IGDBClient()
     return client
 
@@ -46,6 +47,7 @@ class TestSearchGameUnconfigured:
             mock_settings.twitch_client_id = ""
             mock_settings.twitch_client_secret = ""
             from niches.gaming.tools.igdb_client import IGDBClient
+
             client = IGDBClient()
         assert client.search_game("Elden Ring") is None
 
@@ -54,40 +56,43 @@ class TestSearchGameUnconfigured:
             mock_settings.twitch_client_id = ""
             mock_settings.twitch_client_secret = ""
             from niches.gaming.tools.igdb_client import IGDBClient
+
             client = IGDBClient()
         assert client._configured is False
 
 
 class TestSearchGameConfigured:
     @patch("niches.gaming.tools.igdb_client.requests.post")
-    def test_extracts_steam_app_id_from_external_games(
-        self, mock_post, monkeypatch
-    ):
+    def test_extracts_steam_app_id_from_external_games(self, mock_post, monkeypatch):
         """steam_app_id is extracted from external_games where category == 1."""
         client = _make_client(monkeypatch)
 
         # Mock the _headers method to return valid headers
-        client._headers = MagicMock(return_value={
-            "Authorization": "Bearer test_token",
-            "Client-Id": "test_id",
-            "Content-Type": "text/plain",
-        })
-
-        mock_post.return_value = _mock_search_response([
-            {
-                "id": 119133,
-                "name": "Elden Ring",
-                "external_games": [
-                    {"category": 5, "uid": "some_gog_id"},
-                    {"category": 1, "uid": "1245620"},
-                ],
-                "involved_companies": [
-                    {"developer": True, "company": {"name": "FromSoftware"}},
-                ],
-                "cover": {"url": "//images.igdb.com/cover.jpg"},
-                "total_rating": 95.0,
+        client._headers = MagicMock(
+            return_value={
+                "Authorization": "Bearer test_token",
+                "Client-Id": "test_id",
+                "Content-Type": "text/plain",
             }
-        ])
+        )
+
+        mock_post.return_value = _mock_search_response(
+            [
+                {
+                    "id": 119133,
+                    "name": "Elden Ring",
+                    "external_games": [
+                        {"category": 5, "uid": "some_gog_id"},
+                        {"category": 1, "uid": "1245620"},
+                    ],
+                    "involved_companies": [
+                        {"developer": True, "company": {"name": "FromSoftware"}},
+                    ],
+                    "cover": {"url": "//images.igdb.com/cover.jpg"},
+                    "total_rating": 95.0,
+                }
+            ]
+        )
 
         result = client.search_game("Elden Ring")
         assert result is not None
@@ -98,15 +103,15 @@ class TestSearchGameConfigured:
         assert result["rating"] == 95.0
 
     @patch("niches.gaming.tools.igdb_client.requests.post")
-    def test_returns_none_on_empty_results(
-        self, mock_post, monkeypatch
-    ):
+    def test_returns_none_on_empty_results(self, mock_post, monkeypatch):
         client = _make_client(monkeypatch)
-        client._headers = MagicMock(return_value={
-            "Authorization": "Bearer test_token",
-            "Client-Id": "test_id",
-            "Content-Type": "text/plain",
-        })
+        client._headers = MagicMock(
+            return_value={
+                "Authorization": "Bearer test_token",
+                "Client-Id": "test_id",
+                "Content-Type": "text/plain",
+            }
+        )
         mock_post.return_value = _mock_search_response([])
 
         result = client.search_game("Nonexistent Game XYZZY")
@@ -124,28 +129,30 @@ class TestEnrichStory:
         assert result == {"title": "Elden Ring DLC Announced"}
 
     @patch("niches.gaming.tools.igdb_client.requests.post")
-    def test_merges_fields_when_flag_true(
-        self, mock_post, monkeypatch
-    ):
+    def test_merges_fields_when_flag_true(self, mock_post, monkeypatch):
         """enrich_story merges IGDB fields into story when flag is True."""
         client = _make_client(monkeypatch)
-        client._headers = MagicMock(return_value={
-            "Authorization": "Bearer test_token",
-            "Client-Id": "test_id",
-            "Content-Type": "text/plain",
-        })
-        mock_post.return_value = _mock_search_response([
-            {
-                "id": 119133,
-                "name": "Elden Ring",
-                "external_games": [{"category": 1, "uid": "1245620"}],
-                "involved_companies": [
-                    {"developer": True, "company": {"name": "FromSoftware"}},
-                ],
-                "cover": {"url": "//images.igdb.com/cover.jpg"},
-                "total_rating": 95.0,
+        client._headers = MagicMock(
+            return_value={
+                "Authorization": "Bearer test_token",
+                "Client-Id": "test_id",
+                "Content-Type": "text/plain",
             }
-        ])
+        )
+        mock_post.return_value = _mock_search_response(
+            [
+                {
+                    "id": 119133,
+                    "name": "Elden Ring",
+                    "external_games": [{"category": 1, "uid": "1245620"}],
+                    "involved_companies": [
+                        {"developer": True, "company": {"name": "FromSoftware"}},
+                    ],
+                    "cover": {"url": "//images.igdb.com/cover.jpg"},
+                    "total_rating": 95.0,
+                }
+            ]
+        )
 
         story = {"title": "Elden Ring"}
         context = {"feature_flags": {"use_gaming_clip_sourcer": True}}

@@ -3,6 +3,7 @@
 Covers parse_catalog_urls() — URL extraction and placeholder filtering.
 No network calls are made.
 """
+
 from __future__ import annotations
 
 import importlib.util

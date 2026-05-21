@@ -47,9 +47,7 @@ class MovieWritingStrategy(BaseWritingStrategy):
     def __init__(self) -> None:
         super().__init__(niche_id="movies", niche_root=NICHE_ROOT)
 
-    def _story_to_video_dict(
-        self, story: dict, clip_index: dict | None = None
-    ) -> dict:
+    def _story_to_video_dict(self, story: dict, clip_index: dict | None = None) -> dict:
         """Use ``film_title`` as the primary title if available."""
         video = super()._story_to_video_dict(story, clip_index)
         video["title"] = story.get("film_title", "") or story.get("title", "")

@@ -68,28 +68,40 @@ class TestScoringOMDbIntegration:
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        (config_dir / "scoring_weights.yaml").write_text(yaml.dump({
-            "scoring_dimensions": {
-                "weights": {"timeliness": 0.25, "magnitude": 0.35,
-                            "engagement_potential": 0.25, "novelty": 0.15},
-                "timeliness": {"decay_half_life_hours": 48.0},
-                "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
-            },
-            "film_lifecycle_multipliers": {
-                "opening_weekend": 1.6, "unknown": 0.3, "pre_release": 1.0, "long_tail": 0.7,
-            },
-            "franchise_multipliers": {"default": 1.0},
-            "thresholds": {
-                "min_score": 0.40,
-                "top_items_per_run": 5,
-                "pre_enrich_threshold": 0.45,
-            },
-        }))
+        (config_dir / "scoring_weights.yaml").write_text(
+            yaml.dump(
+                {
+                    "scoring_dimensions": {
+                        "weights": {
+                            "timeliness": 0.25,
+                            "magnitude": 0.35,
+                            "engagement_potential": 0.25,
+                            "novelty": 0.15,
+                        },
+                        "timeliness": {"decay_half_life_hours": 48.0},
+                        "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
+                    },
+                    "film_lifecycle_multipliers": {
+                        "opening_weekend": 1.6,
+                        "unknown": 0.3,
+                        "pre_release": 1.0,
+                        "long_tail": 0.7,
+                    },
+                    "franchise_multipliers": {"default": 1.0},
+                    "thresholds": {
+                        "min_score": 0.40,
+                        "top_items_per_run": 5,
+                        "pre_enrich_threshold": 0.45,
+                    },
+                }
+            )
+        )
 
-        with patch("sr_strategies.scoring.NICHE_ROOT", tmp_path), \
-             patch.dict("os.environ", {"OMDB_API_KEY": "test_key"}), \
-             patch("sr_strategies.scoring.OMDbClient") as mock_omdb_cls:
-
+        with (
+            patch("sr_strategies.scoring.NICHE_ROOT", tmp_path),
+            patch.dict("os.environ", {"OMDB_API_KEY": "test_key"}),
+            patch("sr_strategies.scoring.OMDbClient") as mock_omdb_cls,
+        ):
             mock_omdb = MagicMock()
             mock_omdb.__enter__ = MagicMock(return_value=mock_omdb)
             mock_omdb.__exit__ = MagicMock(return_value=False)
@@ -126,28 +138,40 @@ class TestScoringOMDbIntegration:
 
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        (config_dir / "scoring_weights.yaml").write_text(yaml.dump({
-            "scoring_dimensions": {
-                "weights": {"timeliness": 0.25, "magnitude": 0.35,
-                            "engagement_potential": 0.25, "novelty": 0.15},
-                "timeliness": {"decay_half_life_hours": 48.0},
-                "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
-            },
-            "film_lifecycle_multipliers": {
-                "opening_weekend": 1.6, "unknown": 0.3, "pre_release": 1.0, "long_tail": 0.7,
-            },
-            "franchise_multipliers": {"MCU": 1.5, "default": 1.0},
-            "thresholds": {
-                "min_score": 0.10,
-                "top_items_per_run": 5,
-                "pre_enrich_threshold": 0.20,
-            },
-        }))
+        (config_dir / "scoring_weights.yaml").write_text(
+            yaml.dump(
+                {
+                    "scoring_dimensions": {
+                        "weights": {
+                            "timeliness": 0.25,
+                            "magnitude": 0.35,
+                            "engagement_potential": 0.25,
+                            "novelty": 0.15,
+                        },
+                        "timeliness": {"decay_half_life_hours": 48.0},
+                        "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
+                    },
+                    "film_lifecycle_multipliers": {
+                        "opening_weekend": 1.6,
+                        "unknown": 0.3,
+                        "pre_release": 1.0,
+                        "long_tail": 0.7,
+                    },
+                    "franchise_multipliers": {"MCU": 1.5, "default": 1.0},
+                    "thresholds": {
+                        "min_score": 0.10,
+                        "top_items_per_run": 5,
+                        "pre_enrich_threshold": 0.20,
+                    },
+                }
+            )
+        )
 
-        with patch("sr_strategies.scoring.NICHE_ROOT", tmp_path), \
-             patch.dict("os.environ", {"OMDB_API_KEY": "test_key"}), \
-             patch("sr_strategies.scoring.OMDbClient") as mock_omdb_cls:
-
+        with (
+            patch("sr_strategies.scoring.NICHE_ROOT", tmp_path),
+            patch.dict("os.environ", {"OMDB_API_KEY": "test_key"}),
+            patch("sr_strategies.scoring.OMDbClient") as mock_omdb_cls,
+        ):
             mock_omdb = MagicMock()
             mock_omdb.__enter__ = MagicMock(return_value=mock_omdb)
             mock_omdb.__exit__ = MagicMock(return_value=False)

@@ -13,6 +13,7 @@ Usage:
     proxy = GraphTableProxy(graph_client, site_id, list_id, "Stories")
     records = proxy.all(formula="{status}='INTAKE'", max_records=10)
 """
+
 from __future__ import annotations
 
 import logging
@@ -61,17 +62,13 @@ def formula_to_odata(formula: str | None) -> str | None:
         return None
 
     # FIND(value, ARRAYJOIN({field}))
-    find_match = re.match(
-        r"FIND\('([^']*)',\s*ARRAYJOIN\(\{([^}]+)\}\)\)", formula
-    )
+    find_match = re.match(r"FIND\('([^']*)',\s*ARRAYJOIN\(\{([^}]+)\}\)\)", formula)
     if find_match:
         val, field = find_match.groups()
         return f"contains(fields/{field}_text, '{_esc(val)}')"
 
     # FIND('value', {field})
-    find_bare_match = re.match(
-        r"FIND\('([^']*)',\s*\{([^}]+)\}\)", formula
-    )
+    find_bare_match = re.match(r"FIND\('([^']*)',\s*\{([^}]+)\}\)", formula)
     if find_bare_match:
         val, field = find_bare_match.groups()
         return f"contains(fields/{field}, '{_esc(val)}')"
@@ -84,17 +81,15 @@ def _translate_expr(expr: str) -> str:
     expr = expr.strip()
 
     # DATESTR({field})='YYYY-MM-DD'
-    datestr_match = re.match(
-        r"^DATESTR\(\{([^}]+)\}\)\s*=\s*'(\d{4}-\d{2}-\d{2})'$", expr
-    )
+    datestr_match = re.match(r"^DATESTR\(\{([^}]+)\}\)\s*=\s*'(\d{4}-\d{2}-\d{2})'$", expr)
     if datestr_match:
         field, date_str = datestr_match.groups()
         from datetime import date, timedelta
+
         d = date.fromisoformat(date_str)
         next_day = (d + timedelta(days=1)).isoformat()
         return (
-            f"fields/{field} ge '{date_str}T00:00:00Z'"
-            f" and fields/{field} lt '{next_day}T00:00:00Z'"
+            f"fields/{field} ge '{date_str}T00:00:00Z' and fields/{field} lt '{next_day}T00:00:00Z'"
         )
 
     # AND(...)
@@ -134,14 +129,16 @@ def _translate_expr(expr: str) -> str:
     # {field} op 'value' — allow escaped single quotes inside (e.g., it\'s)
     cmp_match = re.match(
         r"^\{([^}]+)\}\s*(=|!=|>=|<=|>|<)\s*'((?:[^'\\]|\\.)*)'$", expr
-    ) or re.match(
-        r"^\{([^}]+)\}\s*(=|!=|>=|<=|>|<)\s*([^',]+)$", expr
-    )
+    ) or re.match(r"^\{([^}]+)\}\s*(=|!=|>=|<=|>|<)\s*([^',]+)$", expr)
     if cmp_match:
         field, op, value = cmp_match.groups()
         odata_ops = {
-            "=": "eq", "!=": "ne", ">=": "ge",
-            "<=": "le", ">": "gt", "<": "lt",
+            "=": "eq",
+            "!=": "ne",
+            ">=": "ge",
+            "<=": "le",
+            ">": "gt",
+            "<": "lt",
         }
         odata_op = odata_ops.get(op, "eq")
 
@@ -224,7 +221,7 @@ class GraphTableProxy:
 
         try:
             cols_response = run_async(_fetch())
-            for col in (cols_response.value or []):
+            for col in cols_response.value or []:
                 display = col.display_name or ""
                 internal = col.name or ""
                 if display and internal:
@@ -237,7 +234,9 @@ class GraphTableProxy:
             )
         except Exception as exc:
             logger.warning(
-                "Failed to load column map for %s: %s", self._list_name, exc,
+                "Failed to load column map for %s: %s",
+                self._list_name,
+                exc,
             )
 
     def _to_internal_name(self, display_name: str) -> str:
@@ -250,28 +249,48 @@ class GraphTableProxy:
 
     def _translate_filter_names(self, odata_filter: str) -> str:
         """Replace display names with internal names in OData filter strings."""
+
         def _replace_field(match):
             field_name = match.group(1)
             internal = self._display_to_internal.get(field_name, field_name)
             return f"fields/{internal}"
+
         return re.sub(r"fields/(\w+)", _replace_field, odata_filter)
 
     # SharePoint metadata fields to strip from API responses
-    _METADATA_FIELDS = frozenset({
-        "@odata.etag", "_UIVersionString", "Attachments",
-        "AppAuthorLookupId", "AppEditorLookupId",
-        "AuthorLookupId", "EditorLookupId",
-        "Content Type", "ContentType", "ContentTypeId",
-        "ComplianceAssetId", "GUID", "OData__ColorTag",
-        "OData__UIVersionString", "Edit",
-        "_ComplianceFlags", "_ComplianceTag",
-        "_ComplianceTagWrittenTime", "_ComplianceTagUserId",
-        "_IsRecord",
-        "Created", "Modified", "Version",
-        "Folder Child Count", "Item Child Count",
-        "Label applied by", "Label setting",
-        "Retention label", "Retention label Applied",
-    })
+    _METADATA_FIELDS = frozenset(
+        {
+            "@odata.etag",
+            "_UIVersionString",
+            "Attachments",
+            "AppAuthorLookupId",
+            "AppEditorLookupId",
+            "AuthorLookupId",
+            "EditorLookupId",
+            "Content Type",
+            "ContentType",
+            "ContentTypeId",
+            "ComplianceAssetId",
+            "GUID",
+            "OData__ColorTag",
+            "OData__UIVersionString",
+            "Edit",
+            "_ComplianceFlags",
+            "_ComplianceTag",
+            "_ComplianceTagWrittenTime",
+            "_ComplianceTagUserId",
+            "_IsRecord",
+            "Created",
+            "Modified",
+            "Version",
+            "Folder Child Count",
+            "Item Child Count",
+            "Label applied by",
+            "Label setting",
+            "Retention label",
+            "Retention label Applied",
+        }
+    )
 
     _FIELD_ALIASES = {
         "hook": "hook_text",
@@ -334,9 +353,7 @@ class GraphTableProxy:
             odata_filter = self._translate_filter_names(odata_filter)
 
         items_req = (
-            self._client.sites.by_site_id(self._site_id)
-            .lists.by_list_id(self._list_id)
-            .items
+            self._client.sites.by_site_id(self._site_id).lists.by_list_id(self._list_id).items
         )
 
         from msgraph.generated.sites.item.lists.item.items.items_request_builder import (
@@ -362,12 +379,16 @@ class GraphTableProxy:
             if original_formula:
                 logger.warning(
                     "OData filter failed for %s, falling back to client-side: %s (%s)",
-                    self._list_name, odata_filter, exc,
+                    self._list_name,
+                    odata_filter,
+                    exc,
                 )
                 return await self._all_with_client_filter(original_formula, max_records)
             logger.error(
                 "Graph list query failed (%s filter=%s): %s",
-                self._list_name, odata_filter, exc,
+                self._list_name,
+                odata_filter,
+                exc,
             )
             return []
 
@@ -386,7 +407,8 @@ class GraphTableProxy:
             try:
                 page_config = ItemsRequestBuilder.ItemsRequestBuilderGetRequestConfiguration()
                 page_config.headers.add(
-                    "Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly",
+                    "Prefer",
+                    "HonorNonIndexedQueriesWarningMayFailRandomly",
                 )
                 result = await items_req.with_url(next_link).get(
                     request_configuration=page_config,
@@ -399,7 +421,9 @@ class GraphTableProxy:
             except Exception as exc:
                 logger.warning(
                     "Pagination failed for %s (got %d records): %s",
-                    self._list_name, len(records), exc,
+                    self._list_name,
+                    len(records),
+                    exc,
                 )
                 break
 
@@ -518,9 +542,7 @@ class GraphTableProxy:
     ) -> dict[str, Any]:
         return run_async(self._update_async(record_id, fields))
 
-    async def _update_async(
-        self, record_id: str, fields: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def _update_async(self, record_id: str, fields: dict[str, Any]) -> dict[str, Any]:
         from msgraph.generated.models.field_value_set import FieldValueSet
 
         clean_fields = self._prepare_fields(fields)
@@ -544,14 +566,10 @@ class GraphTableProxy:
             .delete()
         )
 
-    def batch_create(
-        self, records: list[dict[str, Any]], **kwargs
-    ) -> list[dict[str, Any]]:
+    def batch_create(self, records: list[dict[str, Any]], **kwargs) -> list[dict[str, Any]]:
         return run_async(self._batch_create_async(records))
 
-    async def _batch_create_async(
-        self, records: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def _batch_create_async(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results = []
         for fields in records:
             try:
@@ -561,14 +579,10 @@ class GraphTableProxy:
                 logger.error("Batch create item failed: %s", exc)
         return results
 
-    def batch_update(
-        self, records: list[dict[str, Any]], **kwargs
-    ) -> list[dict[str, Any]]:
+    def batch_update(self, records: list[dict[str, Any]], **kwargs) -> list[dict[str, Any]]:
         return run_async(self._batch_update_async(records))
 
-    async def _batch_update_async(
-        self, records: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def _batch_update_async(self, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         results = []
         for rec in records:
             record_id = rec.get("id", "")
@@ -582,14 +596,10 @@ class GraphTableProxy:
                 logger.error("Batch update item %s failed: %s", record_id, exc)
         return results
 
-    def upload_attachment(
-        self, record_id: str, field_name: str, file_path: str
-    ) -> dict | None:
+    def upload_attachment(self, record_id: str, field_name: str, file_path: str) -> dict | None:
         return run_async(self._upload_async(record_id, field_name, file_path))
 
-    async def _upload_async(
-        self, record_id: str, field_name: str, file_path: str
-    ) -> dict | None:
+    async def _upload_async(self, record_id: str, field_name: str, file_path: str) -> dict | None:
         path = Path(file_path)
         if not path.exists():
             logger.warning("File not found for upload: %s", path)
@@ -624,7 +634,10 @@ class GraphTableProxy:
                 continue
 
             if isinstance(value, list) and key in (
-                "story", "template", "blueprint", "blueprint_link",
+                "story",
+                "template",
+                "blueprint",
+                "blueprint_link",
             ):
                 if value:
                     clean[f"{key}_link"] = str(value[0])

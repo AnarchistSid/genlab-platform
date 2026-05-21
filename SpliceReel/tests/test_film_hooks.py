@@ -10,52 +10,57 @@ from sr_strategies.hooks import MovieHookStrategy
 def strategy(tmp_path):
     """Create strategy with test templates config."""
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "templates.yaml").write_text(yaml.dump({
-        "hooks": {
-            "formulas": [
-                "This scene alone is worth the ticket",
-            ],
-            "forbidden_styles": ["BREAKING:", "JUST IN:"],
-            "story_categories": {
-                "trailer_drop": {
+    (config_dir / "templates.yaml").write_text(
+        yaml.dump(
+            {
+                "hooks": {
                     "formulas": [
-                        "The {film_title} trailer just dropped and I'm not okay",
+                        "This scene alone is worth the ticket",
                     ],
-                    "weight": 1.3,
+                    "forbidden_styles": ["BREAKING:", "JUST IN:"],
+                    "story_categories": {
+                        "trailer_drop": {
+                            "formulas": [
+                                "The {film_title} trailer just dropped and I'm not okay",
+                            ],
+                            "weight": 1.3,
+                        },
+                        "box_office_win": {
+                            "formulas": [
+                                "{film_title} delivered at the box office",
+                            ],
+                            "weight": 1.2,
+                        },
+                        "award_nomination": {
+                            "formulas": [
+                                "{film_title} just picked up an Oscar nomination. Deserved?",
+                            ],
+                            "weight": 1.3,
+                        },
+                        "franchise_news": {
+                            "formulas": [
+                                "The {franchise} universe will never be the same after this",
+                            ],
+                            "weight": 1.2,
+                        },
+                        "streaming_premiere": {
+                            "formulas": [
+                                "{film_title} just landed on streaming. Clear your weekend",
+                            ],
+                            "weight": 1.1,
+                        },
+                        "default": {
+                            "formulas": ["Cinema is back"],
+                            "weight": 1.0,
+                        },
+                    },
                 },
-                "box_office_win": {
-                    "formulas": [
-                        "{film_title} delivered at the box office",
-                    ],
-                    "weight": 1.2,
-                },
-                "award_nomination": {
-                    "formulas": [
-                        "{film_title} just picked up an Oscar nomination. Deserved?",
-                    ],
-                    "weight": 1.3,
-                },
-                "franchise_news": {
-                    "formulas": [
-                        "The {franchise} universe will never be the same after this",
-                    ],
-                    "weight": 1.2,
-                },
-                "streaming_premiere": {
-                    "formulas": [
-                        "{film_title} just landed on streaming. Clear your weekend",
-                    ],
-                    "weight": 1.1,
-                },
-                "default": {
-                    "formulas": ["Cinema is back"],
-                    "weight": 1.0,
-                },
-            },
-        },
-    }))
+            }
+        )
+    )
     with patch("sr_strategies.hooks.NICHE_ROOT", tmp_path):
         s = MovieHookStrategy()
         s._ensure_config()
@@ -84,7 +89,11 @@ class TestHookClassification:
         assert cat == "franchise_news"
 
     def test_streaming_keyword_detected(self, strategy):
-        story = {"title": "New film arrives on Netflix this week", "summary": "", "lifecycle_stage": "long_tail"}
+        story = {
+            "title": "New film arrives on Netflix this week",
+            "summary": "",
+            "lifecycle_stage": "long_tail",
+        }
         cat = strategy._classify_story(story)
         assert cat == "streaming_premiere"
 
@@ -124,7 +133,12 @@ class TestHookExecute:
         context = {
             "stories": [
                 {"title": "Film A", "film_title": "Film A", "lifecycle_stage": "opening_weekend"},
-                {"title": "Film B", "film_title": "Film B", "is_trailer_drop": True, "lifecycle_stage": "pre_release"},
+                {
+                    "title": "Film B",
+                    "film_title": "Film B",
+                    "is_trailer_drop": True,
+                    "lifecycle_stage": "pre_release",
+                },
             ]
         }
         result = strategy.execute(context)
@@ -151,7 +165,11 @@ class TestHookDedup:
     def test_hooks_capped_at_60_chars(self, strategy):
         ctx = {
             "stories": [
-                {"title": f"Film {i}", "film_title": f"A Very Long Film Title {i}", "lifecycle_stage": "unknown"}
+                {
+                    "title": f"Film {i}",
+                    "film_title": f"A Very Long Film Title {i}",
+                    "lifecycle_stage": "unknown",
+                }
                 for i in range(5)
             ]
         }
@@ -176,8 +194,12 @@ class TestHookLLMSkip:
 
     def test_skips_llm_hook_stories(self, strategy):
         stories = [
-            {"title": "Film A", "film_title": "Film A", "lifecycle_stage": "unknown",
-             "content": {"hook": "LLM hook", "written_by": "llm"}},
+            {
+                "title": "Film A",
+                "film_title": "Film A",
+                "lifecycle_stage": "unknown",
+                "content": {"hook": "LLM hook", "written_by": "llm"},
+            },
             {"title": "Film B", "film_title": "Film B", "lifecycle_stage": "opening_weekend"},
         ]
         ctx = {"stories": stories}
@@ -188,8 +210,12 @@ class TestHookLLMSkip:
 
     def test_does_not_skip_template_hook(self, strategy):
         stories = [
-            {"title": "Film A", "film_title": "Film A", "lifecycle_stage": "unknown",
-             "content": {"hook": "Template hook", "written": True}},
+            {
+                "title": "Film A",
+                "film_title": "Film A",
+                "lifecycle_stage": "unknown",
+                "content": {"hook": "Template hook", "written": True},
+            },
         ]
         ctx = {"stories": stories}
         result = strategy.execute(ctx)
@@ -198,8 +224,12 @@ class TestHookLLMSkip:
 
     def test_all_llm_stories_skipped(self, strategy):
         stories = [
-            {"title": f"Film {i}", "film_title": f"Film {i}", "lifecycle_stage": "unknown",
-             "content": {"hook": f"LLM hook {i}", "written_by": "llm"}}
+            {
+                "title": f"Film {i}",
+                "film_title": f"Film {i}",
+                "lifecycle_stage": "unknown",
+                "content": {"hook": f"LLM hook {i}", "written_by": "llm"},
+            }
             for i in range(3)
         ]
         ctx = {"stories": stories}

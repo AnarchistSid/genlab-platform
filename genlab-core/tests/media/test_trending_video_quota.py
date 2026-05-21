@@ -51,7 +51,9 @@ class TestRSSFetch:
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            items = fetcher._fetch_channel_rss("https://www.youtube.com/feeds/videos.xml?channel_id=UCtest")
+            items = fetcher._fetch_channel_rss(
+                "https://www.youtube.com/feeds/videos.xml?channel_id=UCtest"
+            )
 
         assert len(items) == 2
         assert items[0]["video_id"] == "abc123"
@@ -154,9 +156,11 @@ class TestFetchFromChannels:
             {"url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCtest", "name": "Test"},
         ]
 
-        with patch("urllib.request.urlopen") as mock_urlopen, \
-             patch.object(fetcher, "_fetch_playlist_items") as mock_playlist, \
-             patch.object(fetcher, "_fetch_video_details", return_value=[]):
+        with (
+            patch("urllib.request.urlopen") as mock_urlopen,
+            patch.object(fetcher, "_fetch_playlist_items") as mock_playlist,
+            patch.object(fetcher, "_fetch_video_details", return_value=[]),
+        ):
             # RSS returns only 1 item (< 3 threshold)
             mock_resp = MagicMock()
             mock_resp.read.return_value = self.RSS_XML_ONE
@@ -177,10 +181,11 @@ class TestFetchTrendingQuota:
     def test_no_search_list_by_default(self):
         """Verify search.list is NOT called when allow_keyword_search=False."""
         fetcher = TrendingVideoFetcher(api_key="test")
-        with patch.object(fetcher, "_fetch_most_popular", return_value=[]), \
-             patch.object(fetcher, "_fetch_from_channels", return_value=[]), \
-             patch.object(fetcher, "_search_recent") as mock_search:
-
+        with (
+            patch.object(fetcher, "_fetch_most_popular", return_value=[]),
+            patch.object(fetcher, "_fetch_from_channels", return_value=[]),
+            patch.object(fetcher, "_search_recent") as mock_search,
+        ):
             fetcher.fetch_trending(
                 "sports",
                 subscribed_channels=[{"url": "https://yt.com?channel_id=UCtest"}],
@@ -192,11 +197,12 @@ class TestFetchTrendingQuota:
     def test_search_called_when_explicitly_enabled_and_few_results(self):
         """search.list is called only when allow_keyword_search=True AND < 3 candidates."""
         fetcher = TrendingVideoFetcher(api_key="test")
-        with patch.object(fetcher, "_fetch_most_popular", return_value=[]), \
-             patch.object(fetcher, "_fetch_from_channels", return_value=[]), \
-             patch.object(fetcher, "_search_recent", return_value=[]) as mock_search, \
-             patch.object(fetcher, "_fetch_video_details", return_value=[]):
-
+        with (
+            patch.object(fetcher, "_fetch_most_popular", return_value=[]),
+            patch.object(fetcher, "_fetch_from_channels", return_value=[]),
+            patch.object(fetcher, "_search_recent", return_value=[]) as mock_search,
+            patch.object(fetcher, "_fetch_video_details", return_value=[]),
+        ):
             fetcher.fetch_trending(
                 "sports",
                 subscribed_channels=[],

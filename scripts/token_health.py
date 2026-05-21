@@ -9,6 +9,7 @@ Usage:
     uv run --package genlab-core python scripts/token_health.py --niche gaming
     uv run --package genlab-core python scripts/token_health.py --json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,30 +37,40 @@ def _check_niche_credentials(niche_id: str) -> list[dict]:
 
     # Meta/Instagram
     meta = resolve_meta_credentials(niche_id)
-    results.append({
-        "platform": "instagram",
-        "niche": niche_id,
-        "status": "ok" if meta.get("ig_access_token") else "missing",
-        "detail": "token set" if meta.get("ig_access_token") else f"no {prefix}_META_ACCESS_TOKEN",
-    })
+    results.append(
+        {
+            "platform": "instagram",
+            "niche": niche_id,
+            "status": "ok" if meta.get("ig_access_token") else "missing",
+            "detail": "token set"
+            if meta.get("ig_access_token")
+            else f"no {prefix}_META_ACCESS_TOKEN",
+        }
+    )
 
     # YouTube
     yt = resolve_youtube_credentials(niche_id)
-    results.append({
-        "platform": "youtube",
-        "niche": niche_id,
-        "status": "ok" if yt.get("refresh_token") else "missing",
-        "detail": "refresh_token set" if yt.get("refresh_token") else f"no {prefix}_YOUTUBE_REFRESH_TOKEN",
-    })
+    results.append(
+        {
+            "platform": "youtube",
+            "niche": niche_id,
+            "status": "ok" if yt.get("refresh_token") else "missing",
+            "detail": "refresh_token set"
+            if yt.get("refresh_token")
+            else f"no {prefix}_YOUTUBE_REFRESH_TOKEN",
+        }
+    )
 
     # Threads
     th = resolve_threads_credentials(niche_id)
-    results.append({
-        "platform": "threads",
-        "niche": niche_id,
-        "status": "ok" if th[0] else "missing",
-        "detail": "token set" if th[0] else f"no {prefix}_THREADS_ACCESS_TOKEN",
-    })
+    results.append(
+        {
+            "platform": "threads",
+            "niche": niche_id,
+            "status": "ok" if th[0] else "missing",
+            "detail": "token set" if th[0] else f"no {prefix}_THREADS_ACCESS_TOKEN",
+        }
+    )
 
     return results
 
@@ -87,7 +98,9 @@ def main() -> int:
         print("\n=== Global Token Health ===")
         for check in global_results.get("checks", []):
             status = "✓" if check.get("valid") or check.get("status") == "ok" else "✗"
-            print(f"  {status} {check.get('platform', check.get('service', '?'))}: {check.get('message', check.get('detail', ''))[:80]}")
+            print(
+                f"  {status} {check.get('platform', check.get('service', '?'))}: {check.get('message', check.get('detail', ''))[:80]}"
+            )
 
         print("\n=== Per-Niche Credentials ===")
         for r in niche_results:

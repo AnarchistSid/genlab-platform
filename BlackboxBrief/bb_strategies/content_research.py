@@ -1,4 +1,5 @@
 """BB content research strategy — wraps fetch_ai_creators + parse_extract."""
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,9 @@ class BBContentResearchStrategy(ContentResearchStrategy):
 
         logger.info(
             "[ai_creators] Fetch: %d entries from %d sources in %.1fs",
-            total_entries, len(results), overall_elapsed,
+            total_entries,
+            len(results),
+            overall_elapsed,
         )
 
         # --- Parse ---
@@ -89,17 +92,19 @@ class BBContentResearchStrategy(ContentResearchStrategy):
         # (DownloadTopVideos, VideoGate, PushToBacklog, RunReport) can process them
         existing_stories = context.get("stories", [])
         for item in items:
-            existing_stories.append({
-                "story_id": item.get("story_id", ""),
-                "title": item.get("title", ""),
-                "source": item.get("source_name", "rss"),
-                "source_url": item.get("url", item.get("canonical_url", "")),
-                "published_at": item.get("published_at", ""),
-                "fetched_at": item.get("fetched_at", datetime.now(timezone.utc).isoformat()),
-                "summary": (item.get("summary") or "")[:300],
-                "tags": item.get("tags", []),
-                "niche_id": "ai_creators",
-            })
+            existing_stories.append(
+                {
+                    "story_id": item.get("story_id", ""),
+                    "title": item.get("title", ""),
+                    "source": item.get("source_name", "rss"),
+                    "source_url": item.get("url", item.get("canonical_url", "")),
+                    "published_at": item.get("published_at", ""),
+                    "fetched_at": item.get("fetched_at", datetime.now(timezone.utc).isoformat()),
+                    "summary": (item.get("summary") or "")[:300],
+                    "tags": item.get("tags", []),
+                    "niche_id": "ai_creators",
+                }
+            )
         context["stories"] = existing_stories
 
         context.setdefault("run_stats", {})["fetch"] = {

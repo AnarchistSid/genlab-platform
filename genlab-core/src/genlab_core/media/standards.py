@@ -14,6 +14,7 @@ Usage::
     assert std.frame.width == 1080
     assert std.layout.top_bar_pct == 0.12
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -104,7 +105,10 @@ _STANDARDS: dict[Platform, PlatformStandard] = {
     Platform.TIKTOK: PlatformStandard(
         platform=Platform.TIKTOK,
         video=VideoStandard(
-            codec="libx264", crf=15, preset="slow", max_bitrate_kbps=12_000,
+            codec="libx264",
+            crf=15,
+            preset="slow",
+            max_bitrate_kbps=12_000,
         ),
         frame=_VERTICAL_FRAME,
         layout=_DEFAULT_LAYOUT,

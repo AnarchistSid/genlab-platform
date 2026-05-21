@@ -1,4 +1,5 @@
 """Blueprint resource API endpoints."""
+
 import json
 import logging
 import os
@@ -36,14 +37,17 @@ _YT_URL_RE = re.compile(
 )
 _DASHBOARD_ROOT = Path(__file__).resolve().parent.parent.parent
 # GENLAB_PROJECT_ROOT defaults to the GenLab workspace root (parent of dashboard/)
-PROJECT_ROOT = Path(os.environ.get(
-    "GENLAB_PROJECT_ROOT",
-    str(_DASHBOARD_ROOT.parent),
-))
+PROJECT_ROOT = Path(
+    os.environ.get(
+        "GENLAB_PROJECT_ROOT",
+        str(_DASHBOARD_ROOT.parent),
+    )
+)
 
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -115,9 +119,19 @@ def _probe_video_duration(filepath: str) -> float | None:
         return _duration_cache[filepath]
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", filepath],
-            capture_output=True, text=True, timeout=5,
+            [
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                filepath,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
             dur = float(result.stdout.strip())
@@ -190,7 +204,7 @@ def _prefetch_story_thumbnails(records: list[dict]) -> None:
         # Evict oldest entries if cache exceeds max size
         if len(_story_thumbnail_cache) > _STORY_CACHE_MAX:
             keys = list(_story_thumbnail_cache.keys())
-            for k in keys[:len(keys) // 2]:
+            for k in keys[: len(keys) // 2]:
                 del _story_thumbnail_cache[k]
 
         # Populate cache for each needed ID
@@ -207,9 +221,7 @@ def _prefetch_story_thumbnails(records: list[dict]) -> None:
                     if not vid:
                         vid = _extract_youtube_id(story_fields.get("url", ""))
                     if vid:
-                        _story_thumbnail_cache[sid] = (
-                            f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
-                        )
+                        _story_thumbnail_cache[sid] = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
                     else:
                         _story_thumbnail_cache[sid] = None
             else:
@@ -272,7 +284,11 @@ def _transform_media(fields: dict, *, lite: bool = False) -> dict:
                     story_rec = _get_client().stories.get(story_id)
                     story_fields = story_rec.get("fields", {})
                     story_thumb = story_fields.get("thumbnail_url", "")
-                    if story_thumb and isinstance(story_thumb, str) and story_thumb.startswith("http"):
+                    if (
+                        story_thumb
+                        and isinstance(story_thumb, str)
+                        and story_thumb.startswith("http")
+                    ):
                         _story_thumbnail_cache[story_id] = story_thumb
                     else:
                         # Try explicit video_id first, then extract from URL
@@ -302,6 +318,7 @@ def _transform_media(fields: dict, *, lite: bool = False) -> dict:
             else:
                 try:
                     from server.review_server import _resolve_video_url
+
                     fallback_url = _resolve_video_url(fields)
                     if fallback_url:
                         all_media_urls.append(fallback_url)
@@ -356,7 +373,11 @@ def _transform_media(fields: dict, *, lite: bool = False) -> dict:
         # Extract video_duration from the primary video file if not already set
         if not fields.get("video_duration") and paths:
             for p in paths:
-                if isinstance(p, str) and p.endswith((".mp4", ".mov", ".webm")) and "_landscape" not in p:
+                if (
+                    isinstance(p, str)
+                    and p.endswith((".mp4", ".mov", ".webm"))
+                    and "_landscape" not in p
+                ):
                     dur = _probe_video_duration(p)
                     if dur is not None and dur > 0:
                         fields["video_duration"] = round(dur, 1)
@@ -421,7 +442,8 @@ def review_queue():
         # Skip filter when niche_id is "all" — show everything
         if niche_id != "all":
             records = [
-                r for r in records
+                r
+                for r in records
                 if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
             ]
     except Exception as e:
@@ -455,14 +477,14 @@ def review_queue():
             published = client.get_blueprints_by_status("PUBLISHED")
             if niche_id != "all":
                 published = [
-                    r for r in published
+                    r
+                    for r in published
                     if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
                 ]
             published.sort(key=_priority, reverse=True)
             _prefetch_story_thumbnails(published[:5])
             items = [
-                _transform_media({"id": r["id"], **r.get("fields", {})})
-                for r in published[:5]
+                _transform_media({"id": r["id"], **r.get("fields", {})}) for r in published[:5]
             ]
             fallback = len(items) > 0
         except Exception as e:
@@ -491,16 +513,21 @@ def review_action(record_id):
     data = request.json or {}
     action = data.get("action", "")
     VALID_ACTIONS = {
-        "approve": "approved", "approved": "approved",
-        "reject": "rejected", "rejected": "rejected",
-        "revise": "revised", "revised": "revised",
-        "skip": "skipped", "skipped": "skipped",
+        "approve": "approved",
+        "approved": "approved",
+        "reject": "rejected",
+        "rejected": "rejected",
+        "revise": "revised",
+        "revised": "revised",
+        "skip": "skipped",
+        "skipped": "skipped",
     }
     if action not in VALID_ACTIONS:
         return api_error(error=f"Invalid action: {action}")
     action_taken = VALID_ACTIONS[action]
     try:
         from server.review_server import _execute_review_action
+
         _execute_review_action(
             record_id,
             action_taken,
@@ -514,6 +541,7 @@ def review_action(record_id):
         if action_taken == "approved":
             import json as _json
             from datetime import datetime
+
             editorial = {
                 "reviewed_by": "editorial",
                 "reviewed_at": datetime.now(UTC).isoformat(),
@@ -537,6 +565,7 @@ def review_action(record_id):
         # Emit socket event for live badge updates
         try:
             from server.review_server import socketio
+
             socketio.emit("blueprint_updated", {"id": record_id, "action": action_taken})
         except Exception:
             pass
@@ -600,10 +629,7 @@ def list_blueprints():
             )
         else:
             # Default: exclude PUBLISHED from content review (not actionable)
-            filters.append(
-                "OR({status}='INTEL_READY',{status}='DRAFTED',"
-                "{status}='VISUAL_READY')"
-            )
+            filters.append("OR({status}='INTEL_READY',{status}='DRAFTED',{status}='VISUAL_READY')")
 
     # P3.12: Validate action_taken against allowlist to prevent OData injection
     ALLOWED_ACTIONS = {"approved", "rejected", "revised", "skipped"}
@@ -621,7 +647,8 @@ def list_blueprints():
         # Skip filter when niche_id is "all" or empty — show everything
         if niche_id and niche_id != "all":
             records = [
-                r for r in records
+                r
+                for r in records
                 if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
             ]
     except Exception as e:
@@ -630,15 +657,13 @@ def list_blueprints():
 
     # Filter unscheduled: only blueprints without a scheduled_for value
     if unscheduled and unscheduled.lower() in ("true", "1"):
-        records = [
-            r for r in records
-            if not r.get("fields", {}).get("scheduled_for")
-        ]
+        records = [r for r in records if not r.get("fields", {}).get("scheduled_for")]
 
     # Virtual SCHEDULED filter: only keep approved posts with a scheduled_for date
     if filter_scheduled:
         records = [
-            r for r in records
+            r
+            for r in records
             if r.get("fields", {}).get("scheduled_for")
             and r.get("fields", {}).get("action_taken") == "approved"
         ]
@@ -649,7 +674,8 @@ def list_blueprints():
     # review queue isn't misleadingly empty.
     if not filter_scheduled and not status:
         records = [
-            r for r in records
+            r
+            for r in records
             if not (
                 r.get("fields", {}).get("status") == "VISUAL_READY"
                 and r.get("fields", {}).get("action_taken") == "approved"
@@ -659,7 +685,8 @@ def list_blueprints():
 
     if search:
         records = [
-            r for r in records
+            r
+            for r in records
             if search in (r.get("fields", {}).get("hook_text", "") or "").lower()
             or search in (r.get("fields", {}).get("caption", "") or "").lower()
         ]
@@ -686,10 +713,12 @@ def list_blueprints():
     page_data, meta = _paginate(records, page, per_page)
     # Batch-prefetch story thumbnails for only the current page (not all records)
     _prefetch_story_thumbnails(page_data)
-    return api_success(data={
-        "data": [_transform_media({"id": r["id"], **r.get("fields", {})}) for r in page_data],
-        "meta": meta,
-    })
+    return api_success(
+        data={
+            "data": [_transform_media({"id": r["id"], **r.get("fields", {})}) for r in page_data],
+            "meta": meta,
+        }
+    )
 
 
 @bp.route("/<record_id>", methods=["GET"])
@@ -711,10 +740,14 @@ def review_blueprint(record_id):
     action = data.get("action", "")
     # Accept both imperative ("approve") and past tense ("approved") forms
     VALID_ACTIONS = {
-        "approve": "approved", "approved": "approved",
-        "reject": "rejected", "rejected": "rejected",
-        "revise": "revised", "revised": "revised",
-        "skip": "skipped", "skipped": "skipped",
+        "approve": "approved",
+        "approved": "approved",
+        "reject": "rejected",
+        "rejected": "rejected",
+        "revise": "revised",
+        "revised": "revised",
+        "skip": "skipped",
+        "skipped": "skipped",
     }
     if action not in VALID_ACTIONS:
         return api_error(error=f"Invalid action: {action}")
@@ -722,6 +755,7 @@ def review_blueprint(record_id):
     # Persist the review decision to backlog — uses shared helper from review_server
     try:
         from server.review_server import _execute_review_action
+
         _execute_review_action(
             record_id,
             action_taken,
@@ -745,8 +779,10 @@ def batch_review():
     if not ids:
         return api_error(error="No blueprint IDs provided")
     VALID_BATCH = {
-        "approve": "approved", "approved": "approved",
-        "reject": "rejected", "rejected": "rejected",
+        "approve": "approved",
+        "approved": "approved",
+        "reject": "rejected",
+        "rejected": "rejected",
     }
     if action not in VALID_BATCH:
         return api_error(error=f"Invalid action: {action}")
@@ -766,6 +802,7 @@ def batch_review():
             # Auto-schedule approved blueprints
             if action_taken == "approved":
                 from server.core.publishing_queue import _next_available_slot
+
                 try:
                     bp_data = client.blueprints.get(str(rid))
                     existing_sched = bp_data.get("fields", {}).get("scheduled_for") or ""
@@ -800,6 +837,7 @@ def approve_and_schedule(blueprint_id):
 
         # Find next available slot (reuse existing scheduling logic)
         from server.core.publishing_queue import _next_available_slot
+
         scheduled_for = _next_available_slot(niche_id=niche_id)
 
         update_fields = {
@@ -811,11 +849,13 @@ def approve_and_schedule(blueprint_id):
 
         client.blueprints.update(blueprint_id, update_fields, typecast=True)
 
-        return api_success(data={
-            "id": blueprint_id,
-            "status": "ok",
-            "scheduled_for": scheduled_for,
-        })
+        return api_success(
+            data={
+                "id": blueprint_id,
+                "status": "ok",
+                "scheduled_for": scheduled_for,
+            }
+        )
     except Exception as e:
         logger.error("approve-and-schedule failed for %s: %s", blueprint_id, e)
         return api_error(error=str(e), code=500)
@@ -873,6 +913,7 @@ def reschedule(record_id):
 
     # Collision check: parse scheduled_for into date+slot and check occupancy (per-niche)
     from server.api.schedule import IST, _check_slot_collision, _parse_datetime
+
     dt = _parse_datetime(scheduled_for)
     if dt is not None:
         if dt.tzinfo is not None:
@@ -884,11 +925,17 @@ def reschedule(record_id):
         # Look up the blueprint's niche_id for niche-scoped collision check
         try:
             bp_record = _get_client().blueprints.get(record_id)
-            bp_niche = (bp_record.get("fields", {}).get("niche_id", "") or "").strip() if bp_record else ""
+            bp_niche = (
+                (bp_record.get("fields", {}).get("niche_id", "") or "").strip() if bp_record else ""
+            )
         except Exception:
             bp_niche = ""
         occupant = _check_slot_collision(
-            _get_client(), target_date, target_slot, exclude_blueprint_id=record_id, niche_id=bp_niche,
+            _get_client(),
+            target_date,
+            target_slot,
+            exclude_blueprint_id=record_id,
+            niche_id=bp_niche,
         )
         if occupant:
             return api_error(
@@ -946,12 +993,14 @@ def focus_review_health():
         inner = getattr(proxy, "_proxy", proxy)
         list_id = getattr(inner, "_list_id", "unknown")
 
-        return api_success(data={
-            "status": "ok" if count > 0 else "empty",
-            "pending_review_count": count,
-            "last_checked": datetime.now(UTC).isoformat(),
-            "list_id": list_id,
-        })
+        return api_success(
+            data={
+                "status": "ok" if count > 0 else "empty",
+                "pending_review_count": count,
+                "last_checked": datetime.now(UTC).isoformat(),
+                "list_id": list_id,
+            }
+        )
     except Exception as e:
         logger.error("Focus review health check failed: %s", e)
         return api_error(error=str(e), code=502)

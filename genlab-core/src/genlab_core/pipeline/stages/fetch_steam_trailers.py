@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 # Popular Steam app IDs for fallback (if no trending games in context)
 _DEFAULT_APP_IDS = [
-    730,     # Counter-Strike 2
-    570,     # Dota 2
+    730,  # Counter-Strike 2
+    570,  # Dota 2
     271590,  # Grand Theft Auto V
-    1172470, # Apex Legends
+    1172470,  # Apex Legends
     252490,  # Rust
     578080,  # PUBG
-    1938090, # Call of Duty HQ
+    1938090,  # Call of Duty HQ
 ]
 
 
@@ -47,13 +47,15 @@ def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:
             url = mp4.get("480") or mp4.get("max")
             if not url:
                 continue
-            results.append({
-                "title": f"{game_name} - {movie.get('name', 'Trailer')}",
-                "clip_url": url,
-                "source": "steam_trailer",
-                "app_id": app_id,
-                "game_name": game_name,
-            })
+            results.append(
+                {
+                    "title": f"{game_name} - {movie.get('name', 'Trailer')}",
+                    "clip_url": url,
+                    "source": "steam_trailer",
+                    "app_id": app_id,
+                    "game_name": game_name,
+                }
+            )
         return results
     except Exception as e:
         logger.warning("[SteamTrailers] Fetch failed for app %d: %s", app_id, e)
@@ -89,7 +91,9 @@ class FetchSteamTrailers:
             all_trailers.extend(trailers)
             time.sleep(0.3)  # Respect Steam rate limit
 
-        logger.info("[SteamTrailers] %d trailers from %d games", len(all_trailers), len(app_ids[:5]))
+        logger.info(
+            "[SteamTrailers] %d trailers from %d games", len(all_trailers), len(app_ids[:5])
+        )
 
         if all_trailers:
             from genlab_core.cache.stable_ids import generate_story_id
@@ -98,21 +102,23 @@ class FetchSteamTrailers:
             new_stories = []
             for t in all_trailers[:8]:  # Cap at 8 trailers
                 sid = generate_story_id(t["clip_url"], now_iso)
-                new_stories.append({
-                    "story_id": sid,
-                    "title": t["title"],
-                    "source": "steam_trailer",
-                    "source_url": t["clip_url"],
-                    "canonical_url": t["clip_url"],
-                    "published_at": now_iso,
-                    "fetched_at": now_iso,
-                    "summary": f"Official trailer for {t.get('game_name', '')}",
-                    "niche_id": niche_id,
-                    "video_source": "steam",
-                    "_trending_video": True,
-                    "_clip_url": t["clip_url"],
-                    "source_mention_count": 2,
-                })
+                new_stories.append(
+                    {
+                        "story_id": sid,
+                        "title": t["title"],
+                        "source": "steam_trailer",
+                        "source_url": t["clip_url"],
+                        "canonical_url": t["clip_url"],
+                        "published_at": now_iso,
+                        "fetched_at": now_iso,
+                        "summary": f"Official trailer for {t.get('game_name', '')}",
+                        "niche_id": niche_id,
+                        "video_source": "steam",
+                        "_trending_video": True,
+                        "_clip_url": t["clip_url"],
+                        "source_mention_count": 2,
+                    }
+                )
 
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}

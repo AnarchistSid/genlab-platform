@@ -1,4 +1,5 @@
 """Tests for /api/v1/blueprints endpoints."""
+
 import sys
 from pathlib import Path
 

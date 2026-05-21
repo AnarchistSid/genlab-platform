@@ -1,4 +1,5 @@
 """Tests for genlab_core.monetization.revenue_predictor."""
+
 from __future__ import annotations
 
 import pytest
@@ -95,7 +96,9 @@ class TestCommissionPercentageConversion:
     def test_commission_percentage_conversion(self) -> None:
         """4.0 stored as percent should be treated as 4%, not 400%."""
         predictor = RevenuePredictor(conversion_rate=0.02)
-        story = _base_story(affiliate_commission_pct=4.0, _affiliate_price_inr=5000, _affiliate_match_quality=0.5)
+        story = _base_story(
+            affiliate_commission_pct=4.0, _affiliate_price_inr=5000, _affiliate_match_quality=0.5
+        )
         revenue = predictor.predict(story)
         # Expected: 5 * 1.0 * 0.02 * 5000 * 0.04 = 20.0
         # Wrong (400%): 5 * 1.0 * 0.02 * 5000 * 4.0 = 2000.0
@@ -158,7 +161,16 @@ class TestCategoryPriceEstimation:
         assert _estimate_price_by_category("unknown_category") == 3000
 
     def test_all_known_categories_positive(self) -> None:
-        categories = ["hardware", "peripheral", "subscription", "gear", "merchandise", "tool", "educational", "supplement"]
+        categories = [
+            "hardware",
+            "peripheral",
+            "subscription",
+            "gear",
+            "merchandise",
+            "tool",
+            "educational",
+            "supplement",
+        ]
         for cat in categories:
             assert _estimate_price_by_category(cat) > 0
 

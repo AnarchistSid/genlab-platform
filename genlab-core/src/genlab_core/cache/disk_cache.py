@@ -6,6 +6,7 @@ No external dependencies (stdlib only).
 For heavy binary media caching (video clips, thumbnails), a diskcache-backed
 AgentCache is planned but not yet needed by any consumer.
 """
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_SAFE_KEY = re.compile(r'^[a-zA-Z0-9_.\-]{1,256}$')
+_SAFE_KEY = re.compile(r"^[a-zA-Z0-9_.\-]{1,256}$")
 _DEFAULT_MAX_ENTRIES = 10000
 
 
@@ -39,7 +40,7 @@ class Cache:
         data = cache.get("news_feed_abc", ttl_hours=6)
     """
 
-    def __init__(self, cache_dir: str = '.tmp/cache', max_entries: int = _DEFAULT_MAX_ENTRIES):
+    def __init__(self, cache_dir: str = ".tmp/cache", max_entries: int = _DEFAULT_MAX_ENTRIES):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.max_entries = max_entries
@@ -65,7 +66,7 @@ class Cache:
             with open(cache_file) as f:
                 cached = json.load(f)
 
-            cached_at = datetime.fromisoformat(cached['timestamp'])
+            cached_at = datetime.fromisoformat(cached["timestamp"])
             now = datetime.now(UTC)
             if cached_at.tzinfo is None:
                 cached_at = cached_at.replace(tzinfo=UTC)
@@ -76,7 +77,7 @@ class Cache:
                     pass
                 return None
 
-            return cached['data']
+            return cached["data"]
         except FileNotFoundError:
             return None
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
@@ -97,18 +98,15 @@ class Cache:
         cache_file = self.cache_dir / f"{key}.json"
 
         try:
-            with open(cache_file, 'w') as f:
-                json.dump({
-                    'timestamp': datetime.now(UTC).isoformat(),
-                    'data': value
-                }, f)
+            with open(cache_file, "w") as f:
+                json.dump({"timestamp": datetime.now(UTC).isoformat(), "data": value}, f)
         except OSError as exc:
             logger.warning("Cache write error for %s: %s", cache_file.name, exc)
         self._auto_purge()
 
     def clear(self) -> None:
         """Clear all cache entries."""
-        for f in self.cache_dir.glob('*.json'):
+        for f in self.cache_dir.glob("*.json"):
             try:
                 f.unlink()
             except OSError:
@@ -121,7 +119,7 @@ class Cache:
         """
         cutoff_ts = time.time() - (ttl_hours * 3600)
         deleted = 0
-        for f in self.cache_dir.glob('*.json'):
+        for f in self.cache_dir.glob("*.json"):
             try:
                 if f.stat().st_mtime < cutoff_ts:
                     f.unlink()
@@ -144,10 +142,10 @@ class Cache:
 
     def stats(self) -> dict:
         """Return cache stats."""
-        files = list(self.cache_dir.glob('*.json'))
+        files = list(self.cache_dir.glob("*.json"))
         total_size = sum(f.stat().st_size for f in files)
         return {
             "entries": len(files),
             "total_size_bytes": total_size,
-            "cache_dir": str(self.cache_dir)
+            "cache_dir": str(self.cache_dir),
         }

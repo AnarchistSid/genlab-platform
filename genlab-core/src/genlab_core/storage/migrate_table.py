@@ -9,6 +9,7 @@ Usage:
     uv run python -m genlab_core.storage.migrate_table --table blueprints
     uv run python -m genlab_core.storage.migrate_table --table stories --table blueprints
 """
+
 from __future__ import annotations
 
 import argparse
@@ -119,9 +120,20 @@ def _build_insert_sql(
         return val
 
     # TIMESTAMPTZ columns that asyncpg expects as datetime objects
-    _TS_COLS = {"scheduled_for", "published_at", "collected_at", "reviewed_at",
-                "first_seen", "last_seen", "last_fetched", "scheduled_at",
-                "publish_time", "metrics_fetched", "created_at", "updated_at"}
+    _TS_COLS = {
+        "scheduled_for",
+        "published_at",
+        "collected_at",
+        "reviewed_at",
+        "first_seen",
+        "last_seen",
+        "last_fetched",
+        "scheduled_at",
+        "publish_time",
+        "metrics_fetched",
+        "created_at",
+        "updated_at",
+    }
 
     def _parse_datetime(val: Any) -> Any:
         """Parse ISO datetime strings to datetime objects for TIMESTAMPTZ columns."""
@@ -239,8 +251,7 @@ def _get_sp_proxy(client, sp_list_name: str):
     proxy = getattr(client, attr, None)
     if proxy is None:
         raise ValueError(
-            f"BacklogClient has no proxy for '{sp_list_name}' "
-            f"(attribute '{attr}' is None)"
+            f"BacklogClient has no proxy for '{sp_list_name}' (attribute '{attr}' is None)"
         )
     return proxy
 
@@ -291,7 +302,9 @@ def migrate_table(
                         if i % 100 == 0 or i == total:
                             logger.info(
                                 "Migrated %d/%d %s (skipped existing)...",
-                                i, total, pg_table,
+                                i,
+                                total,
+                                pg_table,
                             )
                         continue
 
@@ -304,12 +317,17 @@ def migrate_table(
                     sp_id = sp_record.get("id", "?")
                     logger.warning(
                         "Error migrating %s record sp_id=%s: %s",
-                        pg_table, sp_id, exc,
+                        pg_table,
+                        sp_id,
+                        exc,
                     )
 
                 if i % 100 == 0 or i == total:
                     logger.info(
-                        "Migrated %d/%d %s...", i, total, pg_table,
+                        "Migrated %d/%d %s...",
+                        i,
+                        total,
+                        pg_table,
                     )
 
     assert pg._loop is not None
@@ -387,8 +405,11 @@ def run_migration(
 
         logger.info(
             "%s complete: %d total, %d migrated, %d skipped, %d errors",
-            pg_table, stats["total"], stats["migrated"],
-            stats["skipped"], stats["errors"],
+            pg_table,
+            stats["total"],
+            stats["migrated"],
+            stats["skipped"],
+            stats["errors"],
         )
 
     return results
@@ -421,7 +442,8 @@ def main() -> None:
         help="Read from SharePoint and report counts without writing to PostgreSQL.",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable debug logging.",
     )

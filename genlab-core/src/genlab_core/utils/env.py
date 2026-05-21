@@ -1,4 +1,5 @@
 """Shared environment utilities for Gen Lab agents."""
+
 from __future__ import annotations
 
 import os

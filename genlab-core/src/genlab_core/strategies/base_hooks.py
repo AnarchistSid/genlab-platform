@@ -96,7 +96,21 @@ class BaseHookStrategy(HookStrategy):
             truncated = truncated[:last_space]
         result = truncated.rstrip(" .,!?-:")
         # Strip trailing conjunctions/prepositions that create incomplete sentences
-        for suffix in (" and", " or", " but", " the", " a", " an", " is", " are", " in", " of", " to", " for", " with"):
+        for suffix in (
+            " and",
+            " or",
+            " but",
+            " the",
+            " a",
+            " an",
+            " is",
+            " are",
+            " in",
+            " of",
+            " to",
+            " for",
+            " with",
+        ):
             if result.lower().endswith(suffix):
                 result = result[: -len(suffix)].rstrip(" .,!?-:")
                 break
@@ -118,7 +132,10 @@ class BaseHookStrategy(HookStrategy):
             from genlab_core.writing.llm_hook_generator import generate_hook
 
             result = generate_hook(
-                story, self._niche_id, used_hooks, return_style=True,
+                story,
+                self._niche_id,
+                used_hooks,
+                return_style=True,
             )
             # return_style=True yields (hook, style) — None style means
             # cold-start / no bandit influence, which we don't record.
@@ -140,9 +157,7 @@ class BaseHookStrategy(HookStrategy):
 
         # Build prioritized formula list: own category first, then others
         cat_config = categories.get(category, categories.get("default", {}))
-        primary_formulas = list(
-            cat_config.get("formulas", hooks_config.get("formulas", []))
-        )
+        primary_formulas = list(cat_config.get("formulas", hooks_config.get("formulas", [])))
         random.shuffle(primary_formulas)
 
         other_formulas: list[str] = []
@@ -172,6 +187,7 @@ class BaseHookStrategy(HookStrategy):
     def _is_banned(hook: str) -> bool:
         """Check if hook contains any banned phrase or matches a banned pattern."""
         from genlab_core.writing.llm_hook_generator import _BANNED_PATTERNS, _BANNED_PHRASES
+
         hook_lower = hook.lower()
         if any(phrase in hook_lower for phrase in _BANNED_PHRASES):
             return True
@@ -224,27 +240,27 @@ class BaseHookStrategy(HookStrategy):
                     # Madrid - Athletic Bilbao" as hooks — those are
                     # match listings, not curiosity hooks.
                     has_question = cleaned.rstrip().endswith("?")
-                    has_verb = bool(re.search(
-                        r"\b(is|was|did|are|just|hit|got|made|drops?|broke|"
-                        r"won|lost|leaked|killed|saved|ended|started|"
-                        r"happened|caught|forced|destroyed|exposed|"
-                        r"changes?|matters?|reveals?)\b",
-                        cleaned, re.IGNORECASE,
-                    ))
+                    has_verb = bool(
+                        re.search(
+                            r"\b(is|was|did|are|just|hit|got|made|drops?|broke|"
+                            r"won|lost|leaked|killed|saved|ended|started|"
+                            r"happened|caught|forced|destroyed|exposed|"
+                            r"changes?|matters?|reveals?)\b",
+                            cleaned,
+                            re.IGNORECASE,
+                        )
+                    )
                     long_enough = len(cleaned) >= 25
                     looks_hooky = (has_question or has_verb) and long_enough
-                    if (
-                        cleaned
-                        and looks_hooky
-                        and not self._is_banned(cleaned)
-                    ):
+                    if cleaned and looks_hooky and not self._is_banned(cleaned):
                         story.setdefault("content", {})["hook"] = cleaned
                         story.pop("_skip_llm", None)
                         used_hooks.add(cleaned.lower())
                         hooked_count += 1
                         logger.info(
                             "[%s] LLM skip recovered via title-derived hook: %s",
-                            self._niche_id, cleaned[:60],
+                            self._niche_id,
+                            cleaned[:60],
                         )
                         continue
                     if cleaned and not looks_hooky:
@@ -255,9 +271,9 @@ class BaseHookStrategy(HookStrategy):
                         # runs; the formula generator handles bare
                         # subjects.
                         logger.info(
-                            "[%s] Title not hook-shaped, deferring to "
-                            "template formula: %s",
-                            self._niche_id, cleaned[:60],
+                            "[%s] Title not hook-shaped, deferring to template formula: %s",
+                            self._niche_id,
+                            cleaned[:60],
                         )
                         story.pop("_skip_llm", None)
                         # don't continue — let the formula path below handle it
@@ -265,7 +281,8 @@ class BaseHookStrategy(HookStrategy):
                         logger.info(
                             "[%s] LLM skip not recoverable (title empty/banned), "
                             "leaving for push_to_backlog drop: %s",
-                            self._niche_id, (story.get("title") or "")[:40],
+                            self._niche_id,
+                            (story.get("title") or "")[:40],
                         )
                         continue
                 else:
@@ -315,7 +332,9 @@ class BaseHookStrategy(HookStrategy):
             if specificity == 0 and title_words:
                 logger.debug(
                     "[%s] Hook has no title overlap — may be generic: '%s' (title: '%s')",
-                    self._niche_id, hook[:40], story.get("title", "")[:40],
+                    self._niche_id,
+                    hook[:40],
+                    story.get("title", "")[:40],
                 )
 
             content = story.setdefault("content", {})

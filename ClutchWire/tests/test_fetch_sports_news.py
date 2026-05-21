@@ -75,7 +75,9 @@ class TestESPNScoreboard:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_scoreboard()
 
@@ -88,7 +90,9 @@ class TestESPNScoreboard:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_scoreboard()
 
@@ -103,7 +107,9 @@ class TestESPNScoreboard:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_scoreboard()
 
@@ -117,7 +123,9 @@ class TestESPNScoreboard:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_scoreboard()
 
@@ -141,7 +149,9 @@ class TestESPNScoreboard:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_scoreboard()
 
@@ -178,7 +188,9 @@ class TestESPNNews:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_news()
 
@@ -193,7 +205,9 @@ class TestESPNNews:
         mock_resp.raise_for_status = MagicMock()
 
         with patch("cw_strategies.fetch_sports_news.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+            MockClient.return_value.__enter__ = MagicMock(
+                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+            )
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             items = fetcher.fetch_news()
 
@@ -202,6 +216,7 @@ class TestESPNNews:
 
 
 # --- RSS Fetcher ---
+
 
 class TestRSSFetcher:
     def test_fetches_from_rss_sources(self):
@@ -247,10 +262,13 @@ class TestRSSFetcher:
 
 # --- SportsStoryItem ---
 
+
 class TestSportsStoryItem:
     def test_to_dict(self):
         item = SportsStoryItem(
-            title="Test", source="test", teams=["Lakers", "Celtics"],
+            title="Test",
+            source="test",
+            teams=["Lakers", "Celtics"],
         )
         d = item.to_dict()
         assert d["title"] == "Test"

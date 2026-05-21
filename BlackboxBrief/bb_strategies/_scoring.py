@@ -28,6 +28,7 @@ from genlab_core.cache.stable_ids import generate_cluster_id, normalize_url
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine
+
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
@@ -71,12 +72,13 @@ def load_topic_weights(path: Path = TOPIC_WEIGHTS_PATH) -> Dict[str, Any]:
 # Jaccard 3-gram similarity
 # ---------------------------------------------------------------------------
 
+
 def char_ngrams(text: str, n: int = 3) -> Set[str]:
     """Generate character n-grams from text."""
     text = text.lower().strip()
     if len(text) < n:
         return {text}
-    return {text[i:i + n] for i in range(len(text) - n + 1)}
+    return {text[i : i + n] for i in range(len(text) - n + 1)}
 
 
 def jaccard_similarity(a: str, b: str, n: int = 3) -> float:
@@ -93,6 +95,7 @@ def jaccard_similarity(a: str, b: str, n: int = 3) -> float:
 # ---------------------------------------------------------------------------
 # Three-pass deduplication
 # ---------------------------------------------------------------------------
+
 
 def dedup_pass_url(items: List[Dict]) -> Tuple[List[Dict], int]:
     """Pass 1: Remove exact URL duplicates, keeping highest priority."""
@@ -134,14 +137,14 @@ def dedup_pass_title(items: List[Dict], threshold: float = 0.85) -> Tuple[List[D
             keep.append(item)
         else:
             removed += 1
-    logger.info("Pass 2 (title): %d -> %d items (%d near-duplicates removed)",
-                len(items), len(keep), removed)
+    logger.info("Pass 2 (title): %d -> %d items (%d near-duplicates removed)", len(items), len(keep), removed)
     return keep, removed
 
 
 # ---------------------------------------------------------------------------
 # Pass 3: TF-IDF Topic Clustering
 # ---------------------------------------------------------------------------
+
 
 def _build_clusters_union_find(sim_matrix, threshold: float, n: int) -> List[List[int]]:
     """Single-linkage clustering via union-find on a similarity matrix.
@@ -253,7 +256,7 @@ def cluster_stories(items: List[Dict], config: Dict[str, Any]) -> Tuple[List[Dic
         for rank, (idx, _score) in enumerate(scored, 1):
             items[idx]["cluster_id"] = cluster_id
             items[idx]["cluster_rank"] = rank
-            items[idx]["is_cluster_primary"] = (rank == 1)
+            items[idx]["is_cluster_primary"] = rank == 1
             items[idx]["cluster_size"] = len(cluster_indices)
             items[idx]["cluster_member_urls"] = cluster_urls
 
@@ -262,7 +265,11 @@ def cluster_stories(items: List[Dict], config: Dict[str, Any]) -> Tuple[List[Dic
 
     logger.info(
         "Pass 3 (clustering): %d items -> %d clusters (avg %.1f items/cluster, %d singletons, %d stories in multi-clusters)",
-        len(items), total_clusters, avg_size, singletons, stories_clustered,
+        len(items),
+        total_clusters,
+        avg_size,
+        singletons,
+        stories_clustered,
     )
 
     # Log non-singleton clusters for visibility
@@ -283,6 +290,7 @@ def cluster_stories(items: List[Dict], config: Dict[str, Any]) -> Tuple[List[Dic
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
+
 
 def score_authority(item: Dict, authority_map: Dict[str, float]) -> float:
     """Score based on source priority (primary) or platform domain (fallback).
@@ -528,63 +536,118 @@ def score_virality_fit(item: Dict, config: Dict[str, Any]) -> float:
 # Patterns are ordered so more specific topics match before generic ones.
 _TOPIC_KEYWORD_MAP: Dict[str, List[re.Pattern]] = {
     "tools": [
-        re.compile(r"\b(?:tool|app|extension|plugin|chatgpt|gemini|claude|copilot|perplexity|midjourney|dall.?e|sora|cursor|v0|bolt)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:tool|app|extension|plugin|chatgpt|gemini|claude|copilot|perplexity|midjourney|dall.?e|sora|cursor|v0|bolt)\b",
+            re.IGNORECASE,
+        ),
     ],
     "human_impact": [
-        re.compile(r"\b(?:job|jobs|worker|employee|teacher|doctor|artist|farmer|student|fired|laid off|layoff|replace[ds]?|unemployment|hiring|career)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:job|jobs|worker|employee|teacher|doctor|artist|farmer|student|fired|laid off|layoff|replace[ds]?|unemployment|hiring|career)\b",
+            re.IGNORECASE,
+        ),
         re.compile(r"\b\d{1,3}[\s-]?year[\s-]?old\b", re.IGNORECASE),
     ],
     "pop_culture": [
-        re.compile(r"\b(?:movie|film|music|song|anime|game|celebrity|hollywood|bollywood|netflix|disney|marvel|star wars|harry potter|naruto|ghibli|tiktok|youtube|spotify)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:movie|film|music|song|anime|game|celebrity|hollywood|bollywood|netflix|disney|marvel|star wars|harry potter|naruto|ghibli|tiktok|youtube|spotify)\b",
+            re.IGNORECASE,
+        ),
     ],
     "money": [
         re.compile(r"\$\d[\d,]*\.?\d*\s*[bmkt](?:illion|rillion)?|\$\d[\d,]*\.?\d*", re.IGNORECASE),
-        re.compile(r"\b(?:funding|valuation|revenue|billion|million|investment|acquisition|ipo|profit|salary|cost|pricing|subscription)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:funding|valuation|revenue|billion|million|investment|acquisition|ipo|profit|salary|cost|pricing|subscription)\b",
+            re.IGNORECASE,
+        ),
     ],
     "creative": [
-        re.compile(r"\b(?:generated|art|image|video|animation|render|deepfake|music|visual|painting|portrait|trailer|poster)\b.*\b(?:ai|gpt|model|diffusion)\b", re.IGNORECASE),
-        re.compile(r"\b(?:ai|gpt|model|diffusion)\b.*\b(?:generated|art|image|video|animation|render|deepfake|music|visual)\b", re.IGNORECASE),
-        re.compile(r"\b(?:midjourney|dall.?e|stable.?diffusion|sora|kling|runway|flux|veo|wan\s?\d|hailuo|pika)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:generated|art|image|video|animation|render|deepfake|music|visual|painting|portrait|trailer|poster)\b.*\b(?:ai|gpt|model|diffusion)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:ai|gpt|model|diffusion)\b.*\b(?:generated|art|image|video|animation|render|deepfake|music|visual)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:midjourney|dall.?e|stable.?diffusion|sora|kling|runway|flux|veo|wan\s?\d|hailuo|pika)\b",
+            re.IGNORECASE,
+        ),
     ],
     "prompts": [
         re.compile(r"\b(?:prompt|prompts|prompting|prompt engineering|system prompt)\b", re.IGNORECASE),
     ],
     "products": [
-        re.compile(r"\b(?:launch|launched|launches|release|released|feature|features|update|updated|beta|early access|waitlist|product)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:launch|launched|launches|release|released|feature|features|update|updated|beta|early access|waitlist|product)\b",
+            re.IGNORECASE,
+        ),
     ],
     "llm": [
-        re.compile(r"\b(?:gpt[\s-]?\d|claude|gemini|llama|mistral|phi|qwen|deepseek|llm|language model|chatbot|chat\s?bot)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:gpt[\s-]?\d|claude|gemini|llama|mistral|phi|qwen|deepseek|llm|language model|chatbot|chat\s?bot)\b",
+            re.IGNORECASE,
+        ),
     ],
     "agents": [
-        re.compile(r"\b(?:agent|agents|agentic|autonomous|multi.?agent|auto.?gpt|crew.?ai|mcp|computer use|tool use)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:agent|agents|agentic|autonomous|multi.?agent|auto.?gpt|crew.?ai|mcp|computer use|tool use)\b",
+            re.IGNORECASE,
+        ),
     ],
     "ugc": [
-        re.compile(r"\b(?:someone|guy|woman|man|kid|user|creator)\s+(?:just\s+)?(?:made|created|built|generated|designed)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:someone|guy|woman|man|kid|user|creator)\s+(?:just\s+)?(?:made|created|built|generated|designed)\b",
+            re.IGNORECASE,
+        ),
         re.compile(r"\blook what\b|\bwait (?:until|till) you see\b", re.IGNORECASE),
     ],
     "controversial": [
-        re.compile(r"\b(?:backlash|outrage|scandal|controversy|controversial|debate|sued|lawsuit|ban(?:ned|s)?|censorship|protest|boycott)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:backlash|outrage|scandal|controversy|controversial|debate|sued|lawsuit|ban(?:ned|s)?|censorship|protest|boycott)\b",
+            re.IGNORECASE,
+        ),
     ],
     "robots": [
-        re.compile(r"\b(?:robot|humanoid|boston dynamics|figure|optimus|unitree|bipedal|quadruped|exoskeleton)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:robot|humanoid|boston dynamics|figure|optimus|unitree|bipedal|quadruped|exoskeleton)\b",
+            re.IGNORECASE,
+        ),
     ],
     "safety": [
-        re.compile(r"\b(?:safety|alignment|guardrail|jailbreak|red.?team|responsible ai|ai risk|existential|doom|agi|superintelligence)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:safety|alignment|guardrail|jailbreak|red.?team|responsible ai|ai risk|existential|doom|agi|superintelligence)\b",
+            re.IGNORECASE,
+        ),
     ],
     "industry": [
-        re.compile(r"\b(?:announced?|report|partnership|deal|collaboration|conference|summit|keynote)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:announced?|report|partnership|deal|collaboration|conference|summit|keynote)\b", re.IGNORECASE
+        ),
     ],
     "policy": [
-        re.compile(r"\b(?:regulation|regulatory|legislation|congress|senate|eu ai act|executive order|compliance|gdpr|copyright)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:regulation|regulatory|legislation|congress|senate|eu ai act|executive order|compliance|gdpr|copyright)\b",
+            re.IGNORECASE,
+        ),
     ],
     "research": [
-        re.compile(r"\b(?:paper|arxiv|research|study|findings|peer.?review|authors|abstract|methodology)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:paper|arxiv|research|study|findings|peer.?review|authors|abstract|methodology)\b", re.IGNORECASE
+        ),
     ],
     "data": [
-        re.compile(r"\b(?:dataset|benchmark|mmlu|hellaswag|humaneval|leaderboard|evaluation|metrics|accuracy|perplexity)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:dataset|benchmark|mmlu|hellaswag|humaneval|leaderboard|evaluation|metrics|accuracy|perplexity)\b",
+            re.IGNORECASE,
+        ),
     ],
     "infrastructure": [
-        re.compile(r"\b(?:data.?center|gpu|tpu|chip|semiconductor|nvidia|amd|intel|cloud|compute|cluster|inference|training cost)\b", re.IGNORECASE),
+        re.compile(
+            r"\b(?:data.?center|gpu|tpu|chip|semiconductor|nvidia|amd|intel|cloud|compute|cluster|inference|training cost)\b",
+            re.IGNORECASE,
+        ),
     ],
 }
 
@@ -874,9 +937,15 @@ def rank_items(items: List[Dict], config: Dict[str, Any]) -> List[Dict]:
        accounts for audience interest (topic weight), relatability boosts, and
        anti-pattern penalties from config/topic_weights.yaml
     """
-    weights = config.get("weights", {
-        "virality_fit": 0.35, "recency": 0.25, "novelty": 0.20, "authority": 0.20,
-    })
+    weights = config.get(
+        "weights",
+        {
+            "virality_fit": 0.35,
+            "recency": 0.25,
+            "novelty": 0.20,
+            "authority": 0.20,
+        },
+    )
     authority_map = config.get("authority_map", {"default": 0.4})
     decay_hours = config.get("recency_decay_hours", 24)
     threshold = config.get("novelty_threshold", 0.85)
@@ -890,8 +959,12 @@ def rank_items(items: List[Dict], config: Dict[str, Any]) -> List[Dict]:
     topic_scoring_enabled = bool(topic_config)
 
     if topic_scoring_enabled:
-        logger.info("Topic scoring enabled: %d topics, %d relatability signals, %d deprioritize signals",
-                     len(topic_config), len(relatability_weights), len(deprioritize_weights))
+        logger.info(
+            "Topic scoring enabled: %d topics, %d relatability signals, %d deprioritize signals",
+            len(topic_config),
+            len(relatability_weights),
+            len(deprioritize_weights),
+        )
     else:
         logger.info("Topic scoring disabled (no topic_weights.yaml or empty topics)")
 
@@ -916,16 +989,20 @@ def rank_items(items: List[Dict], config: Dict[str, Any]) -> List[Dict]:
         }
 
         base_score = (
-            weights.get("authority", 0.20) * auth +
-            weights.get("recency", 0.25) * rec +
-            weights.get("novelty", 0.20) * nov +
-            weights.get("virality_fit", 0.35) * vf
+            weights.get("authority", 0.20) * auth
+            + weights.get("recency", 0.25) * rec
+            + weights.get("novelty", 0.20) * nov
+            + weights.get("virality_fit", 0.35) * vf
         )
 
         # Apply topic multiplier if topic scoring is enabled
         if topic_scoring_enabled:
             multiplier, topic_details = compute_topic_multiplier(
-                item, topic_config, relatability_weights, deprioritize_weights, min_topic_weight,
+                item,
+                topic_config,
+                relatability_weights,
+                deprioritize_weights,
+                min_topic_weight,
             )
             final_score = base_score * multiplier
 
@@ -940,9 +1017,12 @@ def rank_items(items: List[Dict], config: Dict[str, Any]) -> List[Dict]:
 
             logger.debug(
                 "Topic %.2fx for '%s': topic=%s (%.2f) + rel=%.2f + depri=%.2f",
-                multiplier, item.get("title", "")[:50],
-                topic_details["topic"], topic_details["topic_weight"],
-                topic_details["relatability_bonus"], topic_details["deprioritize_penalty"],
+                multiplier,
+                item.get("title", "")[:50],
+                topic_details["topic"],
+                topic_details["topic_weight"],
+                topic_details["relatability_bonus"],
+                topic_details["deprioritize_penalty"],
             )
         else:
             final_score = base_score
@@ -951,8 +1031,12 @@ def rank_items(items: List[Dict], config: Dict[str, Any]) -> List[Dict]:
 
     logger.info("Virality fit: %d/%d items matched at least one hook formula", virality_matches, len(items))
     if topic_scoring_enabled:
-        logger.info("Topic scoring: %d boosted (>1.0x), %d penalized (<0.5x), %d neutral",
-                     topic_boosted, topic_penalized, len(items) - topic_boosted - topic_penalized)
+        logger.info(
+            "Topic scoring: %d boosted (>1.0x), %d penalized (<0.5x), %d neutral",
+            topic_boosted,
+            topic_penalized,
+            len(items) - topic_boosted - topic_penalized,
+        )
 
     items.sort(key=lambda x: x.get("composite_score", 0), reverse=True)
     for rank, item in enumerate(items, 1):
@@ -992,15 +1076,20 @@ def main():
         items = [i for i in items if not i.get("injection_flags")]
         logger.warning(
             "Injection filter: quarantined %d items with injection flags (%d remaining)",
-            len(flagged_items), len(items),
+            len(flagged_items),
+            len(items),
         )
         # Write flagged items for manual review
         flagged_path = run_dir / "quarantined_injection_flags.json"
-        flagged_path.write_text(json.dumps(
-            [{"title": i.get("title", "")[:100], "url": i.get("url", ""),
-              "flags": i.get("injection_flags", [])} for i in flagged_items],
-            indent=2,
-        ))
+        flagged_path.write_text(
+            json.dumps(
+                [
+                    {"title": i.get("title", "")[:100], "url": i.get("url", ""), "flags": i.get("injection_flags", [])}
+                    for i in flagged_items
+                ],
+                indent=2,
+            )
+        )
     injection_quarantined = len(flagged_items)
 
     config = load_weights()
@@ -1106,8 +1195,16 @@ def main():
     with open(out_path, "w") as f:
         json.dump(output, f, indent=2)
 
-    logger.info("Ranked %d stories -> %s (%.1fs total: url=%.1fs title=%.1fs score=%.1fs cluster=%.1fs)",
-                len(items), out_path, total_time, url_time, title_time, scoring_time, clustering_time)
+    logger.info(
+        "Ranked %d stories -> %s (%.1fs total: url=%.1fs title=%.1fs score=%.1fs cluster=%.1fs)",
+        len(items),
+        out_path,
+        total_time,
+        url_time,
+        title_time,
+        scoring_time,
+        clustering_time,
+    )
 
 
 if __name__ == "__main__":

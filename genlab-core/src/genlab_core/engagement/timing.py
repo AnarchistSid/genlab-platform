@@ -1,4 +1,5 @@
 """Human-like timing jitter for engagement replies."""
+
 from __future__ import annotations
 
 import random

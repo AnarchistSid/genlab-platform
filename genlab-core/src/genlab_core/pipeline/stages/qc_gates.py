@@ -45,6 +45,7 @@ class QCGates:
         if dedup_cfg.get("enabled", True) and len(blueprints) > 1:
             try:
                 from genlab_core.intelligence.dedup_engine import DedupEngine
+
                 engine = DedupEngine(
                     jaccard_threshold=dedup_cfg.get("jaccard_threshold", 0.85),
                     tfidf_threshold=dedup_cfg.get("tfidf_threshold", 0.80),
@@ -57,7 +58,9 @@ class QCGates:
                         "[QCGates] Dedup: removed %d/%d stories (url=%d, jaccard=%d, tfidf=%d)",
                         len(blueprints) - len(result.unique),
                         len(blueprints),
-                        result.pass1_removed, result.pass2_removed, result.pass3_removed,
+                        result.pass1_removed,
+                        result.pass2_removed,
+                        result.pass3_removed,
                     )
                     blueprints = result.unique
                     context["stories"] = blueprints
@@ -96,11 +99,13 @@ class QCGates:
                         key = str(issue).split(":", 1)[0].strip()
                         failure_reasons[key] = failure_reasons.get(key, 0) + 1
                     if len(failure_examples) < 5:
-                        failure_examples.append({
-                            "candidate_id": bp.get("candidate_id", "unknown"),
-                            "title": (bp.get("title") or "")[:80],
-                            "issues": issues[:5],
-                        })
+                        failure_examples.append(
+                            {
+                                "candidate_id": bp.get("candidate_id", "unknown"),
+                                "title": (bp.get("title") or "")[:80],
+                                "issues": issues[:5],
+                            }
+                        )
                     logger.info(
                         "[QCGates] FAILED %s — %s",
                         bp.get("candidate_id", "unknown"),
@@ -108,9 +113,7 @@ class QCGates:
                     )
                     # Apply score penalty
                     if "priority_score" in bp:
-                        bp["priority_score"] = max(
-                            0, bp["priority_score"] - self.SCORE_PENALTY
-                        )
+                        bp["priority_score"] = max(0, bp["priority_score"] - self.SCORE_PENALTY)
             except Exception:
                 logger.exception(
                     "[QCGates] Error validating blueprint %s",
@@ -126,7 +129,10 @@ class QCGates:
         rate = f"{passed / total:.1%}" if total else "n/a"
         logger.info(
             "[QCGates] %d/%d passed (%s), %d failed; reasons=%s",
-            passed, total, rate, failed,
+            passed,
+            total,
+            rate,
+            failed,
             sorted(failure_reasons.items(), key=lambda kv: -kv[1]) or "[]",
         )
 
@@ -155,7 +161,11 @@ class QCGates:
 
         # Gate 2: Template constraints
         constraints_passed = self._check_constraints(
-            bp, max_slides, max_words, max_duration, issues,
+            bp,
+            max_slides,
+            max_words,
+            max_duration,
+            issues,
         )
 
         # Gate 3: Content completeness
@@ -224,10 +234,7 @@ class QCGates:
 
         # Hook is required
         content = bp.get("content", {})
-        hook = (
-            bp.get("hook", "")
-            or (content.get("hook", "") if isinstance(content, dict) else "")
-        )
+        hook = bp.get("hook", "") or (content.get("hook", "") if isinstance(content, dict) else "")
         if not hook:
             issues.append("Missing required field: hook")
             ok = False
@@ -240,7 +247,9 @@ class QCGates:
             bp.get("caption", "")
             or bp.get("body", "")
             or (content.get("caption", "") if isinstance(content, dict) else "")
-            or (content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else "")
+            or (
+                content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else ""
+            )
         )
         if not body:
             issues.append("Missing required field: caption/body")

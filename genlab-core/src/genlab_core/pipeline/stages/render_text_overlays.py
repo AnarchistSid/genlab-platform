@@ -79,7 +79,11 @@ class RenderTextOverlays:
 
             try:
                 out_path = self._burn_overlay(
-                    Path(rendered), hook_text, font_size, font_color, y_pos,
+                    Path(rendered),
+                    hook_text,
+                    font_size,
+                    font_color,
+                    y_pos,
                 )
                 if out_path:
                     media["overlaid_path"] = str(out_path)
@@ -96,7 +100,9 @@ class RenderTextOverlays:
 
         logger.info(
             "[RenderTextOverlays] %d overlaid, %d skipped, %d errors",
-            overlaid, skipped, errors,
+            overlaid,
+            skipped,
+            errors,
         )
 
         context.setdefault("run_stats", {})["text_overlays"] = {
@@ -135,20 +141,31 @@ class RenderTextOverlays:
         )
 
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(video_path),
-            "-vf", drawtext,
-            "-color_primaries", "bt709",
-            "-color_trc", "bt709",
-            "-colorspace", "bt709",
-            "-codec:a", "copy",
-            "-movflags", "+faststart",
+            ffmpeg,
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            drawtext,
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-colorspace",
+            "bt709",
+            "-codec:a",
+            "copy",
+            "-movflags",
+            "+faststart",
             str(out_path),
         ]
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if result.returncode != 0:
                 logger.warning(

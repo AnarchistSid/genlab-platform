@@ -1,4 +1,5 @@
 """Tests for genlab_core.tools.safe_push."""
+
 from __future__ import annotations
 
 import subprocess
@@ -13,7 +14,10 @@ from genlab_core.tools.safe_push import (
 def _make_completed(stdout: str = "", stderr: str = "", returncode: int = 0):
     """Helper to build a CompletedProcess."""
     return subprocess.CompletedProcess(
-        args=["git"], stdout=stdout, stderr=stderr, returncode=returncode,
+        args=["git"],
+        stdout=stdout,
+        stderr=stderr,
+        returncode=returncode,
     )
 
 
@@ -56,7 +60,9 @@ class TestFeatureBranch:
 
     @patch("genlab_core.tools.safe_push.push_branch")
     @patch("genlab_core.tools.safe_push.get_diff_stat", return_value="1 file changed")
-    @patch("genlab_core.tools.safe_push.get_unpushed_commits", return_value="abc1234 feat: add widget")
+    @patch(
+        "genlab_core.tools.safe_push.get_unpushed_commits", return_value="abc1234 feat: add widget"
+    )
     @patch("genlab_core.tools.safe_push.has_uncommitted_changes", return_value=False)
     @patch("genlab_core.tools.safe_push.get_current_branch", return_value="feat/my-branch")
     def test_feature_branch_push(self, mock_branch, mock_uc, mock_commits, mock_stat, mock_push):
@@ -71,7 +77,9 @@ class TestFeatureBranch:
     @patch("genlab_core.tools.safe_push.get_unpushed_commits", return_value="abc1234 fix stuff")
     @patch("genlab_core.tools.safe_push.has_uncommitted_changes", return_value=False)
     @patch("genlab_core.tools.safe_push.get_current_branch", return_value="fix/bug-123")
-    def test_push_failure_returns_nonzero(self, mock_branch, mock_uc, mock_commits, mock_stat, mock_push):
+    def test_push_failure_returns_nonzero(
+        self, mock_branch, mock_uc, mock_commits, mock_stat, mock_push
+    ):
         """Non-zero git push returncode is propagated."""
         mock_push.return_value = _make_completed(returncode=128, stderr="remote rejected")
         rc = main([])
@@ -87,7 +95,13 @@ class TestUncommittedChangesWarning:
     @patch("genlab_core.tools.safe_push.has_uncommitted_changes", return_value=True)
     @patch("genlab_core.tools.safe_push.get_current_branch", return_value="feat/dirty")
     def test_uncommitted_changes_warns_but_proceeds(
-        self, mock_branch, mock_uc, mock_commits, mock_stat, mock_push, capsys,
+        self,
+        mock_branch,
+        mock_uc,
+        mock_commits,
+        mock_stat,
+        mock_push,
+        capsys,
     ):
         """Uncommitted changes produce a warning on stderr but push proceeds."""
         mock_push.return_value = _make_completed()

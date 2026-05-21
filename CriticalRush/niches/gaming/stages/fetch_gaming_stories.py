@@ -44,6 +44,7 @@ def _now_utc() -> datetime:
 # SOURCE 1 — Steam concurrent player spike detector
 # ---------------------------------------------------------------------------
 
+
 class SteamSpikeFetcher:
     """Detect games with player count spikes on Steam."""
 
@@ -126,18 +127,20 @@ class SteamSpikeFetcher:
                     # Update baseline with slow EMA
                     baseline[app_id] = (avg * 0.8) + (current * 0.2)
 
-                stories.append({
-                    "title": name,
-                    "source": "steam_spike",
-                    "source_url": f"https://store.steampowered.com/app/{app_id}",
-                    "score": round(score, 3),
-                    "published_at": _now_utc().isoformat(),
-                    "summary": f"Currently {current:,} players (baseline ~{int(avg):,})",
-                    "steam_app_id": app_id,
-                    "igdb_game_id": None,
-                    "developer": None,
-                    "thumbnail_url": f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
-                })
+                stories.append(
+                    {
+                        "title": name,
+                        "source": "steam_spike",
+                        "source_url": f"https://store.steampowered.com/app/{app_id}",
+                        "score": round(score, 3),
+                        "published_at": _now_utc().isoformat(),
+                        "summary": f"Currently {current:,} players (baseline ~{int(avg):,})",
+                        "steam_app_id": app_id,
+                        "igdb_game_id": None,
+                        "developer": None,
+                        "thumbnail_url": f"https://cdn.akamai.steamstatic.com/steam/apps/{app_id}/header.jpg",
+                    }
+                )
 
                 if len(stories) >= self._max_stories:
                     break
@@ -157,6 +160,7 @@ class SteamSpikeFetcher:
 # SOURCE 2 — Twitch top games by viewer count
 # ---------------------------------------------------------------------------
 
+
 class TwitchTrendingFetcher:
     """Fetch top games from Twitch Helix API."""
 
@@ -164,6 +168,7 @@ class TwitchTrendingFetcher:
 
     def __init__(self):
         from genlab_core.settings import settings
+
         self._client_id = settings.twitch_client_id or ""
         self._client_secret = settings.twitch_client_secret or ""
 
@@ -174,6 +179,7 @@ class TwitchTrendingFetcher:
 
         try:
             from niches.gaming.tools._twitch_auth import TwitchTokenManager
+
             token_mgr = TwitchTokenManager(self._client_id, self._client_secret)
             token = token_mgr.get_token()
 
@@ -193,19 +199,25 @@ class TwitchTrendingFetcher:
             for rank, game in enumerate(games[:5], start=1):
                 score = round(1.0 - (rank - 1) * 0.18, 3)  # rank 1=1.0, 5=0.28
                 # Twitch provides box_art_url with {width}x{height} placeholders
-                box_art = (game.get("box_art_url") or "").replace("{width}", "285").replace("{height}", "380")
-                stories.append({
-                    "title": game["name"],
-                    "source": "twitch_trending",
-                    "source_url": f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}",
-                    "score": max(score, 0.1),
-                    "published_at": _now_utc().isoformat(),
-                    "summary": f"Twitch trending rank #{rank}",
-                    "steam_app_id": None,
-                    "igdb_game_id": game.get("igdb_id") or game.get("id"),
-                    "developer": None,
-                    "thumbnail_url": box_art or None,
-                })
+                box_art = (
+                    (game.get("box_art_url") or "")
+                    .replace("{width}", "285")
+                    .replace("{height}", "380")
+                )
+                stories.append(
+                    {
+                        "title": game["name"],
+                        "source": "twitch_trending",
+                        "source_url": f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}",
+                        "score": max(score, 0.1),
+                        "published_at": _now_utc().isoformat(),
+                        "summary": f"Twitch trending rank #{rank}",
+                        "steam_app_id": None,
+                        "igdb_game_id": game.get("igdb_id") or game.get("id"),
+                        "developer": None,
+                        "thumbnail_url": box_art or None,
+                    }
+                )
 
             logger.info("[Twitch] Found %d trending games", len(stories))
             return stories
@@ -219,6 +231,7 @@ class TwitchTrendingFetcher:
 # SOURCE 3 — RSS feed aggregator
 # ---------------------------------------------------------------------------
 
+
 class RSSFeedAggregator:
     """Fetch and score stories from gaming RSS feeds."""
 
@@ -231,6 +244,7 @@ class RSSFeedAggregator:
         if published:
             try:
                 from calendar import timegm
+
                 ts = timegm(published)
                 return datetime.fromtimestamp(ts, tz=UTC)
             except (ValueError, TypeError, OverflowError):
@@ -295,17 +309,19 @@ class RSSFeedAggregator:
                     if len(summary) > 200:
                         summary = summary[:197] + "..."
 
-                    stories.append({
-                        "title": title,
-                        "source": "rss",
-                        "source_url": link,
-                        "score": round(score, 3),
-                        "published_at": published_at.isoformat(),
-                        "summary": summary,
-                        "steam_app_id": None,
-                        "igdb_game_id": None,
-                        "developer": None,
-                    })
+                    stories.append(
+                        {
+                            "title": title,
+                            "source": "rss",
+                            "source_url": link,
+                            "score": round(score, 3),
+                            "published_at": published_at.isoformat(),
+                            "summary": summary,
+                            "steam_app_id": None,
+                            "igdb_game_id": None,
+                            "developer": None,
+                        }
+                    )
 
                 logger.debug("[RSS] %s: %d entries parsed", feed_name, len(parsed.entries))
 
@@ -322,6 +338,7 @@ class RSSFeedAggregator:
 # Orchestrator stage
 # ---------------------------------------------------------------------------
 
+
 class FetchGamingStories(ContentResearchStrategy):
     """Pipeline stage: fetch, merge, deduplicate gaming stories."""
 
@@ -333,7 +350,9 @@ class FetchGamingStories(ContentResearchStrategy):
         return {}
 
     def _apply_source_filters(
-        self, stories: list[dict[str, Any]], filters: dict[str, Any],
+        self,
+        stories: list[dict[str, Any]],
+        filters: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Reject stories matching source_filters patterns."""
         if not filters:
@@ -357,15 +376,15 @@ class FetchGamingStories(ContentResearchStrategy):
         if rejected:
             logger.info(
                 "[%s] Source filters rejected %d/%d stories",
-                self.__class__.__name__, rejected, len(stories),
+                self.__class__.__name__,
+                rejected,
+                len(stories),
             )
         return filtered
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         sources_config = self._load_sources_config()
-        max_stories = context.get("niche_config", {}).get(
-            "max_stories_per_run", 20
-        )
+        max_stories = context.get("niche_config", {}).get("max_stories_per_run", 20)
         fetch_timeout = context.get("niche_config", {}).get("fetch_timeout_s", 45)
 
         # Phase 1: Steam + Twitch in parallel (independent of each other)
@@ -378,7 +397,8 @@ class FetchGamingStories(ContentResearchStrategy):
             twitch_future = pool.submit(TwitchTrendingFetcher().fetch)
 
             for future in concurrent.futures.as_completed(
-                {steam_future, twitch_future}, timeout=fetch_timeout,
+                {steam_future, twitch_future},
+                timeout=fetch_timeout,
             ):
                 try:
                     result = future.result()

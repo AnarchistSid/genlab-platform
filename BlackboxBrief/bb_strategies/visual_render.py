@@ -3,6 +3,7 @@
 Renders video clips through the same FrameCompositor pipeline as all
 other niches (CW, SR, FD). No subprocess delegation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,8 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
         if not stories:
             logger.info("[ai_creators] VisualRenderStrategy: no stories to render")
             context.setdefault("run_stats", {})["render"] = {
-                "status": "no_stories", "rendered": 0,
+                "status": "no_stories",
+                "rendered": 0,
             }
             return context
 
@@ -44,10 +46,7 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                 if clip_entry.get("success") and clip_entry.get("clip_path"):
                     clip_path = Path(clip_entry["clip_path"])
                     if clip_path.exists():
-                        hook_text = (
-                            (story.get("content") or {}).get("hook", "")
-                            or story.get("title", "")
-                        )
+                        hook_text = (story.get("content") or {}).get("hook", "") or story.get("title", "")
                         output_dir = Path(run_dir) / "visuals" / sid if run_dir else None
                         if output_dir:
                             output_dir.mkdir(parents=True, exist_ok=True)
@@ -85,7 +84,8 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
 
             except Exception:
                 logger.exception(
-                    "[ai_creators] Failed to render: %s", story.get("title", "?"),
+                    "[ai_creators] Failed to render: %s",
+                    story.get("title", "?"),
                 )
 
         context.setdefault("run_stats", {})["render"] = {
@@ -95,6 +95,8 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
         }
         logger.info(
             "[ai_creators] VisualRender: %d/%d with video, %d rendered",
-            videos_found, len(stories), rendered,
+            videos_found,
+            len(stories),
+            rendered,
         )
         return context

@@ -3,6 +3,7 @@
 GET /api/v1/runway
     Returns runway_days for each niche channel + status badges.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +23,7 @@ RUNWAY_WARN_DAYS = 7
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -42,8 +44,7 @@ def get_runway_status():
             )
             # Only count approved items as truly publish-eligible
             approved = [
-                r for r in vr
-                if (r.get("fields", {}).get("action_taken") or "") == "approved"
+                r for r in vr if (r.get("fields", {}).get("action_taken") or "") == "approved"
             ]
             days = len(approved)  # 1 post/day = 1 item/day
             total_vr = len(vr)

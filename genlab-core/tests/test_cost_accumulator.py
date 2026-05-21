@@ -1,4 +1,5 @@
 """Tests for genlab_core.intelligence.cost_accumulator."""
+
 import threading
 from unittest.mock import patch
 
@@ -15,14 +16,18 @@ from genlab_core.intelligence.cost_accumulator import (
 def _local_only_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Force local MODEL_COSTS table (skip litellm) for deterministic tests."""
     rates = MODEL_COSTS.get(model, MODEL_COSTS.get("gpt-4o-mini"))
-    return (input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)) / 1_000_000
+    return (
+        input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)
+    ) / 1_000_000
 
 
 class TestRecordLlm:
     def test_record_llm_calculates_cost(self):
         acc = CostAccumulator(run_id="test-1")
         # Use local table to test accumulator math (litellm path tested in test_cost_litellm.py)
-        with patch("genlab_core.intelligence.cost_accumulator._compute_cost", side_effect=_local_only_cost):
+        with patch(
+            "genlab_core.intelligence.cost_accumulator._compute_cost", side_effect=_local_only_cost
+        ):
             cost = acc.record_llm("claude-haiku-4-5-20251001", 1_000_000, 1_000_000)
         # claude-haiku-4-5-20251001: input=0.80, output=4.00 per 1M tokens
         assert cost == pytest.approx(0.80 + 4.00)

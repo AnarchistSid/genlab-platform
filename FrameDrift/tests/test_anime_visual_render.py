@@ -9,19 +9,24 @@ from fd_strategies.visual_render import AnimeVisualRenderStrategy
 @pytest.fixture
 def strategy(tmp_path):
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "sources.yaml").write_text(yaml.dump({
-        "media": {
-            "pexels": {
-                "anime_queries": [
-                    "anime aesthetic lifestyle urban",
-                    "streetwear lifestyle outfit",
-                    "anime editorial aesthetic",
-                ],
+    (config_dir / "sources.yaml").write_text(
+        yaml.dump(
+            {
+                "media": {
+                    "pexels": {
+                        "anime_queries": [
+                            "anime aesthetic lifestyle urban",
+                            "streetwear lifestyle outfit",
+                            "anime editorial aesthetic",
+                        ],
+                    }
+                }
             }
-        }
-    }))
+        )
+    )
     (config_dir / "visuals.yaml").write_text(yaml.dump({}))
     with patch("fd_strategies.visual_render.NICHE_ROOT", tmp_path):
         s = AnimeVisualRenderStrategy()
@@ -40,18 +45,23 @@ class TestBrandSafety:
 
     def test_brand_name_in_config_replaced_with_fallback(self, tmp_path):
         import yaml
+
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        (config_dir / "sources.yaml").write_text(yaml.dump({
-            "media": {
-                "pexels": {
-                    "anime_queries": [
-                        "anime aesthetic sakura",
-                        "anime aesthetic lifestyle urban",
-                    ],
+        (config_dir / "sources.yaml").write_text(
+            yaml.dump(
+                {
+                    "media": {
+                        "pexels": {
+                            "anime_queries": [
+                                "anime aesthetic sakura",
+                                "anime aesthetic lifestyle urban",
+                            ],
+                        }
+                    }
                 }
-            }
-        }))
+            )
+        )
         (config_dir / "visuals.yaml").write_text(yaml.dump({}))
         with patch("fd_strategies.visual_render.NICHE_ROOT", tmp_path):
             s = AnimeVisualRenderStrategy()
@@ -139,8 +149,13 @@ class TestFrameCompositorWiring:
         mock_compositor.compose.return_value = str(tmp_path / "composed.mp4")
 
         context = {
-            "stories": [{"story_id": "s1", "title": "Story A",
-                          "content": {"hook": "Gojo returns in new episode"}}],
+            "stories": [
+                {
+                    "story_id": "s1",
+                    "title": "Story A",
+                    "content": {"hook": "Gojo returns in new episode"},
+                }
+            ],
             "clip_index": {"clips": {"s1": {"success": True, "clip_path": str(clip_file)}}},
             "run_dir": str(run_dir),
         }
@@ -151,7 +166,9 @@ class TestFrameCompositorWiring:
 
         MockFC.from_visuals_yaml.assert_called_once()
         mock_compositor.compose.assert_called_once()
-        assert mock_compositor.compose.call_args.kwargs["hook_text"] == "Gojo returns in new episode"
+        assert (
+            mock_compositor.compose.call_args.kwargs["hook_text"] == "Gojo returns in new episode"
+        )
         assert mock_compositor.compose.call_args.kwargs["duration_seconds"] == 55
         assert result["stories"][0]["media"]["rendered_path"] == str(tmp_path / "composed.mp4")
 
@@ -168,7 +185,9 @@ class TestFrameCompositorWiring:
         }
 
         with patch("fd_strategies.visual_render.FrameCompositor") as MockFC:
-            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError("ffmpeg crashed")
+            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError(
+                "ffmpeg crashed"
+            )
             result = strategy.execute(context)
 
         media = result["stories"][0]["media"]

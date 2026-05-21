@@ -10,6 +10,7 @@ These tests verify the SQL clause directly; the smoke tests on Hetzner
 (``test_grace_period.py`` and ``test_grace_expires.py``) cover the
 end-to-end behavior with a real Postgres.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -38,14 +39,13 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[(123,)])  # row exists → skip
 
         with patch("psycopg.connect", return_value=conn):
-            written = write_alerts_to_db([
-                Alert("download_failure", "critical", "x", "gaming")
-            ])
+            written = write_alerts_to_db([Alert("download_failure", "critical", "x", "gaming")])
 
         assert written == 0  # skipped because dedup hit
         # Verify the dedup SELECT was issued with the grace clause
         select_calls = [
-            c.args for c in cur.execute.call_args_list
+            c.args
+            for c in cur.execute.call_args_list
             if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
         ]
         assert len(select_calls) == 1
@@ -66,12 +66,11 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[None])  # no dedup hit
 
         with patch("psycopg.connect", return_value=conn):
-            write_alerts_to_db([
-                Alert("git_drift", "warning", "x")
-            ])
+            write_alerts_to_db([Alert("git_drift", "warning", "x")])
 
         select_calls = [
-            c.args for c in cur.execute.call_args_list
+            c.args
+            for c in cur.execute.call_args_list
             if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
         ]
         assert select_calls[0][1][2] == "10 minutes"
@@ -81,14 +80,13 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[None])  # no dedup hit
 
         with patch("psycopg.connect", return_value=conn):
-            written = write_alerts_to_db([
-                Alert("warp_down", "critical", "x")
-            ])
+            written = write_alerts_to_db([Alert("warp_down", "critical", "x")])
 
         assert written == 1
         # Verify an INSERT was issued
         insert_calls = [
-            c.args for c in cur.execute.call_args_list
+            c.args
+            for c in cur.execute.call_args_list
             if c.args and c.args[0].startswith("INSERT INTO pipeline_alerts")
         ]
         assert len(insert_calls) == 1
@@ -98,13 +96,12 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[(456,)])
 
         with patch("psycopg.connect", return_value=conn):
-            written = write_alerts_to_db([
-                Alert("qc_collapse", "critical", "x", "sports")
-            ])
+            written = write_alerts_to_db([Alert("qc_collapse", "critical", "x", "sports")])
 
         assert written == 0
         insert_calls = [
-            c.args for c in cur.execute.call_args_list
+            c.args
+            for c in cur.execute.call_args_list
             if c.args and c.args[0].startswith("INSERT INTO pipeline_alerts")
         ]
         assert insert_calls == []
@@ -115,10 +112,12 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[(1,), None])
 
         with patch("psycopg.connect", return_value=conn):
-            written = write_alerts_to_db([
-                Alert("download_failure", "critical", "a", "gaming"),
-                Alert("warp_down", "critical", "b"),
-            ])
+            written = write_alerts_to_db(
+                [
+                    Alert("download_failure", "critical", "a", "gaming"),
+                    Alert("warp_down", "critical", "b"),
+                ]
+            )
 
         assert written == 1  # only the second inserted
 
@@ -132,7 +131,8 @@ class TestResolveGracePeriod:
             write_alerts_to_db([Alert("git_drift", "critical", "x")])
 
         select_calls = [
-            c.args for c in cur.execute.call_args_list
+            c.args
+            for c in cur.execute.call_args_list
             if c.args and "SELECT id FROM pipeline_alerts" in c.args[0]
         ]
         assert "IS NOT DISTINCT FROM" in select_calls[0][0]

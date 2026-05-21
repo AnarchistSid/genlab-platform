@@ -1,4 +1,5 @@
 """Tests for PendingFeedbackStore CRUD operations."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -98,10 +99,26 @@ class TestGetPending:
 
     def test_get_pending_filters_by_niche(self, store, mock_proxy):
         items = [
-            {"id": "1", "fields": {"PostID": "ig_1", "Platform": "instagram", "NicheId": "gaming",
-                                    "PublishedAt": datetime.now(UTC).isoformat(), "Status": "awaiting_6h"}},
-            {"id": "2", "fields": {"PostID": "ig_2", "Platform": "instagram", "NicheId": "ai_creators",
-                                    "PublishedAt": datetime.now(UTC).isoformat(), "Status": "awaiting_6h"}},
+            {
+                "id": "1",
+                "fields": {
+                    "PostID": "ig_1",
+                    "Platform": "instagram",
+                    "NicheId": "gaming",
+                    "PublishedAt": datetime.now(UTC).isoformat(),
+                    "Status": "awaiting_6h",
+                },
+            },
+            {
+                "id": "2",
+                "fields": {
+                    "PostID": "ig_2",
+                    "Platform": "instagram",
+                    "NicheId": "ai_creators",
+                    "PublishedAt": datetime.now(UTC).isoformat(),
+                    "Status": "awaiting_6h",
+                },
+            },
         ]
         mock_proxy.all.return_value = items
         tasks = store.get_pending(niche_id="ai_creators")
@@ -145,10 +162,13 @@ class TestUpdateWindow:
         store.update_window(task, "6h")
         assert "6h" in task.completed_windows
         assert task.collection_status == "awaiting_24h"
-        mock_proxy.update.assert_called_once_with("sp_001", {
-            "collection_status": "awaiting_24h",
-            "early_stop": False,
-        })
+        mock_proxy.update.assert_called_once_with(
+            "sp_001",
+            {
+                "collection_status": "awaiting_24h",
+                "early_stop": False,
+            },
+        )
 
     def test_update_48h_sets_reward(self, store, mock_proxy):
         task = _make_task(

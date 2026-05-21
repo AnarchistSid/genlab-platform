@@ -1,4 +1,5 @@
 """Tests for extracted engagement modules — toxicity_gate, spam_filter, timing, rate_limiter, persona_schema."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock

@@ -10,6 +10,7 @@ LinUCB state (A_matrix, b_vector) is persisted as a JSON string in the
 ``LinUCB_State`` column. When this field is empty the arm falls back to
 Thompson Sampling (alpha/beta only).
 """
+
 from __future__ import annotations
 
 import json
@@ -113,7 +114,9 @@ def load_all_arms_extended(
         return arms
     except Exception as e:
         logger.warning(
-            "[arm_loader] failed to load extended arms for %s: %s", niche_id, e,
+            "[arm_loader] failed to load extended arms for %s: %s",
+            niche_id,
+            e,
         )
         return {}
 
@@ -151,9 +154,12 @@ def save_arm(
     try:
         existing = proxy.all()
         match = next(
-            (item for item in existing
-             if (item.get("fields", item)).get("arm_id", "")
-             == arm_id or (item.get("fields", item)).get("Title", "") == arm_id),
+            (
+                item
+                for item in existing
+                if (item.get("fields", item)).get("arm_id", "") == arm_id
+                or (item.get("fields", item)).get("Title", "") == arm_id
+            ),
             None,
         )
         if match:

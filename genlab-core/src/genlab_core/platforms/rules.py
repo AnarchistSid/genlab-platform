@@ -14,6 +14,7 @@ This module is a pre-niche enforcement layer. Every niche's adaptation stage
 calls enforce_platform_rules() BEFORE applying its own niche-specific strategy,
 so niche code never needs to re-implement these platform fundamentals.
 """
+
 from __future__ import annotations
 
 import logging
@@ -157,21 +158,17 @@ def _enforce_youtube_rules(adapted: AdaptedContent) -> None:
         else:
             # Fallback: strip trailing punctuation and add ?
             title = title.rstrip("?.!,").strip() + "?"
-        adapted.warnings.append(
-            "Title converted to question format for Shorts shelf eligibility"
-        )
+        adapted.warnings.append("Title converted to question format for Shorts shelf eligibility")
 
     # Enforce max length
     if len(title) > _YT_SHORTS_MAX_CHARS:
         # Truncate smartly at word boundary
-        truncated = title[:_YT_SHORTS_MAX_CHARS - 1]
+        truncated = title[: _YT_SHORTS_MAX_CHARS - 1]
         last_space = truncated.rfind(" ")
         if last_space > 20:
             truncated = truncated[:last_space]
         title = truncated.rstrip("?.!,").strip() + "?"
-        adapted.warnings.append(
-            f"Title truncated to {_YT_SHORTS_MAX_CHARS} chars"
-        )
+        adapted.warnings.append(f"Title truncated to {_YT_SHORTS_MAX_CHARS} chars")
 
     adapted.title = title
 
@@ -193,9 +190,7 @@ def _enforce_instagram_rules(
 
     # 2. Ensure 3-5 hashtags
     if len(adapted.hashtags) < 3:
-        adapted.warnings.append(
-            f"Only {len(adapted.hashtags)} hashtags provided (need 3-5)"
-        )
+        adapted.warnings.append(f"Only {len(adapted.hashtags)} hashtags provided (need 3-5)")
 
     # 3. CTA at end of caption — only append if the caption truly has no
     #    CTA-shaped phrase. The LLM writer already includes one from
@@ -215,12 +210,14 @@ def _enforce_instagram_rules(
     has_cta_shape = (
         tail.endswith("?")
         or any(emoji in tail for emoji in ("👇", "👉", "🔥"))
-        or bool(re.search(
-            r"\b(follow|tag|comment|save|share|drop|rate|sub or dub|peak or mid|"
-            r"w or l|caught up|watch or skip|hot take|are you watching|"
-            r"have you seen|what do you think)\b",
-            tail_lower,
-        ))
+        or bool(
+            re.search(
+                r"\b(follow|tag|comment|save|share|drop|rate|sub or dub|peak or mid|"
+                r"w or l|caught up|watch or skip|hot take|are you watching|"
+                r"have you seen|what do you think)\b",
+                tail_lower,
+            )
+        )
     )
     has_cta = has_known_cta or has_cta_shape
     if not has_cta and caption:
@@ -230,9 +227,7 @@ def _enforce_instagram_rules(
     adapted.caption = caption
 
 
-def _enforce_twitter_rules(
-    adapted: AdaptedContent, url: str | None = None
-) -> None:
+def _enforce_twitter_rules(adapted: AdaptedContent, url: str | None = None) -> None:
     """X/Twitter: move URLs from body to first_comment."""
     caption = adapted.caption
 
@@ -271,7 +266,8 @@ def _enforce_facebook_rules(adapted: AdaptedContent) -> None:
 
     # Also strip competitor hashtags from the hashtags list
     adapted.hashtags = [
-        h for h in adapted.hashtags
+        h
+        for h in adapted.hashtags
         if not _COMPETITOR_HASHTAGS_RE.match(h if h.startswith("#") else f"#{h}")
     ]
 
@@ -282,10 +278,7 @@ def _enforce_facebook_rules(adapted: AdaptedContent) -> None:
 
     # 4. Short captions get engagement question
     if caption and len(caption) < 200:
-        caption = (
-            f"{caption}\n\n"
-            "What do you think about this? Let us know in the comments."
-        )
+        caption = f"{caption}\n\nWhat do you think about this? Let us know in the comments."
         adapted.warnings.append("Engagement question added to short caption")
 
     adapted.caption = caption

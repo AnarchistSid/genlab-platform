@@ -80,7 +80,8 @@ def _compile_patterns(overrides: dict[str, str] | None) -> dict[str, re.Pattern[
         for name, pat in overrides.items():
             if name not in DEFAULT_PATTERNS:
                 logger.warning(
-                    "[ViralityScoring] Unknown pattern key in niche override: %s", name,
+                    "[ViralityScoring] Unknown pattern key in niche override: %s",
+                    name,
                 )
                 continue
             if not isinstance(pat, str) or not pat:
@@ -93,7 +94,8 @@ def _compile_patterns(overrides: dict[str, str] | None) -> dict[str, re.Pattern[
         except re.error as exc:
             logger.warning(
                 "[ViralityScoring] Invalid regex for %s (%s) — using default",
-                name, exc,
+                name,
+                exc,
             )
             compiled[name] = re.compile(DEFAULT_PATTERNS[name], re.I)
     return compiled
@@ -119,7 +121,8 @@ class ViralityScoring:
         if not isinstance(virality_cfg, dict):
             virality_cfg = {}
         weights = virality_cfg.get("weights") or (
-            virality_cfg if all(isinstance(v, (int, float)) for v in virality_cfg.values())
+            virality_cfg
+            if all(isinstance(v, (int, float)) for v in virality_cfg.values())
             else DEFAULT_WEIGHTS
         )
         patterns = _compile_patterns(virality_cfg.get("patterns"))
@@ -144,7 +147,9 @@ class ViralityScoring:
 
         avg = total_score / scored if scored else 0
         logger.info(
-            "[ViralityScoring] Scored %d blueprints, avg=%.3f", scored, avg,
+            "[ViralityScoring] Scored %d blueprints, avg=%.3f",
+            scored,
+            avg,
         )
 
         context.setdefault("run_stats", {})["virality"] = {
@@ -170,15 +175,9 @@ class ViralityScoring:
     ) -> tuple[list[str], float]:
         content = bp.get("content") or {}
         hook = content.get("hook") or bp.get("hook", "")
-        body = (
-            content.get("caption")
-            or bp.get("body")
-            or bp.get("caption", "")
-        )
+        body = content.get("caption") or bp.get("body") or bp.get("caption", "")
         title = bp.get("title", "")
-        text = " ".join(
-            s for s in (hook, body, title) if isinstance(s, str) and s
-        )
+        text = " ".join(s for s in (hook, body, title) if isinstance(s, str) and s)
 
         features = self._extract_features(text, patterns)
         matched = [name for name, hit in features if hit]

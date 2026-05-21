@@ -1,4 +1,5 @@
 """Config & settings API endpoints."""
+
 import json
 import logging
 from pathlib import Path
@@ -81,15 +82,21 @@ def schedule_slots():
     niche_id = request.args.get("niche_id")
     data = _load_yaml("publishing.yaml", niche_id)
     if data:
-        slots = (data.get("instagram", {}).get("schedule_slots")
-                 or data.get("schedule_slots")
-                 or data.get("publish_times")
-                 or ["12:00"])  # Default to 12:00 IST
+        slots = (
+            data.get("instagram", {}).get("schedule_slots")
+            or data.get("schedule_slots")
+            or data.get("publish_times")
+            or ["12:00"]
+        )  # Default to 12:00 IST
         timezone = data.get("instagram", {}).get("timezone", "Asia/Kolkata")
-        return api_success(data={"data": {
-            "slots": slots,
-            "timezone": timezone,
-        }})
+        return api_success(
+            data={
+                "data": {
+                    "slots": slots,
+                    "timezone": timezone,
+                }
+            }
+        )
     return api_not_found(message="Not found")
 
 
@@ -117,7 +124,9 @@ def source_filters():
         val = s.get("platform") or s.get("type") or s.get("name") or ""
         if val:
             values.add(val)
-    return api_success(data={"data": [{"value": v, "label": v.replace("_", " ").title()} for v in sorted(values)]})
+    return api_success(
+        data={"data": [{"value": v, "label": v.replace("_", " ").title()} for v in sorted(values)]}
+    )
 
 
 @bp.route("/platforms", methods=["GET"])
@@ -132,10 +141,12 @@ def platforms():
     platform_info = []
     for p in enabled:
         cfg = data.get(p, {})
-        platform_info.append({
-            "name": p,
-            "enabled": cfg.get("enabled", True),
-        })
+        platform_info.append(
+            {
+                "name": p,
+                "enabled": cfg.get("enabled", True),
+            }
+        )
     return api_success(data={"data": platform_info})
 
 
@@ -160,19 +171,22 @@ def templates():
         tpl_list = data["templates"]
         result = []
         for tpl in tpl_list:
-            result.append({
-                "id": tpl.get("template_id", ""),
-                "name": tpl.get("name", ""),
-                "type": tpl.get("format", "reel"),
-                "best_for": tpl.get("best_for", []),
-                "structure": tpl.get("structure", []),
-                "default_cta": tpl.get("default_cta", ""),
-                "notes": tpl.get("notes", ""),
-            })
+            result.append(
+                {
+                    "id": tpl.get("template_id", ""),
+                    "name": tpl.get("name", ""),
+                    "type": tpl.get("format", "reel"),
+                    "best_for": tpl.get("best_for", []),
+                    "structure": tpl.get("structure", []),
+                    "default_cta": tpl.get("default_cta", ""),
+                    "notes": tpl.get("notes", ""),
+                }
+            )
         return api_success(data={"data": result})
     # Fallback: try Microsoft Lists
     try:
         from server.core.graph_sync import get_sync_client
+
         records = get_sync_client().templates.all()
         return api_success(data={"data": [{"id": r["id"], **r.get("fields", {})} for r in records]})
     except Exception as e:
@@ -216,8 +230,14 @@ def save_notifications():
         if webhook_url:
             # Validate Slack webhook URL format
             import re
-            if not re.match(r'^https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+$', webhook_url):
-                return api_error(error="Invalid Slack webhook URL format. Must be https://hooks.slack.com/services/...")
+
+            if not re.match(
+                r"^https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+$",
+                webhook_url,
+            ):
+                return api_error(
+                    error="Invalid Slack webhook URL format. Must be https://hooks.slack.com/services/..."
+                )
         prefs["slack_webhook_url"] = webhook_url
     if "email_digest" in data and data["email_digest"] in ("daily", "weekly", "never"):
         prefs["email_digest"] = data["email_digest"]

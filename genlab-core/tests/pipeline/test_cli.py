@@ -7,6 +7,7 @@ Tests cover:
 - Run report writing
 - CLI main() with mocked GenericPipelineRunner
 """
+
 from __future__ import annotations
 
 import json
@@ -108,6 +109,7 @@ class TestResolveGenlabRoot:
         with patch.dict("os.environ", {}, clear=False):
             # Remove GENLAB_ROOT if set
             import os
+
             old = os.environ.pop("GENLAB_ROOT", None)
             try:
                 root = _resolve_genlab_root()
@@ -172,13 +174,17 @@ class TestBuildParser:
 
     def test_all_flags(self) -> None:
         parser = build_parser()
-        args = parser.parse_args([
-            "--niche", "all",
-            "--dry-run",
-            "--verbose",
-            "--force-publish",
-            "--stages", "Fetch,Score",
-        ])
+        args = parser.parse_args(
+            [
+                "--niche",
+                "all",
+                "--dry-run",
+                "--verbose",
+                "--force-publish",
+                "--stages",
+                "Fetch,Score",
+            ]
+        )
         assert args.niche == "all"
         assert args.dry_run is True
         assert args.verbose is True
@@ -193,7 +199,9 @@ class TestRunPipeline:
     @patch("genlab_core.pipeline.cli.GenericPipelineRunner")
     @patch("genlab_core.pipeline.cli.settings")
     def test_single_niche_delegates(
-        self, mock_settings: MagicMock, mock_runner_cls: MagicMock,
+        self,
+        mock_settings: MagicMock,
+        mock_runner_cls: MagicMock,
     ) -> None:
         mock_settings.validate_for_niche.return_value = []
 
@@ -207,16 +215,23 @@ class TestRunPipeline:
 
         mock_runner_cls.assert_called_once()
         call_kwargs = mock_runner_cls.call_args
-        assert "gaming" in call_kwargs.kwargs.get("niche_roots", call_kwargs[1].get("niche_roots", {}))
+        assert "gaming" in call_kwargs.kwargs.get(
+            "niche_roots", call_kwargs[1].get("niche_roots", {})
+        )
         mock_runner_cls.return_value.run.assert_called_once_with(
-            "gaming", dry_run=True, verbose=False, stages_filter=None,
+            "gaming",
+            dry_run=True,
+            verbose=False,
+            stages_filter=None,
         )
         assert ctx is mock_ctx
 
     @patch("genlab_core.pipeline.cli.GenericPipelineRunner")
     @patch("genlab_core.pipeline.cli.settings")
     def test_multi_niche_runs_each(
-        self, mock_settings: MagicMock, mock_runner_cls: MagicMock,
+        self,
+        mock_settings: MagicMock,
+        mock_runner_cls: MagicMock,
     ) -> None:
         mock_settings.validate_for_niche.return_value = []
 
@@ -242,7 +257,9 @@ class TestMain:
     @patch("genlab_core.pipeline.cli.GenericPipelineRunner")
     @patch("genlab_core.pipeline.cli.settings")
     def test_single_niche_exit_0(
-        self, mock_settings: MagicMock, mock_runner_cls: MagicMock,
+        self,
+        mock_settings: MagicMock,
+        mock_runner_cls: MagicMock,
     ) -> None:
         mock_settings.validate_for_niche.return_value = []
 
@@ -259,7 +276,9 @@ class TestMain:
     @patch("genlab_core.pipeline.cli.GenericPipelineRunner")
     @patch("genlab_core.pipeline.cli.settings")
     def test_aborted_returns_1(
-        self, mock_settings: MagicMock, mock_runner_cls: MagicMock,
+        self,
+        mock_settings: MagicMock,
+        mock_runner_cls: MagicMock,
     ) -> None:
         mock_settings.validate_for_niche.return_value = []
 

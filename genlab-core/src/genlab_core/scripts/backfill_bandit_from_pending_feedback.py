@@ -48,6 +48,7 @@ Usage
     # Optionally include post-fix zombies (rare)
     uv run python -m genlab_core.scripts.backfill_bandit_from_pending_feedback --apply --include-post-fix
 """
+
 from __future__ import annotations
 
 import argparse
@@ -71,11 +72,15 @@ OUTAGE_END = "2026-05-19"
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true",
-                        help="Actually call bandit_updater (default: dry run)")
-    parser.add_argument("--include-post-fix", action="store_true",
-                        help="Also replay rows updated after the fix landed "
-                             "(only needed for zombies — use with care)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Actually call bandit_updater (default: dry run)"
+    )
+    parser.add_argument(
+        "--include-post-fix",
+        action="store_true",
+        help="Also replay rows updated after the fix landed "
+        "(only needed for zombies — use with care)",
+    )
     args = parser.parse_args()
 
     if not os.environ.get("DATABASE_URL"):
@@ -101,7 +106,7 @@ def main() -> int:
         SELECT id, niche_id, arm_id, platform, reward_48h, bandit_context,
                collection_status, updated_at
         FROM pending_feedback
-        WHERE {' AND '.join(where)}
+        WHERE {" AND ".join(where)}
         ORDER BY niche_id, arm_id, updated_at
     """
 
@@ -126,8 +131,7 @@ def main() -> int:
             print(f"{nid:12} {arm:30} {len(rs):>6} {avg:>11.3f}")
 
         if not args.apply:
-            print(f"\nDRY RUN — would replay {len(rows)} rewards. "
-                  f"Run with --apply to commit.")
+            print(f"\nDRY RUN — would replay {len(rows)} rewards. Run with --apply to commit.")
             return 0
 
         # APPLY: call updater for each row, then mark as backfilled
@@ -159,8 +163,9 @@ def main() -> int:
                     )
                 ok += 1
             except Exception as exc:
-                logger.warning("Backfill failed for %s/%s id=%s: %s",
-                               r["niche_id"], r["arm_id"], r["id"], exc)
+                logger.warning(
+                    "Backfill failed for %s/%s id=%s: %s", r["niche_id"], r["arm_id"], r["id"], exc
+                )
                 fail += 1
         conn.commit()
 

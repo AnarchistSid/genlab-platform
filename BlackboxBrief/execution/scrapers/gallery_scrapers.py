@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -41,6 +42,7 @@ except ImportError:
 # ======================================================================
 # PIXWITH.AI EXPLORE
 # ======================================================================
+
 
 def scrape_pixwith_explore(
     headless: bool = True,
@@ -81,9 +83,7 @@ def scrape_pixwith_explore(
 
             # Wait for gallery grid to render
             try:
-                page.wait_for_selector(
-                    ".grid.grid-cols-2 > div", timeout=15000
-                )
+                page.wait_for_selector(".grid.grid-cols-2 > div", timeout=15000)
             except PlaywrightTimeout:
                 logger.warning("Pixwith: timeout waiting for gallery grid")
 
@@ -161,22 +161,24 @@ def scrape_pixwith_explore(
             if thumbnails and thumbnails[0] != primary_url:
                 media_urls.extend(thumbnails[:1])
 
-            entries.append({
-                "title": title,
-                "link": f"https://pixwith.ai/explore#{post_id}",
-                "summary": f"Trending {content_type.replace('_', ' ')} on Pixwith.ai using {model}",
-                "published": datetime.now(timezone.utc).isoformat(),
-                "author": creator,
-                "gallery_metadata": {
-                    "content_type": content_type,
-                    "prompt": "",  # Not visible on explore page
-                    "creator_handle": creator,
-                    "model": model,
-                    "media_urls": media_urls,
-                    "gallery_source": "pixwith_explore",
-                    "post_id": post_id,
-                },
-            })
+            entries.append(
+                {
+                    "title": title,
+                    "link": f"https://pixwith.ai/explore#{post_id}",
+                    "summary": f"Trending {content_type.replace('_', ' ')} on Pixwith.ai using {model}",
+                    "published": datetime.now(timezone.utc).isoformat(),
+                    "author": creator,
+                    "gallery_metadata": {
+                        "content_type": content_type,
+                        "prompt": "",  # Not visible on explore page
+                        "creator_handle": creator,
+                        "model": model,
+                        "media_urls": media_urls,
+                        "gallery_source": "pixwith_explore",
+                        "post_id": post_id,
+                    },
+                }
+            )
 
     except Exception as exc:
         logger.error("Pixwith scraper failed: %s", exc, exc_info=True)
@@ -197,6 +199,7 @@ def scrape_pixwith_explore(
 # IMAGINEART COMMUNITY (auth-walled)
 # ======================================================================
 
+
 def scrape_imagineart_community(
     headless: bool = True,
     max_posts: int = 30,
@@ -210,14 +213,14 @@ def scrape_imagineart_community(
     url = "https://www.imagine.art/community"
     return _empty_result(
         url,
-        "ImagineArt community requires authentication. "
-        "Enable after adding auth support or API integration.",
+        "ImagineArt community requires authentication. Enable after adding auth support or API integration.",
     )
 
 
 # ======================================================================
 # REVID.AI GALLERY (auth-walled)
 # ======================================================================
+
 
 def scrape_revid_gallery(
     headless: bool = True,
@@ -232,8 +235,7 @@ def scrape_revid_gallery(
     url = "https://www.revid.ai/view"
     return _empty_result(
         url,
-        "Revid.ai gallery requires authentication. "
-        "/view redirects to /category, /showcase needs login.",
+        "Revid.ai gallery requires authentication. /view redirects to /category, /showcase needs login.",
     )
 
 
@@ -278,6 +280,7 @@ def fetch_gallery(
 # ======================================================================
 # HELPERS
 # ======================================================================
+
 
 def _empty_result(url: str, error: str) -> Dict[str, Any]:
     """Return an empty fetch result with error message."""
@@ -324,12 +327,13 @@ if __name__ == "__main__":
         targets = {args.test: scrapers_to_test[args.test]}
 
     for name, (gallery_type, url) in targets.items():
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"Testing: {name} ({url})")
-        print(f"{'='*50}")
+        print(f"{'=' * 50}")
 
         result = fetch_gallery(
-            url, gallery_type,
+            url,
+            gallery_type,
             headless=not args.headful,
             max_posts=args.max_posts,
         )

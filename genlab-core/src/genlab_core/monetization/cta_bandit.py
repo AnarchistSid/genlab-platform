@@ -12,6 +12,7 @@ Usage:
     variant = bandit.select(platform="instagram")
     cta_text = variant.format(product_name="PS5 Console", url="...")
 """
+
 from __future__ import annotations
 
 import json
@@ -78,7 +79,10 @@ class CTABandit:
         selected = best[1]
         logger.debug(
             "[CTABandit] Selected %s for %s (alpha=%.1f, beta=%.1f)",
-            selected.arm_id, platform, selected.alpha, selected.beta,
+            selected.arm_id,
+            platform,
+            selected.alpha,
+            selected.beta,
         )
         return selected
 
@@ -102,7 +106,9 @@ class CTABandit:
                     v.beta += 1.0
                 logger.debug(
                     "[CTABandit] Updated %s: alpha=%.1f, beta=%.1f",
-                    arm_id, v.alpha, v.beta,
+                    arm_id,
+                    v.alpha,
+                    v.beta,
                 )
                 self.save_state()
                 return
@@ -142,7 +148,9 @@ class CTABandit:
                         v.alpha = float(state[key].get("alpha", 1.0))
                         v.beta = float(state[key].get("beta", 1.0))
                         restored += 1
-            logger.info("[CTABandit] Restored state for %d arms from %s", restored, self._state_path)
+            logger.info(
+                "[CTABandit] Restored state for %d arms from %s", restored, self._state_path
+            )
         except Exception as e:
             logger.warning("[CTABandit] Failed to load state: %s", e)
 
@@ -159,12 +167,14 @@ class CTABandit:
         for platform, pdata in config.get("platforms", {}).items():
             variants[platform] = []
             for v in pdata.get("variants", []):
-                variants[platform].append(CTAVariant(
-                    arm_id=v["arm_id"],
-                    platform=platform,
-                    template=v["template"],
-                    emoji=v.get("emoji", "🔗"),
-                ))
+                variants[platform].append(
+                    CTAVariant(
+                        arm_id=v["arm_id"],
+                        platform=platform,
+                        template=v["template"],
+                        emoji=v.get("emoji", "🔗"),
+                    )
+                )
 
         total = sum(len(v) for v in variants.values())
         logger.info("[CTABandit] Loaded %d variants across %d platforms", total, len(variants))

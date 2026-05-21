@@ -7,6 +7,7 @@ Usage:
     python -m genlab_core.tools.safe_push
     python -m genlab_core.tools.safe_push --force-main  # explicit override
 """
+
 from __future__ import annotations
 
 import argparse
@@ -42,7 +43,10 @@ def get_unpushed_commits(branch: str) -> str:
     """Return oneline log of commits not yet pushed to origin."""
     # Try upstream first, fall back to origin/<branch>
     result = _run_git(
-        "log", "--oneline", f"origin/{branch}..HEAD", check=False,
+        "log",
+        "--oneline",
+        f"origin/{branch}..HEAD",
+        check=False,
     )
     if result.returncode == 0:
         return result.stdout.strip()

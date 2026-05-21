@@ -28,6 +28,7 @@ if _CONTENT_SCRAPER.exists():
 # package so youtube_client's import of niche_credentials doesn't trigger the
 # settings chain.
 
+
 @pytest.fixture(autouse=True)
 def _mock_publishing_chain():
     """Ensure genlab_core.publishing is loadable without triggering Settings().
@@ -57,6 +58,7 @@ def _mock_publishing_chain():
         else:
             # Try importing it
             import genlab_core.settings  # noqa: F401
+
             settings_ok = True
     except Exception:
         pass
@@ -102,20 +104,27 @@ class TestYouTubeChunkRetry:
         mock_qt.status.return_value = {"used": 0, "upload_count": 0}
         mock_tracker_cls = MagicMock(return_value=mock_qt)
         mock_module = MagicMock(YouTubeQuotaTracker=mock_tracker_cls)
-        with patch.dict("sys.modules", {
-            "genlab_core.monitoring": MagicMock(),
-            "genlab_core.monitoring.youtube_quota": mock_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "genlab_core.monitoring": MagicMock(),
+                "genlab_core.monitoring.youtube_quota": mock_module,
+            },
+        ):
             yield
 
     def _make_client(self):
         """Create a YouTubeClient with mocked credentials."""
-        with patch.dict("os.environ", {
-            "YOUTUBE_CLIENT_ID": "test-id",
-            "YOUTUBE_CLIENT_SECRET": "test-secret",
-            "YOUTUBE_REFRESH_TOKEN": "test-token",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "YOUTUBE_CLIENT_ID": "test-id",
+                "YOUTUBE_CLIENT_SECRET": "test-secret",
+                "YOUTUBE_REFRESH_TOKEN": "test-token",
+            },
+        ):
             from execution.utils.youtube_client import YouTubeClient
+
             client = YouTubeClient()
         return client
 
@@ -137,8 +146,10 @@ class TestYouTubeChunkRetry:
         ]
         mock_service.videos.return_value.insert.return_value = mock_request
 
-        with patch.object(client, "_get_data_service", return_value=mock_service), \
-             patch("googleapiclient.http.MediaFileUpload"):
+        with (
+            patch.object(client, "_get_data_service", return_value=mock_service),
+            patch("googleapiclient.http.MediaFileUpload"),
+        ):
             result = client.upload_short(str(video), "Test #Shorts")
 
         assert result is not None
@@ -163,8 +174,10 @@ class TestYouTubeChunkRetry:
         ]
         mock_service.videos.return_value.insert.return_value = mock_request
 
-        with patch.object(client, "_get_data_service", return_value=mock_service), \
-             patch("googleapiclient.http.MediaFileUpload"):
+        with (
+            patch.object(client, "_get_data_service", return_value=mock_service),
+            patch("googleapiclient.http.MediaFileUpload"),
+        ):
             result = client.upload_video(str(video), "Test Video")
 
         assert result is not None
@@ -191,8 +204,10 @@ class TestYouTubeChunkRetry:
         ]
         mock_service.videos.return_value.insert.return_value = mock_request
 
-        with patch.object(client, "_get_data_service", return_value=mock_service), \
-             patch("googleapiclient.http.MediaFileUpload"):
+        with (
+            patch.object(client, "_get_data_service", return_value=mock_service),
+            patch("googleapiclient.http.MediaFileUpload"),
+        ):
             result = client.upload_short(str(video), "Test #Shorts")
 
         # Should return error dict (caught by outer except)
@@ -202,33 +217,41 @@ class TestYouTubeChunkRetry:
 
 # ── P3.8: YouTube error handling ──────────────────────────────────
 
-@pytest.mark.skip(reason="youtube_client removed in Sprint 68 — execution.utils.youtube_client no longer exists")
+
+@pytest.mark.skip(
+    reason="youtube_client removed in Sprint 68 — execution.utils.youtube_client no longer exists"
+)
 class TestYouTubeErrorHandling:
     """Verify post_comment and update_video_metadata handle HTTP errors."""
 
     def _make_client(self):
-        with patch.dict("os.environ", {
-            "YOUTUBE_CLIENT_ID": "test-id",
-            "YOUTUBE_CLIENT_SECRET": "test-secret",
-            "YOUTUBE_REFRESH_TOKEN": "test-token",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "YOUTUBE_CLIENT_ID": "test-id",
+                "YOUTUBE_CLIENT_SECRET": "test-secret",
+                "YOUTUBE_REFRESH_TOKEN": "test-token",
+            },
+        ):
             from execution.utils.youtube_client import YouTubeClient
+
             client = YouTubeClient()
         return client
 
     def test_post_comment_handles_http_error(self):
         import requests
+
         client = self._make_client()
 
         mock_response = MagicMock()
         mock_response.status_code = 403
         mock_response.text = "Forbidden"
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            response=mock_response
-        )
+        mock_response.raise_for_status.side_effect = requests.HTTPError(response=mock_response)
 
-        with patch.object(client, "_get_access_token", return_value="fake-token"), \
-             patch("genlab_core.platforms.youtube.requests.post", return_value=mock_response):
+        with (
+            patch.object(client, "_get_access_token", return_value="fake-token"),
+            patch("genlab_core.platforms.youtube.requests.post", return_value=mock_response),
+        ):
             result = client.post_comment("vid123", "Hello!")
 
         assert result is None
@@ -243,17 +266,18 @@ class TestYouTubeErrorHandling:
 
     def test_update_metadata_handles_http_error(self):
         import requests
+
         client = self._make_client()
 
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            response=mock_response
-        )
+        mock_response.raise_for_status.side_effect = requests.HTTPError(response=mock_response)
 
-        with patch.object(client, "_get_access_token", return_value="fake-token"), \
-             patch("genlab_core.platforms.youtube.requests.get", return_value=mock_response):
+        with (
+            patch.object(client, "_get_access_token", return_value="fake-token"),
+            patch("genlab_core.platforms.youtube.requests.get", return_value=mock_response),
+        ):
             result = client.update_video_metadata("vid123", title="New Title")
 
         assert result is None
@@ -269,17 +293,20 @@ class TestYouTubeErrorHandling:
 
 # ── P3.12: OData action_taken validation ──────────────────────────
 
+
 class TestODataActionValidation:
     """Verify action_taken parameter is validated against allowlist."""
 
     @pytest.fixture(autouse=True)
     def _disable_auth(self, monkeypatch):
         import server.review_server as rs
+
         monkeypatch.setattr(rs, "_AUTH_ENABLED", False)
 
     @pytest.fixture
     def client(self):
         from server.review_server import app
+
         app.config["TESTING"] = True
         with app.test_client() as c:
             yield c

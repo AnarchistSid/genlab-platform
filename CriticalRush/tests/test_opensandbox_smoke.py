@@ -73,9 +73,9 @@ def test_sandbox_file_write_read(sandbox):
     """Write a file in the sandbox and read it back."""
     from opensandbox.models import WriteEntry
 
-    sandbox.files.write_files([
-        WriteEntry(path="/tmp/genlab_test.txt", data="GenLab Phase 0", mode=644)
-    ])
+    sandbox.files.write_files(
+        [WriteEntry(path="/tmp/genlab_test.txt", data="GenLab Phase 0", mode=644)]
+    )
     content = sandbox.files.read_file("/tmp/genlab_test.txt")
     assert "GenLab Phase 0" in content
 

@@ -110,7 +110,9 @@ class PipelineMetrics:
         self._entries.append(entry)
         logger.debug(
             "Recorded metric: stage=%s duration_ms=%.1f status=%s",
-            stage, duration_ms, status,
+            stage,
+            duration_ms,
+            status,
         )
 
     @contextmanager
@@ -192,6 +194,8 @@ class PipelineMetrics:
 
         out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         logger.info(
-            "Flushed %d stage metrics to %s", len(self._entries), out_path,
+            "Flushed %d stage metrics to %s",
+            len(self._entries),
+            out_path,
         )
         return out_path

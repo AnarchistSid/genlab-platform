@@ -8,6 +8,7 @@ Phase 5: PendingEngagement + PendingFeedback tables with Row Level Security.
 PendingEngagement is the engagement worker queue.
 PendingFeedback tracks feedback collection tasks across 4 time windows.
 """
+
 from collections.abc import Sequence
 
 from alembic import op

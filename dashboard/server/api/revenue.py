@@ -4,6 +4,7 @@ Routes:
     GET /api/v1/revenue/summary       -- total clicks + breakdowns + estimated revenue
     GET /api/v1/revenue/click-trends  -- daily affiliate click counts (14 days)
 """
+
 import logging
 import os
 
@@ -128,23 +129,25 @@ def revenue_summary():
         except Exception:
             pass  # table may not exist yet in some environments
 
-        return api_success(data={
-            "clicks": {
-                "today": clicks_today,
-                "last_7d": clicks_7d,
-                "last_30d": clicks_30d,
-            },
-            "by_product": by_product,
-            "by_niche": by_niche,
-            "by_network": by_network,
-            "estimated_revenue_inr_30d": round(estimated_revenue_inr, 2),
-            "actual_revenue_inr_30d": round(actual_revenue_30d, 2),
-            "actual_by_niche": actual_by_niche,
-            "note": (
-                "estimated = clicks × 2% conversion × avg_order × commission. "
-                "actual = reported from affiliate networks (when available)."
-            ),
-        })
+        return api_success(
+            data={
+                "clicks": {
+                    "today": clicks_today,
+                    "last_7d": clicks_7d,
+                    "last_30d": clicks_30d,
+                },
+                "by_product": by_product,
+                "by_niche": by_niche,
+                "by_network": by_network,
+                "estimated_revenue_inr_30d": round(estimated_revenue_inr, 2),
+                "actual_revenue_inr_30d": round(actual_revenue_30d, 2),
+                "actual_by_niche": actual_by_niche,
+                "note": (
+                    "estimated = clicks × 2% conversion × avg_order × commission. "
+                    "actual = reported from affiliate networks (when available)."
+                ),
+            }
+        )
 
     except Exception as e:
         logger.error("[Revenue] Summary query failed: %s", e, exc_info=True)
@@ -160,6 +163,7 @@ def click_trends():
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
             rows = conn.execute(
                 "SELECT created_at::date AS day, COUNT(*) AS clicks "
@@ -167,7 +171,9 @@ def click_trends():
                 "WHERE created_at >= NOW() - INTERVAL '14 days' "
                 "GROUP BY day ORDER BY day"
             ).fetchall()
-        return api_success(data=[{"date": r["day"].isoformat(), "clicks": r["clicks"]} for r in rows])
+        return api_success(
+            data=[{"date": r["day"].isoformat(), "clicks": r["clicks"]} for r in rows]
+        )
     except Exception as exc:
         logger.warning("click-trends failed: %s", exc)
         return api_success(data=[])
@@ -221,19 +227,22 @@ def revenue_attribution():
                 "GROUP BY DATE(created_at) ORDER BY day"
             ).fetchall()
 
-        return api_success(data={
-            "by_channel": {r["channel_id"]: r["cnt"] for r in by_channel},
-            "by_platform": {r["platform_source"]: r["cnt"] for r in by_platform},
-            "top_blueprints": [
-                {"blueprint_id": r["blueprint_id"], "product": r["product_id"],
-                 "niche": r["niche_id"], "clicks": r["cnt"]}
-                for r in top_blueprints
-            ],
-            "daily_trend": [
-                {"date": str(r["day"]), "clicks": r["cnt"]}
-                for r in daily_trend
-            ],
-        })
+        return api_success(
+            data={
+                "by_channel": {r["channel_id"]: r["cnt"] for r in by_channel},
+                "by_platform": {r["platform_source"]: r["cnt"] for r in by_platform},
+                "top_blueprints": [
+                    {
+                        "blueprint_id": r["blueprint_id"],
+                        "product": r["product_id"],
+                        "niche": r["niche_id"],
+                        "clicks": r["cnt"],
+                    }
+                    for r in top_blueprints
+                ],
+                "daily_trend": [{"date": str(r["day"]), "clicks": r["cnt"]} for r in daily_trend],
+            }
+        )
 
     except Exception as e:
         logger.error("[Revenue] Attribution query failed: %s", e, exc_info=True)

@@ -158,7 +158,7 @@ def read_recent_logs(
         with open(log_path, encoding="utf-8") as f:
             # Read last `limit * 2` lines (buffer for filtering)
             all_lines = f.readlines()
-            lines = all_lines[-(limit * 2):]
+            lines = all_lines[-(limit * 2) :]
     except OSError:
         return []
 

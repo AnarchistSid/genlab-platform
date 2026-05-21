@@ -3,6 +3,7 @@
 These tests use concrete, readable examples to document the 3-pass dedup
 pipeline and the make_content_id utility.
 """
+
 import hashlib
 
 from genlab_core.intelligence.dedup_engine import (
@@ -59,8 +60,14 @@ class TestDedupEngineExamples:
     def test_near_duplicate_titles_caught(self):
         """Pass 2: Jaccard similarity catches similar headlines."""
         items = [
-            {"url": "https://a.com/1", "title": "Breaking: New AI model achieves record performance"},
-            {"url": "https://b.com/2", "title": "Breaking: New AI model achieves record performance scores"},
+            {
+                "url": "https://a.com/1",
+                "title": "Breaking: New AI model achieves record performance",
+            },
+            {
+                "url": "https://b.com/2",
+                "title": "Breaking: New AI model achieves record performance scores",
+            },
         ]
         engine = DedupEngine(jaccard_threshold=0.70, tfidf_threshold=1.0)
         result = engine.run(items)

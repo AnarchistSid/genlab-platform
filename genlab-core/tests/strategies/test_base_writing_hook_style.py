@@ -10,6 +10,7 @@ These tests pin the contract that ``write_video_content``'s returned
 to copy into the blueprint's extra JSONB) and ``content["hook_style"]``
 (for downstream consumers).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -52,7 +53,9 @@ def test_hook_style_propagates_to_story_and_content():
     ):
         story = _story()
         strategy._write_story_llm(
-            story, llm_client=object(), extra_instructions="",
+            story,
+            llm_client=object(),
+            extra_instructions="",
             existing_hooks=[],
         )
 
@@ -83,7 +86,9 @@ def test_no_hook_style_when_writer_omits_it():
     ):
         story = _story()
         strategy._write_story_llm(
-            story, llm_client=object(), extra_instructions="",
+            story,
+            llm_client=object(),
+            extra_instructions="",
             existing_hooks=[],
         )
 

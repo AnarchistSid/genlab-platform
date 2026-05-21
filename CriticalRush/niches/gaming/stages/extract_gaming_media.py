@@ -31,6 +31,7 @@ class ExtractGamingMedia:
         """Lazy-initialize the clip sourcer on first use."""
         if self._sourcer is None:
             from niches.gaming.tools.clip_sourcer import GamingClipSourcer
+
             project_root = Path(__file__).resolve().parent.parent.parent.parent
             self._sourcer = GamingClipSourcer.from_config(project_root)
         return self._sourcer
@@ -93,13 +94,16 @@ class ExtractGamingMedia:
                     story["fps"] = clip.get("fps", 0.0)
                     if not story.get("fetched_at"):
                         from datetime import datetime
+
                         story["fetched_at"] = datetime.now(UTC).isoformat()
 
                     logger.info(
                         "[ExtractGamingMedia] %s -> %s clip sourced (%ds, %dx%d, %.0ffps)",
-                        title, clip.get("source_tier"),
+                        title,
+                        clip.get("source_tier"),
                         clip.get("duration_seconds", 0),
-                        clip.get("width", 0), clip.get("height", 0),
+                        clip.get("width", 0),
+                        clip.get("height", 0),
                         clip.get("fps", 0),
                     )
                 else:
@@ -109,9 +113,7 @@ class ExtractGamingMedia:
             except Exception as e:
                 story.setdefault("media", {})["clip"] = None
                 stats["clips_failed"] += 1
-                logger.warning(
-                    "[ExtractGamingMedia] %s -> error: %s", title, e
-                )
+                logger.warning("[ExtractGamingMedia] %s -> error: %s", title, e)
 
             # Rate limit between stories
             if i < len(stories) - 1:

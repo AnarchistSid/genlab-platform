@@ -1,4 +1,5 @@
 """Tests for genlab_core.video.standards — Track C Steps C2 + C3."""
+
 from genlab_core.media.ffmpeg import PLATFORM_SPECS
 from genlab_core.media.ffmpeg import Platform as FFmpegPlatform
 from genlab_core.media.video_compositor import VisualConfig
@@ -47,8 +48,7 @@ def test_standards_codec_matches_platform_specs() -> None:
         std = get_standard(std_plat)
         spec = PLATFORM_SPECS[ffmpeg_plat]
         assert std.video.codec == spec.codec, (
-            f"{std_plat.value}: standards says {std.video.codec}, "
-            f"PLATFORM_SPECS says {spec.codec}"
+            f"{std_plat.value}: standards says {std.video.codec}, PLATFORM_SPECS says {spec.codec}"
         )
 
 

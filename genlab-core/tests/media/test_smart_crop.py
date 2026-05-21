@@ -37,8 +37,11 @@ class TestCropRegion:
     def test_center_strategy_fields(self):
         r = CropRegion(
             strategy=CropStrategy.CENTER,
-            x_offset=420, crop_width=608, crop_height=1080,
-            source_width=1920, source_height=1080,
+            x_offset=420,
+            crop_width=608,
+            crop_height=1080,
+            source_width=1920,
+            source_height=1080,
             confidence=1.0,
         )
         assert r.x_offset == 420
@@ -208,8 +211,11 @@ class TestApply:
 
         region = CropRegion(
             strategy=CropStrategy.CENTER,
-            x_offset=420, crop_width=608, crop_height=1080,
-            source_width=1920, source_height=1080,
+            x_offset=420,
+            crop_width=608,
+            crop_height=1080,
+            source_width=1920,
+            source_height=1080,
         )
         clip = tmp_path / "input.mp4"
         clip.touch()
@@ -240,12 +246,16 @@ class TestApply:
     @patch("genlab_core.media.smart_crop.subprocess.run")
     def test_apply_raises_on_ffmpeg_failure(self, mock_run, mock_ffmpeg, tmp_path):
         mock_run.return_value = MagicMock(
-            returncode=1, stderr="Error: crop dimensions invalid",
+            returncode=1,
+            stderr="Error: crop dimensions invalid",
         )
         region = CropRegion(
             strategy=CropStrategy.CENTER,
-            x_offset=0, crop_width=608, crop_height=1080,
-            source_width=1920, source_height=1080,
+            x_offset=0,
+            crop_width=608,
+            crop_height=1080,
+            source_width=1920,
+            source_height=1080,
         )
         clip = tmp_path / "input.mp4"
         clip.touch()
@@ -340,7 +350,8 @@ FIXTURES = Path(__file__).parent / "_fixtures"
 
 _has_fixtures = FIXTURES.exists() and (FIXTURES / "landscape_motion.mp4").exists()
 _skip_integration = pytest.mark.skipif(
-    not _has_fixtures, reason="test fixtures not generated",
+    not _has_fixtures,
+    reason="test fixtures not generated",
 )
 
 
@@ -435,4 +446,5 @@ class TestIntegrationAutoCrop:
 
         # Cleanup
         import shutil
+
         shutil.rmtree(temp_dir)

@@ -156,7 +156,10 @@ class TestHookLLMSkip:
     def test_all_llm_stories_skipped(self, strategy):
         stories = [
             {**_make_story(), "content": {"hook": "LLM hook 1", "written_by": "llm"}},
-            {**_make_story(title="Story 2"), "content": {"hook": "LLM hook 2", "written_by": "llm"}},
+            {
+                **_make_story(title="Story 2"),
+                "content": {"hook": "LLM hook 2", "written_by": "llm"},
+            },
         ]
         ctx = {"stories": stories}
         result = strategy.execute(ctx)

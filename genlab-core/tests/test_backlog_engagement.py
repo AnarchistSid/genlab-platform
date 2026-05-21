@@ -3,6 +3,7 @@
 Validates write_pending_engagement and list_pending_engagement without
 requiring Azure credentials by mocking the storage backend layer.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -17,13 +18,16 @@ def _mock_heavy_imports():
     mock_graph_cls = MagicMock()
 
     with (
-        patch.dict("sys.modules", {
-            "azure": MagicMock(),
-            "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
-            "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
-            "kiota_abstractions": MagicMock(),
-            "kiota_abstractions.api_error": MagicMock(),
-        }),
+        patch.dict(
+            "sys.modules",
+            {
+                "azure": MagicMock(),
+                "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
+                "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
+                "kiota_abstractions": MagicMock(),
+                "kiota_abstractions.api_error": MagicMock(),
+            },
+        ),
         patch("genlab_core.http.backlog_client.GraphTableProxy") as mock_proxy_cls,
     ):
         yield mock_proxy_cls
@@ -70,6 +74,7 @@ def _make_client(mock_config):
     mock_settings = _make_settings()
     with patch("genlab_core.settings.settings", mock_settings):
         from genlab_core.http.backlog_client import BacklogClient
+
         return BacklogClient(config_path=mock_config)
 
 

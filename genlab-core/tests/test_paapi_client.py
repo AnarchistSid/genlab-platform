@@ -1,4 +1,5 @@
 """Tests for genlab_core.monetization.paapi_client."""
+
 from __future__ import annotations
 
 import json
@@ -30,6 +31,7 @@ def _make_product(**kwargs) -> PaapiProduct:
 # test_not_configured_returns_empty
 # ---------------------------------------------------------------------------
 
+
 def test_not_configured_returns_empty(tmp_path, monkeypatch):
     """Client with no credentials must return [] for search and None for get_by_asin."""
     monkeypatch.delenv("PAAPI_ACCESS_KEY", raising=False)
@@ -44,6 +46,7 @@ def test_not_configured_returns_empty(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # test_is_configured_with_keys
 # ---------------------------------------------------------------------------
+
 
 def test_is_configured_with_keys(tmp_path):
     """is_configured returns True when both keys are set."""
@@ -67,6 +70,7 @@ def test_is_configured_false_when_missing(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 # test_cache_write_and_read
 # ---------------------------------------------------------------------------
+
 
 def test_cache_write_and_read(tmp_path):
     """Written products are read back correctly from disk cache."""
@@ -97,6 +101,7 @@ def test_cache_write_and_read(tmp_path):
 # ---------------------------------------------------------------------------
 # test_cache_expiry
 # ---------------------------------------------------------------------------
+
 
 def test_cache_expiry(tmp_path):
     """Expired cache (ts too old) returns None."""
@@ -144,6 +149,7 @@ def test_cache_not_expired_returns_data(tmp_path):
 # test_niche_search_index_mapping
 # ---------------------------------------------------------------------------
 
+
 def test_niche_search_index_mapping():
     """All 5 GenLab niches must have a PA-API SearchIndex mapped."""
     expected_niches = {"gaming", "sports", "movies", "anime", "ai_creators"}
@@ -169,6 +175,7 @@ def test_niche_search_index_specific_mappings():
 # Unconfigured client does not raise on search/get_by_asin
 # ---------------------------------------------------------------------------
 
+
 def test_search_returns_empty_not_raises_when_unconfigured(tmp_path, monkeypatch):
     """search() must return [] gracefully when not configured, never raise."""
     monkeypatch.delenv("PAAPI_ACCESS_KEY", raising=False)
@@ -182,6 +189,7 @@ def test_search_returns_empty_not_raises_when_unconfigured(tmp_path, monkeypatch
 # ---------------------------------------------------------------------------
 # _item_to_product parsing
 # ---------------------------------------------------------------------------
+
 
 def test_item_to_product_full():
     """_item_to_product correctly parses a well-formed PA-API item dict."""

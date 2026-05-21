@@ -23,9 +23,13 @@ class TestPipelineLogHandler:
         handler.setFormatter(logging.Formatter("%(message)s"))
 
         record = logging.LogRecord(
-            name="test", level=logging.INFO,
-            pathname="", lineno=0, msg="hello world",
-            args=(), exc_info=None,
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello world",
+            args=(),
+            exc_info=None,
         )
         handler.emit(record)
         handler.close()
@@ -45,9 +49,13 @@ class TestPipelineLogHandler:
         handler.setFormatter(logging.Formatter("%(message)s"))
 
         record = logging.LogRecord(
-            name="test", level=logging.WARNING,
-            pathname="", lineno=0, msg="slow",
-            args=(), exc_info=None,
+            name="test",
+            level=logging.WARNING,
+            pathname="",
+            lineno=0,
+            msg="slow",
+            args=(),
+            exc_info=None,
         )
         record.stage = "RenderVideo"  # type: ignore[attr-defined]
         handler.emit(record)
@@ -64,9 +72,13 @@ class TestStageLoggingFilter:
         filt.current_stage = "FetchStories"
 
         record = logging.LogRecord(
-            name="x", level=logging.INFO,
-            pathname="", lineno=0, msg="msg",
-            args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="msg",
+            args=(),
+            exc_info=None,
         )
         assert filt.filter(record) is True
         assert record.stage == "FetchStories"  # type: ignore[attr-defined]
@@ -75,9 +87,13 @@ class TestStageLoggingFilter:
         filt = StageLoggingFilter()
 
         record = logging.LogRecord(
-            name="x", level=logging.INFO,
-            pathname="", lineno=0, msg="msg",
-            args=(), exc_info=None,
+            name="x",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="msg",
+            args=(),
+            exc_info=None,
         )
         filt.filter(record)
         assert record.stage is None  # type: ignore[attr-defined]
@@ -86,7 +102,9 @@ class TestStageLoggingFilter:
 class TestInstallRemove:
     def test_install_creates_file_with_sentinel(self, tmp_path: Path):
         handler, stage_filter, log_path = install_log_handler(
-            "gaming", "run_001", tmp_path,
+            "gaming",
+            "run_001",
+            tmp_path,
         )
         try:
             assert log_path.exists()
@@ -99,7 +117,9 @@ class TestInstallRemove:
 
     def test_handler_captures_root_logger_messages(self, tmp_path: Path):
         handler, _, log_path = install_log_handler(
-            "gaming", "run_002", tmp_path,
+            "gaming",
+            "run_002",
+            tmp_path,
         )
         try:
             test_logger = logging.getLogger("test_capture")
@@ -114,7 +134,9 @@ class TestInstallRemove:
 
     def test_stage_filter_tags_records(self, tmp_path: Path):
         handler, stage_filter, log_path = install_log_handler(
-            "gaming", "run_003", tmp_path,
+            "gaming",
+            "run_003",
+            tmp_path,
         )
         try:
             stage_filter.current_stage = "WriteContent"

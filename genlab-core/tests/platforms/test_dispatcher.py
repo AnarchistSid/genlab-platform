@@ -1,5 +1,6 @@
 # genlab-core/tests/platforms/test_dispatcher.py
 """Tests for dispatch_many — concurrent platform dispatch."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -28,10 +29,12 @@ def test_dispatch_many_success():
     )
 
     with patch("genlab_core.platforms.dispatcher.get_client", return_value=mock_client):
-        results = dispatch_many([
-            ("instagram", _make_payload("instagram")),
-            ("youtube", _make_payload("youtube")),
-        ])
+        results = dispatch_many(
+            [
+                ("instagram", _make_payload("instagram")),
+                ("youtube", _make_payload("youtube")),
+            ]
+        )
 
     assert len(results) == 2
     assert results["instagram"].success is True
@@ -53,10 +56,12 @@ def test_dispatch_many_partial_failure():
         return client
 
     with patch("genlab_core.platforms.dispatcher.get_client", side_effect=mock_get_client):
-        results = dispatch_many([
-            ("instagram", _make_payload("instagram")),
-            ("youtube", _make_payload("youtube")),
-        ])
+        results = dispatch_many(
+            [
+                ("instagram", _make_payload("instagram")),
+                ("youtube", _make_payload("youtube")),
+            ]
+        )
 
     assert results["instagram"].success is True
     assert results["youtube"].success is False

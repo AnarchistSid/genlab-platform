@@ -9,6 +9,7 @@ Usage:
     python3 scripts/posting_optimizer.py --json
     python3 scripts/posting_optimizer.py --platform instagram
 """
+
 import argparse
 import json
 import logging
@@ -61,6 +62,7 @@ def _parse_timestamp(ts: str) -> datetime | None:
 def _engagement_score(post: dict) -> float:
     """Delegate to canonical engagement formula in content_memory."""
     from content_memory import engagement_score
+
     return engagement_score(post)
 
 
@@ -72,12 +74,7 @@ def _ist_hour(utc_dt: datetime) -> tuple[int, int]:
 
 def analyze_platform(platform: str, data: dict) -> dict[str, Any]:
     """Analyze posting patterns for a single platform."""
-    posts = (
-        data.get("recent_videos")
-        or data.get("recent_posts")
-        or data.get("recent_tweets")
-        or []
-    )
+    posts = data.get("recent_videos") or data.get("recent_posts") or data.get("recent_tweets") or []
 
     if not posts:
         return {"platform": platform, "sample_size": 0, "best_windows": []}
@@ -86,11 +83,7 @@ def analyze_platform(platform: str, data: dict) -> dict[str, Any]:
     heatmap: dict[tuple[int, int], list[float]] = defaultdict(list)
 
     for post in posts:
-        ts_str = (
-            post.get("published")
-            or post.get("posted")
-            or post.get("created_at")
-        )
+        ts_str = post.get("published") or post.get("posted") or post.get("created_at")
         ts = _parse_timestamp(ts_str)
         if not ts:
             continue
@@ -112,12 +105,14 @@ def analyze_platform(platform: str, data: dict) -> dict[str, Any]:
 
     best_windows = []
     for (day, hour), avg in ranked[:5]:
-        best_windows.append({
-            "day": DAY_NAMES[day],
-            "hour_ist": f"{hour:02d}:00",
-            "avg_engagement": round(avg, 1),
-            "post_count": len(heatmap[(day, hour)]),
-        })
+        best_windows.append(
+            {
+                "day": DAY_NAMES[day],
+                "hour_ist": f"{hour:02d}:00",
+                "avg_engagement": round(avg, 1),
+                "post_count": len(heatmap[(day, hour)]),
+            }
+        )
 
     # Also compute hour-only aggregates (ignoring day)
     hour_totals: dict[int, list[float]] = defaultdict(list)
@@ -134,7 +129,9 @@ def analyze_platform(platform: str, data: dict) -> dict[str, Any]:
         "platform": platform,
         "sample_size": len(posts),
         "best_windows": best_windows,
-        "best_hours_ist": [{"hour": f"{h:02d}:00", "avg_engagement": round(a, 1)} for h, a in best_hours],
+        "best_hours_ist": [
+            {"hour": f"{h:02d}:00", "avg_engagement": round(a, 1)} for h, a in best_hours
+        ],
     }
 
 
@@ -176,6 +173,7 @@ def build_schedule(days: int = 90, niche_id: str | None = None) -> dict[str, Any
     if all_windows:
         # Find most common best hour across platforms
         from collections import Counter
+
         hour_counts = Counter(w["hour_ist"] for w in all_windows)
         schedule["recommended_posting_time_ist"] = hour_counts.most_common(1)[0][0]
 
@@ -241,7 +239,9 @@ def print_schedule(schedule: dict[str, Any]) -> None:
 
         for w in pdata.get("best_windows", [])[:3]:
             bar = "█" * min(int(w["avg_engagement"] / 100), 30)
-            print(f"    {w['day']} {w['hour_ist']} IST  — avg engagement: {w['avg_engagement']:>8.0f}  {bar}")
+            print(
+                f"    {w['day']} {w['hour_ist']} IST  — avg engagement: {w['avg_engagement']:>8.0f}  {bar}"
+            )
 
         best_hours = pdata.get("best_hours_ist", [])
         if best_hours:
@@ -263,7 +263,9 @@ if __name__ == "__main__":
     parser.add_argument("--days", type=int, default=90, help="Lookback period")
     parser.add_argument("--json", action="store_true", help="Output raw JSON")
     parser.add_argument("--platform", type=str, help="Single platform")
-    parser.add_argument("--niche", type=str, default=None, help="Niche ID (e.g. gaming, ai_creators)")
+    parser.add_argument(
+        "--niche", type=str, default=None, help="Niche ID (e.g. gaming, ai_creators)"
+    )
     args = parser.parse_args()
 
     schedule = build_schedule(args.days, niche_id=args.niche)

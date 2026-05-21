@@ -1,4 +1,5 @@
 """Tests for genlab_core.intelligence.hook_validator."""
+
 import pytest
 from genlab_core.intelligence.hook_validator import (
     HookFailure,
@@ -84,21 +85,15 @@ class TestMarkdownArtifacts:
 
 class TestRedditFormatting:
     def test_subreddit_reference(self, validator):
-        result = validator.validate(
-            "Insane play in ranked /r/leagueoflegends today", "instagram"
-        )
+        result = validator.validate("Insane play in ranked /r/leagueoflegends today", "instagram")
         assert HookFailure.REDDIT_FORMATTING in result.failures
 
     def test_user_reference(self, validator):
-        result = validator.validate(
-            "Check out what /u/coolplayer did today", "instagram"
-        )
+        result = validator.validate("Check out what /u/coolplayer did today", "instagram")
         assert HookFailure.REDDIT_FORMATTING in result.failures
 
     def test_no_reddit_formatting(self, validator):
-        result = validator.validate(
-            "Insane play in League of Legends ranked", "instagram"
-        )
+        result = validator.validate("Insane play in League of Legends ranked", "instagram")
         assert HookFailure.REDDIT_FORMATTING not in result.failures
 
 
@@ -161,21 +156,15 @@ class TestIncompleteSentence:
 
 class TestContainsUrl:
     def test_http_url(self, validator):
-        result = validator.validate(
-            "Check this out https://example.com for more", "instagram"
-        )
+        result = validator.validate("Check this out https://example.com for more", "instagram")
         assert HookFailure.CONTAINS_URL in result.failures
 
     def test_www_url(self, validator):
-        result = validator.validate(
-            "Visit www.example.com for details today", "instagram"
-        )
+        result = validator.validate("Visit www.example.com for details today", "instagram")
         assert HookFailure.CONTAINS_URL in result.failures
 
     def test_no_url_passes(self, validator):
-        result = validator.validate(
-            "This game just hit different after the update", "instagram"
-        )
+        result = validator.validate("This game just hit different after the update", "instagram")
         assert HookFailure.CONTAINS_URL not in result.failures
 
 
@@ -203,9 +192,7 @@ class TestEmojiSpam:
 
 class TestMixedCaps:
     def test_broken_template_pattern(self, validator):
-        result = validator.validate(
-            "WOULD YOU USE salesforce slackbot thing now", "instagram"
-        )
+        result = validator.validate("WOULD YOU USE salesforce slackbot thing now", "instagram")
         assert HookFailure.MIXED_CAPS in result.failures
 
     def test_intentional_caps_ok(self, validator):

@@ -127,8 +127,7 @@ class TestNicheStyle:
         for niche, style in NICHE_STYLE.items():
             words = style["example_good"].split()
             has_proper = any(
-                w[0].isupper() and w not in ("The", "A", "An", "Is")
-                for w in words if w
+                w[0].isupper() and w not in ("The", "A", "An", "Is") for w in words if w
             )
             assert has_proper, f"{niche} example_good lacks proper nouns"
 
@@ -182,12 +181,24 @@ class TestPickHookStyle:
 
         mock_client = MagicMock()
         mock_client.bandit_arms.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "style:gaming:question",
-                                   "niche_id": "gaming",
-                                   "alpha": 5.0, "beta": 2.0}},
-            {"id": "2", "fields": {"arm_id": "style:gaming:bold_claim",
-                                   "niche_id": "gaming",
-                                   "alpha": 1.0, "beta": 5.0}},
+            {
+                "id": "1",
+                "fields": {
+                    "arm_id": "style:gaming:question",
+                    "niche_id": "gaming",
+                    "alpha": 5.0,
+                    "beta": 2.0,
+                },
+            },
+            {
+                "id": "2",
+                "fields": {
+                    "arm_id": "style:gaming:bold_claim",
+                    "niche_id": "gaming",
+                    "alpha": 1.0,
+                    "beta": 5.0,
+                },
+            },
         ]
         with patch(
             "genlab_core.http.backlog_client.BacklogClient",
@@ -205,9 +216,15 @@ class TestPickHookStyle:
         mock_client = MagicMock()
         # Only one arm, and it's an unknown style
         mock_client.bandit_arms.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "style:gaming:mystery_genre",
-                                   "niche_id": "gaming",
-                                   "alpha": 99.0, "beta": 1.0}},
+            {
+                "id": "1",
+                "fields": {
+                    "arm_id": "style:gaming:mystery_genre",
+                    "niche_id": "gaming",
+                    "alpha": 99.0,
+                    "beta": 1.0,
+                },
+            },
         ]
         with patch(
             "genlab_core.http.backlog_client.BacklogClient",
@@ -225,12 +242,24 @@ class TestPickHookStyle:
         mock_client = MagicMock()
         # gaming has a low-confidence arm; movies has a very-strong one
         mock_client.bandit_arms.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "style:gaming:question",
-                                   "niche_id": "gaming",
-                                   "alpha": 1.0, "beta": 5.0}},
-            {"id": "2", "fields": {"arm_id": "style:movies:question",
-                                   "niche_id": "movies",
-                                   "alpha": 99.0, "beta": 1.0}},
+            {
+                "id": "1",
+                "fields": {
+                    "arm_id": "style:gaming:question",
+                    "niche_id": "gaming",
+                    "alpha": 1.0,
+                    "beta": 5.0,
+                },
+            },
+            {
+                "id": "2",
+                "fields": {
+                    "arm_id": "style:movies:question",
+                    "niche_id": "movies",
+                    "alpha": 99.0,
+                    "beta": 1.0,
+                },
+            },
         ]
         with patch(
             "genlab_core.http.backlog_client.BacklogClient",
@@ -247,9 +276,15 @@ class TestPickHookStyle:
 
         mock_client = MagicMock()
         mock_client.bandit_arms.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "style:question",
-                                   "niche_id": "gaming",
-                                   "alpha": 10.0, "beta": 1.0}},
+            {
+                "id": "1",
+                "fields": {
+                    "arm_id": "style:question",
+                    "niche_id": "gaming",
+                    "alpha": 10.0,
+                    "beta": 1.0,
+                },
+            },
         ]
         with patch(
             "genlab_core.http.backlog_client.BacklogClient",
@@ -286,7 +321,9 @@ class TestGenerateHookStyleHint:
                     return_value="bold_claim",
                 ):
                     result = generate_hook(
-                        _make_story(), "sports", return_style=True,
+                        _make_story(),
+                        "sports",
+                        return_style=True,
                     )
         assert isinstance(result, tuple)
         assert result[0] == "Jokic owned Game 7"
@@ -306,8 +343,7 @@ class TestGenerateHookStyleHint:
         system_prompt = client.messages.create.call_args.kwargs["system"]
         assert "STYLE TARGET" in system_prompt
         # The body of the controversy hint should be in the prompt
-        assert "tension" in system_prompt.lower() or \
-               "dispute" in system_prompt.lower()
+        assert "tension" in system_prompt.lower() or "dispute" in system_prompt.lower()
 
     def test_no_style_hint_when_pick_returns_none(self):
         mock_cls = _mock_anthropic_success("Jokic owned Game 7")
@@ -337,6 +373,8 @@ class TestGenerateHookStyleHint:
                     return_value="revelation",
                 ):
                     result = generate_hook(
-                        _make_story(), "sports", return_style=True,
+                        _make_story(),
+                        "sports",
+                        return_style=True,
                     )
         assert result == (None, "revelation")

@@ -55,9 +55,7 @@ def get_model(
             device,
             compute_type,
         )
-        _model_cache[key] = WhisperModel(
-            model_size, device=device, compute_type=compute_type
-        )
+        _model_cache[key] = WhisperModel(model_size, device=device, compute_type=compute_type)
     return _model_cache[key]
 
 

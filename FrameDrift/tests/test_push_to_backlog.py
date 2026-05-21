@@ -48,7 +48,10 @@ def sample_context():
                 "score": 0.95,
                 "content": {
                     "hook": "Denji is back. MAPPA is cooking.",
-                    "instagram": {"caption": "CSM Part 2 confirmed.", "hashtags": ["#ChainsawMan", "#Anime"]},
+                    "instagram": {
+                        "caption": "CSM Part 2 confirmed.",
+                        "hashtags": ["#ChainsawMan", "#Anime"],
+                    },
                     "youtube": {"title": "CSM S2 Announced", "description": "Everything we know"},
                     "x_twitter": {"tweet": "CHAINSAW MAN PART 2 LETS GO"},
                     "facebook": {"caption": "Chainsaw Man Part 2 anime confirmed for Fall 2026."},

@@ -146,7 +146,8 @@ def _is_channel_or_profile_url(link: str) -> bool:
         if first.startswith("@"):
             return len(segments) <= 2 and (
                 len(segments) == 1
-                or segments[1].lower() in {
+                or segments[1].lower()
+                in {
                     "featured",
                     "videos",
                     "shorts",
@@ -248,21 +249,12 @@ def load_sources(config_path: Path = CONFIG_PATH) -> List[Dict[str, Any]]:
     creator_direct_only_mode = bool(cfg.get("creator_direct_only_mode", False))
     creator_lookback_days = int(cfg.get("creator_lookback_days", 0) or 0)
     if creator_only_mode:
-        showcase_sources = [
-            s for s in enabled
-            if (s.get("content_type", "") or "").strip().lower() == "showcase"
-        ]
+        showcase_sources = [s for s in enabled if (s.get("content_type", "") or "").strip().lower() == "showcase"]
         creator_sources = showcase_sources
         if creator_direct_only_mode:
-            creator_sources = [
-                s for s in creator_sources
-                if bool(s.get("creator_source", False))
-            ]
+            creator_sources = [s for s in creator_sources if bool(s.get("creator_source", False))]
         if creator_lookback_days > 0:
-            creator_sources = [
-                dict(s, creator_lookback_days=creator_lookback_days)
-                for s in creator_sources
-            ]
+            creator_sources = [dict(s, creator_lookback_days=creator_lookback_days) for s in creator_sources]
         if creator_video_only_mode:
             creator_sources = [dict(s, video_only_mode=True) for s in creator_sources]
         if creator_media_only_mode:
@@ -289,6 +281,7 @@ def load_sources(config_path: Path = CONFIG_PATH) -> List[Dict[str, Any]]:
 
 def _cache_key(url: str) -> str:
     from datetime import date
+
     key_input = url + date.today().isoformat()
     return hashlib.sha256(key_input.encode()).hexdigest()[:16]
 
@@ -311,20 +304,14 @@ def _has_creator_media(entry: Dict[str, Any]) -> bool:
     """Detect whether an entry has inline/linked media evidence."""
     summary = entry.get("summary", "") or ""
     link = entry.get("link", "") or ""
-    return bool(
-        _CREATOR_MEDIA_PATTERNS.search(summary)
-        or _CREATOR_MEDIA_PATTERNS.search(link)
-    )
+    return bool(_CREATOR_MEDIA_PATTERNS.search(summary) or _CREATOR_MEDIA_PATTERNS.search(link))
 
 
 def _has_creator_video(entry: Dict[str, Any]) -> bool:
     """Detect whether an entry has concrete video evidence."""
     summary = entry.get("summary", "") or ""
     link = entry.get("link", "") or ""
-    return bool(
-        _CREATOR_VIDEO_PATTERNS.search(summary)
-        or _CREATOR_VIDEO_PATTERNS.search(link)
-    )
+    return bool(_CREATOR_VIDEO_PATTERNS.search(summary) or _CREATOR_VIDEO_PATTERNS.search(link))
 
 
 def _is_creator_showcase_entry(entry: Dict[str, Any], require_video: bool = False) -> bool:
@@ -441,31 +428,32 @@ def _apply_entry_filters(src: Dict[str, Any], result: Dict[str, Any]) -> None:
         if pre_count != len(entries):
             logger.info(
                 "AI filter: %d/%d entries kept for %s",
-                len(entries), pre_count, url,
+                len(entries),
+                pre_count,
+                url,
             )
 
     # For showcase feeds, keep only creator-style showcase entries.
     if content_type == "showcase":
         pre_count = len(entries)
-        entries = [
-            e for e in entries
-            if not _is_channel_or_profile_url((e.get("link", "") or "").strip())
-        ]
+        entries = [e for e in entries if not _is_channel_or_profile_url((e.get("link", "") or "").strip())]
         if pre_count != len(entries):
             logger.info(
                 "Creator URL gate: %d/%d entries kept for %s (dropped channel/profile links)",
-                len(entries), pre_count, url,
+                len(entries),
+                pre_count,
+                url,
             )
 
         pre_count = len(entries)
-        entries = [
-            e for e in entries
-            if _is_creator_showcase_entry(e, require_video=video_only_mode)
-        ]
+        entries = [e for e in entries if _is_creator_showcase_entry(e, require_video=video_only_mode)]
         if pre_count != len(entries):
             logger.info(
                 "Creator showcase filter: %d/%d entries kept for %s (video_only=%s)",
-                len(entries), pre_count, url, video_only_mode,
+                len(entries),
+                pre_count,
+                url,
+                video_only_mode,
             )
 
         if media_only_mode and media_required:
@@ -475,7 +463,9 @@ def _apply_entry_filters(src: Dict[str, Any], result: Dict[str, Any]) -> None:
             if pre_count != len(entries):
                 logger.info(
                     "Creator media-only filter: %d/%d entries kept for %s",
-                    len(entries), pre_count, url,
+                    len(entries),
+                    pre_count,
+                    url,
                 )
 
         if lookback_days > 0:
@@ -484,7 +474,10 @@ def _apply_entry_filters(src: Dict[str, Any], result: Dict[str, Any]) -> None:
             if pre_count != len(entries):
                 logger.info(
                     "Creator recency filter: %d/%d entries kept for %s (lookback_days=%d)",
-                    len(entries), pre_count, url, lookback_days,
+                    len(entries),
+                    pre_count,
+                    url,
+                    lookback_days,
                 )
 
     result["entries"] = entries
@@ -503,6 +496,7 @@ def fetch_rss(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
             # P2.1: feedparser's internal urllib gets blocked by Reddit/Cloudflare.
             # Use requests for the HTTP fetch, then parse the response text.
             import requests as _req
+
             try:
                 resp = _req.get(url, headers={"User-Agent": "GenLab-Fetcher/1.0"}, timeout=30)
                 resp.raise_for_status()
@@ -518,17 +512,18 @@ def fetch_rss(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
             if feed.bozo and not feed.entries:
                 raise RuntimeError(f"Feed parse error: {feed.bozo_exception}")
             if feed.bozo and feed.entries:
-                logger.info("Feed %s had parse warnings but got %d entries (proceeding)",
-                           url, len(feed.entries))
+                logger.info("Feed %s had parse warnings but got %d entries (proceeding)", url, len(feed.entries))
             entries = []
             for entry in feed.entries:
-                entries.append({
-                    "title": getattr(entry, "title", ""),
-                    "link": getattr(entry, "link", ""),
-                    "summary": getattr(entry, "summary", ""),
-                    "published": getattr(entry, "published", ""),
-                    "author": getattr(entry, "get", lambda k, d="": d)("author", ""),
-                })
+                entries.append(
+                    {
+                        "title": getattr(entry, "title", ""),
+                        "link": getattr(entry, "link", ""),
+                        "summary": getattr(entry, "summary", ""),
+                        "published": getattr(entry, "published", ""),
+                        "author": getattr(entry, "get", lambda k, d="": d)("author", ""),
+                    }
+                )
             return {
                 "url": url,
                 "feed_title": getattr(feed.feed, "title", url),
@@ -548,8 +543,7 @@ def fetch_rss(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
                 details={"url": url, "attempt": attempt, "retries": retries},
                 exc=exc,
             )
-            logger.warning("RSS fetch attempt %d/%d failed for %s: %s",
-                           attempt, retries, url, exc)
+            logger.warning("RSS fetch attempt %d/%d failed for %s: %s", attempt, retries, url, exc)
             if attempt < retries:
                 time.sleep(RETRY_BACKOFF * attempt)
 
@@ -566,6 +560,7 @@ def fetch_rss(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
 # Module-level session for connection pooling across API fetches
 _session = None
 _session_lock = threading.Lock()
+
 
 def _get_session():
     """Get or create a reusable requests.Session for connection pooling."""
@@ -592,13 +587,15 @@ def fetch_api(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
             articles = data.get("articles", data.get("results", []))
             entries = []
             for article in articles:
-                entries.append({
-                    "title": article.get("title", ""),
-                    "link": article.get("url", article.get("link", "")),
-                    "summary": article.get("description", article.get("summary", "")),
-                    "published": article.get("publishedAt", article.get("published", "")),
-                    "author": article.get("author", ""),
-                })
+                entries.append(
+                    {
+                        "title": article.get("title", ""),
+                        "link": article.get("url", article.get("link", "")),
+                        "summary": article.get("description", article.get("summary", "")),
+                        "published": article.get("publishedAt", article.get("published", "")),
+                        "author": article.get("author", ""),
+                    }
+                )
             return {
                 "url": url,
                 "entry_count": len(entries),
@@ -617,8 +614,7 @@ def fetch_api(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
                 details={"url": url, "attempt": attempt, "retries": retries},
                 exc=exc,
             )
-            logger.warning("API fetch attempt %d/%d failed for %s: %s",
-                           attempt, retries, url, exc)
+            logger.warning("API fetch attempt %d/%d failed for %s: %s", attempt, retries, url, exc)
             if attempt < retries:
                 time.sleep(RETRY_BACKOFF * attempt)
 
@@ -633,7 +629,7 @@ def fetch_api(url: str, retries: int = MAX_RETRIES) -> Dict[str, Any]:
 
 
 # ── Parallelization settings ─────────────────────────────────
-DEFAULT_WORKERS = 5          # ThreadPoolExecutor workers
+DEFAULT_WORKERS = 5  # ThreadPoolExecutor workers
 _cache_lock = threading.Lock()  # Thread-safe cache access
 
 
@@ -667,9 +663,7 @@ def _fetch_single_source(
             _apply_entry_filters(src, result)
             elapsed = time.time() - start
             logger.info("Cache hit for %s (%.1fms)", url, elapsed * 1000)
-            result["source_priority"] = src.get(
-                "priority", result.get("source_priority", 0.5)
-            )
+            result["source_priority"] = src.get("priority", result.get("source_priority", 0.5))
             result["source_id"] = source_id
             result["platform"] = source_platform
             result["cache_hit"] = True
@@ -790,14 +784,19 @@ def fetch_all_sources(
 
     logger.info(
         "Parallel fetch: %d sources with %d workers",
-        len(sources), max_workers,
+        len(sources),
+        max_workers,
     )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_idx = {}
         for i, src in enumerate(sources):
             future = executor.submit(
-                _fetch_single_source, src, cache, cache_ttl, limiter,
+                _fetch_single_source,
+                src,
+                cache,
+                cache_ttl,
+                limiter,
             )
             future_to_idx[future] = i
 
@@ -837,16 +836,16 @@ def fetch_all_sources(
     wall_elapsed = time.time() - wall_start
 
     # Calculate sequential estimate for comparison
-    sequential_estimate = sum(
-        r.get("fetch_time_ms", 0) for r in results if r
-    ) / 1000
+    sequential_estimate = sum(r.get("fetch_time_ms", 0) for r in results if r) / 1000
 
     speedup = sequential_estimate / wall_elapsed if wall_elapsed > 0 else 1.0
 
     logger.info(
-        "Parallel fetch complete: %d sources in %.1fs "
-        "(sequential estimate: %.1fs, speedup: %.1fx)",
-        len(sources), wall_elapsed, sequential_estimate, speedup,
+        "Parallel fetch complete: %d sources in %.1fs (sequential estimate: %.1fs, speedup: %.1fx)",
+        len(sources),
+        wall_elapsed,
+        sequential_estimate,
+        speedup,
     )
 
     return [r for r in results if r is not None]
@@ -855,13 +854,13 @@ def fetch_all_sources(
 def main():
     parser = argparse.ArgumentParser(description="Fetch AI news from configured sources")
     parser.add_argument("--run-id", required=True, help="Unique run identifier")
-    parser.add_argument("--config", type=str, default=str(CONFIG_PATH),
-                        help="Path to sources.yaml config")
-    parser.add_argument("--cache-ttl", type=int, default=DEFAULT_CACHE_TTL_HOURS,
-                        help="Cache TTL in hours")
+    parser.add_argument("--config", type=str, default=str(CONFIG_PATH), help="Path to sources.yaml config")
+    parser.add_argument("--cache-ttl", type=int, default=DEFAULT_CACHE_TTL_HOURS, help="Cache TTL in hours")
     parser.add_argument("--no-cache", action="store_true", help="Disable caching")
     parser.add_argument(
-        "--workers", type=int, default=DEFAULT_WORKERS,
+        "--workers",
+        type=int,
+        default=DEFAULT_WORKERS,
         help=f"Parallel fetch workers (default: {DEFAULT_WORKERS}, set 1 for sequential)",
     )
     parser.add_argument("--verbose", action="store_true")
@@ -885,7 +884,9 @@ def main():
     # ── Timed fetch (parallel by default) ─────────────────
     overall_start = time.time()
     results = fetch_all_sources(
-        sources, cache=cache, cache_ttl=args.cache_ttl,
+        sources,
+        cache=cache,
+        cache_ttl=args.cache_ttl,
         max_workers=args.workers,
     )
     overall_elapsed = time.time() - overall_start
@@ -900,13 +901,15 @@ def main():
     # Per-source timing
     per_source_timing = []
     for r in results:
-        per_source_timing.append({
-            "url": r.get("url", "")[:60],
-            "entries": r.get("entry_count", 0),
-            "time_ms": r.get("fetch_time_ms", 0),
-            "cache_hit": r.get("cache_hit", False),
-            "method": r.get("fetch_method", "unknown"),
-        })
+        per_source_timing.append(
+            {
+                "url": r.get("url", "")[:60],
+                "entries": r.get("entry_count", 0),
+                "time_ms": r.get("fetch_time_ms", 0),
+                "cache_hit": r.get("cache_hit", False),
+                "method": r.get("fetch_method", "unknown"),
+            }
+        )
     per_source_timing.sort(key=lambda x: x["time_ms"], reverse=True)
 
     # Sequential estimate
@@ -916,11 +919,13 @@ def main():
     # Structured error summary
     error_details = []
     for r in errors:
-        error_details.append({
-            "url": r.get("url", ""),
-            "error": r.get("error", "unknown"),
-            "method": r.get("fetch_method", "unknown"),
-        })
+        error_details.append(
+            {
+                "url": r.get("url", ""),
+                "error": r.get("error", "unknown"),
+                "method": r.get("fetch_method", "unknown"),
+            }
+        )
 
     cache_hits = sum(1 for r in results if r.get("cache_hit"))
 
@@ -953,11 +958,18 @@ def main():
     # ── Timing report ─────────────────────────────────────
     logger.info(
         "Fetch complete: %d entries from %d sources (%d cache hits) in %.1fs → %s",
-        total_entries, len(results), cache_hits, overall_elapsed, out_path,
+        total_entries,
+        len(results),
+        cache_hits,
+        overall_elapsed,
+        out_path,
     )
     logger.info(
         "Timing: %.1fs wall (sequential: %.1fs) → %.1fx speedup with %d workers",
-        overall_elapsed, sequential_ms / 1000, speedup, args.workers,
+        overall_elapsed,
+        sequential_ms / 1000,
+        speedup,
+        args.workers,
     )
     logger.info("Methods used: %s", methods)
 
@@ -966,8 +978,10 @@ def main():
     for t in per_source_timing[:5]:
         logger.info(
             "  %.1fs %s (%d entries, %s)",
-            t["time_ms"] / 1000, t["url"],
-            t["entries"], "cached" if t["cache_hit"] else t["method"],
+            t["time_ms"] / 1000,
+            t["url"],
+            t["entries"],
+            "cached" if t["cache_hit"] else t["method"],
         )
 
     if errors:

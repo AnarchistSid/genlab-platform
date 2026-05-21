@@ -3,6 +3,7 @@
 Exercises the path from _dispatch_to_dramatiq through process_reply_event
 to platform client posting, with all external calls mocked.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -63,8 +64,13 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_reply_posted_and_marked_idempotent(
-        self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_time, mock_delay, agent_root,
+        self,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_time,
+        mock_delay,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             _has_replied,
@@ -85,8 +91,10 @@ class TestFullReplyPipeline:
         mock_client = MagicMock(spec=Engageable)
         mock_client.post_reply.return_value = True
 
-        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
-             patch.object(_rate_limiter, "acquire", return_value=True):
+        with (
+            patch("genlab_core.platforms.get_client", return_value=mock_client),
+            patch.object(_rate_limiter, "acquire", return_value=True),
+        ):
             event = {
                 "comment_id": "c200",
                 "comment_text": "Love the content",
@@ -99,13 +107,17 @@ class TestFullReplyPipeline:
 
         # Reply posted via unified client
         mock_client.post_reply.assert_called_once_with(
-            parent_id="c200", text="Thanks for watching!", context_id="v1",
+            parent_id="c200",
+            text="Thanks for watching!",
+            context_id="v1",
         )
 
         # Idempotency: second call should be a no-op
         mock_client.post_reply.reset_mock()
-        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
-             patch.object(_rate_limiter, "acquire", return_value=True):
+        with (
+            patch("genlab_core.platforms.get_client", return_value=mock_client),
+            patch.object(_rate_limiter, "acquire", return_value=True),
+        ):
             process_reply_event(event)
         mock_client.post_reply.assert_not_called()
 
@@ -118,8 +130,13 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_x_twitter_reply_uses_correct_client(
-        self, mock_spam, mock_gate_cls, mock_engine_cls,
-        mock_time, mock_delay, agent_root,
+        self,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_time,
+        mock_delay,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import (
             _rate_limiter,
@@ -135,19 +152,25 @@ class TestFullReplyPipeline:
         mock_client = MagicMock(spec=Engageable)
         mock_client.post_reply.return_value = True
 
-        with patch("genlab_core.platforms.get_client", return_value=mock_client), \
-             patch.object(_rate_limiter, "acquire", return_value=True):
-            process_reply_event({
-                "comment_id": "tw123",
-                "comment_text": "Interesting thread",
-                "platform": "x_twitter",
-                "niche_id": "ai_creators",
-                "post_id": "t1",
-                "post_context": "",
-            })
+        with (
+            patch("genlab_core.platforms.get_client", return_value=mock_client),
+            patch.object(_rate_limiter, "acquire", return_value=True),
+        ):
+            process_reply_event(
+                {
+                    "comment_id": "tw123",
+                    "comment_text": "Interesting thread",
+                    "platform": "x_twitter",
+                    "niche_id": "ai_creators",
+                    "post_id": "t1",
+                    "post_context": "",
+                }
+            )
 
         mock_client.post_reply.assert_called_once_with(
-            parent_id="tw123", text="Nice take!", context_id="t1",
+            parent_id="tw123",
+            text="Nice take!",
+            context_id="t1",
         )
 
 
@@ -163,8 +186,10 @@ class TestDispatchToProcessorIntegration:
         mock_high.send.side_effect = lambda ev: captured.append(ev)
         mock_normal = MagicMock()
 
-        with patch("genlab_core.engagement.tasks.reply_to_comment_high", mock_high), \
-             patch("genlab_core.engagement.tasks.reply_to_comment_normal", mock_normal):
+        with (
+            patch("genlab_core.engagement.tasks.reply_to_comment_high", mock_high),
+            patch("genlab_core.engagement.tasks.reply_to_comment_normal", mock_normal),
+        ):
             comments = [_make_comment(text="What settings do you use?")]
             _dispatch_to_dramatiq(comments, "gaming")
 
@@ -184,8 +209,10 @@ class TestDispatchToProcessorIntegration:
         mock_normal = MagicMock()
         mock_normal.send.side_effect = lambda ev: captured.append(ev)
 
-        with patch("genlab_core.engagement.tasks.reply_to_comment_high", mock_high), \
-             patch("genlab_core.engagement.tasks.reply_to_comment_normal", mock_normal):
+        with (
+            patch("genlab_core.engagement.tasks.reply_to_comment_high", mock_high),
+            patch("genlab_core.engagement.tasks.reply_to_comment_normal", mock_normal),
+        ):
             comments = [_make_comment(text="Amazing clip", comment_id="c300")]
             _dispatch_to_dramatiq(comments, "gaming")
 
@@ -202,20 +229,25 @@ class TestPipelineShortCircuits:
     def test_spam_never_reaches_toxicity(self, mock_spam, mock_gate_cls, agent_root):
         from genlab_core.engagement.comment_processor import process_reply_event
 
-        process_reply_event({
-            "comment_id": "spam1",
-            "comment_text": "Free followers at http://scam.xyz",
-            "platform": "youtube",
-            "niche_id": "gaming",
-            "post_id": "v1",
-            "post_context": "",
-        })
+        process_reply_event(
+            {
+                "comment_id": "spam1",
+                "comment_text": "Free followers at http://scam.xyz",
+                "platform": "youtube",
+                "niche_id": "gaming",
+                "post_id": "v1",
+                "post_context": "",
+            }
+        )
         mock_gate_cls.assert_not_called()
 
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_toxic_comment_never_reaches_persona(
-        self, mock_spam, mock_engine_cls, agent_root,
+        self,
+        mock_spam,
+        mock_engine_cls,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import process_reply_event
 
@@ -227,13 +259,15 @@ class TestPipelineShortCircuits:
         mock_gate.return_value.check_inbound.return_value = toxic_result
 
         with patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate):
-            process_reply_event({
-                "comment_id": "toxic1",
-                "comment_text": "some toxic text",
-                "platform": "youtube",
-                "niche_id": "gaming",
-                "post_id": "v1",
-                "post_context": "",
-            })
+            process_reply_event(
+                {
+                    "comment_id": "toxic1",
+                    "comment_text": "some toxic text",
+                    "platform": "youtube",
+                    "niche_id": "gaming",
+                    "post_id": "v1",
+                    "post_context": "",
+                }
+            )
 
         mock_engine_cls.assert_not_called()

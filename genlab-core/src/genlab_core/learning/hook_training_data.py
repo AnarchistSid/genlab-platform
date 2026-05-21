@@ -7,6 +7,7 @@ Blueprints (hook_text) to build labelled training examples.
 The 75th percentile of reward_48h is used as the label threshold:
 examples above it are "high quality" (label=1), below are label=0.
 """
+
 from __future__ import annotations
 
 import logging
@@ -115,8 +116,8 @@ def pull_training_data(
             if task_id:
                 if task_id not in _blueprint_cache:
                     try:
-                        _blueprint_cache[task_id] = (
-                            backlog_client.find_blueprint_by_candidate_id(task_id)
+                        _blueprint_cache[task_id] = backlog_client.find_blueprint_by_candidate_id(
+                            task_id
                         )
                     except Exception:
                         _blueprint_cache[task_id] = None
@@ -135,7 +136,9 @@ def pull_training_data(
         post_id_for_skip = fields.get("post_id") or fields.get("PostID", "")
         if platform == "instagram" and post_id_for_skip:
             skip_rate = _lookup_skip_rate(
-                backlog_client, post_id_for_skip, _analytics_cache,
+                backlog_client,
+                post_id_for_skip,
+                _analytics_cache,
             )
 
         examples.append(
@@ -197,10 +200,7 @@ def compute_engagement_labels(
         if r >= reward_threshold:
             labels.append(1)
         # Secondary signal: low skip rate (strong retention)
-        elif (
-            ex.skip_rate_proxy is not None
-            and ex.skip_rate_proxy < skip_rate_threshold
-        ):
+        elif ex.skip_rate_proxy is not None and ex.skip_rate_proxy < skip_rate_threshold:
             labels.append(1)
         else:
             labels.append(0)
@@ -289,25 +289,27 @@ def _query_completed_feedback(backlog_client: Any) -> list[dict]:
 
     items: list[dict] = []
     for niche_id, post_id, task_id, platform, reward_48h, publish_time, extra in rows:
-        items.append({
-            "fields": {
-                "niche_id": niche_id,
-                "PostID": post_id,
-                "post_id": post_id,
-                # task_id is the candidate_id used by blueprints; keep it
-                # distinct from post_id so the hook_text fallback can
-                # bridge PF -> Blueprint correctly for legacy rows.
-                "task_id": task_id,
-                "content_id": task_id or post_id,
-                "Platform": platform,
-                "platform": platform,
-                "Reward48h": reward_48h,
-                "reward_48h": reward_48h,
-                "PublishedAt": publish_time.isoformat() if publish_time else "",
-                "published_at": publish_time.isoformat() if publish_time else "",
-                **(extra or {}),
+        items.append(
+            {
+                "fields": {
+                    "niche_id": niche_id,
+                    "PostID": post_id,
+                    "post_id": post_id,
+                    # task_id is the candidate_id used by blueprints; keep it
+                    # distinct from post_id so the hook_text fallback can
+                    # bridge PF -> Blueprint correctly for legacy rows.
+                    "task_id": task_id,
+                    "content_id": task_id or post_id,
+                    "Platform": platform,
+                    "platform": platform,
+                    "Reward48h": reward_48h,
+                    "reward_48h": reward_48h,
+                    "PublishedAt": publish_time.isoformat() if publish_time else "",
+                    "published_at": publish_time.isoformat() if publish_time else "",
+                    **(extra or {}),
+                }
             }
-        })
+        )
     return items
 
 

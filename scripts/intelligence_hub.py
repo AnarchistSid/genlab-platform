@@ -16,6 +16,7 @@ Usage (CLI — quick intelligence snapshot):
     python3 scripts/intelligence_hub.py
     python3 scripts/intelligence_hub.py --niche gaming --json
 """
+
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -32,15 +33,20 @@ logger = logging.getLogger("intelligence_hub")
 # ── Registry ────────────────────────────────────────────────────────
 
 KNOWN_NICHES = {
-    "ai_creators":  {"brand": "Blackbox Brief",  "folder": "BlackboxBrief"},
-    "gaming":   {"brand": "CriticalRush",     "folder": "CriticalRush"},
-    "sports":   {"brand": "ClutchWire",       "folder": "ClutchWire"},
-    "movies":   {"brand": "SpliceReel",       "folder": "SpliceReel"},
-    "anime":    {"brand": "FrameDrift",        "folder": "FrameDrift"},
+    "ai_creators": {"brand": "Blackbox Brief", "folder": "BlackboxBrief"},
+    "gaming": {"brand": "CriticalRush", "folder": "CriticalRush"},
+    "sports": {"brand": "ClutchWire", "folder": "ClutchWire"},
+    "movies": {"brand": "SpliceReel", "folder": "SpliceReel"},
+    "anime": {"brand": "FrameDrift", "folder": "FrameDrift"},
 }
 
 KNOWN_PLATFORMS = [
-    "youtube", "instagram", "facebook", "x_twitter", "threads", "tiktok",
+    "youtube",
+    "instagram",
+    "facebook",
+    "x_twitter",
+    "threads",
+    "tiktok",
 ]
 
 # ── File locations (each system writes here) ────────────────────────
@@ -64,6 +70,7 @@ def _read_json(path: Path) -> Any:
 
 
 # ── Trend Signals ───────────────────────────────────────────────────
+
 
 def get_cached_trends(niche_id: str | None = None) -> dict[str, Any]:
     """Read cached Google Trends data. Returns {} if no cache."""
@@ -112,6 +119,7 @@ def get_trend_boost(topic: str, niche_id: str | None = None) -> float:
 
 # ── Posting Schedule ────────────────────────────────────────────────
 
+
 def get_cached_schedule(niche_id: str | None = None) -> dict[str, Any]:
     """Read cached posting optimizer output, optionally niche-scoped."""
     data = _read_json(SCHEDULE_FILE) or {}
@@ -154,6 +162,7 @@ def get_all_optimal_times(niche_id: str | None = None) -> dict[str, str | None]:
 
 # ── Viral Alerts ────────────────────────────────────────────────────
 
+
 def get_recent_viral_alerts(hours: int = 48) -> list[dict]:
     """Get viral/trending alerts from the last N hours."""
     alerts = _read_json(VIRAL_FILE) or []
@@ -183,10 +192,12 @@ def get_baselines(niche_id: str | None = None) -> dict[str, float]:
 
 # ── Content Memory ──────────────────────────────────────────────────
 
+
 def get_memory_stats(niche_id: str | None = None) -> dict[str, Any]:
     """Content memory summary stats."""
     try:
         from content_memory import _load_posts
+
         posts = _load_posts()
     except Exception:
         posts = _read_json(MEMORY_CACHE) or []
@@ -214,7 +225,9 @@ def get_memory_stats(niche_id: str | None = None) -> dict[str, Any]:
     }
 
 
-def check_content_overlap(text: str, niche_id: str | None = None, threshold: float = 0.4) -> dict[str, Any]:
+def check_content_overlap(
+    text: str, niche_id: str | None = None, threshold: float = 0.4
+) -> dict[str, Any]:
     """Check if similar content exists in memory.
 
     Used by blueprint composition to prevent duplicate posts.
@@ -222,6 +235,7 @@ def check_content_overlap(text: str, niche_id: str | None = None, threshold: flo
     """
     try:
         from content_memory import check_duplicate
+
         matches = check_duplicate(text, threshold=threshold)
         if niche_id:
             matches = [m for m in matches if m.get("niche_id") == niche_id]
@@ -283,6 +297,7 @@ def get_winning_patterns(niche_id: str | None = None, top_n: int = 5) -> dict[st
 
 # ── Full State (Morning Briefing) ──────────────────────────────────
 
+
 def get_full_state(niche_id: str | None = None) -> dict[str, Any]:
     """Complete intelligence snapshot. Used by morning briefing."""
     return {
@@ -298,6 +313,7 @@ def get_full_state(niche_id: str | None = None) -> dict[str, Any]:
 
 
 # ── CLI ─────────────────────────────────────────────────────────────
+
 
 def print_state(state: dict[str, Any]) -> None:
     print(f"\n{'=' * 60}")
@@ -324,8 +340,10 @@ def print_state(state: dict[str, Any]) -> None:
     if alerts:
         print(f"\n  VIRAL ALERTS ({len(alerts)} recent)")
         for a in alerts[-3:]:
-            print(f"    {a.get('level', '?')} [{a.get('platform', '?').upper()}] "
-                  f"{a.get('multiplier', 0)}x — {a.get('text', '')[:50]}")
+            print(
+                f"    {a.get('level', '?')} [{a.get('platform', '?').upper()}] "
+                f"{a.get('multiplier', 0)}x — {a.get('text', '')[:50]}"
+            )
     else:
         print("\n  VIRAL ALERTS: none")
 
@@ -343,7 +361,9 @@ def print_state(state: dict[str, Any]) -> None:
         if hot:
             print("\n  NICHE HOT TOPICS")
             for t in hot[:3]:
-                arrow = {"rising": "^", "falling": "v", "stable": "="}.get(t.get("direction", ""), "?")
+                arrow = {"rising": "^", "falling": "v", "stable": "="}.get(
+                    t.get("direction", ""), "?"
+                )
                 print(f"    {arrow} {t.get('keyword', '?'):20s} score: {t.get('score', 0):.0f}")
     else:
         print("\n  TRENDS: no cached data (run trend_signals.py --full)")
@@ -370,6 +390,7 @@ def print_state(state: dict[str, Any]) -> None:
 
 if __name__ == "__main__":
     import argparse
+
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="Intelligence Hub")
@@ -382,18 +403,27 @@ if __name__ == "__main__":
 
     if args.trend_boost:
         score = get_trend_boost(args.trend_boost, args.niche)
-        print(json.dumps({"topic": args.trend_boost, "boost": score}) if args.json
-              else f"Trend boost for '{args.trend_boost}': {score:.0f}/100")
+        print(
+            json.dumps({"topic": args.trend_boost, "boost": score})
+            if args.json
+            else f"Trend boost for '{args.trend_boost}': {score:.0f}/100"
+        )
 
     elif args.overlap:
         result = check_content_overlap(args.overlap, args.niche)
-        print(json.dumps(result, indent=2) if args.json
-              else f"Duplicate: {result['is_duplicate']} (max similarity: {result['max_similarity']:.0%})")
+        print(
+            json.dumps(result, indent=2)
+            if args.json
+            else f"Duplicate: {result['is_duplicate']} (max similarity: {result['max_similarity']:.0%})"
+        )
 
     elif args.optimal_time:
         t = get_optimal_time(args.optimal_time, args.niche)
-        print(json.dumps({"platform": args.optimal_time, "time_ist": t}) if args.json
-              else f"Optimal time for {args.optimal_time}: {t or 'no data'} IST")
+        print(
+            json.dumps({"platform": args.optimal_time, "time_ist": t})
+            if args.json
+            else f"Optimal time for {args.optimal_time}: {t or 'no data'} IST"
+        )
 
     else:
         state = get_full_state(args.niche)

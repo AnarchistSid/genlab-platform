@@ -10,27 +10,36 @@ from sr_strategies.visual_render import MovieVisualRenderStrategy
 def strategy(tmp_path):
     """Create strategy with test sources config."""
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "sources.yaml").write_text(yaml.dump({
-        "media": {
-            "pexels": {
-                "cinematic_queries": [
-                    "cinema movie theater dark",
-                    "film clapper board production",
-                    "popcorn movie night dark",
-                ],
+    (config_dir / "sources.yaml").write_text(
+        yaml.dump(
+            {
+                "media": {
+                    "pexels": {
+                        "cinematic_queries": [
+                            "cinema movie theater dark",
+                            "film clapper board production",
+                            "popcorn movie night dark",
+                        ],
+                    }
+                }
             }
-        }
-    }))
-    (config_dir / "visuals.yaml").write_text(yaml.dump({
-        "niche_id": "movies",
-        "animation": {
-            "word_by_word": {
-                "whisper_sync": {"enabled": False},
+        )
+    )
+    (config_dir / "visuals.yaml").write_text(
+        yaml.dump(
+            {
+                "niche_id": "movies",
+                "animation": {
+                    "word_by_word": {
+                        "whisper_sync": {"enabled": False},
+                    }
+                },
             }
-        }
-    }))
+        )
+    )
     with patch("sr_strategies.visual_render.NICHE_ROOT", tmp_path):
         s = MovieVisualRenderStrategy()
         s._ensure_config()
@@ -70,9 +79,7 @@ class TestVisualRenderExecute:
         assert stats["overlay_enabled"] is True
 
     def test_execute_sets_media_metadata(self, strategy):
-        context = {
-            "stories": [{"title": "Film A", "film_title": "Film A"}]
-        }
+        context = {"stories": [{"title": "Film A", "film_title": "Film A"}]}
         result = strategy.execute(context)
         media = result["stories"][0]["media"]
         assert "pexels_queries" in media
@@ -143,8 +150,14 @@ class TestFrameCompositorWiring:
         mock_compositor.compose.return_value = str(tmp_path / "composed.mp4")
 
         context = {
-            "stories": [{"story_id": "s1", "title": "Film A", "film_title": "Film A",
-                          "content": {"hook": "This changes cinema forever"}}],
+            "stories": [
+                {
+                    "story_id": "s1",
+                    "title": "Film A",
+                    "film_title": "Film A",
+                    "content": {"hook": "This changes cinema forever"},
+                }
+            ],
             "clip_index": {"clips": {"s1": {"success": True, "clip_path": str(clip_file)}}},
             "run_dir": str(run_dir),
         }
@@ -155,7 +168,9 @@ class TestFrameCompositorWiring:
 
         MockFC.from_visuals_yaml.assert_called_once()
         mock_compositor.compose.assert_called_once()
-        assert mock_compositor.compose.call_args.kwargs["hook_text"] == "This changes cinema forever"
+        assert (
+            mock_compositor.compose.call_args.kwargs["hook_text"] == "This changes cinema forever"
+        )
         assert mock_compositor.compose.call_args.kwargs["duration_seconds"] == 55
         assert result["stories"][0]["media"]["rendered_path"] == str(tmp_path / "composed.mp4")
 
@@ -172,7 +187,9 @@ class TestFrameCompositorWiring:
         }
 
         with patch("sr_strategies.visual_render.FrameCompositor") as MockFC:
-            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError("ffmpeg crashed")
+            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError(
+                "ffmpeg crashed"
+            )
             result = strategy.execute(context)
 
         media = result["stories"][0]["media"]
@@ -189,7 +206,9 @@ class TestFrameCompositorWiring:
         mock_compositor.compose.return_value = "/composed.mp4"
 
         context = {
-            "stories": [{"story_id": "s1", "title": "Top Gun 3 trailer drops", "film_title": "Top Gun 3"}],
+            "stories": [
+                {"story_id": "s1", "title": "Top Gun 3 trailer drops", "film_title": "Top Gun 3"}
+            ],
             "clip_index": {"clips": {"s1": {"success": True, "clip_path": str(clip_file)}}},
             "run_dir": str(run_dir),
         }

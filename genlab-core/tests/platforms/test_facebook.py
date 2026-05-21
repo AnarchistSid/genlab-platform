@@ -1,4 +1,5 @@
 """Tests for FacebookClient — mocks all HTTP."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -86,6 +87,7 @@ class TestPublish:
         captured_urls = []
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
                 return MagicMock(
@@ -144,6 +146,7 @@ class TestPublish:
         captured_urls = []
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
                 return MagicMock(
@@ -196,6 +199,7 @@ class TestEngagement:
         captured_urls = []
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def capture_post(url, *args, **kwargs):
                 captured_urls.append(url)
                 return MagicMock(
@@ -235,6 +239,7 @@ class TestEngagement:
         captured = []
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def cap(url, *a, **kw):
                 captured.append(url)
                 return MagicMock(status_code=200, json=lambda: {"id": "r1"})
@@ -292,6 +297,7 @@ class TestMetrics:
         published_at = self._old_published_at()
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def capture_get(url, *args, **kwargs):
                 captured_urls.append(url)
                 return MagicMock(
@@ -396,6 +402,7 @@ class TestHealthCheck:
         captured = []
 
         with patch("genlab_core.platforms.facebook.requests") as mock_req:
+
             def cap(url, *args, **kwargs):
                 captured.append(url)
                 return MagicMock(

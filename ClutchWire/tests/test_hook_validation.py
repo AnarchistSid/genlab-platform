@@ -1,6 +1,5 @@
 """Tests for HookValidator wiring in ClutchWire hook strategy."""
 
-
 from cw_strategies.hooks import SportHookStrategy
 
 
@@ -47,8 +46,7 @@ class TestHookValidatorWiring:
             if hook:
                 vr = validator.validate(hook, platform="instagram")
                 assert vr.passed, (
-                    f"Hook '{hook}' failed validation: "
-                    f"{[f.value for f in vr.failures]}"
+                    f"Hook '{hook}' failed validation: {[f.value for f in vr.failures]}"
                 )
 
     def test_markdown_hook_gets_replaced(self):

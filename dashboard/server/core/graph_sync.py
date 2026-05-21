@@ -76,6 +76,7 @@ def _load_config() -> dict:
 
 def _get_site_id() -> str:
     from genlab_core.settings import settings
+
     site_id = (settings.sharepoint_site_id or "").strip()
     if not site_id:
         raise RuntimeError("SHAREPOINT_SITE_ID not configured")
@@ -84,22 +85,42 @@ def _get_site_id() -> str:
 
 # ── Metadata stripping (mirrors publishing_queue._clean_fields) ──────
 
-_METADATA_KEYS = frozenset({
-    "@odata.etag", "_UIVersionString", "Attachments",
-    "AppAuthorLookupId", "AppEditorLookupId",
-    "AuthorLookupId", "EditorLookupId",
-    "Content Type", "ContentType", "ContentTypeId",
-    "ComplianceAssetId", "GUID", "OData__ColorTag",
-    "OData__UIVersionString", "Edit",
-    "_ComplianceFlags", "_ComplianceTag",
-    "_ComplianceTagWrittenTime", "_ComplianceTagUserId",
-    "_IsRecord",
-    "Created", "Modified", "Version",
-    "Folder Child Count", "Item Child Count", "FolderChildCount", "ItemChildCount",
-    "Label applied by", "Label setting",
-    "Retention label", "Retention label Applied",
-    "id",
-})
+_METADATA_KEYS = frozenset(
+    {
+        "@odata.etag",
+        "_UIVersionString",
+        "Attachments",
+        "AppAuthorLookupId",
+        "AppEditorLookupId",
+        "AuthorLookupId",
+        "EditorLookupId",
+        "Content Type",
+        "ContentType",
+        "ContentTypeId",
+        "ComplianceAssetId",
+        "GUID",
+        "OData__ColorTag",
+        "OData__UIVersionString",
+        "Edit",
+        "_ComplianceFlags",
+        "_ComplianceTag",
+        "_ComplianceTagWrittenTime",
+        "_ComplianceTagUserId",
+        "_IsRecord",
+        "Created",
+        "Modified",
+        "Version",
+        "Folder Child Count",
+        "Item Child Count",
+        "FolderChildCount",
+        "ItemChildCount",
+        "Label applied by",
+        "Label setting",
+        "Retention label",
+        "Retention label Applied",
+        "id",
+    }
+)
 
 
 _FIELD_ALIASES = {
@@ -111,7 +132,8 @@ _FIELD_ALIASES = {
 
 def _clean_fields(raw_fields: dict[str, Any]) -> dict[str, Any]:
     fields = {
-        k: v for k, v in raw_fields.items()
+        k: v
+        for k, v in raw_fields.items()
         if k not in _METADATA_KEYS and not k.startswith("@odata.")
     }
     for old_name, new_name in _FIELD_ALIASES.items():
@@ -121,6 +143,7 @@ def _clean_fields(raw_fields: dict[str, Any]) -> dict[str, Any]:
 
 
 # ── Formula → OData translation (minimal, dashboard-only patterns) ───
+
 
 def _formula_to_odata(formula: str | None) -> str | None:
     """Translate formula syntax to OData $filter.
@@ -201,6 +224,7 @@ def _split_top_level(s: str) -> list[str]:
 
 # ── SyncListProxy — drop-in for GraphTableProxy ─────────────────────
 
+
 class SyncListProxy:
     """Synchronous SharePoint List accessor using Graph REST API + requests."""
 
@@ -216,10 +240,7 @@ class SyncListProxy:
         }
 
     def _base_url(self) -> str:
-        return (
-            f"https://graph.microsoft.com/v1.0/sites/{self._site_id}"
-            f"/lists/{self._list_id}/items"
-        )
+        return f"https://graph.microsoft.com/v1.0/sites/{self._site_id}/lists/{self._list_id}/items"
 
     def all(
         self,
@@ -256,7 +277,10 @@ class SyncListProxy:
                                 pass
                     logger.warning(
                         "[%s] Transient %d on attempt %d, retrying in %.1fs",
-                        self._list_name, resp.status_code, _attempt + 1, wait,
+                        self._list_name,
+                        resp.status_code,
+                        _attempt + 1,
+                        wait,
                     )
                     time.sleep(wait)
                     continue
@@ -266,7 +290,9 @@ class SyncListProxy:
                 if resp is not None and "$filter" in params:
                     logger.warning(
                         "[%s] OData filter failed (%d), falling back to unfiltered: %s",
-                        self._list_name, resp.status_code, resp.text[:200],
+                        self._list_name,
+                        resp.status_code,
+                        resp.text[:200],
                     )
                     params.pop("$filter")
                     used_filter = False
@@ -283,10 +309,12 @@ class SyncListProxy:
             for item in data.get("value", []):
                 raw_fields = item.get("fields", {})
                 fields = _clean_fields(raw_fields)
-                all_records.append({
-                    "id": str(item.get("id", "")),
-                    "fields": fields,
-                })
+                all_records.append(
+                    {
+                        "id": str(item.get("id", "")),
+                        "fields": fields,
+                    }
+                )
 
             next_link = data.get("@odata.nextLink")
             if next_link:
@@ -312,9 +340,7 @@ class SyncListProxy:
         params = {"$expand": "fields"}
         resp = _requests.get(url, headers=headers, params=params, timeout=15)
         if resp.status_code != 200:
-            raise RuntimeError(
-                f"Graph GET failed ({resp.status_code}): {resp.text[:200]}"
-            )
+            raise RuntimeError(f"Graph GET failed ({resp.status_code}): {resp.text[:200]}")
         item = resp.json()
         return {
             "id": str(item.get("id", "")),
@@ -335,9 +361,7 @@ class SyncListProxy:
         }
         resp = _requests.patch(url, headers=headers, json=fields, timeout=30)
         if resp.status_code not in (200, 204):
-            raise RuntimeError(
-                f"Graph PATCH failed ({resp.status_code}): {resp.text[:200]}"
-            )
+            raise RuntimeError(f"Graph PATCH failed ({resp.status_code}): {resp.text[:200]}")
         return self.get(record_id)
 
     def create(self, fields: dict[str, Any], typecast: bool = False) -> dict[str, Any]:
@@ -350,9 +374,7 @@ class SyncListProxy:
         body = {"fields": fields}
         resp = _requests.post(url, headers=headers, json=body, timeout=30)
         if resp.status_code not in (200, 201):
-            raise RuntimeError(
-                f"Graph POST failed ({resp.status_code}): {resp.text[:200]}"
-            )
+            raise RuntimeError(f"Graph POST failed ({resp.status_code}): {resp.text[:200]}")
         item = resp.json()
         return {
             "id": str(item.get("id", "")),
@@ -360,9 +382,7 @@ class SyncListProxy:
         }
 
 
-def _match_conditions(
-    fields: dict[str, Any], conditions: list[tuple]
-) -> bool:
+def _match_conditions(fields: dict[str, Any], conditions: list[tuple]) -> bool:
     """Return True if fields satisfy ALL conditions (AND semantics)."""
     for field_name, expected_value in conditions:
         actual = fields.get(field_name)
@@ -384,9 +404,7 @@ def _parse_conditions(text: str) -> list[tuple]:
     return conditions
 
 
-def _client_side_filter(
-    records: list[dict[str, Any]], formula: str
-) -> list[dict[str, Any]]:
+def _client_side_filter(records: list[dict[str, Any]], formula: str) -> list[dict[str, Any]]:
     """Apply formula filter client-side when OData fails.
 
     Supports AND (default) and OR(...) wrapper semantics.
@@ -451,6 +469,7 @@ def _client_side_filter(
 
 # ── SyncBacklogClient — drop-in for BacklogClient ───────────────────
 
+
 class SyncBacklogClient:
     """Thin wrapper around genlab-core BacklogClient.
 
@@ -464,13 +483,23 @@ class SyncBacklogClient:
 
         if use_postgres:
             from genlab_core.http.backlog_client import BacklogClient
+
             self._delegate = BacklogClient()
             # Mirror all table proxy attributes from the canonical client
             for attr in [
-                "stories", "blueprints", "analytics", "publishing_analytics",
-                "templates", "sources", "assets", "pending_engagement",
-                "pending_feedback", "bandit_arms", "content_memory",
-                "monetisation_progress", "ab_tests",
+                "stories",
+                "blueprints",
+                "analytics",
+                "publishing_analytics",
+                "templates",
+                "sources",
+                "assets",
+                "pending_engagement",
+                "pending_feedback",
+                "bandit_arms",
+                "content_memory",
+                "monetisation_progress",
+                "ab_tests",
             ]:
                 proxy = getattr(self._delegate, attr, None)
                 if proxy is not None:
@@ -536,9 +565,7 @@ class SyncBacklogClient:
             )
             logger.info("[SyncBacklogClient] Using SharePoint backend")
 
-    def get_blueprints_by_status(
-        self, status: str, *, niche_id: str | None = None
-    ) -> list[dict]:
+    def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> list[dict]:
         formula = f"{{status}}='{status}'"
         if niche_id:
             formula = f"AND({{status}}='{status}',{{niche_id}}='{niche_id}')"

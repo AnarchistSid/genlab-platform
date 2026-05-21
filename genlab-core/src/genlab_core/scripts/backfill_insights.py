@@ -11,6 +11,7 @@ Usage:
     uv run python -m genlab_core.scripts.backfill_insights --dry-run
     uv run python -m genlab_core.scripts.backfill_insights --niche-id gaming
 """
+
 from __future__ import annotations
 
 import argparse
@@ -37,6 +38,7 @@ GENLAB_ROOT = Path(__file__).resolve().parents[4]
 def _load_env(niche_id: str) -> None:
     try:
         from dotenv import load_dotenv
+
         load_dotenv(GENLAB_ROOT / ".env", override=False)
         dir_name = NICHE_ENVS.get(niche_id, "")
         if dir_name:
@@ -55,6 +57,7 @@ def _resolve_ig_media_id(shortcode: str, token: str, ig_user_id: str) -> str | N
     if not ig_user_id:
         return None
     import requests
+
     resp = requests.get(
         f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
         params={"fields": "id,shortcode", "limit": 100, "access_token": token},
@@ -70,6 +73,7 @@ def _resolve_ig_media_id(shortcode: str, token: str, ig_user_id: str) -> str | N
 
 def fetch_instagram(post_id: str, niche_id: str) -> dict[str, Any] | None:
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
     creds = resolve_meta_credentials(niche_id)
     token = creds.get("ig_access_token", "")
     ig_user_id = creds.get("ig_user_id", "")
@@ -83,14 +87,25 @@ def fetch_instagram(post_id: str, niche_id: str) -> dict[str, Any] | None:
         return None
 
     import requests
+
     base = "https://graph.facebook.com/v21.0"
-    r = requests.get(f"{base}/{media_id}", params={"fields": "like_count,comments_count", "access_token": token}, timeout=15)
+    r = requests.get(
+        f"{base}/{media_id}",
+        params={"fields": "like_count,comments_count", "access_token": token},
+        timeout=15,
+    )
     if r.status_code != 200:
         return None
     data = r.json()
 
-    ins = requests.get(f"{base}/{media_id}/insights",
-                       params={"metric": "reach,saved,shares,likes,comments,total_interactions", "access_token": token}, timeout=15)
+    ins = requests.get(
+        f"{base}/{media_id}/insights",
+        params={
+            "metric": "reach,saved,shares,likes,comments,total_interactions",
+            "access_token": token,
+        },
+        timeout=15,
+    )
     insights = {}
     if ins.status_code == 200:
         for item in ins.json().get("data", []):
@@ -113,36 +128,62 @@ def fetch_youtube(post_id: str) -> dict[str, Any] | None:
         return None
     raw_id = _strip_prefix(post_id)
     import requests
-    resp = requests.get("https://www.googleapis.com/youtube/v3/videos",
-                        params={"part": "statistics", "id": raw_id, "key": api_key}, timeout=15)
+
+    resp = requests.get(
+        "https://www.googleapis.com/youtube/v3/videos",
+        params={"part": "statistics", "id": raw_id, "key": api_key},
+        timeout=15,
+    )
     if resp.status_code != 200 or not resp.json().get("items"):
         return None
     stats = resp.json()["items"][0]["statistics"]
     views = int(stats.get("viewCount", 0))
     likes = int(stats.get("likeCount", 0))
     comments = int(stats.get("commentCount", 0))
-    return {"views": views, "likes": likes, "comments": comments, "reach": views, "engagement": likes + comments}
+    return {
+        "views": views,
+        "likes": likes,
+        "comments": comments,
+        "reach": views,
+        "engagement": likes + comments,
+    }
 
 
 def fetch_facebook(post_id: str, niche_id: str) -> dict[str, Any] | None:
     from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
     token, _ = resolve_fb_credentials(niche_id)
     if not token:
         return None
     raw_id = _strip_prefix(post_id)
     import requests
-    resp = requests.get(f"https://graph.facebook.com/v21.0/{raw_id}/video_insights",
-                        params={"access_token": token}, timeout=15)
+
+    resp = requests.get(
+        f"https://graph.facebook.com/v21.0/{raw_id}/video_insights",
+        params={"access_token": token},
+        timeout=15,
+    )
     if resp.status_code != 200:
         # Try basic metrics
-        resp2 = requests.get(f"https://graph.facebook.com/v21.0/{raw_id}",
-                             params={"fields": "shares,reactions.summary(true),comments.summary(true)", "access_token": token}, timeout=15)
+        resp2 = requests.get(
+            f"https://graph.facebook.com/v21.0/{raw_id}",
+            params={
+                "fields": "shares,reactions.summary(true),comments.summary(true)",
+                "access_token": token,
+            },
+            timeout=15,
+        )
         if resp2.status_code != 200:
             return None
         d = resp2.json()
         reactions = d.get("reactions", {}).get("summary", {}).get("total_count", 0)
         comments = d.get("comments", {}).get("summary", {}).get("total_count", 0)
-        return {"likes": reactions, "comments": comments, "engagement": reactions + comments, "reach": 0}
+        return {
+            "likes": reactions,
+            "comments": comments,
+            "engagement": reactions + comments,
+            "reach": 0,
+        }
 
     metrics = {}
     likes = 0
@@ -153,7 +194,12 @@ def fetch_facebook(post_id: str, niche_id: str) -> dict[str, Any] | None:
             likes = sum(val.values())
         elif name == "post_video_views":
             metrics["views"] = val
-    return {"likes": likes, "views": metrics.get("views", 0), "engagement": likes + metrics.get("views", 0), "reach": metrics.get("views", 0)}
+    return {
+        "likes": likes,
+        "views": metrics.get("views", 0),
+        "engagement": likes + metrics.get("views", 0),
+        "reach": metrics.get("views", 0),
+    }
 
 
 def fetch_twitter(post_id: str) -> dict[str, Any] | None:
@@ -162,21 +208,31 @@ def fetch_twitter(post_id: str) -> dict[str, Any] | None:
         return None
     raw_id = _strip_prefix(post_id)
     import requests
-    resp = requests.get(f"https://api.twitter.com/2/tweets/{raw_id}",
-                        params={"tweet.fields": "public_metrics"}, headers={"Authorization": f"Bearer {bearer}"}, timeout=15)
+
+    resp = requests.get(
+        f"https://api.twitter.com/2/tweets/{raw_id}",
+        params={"tweet.fields": "public_metrics"},
+        headers={"Authorization": f"Bearer {bearer}"},
+        timeout=15,
+    )
     if resp.status_code != 200:
         return None
     m = resp.json().get("data", {}).get("public_metrics", {})
     return {
-        "likes": m.get("like_count", 0), "retweets": m.get("retweet_count", 0),
-        "replies": m.get("reply_count", 0), "shares": m.get("retweet_count", 0),
-        "impressions": m.get("impression_count", 0), "engagement": m.get("like_count", 0) + m.get("retweet_count", 0),
+        "likes": m.get("like_count", 0),
+        "retweets": m.get("retweet_count", 0),
+        "replies": m.get("reply_count", 0),
+        "shares": m.get("retweet_count", 0),
+        "impressions": m.get("impression_count", 0),
+        "engagement": m.get("like_count", 0) + m.get("retweet_count", 0),
         "reach": m.get("impression_count", 0),
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Backfill engagement metrics for all published posts")
+    parser = argparse.ArgumentParser(
+        description="Backfill engagement metrics for all published posts"
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--niche-id", default="all", choices=list(NICHE_ENVS.keys()) + ["all"])
     args = parser.parse_args()
@@ -198,12 +254,15 @@ def main():
             ORDER BY created_at
         """).fetchall()
     else:
-        posts = conn.execute("""
+        posts = conn.execute(
+            """
             SELECT DISTINCT post_id, platform, niche_id, created_at
             FROM publishing_analytics
             WHERE status = 'SUCCESS' AND niche_id = %s AND post_id IS NOT NULL AND LENGTH(post_id) > 5
             ORDER BY created_at
-        """, (args.niche_id,)).fetchall()
+        """,
+            (args.niche_id,),
+        ).fetchall()
 
     # Filter out posts that already have analytics
     existing = set()
@@ -211,15 +270,22 @@ def main():
         existing.add(r["post_id"])
 
     to_backfill = [p for p in posts if p["post_id"] not in existing]
-    logger.info("Total published: %d  Already have insights: %d  To backfill: %d",
-                len(posts), len(posts) - len(to_backfill), len(to_backfill))
+    logger.info(
+        "Total published: %d  Already have insights: %d  To backfill: %d",
+        len(posts),
+        len(posts) - len(to_backfill),
+        len(to_backfill),
+    )
 
     if args.dry_run:
         for p in to_backfill:
-            logger.info("[DRY RUN] Would fetch: %s/%s (%s)", p["platform"], p["post_id"][:30], p["niche_id"])
+            logger.info(
+                "[DRY RUN] Would fetch: %s/%s (%s)", p["platform"], p["post_id"][:30], p["niche_id"]
+            )
         return
 
     from genlab_core.http.backlog_client import BacklogClient
+
     client = BacklogClient()
 
     fetched = 0
@@ -264,7 +330,12 @@ def main():
                 published_at=str(p["created_at"]) if p["created_at"] else "",
             )
             fetched += 1
-            logger.info("Backfilled %s/%s: engagement=%s", platform, post_id[:20], insights.get("engagement", "?"))
+            logger.info(
+                "Backfilled %s/%s: engagement=%s",
+                platform,
+                post_id[:20],
+                insights.get("engagement", "?"),
+            )
         except Exception as e:
             logger.warning("Write failed for %s/%s: %s", platform, post_id[:20], e)
             errors += 1

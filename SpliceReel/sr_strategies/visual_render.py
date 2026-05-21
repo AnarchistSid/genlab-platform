@@ -109,6 +109,7 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
 
         try:
             from genlab_core.media.frame_compositor import probe_video
+
             visuals_yaml = str(NICHE_ROOT / "config" / "visuals.yaml")
             compositor = FrameCompositor.from_visuals_yaml(visuals_yaml)
             try:
@@ -131,8 +132,7 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
         self._ensure_config()
 
         configured = (
-            self._sources_config
-            .get("media", {})
+            self._sources_config.get("media", {})
             .get("pexels", {})
             .get("cinematic_queries", _CINEMATIC_QUERIES)
         )
@@ -185,7 +185,9 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
         if film_title:
             logger.info(
                 "[visual] film_rating overlay spec: title=%s, rt_score=%s, imdb=%s",
-                film_title, rt_score, imdb_score,
+                film_title,
+                rt_score,
+                imdb_score,
             )
 
         return story
@@ -226,7 +228,10 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
                             rendered += 1
                         else:
                             story.setdefault("media", {})["render_status"] = "render_failed"
-                            logger.warning("[movies] Render failed for '%s' — staying DRAFTED", story.get("title", "")[:50])
+                            logger.warning(
+                                "[movies] Render failed for '%s' — staying DRAFTED",
+                                story.get("title", "")[:50],
+                            )
                         continue
 
                 # No downloaded video — fall back to Pexels query generation
@@ -246,6 +251,8 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
 
         logger.info(
             "[movies] VisualRender: %d/%d stories have video, %d rendered total",
-            videos_found, len(stories), rendered,
+            videos_found,
+            len(stories),
+            rendered,
         )
         return context

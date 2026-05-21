@@ -2,6 +2,7 @@
 
 ai_creators is the only canonical key. ai_news must NOT appear in any lookup dict.
 """
+
 from genlab_core.intel.google_trends import NICHE_SEED_KEYWORDS, TRENDS_CATEGORIES
 from genlab_core.media.download_top_videos import _NICHE_KEYWORDS
 from genlab_core.media.trending_video_fetcher import (

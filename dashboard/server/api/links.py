@@ -12,6 +12,7 @@ Features:
     - QR code ref tracking via ?ref=qr parameter
     - ?product=slug parameter for deep-linking to a specific product card
 """
+
 import html
 import logging
 import os
@@ -48,14 +49,12 @@ def _is_rate_limited(ip: str, limit: int) -> bool:
 
     # LRU-style eviction: prune stale IPs when bucket count exceeds threshold
     if len(_rate_buckets) > _RATE_BUCKET_MAX:
-        stale_ips = [
-            k for k, v in _rate_buckets.items()
-            if not v or (now - max(v)) >= _RATE_WINDOW
-        ]
+        stale_ips = [k for k, v in _rate_buckets.items() if not v or (now - max(v)) >= _RATE_WINDOW]
         for k in stale_ips:
             del _rate_buckets[k]
 
     return False
+
 
 # ── Click count cache for smart sorting + social proof ────────────────────────
 
@@ -168,7 +167,9 @@ _CHANNEL_META: dict[str, dict] = {
 # ── Catalog path ──────────────────────────────────────────────────────────────
 _CATALOG_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent
-    / "genlab-core" / "config" / "affiliate_catalog.yaml"
+    / "genlab-core"
+    / "config"
+    / "affiliate_catalog.yaml"
 )
 
 
@@ -232,11 +233,14 @@ def _best_network(networks: dict, country: str = "") -> tuple[str, dict]:
 def _product_slug(name: str) -> str:
     """Slugify a product name: lowercase, spaces → hyphens, strip non-alphanum."""
     import re as _re
+
     slug = name.lower().replace(" ", "-")
     return _re.sub(r"[^a-z0-9-]", "", slug)
 
 
-def _find_product_globally(catalog: dict, slug: str, country: str = "") -> tuple[str, str, dict] | None:
+def _find_product_globally(
+    catalog: dict, slug: str, country: str = ""
+) -> tuple[str, str, dict] | None:
     """Search all niches for a product matching the slug.
 
     Returns (niche_id, network_name, product_dict) or None.
@@ -248,13 +252,16 @@ def _find_product_globally(catalog: dict, slug: str, country: str = "") -> tuple
             if not product.get("enabled", True):
                 continue
             if _product_slug(product["name"]) == slug:
-                network_name, network_data = _best_network(product.get("networks", {}), country=country)
+                network_name, network_data = _best_network(
+                    product.get("networks", {}), country=country
+                )
                 if network_name:
                     return niche_id, network_name, {**product, "_best_network": network_data}
     return None
 
 
 # ── HTML page renderer ────────────────────────────────────────────────────────
+
 
 def _render_link_page(
     channel_slug: str,
@@ -301,7 +308,7 @@ def _render_link_page(
 
     tracking_head = ""
     if ga4_id:
-        tracking_head += f'''
+        tracking_head += f"""
   <script async src="https://www.googletagmanager.com/gtag/js?id={ga4_id}"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -309,10 +316,10 @@ def _render_link_page(
     gtag('js', new Date());
     gtag('config', '{ga4_id}');
     gtag('event', 'view_item_list', {{item_list_name: '{safe_slug}'}});
-  </script>'''
+  </script>"""
 
     if fb_pixel_id:
-        tracking_head += f'''
+        tracking_head += f"""
   <script>
     !function(f,b,e,v,n,t,s){{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
     n.callMethod.apply(n,arguments):n.queue.push(arguments)}};if(!f._fbq)f._fbq=n;
@@ -322,11 +329,13 @@ def _render_link_page(
     fbq('init', '{fb_pixel_id}');
     fbq('track', 'PageView');
     fbq('track', 'ViewContent', {{content_name: '{safe_slug}', content_type: 'product_group'}});
-  </script>'''
+  </script>"""
 
     # Determine top-3 products by click count for "Trending" badge
     sorted_slugs_by_clicks = sorted(
-        click_counts.keys(), key=lambda s: click_counts.get(s, 0), reverse=True,
+        click_counts.keys(),
+        key=lambda s: click_counts.get(s, 0),
+        reverse=True,
     )
     top_3_slugs = set(sorted_slugs_by_clicks[:3]) if click_counts else set()
 
@@ -345,9 +354,7 @@ def _render_link_page(
                 price_str = f"From ₹{price_inr:,}/mo"
             else:
                 price_str = f"₹{price_inr:,}"
-        price_tag = (
-            f'<span class="price">{price_str}</span>' if price_str else ""
-        )
+        price_tag = f'<span class="price">{price_str}</span>' if price_str else ""
 
         # Social proof badges
         badges_html = ""
@@ -384,7 +391,9 @@ def _render_link_page(
                     code = html.escape(coupon.get("code", ""))
                     discount = html.escape(coupon.get("discount", ""))
                     if code:
-                        coupon_html = f'<span class="coupon-badge">Use code: {code} ({discount})</span>'
+                        coupon_html = (
+                            f'<span class="coupon-badge">Use code: {code} ({discount})</span>'
+                        )
                     elif discount:
                         coupon_html = f'<span class="coupon-badge">{discount}</span>'
                     break  # use first active coupon
@@ -771,6 +780,7 @@ function handleSubscribe(e) {{
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @bp.route("/links/<channel>")
 def link_page(channel: str):
     """Render the link-in-bio page for a channel."""
@@ -836,7 +846,9 @@ def link_page(channel: str):
         referrer_source = "qr"
 
     page_html = _render_link_page(
-        channel_slug, meta, display_products,
+        channel_slug,
+        meta,
+        display_products,
         tracking=tracking,
         click_counts=click_counts,
         highlight_product=highlight_product,
@@ -882,6 +894,7 @@ def link_go(product_slug: str):
         fallback_channel = ""
         if referrer:
             import re as _re_fb
+
             fb_match = _re_fb.search(r"/links/([a-z]+)", referrer.lower())
             if fb_match:
                 fallback_channel = fb_match.group(1)
@@ -897,6 +910,7 @@ def link_go(product_slug: str):
     channel_id = ""
     if referrer:
         import re
+
         ch_match = re.search(r"/links/([a-z]+)", referrer.lower())
         if ch_match:
             channel_id = ch_match.group(1)
@@ -907,6 +921,7 @@ def link_go(product_slug: str):
     # Append UTM tracking parameters for Amazon Associates dashboard tracking
     try:
         from genlab_core.monetization.cta_engine import append_utm_params
+
         affiliate_url = append_utm_params(
             raw_affiliate_url,
             niche_id=niche_id,
@@ -918,6 +933,7 @@ def link_go(product_slug: str):
     # Log the click (non-blocking — failure is logged and swallowed)
     try:
         from genlab_core.monetization.link_tracker import log_click
+
         log_click(
             product_id=product_slug,
             niche_id=niche_id,
@@ -948,24 +964,40 @@ def link_go(product_slug: str):
     # we just don't double-touch the bandit here anymore.
 
     # Helper: redirect to channel link page instead of dashboard login
-    _fallback_url = f"/links/{channel_id}" if channel_id and channel_id in _CHANNEL_META else "/links/blackboxbrief"
+    _fallback_url = (
+        f"/links/{channel_id}"
+        if channel_id and channel_id in _CHANNEL_META
+        else "/links/blackboxbrief"
+    )
 
     if not affiliate_url:
-        logger.warning("[Links] No affiliate URL for slug=%s network=%s", product_slug, network_name)
+        logger.warning(
+            "[Links] No affiliate URL for slug=%s network=%s", product_slug, network_name
+        )
         return redirect(_fallback_url, 302)
 
     # Validate redirect URL domain against allowlist (prevent open redirect)
     _ALLOWED_DOMAINS = (
-        "amazon.com", "amazon.in", "primevideo.com",
-        "linksredirect.com", "ekaro.in", "earnkaro.com",
+        "amazon.com",
+        "amazon.in",
+        "primevideo.com",
+        "linksredirect.com",
+        "ekaro.in",
+        "earnkaro.com",
         "cuelinks.com",
-        "impact.com", "goto.target.com", "sjv.io",
-        "admitad.com", "ad.admitad.com",
-        "jiohotstar.com", "hotstar.com",
-        "flipkart.com", "myntra.com",
+        "impact.com",
+        "goto.target.com",
+        "sjv.io",
+        "admitad.com",
+        "ad.admitad.com",
+        "jiohotstar.com",
+        "hotstar.com",
+        "flipkart.com",
+        "myntra.com",
     )
     try:
         from urllib.parse import urlparse
+
         domain = urlparse(affiliate_url).hostname or ""
         if not any(domain.endswith(d) for d in _ALLOWED_DOMAINS):
             logger.warning("[Links] Blocked redirect to non-allowlisted domain: %s", domain)
@@ -978,10 +1010,15 @@ def link_go(product_slug: str):
     user_agent = request.headers.get("User-Agent", "")
     try:
         from genlab_core.monetization.deep_linker import generate_deep_link, render_deep_link_page
+
         deep_link = generate_deep_link(affiliate_url, user_agent)
         if deep_link:
             product_name = product.get("name", "")
-            return render_deep_link_page(deep_link, product_name), 200, {"Content-Type": "text/html"}
+            return (
+                render_deep_link_page(deep_link, product_name),
+                200,
+                {"Content-Type": "text/html"},
+            )
     except Exception as e:
         logger.debug("[Links] Deep link generation failed, falling back to redirect: %s", e)
 
@@ -998,6 +1035,7 @@ def link_subscribe():
     origin = request.headers.get("Origin", "") or request.headers.get("Referer", "")
     if origin:
         from urllib.parse import urlparse as _urlparse
+
         origin_host = _urlparse(origin).hostname or ""
         _ALLOWED_ORIGINS = ("aspirehub.ai", "review.aspirehub.ai", "localhost", "127.0.0.1")
         if origin_host not in _ALLOWED_ORIGINS and not origin_host.endswith(".aspirehub.ai"):
@@ -1019,10 +1057,12 @@ def link_subscribe():
     # Store in database
     try:
         import os
+
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
             import psycopg
             from psycopg.rows import dict_row
+
             with psycopg.connect(dsn, row_factory=dict_row) as conn:
                 conn.execute(
                     "INSERT INTO email_subscribers (email, channel_slug, niche_id) "
@@ -1075,6 +1115,7 @@ def link_unsubscribe():
 
     # POST: process unsubscribe
     import re
+
     email = (request.form.get("email") or "").strip().lower()
     if not email or not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
         return jsonify({"ok": False, "error": "Please enter a valid email address."})
@@ -1083,6 +1124,7 @@ def link_unsubscribe():
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
             import psycopg
+
             with psycopg.connect(dsn) as conn:
                 conn.execute(
                     "UPDATE email_subscribers SET is_active = false, unsubscribed_at = NOW() "
@@ -1094,15 +1136,19 @@ def link_unsubscribe():
         logger.warning("[Links] Unsubscribe DB error: %s", e)
 
     return (
-        "<!DOCTYPE html><html><head><meta charset=UTF-8>"
-        '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        "<title>Unsubscribed</title>"
-        "<style>"
-        "body { background: #09090b; color: #fafafa; font-family: -apple-system, sans-serif;"
-        " display: flex; align-items: center; justify-content: center; min-height: 100vh;"
-        " text-align: center; padding: 20px; }"
-        "p { font-size: 1rem; color: #a1a1aa; }"
-        "</style></head><body>"
-        "<p>You have been unsubscribed. You will no longer receive deal notifications.</p>"
-        "</body></html>"
-    ), 200, {"Content-Type": "text/html; charset=utf-8"}
+        (
+            "<!DOCTYPE html><html><head><meta charset=UTF-8>"
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            "<title>Unsubscribed</title>"
+            "<style>"
+            "body { background: #09090b; color: #fafafa; font-family: -apple-system, sans-serif;"
+            " display: flex; align-items: center; justify-content: center; min-height: 100vh;"
+            " text-align: center; padding: 20px; }"
+            "p { font-size: 1rem; color: #a1a1aa; }"
+            "</style></head><body>"
+            "<p>You have been unsubscribed. You will no longer receive deal notifications.</p>"
+            "</body></html>"
+        ),
+        200,
+        {"Content-Type": "text/html; charset=utf-8"},
+    )

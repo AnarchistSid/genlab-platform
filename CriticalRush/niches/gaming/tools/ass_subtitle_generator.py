@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Timestamp conversion
 # ---------------------------------------------------------------------------
 
+
 def seconds_to_ass(seconds: float) -> str:
     """Convert seconds to ASS timestamp format: ``H:MM:SS.cc`` (centiseconds)."""
     if seconds < 0:
@@ -48,6 +49,7 @@ def seconds_to_ass(seconds: float) -> str:
 # ---------------------------------------------------------------------------
 # ASS header generation
 # ---------------------------------------------------------------------------
+
 
 def generate_ass_header(
     *,
@@ -90,10 +92,7 @@ def generate_ass_header(
         ),
         "",
         "[Events]",
-        (
-            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, "
-            "MarginV, Effect, Text"
-        ),
+        ("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"),
     ]
     return "\n".join(lines)
 
@@ -102,6 +101,7 @@ def generate_ass_header(
 # Word grouping
 # ---------------------------------------------------------------------------
 
+
 def _group_words(
     words: list[dict],
     max_words_per_group: int = 5,
@@ -109,9 +109,9 @@ def _group_words(
 ) -> list[list[dict]]:
     """Split a flat list of words into display groups."""
     filtered = [
-        w for w in words
-        if w.get("word", "").strip()
-        and w.get("probability", 1.0) >= min_confidence
+        w
+        for w in words
+        if w.get("word", "").strip() and w.get("probability", 1.0) >= min_confidence
     ]
 
     if not filtered:
@@ -126,6 +126,7 @@ def _group_words(
 # ---------------------------------------------------------------------------
 # Dialogue line generation
 # ---------------------------------------------------------------------------
+
 
 def generate_dialogue_lines(
     transcription: dict,
@@ -178,9 +179,7 @@ def generate_dialogue_lines(
                         parts.append(f"{{\\c{normal_color}}}{text}")
 
                 line_text = " ".join(parts)
-                dialogue_lines.append(
-                    f"Dialogue: 0,{start},{end},Default,,0,0,0,,{line_text}"
-                )
+                dialogue_lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{line_text}")
 
     return dialogue_lines
 
@@ -188,6 +187,7 @@ def generate_dialogue_lines(
 # ---------------------------------------------------------------------------
 # Full ASS file generation
 # ---------------------------------------------------------------------------
+
 
 def generate_ass_file(
     transcription: dict | None,
@@ -272,6 +272,7 @@ def generate_ass_file(
 # FFmpeg burn with fontsdir support
 # ---------------------------------------------------------------------------
 
+
 def burn_ass_captions(
     video_path: str,
     ass_path: str,
@@ -293,10 +294,14 @@ def burn_ass_captions(
         vf = f"ass='{escaped_ass}'"
 
     cmd = [
-        "ffmpeg", "-y",
-        "-i", video_path,
-        "-vf", vf,
-        "-c:a", "copy",
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-vf",
+        vf,
+        "-c:a",
+        "copy",
         output_path,
     ]
 

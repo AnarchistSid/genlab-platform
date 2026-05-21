@@ -3,6 +3,7 @@
 Ensures the viewer receives a consistent message across all sensory channels
 in the first 1.5 seconds. Misalignment causes instant swipe-away.
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,8 +12,9 @@ import re
 logger = logging.getLogger(__name__)
 
 
-def validate_alignment(hook_text: str, narration_opening: str,
-                       video_title: str) -> tuple[bool, str]:
+def validate_alignment(
+    hook_text: str, narration_opening: str, video_title: str
+) -> tuple[bool, str]:
     """Check that hook, narration opening, and video are semantically aligned.
 
     Returns (is_aligned, reason).
@@ -34,8 +36,30 @@ def validate_alignment(hook_text: str, narration_opening: str,
         return False, f"No shared entities: hook={hook_entities}, narr={narr_entities}"
 
     # Rule 2: Hook words overlap with narration (Jaccard > 0.3)
-    hook_words = set(hook_lower.split()) - {"the", "a", "an", "is", "just", "and", "of", "in", "on", "for"}
-    narr_words = set(narr_lower.split()) - {"the", "a", "an", "is", "just", "and", "of", "in", "on", "for"}
+    hook_words = set(hook_lower.split()) - {
+        "the",
+        "a",
+        "an",
+        "is",
+        "just",
+        "and",
+        "of",
+        "in",
+        "on",
+        "for",
+    }
+    narr_words = set(narr_lower.split()) - {
+        "the",
+        "a",
+        "an",
+        "is",
+        "just",
+        "and",
+        "of",
+        "in",
+        "on",
+        "for",
+    }
     if hook_words and narr_words:
         overlap = len(hook_words & narr_words) / max(len(hook_words | narr_words), 1)
         if overlap < 0.2:

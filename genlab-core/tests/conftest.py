@@ -5,6 +5,7 @@ os.environ BEFORE conftest runs. We must pop the Postgres vars here AND
 individual test fixtures should use patch.dict("os.environ", ...) for full
 isolation against re-import or re-loading of .env.
 """
+
 import os
 import sys
 
@@ -24,6 +25,7 @@ os.environ["GENLAB_USE_POSTGRES"] = ""
 # PyTorch + Detoxify model loading in threaded pytest context causes
 # segfaults on Python 3.14. Skip tests that load the model directly.
 _SKIP_DETOXIFY = sys.version_info >= (3, 14)
+
 
 def pytest_collection_modifyitems(config, items):
     """Skip Detoxify-dependent tests on Python 3.14+ to avoid segfaults."""

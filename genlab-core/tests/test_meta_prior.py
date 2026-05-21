@@ -3,6 +3,7 @@
 Verifies confidence-scaled Beta transfer, exploration inflation,
 and the apply_warm_start safety guard (never overwrite real observations).
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -155,8 +156,6 @@ class TestNeverBelowOne:
         assert beta >= 1.0
 
         # With zero inflation and low source
-        alpha, beta = compute_warm_start_prior(
-            0.3, 0.3, confidence=1.0, exploration_inflation=0.0
-        )
+        alpha, beta = compute_warm_start_prior(0.3, 0.3, confidence=1.0, exploration_inflation=0.0)
         assert alpha >= 1.0
         assert beta >= 1.0

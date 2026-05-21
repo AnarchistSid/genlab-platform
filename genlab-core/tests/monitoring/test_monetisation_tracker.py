@@ -92,9 +92,23 @@ class TestTrackerDryRun:
         """Dry run should not write to SP, just return metrics."""
         tracker = MonetisationTracker(mock_client, config_path=targets_yaml)
 
-        with patch.object(tracker, "_collect_youtube", return_value={"status": "no_credentials", "metrics": {}}), \
-             patch.object(tracker, "_collect_facebook", return_value={"status": "no_credentials", "metrics": {}}), \
-             patch.object(tracker, "_collect_instagram", return_value={"status": "no_credentials", "metrics": {}}):
+        with (
+            patch.object(
+                tracker,
+                "_collect_youtube",
+                return_value={"status": "no_credentials", "metrics": {}},
+            ),
+            patch.object(
+                tracker,
+                "_collect_facebook",
+                return_value={"status": "no_credentials", "metrics": {}},
+            ),
+            patch.object(
+                tracker,
+                "_collect_instagram",
+                return_value={"status": "no_credentials", "metrics": {}},
+            ),
+        ):
             results = tracker.run(dry_run=True, niche_filter="ai_creators")
 
         assert "ai_creators" in results
@@ -106,9 +120,15 @@ class TestTrackerDryRun:
         """Without niche_filter, run should iterate all 5 niches."""
         tracker = MonetisationTracker(mock_client, config_path=targets_yaml)
 
-        with patch.object(tracker, "_collect_youtube", return_value={"status": "ok", "metrics": {}}), \
-             patch.object(tracker, "_collect_facebook", return_value={"status": "ok", "metrics": {}}), \
-             patch.object(tracker, "_collect_instagram", return_value={"status": "ok", "metrics": {}}):
+        with (
+            patch.object(tracker, "_collect_youtube", return_value={"status": "ok", "metrics": {}}),
+            patch.object(
+                tracker, "_collect_facebook", return_value={"status": "ok", "metrics": {}}
+            ),
+            patch.object(
+                tracker, "_collect_instagram", return_value={"status": "ok", "metrics": {}}
+            ),
+        ):
             results = tracker.run(dry_run=True)
 
         assert len(results) == 5

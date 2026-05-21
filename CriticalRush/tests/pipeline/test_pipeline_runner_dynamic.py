@@ -16,7 +16,6 @@ def _gaming_config():
 
 
 class TestDynamicStageLoading:
-
     def test_gaming_stages_load_correctly(self):
         """Gaming niche loads its 25 enabled stages from niche.yaml."""
         runner = PipelineRunner()
@@ -79,10 +78,14 @@ class TestDynamicStageLoading:
         config = {
             "pipeline": {
                 "stages": [
-                    {"class": "niches.gaming.stages.fetch_gaming_stories.FetchGamingStories",
-                     "enabled": True},
-                    {"class": "niches.gaming.stages.score_gaming_clips.ScoreGamingClips",
-                     "enabled": False},
+                    {
+                        "class": "niches.gaming.stages.fetch_gaming_stories.FetchGamingStories",
+                        "enabled": True,
+                    },
+                    {
+                        "class": "niches.gaming.stages.score_gaming_clips.ScoreGamingClips",
+                        "enabled": False,
+                    },
                 ]
             }
         }
@@ -94,11 +97,7 @@ class TestDynamicStageLoading:
         """Nonexistent module raises ImportError with clear message."""
         runner = PipelineRunner()
         config = {
-            "pipeline": {
-                "stages": [
-                    {"class": "nonexistent.module.FakeStage", "enabled": True}
-                ]
-            }
+            "pipeline": {"stages": [{"class": "nonexistent.module.FakeStage", "enabled": True}]}
         }
         with pytest.raises(ImportError, match="nonexistent.module"):
             runner._load_stages("test", config)
@@ -108,9 +107,7 @@ class TestDynamicStageLoading:
         runner = PipelineRunner()
         config = {
             "pipeline": {
-                "stages": [
-                    {"class": "niches.gaming.stages.fetch_gaming_stories.NonExistentClass"}
-                ]
+                "stages": [{"class": "niches.gaming.stages.fetch_gaming_stories.NonExistentClass"}]
             }
         }
         with pytest.raises(AttributeError, match="NonExistentClass"):
@@ -119,12 +116,21 @@ class TestDynamicStageLoading:
     def test_no_gaming_specific_imports_in_runner(self):
         """pipeline_runner.py contains no hardcoded gaming stage imports."""
         from core import pipeline_runner
+
         source = inspect.getsource(pipeline_runner)
         for _stage_name in [
-            "FetchGamingStories", "FilterGamingStories", "ScoreGamingClips",
-            "EnrichWithIGDB", "ExtractGamingMedia", "WriteGamingContent",
-            "AdaptGamingContent", "RenderGamingVideo", "GenerateGamingAudio",
-            "RenderTextOverlays", "PublishGamingContent", "PushToBacklog",
+            "FetchGamingStories",
+            "FilterGamingStories",
+            "ScoreGamingClips",
+            "EnrichWithIGDB",
+            "ExtractGamingMedia",
+            "WriteGamingContent",
+            "AdaptGamingContent",
+            "RenderGamingVideo",
+            "GenerateGamingAudio",
+            "RenderTextOverlays",
+            "PublishGamingContent",
+            "PushToBacklog",
             "WriteRunReport",
         ]:
             # Stage names may appear in comments/docs but not as imports
@@ -138,7 +144,5 @@ class TestDynamicStageLoading:
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", _gaming_config())
         for stage in stages:
-            assert hasattr(stage, "execute"), (
-                f"{stage.__class__.__name__} missing execute() method"
-            )
+            assert hasattr(stage, "execute"), f"{stage.__class__.__name__} missing execute() method"
             assert callable(stage.execute)

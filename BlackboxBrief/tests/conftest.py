@@ -62,17 +62,21 @@ def sample_blueprint():
             "caption": "Big news in AI world today.",
             "hashtags": "#AI #ML #Tech",
             "scheduled_for": "",
-            "visual_paths": json.dumps([
-                "https://cdn.example.com/slide1.png",
-                "https://cdn.example.com/slide2.png",
-                "https://cdn.example.com/slide3.png",
-            ]),
+            "visual_paths": json.dumps(
+                [
+                    "https://cdn.example.com/slide1.png",
+                    "https://cdn.example.com/slide2.png",
+                    "https://cdn.example.com/slide3.png",
+                ]
+            ),
             "platform_publish_status": "",
             "story": [],
             "youtube_content": json.dumps({"text": "YouTube community post"}),
-            "twitter_content": json.dumps({
-                "strategy": "single_tweet",
-                "tweets": [{"text": "AI just changed everything #AI"}],
-            }),
+            "twitter_content": json.dumps(
+                {
+                    "strategy": "single_tweet",
+                    "tweets": [{"text": "AI just changed everything #AI"}],
+                }
+            ),
         },
     }

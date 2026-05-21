@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 try:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -104,8 +105,8 @@ def fetch_js_rendered_source(
             browser = p.chromium.launch(headless=headless)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36"
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
 
@@ -125,7 +126,7 @@ def fetch_js_rendered_source(
             articles = page.query_selector_all(article_selector)
             seen_links = set()
 
-            for article in articles[:max_articles * 2]:  # Overfetch to account for dupes
+            for article in articles[: max_articles * 2]:  # Overfetch to account for dupes
                 try:
                     href = article.get_attribute("href") or ""
                     text = (article.inner_text() or "").strip()
@@ -154,13 +155,15 @@ def fetch_js_rendered_source(
                     remaining = text.split("\n")[1:] if "\n" in text else []
                     summary = " ".join(line.strip() for line in remaining if line.strip())[:500]
 
-                    entries.append({
-                        "title": title,
-                        "link": href,
-                        "summary": summary,
-                        "published": "",  # JS pages rarely expose dates in link elements
-                        "author": "",
-                    })
+                    entries.append(
+                        {
+                            "title": title,
+                            "link": href,
+                            "summary": summary,
+                            "published": "",  # JS pages rarely expose dates in link elements
+                            "author": "",
+                        }
+                    )
 
                     if len(entries) >= max_articles:
                         break
@@ -207,8 +210,8 @@ def fetch_js_article_html(url: str, headless: bool = True, timeout_ms: int = 200
             browser = p.chromium.launch(headless=headless)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36"
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
             page.goto(url, wait_until="networkidle", timeout=timeout_ms)

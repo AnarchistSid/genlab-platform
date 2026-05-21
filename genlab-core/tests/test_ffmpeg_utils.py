@@ -40,7 +40,9 @@ class TestGetFfmpegBinary:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("FFMPEG_BINARY", None)
             with patch("genlab_core.media.ffmpeg.os.path.isfile", return_value=False):
-                with patch("genlab_core.media.ffmpeg.shutil.which", return_value="/usr/local/bin/ffmpeg"):
+                with patch(
+                    "genlab_core.media.ffmpeg.shutil.which", return_value="/usr/local/bin/ffmpeg"
+                ):
                     assert get_ffmpeg_binary() == "/usr/local/bin/ffmpeg"
 
     def test_not_found_raises(self):
@@ -77,6 +79,7 @@ class TestRenderSpec:
 
     def test_instagram_dimensions(self):
         from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform
+
         ig = PLATFORM_SPECS[Platform.INSTAGRAM]
         assert ig.width == 1080
         assert ig.height == 1920
@@ -91,6 +94,7 @@ class TestRenderSpec:
 
     def test_rejects_invalid_crf(self):
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             RenderSpec(crf=100)
 
@@ -106,22 +110,26 @@ class TestRenderSpec:
 class TestConstants:
     def test_final_video_params_has_codec(self):
         from genlab_core.media.ffmpeg_utils import FINAL_VIDEO_PARAMS
+
         assert "-c:v" in FINAL_VIDEO_PARAMS
         assert "libx264" in FINAL_VIDEO_PARAMS
 
     def test_final_audio_params_has_codec(self):
         from genlab_core.media.ffmpeg_utils import FINAL_AUDIO_PARAMS
+
         assert "-c:a" in FINAL_AUDIO_PARAMS
         assert "aac" in FINAL_AUDIO_PARAMS
 
     def test_reel_dimensions(self):
         from genlab_core.media.ffmpeg_utils import REEL_FPS, REEL_HEIGHT, REEL_WIDTH
+
         assert REEL_WIDTH == 1080
         assert REEL_HEIGHT == 1920
         assert REEL_FPS == 30
 
     def test_landscape_dimensions(self):
         from genlab_core.media.ffmpeg_utils import LANDSCAPE_HEIGHT, LANDSCAPE_WIDTH
+
         assert LANDSCAPE_WIDTH == 1920
         assert LANDSCAPE_HEIGHT == 1080
 
@@ -133,20 +141,26 @@ class TestProbeVideoMetadata:
     def test_returns_metadata_dict(self):
         from genlab_core.media.ffmpeg_utils import probe_video_metadata
 
-        fake_output = json.dumps({
-            "format": {"duration": "10.5", "format_name": "mp4"},
-            "streams": [{
-                "codec_type": "video",
-                "width": 1920, "height": 1080,
-                "r_frame_rate": "30/1",
-                "codec_name": "h264",
-            }],
-        })
+        fake_output = json.dumps(
+            {
+                "format": {"duration": "10.5", "format_name": "mp4"},
+                "streams": [
+                    {
+                        "codec_type": "video",
+                        "width": 1920,
+                        "height": 1080,
+                        "r_frame_rate": "30/1",
+                        "codec_name": "h264",
+                    }
+                ],
+            }
+        )
 
         with patch("genlab_core.media.ffmpeg_utils.get_ffprobe_binary", return_value="ffprobe"):
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
-                    returncode=0, stdout=fake_output,
+                    returncode=0,
+                    stdout=fake_output,
                 )
                 meta = probe_video_metadata("/fake/video.mp4")
 
@@ -174,7 +188,8 @@ class TestProbeDuration:
         with patch("genlab_core.media.ffmpeg_utils.get_ffprobe_binary", return_value="ffprobe"):
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
-                    returncode=0, stdout=fake_output,
+                    returncode=0,
+                    stdout=fake_output,
                 )
                 assert probe_video_duration("/fake.mp4") == 42.5
 
@@ -189,29 +204,33 @@ class TestProbeMedia:
     def test_returns_structured_dict(self):
         from genlab_core.media.ffmpeg_utils import probe_media
 
-        fake_output = json.dumps({
-            "format": {"duration": "15.0", "size": "5000000"},
-            "streams": [
-                {
-                    "codec_type": "video",
-                    "width": 1080, "height": 1920,
-                    "r_frame_rate": "60/1",
-                    "codec_name": "h264",
-                    "duration": "15.0",
-                },
-                {
-                    "codec_type": "audio",
-                    "sample_rate": "48000",
-                    "channels": 2,
-                    "codec_name": "aac",
-                },
-            ],
-        })
+        fake_output = json.dumps(
+            {
+                "format": {"duration": "15.0", "size": "5000000"},
+                "streams": [
+                    {
+                        "codec_type": "video",
+                        "width": 1080,
+                        "height": 1920,
+                        "r_frame_rate": "60/1",
+                        "codec_name": "h264",
+                        "duration": "15.0",
+                    },
+                    {
+                        "codec_type": "audio",
+                        "sample_rate": "48000",
+                        "channels": 2,
+                        "codec_name": "aac",
+                    },
+                ],
+            }
+        )
 
         with patch("genlab_core.media.ffmpeg_utils.get_ffprobe_binary", return_value="ffprobe"):
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
-                    returncode=0, stdout=fake_output,
+                    returncode=0,
+                    stdout=fake_output,
                 )
                 info = probe_media("/fake/video.mp4")
 
@@ -237,20 +256,24 @@ class TestProbeMedia:
 class TestEscapeDrawtext:
     def test_escapes_colon(self):
         from genlab_core.media.ffmpeg_utils import escape_drawtext
+
         assert "\\:" in escape_drawtext("hello:world")
 
     def test_escapes_semicolon(self):
         from genlab_core.media.ffmpeg_utils import escape_drawtext
+
         assert "\\;" in escape_drawtext("a;b")
 
     def test_escapes_brackets(self):
         from genlab_core.media.ffmpeg_utils import escape_drawtext
+
         result = escape_drawtext("[test]")
         assert "\\[" in result
         assert "\\]" in result
 
     def test_empty_string(self):
         from genlab_core.media.ffmpeg_utils import escape_drawtext
+
         assert escape_drawtext("") == ""
 
 
@@ -260,21 +283,25 @@ class TestEscapeDrawtext:
 class TestBuildScaleCrop:
     def test_same_aspect_ratio(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         result = build_scale_crop(1080, 1920, 1080, 1920)
         assert "scale=1080:1920" in result
 
     def test_wider_source_crops_width(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         result = build_scale_crop(1920, 1080, 1080, 1920)
         assert "crop=" in result
 
     def test_taller_source_crops_height(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         result = build_scale_crop(720, 1280, 1080, 1920)
         assert "scale=1080:1920" in result
 
     def test_pillarbox_mode(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         result = build_scale_crop(1920, 1080, 1080, 1920, mode="pillarbox")
         assert "boxblur" in result
         assert "overlay" in result
@@ -283,31 +310,37 @@ class TestBuildScaleCrop:
 class TestPositionToXY:
     def test_center(self):
         from genlab_core.media.ffmpeg_utils import position_to_xy
+
         x, y = position_to_xy("center")
         assert "text_w" in x
         assert "text_h" in y
 
     def test_bottom_left(self):
         from genlab_core.media.ffmpeg_utils import position_to_xy
+
         x, y = position_to_xy("bottom_left", margin_x=40, margin_y=120)
         assert x == "40"
         assert "120" in y
 
     def test_unknown_position(self):
         from genlab_core.media.ffmpeg_utils import position_to_xy
+
         assert position_to_xy("invalid") == ("0", "0")
 
 
 class TestBuildDrawtext:
     def test_basic_drawtext(self):
         from genlab_core.media.ffmpeg_utils import build_drawtext
+
         result = build_drawtext(
             text="Hello",
             font_file="/fonts/test.ttf",
             size=48,
             color="white",
-            x="10", y="20",
-            start=0.0, end=5.0,
+            x="10",
+            y="20",
+            start=0.0,
+            end=5.0,
         )
         assert "drawtext=" in result
         assert "Hello" in result
@@ -315,12 +348,16 @@ class TestBuildDrawtext:
 
     def test_with_stroke(self):
         from genlab_core.media.ffmpeg_utils import build_drawtext
+
         result = build_drawtext(
             text="Test",
             font_file="/fonts/test.ttf",
-            size=32, color="white",
-            x="0", y="0",
-            start=0.0, end=3.0,
+            size=32,
+            color="white",
+            x="0",
+            y="0",
+            start=0.0,
+            end=3.0,
             stroke_color="black",
             stroke_width=2,
         )
@@ -331,12 +368,14 @@ class TestBuildDrawtext:
 class TestBuildLoudnormFilter:
     def test_default(self):
         from genlab_core.media.ffmpeg_utils import build_loudnorm_filter
+
         result = build_loudnorm_filter()
         assert "loudnorm" in result
         assert "I=-14" in result
 
     def test_custom_target(self):
         from genlab_core.media.ffmpeg_utils import build_loudnorm_filter
+
         result = build_loudnorm_filter(target_i=-16.0)
         assert "I=-16" in result
 
@@ -347,13 +386,21 @@ class TestBuildLoudnormFilter:
 class TestConvenienceWrappers:
     def test_get_duration_delegates(self):
         from genlab_core.media.ffmpeg_utils import get_duration
+
         with patch("genlab_core.media.ffmpeg_utils.probe_video_duration", return_value=30.0):
             assert get_duration("/fake.mp4") == 30.0
 
     def test_get_resolution_delegates(self):
         from genlab_core.media.ffmpeg_utils import get_resolution
+
         fake_info = {
-            "video": {"width": 1920, "height": 1080, "fps": 30.0, "codec": "h264", "duration": 10.0},
+            "video": {
+                "width": 1920,
+                "height": 1080,
+                "fps": 30.0,
+                "codec": "h264",
+                "duration": 10.0,
+            },
             "audio": {"sample_rate": 48000, "channels": 2, "codec": "aac"},
             "duration": 10.0,
             "file_size_bytes": 1000,
@@ -363,8 +410,15 @@ class TestConvenienceWrappers:
 
     def test_get_fps_delegates(self):
         from genlab_core.media.ffmpeg_utils import get_fps
+
         fake_info = {
-            "video": {"width": 1920, "height": 1080, "fps": 60.0, "codec": "h264", "duration": 10.0},
+            "video": {
+                "width": 1920,
+                "height": 1080,
+                "fps": 60.0,
+                "codec": "h264",
+                "duration": 10.0,
+            },
             "audio": {"sample_rate": 48000, "channels": 2, "codec": "aac"},
             "duration": 10.0,
             "file_size_bytes": 1000,

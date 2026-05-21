@@ -1,4 +1,5 @@
 """Cross-niche overview API endpoint for Mission Control."""
+
 import json
 import logging
 import os
@@ -30,6 +31,7 @@ _CACHE_TTL = 120.0
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -81,7 +83,8 @@ def _pipeline_status(niche_id: str) -> tuple[str, str | None]:
             lock_file.unlink(missing_ok=True)
             logger.warning(
                 "Auto-cleaned stale pipeline lock for %s (age: %dm)",
-                niche_id, int(age_seconds / 60),
+                niche_id,
+                int(age_seconds / 60),
             )
         except OSError:
             pass
@@ -170,6 +173,7 @@ def _today_midnight_ist() -> datetime:
 def _bp_niche_overview(fields: dict) -> str:
     """Lazy import wrapper for _bp_niche from analytics."""
     from server.api.analytics import _bp_niche
+
     return _bp_niche(fields)
 
 
@@ -238,8 +242,7 @@ def _build_overview() -> dict:
 
     # Count all-time published from the fetched records (for pass_rate)
     total_published_all = sum(
-        1 for r in all_records
-        if r.get("fields", {}).get("status") == "PUBLISHED"
+        1 for r in all_records if r.get("fields", {}).get("status") == "PUBLISHED"
     )
 
     # Auto-archive breakdown by action_taken reason
@@ -282,7 +285,9 @@ def _build_overview() -> dict:
                                     break
                             if not found:
                                 # Create a synthetic record so the niche gets counted
-                                today_records.append({"fields": {"niche_id": n, "status": "PUBLISHED"}})
+                                today_records.append(
+                                    {"fields": {"niche_id": n, "status": "PUBLISHED"}}
+                                )
                 elif isinstance(pa_created, str) and pa_created:
                     try:
                         dt = datetime.fromisoformat(pa_created.replace("Z", "+00:00"))
@@ -295,7 +300,9 @@ def _build_overview() -> dict:
                                         found = True
                                         break
                                 if not found:
-                                    today_records.append({"fields": {"niche_id": n, "status": "PUBLISHED"}})
+                                    today_records.append(
+                                        {"fields": {"niche_id": n, "status": "PUBLISHED"}}
+                                    )
                     except ValueError:
                         pass
         except Exception as e:
@@ -342,19 +349,21 @@ def _build_overview() -> dict:
         if pipe_status == "running":
             agents_running += 1
 
-        niches_data.append({
-            "id": niche_id,
-            "display_name": niche.get("display_name", niche_id),
-            "accent_hex": niche.get("accent_hex", "#6366f1"),
-            "pipeline_status": pipe_status,
-            "current_stage": current_stage,
-            "last_run_at": last_run,
-            "pending_review": niche_pending.get(niche_id, 0),
-            "published_today": niche_published.get(niche_id, 0),
-            "archived_today": niche_archived.get(niche_id, 0),
-            "target_posts_per_day": niche.get("target_posts_per_day", 4),
-            "best_performer_today": niche_best.get(niche_id),
-        })
+        niches_data.append(
+            {
+                "id": niche_id,
+                "display_name": niche.get("display_name", niche_id),
+                "accent_hex": niche.get("accent_hex", "#6366f1"),
+                "pipeline_status": pipe_status,
+                "current_stage": current_stage,
+                "last_run_at": last_run,
+                "pending_review": niche_pending.get(niche_id, 0),
+                "published_today": niche_published.get(niche_id, 0),
+                "archived_today": niche_archived.get(niche_id, 0),
+                "target_posts_per_day": niche.get("target_posts_per_day", 4),
+                "best_performer_today": niche_best.get(niche_id),
+            }
+        )
 
     # Schedule today — derived from the same single query (dedup by record ID)
     schedule_today = []
@@ -394,27 +403,36 @@ def _build_overview() -> dict:
         elif isinstance(pub_status_raw, dict):
             platform_results = pub_status_raw
 
-        platforms = list(platform_results.keys()) if platform_results else [
-            "instagram", "youtube", "facebook",
-        ]
+        platforms = (
+            list(platform_results.keys())
+            if platform_results
+            else [
+                "instagram",
+                "youtube",
+                "facebook",
+            ]
+        )
 
         item_niche = _bp_niche_overview(fields)
 
-        schedule_today.append({
-            "id": record_id,
-            "slot_time_ist": slot_time,
-            "niche_id": item_niche,
-            "title": (fields.get("hook") or fields.get("hook_text") or "Untitled")[:60],
-            "status": item_status,
-            "platforms": platforms,
-            "platform_results": platform_results,
-        })
+        schedule_today.append(
+            {
+                "id": record_id,
+                "slot_time_ist": slot_time,
+                "niche_id": item_niche,
+                "title": (fields.get("hook") or fields.get("hook_text") or "Untitled")[:60],
+                "status": item_status,
+                "platforms": platforms,
+                "platform_results": platform_results,
+            }
+        )
     schedule_today.sort(key=lambda x: x["slot_time_ist"])
 
     platform_health = _platform_health_from_reports()
 
     # Overlay Prefect-sourced pipeline statuses when available
     from server.api.pipeline import _merge_prefect_status, _prefect_healthy
+
     niches_data = _merge_prefect_status(niches_data)
     prefect_connected = _prefect_healthy()
 
@@ -429,6 +447,7 @@ def _build_overview() -> dict:
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         _dsn = os.environ.get("DATABASE_URL", "")
         if _dsn:
             with psycopg.connect(_dsn, row_factory=dict_row) as _conn:
@@ -458,10 +477,12 @@ def _build_overview() -> dict:
                 ).fetchall()
                 for row in daily_rows:
                     nid = row["niche_id"]
-                    niche_daily_reach.setdefault(nid, []).append({
-                        "date": row["day"].isoformat(),
-                        "reach": int(row["daily_reach"]),
-                    })
+                    niche_daily_reach.setdefault(nid, []).append(
+                        {
+                            "date": row["day"].isoformat(),
+                            "reach": int(row["daily_reach"]),
+                        }
+                    )
     except Exception as exc:
         logger.debug("analytics aggregate for overview failed: %s", exc)
 
@@ -483,7 +504,9 @@ def _build_overview() -> dict:
             "total_reach": total_reach,
             "total_likes": total_likes,
             "total_comments": total_comments,
-            "configured_platform_count": sum(1 for s in platform_health.values() if s != "not_configured"),
+            "configured_platform_count": sum(
+                1 for s in platform_health.values() if s != "not_configured"
+            ),
         },
         "niches": niches_data,
         "schedule_today": schedule_today,

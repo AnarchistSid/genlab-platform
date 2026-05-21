@@ -1,4 +1,5 @@
 """Schedule API endpoints."""
+
 import json as _json
 import logging
 import os
@@ -19,10 +20,12 @@ SLOT_RE = re.compile(r"^\d{1,2}:\d{2}$")  # HH:MM format
 
 _DASHBOARD_ROOT = Path(__file__).resolve().parent.parent.parent
 # GENLAB_PROJECT_ROOT defaults to the GenLab workspace root (parent of dashboard/)
-PROJECT_ROOT = Path(os.environ.get(
-    "GENLAB_PROJECT_ROOT",
-    str(_DASHBOARD_ROOT.parent),
-))
+PROJECT_ROOT = Path(
+    os.environ.get(
+        "GENLAB_PROJECT_ROOT",
+        str(_DASHBOARD_ROOT.parent),
+    )
+)
 
 # IST offset (UTC+5:30, no DST)
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -73,6 +76,7 @@ def _parse_datetime(value) -> datetime | None:
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -187,9 +191,7 @@ def get_schedule():
 
     # Filter by date range in Python (replacing unreliable OData date filter)
     start_dt = start_dt.replace(tzinfo=UTC)
-    end_dt = end_dt_raw.replace(
-        hour=23, minute=59, second=59, tzinfo=UTC
-    )
+    end_dt = end_dt_raw.replace(hour=23, minute=59, second=59, tzinfo=UTC)
     filtered = []
     for r in records:
         sched_raw = r.get("fields", {}).get("scheduled_for", "")
@@ -255,8 +257,10 @@ def get_schedule():
             status = r.get("fields", {}).get("status", "")
             bp_data = _full_transform_media({"id": r["id"], **r.get("fields", {})}, lite=True)
             slot_status = (
-                "published" if status == "PUBLISHED"
-                else "failed" if status == "PUBLISH_FAILED"
+                "published"
+                if status == "PUBLISHED"
+                else "failed"
+                if status == "PUBLISH_FAILED"
                 else "scheduled"
             )
 
@@ -283,10 +287,12 @@ def get_schedule():
         filled = sum(1 for s in day["slots"] if s["status"] != "empty")
         day["coverage"] = filled / len(day["slots"]) if day["slots"] else 0.0
 
-    return api_success(data={
-        "data": list(days.values()),
-        "schedule_slots": schedule_slots,
-    })
+    return api_success(
+        data={
+            "data": list(days.values()),
+            "schedule_slots": schedule_slots,
+        }
+    )
 
 
 @bp.route("/slots", methods=["GET"])
@@ -330,6 +336,7 @@ def _check_slot_collision(
     # (avoids full table scan — only needs nearby records for collision check)
     try:
         from datetime import date as _date
+
         td = _date.fromisoformat(target_date)
         day_before = (td - timedelta(days=1)).isoformat()
         day_after = (td + timedelta(days=1)).isoformat()
@@ -362,7 +369,9 @@ def _check_slot_collision(
             continue
         # Normalize both to UTC for reliable comparison
         dt_utc = dt.astimezone(UTC) if dt.tzinfo else dt.replace(tzinfo=UTC)
-        target_utc = target_dt.astimezone(UTC) if target_dt.tzinfo else target_dt.replace(tzinfo=UTC)
+        target_utc = (
+            target_dt.astimezone(UTC) if target_dt.tzinfo else target_dt.replace(tzinfo=UTC)
+        )
         if dt_utc.strftime("%Y-%m-%d %H:%M") == target_utc.strftime("%Y-%m-%d %H:%M"):
             return {"id": rid, "title": r.get("fields", {}).get("title", "")}
     return None
@@ -396,12 +405,16 @@ def reorder():
     # Look up the blueprint's niche_id for niche-scoped collision check
     try:
         bp_record = client.blueprints.get(str(blueprint_id))
-        bp_niche = (bp_record.get("fields", {}).get("niche_id", "") or "").strip() if bp_record else ""
+        bp_niche = (
+            (bp_record.get("fields", {}).get("niche_id", "") or "").strip() if bp_record else ""
+        )
     except Exception:
         bp_niche = ""
 
     # Collision check: reject if slot already occupied by another post in same niche
-    occupant = _check_slot_collision(client, effective_date, to_slot, exclude_blueprint_id=blueprint_id, niche_id=bp_niche)
+    occupant = _check_slot_collision(
+        client, effective_date, to_slot, exclude_blueprint_id=blueprint_id, niche_id=bp_niche
+    )
     if occupant:
         return api_error(
             error=f"Slot {effective_date} {to_slot} IST is already occupied by blueprint {occupant['id']}",

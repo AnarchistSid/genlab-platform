@@ -15,6 +15,7 @@ Design notes:
   every yt-dlp download for a day → 0/10 sports clips → all 11 sports
   blueprints failed QC. Reddit pulls give us a second leg to stand on.
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,7 +65,8 @@ class FetchRedditClips:
             logger.warning(
                 "[RedditClips] fetch failed for niche=%s: %s — pipeline "
                 "continues with existing stories only",
-                niche_id, exc,
+                niche_id,
+                exc,
             )
             return context
 
@@ -78,8 +80,7 @@ class FetchRedditClips:
         existing = context.get("stories", []) or []
         existing_urls = {s.get("source_url") for s in existing}
         new_stories = [
-            s for s in stories
-            if s.get("source_url") and s["source_url"] not in existing_urls
+            s for s in stories if s.get("source_url") and s["source_url"] not in existing_urls
         ]
         context["stories"] = existing + new_stories
 
@@ -90,7 +91,9 @@ class FetchRedditClips:
         logger.info(
             "[RedditClips] niche=%s added %d new stories (%d total Reddit "
             "candidates after pre-existing dedup)",
-            niche_id, len(new_stories), len(stories),
+            niche_id,
+            len(new_stories),
+            len(stories),
         )
         return context
 

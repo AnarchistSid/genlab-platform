@@ -16,6 +16,7 @@ Writes: context["stories"] (filtered), context["run_stats"]["relevance_gate"]
 Non-fatal: if the filter config is missing or the stage errors, all
 stories pass through and downstream QC catches irrelevant content.
 """
+
 from __future__ import annotations
 
 import logging
@@ -73,7 +74,9 @@ class RelevanceGate:
         if dropped:
             logger.info(
                 "[RelevanceGate] %d/%d stories passed relevance filter (threshold=%.2f)",
-                len(kept), before, filter_cfg.get("relevance_threshold", 0.3),
+                len(kept),
+                before,
+                filter_cfg.get("relevance_threshold", 0.3),
             )
 
         return context

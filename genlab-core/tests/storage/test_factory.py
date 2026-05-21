@@ -1,4 +1,5 @@
 """Tests for the storage backend factory."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -26,6 +27,7 @@ def _reset(monkeypatch):
     reset_backends()
     # Patch _load_config to return empty dict (default = sharepoint)
     import genlab_core.storage.factory as _factory
+
     monkeypatch.setattr(_factory, "_config", {})
     yield
     reset_backends()
@@ -73,6 +75,7 @@ class TestGetBackendForTable:
         # The on-disk config maps all tables to postgres (Sprint 68).
         # Reset _config to None so _load_config reads the real file.
         import genlab_core.storage.factory as _factory
+
         _factory._config = None
         reset_backends()
         backend = get_backend_for_table("Stories")

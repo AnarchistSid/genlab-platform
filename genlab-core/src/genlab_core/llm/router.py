@@ -10,6 +10,7 @@ Usage:
     from genlab_core.llm.router import llm_call
     result = llm_call("hook_generation", system_prompt, user_prompt)
 """
+
 from __future__ import annotations
 
 import logging
@@ -112,7 +113,11 @@ def llm_call(
     Returns the response text. Raises on total failure after all fallbacks.
     """
     tier = get_tier(task)
-    tiers_to_try = FALLBACK_CHAIN[FALLBACK_CHAIN.index(tier):] if tier in FALLBACK_CHAIN else [tier] + FALLBACK_CHAIN
+    tiers_to_try = (
+        FALLBACK_CHAIN[FALLBACK_CHAIN.index(tier) :]
+        if tier in FALLBACK_CHAIN
+        else [tier] + FALLBACK_CHAIN
+    )
 
     last_error = None
     for try_tier in tiers_to_try:
@@ -128,14 +133,23 @@ def llm_call(
         start = time.monotonic()
         try:
             if config["provider"] == "anthropic":
-                result = _call_anthropic(config["model"], system_prompt, user_prompt,
-                                         max_tokens, temperature, api_key)
+                result = _call_anthropic(
+                    config["model"], system_prompt, user_prompt, max_tokens, temperature, api_key
+                )
             elif config["provider"] == "openai":
-                result = _call_openai(config["model"], system_prompt, user_prompt,
-                                       max_tokens, temperature, api_key, json_mode)
+                result = _call_openai(
+                    config["model"],
+                    system_prompt,
+                    user_prompt,
+                    max_tokens,
+                    temperature,
+                    api_key,
+                    json_mode,
+                )
             elif config["provider"] == "google":
-                result = _call_google(config["model"], system_prompt, user_prompt,
-                                       max_tokens, temperature, api_key)
+                result = _call_google(
+                    config["model"], system_prompt, user_prompt, max_tokens, temperature, api_key
+                )
             else:
                 continue
 
@@ -145,15 +159,21 @@ def llm_call(
 
         except Exception as e:
             last_error = e
-            logger.warning("[llm-router] %s/%s failed: %s — trying next tier",
-                           try_tier, config["model"], str(e)[:80])
+            logger.warning(
+                "[llm-router] %s/%s failed: %s — trying next tier",
+                try_tier,
+                config["model"],
+                str(e)[:80],
+            )
 
     raise RuntimeError(f"All LLM tiers failed for task '{task}': {last_error}")
 
 
-def _call_anthropic(model: str, system: str, user: str,
-                    max_tokens: int, temperature: float, api_key: str) -> str:
+def _call_anthropic(
+    model: str, system: str, user: str, max_tokens: int, temperature: float, api_key: str
+) -> str:
     import anthropic
+
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
         model=model,
@@ -165,10 +185,17 @@ def _call_anthropic(model: str, system: str, user: str,
     return response.content[0].text
 
 
-def _call_openai(model: str, system: str, user: str,
-                 max_tokens: int, temperature: float, api_key: str,
-                 json_mode: bool = False) -> str:
+def _call_openai(
+    model: str,
+    system: str,
+    user: str,
+    max_tokens: int,
+    temperature: float,
+    api_key: str,
+    json_mode: bool = False,
+) -> str:
     import openai
+
     client = openai.OpenAI(api_key=api_key)
     kwargs: dict[str, Any] = {
         "model": model,
@@ -185,9 +212,11 @@ def _call_openai(model: str, system: str, user: str,
     return response.choices[0].message.content
 
 
-def _call_google(model: str, system: str, user: str,
-                 max_tokens: int, temperature: float, api_key: str) -> str:
+def _call_google(
+    model: str, system: str, user: str, max_tokens: int, temperature: float, api_key: str
+) -> str:
     import google.generativeai as genai
+
     genai.configure(api_key=api_key)
     gmodel = genai.GenerativeModel(model, system_instruction=system)
     response = gmodel.generate_content(

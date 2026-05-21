@@ -18,6 +18,7 @@ import pytest
 # Wiring tests: render_gaming_video calls validator
 # ---------------------------------------------------------------------------
 
+
 class TestSingleClipValidation:
     def test_validation_called_after_compositor_render(self):
         """validate_platform_variant must be called for each rendered variant."""
@@ -33,11 +34,15 @@ class TestSingleClipValidation:
             "content": {"hook": "Test hook"},
         }
 
-        with patch.object(stage, "_get_frame_compositor", return_value=mock_fc), \
-             patch.object(Path, "exists", return_value=True), \
-             patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")), \
-             patch("niches.gaming.stages.render_gaming_video.validate_platform_variant", return_value=True) as mock_val:
-
+        with (
+            patch.object(stage, "_get_frame_compositor", return_value=mock_fc),
+            patch.object(Path, "exists", return_value=True),
+            patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")),
+            patch(
+                "niches.gaming.stages.render_gaming_video.validate_platform_variant",
+                return_value=True,
+            ) as mock_val,
+        ):
             context = {"stories": [story], "feature_flags": {}, "niche_config": {}}
             result = stage.execute(context)
 
@@ -58,11 +63,15 @@ class TestSingleClipValidation:
             "content": {"hook": "Test hook"},
         }
 
-        with patch.object(stage, "_get_frame_compositor", return_value=mock_fc), \
-             patch.object(Path, "exists", return_value=True), \
-             patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")), \
-             patch("niches.gaming.stages.render_gaming_video.validate_platform_variant", return_value=False):
-
+        with (
+            patch.object(stage, "_get_frame_compositor", return_value=mock_fc),
+            patch.object(Path, "exists", return_value=True),
+            patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")),
+            patch(
+                "niches.gaming.stages.render_gaming_video.validate_platform_variant",
+                return_value=False,
+            ),
+        ):
             context = {"stories": [story], "feature_flags": {}, "niche_config": {}}
             with pytest.raises(VideoValidationError):
                 stage.execute(context)
@@ -81,11 +90,15 @@ class TestSingleClipValidation:
             "content": {"hook": "Nice hook"},
         }
 
-        with patch.object(stage, "_get_frame_compositor", return_value=mock_fc), \
-             patch.object(Path, "exists", return_value=True), \
-             patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")), \
-             patch("niches.gaming.stages.render_gaming_video.validate_platform_variant", return_value=True):
-
+        with (
+            patch.object(stage, "_get_frame_compositor", return_value=mock_fc),
+            patch.object(Path, "exists", return_value=True),
+            patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test")),
+            patch(
+                "niches.gaming.stages.render_gaming_video.validate_platform_variant",
+                return_value=True,
+            ),
+        ):
             context = {"stories": [story], "feature_flags": {}, "niche_config": {}}
             result = stage.execute(context)
 
@@ -102,7 +115,8 @@ class TestCompilationValidation:
         stage._compilation_rules = {
             "compilation_types": {
                 "short_compilation": {
-                    "min_clips": 3, "max_clips": 8,
+                    "min_clips": 3,
+                    "max_clips": 8,
                     "target_duration_seconds": 45,
                     "max_single_clip_ratio": 0.35,
                     "pacing": "escalating",
@@ -126,14 +140,21 @@ class TestCompilationValidation:
             for i in range(4)
         ]
 
-        with patch("niches.gaming.stages.render_gaming_video.normalize_clip", return_value=True), \
-             patch("niches.gaming.stages.render_gaming_video.concat_with_transitions", return_value=True), \
-             patch("niches.gaming.stages.render_gaming_video.add_text_overlay", return_value=True), \
-             patch.object(Path, "exists", return_value=True), \
-             patch("niches.gaming.stages.render_gaming_video.get_duration", return_value=10.0), \
-             patch("niches.gaming.stages.render_gaming_video.compute_hash", return_value=None), \
-             patch("niches.gaming.stages.render_gaming_video.validate_platform_variant", return_value=False):
-
+        with (
+            patch("niches.gaming.stages.render_gaming_video.normalize_clip", return_value=True),
+            patch(
+                "niches.gaming.stages.render_gaming_video.concat_with_transitions",
+                return_value=True,
+            ),
+            patch("niches.gaming.stages.render_gaming_video.add_text_overlay", return_value=True),
+            patch.object(Path, "exists", return_value=True),
+            patch("niches.gaming.stages.render_gaming_video.get_duration", return_value=10.0),
+            patch("niches.gaming.stages.render_gaming_video.compute_hash", return_value=None),
+            patch(
+                "niches.gaming.stages.render_gaming_video.validate_platform_variant",
+                return_value=False,
+            ),
+        ):
             with pytest.raises(VideoValidationError):
                 stage._render_compilation(stories, "test_run", {"rendered": 0}, {})
 
@@ -141,6 +162,7 @@ class TestCompilationValidation:
 # ---------------------------------------------------------------------------
 # genlab-core validator: fail-closed / fail-open behavior
 # ---------------------------------------------------------------------------
+
 
 class TestColorSpaceFailClosed:
     def test_returns_false_on_parse_error(self):
@@ -150,8 +172,10 @@ class TestColorSpaceFailClosed:
         mock_result = MagicMock()
         mock_result.stdout = "not json at all"
 
-        with patch("genlab_core.media.ffmpeg.get_ffprobe_binary", return_value="ffprobe"), \
-             patch("subprocess.run", return_value=mock_result):
+        with (
+            patch("genlab_core.media.ffmpeg.get_ffprobe_binary", return_value="ffprobe"),
+            patch("subprocess.run", return_value=mock_result),
+        ):
             result = check_color_space(Path("/bad.mp4"), "instagram")
 
         assert result is False
@@ -160,19 +184,25 @@ class TestColorSpaceFailClosed:
         """check_color_space returns True when all streams are bt709."""
         from genlab_core.media.video_validator import check_color_space
 
-        probe_output = json.dumps({
-            "streams": [{
-                "color_primaries": "bt709",
-                "color_transfer": "bt709",
-                "color_space": "bt709",
-            }]
-        })
+        probe_output = json.dumps(
+            {
+                "streams": [
+                    {
+                        "color_primaries": "bt709",
+                        "color_transfer": "bt709",
+                        "color_space": "bt709",
+                    }
+                ]
+            }
+        )
 
         mock_result = MagicMock()
         mock_result.stdout = probe_output
 
-        with patch("genlab_core.media.ffmpeg.get_ffprobe_binary", return_value="ffprobe"), \
-             patch("subprocess.run", return_value=mock_result):
+        with (
+            patch("genlab_core.media.ffmpeg.get_ffprobe_binary", return_value="ffprobe"),
+            patch("subprocess.run", return_value=mock_result),
+        ):
             result = check_color_space(Path("/good.mp4"), "instagram")
 
         assert result is True
@@ -183,13 +213,13 @@ class TestVmafFailOpen:
         """When VMAF output is unparseable, returns True (fail-open) with warning."""
         from genlab_core.media.video_validator import check_vmaf
 
-        with patch("genlab_core.media.ffmpeg.get_ffmpeg_binary", return_value="ffmpeg"), \
-             patch("subprocess.run"), \
-             patch("builtins.open", side_effect=FileNotFoundError("no vmaf log")):
+        with (
+            patch("genlab_core.media.ffmpeg.get_ffmpeg_binary", return_value="ffmpeg"),
+            patch("subprocess.run"),
+            patch("builtins.open", side_effect=FileNotFoundError("no vmaf log")),
+        ):
             with caplog.at_level(logging.WARNING):
-                passed, score = check_vmaf(
-                    Path("/master.mp4"), Path("/variant.mp4"), "instagram"
-                )
+                passed, score = check_vmaf(Path("/master.mp4"), Path("/variant.mp4"), "instagram")
 
         assert passed is True
         assert score == 0.0
@@ -200,7 +230,9 @@ class TestVmafFailOpen:
 # VideoValidationError is importable
 # ---------------------------------------------------------------------------
 
+
 class TestVideoValidationError:
     def test_importable(self):
         from niches.gaming.stages.render_gaming_video import VideoValidationError
+
         assert issubclass(VideoValidationError, RuntimeError)

@@ -9,6 +9,7 @@ Method (Kveton et al., ICML 2021):
 The exploration inflation prevents transferred priors from causing
 over-exploitation — the new niche needs to verify source patterns.
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,9 +65,7 @@ def apply_warm_start(
 
     transfers = TRANSFER_MATRIX.get(target_niche, {})
     if not transfers:
-        logger.warning(
-            "[meta_prior] no transfer mapping for target niche '%s'", target_niche
-        )
+        logger.warning("[meta_prior] no transfer mapping for target niche '%s'", target_niche)
         return {}
 
     source_niche = next(iter(transfers))

@@ -8,6 +8,7 @@ Usage:
     python -m genlab_core.monitoring.health_monitor          # full check
     python -m genlab_core.monitoring.health_monitor --niche anime  # single niche
 """
+
 from __future__ import annotations
 
 import json
@@ -124,7 +125,9 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
                 _uv = os.environ.get("UV_PATH", "/usr/local/bin/uv")
                 result = subprocess.run(
                     [_uv, "pip", "install", "--upgrade", "yt-dlp"],
-                    capture_output=True, text=True, timeout=60,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                     cwd=os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab"),
                 )
                 if result.returncode == 0:
@@ -136,9 +139,7 @@ def check_download_failures(reports: list[dict], niche_id: str) -> list[Alert]:
                         "address network/proxy/credential failures)"
                     )
                 else:
-                    alert.auto_fix = (
-                        f"yt-dlp update failed (rc={result.returncode})"
-                    )
+                    alert.auto_fix = f"yt-dlp update failed (rc={result.returncode})"
             except Exception as e:
                 alert.auto_fix = f"yt-dlp update failed: {e}"
         alerts.append(alert)
@@ -180,16 +181,18 @@ def check_zero_blueprints(reports: list[dict], niche_id: str) -> list[Alert]:
         diagnosis.append("stories created but 0 blueprints (dedup?)")
 
     severity = "warning" if consecutive_zero == 1 else "critical"
-    alerts.append(Alert(
-        check="zero_blueprints",
-        severity=severity,
-        message=(
-            f"{consecutive_zero} consecutive run(s) with 0 blueprints. "
-            f"Likely: {', '.join(diagnosis) or 'unknown'}"
-        ),
-        niche_id=niche_id,
-        details={"consecutive_zero": consecutive_zero, "diagnosis": diagnosis},
-    ))
+    alerts.append(
+        Alert(
+            check="zero_blueprints",
+            severity=severity,
+            message=(
+                f"{consecutive_zero} consecutive run(s) with 0 blueprints. "
+                f"Likely: {', '.join(diagnosis) or 'unknown'}"
+            ),
+            niche_id=niche_id,
+            details={"consecutive_zero": consecutive_zero, "diagnosis": diagnosis},
+        )
+    )
     return alerts
 
 
@@ -217,13 +220,15 @@ def check_qc_collapse(reports: list[dict], niche_id: str) -> list[Alert]:
             break
 
     if consecutive_zero >= 2:
-        alerts.append(Alert(
-            check="qc_collapse",
-            severity="critical",
-            message=f"QC at 0% for {consecutive_zero} consecutive runs",
-            niche_id=niche_id,
-            details={"consecutive_zero_qc": consecutive_zero},
-        ))
+        alerts.append(
+            Alert(
+                check="qc_collapse",
+                severity="critical",
+                message=f"QC at 0% for {consecutive_zero} consecutive runs",
+                niche_id=niche_id,
+                details={"consecutive_zero_qc": consecutive_zero},
+            )
+        )
     return alerts
 
 
@@ -237,21 +242,25 @@ def check_source_starvation(reports: list[dict], niche_id: str) -> list[Alert]:
             try:
                 vids = json.loads(tv_path.read_text())
                 if len(vids) < 3:
-                    alerts.append(Alert(
-                        check="source_starvation",
-                        severity="warning",
-                        message=f"Only {len(vids)} videos fetched (< 3 minimum)",
-                        niche_id=niche_id,
-                    ))
+                    alerts.append(
+                        Alert(
+                            check="source_starvation",
+                            severity="warning",
+                            message=f"Only {len(vids)} videos fetched (< 3 minimum)",
+                            niche_id=niche_id,
+                        )
+                    )
                 # Check single-source dependency
                 channels = set(v.get("channel_name", "") for v in vids)
                 if len(channels) == 1 and len(vids) > 3:
-                    alerts.append(Alert(
-                        check="single_source",
-                        severity="warning",
-                        message=f"All {len(vids)} videos from single channel: {channels.pop()}",
-                        niche_id=niche_id,
-                    ))
+                    alerts.append(
+                        Alert(
+                            check="single_source",
+                            severity="warning",
+                            message=f"All {len(vids)} videos from single channel: {channels.pop()}",
+                            niche_id=niche_id,
+                        )
+                    )
             except (json.JSONDecodeError, ValueError):
                 pass
     return alerts
@@ -262,6 +271,7 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -273,13 +283,15 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
         if last_update:
             days_stale = (datetime.now(UTC) - last_update).days
             if days_stale > 7:
-                alerts.append(Alert(
-                    check="bandit_stale",
-                    severity="warning",
-                    message=f"Bandit arms not updated in {days_stale} days",
-                    niche_id=niche_id,
-                    details={"days_stale": days_stale, "last_update": last_update.isoformat()},
-                ))
+                alerts.append(
+                    Alert(
+                        check="bandit_stale",
+                        severity="warning",
+                        message=f"Bandit arms not updated in {days_stale} days",
+                        niche_id=niche_id,
+                        details={"days_stale": days_stale, "last_update": last_update.isoformat()},
+                    )
+                )
     except Exception as e:
         logger.debug("Bandit staleness check failed: %s", e)
     return alerts
@@ -302,6 +314,7 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
 
@@ -351,21 +364,23 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
             ]
 
             if content_unmoved:
-                alerts.append(Alert(
-                    check="bandit_posterior_drift",
-                    severity="error",
-                    message=(
-                        f"{len(content_unmoved)} content arm(s) at uniform "
-                        f"prior despite arm-specific rewards in last 14 days"
-                    ),
-                    niche_id=niche_id,
-                    details={
-                        "unmoved_arms": [
-                            {"arm_id": a, "n_plays": n, "pf_rows_for_arm": p}
-                            for a, _, _, n, p in content_unmoved[:10]
-                        ],
-                    },
-                ))
+                alerts.append(
+                    Alert(
+                        check="bandit_posterior_drift",
+                        severity="error",
+                        message=(
+                            f"{len(content_unmoved)} content arm(s) at uniform "
+                            f"prior despite arm-specific rewards in last 14 days"
+                        ),
+                        niche_id=niche_id,
+                        details={
+                            "unmoved_arms": [
+                                {"arm_id": a, "n_plays": n, "pf_rows_for_arm": p}
+                                for a, _, _, n, p in content_unmoved[:10]
+                            ],
+                        },
+                    )
+                )
 
             # STYLE ARMS: bandit_context.extra_arms is the only path
             # that credits them. Loop over rows separately because
@@ -388,20 +403,22 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
             # of the 2026-05-20 hook_style-not-propagated bug — but a
             # small number can legitimately be cold.
             if style_unmoved and recent_rewards >= 50:
-                alerts.append(Alert(
-                    check="bandit_posterior_drift",
-                    severity="warning",
-                    message=(
-                        f"{len(style_unmoved)} style:* arms unmoved after "
-                        f"{recent_rewards} rewards — check that publisher "
-                        "writes bandit_context.extra_arms"
-                    ),
-                    niche_id=niche_id,
-                    details={
-                        "unmoved_arms": style_unmoved[:10],
-                        "recent_rewards": recent_rewards,
-                    },
-                ))
+                alerts.append(
+                    Alert(
+                        check="bandit_posterior_drift",
+                        severity="warning",
+                        message=(
+                            f"{len(style_unmoved)} style:* arms unmoved after "
+                            f"{recent_rewards} rewards — check that publisher "
+                            "writes bandit_context.extra_arms"
+                        ),
+                        niche_id=niche_id,
+                        details={
+                            "unmoved_arms": style_unmoved[:10],
+                            "recent_rewards": recent_rewards,
+                        },
+                    )
+                )
         conn.close()
     except Exception as e:
         logger.debug("Bandit posterior drift check failed: %s", e)
@@ -422,6 +439,7 @@ def check_missing_media(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -455,33 +473,37 @@ def check_missing_media(niche_id: str) -> list[Alert]:
         all_broken_gate = total_with_paths >= 1 and len(broken) == total_with_paths
         if rate_gate or all_broken_gate:
             pct = (len(broken) * 100 // total_with_paths) if total_with_paths else 0
-            alerts.append(Alert(
-                check="missing_media_mass",
-                severity="critical",
-                message=(
-                    f"{len(broken)}/{total_with_paths} blueprints appear to have "
-                    f"missing media ({pct}%) — likely a symlink/mount/host issue, "
-                    f"NOT auto-archiving"
-                ),
-                niche_id=niche_id,
-                details={
-                    "broken_count": len(broken),
-                    "total": total_with_paths,
-                    "trigger": "all_broken" if all_broken_gate and not rate_gate else "rate",
-                },
-            ))
+            alerts.append(
+                Alert(
+                    check="missing_media_mass",
+                    severity="critical",
+                    message=(
+                        f"{len(broken)}/{total_with_paths} blueprints appear to have "
+                        f"missing media ({pct}%) — likely a symlink/mount/host issue, "
+                        f"NOT auto-archiving"
+                    ),
+                    niche_id=niche_id,
+                    details={
+                        "broken_count": len(broken),
+                        "total": total_with_paths,
+                        "trigger": "all_broken" if all_broken_gate and not rate_gate else "rate",
+                    },
+                )
+            )
             conn.close()
             return alerts
 
         # SAFETY GATE 2: Verify the media root mount is actually accessible
         media_root = pathlib.Path(os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")) / ".tmp"
         if not media_root.exists():
-            alerts.append(Alert(
-                check="media_root_missing",
-                severity="critical",
-                message=f"Media root {media_root} does not exist — symlink broken",
-                niche_id=niche_id,
-            ))
+            alerts.append(
+                Alert(
+                    check="media_root_missing",
+                    severity="critical",
+                    message=f"Media root {media_root} does not exist — symlink broken",
+                    niche_id=niche_id,
+                )
+            )
             conn.close()
             return alerts
 
@@ -494,13 +516,15 @@ def check_missing_media(niche_id: str) -> list[Alert]:
                 (broken,),
             )
             conn.commit()
-            alerts.append(Alert(
-                check="missing_media",
-                severity="critical",
-                message=f"{len(broken)} VISUAL_READY blueprints with missing media files",
-                niche_id=niche_id,
-                auto_fix=f"Archived {len(broken)} blueprints",
-            ))
+            alerts.append(
+                Alert(
+                    check="missing_media",
+                    severity="critical",
+                    message=f"{len(broken)} VISUAL_READY blueprints with missing media files",
+                    niche_id=niche_id,
+                    auto_fix=f"Archived {len(broken)} blueprints",
+                )
+            )
         conn.close()
     except Exception as e:
         logger.debug("Missing media check failed: %s", e)
@@ -512,6 +536,7 @@ def check_content_gap(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -524,12 +549,14 @@ def check_content_gap(niche_id: str) -> list[Alert]:
         count = cur.fetchone()[0]
         conn.close()
         if count == 0:
-            alerts.append(Alert(
-                check="content_gap",
-                severity="warning",
-                message="No approved+scheduled content for next 48 hours",
-                niche_id=niche_id,
-            ))
+            alerts.append(
+                Alert(
+                    check="content_gap",
+                    severity="warning",
+                    message="No approved+scheduled content for next 48 hours",
+                    niche_id=niche_id,
+                )
+            )
     except Exception as e:
         logger.debug("Content gap check failed: %s", e)
     return alerts
@@ -551,6 +578,7 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         # publish_attempts lives in the extra JSONB field on Postgres, not as
@@ -597,19 +625,21 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
                 "UPDATE blueprints SET status = %s WHERE id = %s",
                 (new_status, bp_id),
             )
-            alerts.append(Alert(
-                check="stuck_publishing",
-                severity="warning",
-                message=f"Recovered stuck PUBLISHING '{(title or '')[:60]}': {reason}",
-                niche_id=niche_id,
-                details={
-                    "blueprint_id": str(bp_id),
-                    "new_status": new_status,
-                    "updated_at": str(updated_at),
-                    "attempts": attempts,
-                },
-                auto_fix=f"status={new_status}",
-            ))
+            alerts.append(
+                Alert(
+                    check="stuck_publishing",
+                    severity="warning",
+                    message=f"Recovered stuck PUBLISHING '{(title or '')[:60]}': {reason}",
+                    niche_id=niche_id,
+                    details={
+                        "blueprint_id": str(bp_id),
+                        "new_status": new_status,
+                        "updated_at": str(updated_at),
+                        "attempts": attempts,
+                    },
+                    auto_fix=f"status={new_status}",
+                )
+            )
         conn.commit()
         conn.close()
     except Exception as e:
@@ -635,6 +665,7 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -657,14 +688,16 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
         conn.commit()
         conn.close()
         if archived:
-            alerts.append(Alert(
-                check="orphan_drafts_archived",
-                severity="warning",
-                message=f"auto-archived {len(archived)} stale DRAFTED orphans (>7d, no video, no schedule)",
-                niche_id=niche_id,
-                details={"count": len(archived)},
-                auto_fix="archived",
-            ))
+            alerts.append(
+                Alert(
+                    check="orphan_drafts_archived",
+                    severity="warning",
+                    message=f"auto-archived {len(archived)} stale DRAFTED orphans (>7d, no video, no schedule)",
+                    niche_id=niche_id,
+                    details={"count": len(archived)},
+                    auto_fix="archived",
+                )
+            )
     except Exception as e:
         logger.debug("Orphan-draft archive failed: %s", e)
     return alerts
@@ -675,6 +708,7 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
     alerts = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -687,13 +721,15 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
         conn.close()
         failed = by_status.get("FAILED", 0)
         if failed >= 5:
-            alerts.append(Alert(
-                check="publish_failures",
-                severity="critical",
-                message=f"{failed} FAILED publishes in last 24h",
-                niche_id=niche_id,
-                details={"status_breakdown": by_status},
-            ))
+            alerts.append(
+                Alert(
+                    check="publish_failures",
+                    severity="critical",
+                    message=f"{failed} FAILED publishes in last 24h",
+                    niche_id=niche_id,
+                    details={"status_breakdown": by_status},
+                )
+            )
     except Exception as e:
         logger.debug("Publish failures check failed: %s", e)
     return alerts
@@ -708,7 +744,9 @@ def check_disk() -> list[Alert]:
     try:
         result = subprocess.run(
             ["df", "--output=pcent,target", "/", "/mnt/genlab-media"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         for line in result.stdout.strip().split("\n")[1:]:
             parts = line.strip().split()
@@ -716,11 +754,13 @@ def check_disk() -> list[Alert]:
                 pct = int(parts[0].replace("%", ""))
                 mount = parts[1]
                 if pct > 85:
-                    alerts.append(Alert(
-                        check="disk_pressure",
-                        severity="critical" if pct > 90 else "warning",
-                        message=f"{mount} at {pct}% usage",
-                    ))
+                    alerts.append(
+                        Alert(
+                            check="disk_pressure",
+                            severity="critical" if pct > 90 else "warning",
+                            message=f"{mount} at {pct}% usage",
+                        )
+                    )
     except Exception as e:
         logger.debug("Disk check failed: %s", e)
     return alerts
@@ -732,7 +772,9 @@ def check_services() -> list[Alert]:
     try:
         result = subprocess.run(
             ["systemctl", "list-units", "genlab-*", "--state=failed", "--no-pager", "--plain"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         for line in result.stdout.strip().split("\n"):
             if "failed" not in line.lower():
@@ -743,15 +785,19 @@ def check_services() -> list[Alert]:
             # Attempt restart
             fix_result = subprocess.run(
                 ["systemctl", "restart", unit],
-                capture_output=True, text=True, timeout=15,
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             fix_status = "restarted" if fix_result.returncode == 0 else "restart failed"
-            alerts.append(Alert(
-                check="service_down",
-                severity="critical",
-                message=f"{unit} is in failed state",
-                auto_fix=fix_status,
-            ))
+            alerts.append(
+                Alert(
+                    check="service_down",
+                    severity="critical",
+                    message=f"{unit} is in failed state",
+                    auto_fix=fix_status,
+                )
+            )
     except Exception as e:
         logger.debug("Service check failed: %s", e)
     return alerts
@@ -787,10 +833,16 @@ def check_warp_health() -> list[Alert]:
         # Is warp-svc installed?  list-unit-files exits 0 even when
         # the unit is missing; check via show + LoadState instead.
         show = subprocess.run(
-            ["systemctl", "show", "warp-svc.service",
-             "--property=LoadState,ActiveState,SubState",
-             "--no-pager"],
-            capture_output=True, text=True, timeout=10,
+            [
+                "systemctl",
+                "show",
+                "warp-svc.service",
+                "--property=LoadState,ActiveState,SubState",
+                "--no-pager",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         kv = dict(
             (line.split("=", 1)[0], line.split("=", 1)[1])
@@ -803,22 +855,24 @@ def check_warp_health() -> list[Alert]:
 
         active = kv.get("ActiveState") == "active"
         if not active:
-            alerts.append(Alert(
-                check="warp_down",
-                severity="critical",
-                message=(
-                    f"warp-svc not active (ActiveState={kv.get('ActiveState')}, "
-                    f"SubState={kv.get('SubState')}). All yt-dlp downloads "
-                    "will fail with 'curl: (7) connection refused' until "
-                    "the daemon is restored. Run: systemctl restart warp-svc"
-                ),
-                details={
-                    "load_state": kv.get("LoadState"),
-                    "active_state": kv.get("ActiveState"),
-                    "sub_state": kv.get("SubState"),
-                },
-                auto_fix="not attempted (would need warp-cli mode/port reconfig)",
-            ))
+            alerts.append(
+                Alert(
+                    check="warp_down",
+                    severity="critical",
+                    message=(
+                        f"warp-svc not active (ActiveState={kv.get('ActiveState')}, "
+                        f"SubState={kv.get('SubState')}). All yt-dlp downloads "
+                        "will fail with 'curl: (7) connection refused' until "
+                        "the daemon is restored. Run: systemctl restart warp-svc"
+                    ),
+                    details={
+                        "load_state": kv.get("LoadState"),
+                        "active_state": kv.get("ActiveState"),
+                        "sub_state": kv.get("SubState"),
+                    },
+                    auto_fix="not attempted (would need warp-cli mode/port reconfig)",
+                )
+            )
             # Don't bother checking port if daemon is down.
             return alerts
 
@@ -827,24 +881,28 @@ def check_warp_health() -> list[Alert]:
         # `warp-cli mode proxy` + `warp-cli proxy port 40000` to
         # surface the SOCKS endpoint.
         ss = subprocess.run(
-            ["ss", "-tln"], capture_output=True, text=True, timeout=10,
+            ["ss", "-tln"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         port_listening = any(
-            "127.0.0.1:40000" in line and "LISTEN" in line
-            for line in ss.stdout.split("\n")
+            "127.0.0.1:40000" in line and "LISTEN" in line for line in ss.stdout.split("\n")
         )
         if not port_listening:
-            alerts.append(Alert(
-                check="warp_port_closed",
-                severity="critical",
-                message=(
-                    "warp-svc is active but SOCKS port 40000 is not "
-                    "listening. WARP likely flipped to whole-OS tunnel "
-                    "mode. Run: warp-cli mode proxy && warp-cli proxy "
-                    "port 40000 && warp-cli connect"
-                ),
-                details={"active_state": "active", "port_40000_listening": False},
-            ))
+            alerts.append(
+                Alert(
+                    check="warp_port_closed",
+                    severity="critical",
+                    message=(
+                        "warp-svc is active but SOCKS port 40000 is not "
+                        "listening. WARP likely flipped to whole-OS tunnel "
+                        "mode. Run: warp-cli mode proxy && warp-cli proxy "
+                        "port 40000 && warp-cli connect"
+                    ),
+                    details={"active_state": "active", "port_40000_listening": False},
+                )
+            )
     except Exception as e:
         logger.debug("WARP health check failed: %s", e)
     return alerts
@@ -878,7 +936,9 @@ def check_git_drift() -> list[Alert]:
     try:
         result = subprocess.run(
             ["git", "-C", project_root, "status", "--porcelain"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if result.returncode != 0:
             # Not a git repo, or git not available — silently skip.
@@ -914,46 +974,52 @@ def check_git_drift() -> list[Alert]:
         yaml_count = len(yaml_modified)
 
         if py_count >= 15:
-            alerts.append(Alert(
-                check="git_drift",
-                severity="critical",
-                message=(
-                    f"{py_count} uncommitted .py files on prod — edits "
-                    f"are being made directly on the production host and "
-                    f"never reaching the repo. Top 3: "
-                    f"{', '.join(py_src_modified[:3])}"
-                ),
-                details={
-                    "py_count": py_count,
-                    "yaml_count": yaml_count,
-                    "py_files": py_src_modified[:10],
-                },
-            ))
+            alerts.append(
+                Alert(
+                    check="git_drift",
+                    severity="critical",
+                    message=(
+                        f"{py_count} uncommitted .py files on prod — edits "
+                        f"are being made directly on the production host and "
+                        f"never reaching the repo. Top 3: "
+                        f"{', '.join(py_src_modified[:3])}"
+                    ),
+                    details={
+                        "py_count": py_count,
+                        "yaml_count": yaml_count,
+                        "py_files": py_src_modified[:10],
+                    },
+                )
+            )
         elif py_count >= 5:
-            alerts.append(Alert(
-                check="git_drift",
-                severity="warning",
-                message=(
-                    f"{py_count} uncommitted .py files on prod. Top 3: "
-                    f"{', '.join(py_src_modified[:3])}"
-                ),
-                details={
-                    "py_count": py_count,
-                    "yaml_count": yaml_count,
-                    "py_files": py_src_modified[:10],
-                },
-            ))
+            alerts.append(
+                Alert(
+                    check="git_drift",
+                    severity="warning",
+                    message=(
+                        f"{py_count} uncommitted .py files on prod. Top 3: "
+                        f"{', '.join(py_src_modified[:3])}"
+                    ),
+                    details={
+                        "py_count": py_count,
+                        "yaml_count": yaml_count,
+                        "py_files": py_src_modified[:10],
+                    },
+                )
+            )
 
         if yaml_count >= 30:
-            alerts.append(Alert(
-                check="git_drift_yaml",
-                severity="warning",
-                message=(
-                    f"{yaml_count} uncommitted yaml configs on prod — well "
-                    "above expected per-host override count."
-                ),
-                details={"yaml_count": yaml_count, "yaml_files": yaml_modified[:10]},
-            ))
+            alerts.append(
+                Alert(
+                    check="git_drift_yaml",
+                    severity="warning",
+                    message=(
+                        f"{yaml_count} uncommitted yaml configs on prod — well "
+                        "above expected per-host override count."
+                    ),
+                    details={"yaml_count": yaml_count, "yaml_files": yaml_modified[:10]},
+                )
+            )
     except Exception as e:
         logger.debug("Git drift check failed: %s", e)
     return alerts
@@ -970,11 +1036,13 @@ def check_swap() -> list[Alert]:
                 total = int(parts[1])
                 used = int(parts[2])
                 if total > 0 and used > 500 * 1024 * 1024:  # >500MB swap
-                    alerts.append(Alert(
-                        check="swap_pressure",
-                        severity="warning",
-                        message=f"Swap at {used // (1024*1024)}MB / {total // (1024*1024)}MB",
-                    ))
+                    alerts.append(
+                        Alert(
+                            check="swap_pressure",
+                            severity="warning",
+                            message=f"Swap at {used // (1024 * 1024)}MB / {total // (1024 * 1024)}MB",
+                        )
+                    )
     except Exception as e:
         logger.debug("Swap check failed: %s", e)
     return alerts
@@ -997,6 +1065,7 @@ def check_foreign_host_writes() -> list[Alert]:
     alerts: list[Alert] = []
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -1010,15 +1079,17 @@ def check_foreign_host_writes() -> list[Alert]:
             """
         )
         for host, count in cur.fetchall():
-            alerts.append(Alert(
-                check="foreign_host_write",
-                severity="critical",
-                message=(
-                    f"{count} blueprint(s) written from foreign host '{host}' "
-                    f"in the last hour — split-brain in progress"
-                ),
-                details={"host": host, "count": count},
-            ))
+            alerts.append(
+                Alert(
+                    check="foreign_host_write",
+                    severity="critical",
+                    message=(
+                        f"{count} blueprint(s) written from foreign host '{host}' "
+                        f"in the last hour — split-brain in progress"
+                    ),
+                    details={"host": host, "count": count},
+                )
+            )
         conn.close()
     except Exception as e:
         logger.debug("Foreign host check failed: %s", e)
@@ -1062,6 +1133,7 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
         return 0
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
 
@@ -1130,6 +1202,7 @@ def resolve_stale_alerts() -> int:
     """Auto-resolve alerts older than 24h (they'll be re-created if still active)."""
     try:
         import psycopg
+
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
@@ -1149,6 +1222,7 @@ def resolve_stale_alerts() -> int:
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(description="Pipeline health monitor")
     parser.add_argument("--niche", help="Check single niche (default: all)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
@@ -1173,16 +1247,22 @@ def main() -> None:
     # Output
     if args.json:
         import json as _json
-        print(_json.dumps([
-            {
-                "check": a.check,
-                "severity": a.severity,
-                "niche_id": a.niche_id,
-                "message": a.message,
-                "auto_fix": a.auto_fix,
-            }
-            for a in alerts
-        ], indent=2))
+
+        print(
+            _json.dumps(
+                [
+                    {
+                        "check": a.check,
+                        "severity": a.severity,
+                        "niche_id": a.niche_id,
+                        "message": a.message,
+                        "auto_fix": a.auto_fix,
+                    }
+                    for a in alerts
+                ],
+                indent=2,
+            )
+        )
     else:
         if not alerts:
             print("All checks passed. No issues detected.")

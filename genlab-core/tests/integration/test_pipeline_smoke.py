@@ -76,7 +76,10 @@ def _build_mock_niche_config(niche_id: str) -> dict[str, Any]:
                 # Real shared stages:
                 {"class": "genlab_core.pipeline.stages.express_lane.ExpressLane", "enabled": True},
                 {"class": "genlab_core.pipeline.stages.qc_gates.QCGates", "enabled": True},
-                {"class": "genlab_core.pipeline.stages.virality_scoring.ViralityScoring", "enabled": True},
+                {
+                    "class": "genlab_core.pipeline.stages.virality_scoring.ViralityScoring",
+                    "enabled": True,
+                },
                 # Mock external-dependent stages:
                 {"class": f"{_MOCK_MODULE}.MockPushToBacklog", "enabled": True},
                 {"class": f"{_MOCK_MODULE}.MockFetchInsights", "enabled": True},
@@ -163,13 +166,13 @@ class TestPipelineSmokeAllNiches:
 
     @pytest.mark.parametrize("niche_id", SUPPORTED_NICHE_IDS)
     def test_pipeline_completes_without_exceptions(
-        self, niche_id: str, tmp_path: Path,
+        self,
+        niche_id: str,
+        tmp_path: Path,
     ) -> None:
         """Pipeline runs all stages end-to-end without raising."""
         ctx = _run_pipeline(niche_id, tmp_path)
-        assert not ctx.is_aborted, (
-            f"Pipeline for '{niche_id}' was aborted. Errors: {ctx.errors}"
-        )
+        assert not ctx.is_aborted, f"Pipeline for '{niche_id}' was aborted. Errors: {ctx.errors}"
 
     @pytest.mark.parametrize("niche_id", SUPPORTED_NICHE_IDS)
     def test_stories_fetched(self, niche_id: str, tmp_path: Path) -> None:
@@ -193,9 +196,7 @@ class TestPipelineSmokeAllNiches:
         ctx = _run_pipeline(niche_id, tmp_path)
         report_path = ctx.run_stats.get("report_path")
         assert report_path, f"No report_path in run_stats for '{niche_id}'"
-        assert Path(report_path).exists(), (
-            f"Report file does not exist: {report_path}"
-        )
+        assert Path(report_path).exists(), f"Report file does not exist: {report_path}"
 
         report = json.loads(Path(report_path).read_text())
         assert report["niche_id"] == niche_id
@@ -209,25 +210,19 @@ class TestPipelineSmokeAllNiches:
         """Every stage records its execution time in run_stats."""
         ctx = _run_pipeline(niche_id, tmp_path)
         timings = ctx.run_stats.get("_stage_timings", {})
-        assert len(timings) > 0, (
-            f"No stage timings recorded for '{niche_id}'"
-        )
+        assert len(timings) > 0, f"No stage timings recorded for '{niche_id}'"
         for stage_name, elapsed in timings.items():
             assert isinstance(elapsed, float), (
                 f"Timing for {stage_name} is not a float: {type(elapsed)}"
             )
-            assert elapsed >= 0, (
-                f"Negative timing for {stage_name}: {elapsed}"
-            )
+            assert elapsed >= 0, f"Negative timing for {stage_name}: {elapsed}"
 
     @pytest.mark.parametrize("niche_id", SUPPORTED_NICHE_IDS)
     def test_no_fatal_errors(self, niche_id: str, tmp_path: Path) -> None:
         """Pipeline completes with zero fatal errors."""
         ctx = _run_pipeline(niche_id, tmp_path)
         fatal_errors = [e for e in ctx.errors if e.get("fatal")]
-        assert len(fatal_errors) == 0, (
-            f"Fatal errors in '{niche_id}': {fatal_errors}"
-        )
+        assert len(fatal_errors) == 0, f"Fatal errors in '{niche_id}': {fatal_errors}"
 
 
 # ── Tests: Shared stages with mock data ────────────────────────────────────
@@ -339,8 +334,7 @@ class TestPipelineEdgeCases:
         timings = ctx.run_stats.get("_stage_timings", {})
         # We defined 12 stages in mock config
         assert len(timings) == 12, (
-            f"Expected 12 stage timings, got {len(timings)}: "
-            f"{list(timings.keys())}"
+            f"Expected 12 stage timings, got {len(timings)}: {list(timings.keys())}"
         )
 
     def test_disabled_stages_are_skipped(self, tmp_path: Path) -> None:
@@ -356,8 +350,7 @@ class TestPipelineEdgeCases:
         ctx = _run_pipeline("anime", tmp_path)
         for story in ctx.stories:
             assert story.get("niche_id") == "anime", (
-                f"Story '{story.get('title')}' has wrong niche_id: "
-                f"{story.get('niche_id')}"
+                f"Story '{story.get('title')}' has wrong niche_id: {story.get('niche_id')}"
             )
 
     def test_blueprints_have_required_fields(self, tmp_path: Path) -> None:
@@ -369,19 +362,12 @@ class TestPipelineEdgeCases:
             assert bp.get("format") == "reel", (
                 f"Blueprint format is '{bp.get('format')}', expected 'reel'"
             )
-            assert bp.get("sources") or bp.get("source_urls"), (
-                "Blueprint missing sources"
-            )
+            assert bp.get("sources") or bp.get("source_urls"), "Blueprint missing sources"
 
     def test_express_lane_sorts_critical_first(self, tmp_path: Path) -> None:
         """After ExpressLane, CRITICAL stories appear before LOW stories."""
         ctx = _run_pipeline("ai_creators", tmp_path)
-        urgencies = [
-            s.get("urgency_classification", {}).get("urgency", "LOW")
-            for s in ctx.stories
-        ]
+        urgencies = [s.get("urgency_classification", {}).get("urgency", "LOW") for s in ctx.stories]
         level_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
         orders = [level_order.get(u, 9) for u in urgencies]
-        assert orders == sorted(orders), (
-            f"Stories not sorted by urgency: {urgencies}"
-        )
+        assert orders == sorted(orders), f"Stories not sorted by urgency: {urgencies}"

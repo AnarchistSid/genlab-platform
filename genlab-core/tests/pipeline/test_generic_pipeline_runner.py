@@ -3,6 +3,7 @@
 These tests use mock stages and a minimal niche config to verify the
 generic pipeline runner in isolation. No real niche modules are imported.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -126,7 +127,9 @@ def test_runner_raises_on_unknown_niche() -> None:
 def test_runner_groups_parallel_stages() -> None:
     """Consecutive stages with the same parallel_group are batched together."""
     config = _make_config(
-        StageA, StageB, StageC,
+        StageA,
+        StageB,
+        StageC,
         parallel_groups={"StageA": "fetch", "StageB": "fetch"},
     )
     runner = GenericPipelineRunner(

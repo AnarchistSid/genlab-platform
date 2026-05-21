@@ -23,6 +23,7 @@ Why ISO 8601 not Unix timestamp:
   expired untouched. Commit b5ed1d9 made the parser accept both formats,
   but new tokens are written in ISO for clarity.
 """
+
 from __future__ import annotations
 
 import os
@@ -50,10 +51,7 @@ def validate_token(token: str) -> dict:
         timeout=15,
     )
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"Token validation failed (HTTP {resp.status_code}): "
-            f"{resp.text[:300]}"
-        )
+        raise RuntimeError(f"Token validation failed (HTTP {resp.status_code}): {resp.text[:300]}")
     data = resp.json()
     if "id" not in data:
         raise RuntimeError(f"/me response missing 'id': {data}")
@@ -78,10 +76,7 @@ def exchange_for_long_lived(short_token: str, app_secret: str) -> str:
         timeout=15,
     )
     if resp.status_code != 200:
-        raise RuntimeError(
-            f"th_exchange_token failed (HTTP {resp.status_code}): "
-            f"{resp.text[:300]}"
-        )
+        raise RuntimeError(f"th_exchange_token failed (HTTP {resp.status_code}): {resp.text[:300]}")
     long_token = resp.json().get("access_token", "")
     if not long_token:
         raise RuntimeError(f"Exchange returned no access_token: {resp.json()}")
@@ -151,7 +146,10 @@ def restart_services() -> None:
         try:
             subprocess.run(
                 ["systemctl", "restart", svc],
-                check=True, capture_output=True, text=True, timeout=30,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             print(f"  ✓ Restarted {svc}")
         except subprocess.CalledProcessError as exc:

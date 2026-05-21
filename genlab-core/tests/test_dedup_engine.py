@@ -1,4 +1,5 @@
 """Tests for genlab_core.intelligence.dedup_engine."""
+
 import hashlib
 
 from genlab_core.intelligence.dedup_engine import (
@@ -117,11 +118,13 @@ class TestDedupPass3:
         """TF-IDF should catch semantically similar titles."""
         items = [
             {"url": f"https://site{i}.com", "title": t}
-            for i, t in enumerate([
-                "OpenAI unveils its next generation language model GPT-5",
-                "GPT-5 announced by OpenAI as next generation language model",
-                "Nintendo Switch 2 release date confirmed for March",
-            ])
+            for i, t in enumerate(
+                [
+                    "OpenAI unveils its next generation language model GPT-5",
+                    "GPT-5 announced by OpenAI as next generation language model",
+                    "Nintendo Switch 2 release date confirmed for March",
+                ]
+            )
         ]
         engine = DedupEngine(jaccard_threshold=1.0, tfidf_threshold=0.50)
         result = engine.run(items)
@@ -162,7 +165,10 @@ class TestDedupCounts:
         items = [
             {"url": "https://a.com/1", "title": "Alpha Beta Gamma Story"},
             {"url": "https://a.com/1", "title": "Duplicate URL Story"},  # pass 1
-            {"url": "https://b.com/2", "title": "Alpha Beta Gamma Story Again"},  # pass 2 (similar title at low threshold)
+            {
+                "url": "https://b.com/2",
+                "title": "Alpha Beta Gamma Story Again",
+            },  # pass 2 (similar title at low threshold)
         ]
         engine = DedupEngine(jaccard_threshold=0.50, tfidf_threshold=1.0)
         result = engine.run(items)

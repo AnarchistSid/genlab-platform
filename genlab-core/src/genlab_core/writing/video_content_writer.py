@@ -38,9 +38,12 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "gamers aged 16-30",
         "ctas": [
-            "Drop your take below 👇", "Who else caught this?",
-            "Tag someone who mains this", "Thoughts? 💀",
-            "Agree or disagree?", "Name a better play 🎮",
+            "Drop your take below 👇",
+            "Who else caught this?",
+            "Tag someone who mains this",
+            "Thoughts? 💀",
+            "Agree or disagree?",
+            "Name a better play 🎮",
         ],
         "hashtags": ["#Gaming", "#Gamer", "#GamingClips", "#VideoGames"],
     },
@@ -53,9 +56,12 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "sports fans aged 18-35",
         "ctas": [
-            "Comment your hot take 👇", "Did you see this live?",
-            "Who's your pick?", "Rate this play 1-10",
-            "Agree or nah?", "Would you start them?",
+            "Comment your hot take 👇",
+            "Did you see this live?",
+            "Who's your pick?",
+            "Rate this play 1-10",
+            "Agree or nah?",
+            "Would you start them?",
         ],
         "hashtags": ["#Sports", "#SportsHighlights", "#Clutch"],
     },
@@ -68,9 +74,12 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "movie fans aged 18-40",
         "ctas": [
-            "Have you seen this yet?", "Watch or skip?",
-            "Best film of the year?", "What do you think 👇",
-            "Rate this trailer 1-10", "Overhyped or underrated?",
+            "Have you seen this yet?",
+            "Watch or skip?",
+            "Best film of the year?",
+            "What do you think 👇",
+            "Rate this trailer 1-10",
+            "Overhyped or underrated?",
         ],
         "hashtags": ["#Movies", "#Film", "#Cinema", "#Trailer"],
     },
@@ -84,9 +93,12 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
         ),
         "audience": "anime fans aged 16-30",
         "ctas": [
-            "Are you watching this?", "W or L take? 👇",
-            "Peak or mid?", "Rate this season so far",
-            "Caught up yet?", "Sub or dub?",
+            "Are you watching this?",
+            "W or L take? 👇",
+            "Peak or mid?",
+            "Rate this season so far",
+            "Caught up yet?",
+            "Sub or dub?",
         ],
         "hashtags": ["#Anime", "#Manga", "#Otaku", "#AnimeFan"],
     },
@@ -156,7 +168,8 @@ def _complete_and_parse_json(
             if attempt == 0:
                 logger.info(
                     "[%s] LLM JSON parse failed (attempt 1/2): %s — retrying",
-                    niche_id, exc,
+                    niche_id,
+                    exc,
                 )
                 continue
             raise
@@ -194,6 +207,7 @@ def write_video_content(
     # this call, the ``style:*`` bandit arms never receive any signal — see
     # 2026-05-20 root cause analysis. None means cold-start / no arms seeded.
     from genlab_core.writing.llm_hook_generator import _HOOK_STYLES, pick_hook_style
+
     chosen_style = pick_hook_style(niche_id)
     style_hint = ""
     if chosen_style and chosen_style in _HOOK_STYLES:
@@ -297,7 +311,8 @@ def write_video_content(
             "angle (not just synonyms):\n"
             f"{existing_hooks_text}\n"
             "\n"
-            if existing_hooks_text else ""
+            if existing_hooks_text
+            else ""
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
@@ -341,15 +356,20 @@ def write_video_content(
         # Reject hooks containing banned generic phrases OR matching the
         # banned "X just <verb>" lead-in template.
         from genlab_core.writing.llm_hook_generator import _BANNED_PATTERNS
+
         hook_lower = hook.lower()
         if any(phrase in hook_lower for phrase in _BANNED_PHRASES):
             logger.warning(
-                "[%s] Rejected banned hook (phrase): %s", niche_id, hook[:60],
+                "[%s] Rejected banned hook (phrase): %s",
+                niche_id,
+                hook[:60],
             )
             content["hook"] = ""
         elif any(pat.search(hook) for pat in _BANNED_PATTERNS):
             logger.warning(
-                "[%s] Rejected banned hook (pattern): %s", niche_id, hook[:60],
+                "[%s] Rejected banned hook (pattern): %s",
+                niche_id,
+                hook[:60],
             )
             content["hook"] = ""
 
@@ -361,9 +381,16 @@ def write_video_content(
         import re as _re
 
         from genlab_core.cache.text_sanitizer import check_for_injection
+
         _url_re = _re.compile(r"https?://|www\.|bit\.ly|tinyurl|goo\.gl")
-        for field_name in ("hook", "instagram_caption", "twitter_content",
-                           "youtube_content", "facebook_content", "threads_content"):
+        for field_name in (
+            "hook",
+            "instagram_caption",
+            "twitter_content",
+            "youtube_content",
+            "facebook_content",
+            "threads_content",
+        ):
             val = content.get(field_name, "")
             if not isinstance(val, str) or not val:
                 continue
@@ -371,7 +398,9 @@ def write_video_content(
             if hits:
                 logger.warning(
                     "[%s] LLM output tripped injection heuristic in %s: %s",
-                    niche_id, field_name, hits,
+                    niche_id,
+                    field_name,
+                    hits,
                 )
                 content[field_name] = ""
                 continue
@@ -381,7 +410,8 @@ def write_video_content(
             if _url_re.search(val):
                 logger.warning(
                     "[%s] LLM output contains unexpected URL in %s — dropping",
-                    niche_id, field_name,
+                    niche_id,
+                    field_name,
                 )
                 content[field_name] = ""
 
@@ -404,8 +434,12 @@ def write_video_content(
             if len(all_tags) < 3:
                 # Dynamic topic-aware hashtags instead of static niche list
                 from genlab_core.writing.hashtag_generator import generate_hashtags
+
                 all_tags = generate_hashtags(
-                    {"title": video.get("title", ""), "summary": video.get("description_snippet", "")},
+                    {
+                        "title": video.get("title", ""),
+                        "summary": video.get("description_snippet", ""),
+                    },
                     niche_id,
                     platform="instagram",
                 )
@@ -422,7 +456,7 @@ def write_video_content(
             overhead = len(tags_str) + len(cta_text) + 4  # 4 = two "\n\n" separators
             body_budget = max(20, 200 - overhead)
             if len(body) > body_budget:
-                body = body[:body_budget - 3].rsplit(" ", 1)[0] + "..."
+                body = body[: body_budget - 3].rsplit(" ", 1)[0] + "..."
 
             # Reassemble: body + CTA + hashtags (total ≤200 chars)
             parts = [body]
@@ -436,7 +470,14 @@ def write_video_content(
         tw = content.get("twitter_content", "")
         # LLM sometimes returns {"tweet_text": "..."} instead of plain string
         if isinstance(tw, dict):
-            tw = tw.get("tweet_text") or tw.get("text") or tw.get("tweet") or str(list(tw.values())[0]) if tw else ""
+            tw = (
+                tw.get("tweet_text")
+                or tw.get("text")
+                or tw.get("tweet")
+                or str(list(tw.values())[0])
+                if tw
+                else ""
+            )
             content["twitter_content"] = tw
         if tw and len(tw) > 280:
             tw = tw[:277].rsplit(" ", 1)[0] + "..."
@@ -448,7 +489,11 @@ def write_video_content(
         if isinstance(yt, dict):
             yt = yt.get("title") or str(list(yt.values())[0]) if yt else ""
             # Store description separately for YouTube description field
-            yt_desc = content["youtube_content"].get("description", "") if isinstance(content.get("youtube_content"), dict) else ""
+            yt_desc = (
+                content["youtube_content"].get("description", "")
+                if isinstance(content.get("youtube_content"), dict)
+                else ""
+            )
             if yt_desc:
                 content["youtube_description"] = yt_desc
             content["youtube_content"] = yt
@@ -477,7 +522,9 @@ def write_video_content(
         # ── Fill missing fields from fallback ────────────────
         title = video.get("title", "")
         if not content.get("instagram_caption"):
-            content["instagram_caption"] = f"{title[:150]}\n\n{voice['hashtags'][0]} {voice['hashtags'][1]}"
+            content["instagram_caption"] = (
+                f"{title[:150]}\n\n{voice['hashtags'][0]} {voice['hashtags'][1]}"
+            )
         if not content.get("twitter_content"):
             content["twitter_content"] = title[:280]
         if not content.get("youtube_content"):
@@ -489,6 +536,7 @@ def write_video_content(
 
         # ── Generate aligned narration opening ─────────────────
         from genlab_core.writing.hook_alignment import build_narration_opening
+
         hook = content.get("hook", "")
         if hook:
             content["narration_opening"] = build_narration_opening(hook, title, niche_id)
@@ -497,7 +545,9 @@ def write_video_content(
         yt_raw = content.get("youtube_content", "")
         if isinstance(yt_raw, str):
             channel_name = voice.get("channel_name", niche_id.replace("_", " ").title())
-            content["youtube_attribution"] = f"Curated and produced by {channel_name} | Original commentary and analysis"
+            content["youtube_attribution"] = (
+                f"Curated and produced by {channel_name} | Original commentary and analysis"
+            )
 
         # Mark as LLM-written for hook strategy dedup
         content["written_by"] = "llm"
@@ -518,6 +568,7 @@ def write_video_content(
         title = video.get("title", "")
         channel = video.get("channel_name", "")
         from genlab_core.writing.hashtag_generator import generate_hashtags
+
         fallback_tags = generate_hashtags(
             {"title": title, "summary": video.get("description_snippet", "")},
             niche_id,
@@ -525,9 +576,7 @@ def write_video_content(
         )
         return {
             "hook": title[:57] + "..." if len(title) > 60 else title,
-            "instagram_caption": (
-                f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"
-            ),
+            "instagram_caption": (f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"),
             "twitter_content": title[:280],
             "youtube_content": title[:40],
             "facebook_content": f"{title} — what do you think?",

@@ -57,23 +57,23 @@ CANVAS_W = 1080
 CANVAS_H = 1920
 
 # Aspect ratio thresholds
-LANDSCAPE_THRESHOLD = 1.33   # w/h >= this -> landscape
-PORTRAIT_THRESHOLD = 0.75    # w/h <= this -> portrait
+LANDSCAPE_THRESHOLD = 1.33  # w/h >= this -> landscape
+PORTRAIT_THRESHOLD = 0.75  # w/h <= this -> portrait
 # Between 0.75 and 1.33 = SQUARE
 
 # Layout A: Landscape — video VERTICALLY CENTERED, branding above it
-L_VIDEO_H = 608               # 16:9 at 1080w = 608h
-L_VIDEO_Y = (CANVAS_H - L_VIDEO_H) // 2   # 656 — centered vertically
-L_HOOK_Y = L_VIDEO_Y - 120    # hook text above video with 16px clear gap
-L_LOGO_Y = L_HOOK_Y - 150     # logo/name above hook with breathing room
+L_VIDEO_H = 608  # 16:9 at 1080w = 608h
+L_VIDEO_Y = (CANVAS_H - L_VIDEO_H) // 2  # 656 — centered vertically
+L_HOOK_Y = L_VIDEO_Y - 120  # hook text above video with 16px clear gap
+L_LOGO_Y = L_HOOK_Y - 150  # logo/name above hook with breathing room
 
 # Layout B: Portrait — clean full-screen video, NO branding/hook overlay
 # Portrait videos fill the entire 1080x1920 canvas with zero overlays.
 # Branding comes from the caption/post text, not burned into the video.
 
 # Layout C: Square — video vertically centered, branding above
-S_VIDEO_H = 1080              # 1080x1080 square video
-S_VIDEO_Y = (CANVAS_H - S_VIDEO_H) // 2   # 420 — centered vertically
+S_VIDEO_H = 1080  # 1080x1080 square video
+S_VIDEO_Y = (CANVAS_H - S_VIDEO_H) // 2  # 420 — centered vertically
 S_HOOK_Y = S_VIDEO_Y - 120
 S_LOGO_Y = S_HOOK_Y - 150
 
@@ -101,6 +101,7 @@ HOOK_MAX_CHARS = 60  # enforced upstream, checked here too
 # Config
 # -------------------------------------------------------------
 
+
 @dataclass
 class FFmpegConfig:
     """FFmpeg render settings from visuals.yaml.
@@ -112,6 +113,7 @@ class FFmpegConfig:
     the per-platform transcode step to work from, but small enough
     to ship without re-compression.
     """
+
     preset: str = "medium"
     fallback_preset: str = "fast"
     timeout_seconds: int = 600
@@ -125,11 +127,12 @@ class FFmpegConfig:
 @dataclass
 class ChannelBranding:
     """Per-channel branding loaded from visuals.yaml."""
-    channel_name: str           # e.g. "CriticalRush"
-    handle: str                 # e.g. "@CriticalRush"
-    accent_color: str           # e.g. "#00FF88" (for accent line)
-    logo_path: str              # absolute or relative path to logo PNG
-    niche_id: str               # e.g. "gaming"
+
+    channel_name: str  # e.g. "CriticalRush"
+    handle: str  # e.g. "@CriticalRush"
+    accent_color: str  # e.g. "#00FF88" (for accent line)
+    logo_path: str  # absolute or relative path to logo PNG
+    niche_id: str  # e.g. "gaming"
     ffmpeg: FFmpegConfig = None  # type: ignore[assignment]
 
     def __post_init__(self):
@@ -165,9 +168,7 @@ class ChannelBranding:
 
         # Resolve logo path — relative paths are resolved against niche_root
         raw_logo = (
-            fl_branding.get("logo_path")
-            or branding.get("logo_path")
-            or branding.get("logo", "")
+            fl_branding.get("logo_path") or branding.get("logo_path") or branding.get("logo", "")
         )
         if raw_logo and not Path(raw_logo).is_absolute():
             raw_logo = str((niche_root / raw_logo).resolve())
@@ -184,14 +185,11 @@ class ChannelBranding:
                 or branding.get("instagram_handle", "")
             ),
             accent_color=(
-                fl_branding.get("accent_color")
-                or branding.get("accent_color", "#FFFFFF")
+                fl_branding.get("accent_color") or branding.get("accent_color", "#FFFFFF")
             ),
             logo_path=raw_logo,
             niche_id=(
-                fl_branding.get("niche_id")
-                or branding.get("niche_id")
-                or cfg.get("niche_id", "")
+                fl_branding.get("niche_id") or branding.get("niche_id") or cfg.get("niche_id", "")
             ),
             ffmpeg=ffmpeg,
         )
@@ -201,16 +199,17 @@ class ChannelBranding:
 # Source video probe
 # -------------------------------------------------------------
 
+
 @dataclass
 class VideoInfo:
     width: int
     height: int
     duration_seconds: float
     fps: float
-    aspect_ratio: float       # width / height
-    is_portrait: bool         # aspect_ratio <= PORTRAIT_THRESHOLD
-    is_landscape: bool        # aspect_ratio >= LANDSCAPE_THRESHOLD
-    is_native_9_16: bool      # kept for backward compat; True when portrait
+    aspect_ratio: float  # width / height
+    is_portrait: bool  # aspect_ratio <= PORTRAIT_THRESHOLD
+    is_landscape: bool  # aspect_ratio >= LANDSCAPE_THRESHOLD
+    is_native_9_16: bool  # kept for backward compat; True when portrait
 
     @property
     def layout_case(self) -> str:
@@ -225,8 +224,15 @@ class VideoInfo:
 def probe_video(path: str) -> VideoInfo:
     """Use ffprobe to get video dimensions and duration."""
     cmd = [
-        "ffprobe", "-v", "quiet", "-print_format", "json",
-        "-show_streams", "-select_streams", "v:0", path,
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
+        "-show_streams",
+        "-select_streams",
+        "v:0",
+        path,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -242,8 +248,7 @@ def probe_video(path: str) -> VideoInfo:
     # Duration: try stream first, then format
     dur_str = stream.get("duration")
     if not dur_str:
-        cmd2 = ["ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", path]
+        cmd2 = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", path]
         r2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=30)
         if r2.returncode == 0:
             fmt = json.loads(r2.stdout).get("format", {})
@@ -263,9 +268,13 @@ def probe_video(path: str) -> VideoInfo:
     is_native_9_16 = is_portrait  # backward compat
 
     return VideoInfo(
-        width=w, height=h, duration_seconds=duration,
-        fps=fps, aspect_ratio=ar,
-        is_portrait=is_portrait, is_landscape=is_landscape,
+        width=w,
+        height=h,
+        duration_seconds=duration,
+        fps=fps,
+        aspect_ratio=ar,
+        is_portrait=is_portrait,
+        is_landscape=is_landscape,
         is_native_9_16=is_native_9_16,
     )
 
@@ -273,6 +282,7 @@ def probe_video(path: str) -> VideoInfo:
 # -------------------------------------------------------------
 # Frame compositor
 # -------------------------------------------------------------
+
 
 class FrameCompositor:
     """Composes a Gen Lab video reel from a source clip + channel branding.
@@ -330,7 +340,7 @@ class FrameCompositor:
             logger.warning(
                 f"Hook '{hook_text[:30]}...' is {len(hook_text)} chars -- truncating to {HOOK_MAX_CHARS}"
             )
-            hook_text = hook_text[:HOOK_MAX_CHARS - 3] + "..."
+            hook_text = hook_text[: HOOK_MAX_CHARS - 3] + "..."
 
         # Probe source
         info = probe_video(source_video_path)
@@ -342,7 +352,9 @@ class FrameCompositor:
             trim_start = round(skip, 1)
             logger.debug(
                 "[%s] Skipping first %.1fs (10%%) of %.1fs clip for stronger opening",
-                self.branding.niche_id, trim_start, info.duration_seconds,
+                self.branding.niche_id,
+                trim_start,
+                info.duration_seconds,
             )
 
         # Enforce minimum duration (15s for reels)
@@ -369,11 +381,20 @@ class FrameCompositor:
             "square": self._build_cmd_square,
         }[case]
         ffmpeg_cmd = builder(
-            source_video_path, hook_text, output_path,
-            info, duration_seconds, trim_start, crf, preset, force_fps,
+            source_video_path,
+            hook_text,
+            output_path,
+            info,
+            duration_seconds,
+            trim_start,
+            crf,
+            preset,
+            force_fps,
         )
 
-        logger.info(f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}...")
+        logger.info(
+            f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}..."
+        )
         try:
             run_ffmpeg(
                 ffmpeg_cmd,
@@ -382,9 +403,7 @@ class FrameCompositor:
             )
         except subprocess.CalledProcessError as exc:
             logger.error(f"FFmpeg failed:\n{(exc.stderr or '')[-2000:]}")
-            raise RuntimeError(
-                f"FFmpeg composition failed: {(exc.stderr or '')[-500:]}"
-            ) from exc
+            raise RuntimeError(f"FFmpeg composition failed: {(exc.stderr or '')[-500:]}") from exc
 
         logger.info(f"[{self.branding.niche_id}] Rendered -> {output_path}")
         return output_path
@@ -415,7 +434,9 @@ class FrameCompositor:
 
     # --- Shared: build center-aligned hook drawtext chain --------------------
 
-    def _build_hook_filters(self, hook: str, hook_y: int, font_hook: str, prev_label: str) -> tuple[str, str]:
+    def _build_hook_filters(
+        self, hook: str, hook_y: int, font_hook: str, prev_label: str
+    ) -> tuple[str, str]:
         """Build FFmpeg drawtext filters for center-aligned hook text.
 
         Returns (filter_chain_str, final_label).
@@ -442,8 +463,9 @@ class FrameCompositor:
 
     # --- Shared: build branding filters (logo + name + handle) ------------
 
-    def _build_branding_filters(self, font_bold: str, font_reg: str,
-                                 logo_y: int, base_label: str) -> tuple[str, str]:
+    def _build_branding_filters(
+        self, font_bold: str, font_reg: str, logo_y: int, base_label: str
+    ) -> tuple[str, str]:
         """Build FFmpeg filters for logo + channel name + handle.
 
         Returns (filter_chain_str, final_label).
@@ -460,8 +482,8 @@ class FrameCompositor:
                 # Logo scaled to target size
                 f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
                 # Subtle white backing behind logo for visibility on black
-                f"[{base_label}]drawbox=x={LOGO_X-4}:y={logo_y-4}:"
-                f"w={LOGO_SIZE+8}:h={LOGO_SIZE+8}:"
+                f"[{base_label}]drawbox=x={LOGO_X - 4}:y={logo_y - 4}:"
+                f"w={LOGO_SIZE + 8}:h={LOGO_SIZE + 8}:"
                 f"color=white@0.12:t=fill[withbg];"
                 # Overlay logo on top of backing
                 f"[withbg][logo]overlay={LOGO_X}:{logo_y}[withlogo];"
@@ -509,9 +531,13 @@ class FrameCompositor:
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (
-            ["ffmpeg", "-y"] + trim_flag + inputs + dur_flags
+            ["ffmpeg", "-y"]
+            + trim_flag
+            + inputs
+            + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps) + [out]
+            + self._output_flags(crf, preset, fps)
+            + [out]
         )
 
     # --- Layout B: Portrait (ar <= 0.75) ----------------------------------
@@ -534,9 +560,13 @@ class FrameCompositor:
         )
 
         return (
-            ["ffmpeg", "-y"] + trim_flag + ["-i", src] + dur_flags
+            ["ffmpeg", "-y"]
+            + trim_flag
+            + ["-i", src]
+            + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps) + [out]
+            + self._output_flags(crf, preset, fps)
+            + [out]
         )
 
     # --- Layout C: Square (0.75 < ar < 1.33) ------------------------------
@@ -566,9 +596,13 @@ class FrameCompositor:
         inputs = ["-i", src] + (["-i", self.branding.logo_path] if has_logo else [])
 
         return (
-            ["ffmpeg", "-y"] + trim_flag + inputs + dur_flags
+            ["ffmpeg", "-y"]
+            + trim_flag
+            + inputs
+            + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, fps) + [out]
+            + self._output_flags(crf, preset, fps)
+            + [out]
         )
 
     # --- Overlay branding on already-composed video ----------------------
@@ -596,7 +630,7 @@ class FrameCompositor:
             preset = ff.preset
 
         if len(hook_text) > HOOK_MAX_CHARS:
-            hook_text = hook_text[:HOOK_MAX_CHARS - 3] + "..."
+            hook_text = hook_text[: HOOK_MAX_CHARS - 3] + "..."
 
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -605,9 +639,7 @@ class FrameCompositor:
         dur_flags = self._duration_flags(duration_seconds)
 
         # Build branding filters on top of the source video
-        branding, _ = self._build_branding_filters(
-            font_bold, font_reg, L_LOGO_Y, "base"
-        )
+        branding, _ = self._build_branding_filters(font_bold, font_reg, L_LOGO_Y, "base")
         hooks, _ = self._build_hook_filters(hook_text, L_HOOK_Y, font_hook, "withhandle")
         flash = "[withhook]eq=brightness='if(lt(t,0.07),0.08,0)':eval=frame[out]"
 
@@ -620,14 +652,16 @@ class FrameCompositor:
             inputs += ["-i", self.branding.logo_path]
 
         cmd = (
-            ["ffmpeg", "-y"] + inputs + dur_flags
+            ["ffmpeg", "-y"]
+            + inputs
+            + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
-            + self._output_flags(crf, preset, 30) + [output_path]
+            + self._output_flags(crf, preset, 30)
+            + [output_path]
         )
 
         logger.info(
-            f"[{self.branding.niche_id}] Overlaying branding on compilation: "
-            f"{' '.join(cmd[:8])}..."
+            f"[{self.branding.niche_id}] Overlaying branding on compilation: {' '.join(cmd[:8])}..."
         )
         try:
             run_ffmpeg(cmd, timeout=ff.timeout_seconds, fallback_preset=ff.fallback_preset)
@@ -661,9 +695,8 @@ class FrameCompositor:
         # text might).
         text = "".join(c for c in text if ord(c) >= 32 or c == " ")
         return (
-            text
-            .replace("\\", "\\\\")
-            .replace("'", "\u2019")      # curly quote -- safe inside '...'
+            text.replace("\\", "\\\\")
+            .replace("'", "\u2019")  # curly quote -- safe inside '...'
             .replace("%", "%%")
             .replace(":", "\\:")
             .replace("[", "\\[")
@@ -680,10 +713,14 @@ class FrameCompositor:
 
     def _output_flags(self, crf: int, preset: str, fps: int) -> list[str]:
         flags = [
-            "-c:v", "libx264",
-            "-crf", str(crf),
-            "-preset", preset,
-            "-r", str(fps),
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-r",
+            str(fps),
         ]
         # Master bitrate ceiling from visuals.yaml ffmpeg.maxrate.
         # Empty string disables (legacy uncapped behavior).
@@ -691,17 +728,28 @@ class FrameCompositor:
         bufsize = (self.branding.ffmpeg.bufsize or "").strip()
         if maxrate:
             flags.extend(["-maxrate", maxrate, "-bufsize", bufsize or maxrate])
-        flags.extend([
-            "-c:a", "aac",
-            "-b:a", "320k",
-            "-ar", "48000",
-            "-ac", "2",
-            "-pix_fmt", "yuv420p",
-            "-colorspace", "bt709",
-            "-color_primaries", "bt709",
-            "-color_trc", "bt709",
-            "-movflags", "+faststart",
-        ])
+        flags.extend(
+            [
+                "-c:a",
+                "aac",
+                "-b:a",
+                "320k",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-pix_fmt",
+                "yuv420p",
+                "-colorspace",
+                "bt709",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-movflags",
+                "+faststart",
+            ]
+        )
         return flags
 
     @staticmethod

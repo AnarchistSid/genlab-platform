@@ -1,4 +1,5 @@
 """Pipeline API endpoints — niche-aware status, run history, trigger, and logs."""
+
 import json
 import logging
 import os
@@ -105,10 +106,12 @@ def _normalize_run(data: dict, run_id: str) -> dict:
             {
                 "name": s.get("step", ""),
                 "label": s.get("label", ""),
-                "status": "completed" if s.get("status") in ("ok", "success") else (
-                    "skipped" if s.get("status") == "skipped" else (
-                        "error" if s.get("status") == "failed" else s.get("status", "unknown")
-                    )
+                "status": "completed"
+                if s.get("status") in ("ok", "success")
+                else (
+                    "skipped"
+                    if s.get("status") == "skipped"
+                    else ("error" if s.get("status") == "failed" else s.get("status", "unknown"))
                 ),
                 "duration_seconds": s.get("elapsed_seconds", 0),
             }
@@ -242,16 +245,24 @@ def _merge_prefect_status(niches_data: list[dict]) -> list[dict]:
         if "spike" in flow_name.lower():
             continue
 
-        niche_id = "gaming" if "gaming" in flow_name else (
-            "ai_creators" if "ai_creators" in flow_name or "ai-creators" in flow_name else None
+        niche_id = (
+            "gaming"
+            if "gaming" in flow_name
+            else (
+                "ai_creators" if "ai_creators" in flow_name or "ai-creators" in flow_name else None
+            )
         )
         if niche_id and niche_id not in prefect_latest:
             prefect_latest[niche_id] = run
 
     # Overlay Prefect data onto matching niches
     state_map = {
-        "COMPLETED": "idle", "RUNNING": "running", "FAILED": "error",
-        "CANCELLED": "idle", "PENDING": "running", "SCHEDULED": "idle",
+        "COMPLETED": "idle",
+        "RUNNING": "running",
+        "FAILED": "error",
+        "CANCELLED": "idle",
+        "PENDING": "running",
+        "SCHEDULED": "idle",
     }
 
     for niche in niches_data:
@@ -273,8 +284,7 @@ def _merge_prefect_status(niches_data: list[dict]) -> list[dict]:
                     break
 
             completed = sum(
-                1 for tr in task_runs
-                if (tr.get("state", {}) or {}).get("type") == "COMPLETED"
+                1 for tr in task_runs if (tr.get("state", {}) or {}).get("type") == "COMPLETED"
             )
             niche["stage_progress"] = {
                 "stage": niche.get("current_stage"),
@@ -289,6 +299,7 @@ def _merge_prefect_status(niches_data: list[dict]) -> list[dict]:
 
 
 # ── Endpoint 1: GET /api/v1/pipeline/status ──────────────────────
+
 
 @bp.route("/status", methods=["GET"])
 def status():
@@ -313,16 +324,18 @@ def status():
             niche_runs = _find_runs(limit=10, niche_id=niche_id)
             niche_last_run = _last_run_for_niche(niche_id=niche_id)
 
-            niches_data.append({
-                "id": niche_id,
-                "display_name": niche.get("display_name", niche_id),
-                "accent_hex": niche.get("accent_hex", "#6366f1"),
-                "pipeline_status": pipe_status,
-                "current_stage": current_stage,
-                "stage_progress": stage_progress,
-                "last_run": niche_last_run,
-                "run_history": niche_runs,
-            })
+            niches_data.append(
+                {
+                    "id": niche_id,
+                    "display_name": niche.get("display_name", niche_id),
+                    "accent_hex": niche.get("accent_hex", "#6366f1"),
+                    "pipeline_status": pipe_status,
+                    "current_stage": current_stage,
+                    "stage_progress": stage_progress,
+                    "last_run": niche_last_run,
+                    "run_history": niche_runs,
+                }
+            )
 
         last_run_compat = all_runs[0] if all_runs else None
         health = "unknown"
@@ -351,12 +364,14 @@ def status():
     except Exception as exc:
         logger.error("Pipeline status error: %s", exc, exc_info=True)
         # Return degraded response instead of 500
-        return api_success(data={
-            "niches": [],
-            "prefect_connected": False,
-            "data": {"last_run": None, "health": "error"},
-            "error": str(exc),
-        })
+        return api_success(
+            data={
+                "niches": [],
+                "prefect_connected": False,
+                "data": {"last_run": None, "health": "error"},
+                "error": str(exc),
+            }
+        )
 
 
 def _trigger_via_prefect(niche_id: str, mode: str) -> tuple:
@@ -370,6 +385,7 @@ def _trigger_via_prefect(niche_id: str, mode: str) -> tuple:
 
     try:
         from genlab_core.orchestration.prefect_api import PrefectRESTClient
+
         client = PrefectRESTClient()
         if not client.healthy():
             return api_error(error="Prefect server not reachable", code=503)
@@ -412,12 +428,23 @@ def _run_unified_pipeline(run_id: str, niche_id: str, lock_fd=None):
 
         uv = os.path.expanduser("~/.local/bin/uv")
         cmd = [
-            uv, "run", "--package", "genlab-core",
-            "python", "-m", "genlab_core.pipeline",
-            "--niche", niche_id,
+            uv,
+            "run",
+            "--package",
+            "genlab-core",
+            "python",
+            "-m",
+            "genlab_core.pipeline",
+            "--niche",
+            niche_id,
             "--verbose",
         ]
-        env = {**os.environ, "BACKLOG_CONFIG_PATH": str(GENLAB_ROOT / "genlab-core" / "config" / "lists_config.yaml")}
+        env = {
+            **os.environ,
+            "BACKLOG_CONFIG_PATH": str(
+                GENLAB_ROOT / "genlab-core" / "config" / "lists_config.yaml"
+            ),
+        }
 
         result = subprocess.run(
             cmd,
@@ -429,21 +456,27 @@ def _run_unified_pipeline(run_id: str, niche_id: str, lock_fd=None):
         )
 
         success = result.returncode == 0
-        socketio.emit("pipeline_complete", {
-            "niche_id": niche_id,
-            "run_id": run_id,
-            "success": success,
-            "error": result.stderr[-500:] if not success and result.stderr else None,
-        })
+        socketio.emit(
+            "pipeline_complete",
+            {
+                "niche_id": niche_id,
+                "run_id": run_id,
+                "success": success,
+                "error": result.stderr[-500:] if not success and result.stderr else None,
+            },
+        )
     except Exception as exc:
         logger.error("Unified pipeline error for %s: %s", niche_id, exc)
         try:
-            socketio.emit("pipeline_complete", {
-                "niche_id": niche_id,
-                "run_id": run_id,
-                "success": False,
-                "error": str(exc),
-            })
+            socketio.emit(
+                "pipeline_complete",
+                {
+                    "niche_id": niche_id,
+                    "run_id": run_id,
+                    "success": False,
+                    "error": str(exc),
+                },
+            )
         except Exception:
             pass
     finally:
@@ -461,6 +494,7 @@ def _run_unified_pipeline(run_id: str, niche_id: str, lock_fd=None):
 
 
 # ── Endpoint 2: POST /api/v1/pipeline/trigger ────────────────────
+
 
 @bp.route("/trigger", methods=["POST"])
 def trigger():
@@ -512,6 +546,7 @@ def trigger():
         # Emit WebSocket event to niche room + global
         try:
             from server.review_server import socketio
+
             event_data = {"niche_id": niche_id, "mode": mode, "run_id": run_id}
             socketio.emit("pipeline_started", event_data, room=f"niche:{niche_id}")
             socketio.emit("pipeline_started", event_data)
@@ -533,6 +568,7 @@ def trigger():
 
 # ── Endpoint 3: GET /api/v1/pipeline/runs ────────────────────────
 
+
 @bp.route("/runs", methods=["GET"])
 def list_runs():
     try:
@@ -547,11 +583,17 @@ def list_runs():
     start = (page - 1) * per_page
     page_data = runs[start : start + per_page]
 
-    return api_success(data={
-        "data": page_data,
-        "meta": {"page": page, "per_page": per_page, "total": total,
-                 "total_pages": max(1, (total + per_page - 1) // per_page)},
-    })
+    return api_success(
+        data={
+            "data": page_data,
+            "meta": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": max(1, (total + per_page - 1) // per_page),
+            },
+        }
+    )
 
 
 @bp.route("/runs/<run_id>", methods=["GET"])
@@ -584,6 +626,7 @@ def get_run(run_id):
 
 # ── Endpoint: GET /api/v1/pipeline/logs ────────────────────────
 
+
 @bp.route("/logs", methods=["GET"])
 def get_logs():
     """Return recent pipeline log lines for a niche.
@@ -606,6 +649,7 @@ def get_logs():
 
     try:
         from genlab_core.pipeline import read_recent_logs
+
         entries = read_recent_logs(log_path, limit=limit, after_ts=after_ts)
         return api_success(data={"data": entries})
     except ImportError:
@@ -669,12 +713,14 @@ def quality_stats():
 
 
 def _read_jsonl_tail(
-    path: Path, limit: int, after_ts: str | None,
+    path: Path,
+    limit: int,
+    after_ts: str | None,
 ) -> list[dict]:
     """Fallback JSONL reader if genlab-core isn't available."""
     try:
         with open(path, encoding="utf-8") as f:
-            lines = f.readlines()[-(limit * 2):]
+            lines = f.readlines()[-(limit * 2) :]
     except OSError:
         return []
 

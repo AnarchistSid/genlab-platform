@@ -6,6 +6,7 @@ DPO fine-tuning on a 7B-8B parameter model.
 
 At 5 reels/day, after 3 months GenLab will have ~450 pairs.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,8 @@ from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
-MIN_VIEWS = 100    # Minimum views for a blueprint to be considered
-MIN_RATIO = 1.5    # Minimum ratio between chosen and rejected views
+MIN_VIEWS = 100  # Minimum views for a blueprint to be considered
+MIN_RATIO = 1.5  # Minimum ratio between chosen and rejected views
 
 
 def collect_weekly_pairs(window_days: int = 7) -> int:
@@ -39,7 +40,8 @@ def collect_weekly_pairs(window_days: int = 7) -> int:
         cur.execute("SELECT set_config('app.niche_id', '', true)")
 
         # Get published blueprints with engagement data (168h window = mature metrics)
-        cur.execute("""
+        cur.execute(
+            """
             SELECT b.id::text as blueprint_id, b.niche_id, b.hook, b.caption,
                    pa.platform, pa.views, pa.likes,
                    COALESCE(pa.views, 0) as view_count
@@ -49,7 +51,9 @@ def collect_weekly_pairs(window_days: int = 7) -> int:
               AND pa.views IS NOT NULL AND pa.views >= %s
               AND b.created_at >= %s
             ORDER BY b.niche_id, pa.platform, pa.views DESC
-        """, (MIN_VIEWS, since))
+        """,
+            (MIN_VIEWS, since),
+        )
 
         rows = cur.fetchall()
         if len(rows) < 4:
@@ -90,7 +94,8 @@ def collect_weekly_pairs(window_days: int = 7) -> int:
                     if cur.fetchone():
                         continue
 
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT INTO preference_data
                         (niche_id, platform, chosen_hook, chosen_caption,
                          chosen_engagement, chosen_blueprint_id,
@@ -98,21 +103,32 @@ def collect_weekly_pairs(window_days: int = 7) -> int:
                          rejected_engagement, rejected_blueprint_id,
                          engagement_ratio)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        chosen["niche_id"], chosen["platform"],
-                        chosen["hook"], chosen.get("caption", ""),
-                        json.dumps({"views": chosen["view_count"], "likes": chosen.get("likes", 0)}),
-                        chosen["blueprint_id"],
-                        rejected["hook"], rejected.get("caption", ""),
-                        json.dumps({"views": rejected["view_count"], "likes": rejected.get("likes", 0)}),
-                        rejected["blueprint_id"],
-                        round(ratio, 2),
-                    ))
+                    """,
+                        (
+                            chosen["niche_id"],
+                            chosen["platform"],
+                            chosen["hook"],
+                            chosen.get("caption", ""),
+                            json.dumps(
+                                {"views": chosen["view_count"], "likes": chosen.get("likes", 0)}
+                            ),
+                            chosen["blueprint_id"],
+                            rejected["hook"],
+                            rejected.get("caption", ""),
+                            json.dumps(
+                                {"views": rejected["view_count"], "likes": rejected.get("likes", 0)}
+                            ),
+                            rejected["blueprint_id"],
+                            round(ratio, 2),
+                        ),
+                    )
                     pairs_created += 1
 
         conn.commit()
         conn.close()
-        logger.info("[preference] Created %d pairs from %d eligible blueprints", pairs_created, len(rows))
+        logger.info(
+            "[preference] Created %d pairs from %d eligible blueprints", pairs_created, len(rows)
+        )
         return pairs_created
 
     except Exception as exc:

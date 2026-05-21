@@ -35,6 +35,7 @@ from niches.gaming.tools.schema_validator import validate_against_schema
 _hook_predictor = None
 try:
     from niches.gaming.learning.hook_predictor import HookPredictor
+
     _hook_predictor = HookPredictor()
 except Exception:
     pass
@@ -144,15 +145,18 @@ _FALLBACK_TWEETS = [
 ]
 
 
-def _build_fallback(game_title: str, templates: dict[str, Any],
-                    story_summary: str = "") -> dict[str, Any]:
+def _build_fallback(
+    game_title: str, templates: dict[str, Any], story_summary: str = ""
+) -> dict[str, Any]:
     """Generate varied fallback content when LLM fails.
 
     Uses multiple templates rotated by hash of the game title to ensure
     different stories get different text. Never uses banned template phrases.
     """
     ctas = templates.get("captions", {}).get("cta_library", ["follow for daily gaming content"])
-    hashtags = templates.get("captions", {}).get("hashtag_pool", ["#gaming", "#gamer", "#games", "#videogames"])
+    hashtags = templates.get("captions", {}).get(
+        "hashtag_pool", ["#gaming", "#gamer", "#games", "#videogames"]
+    )
     cta = random.choice(ctas)
 
     # Deterministic rotation based on title so same story gets same fallback
@@ -164,7 +168,9 @@ def _build_fallback(game_title: str, templates: dict[str, Any],
         "hook": _FALLBACK_HOOKS[idx].format(title=game_title)[:60],
         "instagram": {
             "caption": _FALLBACK_IG_CAPTIONS[idx % len(_FALLBACK_IG_CAPTIONS)].format(
-                title=game_title, summary=summary, cta=cta,
+                title=game_title,
+                summary=summary,
+                cta=cta,
             ),
             "hashtags": hashtags[:4],
         },
@@ -174,13 +180,15 @@ def _build_fallback(game_title: str, templates: dict[str, Any],
         },
         "x_twitter": {
             "tweet": _FALLBACK_TWEETS[idx % len(_FALLBACK_TWEETS)].format(
-                title=game_title, summary_short=summary_short,
+                title=game_title,
+                summary_short=summary_short,
             )[:240],
             "hashtags": hashtags[:2],
         },
         "facebook": {
             "caption": _FALLBACK_FB_CAPTIONS[idx % len(_FALLBACK_FB_CAPTIONS)].format(
-                title=game_title, summary=summary,
+                title=game_title,
+                summary=summary,
             ),
         },
         "tiktok": {
@@ -209,7 +217,7 @@ def _validate_content(content: dict[str, Any], templates: dict[str, Any]) -> lis
     yt_max = templates.get("youtube", {}).get("title_max_length", 40)
     if len(yt_title) > yt_max:
         # Auto-fix: truncate
-        content["youtube"]["title"] = yt_title[:yt_max - 1] + "?"
+        content["youtube"]["title"] = yt_title[: yt_max - 1] + "?"
         issues.append(f"youtube title truncated from {len(yt_title)} to {yt_max} chars")
 
     if yt_title and not yt_title.rstrip().endswith("?"):
@@ -324,6 +332,7 @@ class WriteGamingContent(WritingStrategy):
                 current_prompt = prompt
 
                 for attempt in range(1 + max_hook_retries):
+
                     @http_retry(
                         max_attempts=3,
                         initial_delay=5.0,
@@ -341,9 +350,14 @@ class WriteGamingContent(WritingStrategy):
 
                     # Cost tracking
                     from genlab_core.intelligence.cost_accumulator import get_accumulator
+
                     acc = get_accumulator()
                     if acc and hasattr(response, "usage") and response.usage:
-                        acc.record_llm(get_model("write_gaming_content"), response.usage.input_tokens, response.usage.output_tokens)
+                        acc.record_llm(
+                            get_model("write_gaming_content"),
+                            response.usage.input_tokens,
+                            response.usage.output_tokens,
+                        )
 
                     raw = response.content[0].text
 
@@ -359,12 +373,14 @@ class WriteGamingContent(WritingStrategy):
 
                     # JSON schema validation (advisory — log only, don't block)
                     schema_ok, schema_err = validate_against_schema(
-                        content, "written_content.schema.json",
+                        content,
+                        "written_content.schema.json",
                     )
                     if not schema_ok:
                         logger.warning(
                             "[WRITE] Schema validation failed for '%s': %s",
-                            game_title, schema_err,
+                            game_title,
+                            schema_err,
                         )
 
                     # Validate structural constraints
@@ -373,7 +389,8 @@ class WriteGamingContent(WritingStrategy):
                         validation_failures += 1
                         logger.warning(
                             "[WRITE] Validation issues for '%s': %s",
-                            game_title, "; ".join(issues),
+                            game_title,
+                            "; ".join(issues),
                         )
 
                     # Validate hook with gaming-specific rules
@@ -391,10 +408,15 @@ class WriteGamingContent(WritingStrategy):
 
                             if hook_score is not None:
                                 content["hook_prediction_score"] = round(hook_score, 4)
-                                if hook_score < _HOOK_QUALITY_THRESHOLD and attempt < max_hook_retries:
+                                if (
+                                    hook_score < _HOOK_QUALITY_THRESHOLD
+                                    and attempt < max_hook_retries
+                                ):
                                     logger.info(
                                         "[WRITE] Hook scored %.2f (below %.2f) for '%s', retrying",
-                                        hook_score, _HOOK_QUALITY_THRESHOLD, game_title,
+                                        hook_score,
+                                        _HOOK_QUALITY_THRESHOLD,
+                                        game_title,
                                     )
                                     current_prompt = PROMPT_TEMPLATE.format(
                                         game_title=game_title,
@@ -404,7 +426,7 @@ class WriteGamingContent(WritingStrategy):
                                         hashtag_pool=pool_str,
                                         retry_feedback=(
                                             f"\nYour previous hook scored low on engagement prediction. "
-                                            f"The hook was: \"{hook_text}\". "
+                                            f'The hook was: "{hook_text}". '
                                             f"Write a more emotionally charged, scroll-stopping hook.\n"
                                         ),
                                     )
@@ -414,7 +436,9 @@ class WriteGamingContent(WritingStrategy):
                         hook_issues = hook_result.all_issues
                         logger.warning(
                             "[WRITE] Hook failed validation for '%s' (attempt %d/%d): %s",
-                            game_title, attempt + 1, 1 + max_hook_retries,
+                            game_title,
+                            attempt + 1,
+                            1 + max_hook_retries,
                             hook_issues,
                         )
 
@@ -422,7 +446,7 @@ class WriteGamingContent(WritingStrategy):
                             # Retry with feedback about what went wrong
                             feedback = (
                                 f"\nYour previous hook was rejected. Issues: {', '.join(hook_issues)}. "
-                                f"The rejected hook was: \"{hook_text}\". "
+                                f'The rejected hook was: "{hook_text}". '
                                 f"Write a completely different hook that avoids these issues.\n"
                             )
                             current_prompt = PROMPT_TEMPLATE.format(
@@ -440,7 +464,8 @@ class WriteGamingContent(WritingStrategy):
                                 content["hook"] = cleaned
                                 logger.info(
                                     "[WRITE] Using cleaned hook for '%s': %s",
-                                    game_title, cleaned,
+                                    game_title,
+                                    cleaned,
                                 )
                             # else keep original — better than nothing
                     else:
@@ -471,7 +496,8 @@ class WriteGamingContent(WritingStrategy):
             except (json.JSONDecodeError, KeyError, IndexError) as e:
                 logger.warning(
                     "[WRITE] JSON parse failed for '%s': %s — using fallback",
-                    game_title, e,
+                    game_title,
+                    e,
                 )
                 story["content"] = _build_fallback(game_title, templates, story_summary)
                 failed_count += 1
@@ -479,7 +505,8 @@ class WriteGamingContent(WritingStrategy):
             except _LLM_RETRYABLE as e:
                 logger.error(
                     "[WRITE] LLM call failed after 3 attempts for '%s': %s — using fallback",
-                    game_title, e,
+                    game_title,
+                    e,
                 )
                 story["content"] = _build_fallback(game_title, templates, story_summary)
                 failed_count += 1
@@ -487,7 +514,8 @@ class WriteGamingContent(WritingStrategy):
             except Exception as e:
                 logger.warning(
                     "[WRITE] API call failed for '%s': %s — using fallback",
-                    game_title, e,
+                    game_title,
+                    e,
                 )
                 story["content"] = _build_fallback(game_title, templates, story_summary)
                 failed_count += 1
@@ -500,6 +528,8 @@ class WriteGamingContent(WritingStrategy):
 
         logger.info(
             "[WRITE] %d stories written, %d used fallback, %d validation issues",
-            written_count, failed_count, validation_failures,
+            written_count,
+            failed_count,
+            validation_failures,
         )
         return context

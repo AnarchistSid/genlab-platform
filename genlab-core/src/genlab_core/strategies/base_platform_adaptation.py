@@ -94,7 +94,11 @@ class BasePlatformAdaptationStrategy(PlatformAdaptationStrategy):
 
         hashtags = ig.get("hashtags", [])
         result = enforce_platform_rules(
-            "instagram", caption, caption, hashtags=hashtags, cta=None,
+            "instagram",
+            caption,
+            caption,
+            hashtags=hashtags,
+            cta=None,
         )
         ig["caption"] = result.caption
         # Pad hashtags from pool if under 3

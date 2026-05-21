@@ -1,6 +1,5 @@
 """Tests for HookValidator wiring in SpliceReel hook strategy."""
 
-
 from sr_strategies.hooks import MovieHookStrategy
 
 
@@ -38,8 +37,7 @@ class TestHookValidatorWiring:
             if hook:
                 vr = validator.validate(hook, platform="instagram")
                 assert vr.passed, (
-                    f"Hook '{hook}' failed validation: "
-                    f"{[f.value for f in vr.failures]}"
+                    f"Hook '{hook}' failed validation: {[f.value for f in vr.failures]}"
                 )
 
     def test_run_stats_includes_validation_count(self):

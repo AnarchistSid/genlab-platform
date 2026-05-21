@@ -39,7 +39,9 @@ class TestSkippedStories:
         stage = RenderGamingVideo()
         story = _make_story(has_clip=False)
         context = {"stories": [story], "feature_flags": {}, "niche_config": {}}
-        with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+        with patch(
+            "genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")
+        ):
             result = stage.execute(context)
 
         assert result["stories"][0]["media"]["rendered_path"] is None
@@ -49,7 +51,9 @@ class TestSkippedStories:
         stage = RenderGamingVideo()
         story = _make_story(has_hook=False)
         context = {"stories": [story], "feature_flags": {}, "niche_config": {}}
-        with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+        with patch(
+            "genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")
+        ):
             result = stage.execute(context)
 
         assert result["stories"][0]["media"]["rendered_path"] is None
@@ -67,7 +71,10 @@ class TestCompositorRender:
 
         with patch.object(stage, "_get_frame_compositor", return_value=mock_fc):
             with patch.object(Path, "exists", return_value=True):
-                with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+                with patch(
+                    "genlab_core.context.get_current_context",
+                    return_value=MagicMock(run_id="test_run"),
+                ):
                     context = {
                         "stories": [story],
                         "feature_flags": {},
@@ -91,10 +98,15 @@ class TestCompositorRender:
 
         story = _make_story()
 
-        with patch.object(stage, "_get_frame_compositor", return_value=mock_fc), \
-             patch.object(stage, "_get_compositor", return_value=mock_compositor):
+        with (
+            patch.object(stage, "_get_frame_compositor", return_value=mock_fc),
+            patch.object(stage, "_get_compositor", return_value=mock_compositor),
+        ):
             with patch.object(Path, "exists", return_value=True):
-                with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+                with patch(
+                    "genlab_core.context.get_current_context",
+                    return_value=MagicMock(run_id="test_run"),
+                ):
                     context = {
                         "stories": [story],
                         "feature_flags": {},
@@ -130,7 +142,10 @@ class TestCompilationPathPropagation:
         with patch.object(stage, "_render_compilation", side_effect=fake_render_compilation):
             with patch.object(stage, "_ensure_config"):
                 with patch.object(stage, "_get_clip_path", return_value="/tmp/fake_clip.mp4"):
-                    with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+                    with patch(
+                        "genlab_core.context.get_current_context",
+                        return_value=MagicMock(run_id="test_run"),
+                    ):
                         context = {
                             "stories": stories,
                             "feature_flags": {"use_compilation_mode": True},
@@ -143,7 +158,11 @@ class TestCompilationPathPropagation:
         assert len(primary) == 1, "Exactly one story should be compilation primary"
         assert primary[0]["media"]["rendered_path"] == comp_output
 
-        non_primary = [s for s in result["stories"] if s.get("_in_compilation") and not s.get("_compilation_primary")]
+        non_primary = [
+            s
+            for s in result["stories"]
+            if s.get("_in_compilation") and not s.get("_compilation_primary")
+        ]
         for story in non_primary:
             assert story["media"].get("rendered_path") is None, (
                 f"Non-primary story '{story['title']}' should NOT have rendered_path"
@@ -166,7 +185,10 @@ class TestCompositorVertical:
 
         with patch.object(stage, "_get_frame_compositor", return_value=mock_fc):
             with patch.object(Path, "exists", return_value=True):
-                with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+                with patch(
+                    "genlab_core.context.get_current_context",
+                    return_value=MagicMock(run_id="test_run"),
+                ):
                     context = {
                         "stories": [story],
                         "feature_flags": {"platforms_enabled": ["instagram"]},
@@ -214,7 +236,10 @@ class TestAllPlatformsVertical:
 
         with patch.object(stage, "_get_frame_compositor", return_value=mock_fc):
             with patch.object(Path, "exists", return_value=True):
-                with patch("genlab_core.context.get_current_context", return_value=MagicMock(run_id="test_run")):
+                with patch(
+                    "genlab_core.context.get_current_context",
+                    return_value=MagicMock(run_id="test_run"),
+                ):
                     context = {
                         "stories": [story],
                         "feature_flags": {"platforms_enabled": ["facebook"]},

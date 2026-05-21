@@ -163,7 +163,8 @@ class TestTTSCascade:
         cascade = TTSCascade(providers=[p1, p2])
 
         result = cascade.synthesize(
-            "Hello this is a test sentence", tmp_path / "out.mp3",
+            "Hello this is a test sentence",
+            tmp_path / "out.mp3",
         )
         assert result.success
         assert result.provider == "first"
@@ -176,7 +177,8 @@ class TestTTSCascade:
         cascade = TTSCascade(providers=[p1, p2])
 
         result = cascade.synthesize(
-            "Hello this is a test sentence", tmp_path / "out.mp3",
+            "Hello this is a test sentence",
+            tmp_path / "out.mp3",
         )
         assert result.success
         assert result.provider == "second"
@@ -189,7 +191,8 @@ class TestTTSCascade:
         cascade = TTSCascade(providers=[p1, p2])
 
         result = cascade.synthesize(
-            "Hello this is a test sentence", tmp_path / "out.mp3",
+            "Hello this is a test sentence",
+            tmp_path / "out.mp3",
         )
         assert result.success
         assert result.provider == "second"
@@ -201,7 +204,8 @@ class TestTTSCascade:
         cascade = TTSCascade(providers=[p1, p2])
 
         result = cascade.synthesize(
-            "Hello this is a test sentence", tmp_path / "out.mp3",
+            "Hello this is a test sentence",
+            tmp_path / "out.mp3",
         )
         assert not result.success
         assert "All providers failed" in result.error
@@ -212,7 +216,8 @@ class TestTTSCascade:
         cascade = TTSCascade(providers=[p1, p2])
 
         result = cascade.synthesize(
-            "Hello this is a test sentence", tmp_path / "out.mp3",
+            "Hello this is a test sentence",
+            tmp_path / "out.mp3",
         )
         assert result.success
         assert result.provider == "fallback"
@@ -229,7 +234,8 @@ class TestTTSCascade:
 
         # Third call: p1 circuit is open, should skip directly to p2
         result = cascade.synthesize(
-            "Test sentence number three", tmp_path / "3.mp3",
+            "Test sentence number three",
+            tmp_path / "3.mp3",
         )
         assert result.success
         assert result.provider == "reliable"
@@ -297,21 +303,25 @@ class TestProviderProtocol:
 
     def test_elevenlabs_is_tts_provider(self):
         from genlab_core.tts.providers import ElevenLabsTTS
+
         p = ElevenLabsTTS(api_key="test")
         assert isinstance(p, TTSProvider)
 
     def test_openai_is_tts_provider(self):
         from genlab_core.tts.providers import OpenAITTS
+
         p = OpenAITTS(api_key="test")
         assert isinstance(p, TTSProvider)
 
     def test_edge_tts_is_tts_provider(self):
         from genlab_core.tts.providers import EdgeTTS
+
         p = EdgeTTS()
         assert isinstance(p, TTSProvider)
 
     def test_google_tts_is_tts_provider(self):
         from genlab_core.tts.providers import GoogleTTS
+
         p = GoogleTTS()
         assert isinstance(p, TTSProvider)
 
@@ -322,12 +332,14 @@ class TestProviderProtocol:
 class TestElevenLabsTTS:
     def test_unavailable_without_key(self):
         from genlab_core.tts.providers import ElevenLabsTTS
+
         p = ElevenLabsTTS(api_key="")
         assert not p.available
         assert p.name == "elevenlabs"
 
     def test_unavailable_without_sdk(self):
         from genlab_core.tts.providers import ElevenLabsTTS
+
         p = ElevenLabsTTS(api_key="test-key")
         with patch.dict("sys.modules", {"elevenlabs": None}):
             # Can't easily test ImportError via patch.dict, but we can
@@ -336,12 +348,14 @@ class TestElevenLabsTTS:
 
     def test_estimate_cost(self):
         from genlab_core.tts.providers import ElevenLabsTTS
+
         p = ElevenLabsTTS(api_key="test")
         cost = p.estimate_cost("a" * 1000)
         assert abs(cost - 0.30) < 0.01
 
     def test_synthesize_returns_error_when_unavailable(self, tmp_path):
         from genlab_core.tts.providers import ElevenLabsTTS
+
         p = ElevenLabsTTS(api_key="")
         result = p.synthesize("test text", tmp_path / "out.mp3")
         assert not result.success
@@ -352,12 +366,14 @@ class TestOpenAITTS:
     def test_unavailable_without_key(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from genlab_core.tts.providers import OpenAITTS
+
         p = OpenAITTS(api_key="")
         assert not p.available
         assert p.name == "openai_tts"
 
     def test_estimate_cost(self):
         from genlab_core.tts.providers import OpenAITTS
+
         p = OpenAITTS(api_key="test")
         cost = p.estimate_cost("a" * 1000)
         assert abs(cost - 0.015) < 0.001
@@ -365,6 +381,7 @@ class TestOpenAITTS:
     def test_synthesize_returns_error_when_unavailable(self, tmp_path, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         from genlab_core.tts.providers import OpenAITTS
+
         p = OpenAITTS(api_key="")
         result = p.synthesize("test text", tmp_path / "out.mp3")
         assert not result.success
@@ -374,18 +391,22 @@ class TestOpenAITTS:
 class TestEdgeTTS:
     def test_name(self):
         from genlab_core.tts.providers import EdgeTTS
+
         assert EdgeTTS().name == "edge_tts"
 
     def test_free(self):
         from genlab_core.tts.providers import EdgeTTS
+
         assert EdgeTTS().estimate_cost("anything") == 0.0
 
 
 class TestGoogleTTS:
     def test_name(self):
         from genlab_core.tts.providers import GoogleTTS
+
         assert GoogleTTS().name == "gtts"
 
     def test_free(self):
         from genlab_core.tts.providers import GoogleTTS
+
         assert GoogleTTS().estimate_cost("anything") == 0.0

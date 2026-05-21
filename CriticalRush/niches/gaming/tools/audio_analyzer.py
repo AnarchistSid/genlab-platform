@@ -39,6 +39,7 @@ def _load_audio(path: str) -> tuple | None:
 
     try:
         import librosa
+
         y, sr = librosa.load(path, sr=DEFAULT_SR, mono=True)
         _audio_cache[path] = (y, sr)
         return (y, sr)
@@ -61,6 +62,7 @@ def get_rms_energy(path: str) -> float | None:
 
     try:
         import librosa
+
         y, sr = result
         rms = librosa.feature.rms(y=y, hop_length=DEFAULT_HOP_LENGTH)
         return float(np.mean(rms[0]))
@@ -81,6 +83,7 @@ def get_energy_variance(path: str) -> float | None:
 
     try:
         import librosa
+
         y, sr = result
         rms = librosa.feature.rms(y=y, hop_length=DEFAULT_HOP_LENGTH)
         return float(np.var(rms[0]))
@@ -101,13 +104,16 @@ def get_peak_moments(path: str, threshold: float = 0.5) -> list[float] | None:
 
     try:
         import librosa
+
         y, sr = result
         rms = librosa.feature.rms(y=y, hop_length=DEFAULT_HOP_LENGTH)[0]
         peak_frames = np.where(rms > threshold)[0]
         if len(peak_frames) == 0:
             return []
         peak_times = librosa.frames_to_time(
-            peak_frames, sr=sr, hop_length=DEFAULT_HOP_LENGTH,
+            peak_frames,
+            sr=sr,
+            hop_length=DEFAULT_HOP_LENGTH,
         )
         return [float(t) for t in peak_times]
     except Exception as e:

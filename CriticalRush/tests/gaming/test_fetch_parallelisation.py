@@ -12,16 +12,30 @@ class TestConcurrentFetch:
     @patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher")
     @patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher")
     def test_all_three_sources_called(
-        self, MockSteam, MockTwitch, MockRSS, MockDedup,
+        self,
+        MockSteam,
+        MockTwitch,
+        MockRSS,
+        MockDedup,
     ):
         """All three sources are called and their results merged."""
         from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
 
         MockSteam.return_value.fetch.return_value = [
-            {"title": "Steam Game", "source": "steam_spike", "source_url": "http://s", "score": 0.8},
+            {
+                "title": "Steam Game",
+                "source": "steam_spike",
+                "source_url": "http://s",
+                "score": 0.8,
+            },
         ]
         MockTwitch.return_value.fetch.return_value = [
-            {"title": "Twitch Game", "source": "twitch_trending", "source_url": "http://t", "score": 0.7},
+            {
+                "title": "Twitch Game",
+                "source": "twitch_trending",
+                "source_url": "http://t",
+                "score": 0.7,
+            },
         ]
         MockRSS.return_value.fetch.return_value = [
             {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
@@ -52,14 +66,23 @@ class TestConcurrentFetch:
     @patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher")
     @patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher")
     def test_one_source_failure_does_not_block_others(
-        self, MockSteam, MockTwitch, MockRSS, MockDedup,
+        self,
+        MockSteam,
+        MockTwitch,
+        MockRSS,
+        MockDedup,
     ):
         """If Steam fails, Twitch + RSS still return results."""
         from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
 
         MockSteam.return_value.fetch.side_effect = RuntimeError("Steam API down")
         MockTwitch.return_value.fetch.return_value = [
-            {"title": "Twitch Game", "source": "twitch_trending", "source_url": "http://t", "score": 0.7},
+            {
+                "title": "Twitch Game",
+                "source": "twitch_trending",
+                "source_url": "http://t",
+                "score": 0.7,
+            },
         ]
         MockRSS.return_value.fetch.return_value = [
             {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
@@ -86,7 +109,11 @@ class TestConcurrentFetch:
     @patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher")
     @patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher")
     def test_steam_twitch_run_concurrently(
-        self, MockSteam, MockTwitch, MockRSS, MockDedup,
+        self,
+        MockSteam,
+        MockTwitch,
+        MockRSS,
+        MockDedup,
     ):
         """Steam and Twitch start within overlapping time windows."""
         call_times = {}
@@ -101,7 +128,9 @@ class TestConcurrentFetch:
             call_times["twitch_start"] = time.monotonic()
             time.sleep(0.3)
             call_times["twitch_end"] = time.monotonic()
-            return [{"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5}]
+            return [
+                {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5}
+            ]
 
         MockSteam.return_value.fetch.side_effect = slow_steam
         MockTwitch.return_value.fetch.side_effect = slow_twitch

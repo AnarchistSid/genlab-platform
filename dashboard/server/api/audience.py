@@ -4,6 +4,7 @@ Routes:
     GET /api/v1/audience/current   -- latest follower counts per niche × platform
     GET /api/v1/audience/history   -- daily snapshots for growth charts (last 30 days)
 """
+
 import logging
 import os
 
@@ -69,20 +70,26 @@ def audience_history():
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
             conn.execute("SELECT set_config('app.niche_id', 'all', true)")
             if niche_id:
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT niche_id, platform, metric_name, metric_value, snapshot_date
                     FROM audience_snapshots
                     WHERE snapshot_date >= CURRENT_DATE - %s::int
                       AND niche_id = %s
                     ORDER BY snapshot_date
-                """, (days, niche_id)).fetchall()
+                """,
+                    (days, niche_id),
+                ).fetchall()
             else:
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT niche_id, platform, metric_name, metric_value, snapshot_date
                     FROM audience_snapshots
                     WHERE snapshot_date >= CURRENT_DATE - %s::int
                     ORDER BY snapshot_date
-                """, (days,)).fetchall()
+                """,
+                    (days,),
+                ).fetchall()
 
         data = [
             {

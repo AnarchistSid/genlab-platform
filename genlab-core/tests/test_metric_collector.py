@@ -3,6 +3,7 @@
 Covers platform fetchers and bandit_updater callback wiring.
 All external dependencies (platform APIs, SharePoint store) are mocked.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -483,8 +484,14 @@ class TestFetchFacebookReelInsights:
                 r.json.return_value = {
                     "data": [
                         {"name": "post_video_view_time", "values": [{"value": total_view_time_ms}]},
-                        {"name": "post_video_avg_time_watched", "values": [{"value": avg_view_time_ms}]},
-                        {"name": "post_video_social_actions", "values": [{"value": social_actions}]},
+                        {
+                            "name": "post_video_avg_time_watched",
+                            "values": [{"value": avg_view_time_ms}],
+                        },
+                        {
+                            "name": "post_video_social_actions",
+                            "values": [{"value": social_actions}],
+                        },
                     ]
                 }
             else:
@@ -509,7 +516,7 @@ class TestFetchFacebookReelInsights:
             "requests.get",
             side_effect=self._build_fake_get(
                 total_view_time_ms=433778.0,  # 7.23 min total
-                avg_view_time_ms=4819.0,      # 4.819s avg
+                avg_view_time_ms=4819.0,  # 4.819s avg
                 social_actions={"COMMENT": 1, "SHARE": 5, "REACTION": 12},
                 video_length_s=40.0,
             ),
@@ -541,7 +548,7 @@ class TestFetchFacebookReelInsights:
             "requests.get",
             side_effect=self._build_fake_get(
                 avg_view_time_ms=50000.0,  # 50s avg
-                video_length_s=40.0,        # 40s length
+                video_length_s=40.0,  # 40s length
             ),
         ):
             result = _fetch_facebook("reel_loop", niche_id="gaming")
@@ -592,8 +599,10 @@ class TestFetchFacebookReelInsights:
                 "data": [
                     {"name": "post_video_view_time", "values": [{"value": 100000}]},
                     {"name": "post_video_avg_time_watched", "values": [{"value": 2500}]},
-                    {"name": "post_video_social_actions",
-                     "values": [{"value": {"COMMENT": 3, "SHARE": 7, "REACTION": 22}}]},
+                    {
+                        "name": "post_video_social_actions",
+                        "values": [{"value": {"COMMENT": 3, "SHARE": 7, "REACTION": 22}}],
+                    },
                 ]
             }
             return r
@@ -695,7 +704,11 @@ class TestBanditUpdaterCalled:
         # _make_task sets bandit_arm = f"{content_type}__{platform}" to match
         # the classified-arm shape that push_to_backlog._classify_arm writes.
         updater.assert_called_once_with(
-            "sports", "highlight__instagram", "instagram", 0.65, None,
+            "sports",
+            "highlight__instagram",
+            "instagram",
+            0.65,
+            None,
         )
 
     @patch("genlab_core.learning.metric_collector.fetch_platform_metrics")
@@ -851,9 +864,7 @@ class TestCollectMetricsPassthrough:
         mock_client = MagicMock()
         updater = MagicMock()
 
-        with patch(
-            "genlab_core.learning.metric_collector.PendingFeedbackStore"
-        ) as MockStore:
+        with patch("genlab_core.learning.metric_collector.PendingFeedbackStore") as MockStore:
             mock_store_inst = MockStore.return_value
             mock_store_inst.get_pending.return_value = [_make_task()]
 
@@ -974,16 +985,18 @@ class TestDefaultBanditUpdaterFractionalMath:
         from genlab_core.learning.metric_collector import _default_bandit_updater
 
         proxy = MagicMock()
-        proxy.all.return_value = [{
-            "id": "row",
-            "fields": {
-                "arm_id": "clip",
-                "niche_id": "gaming",
-                "alpha": 2.0,
-                "beta": 3.0,
-                "n_plays": 10,
-            },
-        }]
+        proxy.all.return_value = [
+            {
+                "id": "row",
+                "fields": {
+                    "arm_id": "clip",
+                    "niche_id": "gaming",
+                    "alpha": 2.0,
+                    "beta": 3.0,
+                    "n_plays": 10,
+                },
+            }
+        ]
         client = MagicMock()
         client.bandit_arms = proxy
 
@@ -1036,8 +1049,8 @@ class TestMultiArmUpdate:
         from genlab_core.learning.metric_collector import _default_bandit_updater
 
         proxy = self._proxy_with_arms(
-            ("gameplay_clip",            "gaming", 1.0, 1.0, 0),
-            ("style:gaming:bold_claim",  "gaming", 1.0, 1.0, 0),
+            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
+            ("style:gaming:bold_claim", "gaming", 1.0, 1.0, 0),
         )
         client = MagicMock()
         client.bandit_arms = proxy
@@ -1057,8 +1070,7 @@ class TestMultiArmUpdate:
         # save_arm called once per matched target — twice total
         assert proxy.update.call_count == 2
         written_by_arm = {
-            call.args[1]["arm_id"]: call.args[1]
-            for call in proxy.update.call_args_list
+            call.args[1]["arm_id"]: call.args[1] for call in proxy.update.call_args_list
         }
         assert "gameplay_clip" in written_by_arm
         assert "style:gaming:bold_claim" in written_by_arm
@@ -1074,8 +1086,8 @@ class TestMultiArmUpdate:
         from genlab_core.learning.metric_collector import _default_bandit_updater
 
         proxy = self._proxy_with_arms(
-            ("gameplay_clip",            "gaming", 1.0, 1.0, 0),
-            ("style:gaming:bold_claim",  "gaming", 1.0, 1.0, 0),
+            ("gameplay_clip", "gaming", 1.0, 1.0, 0),
+            ("style:gaming:bold_claim", "gaming", 1.0, 1.0, 0),
         )
         client = MagicMock()
         client.bandit_arms = proxy
@@ -1106,10 +1118,8 @@ class TestMultiArmUpdate:
                 primary_linucb = fields.get("linucb_state")
             elif fields["arm_id"] == "style:gaming:bold_claim":
                 style_linucb = fields.get("linucb_state", None)
-        assert primary_linucb is not None, \
-            "Primary arm should have LinUCB state written"
-        assert style_linucb is None, \
-            "Style arm must NOT receive LinUCB state"
+        assert primary_linucb is not None, "Primary arm should have LinUCB state written"
+        assert style_linucb is None, "Style arm must NOT receive LinUCB state"
 
     def test_missing_extra_arm_logs_warning_but_does_not_fail(self):
         from genlab_core.learning.metric_collector import _default_bandit_updater
@@ -1206,10 +1216,12 @@ class TestSaveArmPreservesNPlays:
         from genlab_core.learning.arm_loader import save_arm
 
         proxy = MagicMock()
-        proxy.all.return_value = [{
-            "id": "row_42",
-            "fields": {"arm_id": "test_arm", "n_plays": 9},
-        }]
+        proxy.all.return_value = [
+            {
+                "id": "row_42",
+                "fields": {"arm_id": "test_arm", "n_plays": 9},
+            }
+        ]
 
         save_arm(proxy, arm_id="test_arm", alpha=2.0, beta=3.0, n_plays=10)
 
@@ -1220,10 +1232,12 @@ class TestSaveArmPreservesNPlays:
         from genlab_core.learning.arm_loader import save_arm
 
         proxy = MagicMock()
-        proxy.all.return_value = [{
-            "id": "row_42",
-            "fields": {"arm_id": "test_arm", "n_plays": 9},
-        }]
+        proxy.all.return_value = [
+            {
+                "id": "row_42",
+                "fields": {"arm_id": "test_arm", "n_plays": 9},
+            }
+        ]
 
         save_arm(proxy, arm_id="test_arm", alpha=2.0, beta=3.0)
 
@@ -1265,8 +1279,15 @@ class TestCTABanditClickAttribution:
         """Build a fake backlog_client.find() that returns blueprint + clicks."""
         backlog = MagicMock()
 
-        def fake_find(table: str, *, formula: str = "", niche_id: str = "",
-                      max_records: int | None = None, columns=None, **_):
+        def fake_find(
+            table: str,
+            *,
+            formula: str = "",
+            niche_id: str = "",
+            max_records: int | None = None,
+            columns=None,
+            **_,
+        ):
             if table == "blueprints":
                 return [{"affiliate_cta_variant": variant_field}]
             if table == "affiliate_clicks":
@@ -1416,45 +1437,48 @@ class TestCTABanditVariantMatching:
     def test_match_instagram(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
-        assert _match_variant_for_platform(
-            "ig_link_in_bio,yt_get_here,fb_check_out", "instagram"
-        ) == "ig_link_in_bio"
+        assert (
+            _match_variant_for_platform("ig_link_in_bio,yt_get_here,fb_check_out", "instagram")
+            == "ig_link_in_bio"
+        )
 
     def test_match_youtube(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
-        assert _match_variant_for_platform(
-            "ig_link_in_bio,yt_best_price,fb_check_out", "youtube"
-        ) == "yt_best_price"
+        assert (
+            _match_variant_for_platform("ig_link_in_bio,yt_best_price,fb_check_out", "youtube")
+            == "yt_best_price"
+        )
 
     def test_match_facebook(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
-        assert _match_variant_for_platform(
-            "ig_link_in_bio,yt_get_here,fb_must_have", "facebook"
-        ) == "fb_must_have"
+        assert (
+            _match_variant_for_platform("ig_link_in_bio,yt_get_here,fb_must_have", "facebook")
+            == "fb_must_have"
+        )
 
     def test_no_match_for_unknown_platform(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
-        assert _match_variant_for_platform(
-            "ig_link_in_bio,yt_get_here,fb_check_out", "twitter"
-        ) is None
+        assert (
+            _match_variant_for_platform("ig_link_in_bio,yt_get_here,fb_check_out", "twitter")
+            is None
+        )
 
     def test_no_match_when_variant_missing(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
         # FB variant absent — facebook lookup returns None
-        assert _match_variant_for_platform(
-            "ig_link_in_bio,yt_get_here", "facebook"
-        ) is None
+        assert _match_variant_for_platform("ig_link_in_bio,yt_get_here", "facebook") is None
 
     def test_handles_whitespace(self):
         from genlab_core.learning.metric_collector import _match_variant_for_platform
 
-        assert _match_variant_for_platform(
-            " ig_link_in_bio , yt_get_here ", "instagram"
-        ) == "ig_link_in_bio"
+        assert (
+            _match_variant_for_platform(" ig_link_in_bio , yt_get_here ", "instagram")
+            == "ig_link_in_bio"
+        )
 
 
 class TestCTABanditSaveStateCreatesDir:
@@ -1488,7 +1512,9 @@ class TestFetchYouTubeAnalyticsExtras:
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_credentials",
             lambda niche_id: {
-                "client_id": "cid", "client_secret": "csec", "refresh_token": "rtok",
+                "client_id": "cid",
+                "client_secret": "csec",
+                "refresh_token": "rtok",
             },
         )
         monkeypatch.setattr(
@@ -1529,9 +1555,15 @@ class TestFetchYouTubeAnalyticsExtras:
             r.raise_for_status.return_value = None
             if "youtube/v3/videos" in url:
                 r.json.return_value = {
-                    "items": [{"statistics": {
-                        "viewCount": "10000", "likeCount": "500", "commentCount": "50",
-                    }}]
+                    "items": [
+                        {
+                            "statistics": {
+                                "viewCount": "10000",
+                                "likeCount": "500",
+                                "commentCount": "50",
+                            }
+                        }
+                    ]
                 }
             elif "youtube/v3/channels" in url:
                 r.json.return_value = {"items": [{"id": "UC_test_channel"}]}
@@ -1581,9 +1613,15 @@ class TestFetchYouTubeAnalyticsExtras:
             r.raise_for_status.return_value = None
             if "youtube/v3/videos" in url:
                 r.json.return_value = {
-                    "items": [{"statistics": {
-                        "viewCount": "100", "likeCount": "5", "commentCount": "1",
-                    }}]
+                    "items": [
+                        {
+                            "statistics": {
+                                "viewCount": "100",
+                                "likeCount": "5",
+                                "commentCount": "1",
+                            }
+                        }
+                    ]
                 }
             elif "youtube/v3/channels" in url:
                 r.json.return_value = {"items": [{"id": "UC_test"}]}
@@ -1620,7 +1658,9 @@ class TestFetchYouTubeAnalyticsExtras:
             r.raise_for_status.return_value = None
             if "youtube/v3/videos" in url:
                 r.json.return_value = {
-                    "items": [{"statistics": {"viewCount": "200", "likeCount": "10", "commentCount": "2"}}]
+                    "items": [
+                        {"statistics": {"viewCount": "200", "likeCount": "10", "commentCount": "2"}}
+                    ]
                 }
             elif "youtube/v3/channels" in url:
                 r.json.return_value = {"items": [{"id": "UC_test"}]}

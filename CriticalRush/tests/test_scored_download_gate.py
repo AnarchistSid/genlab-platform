@@ -19,6 +19,7 @@ from niches.gaming.tools.clip_sourcer import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_config(**overrides) -> ClipSourcerConfig:
     defaults = dict(
         min_duration_seconds=5,
@@ -55,6 +56,7 @@ def _subprocess_fail() -> MagicMock:
 # StageScore dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestStageScore:
     def test_stage_score_dataclass(self):
         s = StageScore(stage=1, score=0.5, passed=True, reason="ok", bytes_downloaded=42)
@@ -74,6 +76,7 @@ class TestStageScore:
 # Thresholds
 # ---------------------------------------------------------------------------
 
+
 class TestThresholds:
     def test_thresholds(self):
         assert ScoredDownloadGate.THRESHOLDS == (0.30, 0.50, 0.70, 0.0)
@@ -85,6 +88,7 @@ class TestThresholds:
 # ---------------------------------------------------------------------------
 # Stage 1 — Metadata
 # ---------------------------------------------------------------------------
+
 
 class TestStage1Metadata:
     @patch("niches.gaming.tools.clip_sourcer.subprocess.run")
@@ -180,9 +184,7 @@ class TestStage1Metadata:
 
     @patch("niches.gaming.tools.clip_sourcer.subprocess.run")
     def test_stage1_correct_command(self, mock_run):
-        mock_run.return_value = _subprocess_ok(
-            "Title|||30|||5000|||250"
-        )
+        mock_run.return_value = _subprocess_ok("Title|||30|||5000|||250")
         gate = _make_gate()
         gate.stage1_metadata("https://youtube.com/watch?v=test123")
 
@@ -197,6 +199,7 @@ class TestStage1Metadata:
 # ---------------------------------------------------------------------------
 # run_gates — short-circuit behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestRunGates:
     @patch("niches.gaming.tools.clip_sourcer.subprocess.run")
@@ -217,6 +220,7 @@ class TestRunGates:
     @patch("niches.gaming.tools.clip_sourcer.subprocess.run")
     def test_run_gates_short_circuits_on_stage2_failure(self, mock_run):
         """Stage 1 passes, stage 2 fails (no thumbnail)."""
+
         def side_effect(cmd, **kwargs):
             if "--no-download" in cmd and "--print" in cmd:
                 # Stage 1: metadata
@@ -270,7 +274,13 @@ class TestRunGates:
 
             gate = _make_gate()
             with patch("niches.gaming.tools.clip_sourcer.probe_video") as mock_probe:
-                mock_probe.return_value = {"width": 1280, "height": 720, "duration": 15.0, "fps": 30.0, "aspect_ratio": "1280:720"}
+                mock_probe.return_value = {
+                    "width": 1280,
+                    "height": 720,
+                    "duration": 15.0,
+                    "fps": 30.0,
+                    "aspect_ratio": "1280:720",
+                }
 
                 passed, stages = gate.run_gates("https://youtube.com/watch?v=abc", output_dir)
 
@@ -307,7 +317,13 @@ class TestRunGates:
 
             gate = _make_gate()
             with patch("niches.gaming.tools.clip_sourcer.probe_video") as mock_probe:
-                mock_probe.return_value = {"width": 1280, "height": 720, "duration": 15.0, "fps": 30.0, "aspect_ratio": "1280:720"}
+                mock_probe.return_value = {
+                    "width": 1280,
+                    "height": 720,
+                    "duration": 15.0,
+                    "fps": 30.0,
+                    "aspect_ratio": "1280:720",
+                }
                 passed, stages = gate.run_gates("https://youtube.com/watch?v=abc", output_dir)
 
         assert passed is True
@@ -319,6 +335,7 @@ class TestRunGates:
 # ---------------------------------------------------------------------------
 # Config integration
 # ---------------------------------------------------------------------------
+
 
 class TestConfigIntegration:
     def test_min_views_default(self):

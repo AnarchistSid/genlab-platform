@@ -1,4 +1,5 @@
 """Thread-safe per-run cost accumulation via contextvars."""
+
 from __future__ import annotations
 
 import contextvars
@@ -29,10 +30,14 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """Compute USD cost. Primary: litellm. Fallback: local MODEL_COSTS table."""
     try:
         from litellm import Choices, Message, ModelResponse, Usage, completion_cost
+
         resp = ModelResponse(
             id="cost-calc",
-            choices=[Choices(finish_reason="stop", index=0,
-                           message=Message(content="", role="assistant"))],
+            choices=[
+                Choices(
+                    finish_reason="stop", index=0, message=Message(content="", role="assistant")
+                )
+            ],
             model=model,
             usage=Usage(
                 prompt_tokens=input_tokens,
@@ -59,7 +64,9 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
         logger.warning("[cost] unknown model '%s' — using gpt-4o-mini rates", model)
         rates = MODEL_COSTS.get("gpt-4o-mini", {"input": 0.15, "output": 0.60})
 
-    return (input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)) / 1_000_000
+    return (
+        input_tokens * rates.get("input", 0) + output_tokens * rates.get("output", 0)
+    ) / 1_000_000
 
 
 @dataclass
@@ -134,8 +141,8 @@ class CostAccumulator:
 
 
 # contextvars-based current accumulator
-_current_accumulator: contextvars.ContextVar[CostAccumulator | None] = (
-    contextvars.ContextVar("cost_accumulator", default=None)
+_current_accumulator: contextvars.ContextVar[CostAccumulator | None] = contextvars.ContextVar(
+    "cost_accumulator", default=None
 )
 
 

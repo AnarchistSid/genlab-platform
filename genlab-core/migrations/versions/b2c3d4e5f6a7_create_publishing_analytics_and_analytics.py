@@ -8,6 +8,7 @@ Phase 3: Publishing_Analytics + Analytics tables with Row Level Security.
 Publishing_Analytics tracks per-platform publish records.
 Analytics stores engagement data across collection windows.
 """
+
 from collections.abc import Sequence
 
 from alembic import op

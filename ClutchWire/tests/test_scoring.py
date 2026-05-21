@@ -50,7 +50,9 @@ class TestMagnitudeMultipliers:
         """Full ordering: championship > playoff > rivalry > regular > preseason."""
         types = ["championship_game", "playoff_game", "rivalry_game", "regular_season", "preseason"]
         scores = [strategy.score_item(_make_item(t))["final_score"] for t in types]
-        assert scores == sorted(scores, reverse=True), f"Score ordering wrong: {list(zip(types, scores, strict=False))}"
+        assert scores == sorted(scores, reverse=True), (
+            f"Score ordering wrong: {list(zip(types, scores, strict=False))}"
+        )
 
 
 class TestScoringExecution:

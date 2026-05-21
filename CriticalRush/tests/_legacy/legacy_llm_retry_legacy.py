@@ -13,7 +13,11 @@ class TestLLMRetryOnTransientError:
     @patch("niches.gaming.stages.write_gaming_content.settings")
     @patch("genlab_core.http.retry.time.sleep")
     def test_retries_on_rate_limit_then_succeeds(
-        self, mock_sleep, mock_settings, mock_templates, mock_anthropic_cls,
+        self,
+        mock_sleep,
+        mock_settings,
+        mock_templates,
+        mock_anthropic_cls,
     ):
         """RateLimitError on first call, success on second."""
         from niches.gaming.stages.write_gaming_content import WriteGamingContent
@@ -29,7 +33,13 @@ class TestLLMRetryOnTransientError:
 
         valid_hook = "This changes everything for TestGame"
         ok_resp = MagicMock()
-        ok_resp.content = [MagicMock(text='{"hook":"' + valid_hook + '","instagram":{"caption":"c","hashtags":["#g"]},"youtube":{"title":"What?","description":"d"},"x_twitter":{"tweet":"t","hashtags":["#g"]},"facebook":{"caption":"f"},"tiktok":{"caption":"t","hashtags":["#g"]}}')]
+        ok_resp.content = [
+            MagicMock(
+                text='{"hook":"'
+                + valid_hook
+                + '","instagram":{"caption":"c","hashtags":["#g"]},"youtube":{"title":"What?","description":"d"},"x_twitter":{"tweet":"t","hashtags":["#g"]},"facebook":{"caption":"f"},"tiktok":{"caption":"t","hashtags":["#g"]}}'
+            )
+        ]
 
         mock_client.messages.create.side_effect = [
             anthropic.RateLimitError(
@@ -53,7 +63,11 @@ class TestLLMRetryOnTransientError:
     @patch("niches.gaming.stages.write_gaming_content.settings")
     @patch("genlab_core.http.retry.time.sleep")
     def test_falls_back_after_3_failures(
-        self, mock_sleep, mock_settings, mock_templates, mock_anthropic_cls,
+        self,
+        mock_sleep,
+        mock_settings,
+        mock_templates,
+        mock_anthropic_cls,
     ):
         """3 transient failures -> falls back to template."""
         from niches.gaming.stages.write_gaming_content import WriteGamingContent
@@ -86,7 +100,10 @@ class TestLLMRetryOnTransientError:
     @patch("niches.gaming.stages.write_gaming_content._load_templates")
     @patch("niches.gaming.stages.write_gaming_content.settings")
     def test_does_not_retry_on_auth_error(
-        self, mock_settings, mock_templates, mock_anthropic_cls,
+        self,
+        mock_settings,
+        mock_templates,
+        mock_anthropic_cls,
     ):
         """AuthenticationError should surface immediately, no retry."""
         from niches.gaming.stages.write_gaming_content import WriteGamingContent

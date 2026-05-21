@@ -1,4 +1,5 @@
 """Tests for PublishGatekeeper — each gate tested in isolation."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

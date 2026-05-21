@@ -1,4 +1,5 @@
 """Tests for the CTA Thompson Sampling bandit."""
+
 from __future__ import annotations
 
 import tempfile
@@ -100,8 +101,7 @@ class TestThompsonSampling:
 
         # Run 100 selections and count how many times the winning arm is picked
         win_count = sum(
-            1 for _ in range(100)
-            if bandit.select(platform="instagram").arm_id == winning_arm_id
+            1 for _ in range(100) if bandit.select(platform="instagram").arm_id == winning_arm_id
         )
         assert win_count > 70, (
             f"Expected winning arm to be selected >70% of the time, got {win_count}%"

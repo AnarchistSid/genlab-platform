@@ -4,6 +4,7 @@ This is the compatibility layer that lets BacklogClient route calls through
 the StorageBackend interface while still using the existing GraphTableProxy
 under the hood for SharePoint Lists.
 """
+
 from __future__ import annotations
 
 import logging

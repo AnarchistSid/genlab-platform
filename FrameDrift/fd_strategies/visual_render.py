@@ -30,12 +30,30 @@ _DEFAULT_ANIME_QUERIES = [
 ]
 
 # Protected brand names — never in Pexels queries (anime studios from niche.yaml)
-_PROTECTED_BRANDS = frozenset({
-    "studio ghibli", "toei animation", "mappa", "ufotable", "bones",
-    "cloverworks", "kyoto animation", "wit studio", "sunrise", "a-1 pictures",
-    "shaft", "trigger", "crunchyroll", "funimation", "aniplex",
-    "kadokawa", "viz media", "shueisha", "kodansha", "square enix",
-})
+_PROTECTED_BRANDS = frozenset(
+    {
+        "studio ghibli",
+        "toei animation",
+        "mappa",
+        "ufotable",
+        "bones",
+        "cloverworks",
+        "kyoto animation",
+        "wit studio",
+        "sunrise",
+        "a-1 pictures",
+        "shaft",
+        "trigger",
+        "crunchyroll",
+        "funimation",
+        "aniplex",
+        "kadokawa",
+        "viz media",
+        "shueisha",
+        "kodansha",
+        "square enix",
+    }
+)
 
 
 def _load_yaml(path: Path) -> dict:
@@ -71,6 +89,7 @@ class AnimeVisualRenderStrategy(VisualRenderStrategy):
 
         try:
             from genlab_core.media.frame_compositor import probe_video
+
             visuals_yaml = str(NICHE_ROOT / "config" / "visuals.yaml")
             compositor = FrameCompositor.from_visuals_yaml(visuals_yaml)
             try:
@@ -93,8 +112,7 @@ class AnimeVisualRenderStrategy(VisualRenderStrategy):
         self._ensure_config()
 
         configured = (
-            self._sources_config
-            .get("media", {})
+            self._sources_config.get("media", {})
             .get("pexels", {})
             .get("anime_queries", _DEFAULT_ANIME_QUERIES)
         )
@@ -107,7 +125,8 @@ class AnimeVisualRenderStrategy(VisualRenderStrategy):
             q_lower = q.lower()
             if any(brand in q_lower for brand in _PROTECTED_BRANDS):
                 logger.warning(
-                    "[visual] Brand name detected in Pexels query '%s' — replaced with fallback", q,
+                    "[visual] Brand name detected in Pexels query '%s' — replaced with fallback",
+                    q,
                 )
                 safe_queries.append("anime aesthetic lifestyle urban")
             else:
@@ -221,7 +240,10 @@ class AnimeVisualRenderStrategy(VisualRenderStrategy):
                             rendered += 1
                         else:
                             story.setdefault("media", {})["render_status"] = "render_failed"
-                            logger.warning("[anime] Render failed for '%s' — staying DRAFTED", story.get("title", "")[:50])
+                            logger.warning(
+                                "[anime] Render failed for '%s' — staying DRAFTED",
+                                story.get("title", "")[:50],
+                            )
                         continue
 
                 # No downloaded video — fall back to Pexels query generation
@@ -241,6 +263,8 @@ class AnimeVisualRenderStrategy(VisualRenderStrategy):
 
         logger.info(
             "[anime] VisualRender: %d/%d stories have video, %d rendered total",
-            videos_found, len(stories), rendered,
+            videos_found,
+            len(stories),
+            rendered,
         )
         return context

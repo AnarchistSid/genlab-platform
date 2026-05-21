@@ -28,6 +28,7 @@ class IGDBClient:
     def __init__(self):
         from genlab_core.ratelimit.token_bucket import TokenBucket
         from genlab_core.settings import settings
+
         client_id = settings.twitch_client_id or ""
         client_secret = settings.twitch_client_secret or ""
         self._client_id = client_id
@@ -64,12 +65,12 @@ class IGDBClient:
 
         try:
             query = (
-                f'fields id,name,slug,cover.url,'
-                f'involved_companies.company.name,'
-                f'involved_companies.developer,'
-                f'external_games.category,'
-                f'external_games.uid,'
-                f'total_rating;'
+                f"fields id,name,slug,cover.url,"
+                f"involved_companies.company.name,"
+                f"involved_companies.developer,"
+                f"external_games.category,"
+                f"external_games.uid,"
+                f"total_rating;"
                 f' search "{title}"; limit 3;'
             )
 
@@ -113,7 +114,9 @@ class IGDBClient:
             cover_url = None
             cover = chosen.get("cover")
             if cover and cover.get("url"):
-                cover_url = "https:" + cover["url"] if cover["url"].startswith("//") else cover["url"]
+                cover_url = (
+                    "https:" + cover["url"] if cover["url"].startswith("//") else cover["url"]
+                )
 
             return {
                 "igdb_game_id": str(chosen["id"]),
@@ -127,7 +130,9 @@ class IGDBClient:
             logger.warning("[IGDB] Search failed for '%s': %s", title, e)
             return None
 
-    def enrich_story(self, story: dict[str, Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
+    def enrich_story(
+        self, story: dict[str, Any], context: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Enrich a story dict with IGDB game metadata.
 
         If context is provided, checks the use_gaming_clip_sourcer feature

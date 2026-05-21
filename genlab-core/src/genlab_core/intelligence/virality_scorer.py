@@ -10,6 +10,7 @@ Signals:
   - Content freshness (trending topic match)
   - Video availability (has rendered video)
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,8 +35,8 @@ _DOW_MULTIPLIER = [0.9, 1.0, 1.0, 1.1, 1.1, 1.2, 1.0]
 
 # Hour multipliers (IST posting windows — engagement peaks)
 _HOUR_MULTIPLIER = {
-    range(6, 9): 0.8,    # Early morning
-    range(9, 12): 1.0,   # Morning
+    range(6, 9): 0.8,  # Early morning
+    range(9, 12): 1.0,  # Morning
     range(12, 15): 1.2,  # Lunch peak
     range(15, 18): 1.1,  # Afternoon
     range(18, 21): 1.3,  # Evening peak
@@ -73,11 +74,12 @@ def score_blueprint(
     if hook:
         try:
             from genlab_core.learning.hook_features import build_feature_vector
+
             feats = build_feature_vector(hook)
             # Longer hooks with specificity score higher
             hook_score += min(feats.get("word_count", 0) * 1.5, 15)
-            hook_score += feats.get("has_number", 0) * 5     # Numbers add specificity
-            hook_score += feats.get("has_question", 0) * 3   # Questions drive engagement
+            hook_score += feats.get("has_number", 0) * 5  # Numbers add specificity
+            hook_score += feats.get("has_question", 0) * 3  # Questions drive engagement
             hook_score += feats.get("has_superlative", 0) * 4  # Superlatives create curiosity
             hook_score += feats.get("unique_word_ratio", 0) * 3  # Unique = not generic
         except Exception:

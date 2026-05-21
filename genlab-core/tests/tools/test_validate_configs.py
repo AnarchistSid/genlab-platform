@@ -1,4 +1,5 @@
 """Tests for niche config validation."""
+
 import tempfile
 from pathlib import Path
 

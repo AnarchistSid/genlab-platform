@@ -2,6 +2,7 @@
 
 Mocks all external dependencies: BacklogClient, platform clients, DailyCapEnforcer.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ with open(_TEMP_VIDEO_PATH, "wb") as _f:
 def video_file():
     """Return path to a real temp video file that passes all production checks."""
     return _TEMP_VIDEO_PATH
+
 
 # ---------------------------------------------------------------------------
 # Ensure genlab_core is importable from the worktree's src layout
@@ -185,13 +187,8 @@ class TestBuildPayload:
         )
         payload = build_payload(bp["fields"], "youtube")
         assert payload.platform_specific is not None
-        assert payload.platform_specific.shorts_title == (
-            "Insane clutch play wins the tournament"
-        )
-        assert (
-            "Subnautica 2 just dropped"
-            in payload.platform_specific.community_post_text
-        )
+        assert payload.platform_specific.shorts_title == ("Insane clutch play wins the tournament")
+        assert "Subnautica 2 just dropped" in payload.platform_specific.community_post_text
 
     def test_youtube_legacy_json_field_still_publishable(self):
         """Backward compat: pre-fix rows stored youtube_content as JSON dict.
@@ -200,28 +197,27 @@ class TestBuildPayload:
         the embedded description; the new hook column still wins for the
         Shorts title.
         """
-        legacy = json.dumps({
-            "title": "Did this clutch win it all?",
-            "description": "Full breakdown of the play.",
-        })
+        legacy = json.dumps(
+            {
+                "title": "Did this clutch win it all?",
+                "description": "Full breakdown of the play.",
+            }
+        )
         bp = _make_blueprint(youtube_content=legacy)
         payload = build_payload(bp["fields"], "youtube")
         assert payload.platform_specific is not None
         # Hook drives shorts_title under the new contract
-        assert payload.platform_specific.shorts_title == (
-            "Insane clutch play wins the tournament"
-        )
+        assert payload.platform_specific.shorts_title == ("Insane clutch play wins the tournament")
         # Legacy JSON description is unwrapped for the community post text
-        assert (
-            "Full breakdown of the play."
-            in payload.platform_specific.community_post_text
-        )
+        assert "Full breakdown of the play." in payload.platform_specific.community_post_text
 
     def test_twitter_specific(self):
-        tw_content = json.dumps({
-            "routing": "single",
-            "tweet_text": "Insane clutch play!",
-        })
+        tw_content = json.dumps(
+            {
+                "routing": "single",
+                "tweet_text": "Insane clutch play!",
+            }
+        )
         bp = _make_blueprint(twitter_content=tw_content)
         payload = build_payload(bp["fields"], "twitter")
         assert payload.platform_specific is not None
@@ -232,12 +228,14 @@ class TestBuildPayload:
         bp = _make_blueprint()
         payload = build_payload(bp["fields"], "facebook")
         from genlab_core.platforms.models import FacebookSpecific
+
         assert isinstance(payload.platform_specific, FacebookSpecific)
 
     def test_threads_specific(self):
         bp = _make_blueprint()
         payload = build_payload(bp["fields"], "threads")
         from genlab_core.platforms.models import ThreadsSpecific
+
         assert isinstance(payload.platform_specific, ThreadsSpecific)
 
     def test_hashtags_from_string(self):
@@ -279,6 +277,7 @@ class TestRunPublish:
 
     def _patch_get_client(self, results: dict[str, PublishResult]):
         """Return a mock get_client that creates clients returning given results."""
+
         def _get_client(platform_id, **kwargs):
             client = MagicMock()
             if platform_id in results:
@@ -286,6 +285,7 @@ class TestRunPublish:
             else:
                 client.publish.return_value = _failure_result(platform_id, "Not configured")
             return client
+
         return _get_client
 
     @patch(_RECORD_PATCH)
@@ -296,9 +296,11 @@ class TestRunPublish:
         client = _make_client_mock([bp])
         enforcer = _make_cap_enforcer(can_publish=True)
 
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _success_result("instagram"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _success_result("instagram"),
+            }
+        )
 
         exit_code = run_publish(
             niche_id="gaming",
@@ -333,9 +335,11 @@ class TestRunPublish:
         client = _make_client_mock([bp])
         enforcer = _make_cap_enforcer()
 
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _failure_result("instagram"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _failure_result("instagram"),
+            }
+        )
 
         exit_code = run_publish(
             niche_id="gaming",
@@ -369,10 +373,12 @@ class TestRunPublish:
         client = _make_client_mock([bp])
         enforcer = _make_cap_enforcer()
 
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _success_result("instagram"),
-            "youtube": _failure_result("youtube", "quota exceeded"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _success_result("instagram"),
+                "youtube": _failure_result("youtube", "quota exceeded"),
+            }
+        )
 
         exit_code = run_publish(
             niche_id="gaming",
@@ -396,9 +402,11 @@ class TestRunPublish:
 
         def _capture_get_client(platform_id, **kwargs):
             c = MagicMock()
+
             def _pub(payload):
                 published_payloads.append(payload)
                 return _success_result(platform_id)
+
             c.publish.side_effect = _pub
             return c
 
@@ -424,9 +432,11 @@ class TestRunPublish:
         client = _make_client_mock([bp_wrong, bp_right])
         enforcer = _make_cap_enforcer()
 
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _success_result("instagram"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _success_result("instagram"),
+            }
+        )
 
         exit_code = run_publish(
             niche_id="gaming",
@@ -439,7 +449,9 @@ class TestRunPublish:
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)
     @patch(_CRED_PATCH, return_value={})
-    def test_status_set_to_publishing_before_attempts(self, mock_creds, mock_get_client, mock_record):
+    def test_status_set_to_publishing_before_attempts(
+        self, mock_creds, mock_get_client, mock_record
+    ):
         bp = _make_blueprint()
         client = _make_client_mock([bp])
         enforcer = _make_cap_enforcer()
@@ -451,9 +463,11 @@ class TestRunPublish:
             return {}
 
         client.blueprints.update.side_effect = _track_update
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _success_result("instagram"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _success_result("instagram"),
+            }
+        )
 
         run_publish(
             niche_id="gaming",
@@ -470,15 +484,19 @@ class TestRunPublish:
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)
     @patch(_CRED_PATCH, return_value={})
-    def test_record_publish_called_for_each_platform(self, mock_creds, mock_get_client, mock_record):
+    def test_record_publish_called_for_each_platform(
+        self, mock_creds, mock_get_client, mock_record
+    ):
         bp = _make_blueprint()
         client = _make_client_mock([bp])
         enforcer = _make_cap_enforcer()
 
-        mock_get_client.side_effect = self._patch_get_client({
-            "instagram": _success_result("instagram"),
-            "youtube": _failure_result("youtube"),
-        })
+        mock_get_client.side_effect = self._patch_get_client(
+            {
+                "instagram": _success_result("instagram"),
+                "youtube": _failure_result("youtube"),
+            }
+        )
 
         run_publish(
             niche_id="gaming",
@@ -511,7 +529,9 @@ class TestRunPublish:
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)
     @patch(_CRED_PATCH, return_value=None)
-    def test_credential_resolution_failure_skips_platform(self, mock_creds, mock_get_client, mock_record):
+    def test_credential_resolution_failure_skips_platform(
+        self, mock_creds, mock_get_client, mock_record
+    ):
         """When _resolve_client_kwargs returns None, the platform is marked FAILED."""
         bp = _make_blueprint()
         client = _make_client_mock([bp])

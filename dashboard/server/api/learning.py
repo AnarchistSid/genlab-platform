@@ -4,6 +4,7 @@ Routes:
     GET /api/v1/learning/bandit-state         -- bandit arm alpha/beta for all niches
     GET /api/v1/learning/hook-classifier-status -- which niches have trained hook classifiers
 """
+
 import json
 import logging
 import time as _time
@@ -37,6 +38,7 @@ def _linucb_obs(arm_record: dict) -> int:
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
     return 0
+
 
 _HOOK_NICHES = ["ai_creators", "gaming", "sports", "movies", "anime"]
 
@@ -128,8 +130,7 @@ def _learning_aggregates() -> dict:
                 )
                 niche_counts = {r["niche_id"]: int(r["n"]) for r in cur.fetchall()}
                 out["niches_at_config_quota"] = sum(
-                    1 for n in niche_counts.values()
-                    if n >= _CONFIG_UPDATER_MIN_RECORDS_PER_NICHE
+                    1 for n in niche_counts.values() if n >= _CONFIG_UPDATER_MIN_RECORDS_PER_NICHE
                 )
                 # Progress = total reward-bearing PF rows in last 30 days
                 # across all niches. The "threshold" UI compares against
@@ -150,6 +151,7 @@ def learning_status():
 
     try:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
 
         # Bandit arms — cap raised from 100 to 500. With 5 niches and
@@ -162,13 +164,15 @@ def learning_status():
             niche = f.get("niche_id", "")
             alpha = float(f.get("alpha", 1) or 1)
             beta = float(f.get("beta", 1) or 1)
-            arm_data.setdefault(niche, []).append({
-                "arm_id": f.get("arm_id", ""),
-                "alpha": round(alpha, 3),
-                "beta": round(beta, 3),
-                "n_plays": _linucb_obs(a),
-                "mean": round(alpha / (alpha + beta), 4) if (alpha + beta) > 0 else 0.0,
-            })
+            arm_data.setdefault(niche, []).append(
+                {
+                    "arm_id": f.get("arm_id", ""),
+                    "alpha": round(alpha, 3),
+                    "beta": round(beta, 3),
+                    "n_plays": _linucb_obs(a),
+                    "mean": round(alpha / (alpha + beta), 4) if (alpha + beta) > 0 else 0.0,
+                }
+            )
 
         # Everything else uses direct SQL aggregates so we don't
         # silently truncate when PF > 500 or analytics > 50 (the

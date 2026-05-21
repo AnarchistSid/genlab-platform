@@ -1,4 +1,5 @@
 """Tests for Meta webhook receiver."""
+
 import json
 import sys
 from pathlib import Path
@@ -54,9 +55,7 @@ class TestMetaWebhook:
     def test_receive_event(self, client):
         payload = {
             "object": "instagram",
-            "entry": [
-                {"id": "123", "changes": [{"field": "mentions", "value": {}}]}
-            ],
+            "entry": [{"id": "123", "changes": [{"field": "mentions", "value": {}}]}],
         }
         resp = client.post(
             "/api/v1/webhooks/meta",

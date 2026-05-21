@@ -15,6 +15,7 @@ Uses psycopg3 (the `psycopg` package) with:
 - Native type adaptation (datetime, UUID handled automatically)
 - Pipeline mode for batch operations
 """
+
 from __future__ import annotations
 
 import json
@@ -30,11 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 # Cached at import time so every checked-out connection pays the cost once.
-_HOST_ID = (
-    os.environ.get("GENLAB_HOST_ID", "").strip()
-    or socket.gethostname()
-    or "unknown"
-)
+_HOST_ID = os.environ.get("GENLAB_HOST_ID", "").strip() or socket.gethostname() or "unknown"
 
 
 def _configure_connection(conn) -> None:
@@ -56,16 +53,63 @@ def _configure_connection(conn) -> None:
     except Exception as exc:
         logger.warning("Failed to set app.host_id on new connection: %s", exc)
 
+
 # PostgreSQL reserved words that must be quoted when used as column names.
-_RESERVED_WORDS: frozenset[str] = frozenset({
-    "window", "value", "user", "table", "column", "order", "group",
-    "select", "where", "from", "to", "index", "check", "primary",
-    "references", "constraint", "default", "null", "not", "and", "or",
-    "all", "any", "as", "between", "case", "when", "then", "else",
-    "end", "in", "like", "limit", "offset", "on", "set", "update",
-    "delete", "insert", "into", "values", "create", "drop", "alter",
-    "grant", "revoke", "name", "comment", "key", "type", "role",
-})
+_RESERVED_WORDS: frozenset[str] = frozenset(
+    {
+        "window",
+        "value",
+        "user",
+        "table",
+        "column",
+        "order",
+        "group",
+        "select",
+        "where",
+        "from",
+        "to",
+        "index",
+        "check",
+        "primary",
+        "references",
+        "constraint",
+        "default",
+        "null",
+        "not",
+        "and",
+        "or",
+        "all",
+        "any",
+        "as",
+        "between",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "in",
+        "like",
+        "limit",
+        "offset",
+        "on",
+        "set",
+        "update",
+        "delete",
+        "insert",
+        "into",
+        "values",
+        "create",
+        "drop",
+        "alter",
+        "grant",
+        "revoke",
+        "name",
+        "comment",
+        "key",
+        "type",
+        "role",
+    }
+)
 
 
 def _quote_col(col: str) -> str:
@@ -76,12 +120,26 @@ def _quote_col(col: str) -> str:
 
 
 # Valid table names — prevents SQL injection via table name interpolation.
-_VALID_TABLES: frozenset[str] = frozenset({
-    "blueprints", "stories", "assets", "publishing_analytics", "analytics",
-    "content_memory", "bandit_arms", "pending_engagement", "pending_feedback",
-    "templates", "sources", "monetisationprogress", "ab_tests",
-    "audience_snapshots", "affiliate_clicks", "email_subscribers",
-})
+_VALID_TABLES: frozenset[str] = frozenset(
+    {
+        "blueprints",
+        "stories",
+        "assets",
+        "publishing_analytics",
+        "analytics",
+        "content_memory",
+        "bandit_arms",
+        "pending_engagement",
+        "pending_feedback",
+        "templates",
+        "sources",
+        "monetisationprogress",
+        "ab_tests",
+        "audience_snapshots",
+        "affiliate_clicks",
+        "email_subscribers",
+    }
+)
 
 
 def _validate_table(table: str) -> str:
@@ -95,64 +153,156 @@ def _validate_table(table: str) -> str:
 # Columns that are promoted to proper SQL columns (not in extra JSONB).
 PROMOTED_COLUMNS: dict[str, set[str]] = {
     "blueprints": {
-        "niche_id", "candidate_id", "title", "status", "hook",
-        "hook_text", "caption", "format", "story_id", "topic", "arm_id",
-        "scheduled_for", "platform_publish_status", "video_id",
-        "video_url", "priority_score", "action_taken",
-        "reviewed_at", "source", "summary", "error_message", "blueprint_id",
-        "affiliate_product", "affiliate_url", "affiliate_network",
-        "affiliate_commission_pct", "affiliate_cta", "affiliate_cta_variant",
+        "niche_id",
+        "candidate_id",
+        "title",
+        "status",
+        "hook",
+        "hook_text",
+        "caption",
+        "format",
+        "story_id",
+        "topic",
+        "arm_id",
+        "scheduled_for",
+        "platform_publish_status",
+        "video_id",
+        "video_url",
+        "priority_score",
+        "action_taken",
+        "reviewed_at",
+        "source",
+        "summary",
+        "error_message",
+        "blueprint_id",
+        "affiliate_product",
+        "affiliate_url",
+        "affiliate_network",
+        "affiliate_commission_pct",
+        "affiliate_cta",
+        "affiliate_cta_variant",
     },
     "stories": {
-        "niche_id", "story_id", "title", "url",
-        "status", "published_at", "score", "source", "summary",
+        "niche_id",
+        "story_id",
+        "title",
+        "url",
+        "status",
+        "published_at",
+        "score",
+        "source",
+        "summary",
     },
     "assets": {
-        "niche_id", "asset_id", "story_id", "url", "asset_type",
-        "status", "source_type", "file_path",
+        "niche_id",
+        "asset_id",
+        "story_id",
+        "url",
+        "asset_type",
+        "status",
+        "source_type",
+        "file_path",
     },
     "publishing_analytics": {
-        "niche_id", "post_id", "platform", "published_at", "status",
-        "views", "likes", "comments", "shares", "saves", "metrics_fetched",
-        "blueprint_id", "error_message",
+        "niche_id",
+        "post_id",
+        "platform",
+        "published_at",
+        "status",
+        "views",
+        "likes",
+        "comments",
+        "shares",
+        "saves",
+        "metrics_fetched",
+        "blueprint_id",
+        "error_message",
     },
     "analytics": {
-        "niche_id", "post_id", "platform", "metric_type", "value",
-        "collected_at", "window",
+        "niche_id",
+        "post_id",
+        "platform",
+        "metric_type",
+        "value",
+        "collected_at",
+        "window",
     },
     "content_memory": {
-        "niche_id", "content_hash", "title", "url", "first_seen",
+        "niche_id",
+        "content_hash",
+        "title",
+        "url",
+        "first_seen",
         "last_seen",
     },
     "bandit_arms": {
-        "niche_id", "arm_id", "alpha", "beta", "n_plays", "linucb_state",
+        "niche_id",
+        "arm_id",
+        "alpha",
+        "beta",
+        "n_plays",
+        "linucb_state",
     },
     "pending_engagement": {
-        "niche_id", "post_id", "platform", "status",
+        "niche_id",
+        "post_id",
+        "platform",
+        "status",
         "attempts",
     },
     "pending_feedback": {
-        "niche_id", "task_id", "post_id", "platform", "arm_id",
-        "bandit_context", "collection_status", "reward_48h",
+        "niche_id",
+        "task_id",
+        "post_id",
+        "platform",
+        "arm_id",
+        "bandit_context",
+        "collection_status",
+        "reward_48h",
         "publish_time",
     },
     "templates": {
-        "niche_id", "template_id", "name", "category",
-        "max_duration", "status",
+        "niche_id",
+        "template_id",
+        "name",
+        "category",
+        "max_duration",
+        "status",
     },
     "sources": {
-        "niche_id", "source_id", "name", "url", "source_type",
-        "tier", "weight", "status",
+        "niche_id",
+        "source_id",
+        "name",
+        "url",
+        "source_type",
+        "tier",
+        "weight",
+        "status",
     },
     "monetisationprogress": {
-        "niche_id", "platform", "metric_name", "current_value",
-        "target_value", "pct_complete", "delta_7d",
-        "days_to_threshold_est", "is_threshold_met", "data_source",
-        "as_of_date", "error_log",
+        "niche_id",
+        "platform",
+        "metric_name",
+        "current_value",
+        "target_value",
+        "pct_complete",
+        "delta_7d",
+        "days_to_threshold_est",
+        "is_threshold_met",
+        "data_source",
+        "as_of_date",
+        "error_log",
     },
     "affiliate_clicks": {
-        "niche_id", "product_id", "network", "affiliate_url",
-        "referrer", "country", "platform_source", "blueprint_id", "channel_id",
+        "niche_id",
+        "product_id",
+        "network",
+        "affiliate_url",
+        "referrer",
+        "country",
+        "platform_source",
+        "blueprint_id",
+        "channel_id",
     },
 }
 
@@ -188,6 +338,7 @@ class PostgresBackend:
             with self._pool_lock:
                 if self._pool is None:
                     from psycopg_pool import ConnectionPool
+
                     self._pool = ConnectionPool(
                         self._dsn,
                         min_size=self._min_size,
@@ -241,7 +392,14 @@ class PostgresBackend:
     @staticmethod
     def _is_uuid(record_id: str) -> bool:
         import re
-        return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', record_id.strip(), re.I))
+
+        return bool(
+            re.match(
+                r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                record_id.strip(),
+                re.I,
+            )
+        )
 
     # ── CREATE ──────────────────────────────────────────────────────
 
@@ -343,7 +501,8 @@ class PostgresBackend:
                 if where_clause:
                     # Convert $N positional params to %s for psycopg
                     import re
-                    pg_where = re.sub(r'\$\d+', '%s', where_clause)
+
+                    pg_where = re.sub(r"\$\d+", "%s", where_clause)
                     sql += f" WHERE {pg_where}"
                 sql += " ORDER BY created_at DESC"
                 if max_records:
@@ -500,20 +659,38 @@ class PostgresTableProxy:
         self._backend = backend
         self._table = table.lower()
 
-    def find(self, table: str | None = None, *, formula: str = "",
-             niche_id: str = "", max_records: int | None = None,
-             columns: list[str] | None = None) -> list:
+    def find(
+        self,
+        table: str | None = None,
+        *,
+        formula: str = "",
+        niche_id: str = "",
+        max_records: int | None = None,
+        columns: list[str] | None = None,
+    ) -> list:
         return self._backend.find(
-            table or self._table, formula=formula,
-            niche_id=niche_id, max_records=max_records, columns=columns,
+            table or self._table,
+            formula=formula,
+            niche_id=niche_id,
+            max_records=max_records,
+            columns=columns,
         )
 
-    def all(self, table: str | None = None, *, formula: str = "",
-            niche_id: str = "", max_records: int | None = None,
-            columns: list[str] | None = None) -> list:
+    def all(
+        self,
+        table: str | None = None,
+        *,
+        formula: str = "",
+        niche_id: str = "",
+        max_records: int | None = None,
+        columns: list[str] | None = None,
+    ) -> list:
         return self._backend.find(
-            table or self._table, formula=formula,
-            niche_id=niche_id, max_records=max_records, columns=columns,
+            table or self._table,
+            formula=formula,
+            niche_id=niche_id,
+            max_records=max_records,
+            columns=columns,
         )
 
     def get(self, record_id_or_table: str, record_id: str | None = None):
@@ -521,22 +698,40 @@ class PostgresTableProxy:
             return self._backend.get(record_id_or_table, record_id)
         return self._backend.get(self._table, record_id_or_table)
 
-    def create(self, table: str | None = None, fields: dict | None = None,
-               *, typecast: bool = False, **kwargs):
+    def create(
+        self,
+        table: str | None = None,
+        fields: dict | None = None,
+        *,
+        typecast: bool = False,
+        **kwargs,
+    ):
         if fields is None and isinstance(table, dict):
             fields = table
             table = None
         return self._backend.create(table or self._table, fields or {}, typecast=typecast)
 
-    def update(self, record_id_or_table: str, record_id_or_fields=None,
-               fields: dict | None = None, *, typecast: bool = False):
+    def update(
+        self,
+        record_id_or_table: str,
+        record_id_or_fields=None,
+        fields: dict | None = None,
+        *,
+        typecast: bool = False,
+    ):
         if isinstance(record_id_or_fields, dict):
             return self._backend.update(
-                self._table, record_id_or_table, record_id_or_fields, typecast=typecast,
+                self._table,
+                record_id_or_table,
+                record_id_or_fields,
+                typecast=typecast,
             )
         if fields is not None:
             return self._backend.update(
-                record_id_or_table, record_id_or_fields, fields, typecast=typecast,
+                record_id_or_table,
+                record_id_or_fields,
+                fields,
+                typecast=typecast,
             )
         raise ValueError("update() requires fields dict")
 

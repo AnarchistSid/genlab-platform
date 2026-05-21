@@ -9,6 +9,7 @@ Usage:
 After running this, the daily scraper at 23:00 IST will be able to
 access Amazon Associates dashboards without requiring 2FA.
 """
+
 import os
 from pathlib import Path
 

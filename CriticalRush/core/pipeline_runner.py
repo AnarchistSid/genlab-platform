@@ -12,6 +12,7 @@ Usage:
 CLI:
     python -m core.pipeline_runner --niche gaming --dry-run
 """
+
 from __future__ import annotations
 
 import logging
@@ -88,30 +89,40 @@ def _print_dry_run_summary(ctx: PipelineContext) -> None:
 
     stats = ctx.run_stats
     fetch = stats.get("fetch", {})
-    print(f"\n  Sources: Steam={fetch.get('steam_count', 0)}, "
-          f"Twitch={fetch.get('twitch_count', 0)}, "
-          f"RSS={fetch.get('rss_count', 0)}")
-    print(f"  After dedup: {fetch.get('after_dedup', 0)} → "
-          f"final {fetch.get('final_count', 0)} stories")
+    print(
+        f"\n  Sources: Steam={fetch.get('steam_count', 0)}, "
+        f"Twitch={fetch.get('twitch_count', 0)}, "
+        f"RSS={fetch.get('rss_count', 0)}"
+    )
+    print(
+        f"  After dedup: {fetch.get('after_dedup', 0)} → "
+        f"final {fetch.get('final_count', 0)} stories"
+    )
 
     filt = stats.get("filter", {})
     if filt:
-        print(f"\n  Filter: {filt.get('input_count', 0)} → "
-              f"{filt.get('selected', 0)} stories "
-              f"(rejected: {filt.get('rejected', 0)})")
+        print(
+            f"\n  Filter: {filt.get('input_count', 0)} → "
+            f"{filt.get('selected', 0)} stories "
+            f"(rejected: {filt.get('rejected', 0)})"
+        )
         rejected_titles = filt.get("rejected_titles", [])
         if rejected_titles:
             print(f"  Rejected samples: {rejected_titles[:3]}")
 
     igdb = stats.get("igdb_enrichment", {})
-    print(f"\n  IGDB enrichment: {igdb.get('enriched_count', 0)} enriched, "
-          f"{igdb.get('skipped_count', 0)} already had IDs, "
-          f"{igdb.get('failed_count', 0)} failed "
-          f"({igdb.get('status', 'ran')})")
+    print(
+        f"\n  IGDB enrichment: {igdb.get('enriched_count', 0)} enriched, "
+        f"{igdb.get('skipped_count', 0)} already had IDs, "
+        f"{igdb.get('failed_count', 0)} failed "
+        f"({igdb.get('status', 'ran')})"
+    )
 
     clip = stats.get("clip_sourcing", {})
     if clip:
-        print(f"\n  Clip sourcing: {clip.get('clips_sourced', 0)}/{clip.get('total_stories', 0)} sourced")
+        print(
+            f"\n  Clip sourcing: {clip.get('clips_sourced', 0)}/{clip.get('total_stories', 0)} sourced"
+        )
     else:
         print("\n  Clip sourcing: skipped (use_gaming_clip_sourcer=False)")
 
@@ -121,14 +132,18 @@ def _print_dry_run_summary(ctx: PipelineContext) -> None:
         if status == "skipped_no_api_key":
             print("\n  Content writing: skipped (no API key)")
         else:
-            print(f"\n  Content writing: {cw.get('written_count', 0)} written, "
-                  f"{cw.get('failed_count', 0)} failed")
+            print(
+                f"\n  Content writing: {cw.get('written_count', 0)} written, "
+                f"{cw.get('failed_count', 0)} failed"
+            )
 
     render = stats.get("render", {})
     if render:
-        print(f"\n  Render: {render.get('rendered', 0)} rendered, "
-              f"{render.get('failed', 0)} failed, "
-              f"{render.get('skipped', 0)} skipped")
+        print(
+            f"\n  Render: {render.get('rendered', 0)} rendered, "
+            f"{render.get('failed', 0)} failed, "
+            f"{render.get('skipped', 0)} skipped"
+        )
         breakdown = render.get("method_breakdown", {})
         if breakdown:
             print(f"  Methods: {breakdown}")
@@ -138,9 +153,11 @@ def _print_dry_run_summary(ctx: PipelineContext) -> None:
     pub = stats.get("publish", {})
     if pub:
         mode = "DRY RUN" if pub.get("dry_run") else "LIVE"
-        print(f"\n  Publish ({mode}): {pub.get('published', 0)} published, "
-              f"{pub.get('failed', 0)} failed, "
-              f"{pub.get('skipped', 0)} skipped")
+        print(
+            f"\n  Publish ({mode}): {pub.get('published', 0)} published, "
+            f"{pub.get('failed', 0)} failed, "
+            f"{pub.get('skipped', 0)} skipped"
+        )
 
     report = stats.get("report", {})
     if report:
@@ -158,7 +175,7 @@ def _print_dry_run_summary(ctx: PipelineContext) -> None:
             print(f"    {i:2}. [{s['score']:.2f}] {s['title']}")
             print(f"        src={s['source']}, steam={steam_id}, igdb={igdb_id}")
             if hook != "-":
-                print(f"        hook: \"{hook}\"")
+                print(f'        hook: "{hook}"')
             if rendered:
                 print(f"        video: {rendered}")
             if pub_status != "-":
@@ -183,7 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
-        "--force-publish", action="store_true",
+        "--force-publish",
+        action="store_true",
         help="Bypass schedule gate and daily cap — publish immediately",
     )
     args = parser.parse_args()

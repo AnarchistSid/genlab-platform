@@ -62,6 +62,7 @@ def _load_yaml(path: Path) -> dict:
 # Individual scoring functions
 # ---------------------------------------------------------------------------
 
+
 def score_virality(clip: dict, scoring_config: dict) -> float:
     """Score virality potential based on view count and engagement rate."""
     view_count = clip.get("view_count", 0)
@@ -201,6 +202,7 @@ def apply_tier_multiplier(score: float, tier: str) -> float:
 # Stage class
 # ---------------------------------------------------------------------------
 
+
 class ScoreGamingClips(ScoringStrategy):
     """Score and rank gaming clips across 7 weighted dimensions.
 
@@ -233,6 +235,7 @@ class ScoreGamingClips(ScoringStrategy):
         if crispy_config_path.exists():
             try:
                 from niches.gaming.tools.crispy_scorer import CrispyScorer
+
                 crispy_config = _load_yaml(crispy_config_path)
                 self._crispy_scorer = CrispyScorer(crispy_config, str(PROJECT_ROOT))
             except ImportError:
@@ -272,10 +275,7 @@ class ScoreGamingClips(ScoringStrategy):
             "highlight_detection": highlight_score,
         }
 
-        weighted_sum = sum(
-            scores[dim] * self._weights.get(dim, 0)
-            for dim in scores
-        )
+        weighted_sum = sum(scores[dim] * self._weights.get(dim, 0) for dim in scores)
 
         game_title = clip.get("game_title", "")
         tier = get_publisher_tier(game_title, self._game_registry)
@@ -292,7 +292,9 @@ class ScoreGamingClips(ScoringStrategy):
         }
 
     def _apply_median_fallback(
-        self, scored: list[dict], clips: list[dict],
+        self,
+        scored: list[dict],
+        clips: list[dict],
     ) -> None:
         """Apply median fallback for chat_excitement and highlight_detection.
 
@@ -323,8 +325,7 @@ class ScoreGamingClips(ScoringStrategy):
             for i, (c, orig) in enumerate(zip(scored, clips, strict=False)):
                 had_local = orig.get("local_path") is not None
                 has_crispy = self._crispy_scorer is not None and (
-                    hasattr(self._crispy_scorer, "is_enabled")
-                    and self._crispy_scorer.is_enabled()
+                    hasattr(self._crispy_scorer, "is_enabled") and self._crispy_scorer.is_enabled()
                 )
                 if had_local and has_crispy:
                     real_hl_scores.append(c["scores"]["highlight_detection"])
@@ -340,12 +341,12 @@ class ScoreGamingClips(ScoringStrategy):
     def _recompute_final_score(self, clip_result: dict) -> None:
         """Recompute weighted sum + final score after a fallback substitution."""
         weighted_sum = sum(
-            clip_result["scores"][dim] * self._weights.get(dim, 0)
-            for dim in clip_result["scores"]
+            clip_result["scores"][dim] * self._weights.get(dim, 0) for dim in clip_result["scores"]
         )
         tier = clip_result["publisher_tier"]
         clip_result["final_score"] = round(
-            apply_tier_multiplier(weighted_sum, tier), 4,
+            apply_tier_multiplier(weighted_sum, tier),
+            4,
         )
 
     def _validate_schema(self, scored_clips: list[dict]) -> None:
@@ -357,6 +358,7 @@ class ScoreGamingClips(ScoringStrategy):
 
         try:
             import jsonschema
+
             with open(schema_path) as f:
                 schema = json.load(f)
 
@@ -411,7 +413,8 @@ class ScoreGamingClips(ScoringStrategy):
         if dropped > 0:
             logger.info(
                 "[SCORE] Dropped %d clips below min_clip_score=%.2f",
-                dropped, min_score,
+                dropped,
+                min_score,
             )
 
         # Respect top_clips_per_run limit
@@ -444,6 +447,10 @@ class ScoreGamingClips(ScoringStrategy):
 
         logger.info(
             "[SCORE] %d -> %d clips (dropped %d below %.2f, tier dist: %s)",
-            len(stories), len(above), dropped, min_score, tier_dist,
+            len(stories),
+            len(above),
+            dropped,
+            min_score,
+            tier_dist,
         )
         return context

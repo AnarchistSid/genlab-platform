@@ -4,6 +4,7 @@
 Note: publish_all_platforms.py uses its own ThreadPoolExecutor directly.
 This module is available for callers that want a simpler dispatch API.
 """
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -22,8 +23,7 @@ def dispatch_many(
     results: dict[str, PublishResult] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
-            platform: pool.submit(_safe_dispatch, platform, payload)
-            for platform, payload in tasks
+            platform: pool.submit(_safe_dispatch, platform, payload) for platform, payload in tasks
         }
         for platform, future in futures.items():
             results[platform] = future.result()

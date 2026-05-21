@@ -1,4 +1,5 @@
 """Regression test for LinUCB numerical edge-case guards."""
+
 from __future__ import annotations
 
 import numpy as np

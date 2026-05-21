@@ -11,6 +11,7 @@ Confidence routing (hybrid auto-reply):
   review  — confidence >= 0.5 AND toxicity < 0.3
   discard — low confidence OR high toxicity
 """
+
 from __future__ import annotations
 
 import fcntl
@@ -105,8 +106,8 @@ RATE_CAPS: dict[str, int] = {
     "instagram": 20,
     "youtube": 10,
     "facebook": 20,
-    "x_twitter": 4,    # 50/day / ~12 active hours
-    "threads": 3,      # 15/day / ~5 active session hours
+    "x_twitter": 4,  # 50/day / ~12 active hours
+    "threads": 3,  # 15/day / ~5 active session hours
 }
 
 # Token refill interval (milliseconds) per platform, used as the
@@ -116,8 +117,7 @@ RATE_CAPS: dict[str, int] = {
 # the slowest platforms — threads, x_twitter — could refill even
 # one token, multiplying every rate-limited message into 4 errors).
 RATE_REFILL_MS: dict[str, int] = {
-    platform: max(60_000, int(3_600_000 / max(rate, 1)))
-    for platform, rate in RATE_CAPS.items()
+    platform: max(60_000, int(3_600_000 / max(rate, 1))) for platform, rate in RATE_CAPS.items()
 }
 
 _rate_limiter = EngagementRateLimiter(RATE_CAPS)
@@ -135,6 +135,7 @@ def _get_backlog_client():
     if _backlog_client_singleton is None:
         try:
             from genlab_core.http.backlog_client import BacklogClient
+
             _backlog_client_singleton = BacklogClient()
         except Exception:
             return None
@@ -384,6 +385,7 @@ def process_reply_event(event: dict) -> None:
 
     # Sanitize external comment text against prompt injection
     from genlab_core.cache.text_sanitizer import check_for_injection
+
     if check_for_injection(comment_text):
         logger.warning(
             "Engagement: injection pattern in comment %s — skipping LLM reply",
@@ -403,7 +405,8 @@ def process_reply_event(event: dict) -> None:
     if _has_replied(f"skip:{comment_id}", platform):
         logger.debug(
             "Engagement: previously skipped %s on %s, ignoring re-queue",
-            comment_id, platform,
+            comment_id,
+            platform,
         )
         return
 
@@ -412,9 +415,9 @@ def process_reply_event(event: dict) -> None:
     # call) every poller cycle while sitting in the review queue.
     if _has_replied(f"review:{comment_id}", platform):
         logger.debug(
-            "Engagement: previously queued %s for review on %s, "
-            "ignoring re-queue",
-            comment_id, platform,
+            "Engagement: previously queued %s for review on %s, ignoring re-queue",
+            comment_id,
+            platform,
         )
         return
 
@@ -422,15 +425,17 @@ def process_reply_event(event: dict) -> None:
     bl = _get_backlog_client()
     sp_item_id = None
     if bl:
-        sp_item_id = bl.write_pending_engagement({
-            "comment_id": comment_id,
-            "platform": platform,
-            "post_id": post_id,
-            "text": comment_text,
-            "author_name": event.get("author_name", ""),
-            "created_at": event.get("created_at", ""),
-            "niche_id": niche_id,
-        })
+        sp_item_id = bl.write_pending_engagement(
+            {
+                "comment_id": comment_id,
+                "platform": platform,
+                "post_id": post_id,
+                "text": comment_text,
+                "author_name": event.get("author_name", ""),
+                "created_at": event.get("created_at", ""),
+                "niche_id": niche_id,
+            }
+        )
 
     # 2. Spam filter
     if is_spam(comment_text):
@@ -451,7 +456,9 @@ def process_reply_event(event: dict) -> None:
     if result.is_toxic:
         logger.info(
             "Engagement: skipping toxic comment %s (%s=%.2f)",
-            comment_id, result.max_dimension, result.max_score,
+            comment_id,
+            result.max_dimension,
+            result.max_score,
         )
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "skipped")
@@ -471,7 +478,9 @@ def process_reply_event(event: dict) -> None:
         backoff_ms = RATE_REFILL_MS.get(platform, 600_000)
         logger.info(
             "Engagement: rate limit reached for %s, retry in %.0fs (%s)",
-            platform, backoff_ms / 1000, comment_id,
+            platform,
+            backoff_ms / 1000,
+            comment_id,
         )
         raise dramatiq.Retry(  # type: ignore[name-defined]
             message=f"rate_limited:{platform}",
@@ -508,11 +517,19 @@ def process_reply_event(event: dict) -> None:
     action = classify_reply_action(reply_text=reply, confidence=confidence, toxicity=tox_score)
     logger.info(
         "Engagement: classify %s → %s (confidence=%.2f, tox=%.2f, len=%d, question=%s)",
-        comment_id, action, confidence, tox_score, len(comment_text), is_question,
+        comment_id,
+        action,
+        confidence,
+        tox_score,
+        len(comment_text),
+        is_question,
     )
 
     if action == "discard":
-        logger.info("Engagement: discarding reply for %s (low confidence or borderline toxicity)", comment_id)
+        logger.info(
+            "Engagement: discarding reply for %s (low confidence or borderline toxicity)",
+            comment_id,
+        )
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "skipped")
         return
@@ -551,7 +568,9 @@ def process_reply_event(event: dict) -> None:
     time.sleep(delay)
 
     # 7. Post reply
-    posted = _post_reply(platform=platform, post_id=post_id, comment_id=comment_id, reply_text=reply)
+    posted = _post_reply(
+        platform=platform, post_id=post_id, comment_id=comment_id, reply_text=reply
+    )
 
     # 8. Mark as replied — only if the reply was actually posted
     if posted:
@@ -559,7 +578,9 @@ def process_reply_event(event: dict) -> None:
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "replied", reply_text=reply)
     else:
-        logger.warning("Engagement: reply to %s on %s failed — NOT marking as replied", comment_id, platform)
+        logger.warning(
+            "Engagement: reply to %s on %s failed — NOT marking as replied", comment_id, platform
+        )
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "failed", error_msg="Platform API call failed")
 
@@ -579,7 +600,9 @@ def process_like_event(event: dict) -> None:
         backoff_ms = RATE_REFILL_MS.get(platform, 600_000)
         logger.info(
             "Engagement: rate limit reached for %s, retry like %s in %.0fs",
-            platform, comment_id, backoff_ms / 1000,
+            platform,
+            comment_id,
+            backoff_ms / 1000,
         )
         raise dramatiq.Retry(  # type: ignore[name-defined]
             message=f"rate_limited:{platform}",
@@ -613,18 +636,19 @@ def _post_reply(platform: str, post_id: str, comment_id: str, reply_text: str) -
         if platform == "tiktok":
             logger.info(
                 "Engagement: TikTok engagement not available via API — "
-                "manual reply required for comment %s", comment_id,
+                "manual reply required for comment %s",
+                comment_id,
             )
             return False
         logger.error(
-            "Engagement: could not load client for '%s': %s", platform, exc,
+            "Engagement: could not load client for '%s': %s",
+            platform,
+            exc,
         )
         return False
 
     if isinstance(client, Engageable):
-        return client.post_reply(
-            parent_id=comment_id, text=reply_text, context_id=post_id
-        )
+        return client.post_reply(parent_id=comment_id, text=reply_text, context_id=post_id)
 
     logger.error(
         "Engagement: client for '%s' does not implement Engageable — cannot reply",
@@ -643,7 +667,9 @@ def _post_like(platform: str, comment_id: str, post_id: str | None = None) -> No
     except (ValueError, ImportError) as exc:
         logger.warning(
             "Engagement: could not load client for '%s' to like comment %s: %s",
-            platform, comment_id, exc,
+            platform,
+            comment_id,
+            exc,
         )
         return
 
@@ -651,6 +677,7 @@ def _post_like(platform: str, comment_id: str, post_id: str | None = None) -> No
         client.like(target_id=comment_id, context_id=post_id or "")
     else:
         logger.warning(
-            "Engagement: client for '%s' does not implement Engageable — "
-            "cannot like comment %s", platform, comment_id,
+            "Engagement: client for '%s' does not implement Engageable — cannot like comment %s",
+            platform,
+            comment_id,
         )

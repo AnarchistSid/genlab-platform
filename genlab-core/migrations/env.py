@@ -1,4 +1,5 @@
 """Alembic env.py — reads POSTGRES_PASSWORD from environment."""
+
 import os
 from logging.config import fileConfig
 
@@ -12,9 +13,7 @@ config = context.config
 # Inject POSTGRES_PASSWORD from environment into the config
 # so %(POSTGRES_PASSWORD)s in alembic.ini resolves correctly.
 pg_password = os.environ.get("POSTGRES_PASSWORD", "genlab_dev")
-config.set_section_option(
-    config.config_ini_section, "POSTGRES_PASSWORD", pg_password
-)
+config.set_section_option(config.config_ini_section, "POSTGRES_PASSWORD", pg_password)
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
@@ -50,9 +49,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

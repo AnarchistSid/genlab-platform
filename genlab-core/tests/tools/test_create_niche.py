@@ -1,4 +1,5 @@
 """Tests for the niche scaffold tool."""
+
 import tempfile
 from pathlib import Path
 

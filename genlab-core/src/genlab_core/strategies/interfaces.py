@@ -28,8 +28,7 @@ class ContentResearchStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class ScoringStrategy(ABC):
@@ -41,8 +40,7 @@ class ScoringStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class WritingStrategy(ABC):
@@ -54,8 +52,7 @@ class WritingStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class HookStrategy(ABC):
@@ -67,8 +64,7 @@ class HookStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class VisualRenderStrategy(ABC):
@@ -80,8 +76,7 @@ class VisualRenderStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class PlatformAdaptationStrategy(ABC):
@@ -93,8 +88,7 @@ class PlatformAdaptationStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...
 
 
 class PerformanceLearner(ABC):
@@ -107,5 +101,4 @@ class PerformanceLearner(ABC):
     """
 
     @abstractmethod
-    def execute(self, context: Any) -> Any:
-        ...
+    def execute(self, context: Any) -> Any: ...

@@ -3,6 +3,7 @@
 Routes:
     GET /api/v1/trends  -- returns trending topics per niche from local cache files
 """
+
 from __future__ import annotations
 
 import json

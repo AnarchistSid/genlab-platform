@@ -11,35 +11,40 @@ from sr_strategies.scoring import MovieScoringStrategy
 def strategy(tmp_path):
     """Create strategy with test config."""
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "scoring_weights.yaml").write_text(yaml.dump({
-        "scoring_dimensions": {
-            "weights": {
-                "timeliness": 0.25,
-                "magnitude": 0.35,
-                "engagement_potential": 0.25,
-                "novelty": 0.15,
-            },
-            "timeliness": {"decay_half_life_hours": 48.0},
-            "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
-        },
-        "film_lifecycle_multipliers": {
-            "pre_release": 1.0,
-            "opening_weekend": 1.6,
-            "long_tail": 0.7,
-            "unknown": 0.3,
-        },
-        "franchise_multipliers": {
-            "MCU": 1.5,
-            "DC": 1.3,
-            "default": 1.0,
-        },
-        "thresholds": {
-            "min_score": 0.40,
-            "top_items_per_run": 5,
-        },
-    }))
+    (config_dir / "scoring_weights.yaml").write_text(
+        yaml.dump(
+            {
+                "scoring_dimensions": {
+                    "weights": {
+                        "timeliness": 0.25,
+                        "magnitude": 0.35,
+                        "engagement_potential": 0.25,
+                        "novelty": 0.15,
+                    },
+                    "timeliness": {"decay_half_life_hours": 48.0},
+                    "magnitude": {"rt_score_excellent": 0.90, "rt_score_good": 0.75},
+                },
+                "film_lifecycle_multipliers": {
+                    "pre_release": 1.0,
+                    "opening_weekend": 1.6,
+                    "long_tail": 0.7,
+                    "unknown": 0.3,
+                },
+                "franchise_multipliers": {
+                    "MCU": 1.5,
+                    "DC": 1.3,
+                    "default": 1.0,
+                },
+                "thresholds": {
+                    "min_score": 0.40,
+                    "top_items_per_run": 5,
+                },
+            }
+        )
+    )
     with patch("sr_strategies.scoring.NICHE_ROOT", tmp_path):
         s = MovieScoringStrategy()
         s._ensure_config()
@@ -83,9 +88,8 @@ class TestScoring:
     def test_48h_decay_half_life_applied(self, strategy):
         recent = _make_story(fetched_at=datetime.now(UTC).isoformat())
         from datetime import timedelta
-        old = _make_story(
-            fetched_at=(datetime.now(UTC) - timedelta(hours=48)).isoformat()
-        )
+
+        old = _make_story(fetched_at=(datetime.now(UTC) - timedelta(hours=48)).isoformat())
         scored_recent = strategy.score_item(recent)
         scored_old = strategy.score_item(old)
         assert scored_recent["scores"]["timeliness"] > scored_old["scores"]["timeliness"]

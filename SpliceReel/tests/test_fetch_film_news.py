@@ -61,7 +61,9 @@ class TestTMDBFetcher:
             ]
         }
         mock_resp.raise_for_status = MagicMock()
-        mock_client_cls.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+        mock_client_cls.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+        )
         mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         fetcher = TMDBFetcher(api_key="test_key")
@@ -75,11 +77,14 @@ class TestTMDBFetcher:
     @patch("sr_strategies.fetch_film_news.httpx.Client")
     def test_tmdb_fetcher_gracefully_handles_401(self, mock_client_cls):
         import httpx
+
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
             "401", request=MagicMock(), response=MagicMock(status_code=401)
         )
-        mock_client_cls.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+        mock_client_cls.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+        )
         mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         fetcher = TMDBFetcher(api_key="bad_key")
@@ -96,7 +101,9 @@ class TestTMDBFetcher:
             ]
         }
         mock_resp.raise_for_status = MagicMock()
-        mock_client_cls.return_value.__enter__ = MagicMock(return_value=MagicMock(get=MagicMock(return_value=mock_resp)))
+        mock_client_cls.return_value.__enter__ = MagicMock(
+            return_value=MagicMock(get=MagicMock(return_value=mock_resp))
+        )
         mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         fetcher = TMDBFetcher(api_key="test_key")
@@ -117,7 +124,11 @@ class TestEntertainmentRSSFetcher:
         with patch("sr_strategies.fetch_film_news.feedparser.parse") as mock_parse:
             mock_parse.return_value = {
                 "entries": [
-                    {"title": "New Spider-Man Trailer Drops Today", "link": "https://example.com/1", "summary": "..."},
+                    {
+                        "title": "New Spider-Man Trailer Drops Today",
+                        "link": "https://example.com/1",
+                        "summary": "...",
+                    },
                 ]
             }
             fetcher = EntertainmentRSSFetcher(config)
@@ -138,7 +149,11 @@ class TestEntertainmentRSSFetcher:
         with patch("sr_strategies.fetch_film_news.feedparser.parse") as mock_parse:
             mock_parse.return_value = {
                 "entries": [
-                    {"title": "Oscar Nominations Announced for 2026", "link": "https://example.com/2", "summary": "The Academy..."},
+                    {
+                        "title": "Oscar Nominations Announced for 2026",
+                        "link": "https://example.com/2",
+                        "summary": "The Academy...",
+                    },
                 ]
             }
             fetcher = EntertainmentRSSFetcher(config)

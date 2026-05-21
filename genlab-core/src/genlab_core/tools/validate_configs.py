@@ -6,6 +6,7 @@ presence of optional config files. Reports errors and warnings.
 Usage:
     uv run python -m genlab_core.tools.validate_configs --niche-dir /path/to/FitPulse
 """
+
 from __future__ import annotations
 
 import argparse

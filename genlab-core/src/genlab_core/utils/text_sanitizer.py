@@ -25,10 +25,10 @@ _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 # Curly / smart quotes and apostrophes that Graph rejects
 _SMART_QUOTES: dict[str, str] = {
-    "\u2018": "'",   # LEFT SINGLE QUOTATION MARK
-    "\u2019": "'",   # RIGHT SINGLE QUOTATION MARK (curly apostrophe)
-    "\u201C": '"',   # LEFT DOUBLE QUOTATION MARK
-    "\u201D": '"',   # RIGHT DOUBLE QUOTATION MARK
+    "\u2018": "'",  # LEFT SINGLE QUOTATION MARK
+    "\u2019": "'",  # RIGHT SINGLE QUOTATION MARK (curly apostrophe)
+    "\u201c": '"',  # LEFT DOUBLE QUOTATION MARK
+    "\u201d": '"',  # RIGHT DOUBLE QUOTATION MARK
 }
 
 
@@ -47,8 +47,8 @@ def sanitize_for_graph_api(text: str | None) -> str | None:
         return text  # type: ignore[return-value]
 
     # Strip HTML tags leaked from RSS feeds (e.g. <cite>Title</cite>)
-    if '<' in text:
-        text = _HTML_TAG_RE.sub('', text)
+    if "<" in text:
+        text = _HTML_TAG_RE.sub("", text)
 
     # Replace smart quotes first (before BMP strip collapses context)
     for char, replacement in _SMART_QUOTES.items():

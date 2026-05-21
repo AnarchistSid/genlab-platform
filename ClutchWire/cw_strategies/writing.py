@@ -105,7 +105,7 @@ class SportWritingStrategy(BaseWritingStrategy):
         # YouTube
         yt_config = platforms_config.get("youtube", {})
         yt_formulas = (self._templates or {}).get("youtube", {}).get("title_formulas", [])
-        yt_title = story.get("title", "")[:yt_config.get("title_max_chars", 40)]
+        yt_title = story.get("title", "")[: yt_config.get("title_max_chars", 40)]
         if yt_formulas:
             teams = story.get("teams", [])
             formula = random.choice(yt_formulas)
@@ -113,7 +113,7 @@ class SportWritingStrategy(BaseWritingStrategy):
                 yt_title = formula.format(
                     Player=teams[0] if teams else "This Player",
                     Team=teams[0] if teams else "This Team",
-                )[:yt_config.get("title_max_chars", 40)]
+                )[: yt_config.get("title_max_chars", 40)]
             except (KeyError, IndexError):
                 pass
         content["youtube"] = {"title": yt_title, "description": caption}
@@ -125,15 +125,15 @@ class SportWritingStrategy(BaseWritingStrategy):
 
         # Facebook
         fb_config = platforms_config.get("facebook", {})
-        content["facebook"] = {"caption": caption[:fb_config.get("caption_length_target", 300)]}
+        content["facebook"] = {"caption": caption[: fb_config.get("caption_length_target", 300)]}
 
         # TikTok
         tk_config = platforms_config.get("tiktok", {})
-        content["tiktok"] = {"caption": caption[:tk_config.get("max_caption_length", 2200)]}
+        content["tiktok"] = {"caption": caption[: tk_config.get("max_caption_length", 2200)]}
 
         # Threads
         th_config = platforms_config.get("threads", {})
-        content["threads"] = {"caption": caption[:th_config.get("max_caption_length", 500)]}
+        content["threads"] = {"caption": caption[: th_config.get("max_caption_length", 500)]}
 
         story["content"] = content
         return story

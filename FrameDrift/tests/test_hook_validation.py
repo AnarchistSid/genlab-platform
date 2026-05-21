@@ -1,6 +1,5 @@
 """Tests for HookValidator wiring in FrameDrift hook strategy."""
 
-
 from fd_strategies.hooks import AnimeHookStrategy
 
 
@@ -38,8 +37,7 @@ class TestHookValidatorWiring:
             if hook:
                 vr = validator.validate(hook, platform="instagram")
                 assert vr.passed, (
-                    f"Hook '{hook}' failed validation: "
-                    f"{[f.value for f in vr.failures]}"
+                    f"Hook '{hook}' failed validation: {[f.value for f in vr.failures]}"
                 )
 
     def test_run_stats_includes_validation_count(self):

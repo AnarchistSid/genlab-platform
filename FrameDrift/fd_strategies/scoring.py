@@ -116,10 +116,7 @@ class AnimeScoringStrategy(ScoringStrategy):
             "novelty": self._score_novelty(item),
         }
 
-        weighted_sum = sum(
-            scores[dim] * weights.get(dim, 0)
-            for dim in scores
-        )
+        weighted_sum = sum(scores[dim] * weights.get(dim, 0) for dim in scores)
 
         # Trend cycle multiplier — from config
         cycle_str = item.get("trend_cycle_stage", "unknown")
@@ -167,7 +164,8 @@ class AnimeScoringStrategy(ScoringStrategy):
                 visual_rejected += 1
                 logger.info(
                     "[anime] Visual potential rejected (%.1f): %s",
-                    vp, s.get("title", "")[:60],
+                    vp,
+                    s.get("title", "")[:60],
                 )
         stories = visual_passed
 
@@ -198,6 +196,9 @@ class AnimeScoringStrategy(ScoringStrategy):
 
         logger.info(
             "[anime] Scored %d -> %d stories (dropped %d below %.2f)",
-            len(stories), len(above), dropped, min_score,
+            len(stories),
+            len(above),
+            dropped,
+            min_score,
         )
         return context

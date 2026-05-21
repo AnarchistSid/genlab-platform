@@ -27,6 +27,7 @@ Usage:
     vertical = comp.compose_vertical(clips, "This changes everything", out / "reel.mp4")
     landscape = comp.derive_landscape(vertical, out / "landscape.mp4")
 """
+
 from __future__ import annotations
 
 import logging
@@ -181,11 +182,11 @@ class VisualConfig(BaseModel):
     niche_id: str
     logo_path: Path
     accent_color: str
-    top_bar_height_pct: float = 0.12   # LayoutStandard.top_bar_pct
+    top_bar_height_pct: float = 0.12  # LayoutStandard.top_bar_pct
     bottom_bar_height_pct: float = 0.18  # LayoutStandard.bottom_bar_pct
-    logo_height_px: int = 60           # LayoutStandard.logo_height
+    logo_height_px: int = 60  # LayoutStandard.logo_height
     logo_x_offset: int = 24
-    hook_font_size: int = 32           # LayoutStandard.hook_font_size
+    hook_font_size: int = 32  # LayoutStandard.hook_font_size
     hook_x_offset: int = 24
     hook_max_lines: int = 2
     bar_color: list[int] = [0, 0, 0]
@@ -266,8 +267,7 @@ class VideoCompositor:
             return run_ffmpeg(cmd, timeout=timeout, fallback_preset="fast")
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
-                f"FFmpeg failed [{label}] (exit {exc.returncode}):\n"
-                + (exc.stderr or "")[-2000:]
+                f"FFmpeg failed [{label}] (exit {exc.returncode}):\n" + (exc.stderr or "")[-2000:]
             ) from exc
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -359,9 +359,7 @@ class VideoCompositor:
         - The sandwich bars are preserved in the foreground layer
         """
         if not vertical_master.exists():
-            raise FileNotFoundError(
-                f"Vertical master not found: {vertical_master}"
-            )
+            raise FileNotFoundError(f"Vertical master not found: {vertical_master}")
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -376,10 +374,16 @@ class VideoCompositor:
 
         ffmpeg = get_ffmpeg_binary()
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(vertical_master),
-            "-filter_complex", filter_complex,
-            "-map", "[out]", "-map", "0:a?",
+            ffmpeg,
+            "-y",
+            "-i",
+            str(vertical_master),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[out]",
+            "-map",
+            "0:a?",
             *_get_landscape_encode_args(platform),
             str(output_path),
         ]
@@ -443,7 +447,10 @@ class VideoCompositor:
         max_text_w = self._canvas_w - text_x - TEXT_RIGHT_MARGIN
 
         wrapped = self._wrap_hook(
-            hook, config.hook_font_size, max_text_w, config.hook_max_lines,
+            hook,
+            config.hook_font_size,
+            max_text_w,
+            config.hook_max_lines,
         )
         escaped = escape_drawtext(wrapped)
 
@@ -463,7 +470,8 @@ class VideoCompositor:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _smart_crop_clips(
-        self, clips: list[Path],
+        self,
+        clips: list[Path],
     ) -> tuple[list[Path], str | None]:
         """Pre-crop landscape clips using face/motion detection.
 
@@ -479,7 +487,8 @@ class VideoCompositor:
         return cropper.pre_crop_clips(clips)
 
     def _assemble_clips(
-        self, clips: list[Path],
+        self,
+        clips: list[Path],
     ) -> tuple[Path, str | None]:
         """Concatenate clips if >1.  Returns (assembled_path, temp_dir_or_None)."""
         if len(clips) == 1:
@@ -488,7 +497,9 @@ class VideoCompositor:
         temp_dir = tempfile.mkdtemp(prefix="genlab_concat_")
         assembled = str(Path(temp_dir) / "assembled.mp4")
         success = concat(
-            [str(p) for p in clips], assembled, temp_dir=temp_dir,
+            [str(p) for p in clips],
+            assembled,
+            temp_dir=temp_dir,
         )
         if not success:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -518,11 +529,18 @@ class VideoCompositor:
 
         ffmpeg = get_ffmpeg_binary()
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(source),
-            "-i", str(cfg.logo_path),
-            "-filter_complex", filter_complex,
-            "-map", "[out]", "-map", "0:a?",
+            ffmpeg,
+            "-y",
+            "-i",
+            str(source),
+            "-i",
+            str(cfg.logo_path),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[out]",
+            "-map",
+            "0:a?",
             *_get_encode_args(platform),
             str(output),
         ]

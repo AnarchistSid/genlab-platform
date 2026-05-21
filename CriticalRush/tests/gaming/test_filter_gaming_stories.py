@@ -1,6 +1,5 @@
 """Tests for FilterGamingStories stage."""
 
-
 from niches.gaming.stages.filter_gaming_stories import FilterGamingStories
 
 
@@ -49,8 +48,11 @@ class TestRSSFiltering:
         """Non-gaming content like phone deals is rejected."""
         stage = FilterGamingStories()
         stories = [
-            _make_story("Best T-Mobile smartphone deals this week", score=0.9,
-                        summary="Save on the latest phone sale"),
+            _make_story(
+                "Best T-Mobile smartphone deals this week",
+                score=0.9,
+                summary="Save on the latest phone sale",
+            ),
         ]
         context = {"stories": stories, "run_stats": {}}
         result = stage.execute(context)
@@ -63,10 +65,7 @@ class TestTopSelection:
     def test_top_5_selected(self):
         """When 8 stories pass, only top 5 by score are returned."""
         stage = FilterGamingStories()
-        stories = [
-            _make_story(f"Game {i} update news", score=i * 0.1)
-            for i in range(1, 9)
-        ]
+        stories = [_make_story(f"Game {i} update news", score=i * 0.1) for i in range(1, 9)]
         context = {"stories": stories, "run_stats": {}}
         result = stage.execute(context)
 
@@ -83,8 +82,9 @@ class TestStats:
         stage = FilterGamingStories()
         stories = [
             _make_story("New game release trailer", score=0.8),
-            _make_story("Best phone deal sale discount", score=0.9,
-                        summary="Save on electronics sale"),
+            _make_story(
+                "Best phone deal sale discount", score=0.9, summary="Save on electronics sale"
+            ),
             _make_story("Steam patch update for FPS", source="steam_spike", score=0.5),
         ]
         context = {"stories": stories, "run_stats": {}}

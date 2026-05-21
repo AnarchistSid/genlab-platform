@@ -32,8 +32,10 @@ class TestNetworkFailure:
         mgr._token = "stale_token"
         mgr._expiry = 0.0  # expired, so get_token will try to refresh
 
-        with patch("niches.gaming.tools._twitch_auth.requests.post",
-                    side_effect=ConnectionError("DNS failure")):
+        with patch(
+            "niches.gaming.tools._twitch_auth.requests.post",
+            side_effect=ConnectionError("DNS failure"),
+        ):
             with pytest.raises(TwitchAuthError, match="token refresh failed"):
                 mgr.get_token()
 
@@ -47,8 +49,7 @@ class TestNetworkFailure:
         mock_resp = MagicMock()
         mock_resp.raise_for_status.side_effect = Exception("401 Unauthorized")
 
-        with patch("niches.gaming.tools._twitch_auth.requests.post",
-                    return_value=mock_resp):
+        with patch("niches.gaming.tools._twitch_auth.requests.post", return_value=mock_resp):
             with pytest.raises(TwitchAuthError, match="token refresh failed"):
                 mgr.get_token()
 

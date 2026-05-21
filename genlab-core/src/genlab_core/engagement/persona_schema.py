@@ -1,4 +1,5 @@
 """Pydantic schema for niche persona YAML configs."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

@@ -27,8 +27,11 @@ def _check_tiktok() -> dict:
 
     token = getattr(settings, "tiktok_access_token", None)
     if not token:
-        return {"platform": "tiktok", "access_token_status": "missing",
-                "refresh_token_status": "missing"}
+        return {
+            "platform": "tiktok",
+            "access_token_status": "missing",
+            "refresh_token_status": "missing",
+        }
 
     audit_raw = getattr(settings, "tiktok_audit_approved", "false")
     audit_approved = str(audit_raw).lower() == "true"
@@ -91,8 +94,7 @@ def _check_threads() -> dict:
 
     token = getattr(settings, "threads_access_token", None)
     if not token:
-        return {"platform": "threads", "token_status": "missing",
-                "expires_in_days": None}
+        return {"platform": "threads", "token_status": "missing", "expires_in_days": None}
 
     issued_str = getattr(settings, "threads_token_issued_at", None)
     status = "unknown"
@@ -128,6 +130,7 @@ def _check_threads() -> dict:
 def _check_instagram() -> dict:
     """Check Instagram (Meta) token health."""
     from genlab_core.monitoring.token_health import check_meta_token
+
     result = check_meta_token()
     days = result.get("days_remaining")
     status = "ok"
@@ -147,6 +150,7 @@ def _check_instagram() -> dict:
 def _check_youtube() -> dict:
     """Check YouTube OAuth health."""
     from genlab_core.monitoring.check_token_health import check_youtube
+
     result = check_youtube()
     status = "ok" if result["status"] == "healthy" else "critical"
     return {
@@ -160,6 +164,7 @@ def _check_youtube() -> dict:
 def _check_facebook() -> dict:
     """Check Facebook Page token health."""
     from genlab_core.monitoring.check_token_health import check_facebook
+
     result = check_facebook()
     status = "ok"
     if result["status"] in ("expired", "error"):
@@ -182,8 +187,13 @@ def token_health():
         return api_success(data=_health_cache["data"])
 
     platforms = []
-    for checker in [_check_tiktok, _check_threads, _check_instagram,
-                    _check_youtube, _check_facebook]:
+    for checker in [
+        _check_tiktok,
+        _check_threads,
+        _check_instagram,
+        _check_youtube,
+        _check_facebook,
+    ]:
         try:
             platforms.append(checker())
         except Exception as e:
@@ -204,6 +214,7 @@ def refresh_token(platform: str):
     if platform == "threads":
         try:
             from genlab_core.publishing.threads_client import ThreadsClient
+
             client = ThreadsClient()
             client.refresh_token()
             # Invalidate cache
@@ -215,6 +226,7 @@ def refresh_token(platform: str):
     if platform == "tiktok":
         try:
             from genlab_core.publishing.tiktok_client import TikTokClient
+
             client = TikTokClient()
             client._refresh_access_token()
             _health_cache["data"] = None
@@ -223,15 +235,19 @@ def refresh_token(platform: str):
             return api_error(error=str(e)[:200], code=500)
 
     if platform in ("instagram", "facebook"):
-        return api_success(data={
-            "status": "redirect",
-            "message": f"{platform} uses Meta OAuth — refresh via check_token_health.py or re-auth flow",
-        })
+        return api_success(
+            data={
+                "status": "redirect",
+                "message": f"{platform} uses Meta OAuth — refresh via check_token_health.py or re-auth flow",
+            }
+        )
 
     if platform == "youtube":
-        return api_success(data={
-            "status": "redirect",
-            "message": "YouTube uses Google OAuth2 with permanent refresh tokens",
-        })
+        return api_success(
+            data={
+                "status": "redirect",
+                "message": "YouTube uses Google OAuth2 with permanent refresh tokens",
+            }
+        )
 
     return api_not_found(message=f"Unknown platform: {platform}")

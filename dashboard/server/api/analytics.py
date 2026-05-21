@@ -1,4 +1,5 @@
 """Analytics API endpoints."""
+
 import json
 import logging
 import os
@@ -18,9 +19,9 @@ bp = Blueprint("analytics_api", __name__, url_prefix="/api/v1/analytics")
 import time as _time
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DAILY_INTEL_RE = re.compile(r'^\d{8}_\d{6}$')
+DAILY_INTEL_RE = re.compile(r"^\d{8}_\d{6}$")
 # Match all pipeline runs: daily intel (YYYYMMDD_HHMMSS or YYYYMMDD_HHMMSS_PID) + pub runs
-RUN_DIR_RE = re.compile(r'^(\d{8})_(\d{6})(?:_\w+)?$')
+RUN_DIR_RE = re.compile(r"^(\d{8})_(\d{6})(?:_\w+)?$")
 
 # Overview cache (60s TTL)
 _overview_cache: dict = {"data": None, "ts": 0.0, "key": ""}
@@ -54,14 +55,15 @@ def _cached_pub_analytics_all():
     return records
 
 
-
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
-def _filter_by_date_range(records: list, date_field: str = "published_at",
-                          fallback_field: str = "fetched_at") -> list:
+def _filter_by_date_range(
+    records: list, date_field: str = "published_at", fallback_field: str = "fetched_at"
+) -> list:
     """Filter records by ?from= and ?to= query params. Returns all if params missing.
 
     When ``date_field`` is NULL on a record, falls back to ``fallback_field``
@@ -142,15 +144,17 @@ def top_posts():
     for r in records:
         f = r.get("fields", {})
         likes = int(float(f.get("likes", 0) or 0))
-        posts.append({
-            "post_id": f.get("post_id") or f.get("id") or r.get("id", ""),
-            "platform": f.get("platform", ""),
-            "niche_id": f.get("niche_id") or "",
-            "likes": likes,
-            "comments": int(float(f.get("comments", 0) or 0)),
-            "reach": int(float(f.get("reach", 0) or 0)),
-            "collected_at": f.get("collected_at") or f.get("fetched_at") or "",
-        })
+        posts.append(
+            {
+                "post_id": f.get("post_id") or f.get("id") or r.get("id", ""),
+                "platform": f.get("platform", ""),
+                "niche_id": f.get("niche_id") or "",
+                "likes": likes,
+                "comments": int(float(f.get("comments", 0) or 0)),
+                "reach": int(float(f.get("reach", 0) or 0)),
+                "collected_at": f.get("collected_at") or f.get("fetched_at") or "",
+            }
+        )
 
     posts.sort(key=lambda p: p["likes"], reverse=True)
     top = posts[:20]
@@ -161,6 +165,7 @@ def top_posts():
         try:
             import psycopg
             from psycopg.rows import dict_row
+
             post_ids = [p["post_id"] for p in top]
             with psycopg.connect(_dsn, row_factory=dict_row) as _conn:
                 rows = _conn.execute(
@@ -193,7 +198,11 @@ def overview():
 
     cache_key = f"{niche_id}:{window}"
     now = _time.time()
-    if _overview_cache["data"] and _overview_cache["key"] == cache_key and (now - _overview_cache["ts"]) < _OVERVIEW_TTL:
+    if (
+        _overview_cache["data"]
+        and _overview_cache["key"] == cache_key
+        and (now - _overview_cache["ts"]) < _OVERVIEW_TTL
+    ):
         return api_success(data=_overview_cache["data"])
 
     try:
@@ -220,7 +229,9 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         # Use collected_at (when metric was fetched) instead of published_at
         # (when post went live). Engagement metrics are cumulative — a post
         # published 3 weeks ago with fresh metrics is relevant to the window.
-        dt = _parse_datetime(f.get("collected_at") or f.get("fetched_at") or f.get("published_at", ""))
+        dt = _parse_datetime(
+            f.get("collected_at") or f.get("fetched_at") or f.get("published_at", "")
+        )
         if not (dt and dt >= cutoff):
             continue
         # Apply niche filter at the source — prevents cross-niche leakage
@@ -305,7 +316,11 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
                 continue
         if plat not in platform_metrics:
             platform_metrics[plat] = {
-                "reach": 0, "posts": 0, "likes": 0, "comments": 0, "shares": 0,
+                "reach": 0,
+                "posts": 0,
+                "likes": 0,
+                "comments": 0,
+                "shares": 0,
                 "impressions": 0,
             }
         pm = platform_metrics[plat]
@@ -323,7 +338,11 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         plat = _norm_platform(f.get("platform", "unknown"))
         if plat not in platform_metrics:
             platform_metrics[plat] = {
-                "reach": 0, "posts": 0, "likes": 0, "comments": 0, "shares": 0,
+                "reach": 0,
+                "posts": 0,
+                "likes": 0,
+                "comments": 0,
+                "shares": 0,
                 "impressions": 0,
             }
         # Only add post count if Analytics doesn't already track this platform
@@ -339,18 +358,24 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         cid = f.get("candidate_id") or f.get("blueprint_id") or str(r.get("id", ""))
         published_candidates.add(cid)
     total_posts = len(published_candidates) if published_candidates else len(filtered_pub)
-    total_interactions = sum(p["likes"] + p["comments"] + p["shares"] for p in platform_metrics.values())
+    total_interactions = sum(
+        p["likes"] + p["comments"] + p["shares"] for p in platform_metrics.values()
+    )
     avg_eng = round((total_interactions / total_reach * 100), 2) if total_reach > 0 else None
 
     # Publish success rate from Publishing_Analytics (actual attempts vs successes)
     total_attempted = len(filtered_attempts)
     total_succeeded = len(filtered_pub)
-    pub_success = round(total_succeeded / total_attempted * 100, 1) if total_attempted > 0 else 100.0
+    pub_success = (
+        round(total_succeeded / total_attempted * 100, 1) if total_attempted > 0 else 100.0
+    )
 
     # Best post
     best_post = None
     if filtered_analytics:
-        best_r = max(filtered_analytics, key=lambda r: int(float(r.get("fields", {}).get("reach", 0) or 0)))
+        best_r = max(
+            filtered_analytics, key=lambda r: int(float(r.get("fields", {}).get("reach", 0) or 0))
+        )
         bf = best_r.get("fields", {})
         best_post = {
             "id": str(best_r.get("id", "")),
@@ -388,10 +413,20 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
             platform_data_status[plat] = "no_data"
 
     # --- by_platform ---
-    metric_labels = {"instagram": "Reach", "youtube": "Views", "x_twitter": "Impressions", "facebook": "Views", "threads": "Reach"}
+    metric_labels = {
+        "instagram": "Reach",
+        "youtube": "Views",
+        "x_twitter": "Impressions",
+        "facebook": "Views",
+        "threads": "Reach",
+    }
     by_platform = {}
     for plat, pm in platform_metrics.items():
-        eng_rate = round((pm["likes"] + pm["comments"] + pm["shares"]) / pm["reach"] * 100, 2) if pm["reach"] > 0 else None
+        eng_rate = (
+            round((pm["likes"] + pm["comments"] + pm["shares"]) / pm["reach"] * 100, 2)
+            if pm["reach"] > 0
+            else None
+        )
         by_platform[plat] = {
             "reach": pm["reach"],
             "posts": pm["posts"],
@@ -406,10 +441,18 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         dt = now_dt - timedelta(days=days - 1 - d)
         date_key = dt.strftime("%Y-%m-%d")
         ts_buckets[date_key] = {
-            "date": date_key, "total_reach": 0, "posts": 0,
-            "instagram_reach": 0, "youtube_reach": 0, "x_twitter_reach": 0, "facebook_reach": 0,
-            "ai_creators_reach": 0, "gaming_reach": 0,
-            "sports_reach": 0, "movies_reach": 0, "anime_reach": 0,
+            "date": date_key,
+            "total_reach": 0,
+            "posts": 0,
+            "instagram_reach": 0,
+            "youtube_reach": 0,
+            "x_twitter_reach": 0,
+            "facebook_reach": 0,
+            "ai_creators_reach": 0,
+            "gaming_reach": 0,
+            "sports_reach": 0,
+            "movies_reach": 0,
+            "anime_reach": 0,
         }
 
     for r in filtered_analytics:
@@ -417,7 +460,9 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         # Use collected_at for time series bucketing — published_at is when
         # the post went live (often weeks ago), but we want to show when
         # the reach/engagement was measured so the chart reflects recent activity.
-        dt = _parse_datetime(f.get("collected_at") or f.get("fetched_at") or f.get("published_at", ""))
+        dt = _parse_datetime(
+            f.get("collected_at") or f.get("fetched_at") or f.get("published_at", "")
+        )
         if not dt:
             continue
         date_key = dt.strftime("%Y-%m-%d")
@@ -483,17 +528,27 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
         for r in filtered_analytics:
             pid = r.get("fields", {}).get("post_id", str(r.get("id", "")))
             reach = int(float(r.get("fields", {}).get("reach", 0) or 0))
-            if pid not in _seen_posts or reach > int(float(_seen_posts[pid].get("fields", {}).get("reach", 0) or 0)):
+            if pid not in _seen_posts or reach > int(
+                float(_seen_posts[pid].get("fields", {}).get("reach", 0) or 0)
+            ):
                 _seen_posts[pid] = r
-        sorted_analytics = sorted(_seen_posts.values(), key=lambda r: int(float(r.get("fields", {}).get("reach", 0) or 0)), reverse=True)
+        sorted_analytics = sorted(
+            _seen_posts.values(),
+            key=lambda r: int(float(r.get("fields", {}).get("reach", 0) or 0)),
+            reverse=True,
+        )
         for r in sorted_analytics[:10]:
             f = r.get("fields", {})
             bl = str(f.get("blueprint_link", "") or "")
             bp_fields = bp_map.get(bl, {})
-            record_niche = f.get("niche_id") or (_bp_niche(bp_fields) if bp_fields else "ai_creators")
+            record_niche = f.get("niche_id") or (
+                _bp_niche(bp_fields) if bp_fields else "ai_creators"
+            )
 
             # Resolve hook text: try blueprint lookup first, then match by post_id
-            hook = bp_fields.get("hook") or bp_fields.get("hook_text") or bp_fields.get("title") or ""
+            hook = (
+                bp_fields.get("hook") or bp_fields.get("hook_text") or bp_fields.get("title") or ""
+            )
             if not hook:
                 # Try to find blueprint via post_id match in publishing_analytics
                 post_id = f.get("post_id", "")
@@ -505,23 +560,27 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
                         hook = bp_f["hook"]
                         break
 
-            top_performers.append({
-                "id": str(r.get("id", "")),
-                "title": f.get("story_title", bp_fields.get("topic", "")),
-                "hook_text": (hook or f.get("story_title") or f.get("post_id", ""))[:60],
-                "niche_id": record_niche,
-                "platform": f.get("platform", ""),
-                "total_reach": int(float(f.get("reach", 0) or 0)),
-                "engagement_rate": float(f.get("engagement_rate", 0) or 0),
-                "published_at": f.get("published_at", ""),
-            })
+            top_performers.append(
+                {
+                    "id": str(r.get("id", "")),
+                    "title": f.get("story_title", bp_fields.get("topic", "")),
+                    "hook_text": (hook or f.get("story_title") or f.get("post_id", ""))[:60],
+                    "niche_id": record_niche,
+                    "platform": f.get("platform", ""),
+                    "total_reach": int(float(f.get("reach", 0) or 0)),
+                    "engagement_rate": float(f.get("engagement_rate", 0) or 0),
+                    "published_at": f.get("published_at", ""),
+                }
+            )
         # Second dedup pass: same hook_text across platforms → keep highest reach
         _seen_hooks: dict[str, dict] = {}
         for tp in top_performers:
             key = (tp.get("hook_text", "").lower().strip(), tp.get("niche_id", ""))
             if key not in _seen_hooks or tp["total_reach"] > _seen_hooks[key]["total_reach"]:
                 _seen_hooks[key] = tp
-        top_performers = sorted(_seen_hooks.values(), key=lambda x: x["total_reach"], reverse=True)[:10]
+        top_performers = sorted(_seen_hooks.values(), key=lambda x: x["total_reach"], reverse=True)[
+            :10
+        ]
     elif filtered_pub:
         # Show recent publishes as top performers when no engagement data yet
         for r in filtered_pub[:10]:
@@ -529,16 +588,18 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
             r_niche = f.get("niche_id") or "ai_creators"
             if r_niche == "ai_news":
                 r_niche = "ai_creators"
-            top_performers.append({
-                "id": str(r.get("id", "")),
-                "title": f.get("candidate_id", ""),
-                "hook_text": f.get("candidate_id", "")[:60],
-                "niche_id": r_niche,
-                "platform": f.get("platform", "instagram"),
-                "total_reach": 0,
-                "engagement_rate": None,
-                "published_at": f.get("published_at", ""),
-            })
+            top_performers.append(
+                {
+                    "id": str(r.get("id", "")),
+                    "title": f.get("candidate_id", ""),
+                    "hook_text": f.get("candidate_id", "")[:60],
+                    "niche_id": r_niche,
+                    "platform": f.get("platform", "instagram"),
+                    "total_reach": 0,
+                    "engagement_rate": None,
+                    "published_at": f.get("published_at", ""),
+                }
+            )
 
     return {
         "window": f"{days}d",
@@ -629,7 +690,9 @@ def _compute_funnel(client) -> dict:
                     archived_published += 1
                     archived_rendered += 1
                 # Posts that had visuals but were archived before publish
-                elif "no_video" not in action and "stale" not in action and "duplicate" not in action:
+                elif (
+                    "no_video" not in action and "stale" not in action and "duplicate" not in action
+                ):
                     archived_rendered += 1
 
         # Fetch total stories (source items before blueprint creation)
@@ -638,11 +701,14 @@ def _compute_funnel(client) -> dict:
         try:
             import psycopg as _pg
             from psycopg.rows import dict_row as _dr
+
             _dsn = os.environ.get("DATABASE_URL", "")
             if _dsn:
                 with _pg.connect(_dsn, row_factory=_dr) as _c:
                     _c.execute("SELECT set_config('app.niche_id', 'all', true)")
-                    stories_count = _c.execute("SELECT COUNT(*) as cnt FROM stories").fetchone()["cnt"]
+                    stories_count = _c.execute("SELECT COUNT(*) as cnt FROM stories").fetchone()[
+                        "cnt"
+                    ]
         except Exception:
             pass
 
@@ -650,10 +716,19 @@ def _compute_funnel(client) -> dict:
         filtered = total_bp
         # Items with content written (DRAFTED or beyond — exclude archived-before-write)
         archived_before_write = sum(
-            1 for r in records
+            1
+            for r in records
             if r.get("fields", {}).get("status") == "ARCHIVED"
-            and any(tag in (r.get("fields", {}).get("action_taken") or "").lower()
-                    for tag in ("no_video", "stale", "duplicate", "weak_hook", "source_not_downloadable"))
+            and any(
+                tag in (r.get("fields", {}).get("action_taken") or "").lower()
+                for tag in (
+                    "no_video",
+                    "stale",
+                    "duplicate",
+                    "weak_hook",
+                    "source_not_downloadable",
+                )
+            )
         )
         written = total_bp - archived_before_write
         # Items that were rendered (VISUAL_READY + PUBLISHED + archived that had renders)
@@ -690,10 +765,7 @@ def content():
             formula="OR({status}='PUBLISHED',{status}='VISUAL_READY')"
         )
         if niche_id and niche_id != "all":
-            records = [
-                r for r in records
-                if _bp_niche(r.get("fields", {})) == niche_id
-            ]
+            records = [r for r in records if _bp_niche(r.get("fields", {})) == niche_id]
         # Group by template — check template_id (text), then template (linked record)
         templates = {}
         for r in records:
@@ -845,16 +917,18 @@ def pipeline_analytics():
                 continue
 
             cost_info = _extract_run_cost(run_dir)
-            runs.append({
-                "run_id": run_name,
-                "date": date_str,
-                "run_type": cost_info["run_type"],
-                "duration_seconds": cost_info["duration"],
-                "errors": cost_info["errors"],
-                "status": cost_info["status"],
-                "cost_estimate": cost_info["cost"],
-                "cost_breakdown": cost_info["breakdown"],
-            })
+            runs.append(
+                {
+                    "run_id": run_name,
+                    "date": date_str,
+                    "run_type": cost_info["run_type"],
+                    "duration_seconds": cost_info["duration"],
+                    "errors": cost_info["errors"],
+                    "status": cost_info["status"],
+                    "cost_estimate": cost_info["cost"],
+                    "cost_breakdown": cost_info["breakdown"],
+                }
+            )
 
     if aggregate == "day":
         # Aggregate costs by day for the cost tracker chart
@@ -876,16 +950,16 @@ def pipeline_analytics():
             for k, v in r.get("cost_breakdown", {}).items():
                 if k == "total":
                     continue
-                day["breakdown"][k] = round(
-                    day["breakdown"].get(k, 0) + float(v or 0), 6
-                )
+                day["breakdown"][k] = round(day["breakdown"].get(k, 0) + float(v or 0), 6)
             # Count run types
             rt = r["run_type"]
             day["run_types"][rt] = day["run_types"].get(rt, 0) + 1
 
-        return api_success(data={
-            "data": sorted(daily.values(), key=lambda x: x["date"]),
-        })
+        return api_success(
+            data={
+                "data": sorted(daily.values(), key=lambda x: x["date"]),
+            }
+        )
 
     return api_success(data={"data": runs})
 
@@ -901,10 +975,7 @@ def funnel():
             "{status}='VISUAL_READY',{status}='PUBLISHED')"
         )
         if niche_id and niche_id != "all":
-            records = [
-                r for r in records
-                if _bp_niche(r.get("fields", {})) == niche_id
-            ]
+            records = [r for r in records if _bp_niche(r.get("fields", {})) == niche_id]
         counts = {s: 0 for s in STAGES}
         total_cost = 0.0
         for r in records:
@@ -986,24 +1057,28 @@ def engagement_summary():
         data = []
         for p in platforms.values():
             n = p["total_posts"]
-            data.append({
-                "platform": p["platform"],
-                "total_posts": n,
-                "avg_engagement_rate": round(p["sum_engagement_rate"] / n, 4) if n else 0,
-                "avg_viral_score": round(p["sum_viral_score"] / n, 2) if n else 0,
-                "total_impressions": p["total_impressions"],
-                "total_reach": p["total_reach"],
-                "total_likes": p["total_likes"],
-                "total_comments": p["total_comments"],
-                "total_shares": p["total_shares"],
-                "total_saves": p["total_saves"],
-            })
-        return api_success(data={
-            "data": data,
-            "excluded_count": excluded_count,
-            "total_records": len(records),
-            "data_quality": "partial" if excluded_count > len(records) * 0.2 else "good",
-        })
+            data.append(
+                {
+                    "platform": p["platform"],
+                    "total_posts": n,
+                    "avg_engagement_rate": round(p["sum_engagement_rate"] / n, 4) if n else 0,
+                    "avg_viral_score": round(p["sum_viral_score"] / n, 2) if n else 0,
+                    "total_impressions": p["total_impressions"],
+                    "total_reach": p["total_reach"],
+                    "total_likes": p["total_likes"],
+                    "total_comments": p["total_comments"],
+                    "total_shares": p["total_shares"],
+                    "total_saves": p["total_saves"],
+                }
+            )
+        return api_success(
+            data={
+                "data": data,
+                "excluded_count": excluded_count,
+                "total_records": len(records),
+                "data_quality": "partial" if excluded_count > len(records) * 0.2 else "good",
+            }
+        )
     except Exception as e:
         logger.error("Engagement summary error: %s", e, exc_info=True)
         return api_error(error="Service temporarily unavailable", code=502)
@@ -1089,7 +1164,13 @@ def content_performance():
 
             # Format aggregation
             if fmt not in by_format:
-                by_format[fmt] = {"format": fmt, "count": 0, "sum_eng": 0, "sum_viral": 0, "sum_imp": 0}
+                by_format[fmt] = {
+                    "format": fmt,
+                    "count": 0,
+                    "sum_eng": 0,
+                    "sum_viral": 0,
+                    "sum_imp": 0,
+                }
             by_format[fmt]["count"] += 1
             by_format[fmt]["sum_eng"] += engagement_rate
             by_format[fmt]["sum_viral"] += viral_score
@@ -1098,7 +1179,12 @@ def content_performance():
             # Template aggregation
             if template_id:
                 if template_id not in by_template:
-                    by_template[template_id] = {"template_id": template_id, "count": 0, "sum_eng": 0, "sum_viral": 0}
+                    by_template[template_id] = {
+                        "template_id": template_id,
+                        "count": 0,
+                        "sum_eng": 0,
+                        "sum_viral": 0,
+                    }
                 by_template[template_id]["count"] += 1
                 by_template[template_id]["sum_eng"] += engagement_rate
                 by_template[template_id]["sum_viral"] += viral_score
@@ -1115,19 +1201,27 @@ def content_performance():
             result = []
             for g in groups.values():
                 n = g["count"]
-                result.append({
-                    **{k: v for k, v in g.items() if k not in ("sum_eng", "sum_viral", "sum_imp")},
-                    "avg_engagement_rate": round(g["sum_eng"] / n, 4) if n else 0,
-                    "avg_viral_score": round(g["sum_viral"] / n, 2) if n else 0,
-                    "total_impressions": g.get("sum_imp", 0),
-                })
+                result.append(
+                    {
+                        **{
+                            k: v
+                            for k, v in g.items()
+                            if k not in ("sum_eng", "sum_viral", "sum_imp")
+                        },
+                        "avg_engagement_rate": round(g["sum_eng"] / n, 4) if n else 0,
+                        "avg_viral_score": round(g["sum_viral"] / n, 2) if n else 0,
+                        "total_impressions": g.get("sum_imp", 0),
+                    }
+                )
             return sorted(result, key=lambda x: x.get("avg_engagement_rate", 0), reverse=True)
 
-        return api_success(data={
-            "by_format": avg_dict(by_format),
-            "by_template": avg_dict(by_template),
-            "by_topic": avg_dict(by_topic),
-        })
+        return api_success(
+            data={
+                "by_format": avg_dict(by_format),
+                "by_template": avg_dict(by_template),
+                "by_topic": avg_dict(by_topic),
+            }
+        )
     except Exception as e:
         logger.error("Content performance error: %s", e, exc_info=True)
         return api_error(error="Service temporarily unavailable", code=502)
@@ -1152,6 +1246,7 @@ def trends():
             if granularity == "weekly":
                 # ISO week start (Monday)
                 from datetime import timedelta as _td
+
                 day = dt - _td(days=dt.weekday())
                 date_key = day.strftime("%Y-%m-%d")
             else:
@@ -1161,9 +1256,14 @@ def trends():
             key = (date_key, platform)
             if key not in buckets:
                 buckets[key] = {
-                    "date": date_key, "platform": platform,
-                    "count": 0, "sum_eng_rate": 0, "sum_impressions": 0,
-                    "sum_reach": 0, "sum_likes": 0, "sum_shares": 0,
+                    "date": date_key,
+                    "platform": platform,
+                    "count": 0,
+                    "sum_eng_rate": 0,
+                    "sum_impressions": 0,
+                    "sum_reach": 0,
+                    "sum_likes": 0,
+                    "sum_shares": 0,
                     "sum_viral": 0,
                 }
             b = buckets[key]
@@ -1178,17 +1278,19 @@ def trends():
         data = []
         for b in buckets.values():
             n = b["count"]
-            data.append({
-                "date": b["date"],
-                "platform": b["platform"],
-                "posts": n,
-                "avg_engagement_rate": round(b["sum_eng_rate"] / n, 4) if n else 0,
-                "total_impressions": b["sum_impressions"],
-                "total_reach": b["sum_reach"],
-                "total_likes": b["sum_likes"],
-                "total_shares": b["sum_shares"],
-                "avg_viral_score": round(b["sum_viral"] / n, 2) if n else 0,
-            })
+            data.append(
+                {
+                    "date": b["date"],
+                    "platform": b["platform"],
+                    "posts": n,
+                    "avg_engagement_rate": round(b["sum_eng_rate"] / n, 4) if n else 0,
+                    "total_impressions": b["sum_impressions"],
+                    "total_reach": b["sum_reach"],
+                    "total_likes": b["sum_likes"],
+                    "total_shares": b["sum_shares"],
+                    "avg_viral_score": round(b["sum_viral"] / n, 2) if n else 0,
+                }
+            )
 
         data.sort(key=lambda x: (x["date"], x["platform"]))
         return api_success(data={"data": data})
@@ -1202,8 +1304,13 @@ def audience():
     """Follower count snapshots over time."""
     try:
         client = _get_client()
-        if not hasattr(client, 'audience_snapshots') or client.audience_snapshots is None:
-            return api_success(data={"data": [], "message": "Audience tracking not configured. Run setup/migrate_analytics_columns.py to create the table."})
+        if not hasattr(client, "audience_snapshots") or client.audience_snapshots is None:
+            return api_success(
+                data={
+                    "data": [],
+                    "message": "Audience tracking not configured. Run setup/migrate_analytics_columns.py to create the table.",
+                }
+            )
         records = client.audience_snapshots.all(max_records=200)
         data = []
         for r in records:
@@ -1221,6 +1328,7 @@ def virality_breakdown():
     """Per-platform virality signal weights and top viral posts."""
     try:
         import yaml
+
         config_path = PROJECT_ROOT / "config" / "virality_scoring.yaml"
         weights = {}
         if config_path.exists():
@@ -1237,26 +1345,30 @@ def virality_breakdown():
             f = r.get("fields", {})
             vs = float(f.get("viral_score", 0) or 0)
             if vs > 0:
-                posts.append({
-                    "id": r["id"],
-                    "platform": f.get("platform", ""),
-                    "viral_score": vs,
-                    "engagement_rate": float(f.get("engagement_rate", 0) or 0),
-                    "impressions": int(float(f.get("impressions", 0) or 0)),
-                    "likes": int(float(f.get("likes", 0) or 0)),
-                    "shares": int(float(f.get("shares", 0) or 0)),
-                    "saves": int(float(f.get("saved", 0) or 0)),
-                    "story_title": f.get("story_title", ""),
-                    "format": f.get("format", ""),
-                    "published_at": f.get("published_at", ""),
-                })
+                posts.append(
+                    {
+                        "id": r["id"],
+                        "platform": f.get("platform", ""),
+                        "viral_score": vs,
+                        "engagement_rate": float(f.get("engagement_rate", 0) or 0),
+                        "impressions": int(float(f.get("impressions", 0) or 0)),
+                        "likes": int(float(f.get("likes", 0) or 0)),
+                        "shares": int(float(f.get("shares", 0) or 0)),
+                        "saves": int(float(f.get("saved", 0) or 0)),
+                        "story_title": f.get("story_title", ""),
+                        "format": f.get("format", ""),
+                        "published_at": f.get("published_at", ""),
+                    }
+                )
 
         posts.sort(key=lambda x: x["viral_score"], reverse=True)
 
-        return api_success(data={
-            "platform_weights": weights,
-            "top_posts": posts[:10],
-        })
+        return api_success(
+            data={
+                "platform_weights": weights,
+                "top_posts": posts[:10],
+            }
+        )
     except Exception as e:
         logger.error("Virality breakdown error: %s", e, exc_info=True)
         return api_error(error="Service temporarily unavailable", code=502)
@@ -1279,6 +1391,7 @@ def monetization():
         if dsn:
             import psycopg
             from psycopg.rows import dict_row
+
             try:
                 with psycopg.connect(dsn, row_factory=dict_row) as conn:
                     total_published = conn.execute(
@@ -1306,21 +1419,25 @@ def monetization():
         # Build program list from network breakdown
         programs = []
         for net_name, count in catalog_networks.items():
-            programs.append({
-                "name": net_name.replace("_", " ").title(),
-                "slug": net_name,
-                "commission": f"{count} posts matched",
-                "cta_text": "",
-            })
+            programs.append(
+                {
+                    "name": net_name.replace("_", " ").title(),
+                    "slug": net_name,
+                    "commission": f"{count} posts matched",
+                    "cta_text": "",
+                }
+            )
 
-        return api_success(data={
-            "active_programs": programs,
-            "total_programs": len(programs),
-            "posts_with_affiliate_links": affiliate_count,
-            "posts_with_newsletter_cta": 0,
-            "total_published": total_published,
-            "catalog_networks": catalog_networks,
-        })
+        return api_success(
+            data={
+                "active_programs": programs,
+                "total_programs": len(programs),
+                "posts_with_affiliate_links": affiliate_count,
+                "posts_with_newsletter_cta": 0,
+                "total_published": total_published,
+                "catalog_networks": catalog_networks,
+            }
+        )
     except Exception as e:
         logger.error("Monetization error: %s", e, exc_info=True)
         return api_error(error="Service temporarily unavailable", code=502)
@@ -1330,12 +1447,15 @@ def monetization():
 def demographics():
     """Serve YouTube demographics from cached JSON file."""
     import json as _json
+
     demo_path = Path(__file__).resolve().parent.parent.parent / ".tmp" / "youtube_demographics.json"
     if not demo_path.exists():
-        return api_success(data={
-            "data": None,
-            "message": "No demographics data available. Run fetch_youtube_demographics.py to fetch.",
-        })
+        return api_success(
+            data={
+                "data": None,
+                "message": "No demographics data available. Run fetch_youtube_demographics.py to fetch.",
+            }
+        )
     try:
         with open(demo_path) as f:
             data = _json.load(f)
@@ -1389,7 +1509,9 @@ def cross_niche_analytics():
                 total = r["success"] + r["failed"]
                 result[niche]["publish_success"] = r["success"]
                 result[niche]["publish_failed"] = r["failed"]
-                result[niche]["publish_rate"] = round(r["success"] / total * 100) if total > 0 else 0
+                result[niche]["publish_rate"] = (
+                    round(r["success"] / total * 100) if total > 0 else 0
+                )
 
             # Affiliate clicks per niche (30d)
             click_rows = conn.execute(

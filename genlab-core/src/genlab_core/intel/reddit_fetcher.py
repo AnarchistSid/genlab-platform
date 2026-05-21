@@ -107,24 +107,28 @@ def fetch_reddit_videos(
                 if is_video and post.get("media", {}).get("reddit_video"):
                     video_url = post["media"]["reddit_video"].get("fallback_url", "")
 
-                results.append({
-                    "title": post.get("title", ""),
-                    "url": post.get("url", ""),
-                    "source_url": f"https://reddit.com{post.get('permalink', '')}",
-                    "video_url": video_url,
-                    "score": score,
-                    "upvote_ratio": post.get("upvote_ratio", 0),
-                    "num_comments": post.get("num_comments", 0),
-                    "subreddit": sub,
-                    "created_utc": post.get("created_utc", 0),
-                    "is_video": is_video,
-                    "source": "reddit",
-                    "_trending_video": is_video and bool(video_url),
-                    "_clip_url": video_url if video_url else None,
-                })
+                results.append(
+                    {
+                        "title": post.get("title", ""),
+                        "url": post.get("url", ""),
+                        "source_url": f"https://reddit.com{post.get('permalink', '')}",
+                        "video_url": video_url,
+                        "score": score,
+                        "upvote_ratio": post.get("upvote_ratio", 0),
+                        "num_comments": post.get("num_comments", 0),
+                        "subreddit": sub,
+                        "created_utc": post.get("created_utc", 0),
+                        "is_video": is_video,
+                        "source": "reddit",
+                        "_trending_video": is_video and bool(video_url),
+                        "_clip_url": video_url if video_url else None,
+                    }
+                )
 
         except Exception as e:
             logger.warning("[Reddit] r/%s fetch failed: %s", sub, e)
 
-    logger.info("[Reddit] Fetched %d posts across %d subreddits", len(results), len(subreddit_configs))
+    logger.info(
+        "[Reddit] Fetched %d posts across %d subreddits", len(results), len(subreddit_configs)
+    )
     return results

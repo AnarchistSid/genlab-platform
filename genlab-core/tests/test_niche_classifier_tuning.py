@@ -1,4 +1,5 @@
 """Tests for classifier tuning at 10x volume."""
+
 from unittest.mock import patch
 
 import pytest
@@ -9,18 +10,57 @@ import yaml
 def classifier(tmp_path):
     """Create a classifier with minimal test profiles."""
     for niche_id, kw_cfg in [
-        ("ai_creators", {"positive_keywords": ["ai", "chatgpt", "llm", "neural", "model"], "negative_keywords": ["cooking"], "relevance_threshold": 0.30}),
-        ("gaming", {"positive_keywords": ["game", "gaming", "esports", "fortnite", "playstation"], "negative_keywords": ["cooking"], "relevance_threshold": 0.20}),
-        ("sports", {"positive_keywords": ["sports", "nba", "football", "cricket", "ufc"], "negative_keywords": ["cooking"], "relevance_threshold": 0.20}),
-        ("movies", {"positive_keywords": ["movie", "trailer", "film", "oscar", "netflix"], "negative_keywords": ["cooking"], "relevance_threshold": 0.25}),
-        ("anime", {"positive_keywords": ["anime", "manga", "crunchyroll", "one piece", "demon slayer"], "negative_keywords": ["cooking"], "relevance_threshold": 0.35}),
+        (
+            "ai_creators",
+            {
+                "positive_keywords": ["ai", "chatgpt", "llm", "neural", "model"],
+                "negative_keywords": ["cooking"],
+                "relevance_threshold": 0.30,
+            },
+        ),
+        (
+            "gaming",
+            {
+                "positive_keywords": ["game", "gaming", "esports", "fortnite", "playstation"],
+                "negative_keywords": ["cooking"],
+                "relevance_threshold": 0.20,
+            },
+        ),
+        (
+            "sports",
+            {
+                "positive_keywords": ["sports", "nba", "football", "cricket", "ufc"],
+                "negative_keywords": ["cooking"],
+                "relevance_threshold": 0.20,
+            },
+        ),
+        (
+            "movies",
+            {
+                "positive_keywords": ["movie", "trailer", "film", "oscar", "netflix"],
+                "negative_keywords": ["cooking"],
+                "relevance_threshold": 0.25,
+            },
+        ),
+        (
+            "anime",
+            {
+                "positive_keywords": ["anime", "manga", "crunchyroll", "one piece", "demon slayer"],
+                "negative_keywords": ["cooking"],
+                "relevance_threshold": 0.35,
+            },
+        ),
     ]:
         cfg_file = tmp_path / f"{niche_id}.yaml"
         cfg_file.write_text(yaml.dump({"content_filter": kw_cfg}))
 
-    paths = {nid: tmp_path / f"{nid}.yaml" for nid in ["ai_creators", "gaming", "sports", "movies", "anime"]}
+    paths = {
+        nid: tmp_path / f"{nid}.yaml"
+        for nid in ["ai_creators", "gaming", "sports", "movies", "anime"]
+    }
     with patch("genlab_core.intelligence.niche_classifier.NICHE_SOURCE_PATHS", paths):
         from genlab_core.intelligence.niche_classifier import NicheClassifier
+
         c = NicheClassifier(genlab_root=tmp_path)
     return c
 

@@ -25,6 +25,7 @@ Exit codes:
   1 = some networks failed (partial data recorded)
   2 = fatal error
 """
+
 from __future__ import annotations
 
 import json
@@ -53,22 +54,43 @@ if env_path.exists():
 DATABASE_URL = os.environ.get("DATABASE_URL", "dbname=genlab")
 
 
-def _record(network: str, clicks: int, conversions: int, revenue: float,
-            currency: str = "INR", extra: dict | None = None) -> None:
+def _record(
+    network: str,
+    clicks: int,
+    conversions: int,
+    revenue: float,
+    currency: str = "INR",
+    extra: dict | None = None,
+) -> None:
     """Write a revenue record to the database."""
     import psycopg
+
     try:
         conn = psycopg.connect(DATABASE_URL, autocommit=True)
         conn.execute(
             "INSERT INTO affiliate_revenue "
             "(niche_id, network, clicks, conversions, revenue_amount, currency, date, extra) "
             "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-            ("all", network, clicks, conversions, revenue, currency,
-             date.today(), json.dumps(extra or {})),
+            (
+                "all",
+                network,
+                clicks,
+                conversions,
+                revenue,
+                currency,
+                date.today(),
+                json.dumps(extra or {}),
+            ),
         )
         conn.close()
-        logger.info("[%s] Recorded: %d clicks, %d conv, %s %.2f",
-                    network, clicks, conversions, currency, revenue)
+        logger.info(
+            "[%s] Recorded: %d clicks, %d conv, %s %.2f",
+            network,
+            clicks,
+            conversions,
+            currency,
+            revenue,
+        )
     except Exception as e:
         logger.error("[%s] DB write failed: %s", network, e)
 
@@ -106,6 +128,7 @@ def scrape_admitad() -> bool:
 
         # Get statistics for last 30 days
         from datetime import timedelta
+
         since = (date.today() - timedelta(days=30)).strftime("%d.%m.%Y")
         until = date.today().strftime("%d.%m.%Y")
         stats_url = (
@@ -123,11 +146,19 @@ def scrape_admitad() -> bool:
         total_clicks = sum(r.get("clicks", 0) for r in results)
         total_leads = sum(r.get("leads", 0) for r in results)
         total_sales = sum(r.get("sales", 0) for r in results)
-        total_revenue = sum(float(r.get("payment_sum_open", 0)) + float(r.get("payment_sum_approved", 0)) for r in results)
+        total_revenue = sum(
+            float(r.get("payment_sum_open", 0)) + float(r.get("payment_sum_approved", 0))
+            for r in results
+        )
 
-        _record("admitad", total_clicks, total_leads + total_sales, total_revenue,
-                currency="USD", extra={"source": "api", "period": "30d",
-                                       "website_id": website_id})
+        _record(
+            "admitad",
+            total_clicks,
+            total_leads + total_sales,
+            total_revenue,
+            currency="USD",
+            extra={"source": "api", "period": "30d", "website_id": website_id},
+        )
         return True
 
     except Exception as e:
@@ -161,8 +192,13 @@ def scrape_cuelinks_browser(page) -> bool:
         earnings_match = re.search(r"([\d,.]+)", earnings_text)
         earnings = float(earnings_match.group(1).replace(",", "")) if earnings_match else 0.0
 
-        _record("cuelinks", clicks, 0, earnings,
-                extra={"source": "browser_scrape", "period": "dashboard_default"})
+        _record(
+            "cuelinks",
+            clicks,
+            0,
+            earnings,
+            extra={"source": "browser_scrape", "period": "dashboard_default"},
+        )
         return True
 
     except Exception as e:
@@ -192,8 +228,13 @@ def scrape_earnkaro_browser(page) -> bool:
         profit_match = re.search(r"Total Profit.*?₹([\d,.]+)", content, re.DOTALL)
         profit = float(profit_match.group(1).replace(",", "")) if profit_match else 0.0
 
-        _record("earnkaro", 0, 0, profit,
-                extra={"source": "browser_scrape", "note": "total_profit_lifetime"})
+        _record(
+            "earnkaro",
+            0,
+            0,
+            profit,
+            extra={"source": "browser_scrape", "note": "total_profit_lifetime"},
+        )
         return True
 
     except Exception as e:
@@ -209,7 +250,11 @@ def scrape_amazon_browser(page, region: str = "in") -> bool:
     runs will use the persisted session.
     """
     domain = "amazon.in" if region == "in" else "amazon.com"
-    tag = os.environ.get("AMAZON_IN_AFFILIATE_TAG", "") if region == "in" else os.environ.get("AMAZON_US_AFFILIATE_TAG", "")
+    tag = (
+        os.environ.get("AMAZON_IN_AFFILIATE_TAG", "")
+        if region == "in"
+        else os.environ.get("AMAZON_US_AFFILIATE_TAG", "")
+    )
 
     try:
         page.goto(f"https://affiliate-program.{domain}/home", timeout=30000)
@@ -230,13 +275,20 @@ def scrape_amazon_browser(page, region: str = "in") -> bool:
         currency_sym = "₹" if region == "in" else r"\$"
         earnings_match = re.search(
             rf"Total (?:Fees|Commissions|Earnings).*?{currency_sym}([\d,.]+)",
-            content, re.DOTALL,
+            content,
+            re.DOTALL,
         )
         earnings = float(earnings_match.group(1).replace(",", "")) if earnings_match else 0.0
 
         currency = "INR" if region == "in" else "USD"
-        _record(f"amazon_{region}", clicks, 0, earnings, currency=currency,
-                extra={"source": "browser_scrape", "store_id": tag, "period": "30d"})
+        _record(
+            f"amazon_{region}",
+            clicks,
+            0,
+            earnings,
+            currency=currency,
+            extra={"source": "browser_scrape", "store_id": tag, "period": "30d"},
+        )
         return True
 
     except Exception as e:
@@ -267,7 +319,9 @@ def main() -> int:
         else:
             user_data_dir = str(fallback_profile)
             os.makedirs(user_data_dir, exist_ok=True)
-            logger.info("[scraper] Using fallback profile (run amazon_2fa_setup.py for Amazon access)")
+            logger.info(
+                "[scraper] Using fallback profile (run amazon_2fa_setup.py for Amazon access)"
+            )
 
         with sync_playwright() as p:
             browser = p.chromium.launch_persistent_context(
@@ -296,7 +350,9 @@ def main() -> int:
             browser.close()
 
     except ImportError:
-        logger.error("Playwright not installed: pip install playwright && playwright install chromium")
+        logger.error(
+            "Playwright not installed: pip install playwright && playwright install chromium"
+        )
     except Exception as e:
         logger.error("Browser scraping failed: %s", e)
 

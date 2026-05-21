@@ -112,9 +112,7 @@ class BaseWritingStrategy(WritingStrategy):
     # Story-to-video dict conversion (override for niche-specific fields)
     # ------------------------------------------------------------------
 
-    def _story_to_video_dict(
-        self, story: dict, clip_index: dict | None = None
-    ) -> dict:
+    def _story_to_video_dict(self, story: dict, clip_index: dict | None = None) -> dict:
         """Convert a pipeline story dict to the video dict expected by write_video_content.
 
         External text (title, summary, tags, channel name) is sanitized before
@@ -153,7 +151,10 @@ class BaseWritingStrategy(WritingStrategy):
             if hits:
                 logger.warning(
                     "[%s] Injection heuristic hit in %s for story %s: %s",
-                    self._niche_id, field_name, story_id[:16], hits,
+                    self._niche_id,
+                    field_name,
+                    story_id[:16],
+                    hits,
                 )
                 if field_name == "title":
                     clean_title = ""
@@ -203,9 +204,7 @@ class BaseWritingStrategy(WritingStrategy):
             parts.append(random.choice(cta_library))
 
         if hashtag_pool:
-            selected = random.sample(
-                hashtag_pool, min(hashtags_per_post, len(hashtag_pool))
-            )
+            selected = random.sample(hashtag_pool, min(hashtags_per_post, len(hashtag_pool)))
             parts.append(" ".join(selected))
 
         target_length = captions_config.get("target_length", 300)
@@ -340,9 +339,7 @@ class BaseWritingStrategy(WritingStrategy):
             model = get_model(self._model_route_key())
             llm_client = AnthropicLLMClient(api_key=api_key, model=model)
             extra_instructions = _build_extra_instructions(self._writing_cfg or {})
-            logger.info(
-                "[%s] Using LLM writing with model=%s", self._niche_id, model
-            )
+            logger.info("[%s] Using LLM writing with model=%s", self._niche_id, model)
 
         clip_index = context.get("clip_index")
         existing_hooks: list[str] = []

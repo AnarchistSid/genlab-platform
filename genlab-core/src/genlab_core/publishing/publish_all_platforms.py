@@ -19,6 +19,7 @@ Exit codes:
     3 = daily cap reached for all platforms
     4 = lock held by another process
 """
+
 from __future__ import annotations
 
 import argparse
@@ -62,9 +63,15 @@ EXIT_ALL_FAILED = 2
 EXIT_DAILY_CAP = 3
 EXIT_LOCK_HELD = 4
 
-_VALID_NICHE_IDS = frozenset({
-    "ai_creators", "gaming", "sports", "movies", "anime",
-})
+_VALID_NICHE_IDS = frozenset(
+    {
+        "ai_creators",
+        "gaming",
+        "sports",
+        "movies",
+        "anime",
+    }
+)
 
 # Maps legacy/alternate platform names to canonical registry IDs
 _PLATFORM_ID_MAP: dict[str, str] = {
@@ -121,9 +128,7 @@ def _validate_niche(niche_id: str) -> str:
     if not niche_id:
         raise ValueError("Empty niche_id — refusing to publish")
     if niche_id not in _VALID_NICHE_IDS:
-        raise ValueError(
-            f"unknown niche_id '{niche_id}' — valid: {sorted(_VALID_NICHE_IDS)}"
-        )
+        raise ValueError(f"unknown niche_id '{niche_id}' — valid: {sorted(_VALID_NICHE_IDS)}")
     return niche_id
 
 
@@ -215,9 +220,15 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         # Load platform duration targets from config
         max_duration = None
         try:
-            config_path = Path(__file__).resolve().parent.parent / "config" / "platform_encode_specs.yaml"
+            config_path = (
+                Path(__file__).resolve().parent.parent / "config" / "platform_encode_specs.yaml"
+            )
             if not config_path.exists():
-                config_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "platform_encode_specs.yaml"
+                config_path = (
+                    Path(__file__).resolve().parent.parent.parent.parent
+                    / "config"
+                    / "platform_encode_specs.yaml"
+                )
             if config_path.exists():
                 with open(config_path) as f:
                     enc_config = _yaml.safe_load(f) or {}
@@ -228,7 +239,8 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
             # Logged at debug because transcode_specs is optional.
             logger.debug(
                 "[publish] Could not load platform_encode_specs for %s: %s",
-                platform, exc,
+                platform,
+                exc,
             )
 
         cmd = [ffmpeg, "-y", "-i", str(source)]
@@ -251,13 +263,27 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
             cmd.extend(["-maxrate", spec.maxrate, "-bufsize", spec.bufsize or spec.maxrate])
         if spec.width and spec.height:
             cmd.extend(["-vf", f"scale={spec.width}:{spec.height}"])
-        cmd.extend([
-            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-            "-c:a", "aac", "-b:a", spec.audio_bitrate or "192k", "-ar", "48000",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            str(variant_path),
-        ])
+        cmd.extend(
+            [
+                "-colorspace",
+                "bt709",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-c:a",
+                "aac",
+                "-b:a",
+                spec.audio_bitrate or "192k",
+                "-ar",
+                "48000",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(variant_path),
+            ]
+        )
         # 600s timeout (was 300) gives "fast" preset enough headroom
         # for the longest 60s reels on the 2 vCPU Hetzner VPS. The
         # combination of slow CPU + "medium" preset + max_duration=60
@@ -267,8 +293,14 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         # box gets a faster CPU or HW accel, drop this back.
         subprocess.run(cmd, check=True, capture_output=True, timeout=600)
         dur_msg = f", trimmed to {max_duration}s" if max_duration else ""
-        logger.info("[publish] Transcoded %s for %s (%s CRF %s%s)",
-                    source.name, platform, spec.codec, spec.crf, dur_msg)
+        logger.info(
+            "[publish] Transcoded %s for %s (%s CRF %s%s)",
+            source.name,
+            platform,
+            spec.codec,
+            spec.crf,
+            dur_msg,
+        )
         return variant_path
     except subprocess.TimeoutExpired as exc:
         # Surface timeout distinctly so the dashboard alerting can
@@ -277,12 +309,15 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         logger.warning(
             "[publish] Transcode TIMEOUT for %s/%s after %ds — using original "
             "(uncapped bitrate may be rejected by platform)",
-            platform, source.name, getattr(exc, "timeout", 600),
+            platform,
+            source.name,
+            getattr(exc, "timeout", 600),
         )
         return source
     except Exception as exc:
-        logger.warning("[publish] Transcode failed for %s/%s: %s — using original",
-                       platform, source.name, exc)
+        logger.warning(
+            "[publish] Transcode failed for %s/%s: %s — using original", platform, source.name, exc
+        )
         return source
 
 
@@ -291,9 +326,7 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _post_affiliate_reply(
-    platform: str, post_id: str | None, fields: dict, niche_id: str
-) -> None:
+def _post_affiliate_reply(platform: str, post_id: str | None, fields: dict, niche_id: str) -> None:
     """Post affiliate link as first reply/comment after publishing.
 
     Instagram: POST /{media_id}/comments with affiliate text (pinned first comment).
@@ -321,6 +354,7 @@ def _post_affiliate_reply(
             import requests as _req
 
             from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
             meta_creds = resolve_meta_credentials(niche_id)
             access_token = meta_creds.get("ig_access_token", "")
             if not access_token:
@@ -333,11 +367,14 @@ def _post_affiliate_reply(
             if resp.status_code == 200:
                 logger.info("[affiliate] Posted IG comment on %s", post_id)
             else:
-                logger.debug("[affiliate] IG comment failed (HTTP %d): %s", resp.status_code, resp.text[:200])
+                logger.debug(
+                    "[affiliate] IG comment failed (HTTP %d): %s", resp.status_code, resp.text[:200]
+                )
 
         elif platform == "facebook":
             from genlab_core.platforms.facebook import FacebookClient
             from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
             access_token, page_id = resolve_fb_credentials(niche_id)
             if not access_token:
                 return
@@ -348,6 +385,7 @@ def _post_affiliate_reply(
         elif platform in ("twitter", "x_twitter"):
             from genlab_core.platforms.x_twitter import XTwitterClient
             from genlab_core.publishing.niche_credentials import resolve_twitter_credentials
+
             creds = resolve_twitter_credentials(niche_id)
             if not creds.get("api_key"):
                 return
@@ -358,6 +396,7 @@ def _post_affiliate_reply(
         elif platform == "threads":
             from genlab_core.platforms.threads import ThreadsClient
             from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+
             access_token, user_id = resolve_threads_credentials(niche_id)
             if not access_token or not user_id:
                 return
@@ -371,7 +410,9 @@ def _post_affiliate_reply(
     except Exception as exc:
         logger.warning(
             "[affiliate] Reply failed for %s/%s (non-blocking): %s",
-            platform, post_id, exc,
+            platform,
+            post_id,
+            exc,
         )
 
 
@@ -410,7 +451,9 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     # Filter out corrupted/empty files (< 10KB is not a valid video)
     too_small = [p for p in media_paths if p.exists() and p.stat().st_size < 10240]
     if too_small:
-        logger.warning("[publish] Skipping too-small media files (<10KB): %s", [str(p) for p in too_small])
+        logger.warning(
+            "[publish] Skipping too-small media files (<10KB): %s", [str(p) for p in too_small]
+        )
         media_paths = [p for p in media_paths if p not in too_small]
 
     # Per-platform transcode: produce optimized variant for the target platform
@@ -445,10 +488,16 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         caption = (fields.get("caption", "") or "").strip()
     hashtags_raw = fields.get("hashtags", "") or ""
     if isinstance(hashtags_raw, list):
-        hashtags = [t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in (str(h) for h in hashtags_raw if h) if t.strip()]
+        hashtags = [
+            t.strip() if t.strip().startswith("#") else f"#{t.strip()}"
+            for t in (str(h) for h in hashtags_raw if h)
+            if t.strip()
+        ]
     else:
         hashtags = [
-            t.strip() if t.strip().startswith("#") else f"#{t.strip()}" for t in str(hashtags_raw).split() if t.strip()
+            t.strip() if t.strip().startswith("#") else f"#{t.strip()}"
+            for t in str(hashtags_raw).split()
+            if t.strip()
         ]
     hook = (fields.get("hook", "") or fields.get("hook_text", "") or "").strip()
 
@@ -476,14 +525,11 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     )
 
 
-def _build_platform_specific(
-    fields: dict[str, Any], platform: str, caption: str, hook: str
-):
+def _build_platform_specific(fields: dict[str, Any], platform: str, caption: str, hook: str):
     """Build the platform-specific config from blueprint fields."""
     if platform == "instagram":
         image_paths = [
-            str(p) for p in _parse_visual_paths(fields)
-            if not str(p).lower().endswith(".mp4")
+            str(p) for p in _parse_visual_paths(fields) if not str(p).lower().endswith(".mp4")
         ]
         return InstagramSpecific(
             cover_url=image_paths[0] if image_paths else "",
@@ -504,11 +550,7 @@ def _build_platform_specific(
         else:
             description = raw_yt
             legacy_title = ""
-        shorts_title = (
-            hook[:100]
-            or legacy_title
-            or fields.get("topic", "")
-        )
+        shorts_title = hook[:100] or legacy_title or fields.get("topic", "")
         return YouTubeSpecific(
             shorts_title=shorts_title[:100],
             community_post_text=description or caption,
@@ -516,9 +558,9 @@ def _build_platform_specific(
 
     if platform == "twitter":
         tw_content = _parse_json_field(fields.get("twitter_content", ""))
-        routing = str(
-            tw_content.get("routing", tw_content.get("strategy", "single"))
-        ).strip().lower()
+        routing = (
+            str(tw_content.get("routing", tw_content.get("strategy", "single"))).strip().lower()
+        )
         tweet_text = str(tw_content.get("tweet_text", "") or caption).strip()
         tweet_text = tweet_text[:280]
         return TwitterSpecific(
@@ -581,9 +623,12 @@ def _resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
         creds = resolve_youtube_credentials(niche_id)
         refresh_token = creds.get("refresh_token", "")
         client_id = creds.get("client_id", "") or os.environ.get("YOUTUBE_CLIENT_ID", "")
-        client_secret = creds.get("client_secret", "") or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        client_secret = creds.get("client_secret", "") or os.environ.get(
+            "YOUTUBE_CLIENT_SECRET", ""
+        )
         # Expected channel ID for cross-channel verification
         from genlab_core.publishing.niche_credentials import resolve_niche_env
+
         expected_channel = resolve_niche_env(niche_id, "", "YT_CHANNEL_ID")
         if refresh_token and client_id and client_secret:
             kwargs = {
@@ -648,24 +693,37 @@ def run_publish(
                         # Check if already published on any platform (crash after partial success)
                         pps_raw = fields.get("platform_publish_status", "{}")
                         try:
-                            pps = json.loads(pps_raw) if isinstance(pps_raw, str) else (pps_raw or {})
+                            pps = (
+                                json.loads(pps_raw) if isinstance(pps_raw, str) else (pps_raw or {})
+                            )
                         except (json.JSONDecodeError, TypeError):
                             pps = {}
                         has_published = any(
-                            v == "PUBLISHED" or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
+                            v == "PUBLISHED"
+                            or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
                             for v in pps.values()
                         )
                         if has_published:
                             # Already published on some platforms — mark as PUBLISHED, don't re-publish
                             backlog_client.blueprints.update(bp["id"], {"status": "PUBLISHED"})
-                            logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s as PUBLISHED (partial success detected)", bp["id"][:8])
+                            logger.warning(
+                                "[publish] Recovered stuck PUBLISHING blueprint %s as PUBLISHED (partial success detected)",
+                                bp["id"][:8],
+                            )
                         elif attempt_count >= 3:
                             # Too many attempts — give up
                             backlog_client.blueprints.update(bp["id"], {"status": "PUBLISH_FAILED"})
-                            logger.error("[publish] Blueprint %s stuck after %d attempts — marking PUBLISH_FAILED", bp["id"][:8], attempt_count)
+                            logger.error(
+                                "[publish] Blueprint %s stuck after %d attempts — marking PUBLISH_FAILED",
+                                bp["id"][:8],
+                                attempt_count,
+                            )
                         else:
                             backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
-                            logger.warning("[publish] Recovered stuck PUBLISHING blueprint %s (>30min)", bp["id"][:8])
+                            logger.warning(
+                                "[publish] Recovered stuck PUBLISHING blueprint %s (>30min)",
+                                bp["id"][:8],
+                            )
                 except (ValueError, TypeError):
                     pass
     except Exception as e:
@@ -683,11 +741,17 @@ def run_publish(
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=UTC)
                     if datetime.now(UTC) - dt > timedelta(hours=24):
-                        backlog_client.blueprints.update(bp["id"], {
-                            "status": "VISUAL_READY",
-                            "publish_attempts": 0,
-                        })
-                        logger.info("[publish] Auto-recovered PUBLISH_FAILED blueprint %s after 24h cooldown", bp["id"][:8])
+                        backlog_client.blueprints.update(
+                            bp["id"],
+                            {
+                                "status": "VISUAL_READY",
+                                "publish_attempts": 0,
+                            },
+                        )
+                        logger.info(
+                            "[publish] Auto-recovered PUBLISH_FAILED blueprint %s after 24h cooldown",
+                            bp["id"][:8],
+                        )
                 except (ValueError, TypeError):
                     pass
     except Exception as e:
@@ -695,7 +759,8 @@ def run_publish(
 
     # 1. Query VISUAL_READY blueprints for this niche
     all_blueprints = backlog_client.get_blueprints_by_status(
-        "VISUAL_READY", niche_id=niche_id,
+        "VISUAL_READY",
+        niche_id=niche_id,
     )
     if not all_blueprints:
         logger.info("[publish] No VISUAL_READY blueprints for niche=%s", niche_id)
@@ -712,7 +777,9 @@ def run_publish(
         if bp_niche != niche_id:
             logger.warning(
                 "[publish] Skipping blueprint %s: niche mismatch (%s != %s)",
-                bp.get("id", "?"), bp_niche, niche_id,
+                bp.get("id", "?"),
+                bp_niche,
+                niche_id,
             )
             continue
         gate = gatekeeper.evaluate(fields, "")  # platform-agnostic evaluation
@@ -721,7 +788,9 @@ def run_publish(
         else:
             logger.info(
                 "[publish] Blueprint %s blocked by %s: %s (title='%s')",
-                bp.get("id", "?")[:8], gate.gate_name, gate.reason,
+                bp.get("id", "?")[:8],
+                gate.gate_name,
+                gate.reason,
                 (fields.get("title") or "")[:50],
             )
 
@@ -777,7 +846,8 @@ def run_publish(
             kwargs = _resolve_client_kwargs(registry_id, niche_id)
             if kwargs is None:
                 return platform, PublishResult(
-                    platform=registry_id, success=False,
+                    platform=registry_id,
+                    success=False,
                     error=f"No {registry_id} credentials for niche '{niche_id}'",
                 )
             payload = build_payload(fields, platform)
@@ -786,26 +856,28 @@ def run_publish(
             return platform, result
         except Exception as exc:
             return platform, PublishResult(
-                platform=registry_id, success=False, error=str(exc),
+                platform=registry_id,
+                success=False,
+                error=str(exc),
             )
 
     with ThreadPoolExecutor(max_workers=len(platforms_to_publish)) as pool:
-        futures = {
-            pool.submit(_publish_one, p): p for p in platforms_to_publish
-        }
+        futures = {pool.submit(_publish_one, p): p for p in platforms_to_publish}
         for future in futures:
             try:
                 platform, result = future.result(timeout=600)  # 10-min max per platform
             except TimeoutError:
                 platform = futures[future]
                 result = PublishResult(
-                    platform=_to_registry_id(platform), success=False,
+                    platform=_to_registry_id(platform),
+                    success=False,
                     error=f"Publish timed out after 600s for {platform}",
                 )
             except Exception as exc:
                 platform = futures[future]
                 result = PublishResult(
-                    platform=_to_registry_id(platform), success=False,
+                    platform=_to_registry_id(platform),
+                    success=False,
                     error=f"Publish error: {exc}",
                 )
             registry_id = _to_registry_id(platform)
@@ -817,7 +889,9 @@ def run_publish(
                     daily_cap.record_publish(platform)
                 logger.info(
                     "[publish] %s: SUCCESS post_id=%s url=%s",
-                    platform, result.post_id, result.post_url,
+                    platform,
+                    result.post_id,
+                    result.post_url,
                 )
                 # Post affiliate link as first reply/comment (non-blocking)
                 _post_affiliate_reply(platform, result.post_id, fields, niche_id)
@@ -834,7 +908,8 @@ def run_publish(
                     logger.warning(
                         "[publish] Mid-publish state persistence failed for %s "
                         "(will retry at final update): %s",
-                        platform, exc,
+                        platform,
+                        exc,
                     )
             else:
                 error_class = classify(result.error, platform)
@@ -875,7 +950,11 @@ def run_publish(
     attempt_count = int(fields.get("publish_attempts", 0) or 0) + 1
     if not any_success and attempt_count >= 3:
         final_status = "PUBLISH_FAILED"
-        logger.error("[publish] Blueprint %s failed %d times — marking PUBLISH_FAILED", record_id, attempt_count)
+        logger.error(
+            "[publish] Blueprint %s failed %d times — marking PUBLISH_FAILED",
+            record_id,
+            attempt_count,
+        )
     elif any_success:
         final_status = "PUBLISHED"
     else:
@@ -890,21 +969,26 @@ def run_publish(
             },
             typecast=True,
         )
-        logger.info("[publish] Blueprint %s -> %s (%s)", record_id[:16], final_status, platform_status)
+        logger.info(
+            "[publish] Blueprint %s -> %s (%s)", record_id[:16], final_status, platform_status
+        )
     except Exception as exc:
         logger.error("[publish] Failed to update final status: %s", exc)
 
     # Push dashboard notification event
     try:
         from genlab_core.observability.dashboard_events import push_event
-        hook_text = (fields.get("hook_text") or fields.get("hook") or fields.get("title") or "")[:50]
+
+        hook_text = (fields.get("hook_text") or fields.get("hook") or fields.get("title") or "")[
+            :50
+        ]
         success_platforms = [p for p, s in platform_status.items() if s == "PUBLISHED"]
         terminal_failed = _terminal_failed_platforms(platform_status)
         if any_success and terminal_failed:
             # Some platforms succeeded, but others are PERMANENTLY failed (won't auto-retry).
             # Surface to the dashboard so the user knows publishing was partial.
             failed_summary = ", ".join(
-                f"{p}({d.get('error_class','?')})" for p, d in terminal_failed.items()
+                f"{p}({d.get('error_class', '?')})" for p, d in terminal_failed.items()
             )
             push_event(
                 "publish_partial",
@@ -943,7 +1027,9 @@ def run_publish(
 
             fb_store = PendingFeedbackStore(backlog_client)
             for plat, pstatus in platform_status.items():
-                if pstatus == "PUBLISHED" or (isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"):
+                if pstatus == "PUBLISHED" or (
+                    isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"
+                ):
                     # Find the post_id from the publish results
                     post_id_for_plat = ""
                     for future in futures:
@@ -960,6 +1046,7 @@ def run_publish(
                     try:
                         from genlab_core.learning.hook_features import build_feature_vector
                         from genlab_core.learning.linucb import build_content_context
+
                         hook_txt = fields.get("hook", "")
                         hook_feats = build_feature_vector(hook_txt) if hook_txt else {}
                         linucb_ctx = build_content_context(fields, niche_id).tolist()
@@ -973,9 +1060,7 @@ def run_publish(
                         # commit 84b7801).
                         hook_style = fields.get("hook_style", "")
                         if hook_style:
-                            bandit_ctx["extra_arms"] = [
-                                f"style:{niche_id}:{hook_style}"
-                            ]
+                            bandit_ctx["extra_arms"] = [f"style:{niche_id}:{hook_style}"]
                     except Exception as ctx_exc:
                         logger.debug("[publish] bandit_context build failed: %s", ctx_exc)
 
@@ -1000,7 +1085,9 @@ def run_publish(
     try:
         (datetime.now(UTC) - timedelta(days=7)).isoformat()
         published_bps = backlog_client.get_blueprints_by_status(
-            "PUBLISHED", niche_id=niche_id, max_records=50,
+            "PUBLISHED",
+            niche_id=niche_id,
+            max_records=50,
         )
         for bp in published_bps:
             fields = bp.get("fields", bp)
@@ -1051,8 +1138,12 @@ def run_publish(
                 logger.info("[publish] Skipping retry for %s — media files deleted", bp["id"][:8])
                 continue
 
-            logger.info("[publish] Retrying %d failed platform(s) for blueprint %s: %s",
-                        len(retry_platforms), bp["id"][:8], retry_platforms)
+            logger.info(
+                "[publish] Retrying %d failed platform(s) for blueprint %s: %s",
+                len(retry_platforms),
+                bp["id"][:8],
+                retry_platforms,
+            )
 
             # Retry each failed platform with its own payload
             try:
@@ -1071,20 +1162,35 @@ def run_publish(
 
                         if result.success:
                             pps[plat] = "PUBLISHED"
-                            logger.info("[publish] Retry SUCCESS: %s/%s post_id=%s", niche_id, plat, result.post_id)
+                            logger.info(
+                                "[publish] Retry SUCCESS: %s/%s post_id=%s",
+                                niche_id,
+                                plat,
+                                result.post_id,
+                            )
                         else:
                             ec = classify(result.error, plat)
                             prev = pps[plat] if isinstance(pps[plat], dict) else {}
-                            attempts = (prev.get("attempts", 0) if isinstance(prev, dict) else 0) + 1
+                            attempts = (
+                                prev.get("attempts", 0) if isinstance(prev, dict) else 0
+                            ) + 1
                             delay = retry_delay_seconds(ec, attempts)
                             pps[plat] = {
                                 "status": "FAILED",
                                 "attempts": attempts,
                                 "last_error": result.error[:200],
                                 "error_class": ec,
-                                "next_retry_after": (datetime.now(UTC) + timedelta(seconds=delay)).isoformat(),
+                                "next_retry_after": (
+                                    datetime.now(UTC) + timedelta(seconds=delay)
+                                ).isoformat(),
                             }
-                            logger.warning("[publish] Retry FAILED: %s/%s (%s): %s", niche_id, plat, ec, result.error[:100])
+                            logger.warning(
+                                "[publish] Retry FAILED: %s/%s (%s): %s",
+                                niche_id,
+                                plat,
+                                ec,
+                                result.error[:100],
+                            )
 
                         # Record to analytics
                         record_publish(
@@ -1100,9 +1206,12 @@ def run_publish(
                         logger.warning("[publish] Retry exception for %s/%s: %s", niche_id, plat, e)
 
                 # Update platform_publish_status
-                backlog_client.blueprints.update(record_id, {
-                    "platform_publish_status": json.dumps(pps),
-                })
+                backlog_client.blueprints.update(
+                    record_id,
+                    {
+                        "platform_publish_status": json.dumps(pps),
+                    },
+                )
 
                 # If any platforms remain terminally failed after retries, surface
                 # to the dashboard. Without this, partial-publish failures are
@@ -1111,17 +1220,21 @@ def run_publish(
                 if terminal_failed:
                     try:
                         from genlab_core.observability.dashboard_events import push_event
+
                         hook_text = (
-                            fields.get("hook_text") or fields.get("hook")
-                            or fields.get("title") or ""
+                            fields.get("hook_text")
+                            or fields.get("hook")
+                            or fields.get("title")
+                            or ""
                         )[:50]
                         ok_plats = [
-                            p for p, s in pps.items()
+                            p
+                            for p, s in pps.items()
                             if s == "PUBLISHED"
                             or (isinstance(s, dict) and s.get("status") == "PUBLISHED")
                         ]
                         failed_summary = ", ".join(
-                            f"{p}({d.get('error_class','?')},{d.get('attempts','?')}x)"
+                            f"{p}({d.get('error_class', '?')},{d.get('attempts', '?')}x)"
                             for p, d in terminal_failed.items()
                         )
                         push_event(
@@ -1135,7 +1248,9 @@ def run_publish(
                     except Exception:
                         pass  # non-fatal
             except Exception as e:
-                logger.warning("[publish] Retry processing failed for blueprint %s: %s", bp["id"][:8], e)
+                logger.warning(
+                    "[publish] Retry processing failed for blueprint %s: %s", bp["id"][:8], e
+                )
 
     except Exception as e:
         logger.debug("[publish] Retry pass failed: %s", e)
@@ -1171,13 +1286,18 @@ def main() -> int:
     )
 
     from dotenv import load_dotenv
+
     load_dotenv(override=True)
 
     from genlab_core.http.backlog_client import BacklogClient
     from genlab_core.publishing.daily_cap import DailyCapEnforcer
 
     enabled = args.platforms or [
-        "instagram", "youtube", "facebook", "twitter", "threads",
+        "instagram",
+        "youtube",
+        "facebook",
+        "twitter",
+        "threads",
     ]
 
     niches = (

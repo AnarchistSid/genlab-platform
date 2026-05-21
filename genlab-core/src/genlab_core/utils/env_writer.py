@@ -11,6 +11,7 @@ Rules:
 - Quotes values that contain whitespace or special chars.
 - Never logs the value itself — tokens must not leak into logs.
 """
+
 from __future__ import annotations
 
 import logging
@@ -60,11 +61,7 @@ def update_env_file(updates: dict[str, str], env_path: str | os.PathLike | None 
     env_path = Path(env_path)
 
     try:
-        existing_lines = (
-            env_path.read_text().splitlines()
-            if env_path.exists()
-            else []
-        )
+        existing_lines = env_path.read_text().splitlines() if env_path.exists() else []
     except OSError as exc:
         logger.error("[env_writer] cannot read %s: %s", env_path, exc)
         return False
@@ -94,7 +91,9 @@ def update_env_file(updates: dict[str, str], env_path: str | os.PathLike | None 
     # Atomic replace: write temp file in same dir, rename over original
     try:
         fd, tmp_path = tempfile.mkstemp(
-            prefix=".env.", dir=str(env_path.parent), text=True,
+            prefix=".env.",
+            dir=str(env_path.parent),
+            text=True,
         )
         try:
             with os.fdopen(fd, "w") as fh:
@@ -121,6 +120,7 @@ def update_env_file(updates: dict[str, str], env_path: str | os.PathLike | None 
 
     logger.info(
         "[env_writer] updated %d key(s) in %s",
-        len(updates), env_path,
+        len(updates),
+        env_path,
     )
     return True

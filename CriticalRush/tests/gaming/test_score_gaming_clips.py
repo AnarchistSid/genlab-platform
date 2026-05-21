@@ -36,6 +36,7 @@ NICHE_ROOT = Path(__file__).resolve().parent.parent.parent / "niches" / "gaming"
 
 # ---- Fixtures ----
 
+
 @pytest.fixture
 def scoring_config():
     """Minimal scoring config matching scoring_weights.yaml structure."""
@@ -145,11 +146,17 @@ def sample_clips(sample_clip):
 
 # ---- Test: Individual dimension scores ----
 
+
 class TestDimensionScores:
     """All 7 dimensions must return values between 0 and 1."""
 
     def test_virality_returns_0_to_1(self, scoring_config):
-        clip = {"view_count": 5000, "like_count": 100, "comment_count": 20, "source_platform": "twitch"}
+        clip = {
+            "view_count": 5000,
+            "like_count": 100,
+            "comment_count": 20,
+            "source_platform": "twitch",
+        }
         score = score_virality(clip, scoring_config)
         assert 0.0 <= score <= 1.0
 
@@ -204,6 +211,7 @@ class TestDimensionScores:
 
     def test_chat_excitement_returns_0_to_1(self):
         from niches.gaming.tools.chat_excitement_scorer import compute_excitement
+
         config = {
             "baseline_message_rate": 5.0,
             "min_messages_for_score": 3,
@@ -226,6 +234,7 @@ class TestDimensionScores:
 
     def test_chat_excitement_missing_data(self):
         from niches.gaming.tools.chat_excitement_scorer import compute_excitement
+
         assert compute_excitement(None, {}, {}) == 0.0
 
     def test_highlight_detection_fallback(self):
@@ -237,6 +246,7 @@ class TestDimensionScores:
 
 
 # ---- Test: Publisher tier multiplier ----
+
 
 class TestPublisherTier:
     def test_green_full_score(self, game_registry):
@@ -262,6 +272,7 @@ class TestPublisherTier:
 
 
 # ---- Test: Stage execute (integration) ----
+
 
 class TestScoreGamingClipsStage:
     def _make_stage(self, scoring_config, game_registry):
@@ -330,9 +341,13 @@ class TestScoreGamingClipsStage:
         assert len(result["stories"]) == 1
         scores = result["stories"][0]["scores"]
         expected_dims = [
-            "virality_potential", "entertainment_value", "recency",
-            "source_authority", "production_quality",
-            "chat_excitement", "highlight_detection",
+            "virality_potential",
+            "entertainment_value",
+            "recency",
+            "source_authority",
+            "production_quality",
+            "chat_excitement",
+            "highlight_detection",
         ]
         for dim in expected_dims:
             assert dim in scores, f"Missing dimension: {dim}"
@@ -367,6 +382,7 @@ class TestScoreGamingClipsStage:
 
 # ---- Test: Schema validation ----
 
+
 class TestSchemaValidation:
     def test_output_validates_against_schema(self, scoring_config, game_registry, sample_clip):
         """Scored clip must validate against scored_clip.schema.json."""
@@ -397,6 +413,7 @@ class TestSchemaValidation:
 
 
 # ---- Test: Overwatch preprocessing ----
+
 
 class TestOverwatchPreprocessing:
     def test_vectorized_output_shape(self):
@@ -430,8 +447,8 @@ class TestOverwatchPreprocessing:
         # Create 10x10 image with bright red
         arr = np.zeros((10, 10, 3), dtype=np.uint8)
         arr[:, :, 0] = 220  # R > 200
-        arr[:, :, 1] = 50   # G < 100
-        arr[:, :, 2] = 30   # B < 100
+        arr[:, :, 1] = 50  # G < 100
+        arr[:, :, 2] = 30  # B < 100
         test_image = Image.fromarray(arr, "RGB")
 
         result = scorer._preprocess_overwatch(test_image)
@@ -445,6 +462,7 @@ class TestOverwatchPreprocessing:
 
 
 # ---- Test: Median fallback ----
+
 
 class TestMedianFallback:
     def test_missing_chat_uses_median(self, scoring_config, game_registry):
@@ -475,15 +493,22 @@ class TestMedianFallback:
         }
 
         # Clip with chat data
-        clip_with_chat = {**base, "clip_id": "with_chat", "chat_data": {
-            "fetch_status": "ok",
-            "messages": [
-                {"text": "WOW"}, {"text": "NICE"}, {"text": "AMAZING"},
-                {"text": "POG"}, {"text": "LETS GO"},
-            ],
-            "clip_start_in_vod": 100,
-            "clip_end_in_vod": 130,
-        }}
+        clip_with_chat = {
+            **base,
+            "clip_id": "with_chat",
+            "chat_data": {
+                "fetch_status": "ok",
+                "messages": [
+                    {"text": "WOW"},
+                    {"text": "NICE"},
+                    {"text": "AMAZING"},
+                    {"text": "POG"},
+                    {"text": "LETS GO"},
+                ],
+                "clip_start_in_vod": 100,
+                "clip_end_in_vod": 130,
+            },
+        }
         # Clip without chat data
         clip_no_chat = {**base, "clip_id": "no_chat"}
 

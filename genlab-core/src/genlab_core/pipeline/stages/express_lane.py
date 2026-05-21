@@ -135,14 +135,18 @@ class ExpressLane:
 
         # Sort stories: express first, then by urgency score descending
         level_order = {URGENCY_CRITICAL: 0, URGENCY_HIGH: 1, URGENCY_MEDIUM: 2, URGENCY_LOW: 3}
-        stories.sort(key=lambda s: (
-            level_order.get(s.get("urgency_classification", {}).get("urgency", URGENCY_LOW), 9),
-            -s.get("urgency_classification", {}).get("score", 0),
-        ))
+        stories.sort(
+            key=lambda s: (
+                level_order.get(s.get("urgency_classification", {}).get("urgency", URGENCY_LOW), 9),
+                -s.get("urgency_classification", {}).get("score", 0),
+            )
+        )
 
         logger.info(
             "[ExpressLane] %d stories classified: %s | %d express",
-            len(stories), level_counts, express_count,
+            len(stories),
+            level_counts,
+            express_count,
         )
 
         context.setdefault("run_stats", {})["express_lane"] = {

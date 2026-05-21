@@ -113,9 +113,7 @@ def _load_yaml_overlay(config_path: Path | None = None) -> dict[str, list[str]]:
                 with open(path) as f:
                     data: Any = yaml.safe_load(f)
                 if isinstance(data, dict):
-                    _yaml_overlay = {
-                        k: v for k, v in data.items() if isinstance(v, list)
-                    }
+                    _yaml_overlay = {k: v for k, v in data.items() if isinstance(v, list)}
                     logger.info("[EGRESS] Loaded overlay from %s", path)
                     return _yaml_overlay
             except Exception as e:

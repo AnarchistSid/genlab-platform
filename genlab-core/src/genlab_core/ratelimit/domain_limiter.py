@@ -12,6 +12,7 @@ Usage:
 
 Config-driven via YAML (optional). Falls back to sensible defaults.
 """
+
 from __future__ import annotations
 
 import logging

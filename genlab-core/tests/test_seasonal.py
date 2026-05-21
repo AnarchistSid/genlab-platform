@@ -1,4 +1,5 @@
 """Tests for seasonal product rotation (affiliate_seasonal.yaml + seasonal.py)."""
+
 from __future__ import annotations
 
 from datetime import date

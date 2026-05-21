@@ -50,7 +50,9 @@ if _root_env.is_file():
 NICHE_REQUIREMENTS: dict[str, list[str]] = {
     "ai_creators": [
         # Backlog
-        "azure_tenant_id", "azure_client_id", "azure_client_secret",
+        "azure_tenant_id",
+        "azure_client_id",
+        "azure_client_secret",
         "sharepoint_site_id",
         # LLM
         "anthropic_api_key",
@@ -58,13 +60,18 @@ NICHE_REQUIREMENTS: dict[str, list[str]] = {
         "meta_access_token",
     ],
     "gaming": [
-        "azure_tenant_id", "azure_client_id", "azure_client_secret",
+        "azure_tenant_id",
+        "azure_client_id",
+        "azure_client_secret",
         "sharepoint_site_id",
         "anthropic_api_key",
-        "twitch_client_id", "twitch_client_secret",
+        "twitch_client_id",
+        "twitch_client_secret",
     ],
     "default": [
-        "azure_tenant_id", "azure_client_id", "azure_client_secret",
+        "azure_tenant_id",
+        "azure_client_id",
+        "azure_client_secret",
         "sharepoint_site_id",
         "anthropic_api_key",
     ],
@@ -314,9 +321,7 @@ class Settings(BaseSettings):
         Logs a warning per missing field but never raises.
         Returns the list of missing field names (empty = all good).
         """
-        requirements = NICHE_REQUIREMENTS.get(
-            niche_id, NICHE_REQUIREMENTS["default"]
-        )
+        requirements = NICHE_REQUIREMENTS.get(niche_id, NICHE_REQUIREMENTS["default"])
         missing: list[str] = []
         for field_name in requirements:
             value = getattr(self, field_name, None)

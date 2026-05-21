@@ -6,6 +6,7 @@ Threads: poll every 10 minutes (Threads API rate limit: 200 req/hr).
 
 Moved from genlab_core.platform.engagement_poller in Sprint 24 (2026-03-10).
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,9 +14,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Polling intervals in seconds
-YOUTUBE_POLL_INTERVAL = 1800   # 30 minutes (saves ~2,400 quota units/day)
-TWITTER_POLL_INTERVAL = 900    # 15 minutes
-THREADS_POLL_INTERVAL = 600    # 10 minutes
+YOUTUBE_POLL_INTERVAL = 1800  # 30 minutes (saves ~2,400 quota units/day)
+TWITTER_POLL_INTERVAL = 900  # 15 minutes
+THREADS_POLL_INTERVAL = 600  # 10 minutes
 
 
 async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
@@ -92,7 +93,9 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
         if playlist_resp.status_code == 403:
             error_body = playlist_resp.json().get("error", {}).get("message", "")
             if "quota" in error_body.lower():
-                logger.warning("[POLLER] YouTube quota exceeded for %s — skipping until reset", niche_id)
+                logger.warning(
+                    "[POLLER] YouTube quota exceeded for %s — skipping until reset", niche_id
+                )
                 return []
             logger.warning("[POLLER] YouTube 403 for %s: %s", niche_id, error_body[:100])
             return []
@@ -144,21 +147,27 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                 if author_id == channel_id:
                     skipped_self += 1
                     continue
-                comments.append({
-                    "platform": "youtube",
-                    "post_id": video_id,
-                    "comment_id": item.get("id", ""),
-                    "author_id": author_id,
-                    "author_name": snippet.get("authorDisplayName", ""),
-                    "text": snippet.get("textOriginal", ""),
-                    "is_question": "?" in snippet.get("textOriginal", ""),
-                })
+                comments.append(
+                    {
+                        "platform": "youtube",
+                        "post_id": video_id,
+                        "comment_id": item.get("id", ""),
+                        "author_id": author_id,
+                        "author_name": snippet.get("authorDisplayName", ""),
+                        "text": snippet.get("textOriginal", ""),
+                        "is_question": "?" in snippet.get("textOriginal", ""),
+                    }
+                )
 
         if skipped_self:
-            logger.debug("[POLLER] YouTube: skipped %d self-comments for %s", skipped_self, niche_id)
+            logger.debug(
+                "[POLLER] YouTube: skipped %d self-comments for %s", skipped_self, niche_id
+            )
         logger.info(
             "[POLLER] YouTube: fetched %d comments across %d videos for %s",
-            len(comments), len(video_ids), niche_id,
+            len(comments),
+            len(video_ids),
+            niche_id,
         )
         return comments
 
@@ -214,7 +223,8 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                     "OAuth tokens may be expired or revoked. Regenerate at "
                     "developer.twitter.com and update X_ACCESS_TOKEN / X_ACCESS_SECRET "
                     "in .env. Suppressing further 401 logs after 5 consecutive failures.",
-                    niche_id, _count,
+                    niche_id,
+                    _count,
                 )
             return []
         except tweepy.Forbidden:
@@ -238,18 +248,22 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                 if str(tweet.author_id) == user_id:
                     skipped_self += 1
                     continue
-                mentions.append({
-                    "platform": "x_twitter",
-                    "post_id": str(tweet.id),
-                    "comment_id": str(tweet.id),
-                    "author_id": str(tweet.author_id),
-                    "author_name": author_map.get(tweet.author_id, ""),
-                    "text": tweet.text,
-                    "is_question": "?" in tweet.text,
-                })
+                mentions.append(
+                    {
+                        "platform": "x_twitter",
+                        "post_id": str(tweet.id),
+                        "comment_id": str(tweet.id),
+                        "author_id": str(tweet.author_id),
+                        "author_name": author_map.get(tweet.author_id, ""),
+                        "text": tweet.text,
+                        "is_question": "?" in tweet.text,
+                    }
+                )
 
         if skipped_self:
-            logger.debug("[POLLER] X/Twitter: skipped %d self-mentions for %s", skipped_self, niche_id)
+            logger.debug(
+                "[POLLER] X/Twitter: skipped %d self-mentions for %s", skipped_self, niche_id
+            )
         logger.info("[POLLER] X/Twitter: fetched %d mentions for %s", len(mentions), niche_id)
         return mentions
 
@@ -271,6 +285,7 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
     logger.debug("[POLLER] Threads poll for %s (user=%s)", niche_id, user_id)
 
     from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+
     token, resolved_user_id = resolve_threads_credentials(niche_id)
     if not token:
         logger.warning("[POLLER] Threads credentials not set for %s — skipping poll", niche_id)
@@ -330,7 +345,8 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
             if replies_resp.status_code != 200:
                 logger.debug(
                     "[POLLER] Threads: replies fetch failed for %s (HTTP %d)",
-                    media_id, replies_resp.status_code,
+                    media_id,
+                    replies_resp.status_code,
                 )
                 continue
 
@@ -340,15 +356,17 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
                 if own_username and reply_username == own_username:
                     skipped_self += 1
                     continue
-                comments.append({
-                    "platform": "threads",
-                    "post_id": media_id,
-                    "comment_id": reply.get("id", ""),
-                    "author_id": reply_username,
-                    "author_name": reply_username,
-                    "text": reply.get("text", ""),
-                    "is_question": "?" in reply.get("text", ""),
-                })
+                comments.append(
+                    {
+                        "platform": "threads",
+                        "post_id": media_id,
+                        "comment_id": reply.get("id", ""),
+                        "author_id": reply_username,
+                        "author_name": reply_username,
+                        "text": reply.get("text", ""),
+                        "is_question": "?" in reply.get("text", ""),
+                    }
+                )
 
         if skipped_self:
             logger.debug("[POLLER] Threads: skipped %d self-replies for %s", skipped_self, niche_id)
@@ -436,18 +454,22 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
                     skipped_self += 1
                     continue
 
-                comments.append({
-                    "platform": "facebook",
-                    "post_id": fb_post_id,
-                    "comment_id": comment.get("id", ""),
-                    "author_id": author_id,
-                    "author_name": author.get("name", ""),
-                    "text": comment.get("message", ""),
-                    "is_question": "?" in comment.get("message", ""),
-                })
+                comments.append(
+                    {
+                        "platform": "facebook",
+                        "post_id": fb_post_id,
+                        "comment_id": comment.get("id", ""),
+                        "author_id": author_id,
+                        "author_name": author.get("name", ""),
+                        "text": comment.get("message", ""),
+                        "is_question": "?" in comment.get("message", ""),
+                    }
+                )
 
         if skipped_self:
-            logger.debug("[POLLER] Facebook: skipped %d self-comments for %s", skipped_self, niche_id)
+            logger.debug(
+                "[POLLER] Facebook: skipped %d self-comments for %s", skipped_self, niche_id
+            )
         logger.info("[POLLER] Facebook: fetched %d comments for %s", len(comments), niche_id)
         return comments
 

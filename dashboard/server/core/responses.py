@@ -2,6 +2,7 @@
 
 All dashboard endpoints should use these instead of raw jsonify().
 """
+
 from __future__ import annotations
 
 from flask import jsonify
@@ -12,12 +13,14 @@ def api_success(data=None, message="OK", code=200):
 
 
 def api_error(error=None, message="Request failed", code=400):
-    return jsonify({
-        "status": "error",
-        "code": code,
-        "error": str(error) if error else None,
-        "message": message,
-    }), code
+    return jsonify(
+        {
+            "status": "error",
+            "code": code,
+            "error": str(error) if error else None,
+            "message": message,
+        }
+    ), code
 
 
 def api_not_found(message="Resource not found"):

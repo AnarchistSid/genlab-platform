@@ -3,6 +3,7 @@
 Uses a module-level singleton for database connection pooling instead of
 creating a new PostgresBackend per click.
 """
+
 import logging
 import os
 import threading
@@ -25,6 +26,7 @@ def _get_pg():
         if not dsn:
             return None
         from genlab_core.storage.postgres import PostgresBackend
+
         _pg_instance = PostgresBackend(dsn=dsn)
         return _pg_instance
 
@@ -46,17 +48,20 @@ def log_click(
         if pg is None:
             logger.warning("[LinkTracker] DATABASE_URL not set")
             return
-        pg.create("affiliate_clicks", {
-            "niche_id": niche_id,
-            "product_id": product_id,
-            "network": network,
-            "affiliate_url": affiliate_url,
-            "referrer": referrer,
-            "country": country,
-            "platform_source": platform_source,
-            "blueprint_id": blueprint_id,
-            "channel_id": channel_id,
-        })
+        pg.create(
+            "affiliate_clicks",
+            {
+                "niche_id": niche_id,
+                "product_id": product_id,
+                "network": network,
+                "affiliate_url": affiliate_url,
+                "referrer": referrer,
+                "country": country,
+                "platform_source": platform_source,
+                "blueprint_id": blueprint_id,
+                "channel_id": channel_id,
+            },
+        )
         logger.info("[LinkTracker] Click logged: %s/%s via %s", niche_id, product_id, network)
     except Exception as e:
         logger.warning("[LinkTracker] Failed to log click: %s", e)

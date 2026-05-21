@@ -84,12 +84,17 @@ class PerformanceLearner:
             logger.warning(
                 "[PerformanceLearner] %s: bandit posteriors not discriminating "
                 "(spread=%.4f, n_obs=%d) — check reward signal health",
-                niche_id, mean_spread, total_linucb_obs,
+                niche_id,
+                mean_spread,
+                total_linucb_obs,
             )
 
         logger.info(
             "[PerformanceLearner] %s snapshot: %d arms, %d linucb_obs, mean_spread=%.4f",
-            niche_id, len(arms_extended), total_linucb_obs, mean_spread,
+            niche_id,
+            len(arms_extended),
+            total_linucb_obs,
+            mean_spread,
         )
 
         context.setdefault("run_stats", {})["learning"] = learning_snapshot
@@ -100,12 +105,11 @@ class PerformanceLearner:
         """Get a GraphTableProxy for the bandit arms list via BacklogClient."""
         try:
             from genlab_core.http.backlog_client import BacklogClient
+
             client = BacklogClient()
             proxy = client.bandit_arms
             if proxy is None:
-                logger.error(
-                    "[PerformanceLearner] BacklogClient has no bandit_arms proxy"
-                )
+                logger.error("[PerformanceLearner] BacklogClient has no bandit_arms proxy")
                 return None
             return proxy
         except Exception:
@@ -144,4 +148,3 @@ class PerformanceLearner:
             arm_ids.append(f"slot:{time_slot}")
 
         return arm_ids
-

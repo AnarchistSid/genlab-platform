@@ -138,9 +138,7 @@ class BaseContentResearchStrategy(ContentResearchStrategy):
         Override this in subclasses to add niche-specific counters
         (e.g. ``espn_count``, ``tmdb_count``, ``emerging_count``).
         """
-        rss_count = sum(
-            1 for s in stories if (s.get("source") or "").startswith("rss")
-        )
+        rss_count = sum(1 for s in stories if (s.get("source") or "").startswith("rss"))
         return {
             "rss_count": rss_count,
             "total_fetched": raw_count,
@@ -187,9 +185,7 @@ class BaseContentResearchStrategy(ContentResearchStrategy):
         existing = context.get("stories", [])
         context["stories"] = existing + stories
 
-        stats = self._build_fetch_stats(
-            stories, raw_count, dedup_result, len(context["stories"])
-        )
+        stats = self._build_fetch_stats(stories, raw_count, dedup_result, len(context["stories"]))
         context.setdefault("run_stats", {})["fetch"] = stats
 
         logger.info(

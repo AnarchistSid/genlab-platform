@@ -15,6 +15,7 @@ from genlab_core.pipeline.stage_runner import (
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 class FakeStage:
     """Minimal stage that records calls."""
 
@@ -121,9 +122,7 @@ class TestSandboxAwareStageRunner:
         ctx = {}
         pipeline_ctx = MagicMock()
 
-        with patch(
-            "genlab_core.pipeline.stage_runner.SandboxAwareStageRunner.run_stage"
-        ):
+        with patch("genlab_core.pipeline.stage_runner.SandboxAwareStageRunner.run_stage"):
             # Instead, test the actual fallback path
             pass
 
@@ -188,12 +187,15 @@ class TestSandboxAwareStageRunner:
         pipeline_ctx.record_error.assert_called_once()
 
     def test_egress_allow_passed_to_ffmpeg_runner(self):
-        with patch(
-            "genlab_core.media.sandbox_runner.sandbox_rendering_enabled",
-            return_value=True,
-        ), patch(
-            "genlab_core.media.sandbox_runner.SandboxedFFmpegRunner",
-        ) as MockRunner:
+        with (
+            patch(
+                "genlab_core.media.sandbox_runner.sandbox_rendering_enabled",
+                return_value=True,
+            ),
+            patch(
+                "genlab_core.media.sandbox_runner.SandboxedFFmpegRunner",
+            ) as MockRunner,
+        ):
             mock_instance = MagicMock()
             mock_instance.__enter__ = MagicMock(return_value=mock_instance)
             mock_instance.__exit__ = MagicMock(return_value=False)
@@ -235,18 +237,22 @@ class TestStageRunnerFactory:
         assert isinstance(runner, SandboxAwareStageRunner)
 
     def test_sandbox_dict_with_egress(self):
-        runner = self.factory.get_runner({
-            "class": "some.Stage",
-            "sandbox": {"egress": ["api.twitch.tv", "store.steampowered.com"]},
-        })
+        runner = self.factory.get_runner(
+            {
+                "class": "some.Stage",
+                "sandbox": {"egress": ["api.twitch.tv", "store.steampowered.com"]},
+            }
+        )
         assert isinstance(runner, SandboxAwareStageRunner)
         assert runner._egress_allow == ["api.twitch.tv", "store.steampowered.com"]
 
     def test_sandbox_dict_empty_egress(self):
-        runner = self.factory.get_runner({
-            "class": "some.Stage",
-            "sandbox": {"egress": []},
-        })
+        runner = self.factory.get_runner(
+            {
+                "class": "some.Stage",
+                "sandbox": {"egress": []},
+            }
+        )
         assert isinstance(runner, SandboxAwareStageRunner)
 
     def test_local_runner_reused(self):
@@ -315,6 +321,7 @@ class TestRunParallel:
         class BarrierStage:
             def __init__(self, name):
                 self._name = name
+
             def execute(self, context):
                 barrier.wait()  # blocks until both threads arrive
                 reached.append(self._name)
@@ -420,6 +427,7 @@ class TestRunParallel:
         class SleepStage:
             def __init__(self, duration: float):
                 self._duration = duration
+
             def execute(self, context):
                 _t.sleep(self._duration)
                 return context

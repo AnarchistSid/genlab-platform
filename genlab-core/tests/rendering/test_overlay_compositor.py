@@ -64,8 +64,15 @@ class TestCompositeOverlay:
         mock_result.returncode = 1
         mock_result.stderr = "ffmpeg error"
 
-        with patch("genlab_core.rendering.overlay_compositor.shutil.which", return_value="/usr/bin/ffmpeg"), \
-             patch("genlab_core.rendering.overlay_compositor.subprocess.run", return_value=mock_result):
+        with (
+            patch(
+                "genlab_core.rendering.overlay_compositor.shutil.which",
+                return_value="/usr/bin/ffmpeg",
+            ),
+            patch(
+                "genlab_core.rendering.overlay_compositor.subprocess.run", return_value=mock_result
+            ),
+        ):
             result = composite_overlay(input_vid, output_vid, spec)
 
         assert result == input_vid
@@ -80,8 +87,15 @@ class TestCompositeOverlay:
         mock_result = MagicMock()
         mock_result.returncode = 0
 
-        with patch("genlab_core.rendering.overlay_compositor.shutil.which", return_value="/usr/bin/ffmpeg"), \
-             patch("genlab_core.rendering.overlay_compositor.subprocess.run", return_value=mock_result):
+        with (
+            patch(
+                "genlab_core.rendering.overlay_compositor.shutil.which",
+                return_value="/usr/bin/ffmpeg",
+            ),
+            patch(
+                "genlab_core.rendering.overlay_compositor.subprocess.run", return_value=mock_result
+            ),
+        ):
             result = composite_overlay(input_vid, output_vid, spec)
 
         assert result == output_vid
@@ -100,8 +114,15 @@ class TestCompositeOverlay:
             r.returncode = 0
             return r
 
-        with patch("genlab_core.rendering.overlay_compositor.shutil.which", return_value="/usr/bin/ffmpeg"), \
-             patch("genlab_core.rendering.overlay_compositor.subprocess.run", side_effect=capture_run):
+        with (
+            patch(
+                "genlab_core.rendering.overlay_compositor.shutil.which",
+                return_value="/usr/bin/ffmpeg",
+            ),
+            patch(
+                "genlab_core.rendering.overlay_compositor.subprocess.run", side_effect=capture_run
+            ),
+        ):
             composite_overlay(input_vid, output_vid, spec)
 
         assert "ffmpeg" in captured_cmd[0]

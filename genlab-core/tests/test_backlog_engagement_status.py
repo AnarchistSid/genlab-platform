@@ -3,6 +3,7 @@
 Validates status updates on PendingEngagement items without requiring
 Azure credentials by mocking the storage backend layer.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -17,13 +18,16 @@ def _mock_heavy_imports():
     mock_graph_cls = MagicMock()
 
     with (
-        patch.dict("sys.modules", {
-            "azure": MagicMock(),
-            "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
-            "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
-            "kiota_abstractions": MagicMock(),
-            "kiota_abstractions.api_error": MagicMock(),
-        }),
+        patch.dict(
+            "sys.modules",
+            {
+                "azure": MagicMock(),
+                "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
+                "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
+                "kiota_abstractions": MagicMock(),
+                "kiota_abstractions.api_error": MagicMock(),
+            },
+        ),
         patch("genlab_core.http.backlog_client.GraphTableProxy") as mock_proxy_cls,
     ):
         yield mock_proxy_cls
@@ -70,6 +74,7 @@ def _make_client(mock_config):
     mock_settings = _make_settings()
     with patch("genlab_core.settings.settings", mock_settings):
         from genlab_core.http.backlog_client import BacklogClient
+
         return BacklogClient(config_path=mock_config)
 
 
@@ -88,9 +93,7 @@ def _make_client_with_backend(mock_config):
 class TestUpdateEngagementStatus:
     def test_update_engagement_status_replied(self, mock_config):
         client, mock_proxy = _make_client_with_backend(mock_config)
-        client.update_engagement_status(
-            "item-42", "replied", reply_text="Thanks for watching!"
-        )
+        client.update_engagement_status("item-42", "replied", reply_text="Thanks for watching!")
 
         mock_proxy.update.assert_called_once()
         call_args = mock_proxy.update.call_args[0]
@@ -105,9 +108,7 @@ class TestUpdateEngagementStatus:
 
     def test_update_engagement_status_failed_with_error(self, mock_config):
         client, mock_proxy = _make_client_with_backend(mock_config)
-        client.update_engagement_status(
-            "item-99", "failed", error_msg="Rate limit exceeded"
-        )
+        client.update_engagement_status("item-99", "failed", error_msg="Rate limit exceeded")
 
         call_args = mock_proxy.update.call_args[0]
         fields = call_args[1]
@@ -117,9 +118,7 @@ class TestUpdateEngagementStatus:
     def test_update_engagement_status_truncates_reply(self, mock_config):
         client, mock_proxy = _make_client_with_backend(mock_config)
         long_reply = "x" * 5000
-        client.update_engagement_status(
-            "item-1", "replied", reply_text=long_reply
-        )
+        client.update_engagement_status("item-1", "replied", reply_text=long_reply)
 
         call_args = mock_proxy.update.call_args[0]
         fields = call_args[1]
@@ -128,9 +127,7 @@ class TestUpdateEngagementStatus:
     def test_update_engagement_status_truncates_error(self, mock_config):
         client, mock_proxy = _make_client_with_backend(mock_config)
         long_error = "e" * 1000
-        client.update_engagement_status(
-            "item-2", "failed", error_msg=long_error
-        )
+        client.update_engagement_status("item-2", "failed", error_msg=long_error)
 
         call_args = mock_proxy.update.call_args[0]
         fields = call_args[1]

@@ -25,6 +25,7 @@ Append-only by intent — there's no UPDATE/DELETE path. Operators who
 need to roll back a YAML change do so by editing the file directly;
 the history row stays for audit.
 """
+
 from alembic import op
 
 revision = "j0e1f2g3h4i5"

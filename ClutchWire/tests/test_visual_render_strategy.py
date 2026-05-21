@@ -114,10 +114,12 @@ class TestFrameCompositorWiring:
         mock_compositor.compose.return_value = str(tmp_path / "composed.mp4")
 
         ctx = {
-            "stories": [_make_story(
-                story_id="s1",
-                content={"hook": "Lakers dominate in 4th quarter"},
-            )],
+            "stories": [
+                _make_story(
+                    story_id="s1",
+                    content={"hook": "Lakers dominate in 4th quarter"},
+                )
+            ],
             "clip_index": {"clips": {"s1": {"success": True, "clip_path": str(clip_file)}}},
             "run_dir": str(run_dir),
         }
@@ -147,7 +149,9 @@ class TestFrameCompositorWiring:
         }
 
         with patch("cw_strategies.visual_render.FrameCompositor") as MockFC:
-            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError("ffmpeg crashed")
+            MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError(
+                "ffmpeg crashed"
+            )
             result = strategy.execute(ctx)
 
         media = result["stories"][0]["media"]
@@ -164,10 +168,12 @@ class TestFrameCompositorWiring:
         mock_compositor.compose.return_value = "/composed.mp4"
 
         ctx = {
-            "stories": [_make_story(
-                story_id="s1",
-                content={"hook": "This is the hook"},
-            )],
+            "stories": [
+                _make_story(
+                    story_id="s1",
+                    content={"hook": "This is the hook"},
+                )
+            ],
             "clip_index": {"clips": {"s1": {"success": True, "clip_path": str(clip_file)}}},
             "run_dir": str(run_dir),
         }

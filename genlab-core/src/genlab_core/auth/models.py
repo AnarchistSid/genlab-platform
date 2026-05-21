@@ -1,4 +1,5 @@
 """Team, permission, and niche access models."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

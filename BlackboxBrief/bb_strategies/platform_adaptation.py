@@ -7,6 +7,7 @@ Previous version (61 lines) shelled out to adapt_for_platforms.py via
 subprocess, which is preserved at execution/adapt_for_platforms.py
 but no longer called from the pipeline.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -39,12 +39,10 @@ class TestBuiltinPolicies:
 class TestYamlOverlay:
     def test_overlay_adds_domains(self, tmp_path: Path):
         yaml_file = tmp_path / "egress_policies.yaml"
-        yaml_file.write_text(
-            "render:\n  - custom.example.com\n"
-            "fetch_gaming:\n  - extra.api.com\n"
-        )
+        yaml_file.write_text("render:\n  - custom.example.com\nfetch_gaming:\n  - extra.api.com\n")
         # Reset module cache
         import genlab_core.media.egress_policies as mod
+
         mod._yaml_overlay = None
 
         allowed = get_egress_allow("render", config_path=yaml_file)
@@ -63,6 +61,7 @@ class TestYamlOverlay:
             "publish:\n  - graph.facebook.com\n"  # already in builtin
         )
         import genlab_core.media.egress_policies as mod
+
         mod._yaml_overlay = None
 
         allowed = get_egress_allow("publish", config_path=yaml_file)
@@ -73,6 +72,7 @@ class TestYamlOverlay:
     def test_missing_yaml_is_fine(self, tmp_path: Path):
         missing = tmp_path / "nonexistent.yaml"
         import genlab_core.media.egress_policies as mod
+
         mod._yaml_overlay = None
 
         allowed = get_egress_allow("render", config_path=missing)

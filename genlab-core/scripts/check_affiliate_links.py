@@ -13,6 +13,7 @@ Usage:
   python genlab-core/scripts/check_affiliate_links.py
   python genlab-core/scripts/check_affiliate_links.py --verbose
 """
+
 from __future__ import annotations
 
 import argparse
@@ -157,7 +158,8 @@ def auto_disable_broken_products(catalog: dict, broken: list[dict]) -> int:
             # Count total real networks vs broken networks
             networks = product.get("networks", {})
             real_networks = {
-                n for n, d in networks.items()
+                n
+                for n, d in networks.items()
                 if d.get("url") and "example.com" not in d.get("url", "")
             }
             broken_networks = broken_lookup[key]
@@ -223,7 +225,9 @@ def main() -> None:
                 )
         else:
             broken.append({**entry, **result})
-            status_label = f"HTTP {result['status']}" if result["status"] else result.get("error", "unknown")
+            status_label = (
+                f"HTTP {result['status']}" if result["status"] else result.get("error", "unknown")
+            )
             print(
                 f"  [{i:>2}/{total}] BROKEN {status_label:<10} "
                 f"{entry['niche']}/{entry['network']}  {entry['product']}"

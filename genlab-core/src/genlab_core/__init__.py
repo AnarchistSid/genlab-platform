@@ -4,6 +4,7 @@ genlab-core — Shared infrastructure for all Gen Lab content agents.
 All submodules are lazily loaded to avoid importing heavy dependencies
 until they are actually needed.
 """
+
 from __future__ import annotations
 
 import importlib

@@ -4,6 +4,7 @@ These tests require a running PostgreSQL with the genlab database and
 the stories + assets tables (created by Alembic migration a1b2c3d4e5f6).
 Set POSTGRES_PASSWORD env var to enable these tests.
 """
+
 from __future__ import annotations
 
 import os
@@ -42,12 +43,8 @@ def pg_backend():
         pool = backend._get_pool()
         async with pool.acquire() as conn:
             for tbl in _ALL_TABLES:
-                await conn.execute(
-                    f"DELETE FROM {tbl} WHERE niche_id = $1", _TEST_NICHE
-                )
-                await conn.execute(
-                    f"DELETE FROM {tbl} WHERE niche_id LIKE 'rls_test_%'"
-                )
+                await conn.execute(f"DELETE FROM {tbl} WHERE niche_id = $1", _TEST_NICHE)
+                await conn.execute(f"DELETE FROM {tbl} WHERE niche_id LIKE 'rls_test_%'")
         await pool.close()
 
     backend._ensure_pool()
@@ -57,21 +54,25 @@ def pg_backend():
 
 # ── Stories CRUD ─────────────────────────────────────────────────────
 
+
 class TestStoriesCRUD:
     """Test CRUD on the stories table."""
 
     def test_create_and_get(self, pg_backend):
         sid = f"story_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("stories", {
-            "niche_id": _TEST_NICHE,
-            "story_id": sid,
-            "title": "AI breakthrough",
-            "url": "https://example.com/story",
-            "source_name": "TechCrunch",
-            "source_type": "rss",
-            "status": "NEW",
-            "score": 0.85,
-        })
+        record_id = pg_backend.create(
+            "stories",
+            {
+                "niche_id": _TEST_NICHE,
+                "story_id": sid,
+                "title": "AI breakthrough",
+                "url": "https://example.com/story",
+                "source_name": "TechCrunch",
+                "source_type": "rss",
+                "status": "NEW",
+                "score": 0.85,
+            },
+        )
         uuid.UUID(record_id)
 
         record = pg_backend.get("stories", record_id)
@@ -82,17 +83,24 @@ class TestStoriesCRUD:
 
     def test_update(self, pg_backend):
         sid = f"story_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("stories", {
-            "niche_id": _TEST_NICHE,
-            "story_id": sid,
-            "status": "NEW",
-        })
+        record_id = pg_backend.create(
+            "stories",
+            {
+                "niche_id": _TEST_NICHE,
+                "story_id": sid,
+                "status": "NEW",
+            },
+        )
 
-        pg_backend.update("stories", record_id, {
-            "status": "USED",
-            "video_id": "dQw4w9WgXcQ",
-            "video_url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
-        })
+        pg_backend.update(
+            "stories",
+            record_id,
+            {
+                "status": "USED",
+                "video_id": "dQw4w9WgXcQ",
+                "video_url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+            },
+        )
 
         record = pg_backend.get("stories", record_id)
         assert record["fields"]["status"] == "USED"
@@ -100,21 +108,27 @@ class TestStoriesCRUD:
 
     def test_delete(self, pg_backend):
         sid = f"story_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("stories", {
-            "niche_id": _TEST_NICHE,
-            "story_id": sid,
-            "status": "NEW",
-        })
+        record_id = pg_backend.create(
+            "stories",
+            {
+                "niche_id": _TEST_NICHE,
+                "story_id": sid,
+                "status": "NEW",
+            },
+        )
         pg_backend.delete("stories", record_id)
         assert pg_backend.get("stories", record_id) is None
 
     def test_find_with_formula(self, pg_backend):
         sid = f"story_{uuid.uuid4().hex[:8]}"
-        pg_backend.create("stories", {
-            "niche_id": _TEST_NICHE,
-            "story_id": sid,
-            "status": "NEW",
-        })
+        pg_backend.create(
+            "stories",
+            {
+                "niche_id": _TEST_NICHE,
+                "story_id": sid,
+                "status": "NEW",
+            },
+        )
 
         results = pg_backend.find(
             "stories",
@@ -126,33 +140,40 @@ class TestStoriesCRUD:
 
     def test_extra_jsonb_overflow(self, pg_backend):
         sid = f"story_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("stories", {
-            "niche_id": _TEST_NICHE,
-            "story_id": sid,
-            "status": "NEW",
-            "custom_meta": "overflow_value",
-        })
+        record_id = pg_backend.create(
+            "stories",
+            {
+                "niche_id": _TEST_NICHE,
+                "story_id": sid,
+                "status": "NEW",
+                "custom_meta": "overflow_value",
+            },
+        )
         record = pg_backend.get("stories", record_id)
         assert record["fields"]["custom_meta"] == "overflow_value"
 
 
 # ── Assets CRUD ──────────────────────────────────────────────────────
 
+
 class TestAssetsCRUD:
     """Test CRUD on the assets table."""
 
     def test_create_and_get(self, pg_backend):
         aid = f"asset_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("assets", {
-            "niche_id": _TEST_NICHE,
-            "asset_id": aid,
-            "story_id": "story_abc",
-            "url": "https://example.com/clip.mp4",
-            "asset_type": "video",
-            "status": "DOWNLOADED",
-            "source_type": "youtube",
-            "file_path": "/tmp/clips/clip.mp4",
-        })
+        record_id = pg_backend.create(
+            "assets",
+            {
+                "niche_id": _TEST_NICHE,
+                "asset_id": aid,
+                "story_id": "story_abc",
+                "url": "https://example.com/clip.mp4",
+                "asset_type": "video",
+                "status": "DOWNLOADED",
+                "source_type": "youtube",
+                "file_path": "/tmp/clips/clip.mp4",
+            },
+        )
         uuid.UUID(record_id)
 
         record = pg_backend.get("assets", record_id)
@@ -163,27 +184,34 @@ class TestAssetsCRUD:
 
     def test_update(self, pg_backend):
         aid = f"asset_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("assets", {
-            "niche_id": _TEST_NICHE,
-            "asset_id": aid,
-            "status": "NEW",
-        })
+        record_id = pg_backend.create(
+            "assets",
+            {
+                "niche_id": _TEST_NICHE,
+                "asset_id": aid,
+                "status": "NEW",
+            },
+        )
         pg_backend.update("assets", record_id, {"status": "RENDERED"})
         record = pg_backend.get("assets", record_id)
         assert record["fields"]["status"] == "RENDERED"
 
     def test_delete(self, pg_backend):
         aid = f"asset_{uuid.uuid4().hex[:8]}"
-        record_id = pg_backend.create("assets", {
-            "niche_id": _TEST_NICHE,
-            "asset_id": aid,
-            "status": "NEW",
-        })
+        record_id = pg_backend.create(
+            "assets",
+            {
+                "niche_id": _TEST_NICHE,
+                "asset_id": aid,
+                "status": "NEW",
+            },
+        )
         pg_backend.delete("assets", record_id)
         assert pg_backend.get("assets", record_id) is None
 
 
 # ── RLS for Stories + Assets ─────────────────────────────────────────
+
 
 class TestPhase2RLS:
     """Test Row Level Security isolation for stories and assets."""
@@ -192,16 +220,22 @@ class TestPhase2RLS:
         niche_a = f"rls_test_{uuid.uuid4().hex[:6]}"
         niche_b = f"rls_test_{uuid.uuid4().hex[:6]}"
 
-        pg_backend.create("stories", {
-            "niche_id": niche_a,
-            "story_id": f"rls_sa_{uuid.uuid4().hex[:8]}",
-            "status": "NEW",
-        })
-        pg_backend.create("stories", {
-            "niche_id": niche_b,
-            "story_id": f"rls_sb_{uuid.uuid4().hex[:8]}",
-            "status": "NEW",
-        })
+        pg_backend.create(
+            "stories",
+            {
+                "niche_id": niche_a,
+                "story_id": f"rls_sa_{uuid.uuid4().hex[:8]}",
+                "status": "NEW",
+            },
+        )
+        pg_backend.create(
+            "stories",
+            {
+                "niche_id": niche_b,
+                "story_id": f"rls_sb_{uuid.uuid4().hex[:8]}",
+                "status": "NEW",
+            },
+        )
 
         results_a = pg_backend.find("stories", niche_id=niche_a)
         results_b = pg_backend.find("stories", niche_id=niche_b)
@@ -213,16 +247,22 @@ class TestPhase2RLS:
         niche_a = f"rls_test_{uuid.uuid4().hex[:6]}"
         niche_b = f"rls_test_{uuid.uuid4().hex[:6]}"
 
-        pg_backend.create("assets", {
-            "niche_id": niche_a,
-            "asset_id": f"rls_aa_{uuid.uuid4().hex[:8]}",
-            "status": "NEW",
-        })
-        pg_backend.create("assets", {
-            "niche_id": niche_b,
-            "asset_id": f"rls_ab_{uuid.uuid4().hex[:8]}",
-            "status": "NEW",
-        })
+        pg_backend.create(
+            "assets",
+            {
+                "niche_id": niche_a,
+                "asset_id": f"rls_aa_{uuid.uuid4().hex[:8]}",
+                "status": "NEW",
+            },
+        )
+        pg_backend.create(
+            "assets",
+            {
+                "niche_id": niche_b,
+                "asset_id": f"rls_ab_{uuid.uuid4().hex[:8]}",
+                "status": "NEW",
+            },
+        )
 
         results_a = pg_backend.find("assets", niche_id=niche_a)
         results_b = pg_backend.find("assets", niche_id=niche_b)
@@ -233,11 +273,14 @@ class TestPhase2RLS:
     def test_stories_admin_mode_sees_all(self, pg_backend):
         niche = f"rls_test_{uuid.uuid4().hex[:6]}"
         sid = f"rls_all_{uuid.uuid4().hex[:8]}"
-        pg_backend.create("stories", {
-            "niche_id": niche,
-            "story_id": sid,
-            "status": "NEW",
-        })
+        pg_backend.create(
+            "stories",
+            {
+                "niche_id": niche,
+                "story_id": sid,
+                "status": "NEW",
+            },
+        )
 
         results = pg_backend.find(
             "stories",

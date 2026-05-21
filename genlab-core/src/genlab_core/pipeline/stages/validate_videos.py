@@ -148,7 +148,10 @@ class ValidateVideos:
 
         logger.info(
             "[ValidateVideos] %d passed (%d auto-fixed), %d failed, %d skipped",
-            passed, fixed, failed, skipped,
+            passed,
+            fixed,
+            failed,
+            skipped,
         )
 
         context.setdefault("run_stats", {})["video_validation"] = {
@@ -178,7 +181,8 @@ class ValidateVideos:
 
         logger.warning(
             "[ValidateVideos] VMAF %.1f < 85 — attempting re-encode at CRF-%d",
-            score, _CRF_STEP,
+            score,
+            _CRF_STEP,
         )
 
         # Re-encode at lower CRF
@@ -205,9 +209,13 @@ class ValidateVideos:
         """Probe video with ffprobe, return metadata dict."""
         ffprobe = get_ffprobe_binary()
         cmd = [
-            ffprobe, "-v", "quiet",
-            "-print_format", "json",
-            "-show_format", "-show_streams",
+            ffprobe,
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
             str(path),
         ]
         try:
@@ -295,13 +303,14 @@ class ValidateVideos:
     def _can_fix(issues: list[str]) -> bool:
         """Determine if issues are auto-fixable via re-encoding."""
         fixable = {
-            "wrong_codec", "wrong_pix_fmt", "wrong_color_space",
-            "wrong_audio_codec", "wrong_sample_rate", "wrong_audio_channels",
+            "wrong_codec",
+            "wrong_pix_fmt",
+            "wrong_color_space",
+            "wrong_audio_codec",
+            "wrong_sample_rate",
+            "wrong_audio_channels",
         }
-        return all(
-            any(issue.startswith(f) for f in fixable)
-            for issue in issues
-        )
+        return all(any(issue.startswith(f) for f in fixable) for issue in issues)
 
     @staticmethod
     def _fix(
@@ -314,17 +323,28 @@ class ValidateVideos:
         out = path.with_stem(f"{path.stem}_fixed")
 
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(path),
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-colorspace", "bt709",
-            "-color_primaries", "bt709",
-            "-color_trc", "bt709",
-            "-c:a", "aac",
-            "-ar", "48000",
-            "-ac", "2",
-            "-movflags", "+faststart",
+            ffmpeg,
+            "-y",
+            "-i",
+            str(path),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-c:a",
+            "aac",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-movflags",
+            "+faststart",
             str(out),
         ]
 
@@ -351,23 +371,38 @@ class ValidateVideos:
 
         logger.info(
             "[ValidateVideos] VMAF re-encode: CRF %d → %d for %s",
-            current_crf, new_crf, path.name,
+            current_crf,
+            new_crf,
+            path.name,
         )
 
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(path),
-            "-c:v", "libx264",
-            "-crf", str(new_crf),
-            "-preset", "slow",
-            "-pix_fmt", "yuv420p",
-            "-colorspace", "bt709",
-            "-color_primaries", "bt709",
-            "-color_trc", "bt709",
-            "-c:a", "aac",
-            "-b:a", "320k",
-            "-ar", "48000",
-            "-movflags", "+faststart",
+            ffmpeg,
+            "-y",
+            "-i",
+            str(path),
+            "-c:v",
+            "libx264",
+            "-crf",
+            str(new_crf),
+            "-preset",
+            "slow",
+            "-pix_fmt",
+            "yuv420p",
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "320k",
+            "-ar",
+            "48000",
+            "-movflags",
+            "+faststart",
             str(out),
         ]
 

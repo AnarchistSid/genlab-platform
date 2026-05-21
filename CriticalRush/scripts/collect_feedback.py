@@ -31,9 +31,11 @@ logger = logging.getLogger("collect_feedback")
 def main() -> int:
     # Source .env files if DATABASE_URL not already set
     import os
+
     if not os.environ.get("DATABASE_URL"):
         try:
             from dotenv import load_dotenv
+
             genlab_root = Path(__file__).resolve().parents[2]
             load_dotenv(genlab_root / ".env", override=False)
         except ImportError:

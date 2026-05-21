@@ -4,6 +4,7 @@ Usage:
     python run_pipeline.py --dry-run
     python run_pipeline.py --verbose
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,7 +35,8 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
-        "--force-publish", action="store_true",
+        "--force-publish",
+        action="store_true",
         help="Bypass schedule gate and daily cap — publish immediately",
     )
     args = parser.parse_args()

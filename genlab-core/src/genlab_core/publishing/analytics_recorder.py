@@ -3,6 +3,7 @@
 Writes a publish record to the unified Publishing_Analytics SharePoint list
 so cross-channel dashboard queries and DailyCapEnforcer work correctly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -72,14 +73,15 @@ def record_publish(
     try:
         proxy = getattr(client, "publishing_analytics", None)
         if proxy is None:
-            logger.debug(
-                "No publishing_analytics proxy on client — skipping analytics record."
-            )
+            logger.debug("No publishing_analytics proxy on client — skipping analytics record.")
             return
         proxy.create(fields)
         logger.info(
             "Recorded to Publishing_Analytics: %s/%s/%s → %s",
-            niche_id, platform, status, post_url[:60] if post_url else "(no url)",
+            niche_id,
+            platform,
+            status,
+            post_url[:60] if post_url else "(no url)",
         )
     except Exception as e:
         logger.warning("Failed to record to Publishing_Analytics: %s", e)

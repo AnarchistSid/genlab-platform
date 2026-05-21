@@ -23,6 +23,7 @@ about deduplicating 'same game, slightly different headline' stories.
 An AI news niche might use higher thresholds (0.85, 0.80) because nuanced
 differences in AI announcements matter more.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -150,8 +151,10 @@ class DedupEngine:
                 result.pass2_removed += 1
                 logger.info(
                     "[Dedup:jaccard] %.2f threshold=%.2f: '%s' ≈ '%s'",
-                    best_score, self.jaccard_threshold,
-                    text[:70], matched_against[:70],
+                    best_score,
+                    self.jaccard_threshold,
+                    text[:70],
+                    matched_against[:70],
                 )
             else:
                 seen_texts.append(text)
@@ -204,8 +207,10 @@ class DedupEngine:
                     result.pass3_removed += 1
                     logger.info(
                         "[Dedup:tfidf] %.2f threshold=%.2f: '%s' ≈ '%s'",
-                        float(cos_sim[i, j]), self.tfidf_threshold,
-                        texts[j][:70], texts[i][:70],
+                        float(cos_sim[i, j]),
+                        self.tfidf_threshold,
+                        texts[j][:70],
+                        texts[i][:70],
                     )
 
         return [item for item, k in zip(items, keep, strict=False) if k]

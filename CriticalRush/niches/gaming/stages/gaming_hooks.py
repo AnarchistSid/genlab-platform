@@ -4,6 +4,7 @@ Migrated from inline hook generation in WriteGamingContent (Sprint 69).
 Uses LLM-first hook generation with gaming-specific category classification
 and placeholder substitution from config/templates.yaml.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,7 +15,17 @@ from genlab_core.strategies import BaseHookStrategy
 _NICHE_ROOT = Path(__file__).resolve().parent.parent
 
 # Keywords for classifying gaming stories
-_UPDATE_KEYWORDS = {"update", "patch", "drop", "release", "launch", "added", "nerf", "buff", "rework"}
+_UPDATE_KEYWORDS = {
+    "update",
+    "patch",
+    "drop",
+    "release",
+    "launch",
+    "added",
+    "nerf",
+    "buff",
+    "rework",
+}
 _CLUTCH_KEYWORDS = {"clutch", "play", "insane", "unreal", "highlight", "clip", "moment", "crazy"}
 _STREAMER_KEYWORDS = {"streamer", "twitch", "just chatting", "trending", "live", "stream"}
 _META_KEYWORDS = {"meta", "ranked", "competitive", "tier", "balance", "broken", "op", "season"}
@@ -75,19 +86,59 @@ class GamingHookStrategy(BaseHookStrategy):
 # ── Extraction helpers ──────────────────────────────────────────
 
 _KNOWN_GAMES = {
-    "valorant", "cs2", "counter-strike", "fortnite", "overwatch",
-    "league of legends", "apex legends", "elden ring", "minecraft",
-    "gta", "call of duty", "cod", "destiny", "diablo", "dota",
-    "rocket league", "rainbow six", "r6", "pubg", "warzone",
-    "crimson desert", "marvel rivals", "deadlock", "the finals",
-    "palworld", "helldivers", "baldur's gate", "cyberpunk",
-    "starfield", "zelda", "pokemon", "smash", "street fighter",
+    "valorant",
+    "cs2",
+    "counter-strike",
+    "fortnite",
+    "overwatch",
+    "league of legends",
+    "apex legends",
+    "elden ring",
+    "minecraft",
+    "gta",
+    "call of duty",
+    "cod",
+    "destiny",
+    "diablo",
+    "dota",
+    "rocket league",
+    "rainbow six",
+    "r6",
+    "pubg",
+    "warzone",
+    "crimson desert",
+    "marvel rivals",
+    "deadlock",
+    "the finals",
+    "palworld",
+    "helldivers",
+    "baldur's gate",
+    "cyberpunk",
+    "starfield",
+    "zelda",
+    "pokemon",
+    "smash",
+    "street fighter",
 }
 
 _KNOWN_STREAMERS = {
-    "shroud", "ninja", "pokimane", "xqc", "summit1g", "timthetatman",
-    "dr disrespect", "tfue", "s1mple", "tarik", "adin", "kai cenat",
-    "speed", "hasanabi", "ludwig", "valkyrae", "sykkuno",
+    "shroud",
+    "ninja",
+    "pokimane",
+    "xqc",
+    "summit1g",
+    "timthetatman",
+    "dr disrespect",
+    "tfue",
+    "s1mple",
+    "tarik",
+    "adin",
+    "kai cenat",
+    "speed",
+    "hasanabi",
+    "ludwig",
+    "valkyrae",
+    "sykkuno",
 }
 
 

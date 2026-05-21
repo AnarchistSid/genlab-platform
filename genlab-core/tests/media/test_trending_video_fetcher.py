@@ -1,4 +1,5 @@
 """Tests for TrendingVideoFetcher and FetchTrendingVideos pipeline stage."""
+
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -17,11 +18,12 @@ def _make_fetcher():
 
 
 def _make_api_video_item(
-    video_id="abc123", age_hours=2, view_count=10000, duration="PT2M30S",
+    video_id="abc123",
+    age_hours=2,
+    view_count=10000,
+    duration="PT2M30S",
 ):
-    published = (
-        datetime.now(UTC) - timedelta(hours=age_hours)
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    published = (datetime.now(UTC) - timedelta(hours=age_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
         "id": video_id,
         "snippet": {
@@ -106,9 +108,11 @@ class TestFetchTrending:
         long_v = f._parse_video(_make_api_video_item("long", duration="PT11M"), "test")
         good = f._parse_video(_make_api_video_item("good", duration="PT2M30S"), "test")
 
-        with patch.object(f, "_fetch_most_popular", return_value=[short, long_v, good]), \
-             patch.object(f, "_search_recent", return_value=[]), \
-             patch.object(f, "_fetch_video_details", return_value=[short, long_v, good]):
+        with (
+            patch.object(f, "_fetch_most_popular", return_value=[short, long_v, good]),
+            patch.object(f, "_search_recent", return_value=[]),
+            patch.object(f, "_fetch_video_details", return_value=[short, long_v, good]),
+        ):
             results = f.fetch_trending("gaming", limit=10, min_velocity=0)
 
         ids = [v.video_id for v in results]
@@ -129,9 +133,11 @@ class TestFetchTrending:
             "test",
         )
 
-        with patch.object(f, "_fetch_most_popular", return_value=[slow, fast]), \
-             patch.object(f, "_search_recent", return_value=[]), \
-             patch.object(f, "_fetch_video_details", return_value=[slow, fast]):
+        with (
+            patch.object(f, "_fetch_most_popular", return_value=[slow, fast]),
+            patch.object(f, "_search_recent", return_value=[]),
+            patch.object(f, "_fetch_video_details", return_value=[slow, fast]),
+        ):
             results = f.fetch_trending("gaming", limit=10, min_velocity=500)
 
         ids = [v.video_id for v in results]
@@ -141,15 +147,19 @@ class TestFetchTrending:
     def test_deduplicates_by_video_id(self):
         f = _make_fetcher()
         v1 = f._parse_video(
-            _make_api_video_item("dup", view_count=50000, duration="PT2M"), "test",
+            _make_api_video_item("dup", view_count=50000, duration="PT2M"),
+            "test",
         )
         v2 = f._parse_video(
-            _make_api_video_item("dup", view_count=50000, duration="PT2M"), "test",
+            _make_api_video_item("dup", view_count=50000, duration="PT2M"),
+            "test",
         )
 
-        with patch.object(f, "_fetch_most_popular", return_value=[v1]), \
-             patch.object(f, "_search_recent", return_value=[v2]), \
-             patch.object(f, "_fetch_video_details", return_value=[v1]):
+        with (
+            patch.object(f, "_fetch_most_popular", return_value=[v1]),
+            patch.object(f, "_search_recent", return_value=[v2]),
+            patch.object(f, "_fetch_video_details", return_value=[v1]),
+        ):
             results = f.fetch_trending("gaming", limit=10, min_velocity=0)
 
         assert len([v for v in results if v.video_id == "dup"]) == 1
@@ -260,13 +270,19 @@ class TestFetchTrendingVideosStage:
             license="youtube",
         )
 
-        with patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}, clear=False), \
-             patch.object(
-                 TrendingVideoFetcher, "fetch_trending", return_value=[mock_video],
-             ), \
-             patch.object(
-                 FetchTrendingVideos, "_read_from_content_pool", return_value=[],
-             ):
+        with (
+            patch.dict("os.environ", {"YOUTUBE_API_KEY": "fake"}, clear=False),
+            patch.object(
+                TrendingVideoFetcher,
+                "fetch_trending",
+                return_value=[mock_video],
+            ),
+            patch.object(
+                FetchTrendingVideos,
+                "_read_from_content_pool",
+                return_value=[],
+            ),
+        ):
             result = stage.execute(context)
 
         # Trending video story should be first

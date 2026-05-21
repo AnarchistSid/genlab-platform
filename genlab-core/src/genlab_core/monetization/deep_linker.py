@@ -3,6 +3,7 @@
 Detects mobile devices from User-Agent and generates platform-specific
 deep links that open products in native apps (Amazon).
 """
+
 from __future__ import annotations
 
 import html

@@ -15,7 +15,10 @@ from fd_strategies.fetch_anime_news import (
 
 class TestNormalizeTitle:
     def test_strips_punctuation_and_lowercases(self):
-        assert _normalize_title("MAPPA's NEW Chainsaw Man Trailer!") == "mappas new chainsaw man trailer"
+        assert (
+            _normalize_title("MAPPA's NEW Chainsaw Man Trailer!")
+            == "mappas new chainsaw man trailer"
+        )
 
     def test_collapses_whitespace(self):
         assert _normalize_title("  Too   much  space  ") == "too much space"
@@ -58,7 +61,11 @@ class TestAnimeRSSFetcher:
         with patch("fd_strategies.fetch_anime_news.feedparser.parse") as mock_parse:
             mock_parse.return_value = {
                 "entries": [
-                    {"title": "Jujutsu Kaisen Season 3 Premiere", "link": "https://example.com/1", "summary": "..."},
+                    {
+                        "title": "Jujutsu Kaisen Season 3 Premiere",
+                        "link": "https://example.com/1",
+                        "summary": "...",
+                    },
                 ]
             }
             fetcher = AnimeRSSFetcher(config)
@@ -79,7 +86,11 @@ class TestAnimeRSSFetcher:
         with patch("fd_strategies.fetch_anime_news.feedparser.parse") as mock_parse:
             mock_parse.return_value = {
                 "entries": [
-                    {"title": "Same Exact Anime Story Here", "link": "https://example.com/1", "summary": "..."},
+                    {
+                        "title": "Same Exact Anime Story Here",
+                        "link": "https://example.com/1",
+                        "summary": "...",
+                    },
                 ]
             }
             fetcher = AnimeRSSFetcher(config)
@@ -97,7 +108,10 @@ class TestAnimeRSSFetcher:
                 ]
             }
         }
-        with patch("fd_strategies.fetch_anime_news.feedparser.parse", side_effect=Exception("Network error")):
+        with patch(
+            "fd_strategies.fetch_anime_news.feedparser.parse",
+            side_effect=Exception("Network error"),
+        ):
             fetcher = AnimeRSSFetcher(config)
             items = fetcher.fetch_all()
             assert items == []
@@ -140,13 +154,18 @@ class TestCrossMentionGroupingV2:
     def test_tier1_fresh_single_source_is_emerging(self):
         """Tier-1 fresh single-source items should be classified EMERGING."""
         from datetime import datetime
+
         AnimeStoryItem(
             title="Fresh Tier 1 Story",
             source="rss_ann",
             trend_name="fresh tier story",
             published_at=datetime.now(UTC).isoformat(),
         )
-        config = {"tier_1": {"sources": [{"name": "ANN", "type": "rss", "url": "https://example.com/feed"}]}}
+        config = {
+            "tier_1": {
+                "sources": [{"name": "ANN", "type": "rss", "url": "https://example.com/feed"}]
+            }
+        }
         with patch("fd_strategies.fetch_anime_news.feedparser.parse") as mock_parse:
             mock_parse.return_value = {
                 "entries": [{"title": "Fresh Tier 1 Story", "link": "https://example.com/1"}]

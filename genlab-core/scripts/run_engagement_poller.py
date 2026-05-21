@@ -20,6 +20,7 @@ Environment:
     REDIS_HOST=localhost            Dramatiq broker host (default: localhost)
     REDIS_PORT=6379                 Dramatiq broker port (default: 6379)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,6 +31,7 @@ import sys
 
 try:
     from genlab_core.observability.logging import configure_logging
+
     _is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
     configure_logging(json_output=_is_json, level=logging.INFO)
 except ImportError:
@@ -105,8 +107,12 @@ async def _poll_loop_youtube(niche_id: str, channel_id: str) -> None:
     """Poll YouTube comments in a loop."""
     from genlab_core.engagement.poller import YOUTUBE_POLL_INTERVAL, poll_youtube_comments
 
-    logger.info("Starting YouTube poller for niche=%s channel=%s interval=%ds",
-                niche_id, channel_id, YOUTUBE_POLL_INTERVAL)
+    logger.info(
+        "Starting YouTube poller for niche=%s channel=%s interval=%ds",
+        niche_id,
+        channel_id,
+        YOUTUBE_POLL_INTERVAL,
+    )
 
     while True:
         try:
@@ -124,8 +130,12 @@ async def _poll_loop_twitter(niche_id: str, user_id: str) -> None:
     """Poll X/Twitter mentions in a loop."""
     from genlab_core.engagement.poller import TWITTER_POLL_INTERVAL, poll_twitter_mentions
 
-    logger.info("Starting X/Twitter poller for niche=%s user=%s interval=%ds",
-                niche_id, user_id, TWITTER_POLL_INTERVAL)
+    logger.info(
+        "Starting X/Twitter poller for niche=%s user=%s interval=%ds",
+        niche_id,
+        user_id,
+        TWITTER_POLL_INTERVAL,
+    )
 
     while True:
         try:
@@ -143,8 +153,12 @@ async def _poll_loop_threads(niche_id: str, user_id: str) -> None:
     """Poll Threads replies in a loop."""
     from genlab_core.engagement.poller import THREADS_POLL_INTERVAL, poll_threads_comments
 
-    logger.info("Starting Threads poller for niche=%s user=%s interval=%ds",
-                niche_id, user_id, THREADS_POLL_INTERVAL)
+    logger.info(
+        "Starting Threads poller for niche=%s user=%s interval=%ds",
+        niche_id,
+        user_id,
+        THREADS_POLL_INTERVAL,
+    )
 
     while True:
         try:
@@ -170,6 +184,7 @@ def _resolve_id(yaml_value: str, niche_id: str, env_suffix: str) -> str:
         return val
 
     from genlab_core.publishing.niche_credentials import NICHE_CREDENTIAL_PREFIXES
+
     prefix = NICHE_CREDENTIAL_PREFIXES.get(niche_id, "")
     if not prefix:
         return ""
@@ -209,7 +224,8 @@ async def _run_all_pollers(platform: str) -> None:
         if platform in ("all", "youtube") and "youtube" in platforms:
             channel_id = _resolve_id(
                 platforms["youtube"].get("channel_id", ""),
-                niche_id, "YOUTUBE_CHANNEL_ID",
+                niche_id,
+                "YOUTUBE_CHANNEL_ID",
             )
             if channel_id:
                 tasks.append(_poll_loop_youtube(niche_id, channel_id))
@@ -218,7 +234,8 @@ async def _run_all_pollers(platform: str) -> None:
         if platform in ("all", "twitter") and "twitter" in platforms:
             user_id = _resolve_id(
                 str(platforms["twitter"].get("user_id", "")),
-                niche_id, "X_USER_ID",
+                niche_id,
+                "X_USER_ID",
             )
             if user_id:
                 tasks.append(_poll_loop_twitter(niche_id, user_id))
@@ -227,7 +244,8 @@ async def _run_all_pollers(platform: str) -> None:
         if platform in ("all", "threads") and "threads" in platforms:
             threads_user_id = _resolve_id(
                 str(platforms["threads"].get("user_id", "")),
-                niche_id, "THREADS_USER_ID",
+                niche_id,
+                "THREADS_USER_ID",
             )
             if threads_user_id:
                 tasks.append(_poll_loop_threads(niche_id, threads_user_id))
@@ -246,17 +264,23 @@ async def _run_all_pollers(platform: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Engagement comment poller")
-    parser.add_argument("--niche", required=True,
-                       help="Niche ID (e.g., gaming, ai_creators) or 'all'")
-    parser.add_argument("--platform", required=True, choices=["youtube", "twitter", "threads", "all"],
-                       help="Platform to poll (or 'all')")
+    parser.add_argument(
+        "--niche", required=True, help="Niche ID (e.g., gaming, ai_creators) or 'all'"
+    )
+    parser.add_argument(
+        "--platform",
+        required=True,
+        choices=["youtube", "twitter", "threads", "all"],
+        help="Platform to poll (or 'all')",
+    )
     parser.add_argument("--channel-id", default="", help="YouTube channel ID (single-niche mode)")
     parser.add_argument("--user-id", default="", help="X/Twitter user ID (single-niche mode)")
     args = parser.parse_args()
 
     mode = "DISPATCH" if _is_dispatch_enabled() else "OBSERVE"
-    logger.info("Engagement poller starting — mode=%s niche=%s platform=%s",
-                mode, args.niche, args.platform)
+    logger.info(
+        "Engagement poller starting — mode=%s niche=%s platform=%s", mode, args.niche, args.platform
+    )
 
     # Multi-niche mode
     if args.niche == "all":

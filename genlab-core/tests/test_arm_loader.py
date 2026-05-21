@@ -2,6 +2,7 @@
 
 Verifies arm loading/saving against mock proxies (no SharePoint calls).
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -76,15 +77,28 @@ class TestLoadAllArmsNicheFilter:
     def test_drops_rows_for_other_niches(self):
         mock_proxy = MagicMock()
         mock_proxy.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "gameplay_clip",
-                                   "niche_id": "gaming",
-                                   "alpha": 3.0, "beta": 5.0}},
-            {"id": "2", "fields": {"arm_id": "cast_reveal",
-                                   "niche_id": "movies",
-                                   "alpha": 2.0, "beta": 4.0}},
-            {"id": "3", "fields": {"arm_id": "patch_news",
-                                   "niche_id": "gaming",
-                                   "alpha": 1.5, "beta": 1.5}},
+            {
+                "id": "1",
+                "fields": {
+                    "arm_id": "gameplay_clip",
+                    "niche_id": "gaming",
+                    "alpha": 3.0,
+                    "beta": 5.0,
+                },
+            },
+            {
+                "id": "2",
+                "fields": {
+                    "arm_id": "cast_reveal",
+                    "niche_id": "movies",
+                    "alpha": 2.0,
+                    "beta": 4.0,
+                },
+            },
+            {
+                "id": "3",
+                "fields": {"arm_id": "patch_news", "niche_id": "gaming", "alpha": 1.5, "beta": 1.5},
+            },
         ]
         arms = load_all_arms(mock_proxy, "gaming")
         assert set(arms) == {"gameplay_clip", "patch_news"}
@@ -95,8 +109,7 @@ class TestLoadAllArmsNicheFilter:
         the proxy itself is per-niche. Those rows must still load."""
         mock_proxy = MagicMock()
         mock_proxy.all.return_value = [
-            {"id": "1", "fields": {"arm_id": "legacy_arm",
-                                   "alpha": 2.0, "beta": 3.0}},
+            {"id": "1", "fields": {"arm_id": "legacy_arm", "alpha": 2.0, "beta": 3.0}},
         ]
         arms = load_all_arms(mock_proxy, "gaming")
         assert "legacy_arm" in arms

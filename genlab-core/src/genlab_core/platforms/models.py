@@ -1,4 +1,5 @@
 """Data models for the unified platform client package."""
+
 from __future__ import annotations
 
 import logging
@@ -32,6 +33,7 @@ def safe_json(resp: requests.Response) -> dict[str, Any]:
             (getattr(resp, "text", "") or "")[:200],
         )
         return {}
+
 
 # --- Platform-specific payload configs ---
 

@@ -25,8 +25,8 @@ from genlab_core.media.frame_compositor import (
 
 # --- ChannelBranding ------------------------------------------------
 
-class TestChannelBranding:
 
+class TestChannelBranding:
     def test_from_yaml_loads_fields(self, tmp_path):
         yaml_content = """
 niche_id: test_niche
@@ -58,28 +58,43 @@ ffmpeg:
 
 # --- VideoInfo ------------------------------------------------------
 
-class TestVideoInfo:
 
+class TestVideoInfo:
     def test_landscape_detection(self):
         info = VideoInfo(
-            width=1920, height=1080, duration_seconds=30, fps=30,
-            aspect_ratio=1.78, is_portrait=False, is_landscape=True,
+            width=1920,
+            height=1080,
+            duration_seconds=30,
+            fps=30,
+            aspect_ratio=1.78,
+            is_portrait=False,
+            is_landscape=True,
             is_native_9_16=False,
         )
         assert info.layout_case == "landscape"
 
     def test_portrait_detection(self):
         info = VideoInfo(
-            width=608, height=1080, duration_seconds=30, fps=30,
-            aspect_ratio=0.56, is_portrait=True, is_landscape=False,
+            width=608,
+            height=1080,
+            duration_seconds=30,
+            fps=30,
+            aspect_ratio=0.56,
+            is_portrait=True,
+            is_landscape=False,
             is_native_9_16=True,
         )
         assert info.layout_case == "portrait"
 
     def test_square_detection(self):
         info = VideoInfo(
-            width=1080, height=1080, duration_seconds=30, fps=30,
-            aspect_ratio=1.0, is_portrait=False, is_landscape=False,
+            width=1080,
+            height=1080,
+            duration_seconds=30,
+            fps=30,
+            aspect_ratio=1.0,
+            is_portrait=False,
+            is_landscape=False,
             is_native_9_16=False,
         )
         assert info.layout_case == "square"
@@ -91,8 +106,8 @@ class TestVideoInfo:
 
 # --- Locked pixel constants ------------------------------------------
 
-class TestLockedConstants:
 
+class TestLockedConstants:
     def test_canvas_dimensions(self):
         assert CANVAS_W == 1080
         assert CANVAS_H == 1920
@@ -125,38 +140,55 @@ class TestLockedConstants:
 
 # --- Hook wrapping --------------------------------------------------
 
-class TestHookWrapping:
 
+class TestHookWrapping:
     def test_short_hook_single_line(self):
-        comp = FrameCompositor(ChannelBranding(
-            channel_name="Test", handle="@test",
-            accent_color="#FFF", logo_path="", niche_id="test",
-        ))
+        comp = FrameCompositor(
+            ChannelBranding(
+                channel_name="Test",
+                handle="@test",
+                accent_color="#FFF",
+                logo_path="",
+                niche_id="test",
+            )
+        )
         lines = comp._wrap_hook("Short hook")
         assert lines == ["Short hook"]
 
     def test_long_hook_wraps(self):
-        comp = FrameCompositor(ChannelBranding(
-            channel_name="Test", handle="@test",
-            accent_color="#FFF", logo_path="", niche_id="test",
-        ))
-        lines = comp._wrap_hook("This is a much longer hook that should definitely wrap to two lines")
+        comp = FrameCompositor(
+            ChannelBranding(
+                channel_name="Test",
+                handle="@test",
+                accent_color="#FFF",
+                logo_path="",
+                niche_id="test",
+            )
+        )
+        lines = comp._wrap_hook(
+            "This is a much longer hook that should definitely wrap to two lines"
+        )
         assert len(lines) == 2
         assert all(len(line) <= 36 for line in lines)  # HOOK_MAX_CHARS_LINE + 1 word
 
     def test_max_two_lines(self):
-        comp = FrameCompositor(ChannelBranding(
-            channel_name="Test", handle="@test",
-            accent_color="#FFF", logo_path="", niche_id="test",
-        ))
+        comp = FrameCompositor(
+            ChannelBranding(
+                channel_name="Test",
+                handle="@test",
+                accent_color="#FFF",
+                logo_path="",
+                niche_id="test",
+            )
+        )
         lines = comp._wrap_hook("word " * 30)
         assert len(lines) <= 2
 
 
 # --- Escape ----------------------------------------------------------
 
-class TestEscapeDrawtext:
 
+class TestEscapeDrawtext:
     def test_escapes_special_chars(self):
         result = FrameCompositor._escape_drawtext("Test: [value], 50%")
         assert "\\:" in result

@@ -112,10 +112,10 @@ def pick_hook_style(niche_id: str) -> str | None:
     niche_prefix = f"style:{niche_id}:"
     for arm_id, (alpha, beta) in arms.items():
         if arm_id.startswith(niche_prefix):
-            name = arm_id[len(niche_prefix):]
-        elif arm_id.startswith(legacy_prefix) and ":" not in arm_id[len(legacy_prefix):]:
+            name = arm_id[len(niche_prefix) :]
+        elif arm_id.startswith(legacy_prefix) and ":" not in arm_id[len(legacy_prefix) :]:
             # Legacy "style:question" form (single-niche deployment)
-            name = arm_id[len(legacy_prefix):]
+            name = arm_id[len(legacy_prefix) :]
         else:
             continue
         style_arms[name] = (alpha, beta)
@@ -123,6 +123,7 @@ def pick_hook_style(niche_id: str) -> str | None:
         return None
 
     import random
+
     best_sample = -1.0
     best_style: str | None = None
     for name, (alpha, beta) in style_arms.items():
@@ -141,6 +142,7 @@ def pick_hook_style(niche_id: str) -> str | None:
         # malformed hint; treat as cold-start.
         return None
     return best_style
+
 
 _BANNED_PHRASES = [
     # Generic hype
@@ -325,9 +327,7 @@ def generate_hook(
     chosen_style = pick_hook_style(niche_id)
     style_hint = ""
     if chosen_style and chosen_style in _HOOK_STYLES:
-        style_hint = (
-            f"\n\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}"
-        )
+        style_hint = f"\n\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}"
 
     banned_text = "\n".join(f"  - {p}" for p in _BANNED_PHRASES)
     used_text = ""
@@ -347,8 +347,8 @@ def generate_hook(
         "- Reference something SPECIFIC from the story (a name, team, title, event)\n"
         "- Create curiosity or emotional reaction\n"
         "- Contain at least one proper noun from the story\n\n"
-        f"GOOD example: \"{style['example_good']}\"\n"
-        f"BAD example: \"{style['example_bad']}\"\n\n"
+        f'GOOD example: "{style["example_good"]}"\n'
+        f'BAD example: "{style["example_bad"]}"\n\n'
         "BANNED phrases (never use these or variations):\n"
         f"{banned_text}\n\n"
         "BANNED OPENING TEMPLATE: Do NOT start the hook with "
@@ -365,10 +365,9 @@ def generate_hook(
     # Add few-shot examples from top performers
     top_hooks = style.get("top_hooks", [])
     if top_hooks:
-        examples_text = "\n".join(f"  {i+1}. \"{h}\"" for i, h in enumerate(top_hooks))
+        examples_text = "\n".join(f'  {i + 1}. "{h}"' for i, h in enumerate(top_hooks))
         system += (
-            "\n\nTOP PERFORMING HOOKS (match this energy and specificity):\n"
-            f"{examples_text}\n"
+            f"\n\nTOP PERFORMING HOOKS (match this energy and specificity):\n{examples_text}\n"
         )
 
     user = f"Story: {title}\nSummary: {summary}" + used_text
@@ -460,9 +459,10 @@ def generate_hook(
             scored.sort(key=lambda x: x[1], reverse=True)
             best = scored[0][0]
             logger.debug(
-                "[%s] Hook ranked %d candidates with classifier "
-                "(clf_score of best=%.3f)",
-                niche_id, len(scored), scored[0][2],
+                "[%s] Hook ranked %d candidates with classifier (clf_score of best=%.3f)",
+                niche_id,
+                len(scored),
+                scored[0][2],
             )
         except Exception as exc:
             logger.debug("[%s] Classifier-aware scoring failed: %s", niche_id, exc)
@@ -470,7 +470,9 @@ def generate_hook(
 
     logger.info(
         "[%s] LLM hook: %s (style=%s)",
-        niche_id, best, chosen_style or "none",
+        niche_id,
+        best,
+        chosen_style or "none",
     )
     if return_style:
         return (best, chosen_style)

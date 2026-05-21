@@ -28,6 +28,7 @@ breaker in one annotation::
     def fetch_trending(api_key):
         ...
 """
+
 from __future__ import annotations
 
 import functools
@@ -49,9 +50,7 @@ class CircuitOpenError(Exception):
     def __init__(self, name: str, retry_after: float = 0.0):
         self.name = name
         self.retry_after = retry_after
-        super().__init__(
-            f"Circuit breaker '{name}' is OPEN — retry after {retry_after:.1f}s"
-        )
+        super().__init__(f"Circuit breaker '{name}' is OPEN — retry after {retry_after:.1f}s")
 
 
 # ── CircuitBreaker ───────────────────────────────────────────────────
@@ -113,7 +112,8 @@ class CircuitBreaker:
                 self._state = self.HALF_OPEN
                 logger.info(
                     "Circuit '%s' → HALF_OPEN (%.1fs since last failure)",
-                    self.name, elapsed,
+                    self.name,
+                    elapsed,
                 )
         return self._state
 
@@ -125,9 +125,7 @@ class CircuitBreaker:
         with self._lock:
             state = self._effective_state()
             if state == self.OPEN:
-                retry_after = self.recovery_timeout - (
-                    time.monotonic() - self._last_failure_time
-                )
+                retry_after = self.recovery_timeout - (time.monotonic() - self._last_failure_time)
                 raise CircuitOpenError(self.name, max(0.0, retry_after))
             self._total_calls += 1
 
@@ -159,9 +157,7 @@ class CircuitBreaker:
 
             # Prune failures outside the sliding window
             cutoff = now - self.window_seconds
-            self._failure_timestamps = [
-                t for t in self._failure_timestamps if t > cutoff
-            ]
+            self._failure_timestamps = [t for t in self._failure_timestamps if t > cutoff]
 
             if len(self._failure_timestamps) >= self.failure_threshold:
                 if self._state != self.OPEN:
@@ -174,7 +170,8 @@ class CircuitBreaker:
                 self._state = self.OPEN
             elif self._state == self.HALF_OPEN:
                 logger.info(
-                    "Circuit '%s' → OPEN (half-open probe failed)", self.name,
+                    "Circuit '%s' → OPEN (half-open probe failed)",
+                    self.name,
                 )
                 self._state = self.OPEN
 
@@ -191,9 +188,7 @@ class CircuitBreaker:
         with self._lock:
             now = time.monotonic()
             cutoff = now - self.window_seconds
-            recent_failures = len(
-                [t for t in self._failure_timestamps if t > cutoff]
-            )
+            recent_failures = len([t for t in self._failure_timestamps if t > cutoff])
             return {
                 "name": self.name,
                 "state": self._effective_state(),
@@ -235,6 +230,7 @@ def resilient(
         initial_delay:   Seconds before the first retry.
         exceptions:      Exception types eligible for retry.
     """
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -266,6 +262,7 @@ def resilient(
             raise last_exc  # type: ignore[misc]
 
         return wrapper
+
     return decorator
 
 

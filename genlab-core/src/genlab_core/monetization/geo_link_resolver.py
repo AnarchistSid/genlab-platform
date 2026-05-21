@@ -6,6 +6,7 @@ and appends UTM tracking parameters + network-specific subIDs.
 Skips placeholder URLs (example.com) and known-broken links (cached from the
 link health checker).
 """
+
 from __future__ import annotations
 
 import logging
@@ -128,7 +129,8 @@ def resolve_affiliate_link_with_network(
         if not _is_url_healthy(url):
             logger.debug(
                 "[GeoResolver] Skipping broken %s link for %s, trying next",
-                net, product.get("name", "?"),
+                net,
+                product.get("name", "?"),
             )
             continue
         base_url = url

@@ -1,4 +1,5 @@
 """Tests for genlab_core.publishing.error_classifier."""
+
 from __future__ import annotations
 
 from genlab_core.publishing.error_classifier import (
@@ -10,6 +11,7 @@ from genlab_core.publishing.error_classifier import (
 # ---------------------------------------------------------------------------
 # classify()
 # ---------------------------------------------------------------------------
+
 
 def test_classify_timeout():
     assert classify("Read timed out after 30s") == "TRANSIENT"
@@ -97,6 +99,7 @@ def test_classify_broken_pipe():
 # should_retry()
 # ---------------------------------------------------------------------------
 
+
 def test_should_retry_transient():
     assert should_retry("TRANSIENT") is True
 
@@ -120,6 +123,7 @@ def test_should_retry_permanent():
 # ---------------------------------------------------------------------------
 # retry_delay_seconds()
 # ---------------------------------------------------------------------------
+
 
 def test_retry_delay_quota():
     assert retry_delay_seconds("QUOTA", 0) == 86400
@@ -150,6 +154,7 @@ def test_retry_delay_exponential_clamps_at_max():
 # ---------------------------------------------------------------------------
 # Priority ordering — CREDENTIAL beats QUOTA beats CONTENT beats TRANSIENT
 # ---------------------------------------------------------------------------
+
 
 def test_priority_credential_over_transient():
     # "401" matches CREDENTIAL; "timeout" matches TRANSIENT — CREDENTIAL wins

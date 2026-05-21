@@ -7,6 +7,7 @@ Usage:
         --accent-color "#00FF88" \
         --output-dir /path/to/FitPulse
 """
+
 from __future__ import annotations
 
 import argparse

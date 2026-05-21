@@ -1,4 +1,5 @@
 """Tests for genlab_core.media.ffmpeg."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest

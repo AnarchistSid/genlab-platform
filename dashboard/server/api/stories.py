@@ -1,4 +1,5 @@
 """Story resource API endpoints."""
+
 import logging
 
 from flask import Blueprint, request
@@ -11,6 +12,7 @@ bp = Blueprint("stories_api", __name__, url_prefix="/api/v1/stories")
 
 def _get_client():
     from server.core.graph_sync import get_sync_client
+
     return get_sync_client()
 
 
@@ -26,10 +28,19 @@ def list_stories():
         return api_error(error="Invalid page or per_page parameter")
 
     # Allowlist of valid source values to prevent formula injection
-    _VALID_SOURCES = frozenset({
-        "youtube", "youtube_rss", "youtube_playlist", "youtube_search",
-        "rss", "google_trends", "manual", "reddit", "twitter",
-    })
+    _VALID_SOURCES = frozenset(
+        {
+            "youtube",
+            "youtube_rss",
+            "youtube_playlist",
+            "youtube_search",
+            "rss",
+            "google_trends",
+            "manual",
+            "reddit",
+            "twitter",
+        }
+    )
 
     filters = []
     if source:
@@ -39,7 +50,9 @@ def list_stories():
     formula = "AND(" + ",".join(filters) + ")" if filters else ""
 
     try:
-        records = _get_client().stories.all(formula=formula) if formula else _get_client().stories.all()
+        records = (
+            _get_client().stories.all(formula=formula) if formula else _get_client().stories.all()
+        )
     except Exception as e:
         logger.error("Failed to fetch stories: %s", e, exc_info=True)
         return api_error(error="Failed to fetch stories", code=502)
@@ -47,14 +60,12 @@ def list_stories():
     # Filter by niche_id client-side
     if niche_id and niche_id != "all":
         records = [
-            r for r in records
-            if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
+            r for r in records if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
         ]
 
     if search:
         records = [
-            r for r in records
-            if search in (r.get("fields", {}).get("title", "") or "").lower()
+            r for r in records if search in (r.get("fields", {}).get("title", "") or "").lower()
         ]
 
     records.sort(key=lambda r: str(r.get("fields", {}).get("published_at", "") or ""), reverse=True)
@@ -74,15 +85,23 @@ def list_stories():
             out["score"] = out["priority"]
         return out
 
-    return api_success(data={
-        "data": [{"id": r["id"], **_normalize(r.get("fields", {}))} for r in page_data],
-        "meta": {"page": page, "per_page": per_page, "total": total, "total_pages": max(1, (total + per_page - 1) // per_page)},
-    })
+    return api_success(
+        data={
+            "data": [{"id": r["id"], **_normalize(r.get("fields", {}))} for r in page_data],
+            "meta": {
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+                "total_pages": max(1, (total + per_page - 1) // per_page),
+            },
+        }
+    )
 
 
 @bp.route("/<record_id>", methods=["GET"])
 def get_story(record_id):
     import re
+
     if not re.match(r"^[\w-]+$", record_id):
         return api_error(error="Invalid record ID")
     try:

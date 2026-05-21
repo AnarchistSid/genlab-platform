@@ -1,4 +1,5 @@
 """Extended poller tests -- YouTube params, Twitter empty response, and polling constants."""
+
 from __future__ import annotations
 
 import asyncio
@@ -20,9 +21,7 @@ def _make_yt_mocks(comment_items=None):
     """
     playlist_resp = MagicMock()
     playlist_resp.raise_for_status = MagicMock()
-    playlist_resp.json.return_value = {
-        "items": [{"contentDetails": {"videoId": "vid_1"}}]
-    }
+    playlist_resp.json.return_value = {"items": [{"contentDetails": {"videoId": "vid_1"}}]}
 
     comments_resp = MagicMock()
     comments_resp.status_code = 200
@@ -105,6 +104,7 @@ class TestYouTubePollerParams:
         _set_api_key(monkeypatch)
 
         import requests as _requests
+
         quota_resp = MagicMock()
         quota_resp.status_code = 403
         quota_resp.raise_for_status.side_effect = _requests.exceptions.HTTPError(
@@ -156,7 +156,6 @@ class TestYouTubePollerParams:
 
         assert result[0]["is_question"] is True
         assert result[1]["is_question"] is False
-
 
     def test_self_comments_filtered_out(self, monkeypatch):
         """Comments from the channel owner should be excluded."""

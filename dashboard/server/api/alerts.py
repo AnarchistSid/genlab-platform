@@ -4,6 +4,7 @@ Routes:
     GET /api/v1/alerts/publishing  -- categorized publishing alerts
     GET /api/v1/alerts/system      -- system-wide health alerts
 """
+
 import logging
 import os
 
@@ -21,6 +22,7 @@ def publishing_alerts():
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
             return api_error(error="DATABASE_URL not configured", code=503)
@@ -39,11 +41,13 @@ def publishing_alerts():
                 "GROUP BY niche_id"
             ).fetchall()
             if pf:
-                critical.append({
-                    "type": "publish_failed",
-                    "count": sum(r["cnt"] for r in pf),
-                    "niches": [r["niche_id"] for r in pf],
-                })
+                critical.append(
+                    {
+                        "type": "publish_failed",
+                        "count": sum(r["cnt"] for r in pf),
+                        "niches": [r["niche_id"] for r in pf],
+                    }
+                )
 
             # WARNING: High failure rate (24h)
             rates = conn.execute(
@@ -57,7 +61,9 @@ def publishing_alerts():
             if total > 0:
                 fail_rate = int((rates["fail"] or 0) / total * 100)
                 if fail_rate > 20:
-                    warning.append({"type": "high_failure_rate", "rate": fail_rate, "period": "24h"})
+                    warning.append(
+                        {"type": "high_failure_rate", "rate": fail_rate, "period": "24h"}
+                    )
 
             # WARNING: Partial publishes pending retry
             partial = conn.execute(
@@ -83,7 +89,9 @@ def publishing_alerts():
                 "WHERE platform = 'youtube' AND status = 'SUCCESS' "
                 "AND created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
             ).fetchone()["cnt"]
-            info.append({"type": "youtube_quota", "uploads_today": yt_today, "daily_limit": "~6 uploads"})
+            info.append(
+                {"type": "youtube_quota", "uploads_today": yt_today, "daily_limit": "~6 uploads"}
+            )
 
             # INFO: Today's publishing summary
             today = conn.execute(
@@ -93,32 +101,39 @@ def publishing_alerts():
                 "FROM publishing_analytics "
                 "WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
             ).fetchone()
-            info.append({
-                "type": "today_summary",
-                "published": today["ok"] or 0,
-                "failed": today["fail"] or 0,
-            })
+            info.append(
+                {
+                    "type": "today_summary",
+                    "published": today["ok"] or 0,
+                    "failed": today["fail"] or 0,
+                }
+            )
 
         # WARNING: Placeholder URLs (example.com) in affiliate catalog
         try:
             from pathlib import Path
 
             import yaml
+
             _catalog_path = (
                 Path(__file__).resolve().parent.parent.parent.parent
-                / "genlab-core" / "config" / "affiliate_catalog.yaml"
+                / "genlab-core"
+                / "config"
+                / "affiliate_catalog.yaml"
             )
             # Load alerting config to check if placeholder_url_alert is enabled
             _alerting_path = (
                 Path(__file__).resolve().parent.parent.parent.parent
-                / "genlab-core" / "config" / "alerting.yaml"
+                / "genlab-core"
+                / "config"
+                / "alerting.yaml"
             )
             placeholder_alert_enabled = False
             if _alerting_path.exists():
                 with open(_alerting_path, encoding="utf-8") as af:
                     alerting_cfg = yaml.safe_load(af) or {}
-                placeholder_alert_enabled = (
-                    alerting_cfg.get("affiliate", {}).get("placeholder_url_alert", False)
+                placeholder_alert_enabled = alerting_cfg.get("affiliate", {}).get(
+                    "placeholder_url_alert", False
                 )
 
             if placeholder_alert_enabled and _catalog_path.exists():
@@ -134,21 +149,25 @@ def publishing_alerts():
                                 placeholder_count += 1
                                 placeholder_products.append(product.get("name", "unknown"))
                 if placeholder_count > 0:
-                    warning.append({
-                        "type": "placeholder_affiliate_urls",
-                        "count": placeholder_count,
-                        "products": placeholder_products[:10],  # cap at 10 for readability
-                    })
+                    warning.append(
+                        {
+                            "type": "placeholder_affiliate_urls",
+                            "count": placeholder_count,
+                            "products": placeholder_products[:10],  # cap at 10 for readability
+                        }
+                    )
         except Exception as e:
             logger.debug("[Alerts] Placeholder URL check failed: %s", e)
 
         total_unresolved = len(critical) + len(warning)
-        return api_success(data={
-            "critical": critical,
-            "warning": warning,
-            "info": info,
-            "total_unresolved": total_unresolved,
-        })
+        return api_success(
+            data={
+                "critical": critical,
+                "warning": warning,
+                "info": info,
+                "total_unresolved": total_unresolved,
+            }
+        )
 
     except Exception as e:
         logger.error("[Alerts] Publishing query failed: %s", e, exc_info=True)
@@ -164,6 +183,7 @@ def system_alerts():
         # Pipeline: check if all niches ran today
         import psycopg
         from psycopg.rows import dict_row
+
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
             with psycopg.connect(dsn, row_factory=dict_row) as conn:
@@ -191,6 +211,7 @@ def system_alerts():
 
         # Disk usage
         import shutil
+
         genlab_path = os.environ.get("GENLAB_PROJECT_ROOT", "/Users/anarchistsid/GenLab")
         try:
             usage = shutil.disk_usage(genlab_path)

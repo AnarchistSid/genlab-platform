@@ -7,6 +7,7 @@ Pricing (Claude Haiku 4.5, as of March 2026):
   - Input: $0.80 / 1M tokens
   - Output: $4.00 / 1M tokens
 """
+
 from __future__ import annotations
 
 import logging

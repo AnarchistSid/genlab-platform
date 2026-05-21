@@ -5,6 +5,7 @@ Usage:
     python run_pipeline.py --verbose
     python run_pipeline.py --force-publish
 """
+
 from __future__ import annotations
 
 import sys

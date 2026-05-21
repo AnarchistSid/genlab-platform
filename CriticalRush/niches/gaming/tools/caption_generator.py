@@ -128,6 +128,7 @@ def select_model_size(duration_seconds: float | None, config: dict | None = None
 # Transcription (faster-whisper backend)
 # ---------------------------------------------------------------------------
 
+
 def transcribe(
     audio_path: str,
     model_size: str | None = None,
@@ -203,19 +204,23 @@ def _normalize_segments(segments_gen, min_word_probability: float = 0.0) -> list
                 prob = getattr(w, "probability", 1.0)
                 if prob < min_word_probability:
                     continue
-                words.append({
-                    "word": w.word.strip(),
-                    "start": w.start,
-                    "end": w.end,
-                    "probability": prob,
-                })
+                words.append(
+                    {
+                        "word": w.word.strip(),
+                        "start": w.start,
+                        "end": w.end,
+                        "probability": prob,
+                    }
+                )
 
-        segments.append({
-            "start": seg.start,
-            "end": seg.end,
-            "text": seg.text.strip() if seg.text else "",
-            "words": words,
-        })
+        segments.append(
+            {
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text.strip() if seg.text else "",
+                "words": words,
+            }
+        )
 
     return segments
 
@@ -223,6 +228,7 @@ def _normalize_segments(segments_gen, min_word_probability: float = 0.0) -> list
 # ---------------------------------------------------------------------------
 # SRT formatting
 # ---------------------------------------------------------------------------
+
 
 def format_srt_timestamp(seconds: float) -> str:
     """Convert seconds to SRT timestamp format: HH:MM:SS,mmm"""
@@ -272,10 +278,14 @@ def burn_captions(
         vf = f"subtitles='{escaped}'"
 
     cmd = [
-        "ffmpeg", "-y",
-        "-i", video_path,
-        "-vf", vf,
-        "-c:a", "copy",
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-vf",
+        vf,
+        "-c:a",
+        "copy",
         output_path,
     ]
 

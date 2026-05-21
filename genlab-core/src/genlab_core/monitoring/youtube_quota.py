@@ -83,8 +83,7 @@ class YouTubeQuotaTracker:
         cost_per = OPERATION_COSTS.get(operation)
         if cost_per is None:
             raise ValueError(
-                f"Unknown operation {operation!r}. "
-                f"Known: {', '.join(sorted(OPERATION_COSTS))}"
+                f"Unknown operation {operation!r}. Known: {', '.join(sorted(OPERATION_COSTS))}"
             )
 
         total_cost = cost_per * count
@@ -179,9 +178,7 @@ class YouTubeQuotaTracker:
             "updated_at": datetime.now(tz=PACIFIC).isoformat(),
         }
         try:
-            self._state_path.write_text(
-                json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-            )
+            self._state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         except OSError as exc:
             logger.error("Failed to save quota state to %s: %s", self._state_path, exc)
 

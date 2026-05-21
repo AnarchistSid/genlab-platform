@@ -64,7 +64,8 @@ class PreDownloadDedup:
             )
         except Exception as exc:
             logger.warning(
-                "[PreDownloadDedup] Blueprint load failed — skipping: %s", exc,
+                "[PreDownloadDedup] Blueprint load failed — skipping: %s",
+                exc,
             )
             return context
 
@@ -85,9 +86,7 @@ class PreDownloadDedup:
         for story in stories:
             source_url = story.get("source_url", "") or ""
             video_id = story.get("video_id", "") or ""
-            url_hash = (
-                sha256(source_url.encode()).hexdigest()[:16] if source_url else ""
-            )
+            url_hash = sha256(source_url.encode()).hexdigest()[:16] if source_url else ""
             if url_hash and url_hash in seen_url_hashes:
                 dropped_url += 1
                 logger.info(
@@ -101,7 +100,8 @@ class PreDownloadDedup:
                 logger.info(
                     "[PreDownloadDedup] video-dedup: dropping '%s' "
                     "(video_id=%s already in active blueprint set)",
-                    (story.get("title") or "")[:60], video_id[:16],
+                    (story.get("title") or "")[:60],
+                    video_id[:16],
                 )
                 continue
             kept.append(story)
@@ -117,6 +117,9 @@ class PreDownloadDedup:
         }
         logger.info(
             "[PreDownloadDedup] %d/%d kept (dropped %d url, %d video_id)",
-            len(kept), len(stories), dropped_url, dropped_vid,
+            len(kept),
+            len(stories),
+            dropped_url,
+            dropped_vid,
         )
         return context

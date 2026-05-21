@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 def _get_queue_manager():
     from server.core.publishing_queue import PublishingQueueManager
+
     return PublishingQueueManager()
 
 
@@ -53,9 +54,12 @@ def list_queue():
         # Lite transform: resolve visual_paths to URLs for thumbnails
         # without expensive ffprobe / review_server import
         from server.api.blueprints import _transform_media
+
         items = [_transform_media(item, lite=True) for item in items]
 
-        return api_success(data={"data": items, "meta": {"total": len(items), "niche_id": niche_id}})
+        return api_success(
+            data={"data": items, "meta": {"total": len(items), "niche_id": niche_id}}
+        )
     except Exception as e:
         logger.error("Queue list failed: %s", e, exc_info=True)
         return api_error(error="Failed to fetch publishing queue", code=502)
@@ -91,12 +95,16 @@ def approve_item(record_id):
         # Emit socket event
         try:
             from server.review_server import socketio
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "approved",
-                "queue_status": "APPROVED",
-            })
+
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "approved",
+                    "queue_status": "APPROVED",
+                },
+            )
         except Exception:
             pass
 
@@ -119,12 +127,16 @@ def hold_item(record_id):
 
         try:
             from server.review_server import socketio
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "held",
-                "queue_status": "HELD",
-            })
+
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "held",
+                    "queue_status": "HELD",
+                },
+            )
         except Exception:
             pass
 
@@ -145,12 +157,16 @@ def release_item(record_id):
 
         try:
             from server.review_server import socketio
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "released",
-                "queue_status": "PENDING_APPROVAL",
-            })
+
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "released",
+                    "queue_status": "PENDING_APPROVAL",
+                },
+            )
         except Exception:
             pass
 
@@ -170,21 +186,29 @@ def unschedule_item(record_id):
         return api_error(error="Invalid record ID")
     try:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
         # Keep action_taken=approved so the post appears in the unscheduled pool
         # (the pool filters for approved + no scheduled_for)
-        client.blueprints.update(record_id, {
-            "scheduled_for": None,
-        })
+        client.blueprints.update(
+            record_id,
+            {
+                "scheduled_for": None,
+            },
+        )
 
         try:
             from server.review_server import socketio
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "unscheduled",
-                "queue_status": "PENDING_APPROVAL",
-            })
+
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "unscheduled",
+                    "queue_status": "PENDING_APPROVAL",
+                },
+            )
         except Exception:
             pass
 
@@ -201,20 +225,28 @@ def archive_item(record_id):
         return api_error(error="Invalid record ID")
     try:
         from server.core.graph_sync import get_sync_client
+
         client = get_sync_client()
-        client.blueprints.update(record_id, {
-            "status": "ARCHIVED",
-            "action_taken": "archived",
-            "scheduled_for": None,
-        })
+        client.blueprints.update(
+            record_id,
+            {
+                "status": "ARCHIVED",
+                "action_taken": "archived",
+                "scheduled_for": None,
+            },
+        )
 
         try:
             from server.review_server import socketio
-            socketio.emit("blueprint_updated", {
-                "id": record_id,
-                "record_id": record_id,
-                "action": "archived",
-            })
+
+            socketio.emit(
+                "blueprint_updated",
+                {
+                    "id": record_id,
+                    "record_id": record_id,
+                    "action": "archived",
+                },
+            )
         except Exception:
             pass
 
@@ -239,9 +271,11 @@ def channel_health():
 @bp.route("/publishing/schedule", methods=["GET"])
 def publishing_schedule_stub():
     """Stub endpoint — redirects to /api/v1/schedule which has the real implementation."""
-    return api_success(data={
-        "slots": [],
-        "redirect": "/api/v1/schedule",
-        "status": "use_schedule_endpoint",
-        "message": "Publishing schedule is served at /api/v1/schedule",
-    })
+    return api_success(
+        data={
+            "slots": [],
+            "redirect": "/api/v1/schedule",
+            "status": "use_schedule_endpoint",
+            "message": "Publishing schedule is served at /api/v1/schedule",
+        }
+    )

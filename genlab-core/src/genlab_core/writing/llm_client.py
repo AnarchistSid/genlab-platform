@@ -63,6 +63,7 @@ class AnthropicLLMClient:
         # Track cost if accumulator is available in current context
         try:
             from genlab_core.intelligence.cost_accumulator import get_accumulator
+
             acc = get_accumulator()
             if acc is not None:
                 acc.record_llm(

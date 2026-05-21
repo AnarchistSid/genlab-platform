@@ -4,6 +4,7 @@ Extracts topic hashtags from story content and combines with
 niche-specific base tags. Trending tag integration is optional
 (requires Google Trends data).
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,39 +25,74 @@ _NICHE_BASE: dict[str, list[str]] = {
 # Topic keyword → hashtag mapping for common topics
 _TOPIC_HASHTAGS: dict[str, str] = {
     # Gaming
-    "minecraft": "#Minecraft", "fortnite": "#Fortnite", "valorant": "#VALORANT",
-    "gta": "#GTA6", "elden ring": "#EldenRing", "call of duty": "#CallOfDuty",
-    "playstation": "#PlayStation", "xbox": "#Xbox", "nintendo": "#Nintendo",
-    "steam": "#Steam", "esports": "#Esports", "battle royale": "#BattleRoyale",
+    "minecraft": "#Minecraft",
+    "fortnite": "#Fortnite",
+    "valorant": "#VALORANT",
+    "gta": "#GTA6",
+    "elden ring": "#EldenRing",
+    "call of duty": "#CallOfDuty",
+    "playstation": "#PlayStation",
+    "xbox": "#Xbox",
+    "nintendo": "#Nintendo",
+    "steam": "#Steam",
+    "esports": "#Esports",
+    "battle royale": "#BattleRoyale",
     # Sports
-    "nba": "#NBA", "nfl": "#NFL", "ipl": "#IPL", "cricket": "#Cricket",
-    "football": "#Football", "soccer": "#Soccer", "ufc": "#UFC",
-    "tennis": "#Tennis", "f1": "#F1", "baseball": "#MLB",
-    "basketball": "#Basketball", "premier league": "#PremierLeague",
+    "nba": "#NBA",
+    "nfl": "#NFL",
+    "ipl": "#IPL",
+    "cricket": "#Cricket",
+    "football": "#Football",
+    "soccer": "#Soccer",
+    "ufc": "#UFC",
+    "tennis": "#Tennis",
+    "f1": "#F1",
+    "baseball": "#MLB",
+    "basketball": "#Basketball",
+    "premier league": "#PremierLeague",
     # Movies
-    "marvel": "#Marvel", "dc": "#DC", "disney": "#Disney",
-    "netflix": "#Netflix", "oscar": "#Oscars", "horror": "#Horror",
-    "thriller": "#Thriller", "sci-fi": "#SciFi", "star wars": "#StarWars",
-    "trailer": "#Trailer", "box office": "#BoxOffice",
+    "marvel": "#Marvel",
+    "dc": "#DC",
+    "disney": "#Disney",
+    "netflix": "#Netflix",
+    "oscar": "#Oscars",
+    "horror": "#Horror",
+    "thriller": "#Thriller",
+    "sci-fi": "#SciFi",
+    "star wars": "#StarWars",
+    "trailer": "#Trailer",
+    "box office": "#BoxOffice",
     # Anime
-    "one piece": "#OnePiece", "naruto": "#Naruto", "dragon ball": "#DragonBall",
-    "jujutsu kaisen": "#JJK", "demon slayer": "#DemonSlayer",
-    "attack on titan": "#AOT", "my hero academia": "#MHA",
-    "crunchyroll": "#Crunchyroll", "isekai": "#Isekai", "shonen": "#Shonen",
+    "one piece": "#OnePiece",
+    "naruto": "#Naruto",
+    "dragon ball": "#DragonBall",
+    "jujutsu kaisen": "#JJK",
+    "demon slayer": "#DemonSlayer",
+    "attack on titan": "#AOT",
+    "my hero academia": "#MHA",
+    "crunchyroll": "#Crunchyroll",
+    "isekai": "#Isekai",
+    "shonen": "#Shonen",
     # AI
-    "chatgpt": "#ChatGPT", "openai": "#OpenAI", "midjourney": "#Midjourney",
-    "sora": "#Sora", "claude": "#Claude", "stable diffusion": "#StableDiffusion",
-    "llm": "#LLM", "gpt": "#GPT", "deep learning": "#DeepLearning",
+    "chatgpt": "#ChatGPT",
+    "openai": "#OpenAI",
+    "midjourney": "#Midjourney",
+    "sora": "#Sora",
+    "claude": "#Claude",
+    "stable diffusion": "#StableDiffusion",
+    "llm": "#LLM",
+    "gpt": "#GPT",
+    "deep learning": "#DeepLearning",
 }
 
 # Platform hashtag count limits
 _PLATFORM_LIMITS: dict[str, int] = {
-    "instagram": 5,    # 2 base + 3 topic
-    "youtube": 0,      # YouTube uses tags in description, not hashtags
-    "twitter": 2,      # Less is more on X
-    "facebook": 3,     # Moderate
-    "threads": 3,      # Similar to IG but fewer
-    "tiktok": 5,       # Similar to IG
+    "instagram": 5,  # 2 base + 3 topic
+    "youtube": 0,  # YouTube uses tags in description, not hashtags
+    "twitter": 2,  # Less is more on X
+    "facebook": 3,  # Moderate
+    "threads": 3,  # Similar to IG but fewer
+    "tiktok": 5,  # Similar to IG
 }
 
 
@@ -64,8 +100,10 @@ def _extract_topic_hashtags(story: dict[str, Any], niche_id: str, max_tags: int 
     """Extract topic-specific hashtags from story title and summary."""
     text = (
         (story.get("title", "") or "")
-        + " " + (story.get("summary", "") or "")
-        + " " + (story.get("hook", "") or story.get("hook_text", "") or "")
+        + " "
+        + (story.get("summary", "") or "")
+        + " "
+        + (story.get("hook", "") or story.get("hook_text", "") or "")
     ).lower()
 
     found: list[str] = []
@@ -79,7 +117,20 @@ def _extract_topic_hashtags(story: dict[str, Any], niche_id: str, max_tags: int 
     if not found:
         title = story.get("title", "") or ""
         # Extract capitalized words (likely proper nouns) — 3+ chars, not common words
-        common = {"the", "and", "for", "with", "from", "this", "that", "just", "new", "how", "why", "what"}
+        common = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "just",
+            "new",
+            "how",
+            "why",
+            "what",
+        }
         words = re.findall(r"\b[A-Z][a-z]{2,}\b", title)
         for word in words:
             if word.lower() not in common and len(found) < max_tags:
@@ -159,7 +210,25 @@ def generate_youtube_tags(
     tags.extend(niche_tags.get(niche_id, ["content"])[:4])
 
     # Extract topic keywords from title
-    common = {"the", "and", "for", "with", "from", "this", "that", "just", "new", "how", "a", "an", "in", "on", "of", "is", "to"}
+    common = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "just",
+        "new",
+        "how",
+        "a",
+        "an",
+        "in",
+        "on",
+        "of",
+        "is",
+        "to",
+    }
     words = [w.strip(".,!?:;'\"") for w in title.split() if len(w) > 2 and w.lower() not in common]
     tags.extend(words[:6])
 

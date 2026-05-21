@@ -9,20 +9,67 @@ BacklogClient and GraphTableProxy) uses patterns like:
 This module translates those to parameterized SQL WHERE clauses with
 positional parameters ($1, $2, etc.) for use with psycopg3.
 """
+
 from __future__ import annotations
 
 import re
 
 # PostgreSQL reserved words that require quoting when used as identifiers.
-_PG_RESERVED: frozenset[str] = frozenset({
-    "window", "value", "user", "table", "column", "order", "group",
-    "select", "where", "from", "to", "index", "check", "primary",
-    "references", "constraint", "default", "null", "not", "and", "or",
-    "all", "any", "as", "between", "case", "when", "then", "else",
-    "end", "in", "like", "limit", "offset", "on", "set", "update",
-    "delete", "insert", "into", "values", "create", "drop", "alter",
-    "grant", "revoke", "name", "comment", "key", "type", "role",
-})
+_PG_RESERVED: frozenset[str] = frozenset(
+    {
+        "window",
+        "value",
+        "user",
+        "table",
+        "column",
+        "order",
+        "group",
+        "select",
+        "where",
+        "from",
+        "to",
+        "index",
+        "check",
+        "primary",
+        "references",
+        "constraint",
+        "default",
+        "null",
+        "not",
+        "and",
+        "or",
+        "all",
+        "any",
+        "as",
+        "between",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "in",
+        "like",
+        "limit",
+        "offset",
+        "on",
+        "set",
+        "update",
+        "delete",
+        "insert",
+        "into",
+        "values",
+        "create",
+        "drop",
+        "alter",
+        "grant",
+        "revoke",
+        "name",
+        "comment",
+        "key",
+        "type",
+        "role",
+    }
+)
 
 
 def _quote_reserved(field: str) -> str:

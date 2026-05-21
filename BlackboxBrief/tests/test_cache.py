@@ -29,7 +29,7 @@ class TestCache:
         # Manually backdate the timestamp
         cache_file = cache.cache_dir / "test_key.json"
         data = json.loads(cache_file.read_text())
-        data['timestamp'] = "2020-01-01T00:00:00"
+        data["timestamp"] = "2020-01-01T00:00:00"
         cache_file.write_text(json.dumps(data))
 
         result = cache.get("test_key", ttl_hours=1)

@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 # Models
 # ---------------------------------------------------------------------------
 
+
 class ClipResult(BaseModel):
     """Result of a successful clip sourcing operation."""
+
     file_path: str
     source_tier: str  # "steam", "youtube", "twitch", "pexels"
     source_url: str
@@ -44,6 +46,7 @@ class ClipResult(BaseModel):
 
 class ClipSourcerConfig(BaseModel):
     """Configuration for the clip sourcer, loaded from sources.yaml."""
+
     max_duration_seconds: int = Field(default=60)
     min_duration_seconds: int = Field(default=5)
     target_resolution: str = Field(default="1080")
@@ -62,9 +65,11 @@ class ClipSourcerConfig(BaseModel):
 # Scored download gate — reject bad clips before full download
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class StageScore:
     """Score from a single download gate stage."""
+
     stage: int  # 1-4
     score: float  # 0.0-1.0
     passed: bool
@@ -91,10 +96,13 @@ class ScoredDownloadGate:
     def stage1_metadata(self, url: str) -> StageScore:
         """Fetch metadata without downloading. Cost: 0 bytes."""
         cmd = [
-            "yt-dlp", url,
+            "yt-dlp",
+            url,
             "--no-download",
-            "--print", "%(title)s|||%(duration)s|||%(view_count)s|||%(like_count)s",
-            "--quiet", "--no-warnings",
+            "--print",
+            "%(title)s|||%(duration)s|||%(view_count)s|||%(like_count)s",
+            "--quiet",
+            "--no-warnings",
         ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -125,9 +133,14 @@ class ScoredDownloadGate:
 
         # Duration filter
         if duration > 0:
-            if duration < self._config.min_duration_seconds or duration > self._config.max_duration_seconds:
+            if (
+                duration < self._config.min_duration_seconds
+                or duration > self._config.max_duration_seconds
+            ):
                 return StageScore(
-                    stage=1, score=0.0, passed=False,
+                    stage=1,
+                    score=0.0,
+                    passed=False,
                     reason=f"duration {duration}s outside [{self._config.min_duration_seconds}-{self._config.max_duration_seconds}]",
                 )
 
@@ -139,7 +152,9 @@ class ScoredDownloadGate:
         title_lower = title.lower()
         for frag in self._config.banned_fragments:
             if frag in title_lower:
-                return StageScore(stage=1, score=0.0, passed=False, reason=f"banned fragment: {frag}")
+                return StageScore(
+                    stage=1, score=0.0, passed=False, reason=f"banned fragment: {frag}"
+                )
 
         # Score: normalized views + likes ratio
         view_score = min(1.0, views / 100_000) if views > 0 else 0.3  # Unknown = moderate
@@ -148,40 +163,59 @@ class ScoredDownloadGate:
         score = max(0.1, min(1.0, score))
 
         passed = score >= self.THRESHOLDS[0]
-        return StageScore(stage=1, score=score, passed=passed, reason=f"views={views} likes={likes}")
+        return StageScore(
+            stage=1, score=score, passed=passed, reason=f"views={views} likes={likes}"
+        )
 
     def stage2_thumbnail(self, url: str, output_dir: Path) -> StageScore:
         """Download thumbnail only. Cost: ~50KB."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cmd = [
-                "yt-dlp", url,
-                "--write-thumbnail", "--skip-download",
-                "--convert-thumbnails", "jpg",
-                "-o", f"{tmpdir}/%(id)s.%(ext)s",
-                "--quiet", "--no-warnings",
+                "yt-dlp",
+                url,
+                "--write-thumbnail",
+                "--skip-download",
+                "--convert-thumbnails",
+                "jpg",
+                "-o",
+                f"{tmpdir}/%(id)s.%(ext)s",
+                "--quiet",
+                "--no-warnings",
             ]
             try:
                 subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             except Exception as exc:
-                return StageScore(stage=2, score=0.0, passed=False, reason=f"thumbnail cmd error: {exc}")
+                return StageScore(
+                    stage=2, score=0.0, passed=False, reason=f"thumbnail cmd error: {exc}"
+                )
 
             thumbs = list(Path(tmpdir).glob("*.jpg"))
             if not thumbs:
-                return StageScore(stage=2, score=0.3, passed=False, reason="no thumbnail", bytes_downloaded=0)
+                return StageScore(
+                    stage=2, score=0.3, passed=False, reason="no thumbnail", bytes_downloaded=0
+                )
 
             size = thumbs[0].stat().st_size
-            return StageScore(stage=2, score=0.7, passed=True, reason="thumbnail ok", bytes_downloaded=size)
+            return StageScore(
+                stage=2, score=0.7, passed=True, reason="thumbnail ok", bytes_downloaded=size
+            )
 
     def stage3_preview(self, url: str, output_dir: Path) -> StageScore:
         """Download first 15 seconds at 720p. Cost: ~5-20MB."""
         preview_path = output_dir / "preview_clip.mp4"
         cmd = [
-            "yt-dlp", url,
-            "--download-sections", "*0-15",
-            "--format", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]",
-            "--merge-output-format", "mp4",
-            "-o", str(preview_path),
-            "--quiet", "--no-warnings",
+            "yt-dlp",
+            url,
+            "--download-sections",
+            "*0-15",
+            "--format",
+            "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]",
+            "--merge-output-format",
+            "mp4",
+            "-o",
+            str(preview_path),
+            "--quiet",
+            "--no-warnings",
         ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -198,11 +232,15 @@ class ScoredDownloadGate:
         preview_path.unlink(missing_ok=True)  # Clean up preview
 
         if not probe or probe.get("height", 0) < 480:
-            return StageScore(stage=3, score=0.2, passed=False, reason="resolution too low", bytes_downloaded=size)
+            return StageScore(
+                stage=3, score=0.2, passed=False, reason="resolution too low", bytes_downloaded=size
+            )
 
         score = 0.8 if probe.get("height", 0) >= 720 else 0.6
         passed = score >= self.THRESHOLDS[2]
-        return StageScore(stage=3, score=score, passed=passed, reason=f"{probe['height']}p", bytes_downloaded=size)
+        return StageScore(
+            stage=3, score=score, passed=passed, reason=f"{probe['height']}p", bytes_downloaded=size
+        )
 
     def run_gates(self, url: str, output_dir: Path) -> tuple:
         """Run stages 1-3 in order, short-circuit on failure.
@@ -238,6 +276,7 @@ class ScoredDownloadGate:
 # ---------------------------------------------------------------------------
 # Tier 1 — Steam trailer (free, best quality for game trailers)
 # ---------------------------------------------------------------------------
+
 
 class SteamTrailerFetcher:
     """Fetch game trailers from Steam's public appdetails API."""
@@ -294,6 +333,7 @@ class SteamTrailerFetcher:
 # Tier 2 — YouTube trailer search (yt-dlp ytsearch)
 # ---------------------------------------------------------------------------
 
+
 class YouTubeTrailerFetcher:
     """Search YouTube for game trailers via yt-dlp."""
 
@@ -317,14 +357,19 @@ class YouTubeTrailerFetcher:
             [
                 "yt-dlp",
                 f"ytsearch3:{query}",
-                "--format", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",
-                "--merge-output-format", "mp4",
+                "--format",
+                "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",
+                "--merge-output-format",
+                "mp4",
                 "--no-playlist",
-                "--max-downloads", "1",
-                "--output", str(output_path),
+                "--max-downloads",
+                "1",
+                "--output",
+                str(output_path),
                 "--quiet",
                 "--no-warnings",
-                "--print", "%(title)s",
+                "--print",
+                "%(title)s",
             ]
 
             # First, get info to check for banned fragments
@@ -332,12 +377,16 @@ class YouTubeTrailerFetcher:
                 "yt-dlp",
                 f"ytsearch3:{query}",
                 "--no-download",
-                "--print", "%(title)s",
+                "--print",
+                "%(title)s",
                 "--quiet",
                 "--no-warnings",
             ]
             info_result = subprocess.run(
-                info_cmd, capture_output=True, text=True, timeout=30,
+                info_cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if info_result.returncode != 0:
                 logger.info("[YouTube] Search returned no results for '%s'", game_title)
@@ -375,16 +424,21 @@ class YouTubeTrailerFetcher:
             dl_cmd = [
                 "yt-dlp",
                 search_url,
-                "--format", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",
-                "--merge-output-format", "mp4",
+                "--format",
+                "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",
+                "--merge-output-format",
+                "mp4",
                 "--no-playlist",
-                "--output", str(output_path),
+                "--output",
+                str(output_path),
                 "--quiet",
                 "--no-warnings",
             ]
             result = subprocess.run(dl_cmd, capture_output=True, text=True, timeout=120)
             if result.returncode != 0:
-                logger.warning("[YouTube] Download failed for '%s': %s", game_title, result.stderr[:200])
+                logger.warning(
+                    "[YouTube] Download failed for '%s': %s", game_title, result.stderr[:200]
+                )
                 return None
 
             if output_path.exists():
@@ -404,6 +458,7 @@ class YouTubeTrailerFetcher:
 # Tier 3 — Twitch clips (Helix API + yt-dlp)
 # ---------------------------------------------------------------------------
 
+
 class TwitchClipFetcher:
     """Fetch top Twitch clips for a game via Helix API."""
 
@@ -413,6 +468,7 @@ class TwitchClipFetcher:
     def __init__(self, clip_limit: int = 5):
         self._clip_limit = clip_limit
         from genlab_core.settings import settings
+
         self._client_id = settings.twitch_client_id or ""
         self._client_secret = settings.twitch_client_secret or ""
         self._token: str | None = None
@@ -422,6 +478,7 @@ class TwitchClipFetcher:
         if not self._client_id or not self._client_secret:
             return None
         import time
+
         if self._token and time.time() < self._token_expiry:
             return self._token
         try:
@@ -495,7 +552,8 @@ class TwitchClipFetcher:
             dl_cmd = [
                 "yt-dlp",
                 clip_url,
-                "--output", str(output_path),
+                "--output",
+                str(output_path),
                 "--quiet",
                 "--no-warnings",
             ]
@@ -519,6 +577,7 @@ class TwitchClipFetcher:
 # Tier 4 — Pexels fallback (guaranteed, attribution required)
 # ---------------------------------------------------------------------------
 
+
 class PexelsFallbackFetcher:
     """Search Pexels for generic gaming footage as a last resort."""
 
@@ -526,6 +585,7 @@ class PexelsFallbackFetcher:
 
     def __init__(self, query_template: str):
         from genlab_core.settings import settings
+
         self._api_key = settings.pexels_api_key or ""
         self._query_template = query_template
 
@@ -586,6 +646,7 @@ class PexelsFallbackFetcher:
 # Video probing and trimming utilities
 # ---------------------------------------------------------------------------
 
+
 def _normalize_to_h264(file_path: str) -> str:
     """Re-encode to H.264/AAC if the clip uses VP9 or AV1 codec.
 
@@ -595,12 +656,20 @@ def _normalize_to_h264(file_path: str) -> str:
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "quiet", "-select_streams", "v:0",
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "ffprobe",
+                "-v",
+                "quiet",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 file_path,
             ],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         codec = result.stdout.strip().lower()
         if codec not in ("vp9", "av1", "vp8"):
@@ -610,21 +679,38 @@ def _normalize_to_h264(file_path: str) -> str:
         normalized_path = file_path.replace(".mp4", "_h264.mp4")
         transcode = subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-i", file_path,
-                "-vcodec", "libx264", "-acodec", "aac",
-                "-crf", "18", "-preset", "fast",
-                "-pix_fmt", "yuv420p",
-                "-color_primaries", "bt709",
-                "-color_trc", "bt709",
-                "-colorspace", "bt709",
+                "ffmpeg",
+                "-y",
+                "-i",
+                file_path,
+                "-vcodec",
+                "libx264",
+                "-acodec",
+                "aac",
+                "-crf",
+                "18",
+                "-preset",
+                "fast",
+                "-pix_fmt",
+                "yuv420p",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-colorspace",
+                "bt709",
                 normalized_path,
             ],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True,
+            text=True,
+            timeout=180,
         )
         if transcode.returncode != 0:
-            logger.warning("[Normalize] Transcode failed (exit %d): %s",
-                           transcode.returncode, transcode.stderr[:200])
+            logger.warning(
+                "[Normalize] Transcode failed (exit %d): %s",
+                transcode.returncode,
+                transcode.stderr[:200],
+            )
             return file_path  # Fall back to original
 
         # Replace original with normalized version
@@ -640,9 +726,13 @@ def probe_video(file_path: str) -> dict[str, Any] | None:
     """Run ffprobe and return width, height, duration, aspect_ratio."""
     try:
         cmd = [
-            "ffprobe", "-v", "quiet",
-            "-print_format", "json",
-            "-show_streams", "-show_format",
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_streams",
+            "-show_format",
             file_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
@@ -703,11 +793,16 @@ def trim_to_highlight(
     trimmed_path = file_path.replace(".mp4", "_trimmed.mp4")
     try:
         cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start_time),
-            "-i", file_path,
-            "-t", str(clip_duration),
-            "-c", "copy",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(start_time),
+            "-i",
+            file_path,
+            "-t",
+            str(clip_duration),
+            "-c",
+            "copy",
             trimmed_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -727,6 +822,7 @@ def trim_to_highlight(
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
+
 
 class GamingClipSourcer:
     """Orchestrate the 4-tier clip sourcing waterfall."""
@@ -784,7 +880,7 @@ class GamingClipSourcer:
         return ClipResult(
             file_path=trimmed,
             source_tier="",  # Caller sets this
-            source_url="",   # Caller sets this
+            source_url="",  # Caller sets this
             duration_seconds=probe["duration"],
             width=probe["width"],
             height=probe["height"],

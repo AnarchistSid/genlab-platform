@@ -19,24 +19,26 @@ def _make_story(title="Elden Ring", score=0.8):
 
 
 def _valid_llm_response():
-    return json.dumps({
-        "hook": "Elden Ring players are losing their minds rn",
-        "instagram": {
-            "caption": "Something massive just happened in the Lands Between and the community is going wild. drop a 🎮 if you're playing this",
-            "hashtags": ["#gaming", "#gamer", "#games", "#videogames"],
-        },
-        "youtube": {
-            "title": "Did Elden Ring Just Change Everything?",
-            "description": "The Elden Ring community is buzzing after a surprise update.",
-        },
-        "x_twitter": {
-            "tweet": "Elden Ring is going absolutely wild right now",
-            "hashtags": ["#gaming", "#gamer"],
-        },
-        "facebook": {
-            "caption": "The Elden Ring community can't stop talking about this. What's your take on the latest update?",
-        },
-    })
+    return json.dumps(
+        {
+            "hook": "Elden Ring players are losing their minds rn",
+            "instagram": {
+                "caption": "Something massive just happened in the Lands Between and the community is going wild. drop a 🎮 if you're playing this",
+                "hashtags": ["#gaming", "#gamer", "#games", "#videogames"],
+            },
+            "youtube": {
+                "title": "Did Elden Ring Just Change Everything?",
+                "description": "The Elden Ring community is buzzing after a surprise update.",
+            },
+            "x_twitter": {
+                "tweet": "Elden Ring is going absolutely wild right now",
+                "hashtags": ["#gaming", "#gamer"],
+            },
+            "facebook": {
+                "caption": "The Elden Ring community can't stop talking about this. What's your take on the latest update?",
+            },
+        }
+    )
 
 
 def _mock_settings(api_key=None):
@@ -93,16 +95,18 @@ class TestYouTubeTitleValidation:
         """If LLM returns title over 40 chars, it gets truncated."""
         from niches.gaming.stages.write_gaming_content import WriteGamingContent
 
-        long_title_response = json.dumps({
-            "hook": "test hook",
-            "instagram": {"caption": "test caption", "hashtags": ["#gaming"]},
-            "youtube": {
-                "title": "Is This Really The Most Amazing Game Update Of All Time?",
-                "description": "test desc",
-            },
-            "x_twitter": {"tweet": "test tweet", "hashtags": ["#gaming"]},
-            "facebook": {"caption": "test caption"},
-        })
+        long_title_response = json.dumps(
+            {
+                "hook": "test hook",
+                "instagram": {"caption": "test caption", "hashtags": ["#gaming"]},
+                "youtube": {
+                    "title": "Is This Really The Most Amazing Game Update Of All Time?",
+                    "description": "test desc",
+                },
+                "x_twitter": {"tweet": "test tweet", "hashtags": ["#gaming"]},
+                "facebook": {"caption": "test caption"},
+            }
+        )
 
         mock_client = MagicMock()
         mock_anthropic_module.Anthropic.return_value = mock_client

@@ -5,6 +5,7 @@ without authentication at:
     - https://<GENLAB_DOMAIN>/legal/privacy
     - https://<GENLAB_DOMAIN>/legal/deletion
 """
+
 from __future__ import annotations
 
 import os

@@ -59,17 +59,19 @@ class OverlaySpec:
     ) -> OverlaySpec:
         """ClutchWire score overlay: "AWAY 3 - 2 HOME" top-center."""
         score_text = f"{away_team}  {away_score} - {home_score}  {home_team}"
-        return cls(overlays=[
-            TextOverlay(
-                text=score_text,
-                x="(w-text_w)/2",
-                y="24",
-                font_size=52,
-                font_color="white@0.97",
-                box_color="black@0.72",
-                box_padding=16,
-            ),
-        ])
+        return cls(
+            overlays=[
+                TextOverlay(
+                    text=score_text,
+                    x="(w-text_w)/2",
+                    y="24",
+                    font_size=52,
+                    font_color="white@0.97",
+                    box_color="black@0.72",
+                    box_padding=16,
+                ),
+            ]
+        )
 
     @classmethod
     def film_rating(
@@ -98,27 +100,24 @@ class OverlaySpec:
             score_parts.append(f"IMDB {imdb_score}/10")
 
         if score_parts:
-            overlays.append(TextOverlay(
-                text="  |  ".join(score_parts),
-                x="(w-text_w)/2",
-                y="h*0.70",
-                font_size=44,
-                font_color="white@0.97",
-                box_color="black@0.72",
-                box_padding=14,
-            ))
+            overlays.append(
+                TextOverlay(
+                    text="  |  ".join(score_parts),
+                    x="(w-text_w)/2",
+                    y="h*0.70",
+                    font_size=44,
+                    font_color="white@0.97",
+                    box_color="black@0.72",
+                    box_padding=14,
+                )
+            )
 
         return cls(overlays=overlays)
 
 
 def _escape_drawtext(text: str) -> str:
     """Escape special chars for FFmpeg drawtext filter syntax."""
-    return (
-        text
-        .replace("\\", "\\\\")
-        .replace("'", "\u2019")
-        .replace(":", "\\:")
-    )
+    return text.replace("\\", "\\\\").replace("'", "\u2019").replace(":", "\\:")
 
 
 def composite_overlay(
@@ -173,24 +172,36 @@ def composite_overlay(
     cmd = ["ffmpeg"]
     if overwrite:
         cmd.append("-y")
-    cmd.extend([
-        "-i", str(input_path),
-        "-vf", vf_chain,
-        "-c:a", "copy",
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "20",
-        str(output_path),
-    ])
+    cmd.extend(
+        [
+            "-i",
+            str(input_path),
+            "-vf",
+            vf_chain,
+            "-c:a",
+            "copy",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "20",
+            str(output_path),
+        ]
+    )
 
     log.info(
         "[overlay] compositing %d overlay(s) onto %s",
-        len(spec.overlays), input_path.name,
+        len(spec.overlays),
+        input_path.name,
     )
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=120,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode != 0:
             log.warning(

@@ -2,6 +2,7 @@
 
 Verifies regex-based text feature extraction for hook quality prediction.
 """
+
 from __future__ import annotations
 
 from genlab_core.learning.hook_features import (
@@ -26,11 +27,13 @@ class TestExtractTextFeaturesQuestionDetection:
 
 class TestExtractTextFeaturesEmojiCount:
     def test_single_emoji(self):
-        features = extract_text_features("Breaking news \U0001F525")
+        features = extract_text_features("Breaking news \U0001f525")
         assert features["emoji_count"] >= 1.0
 
     def test_multiple_emoji(self):
-        features = extract_text_features("\U0001F6A8 OpenAI just dropped GPT-5 \U0001F525\U0001F4A5")
+        features = extract_text_features(
+            "\U0001f6a8 OpenAI just dropped GPT-5 \U0001f525\U0001f4a5"
+        )
         assert features["emoji_count"] >= 2.0
 
     def test_no_emoji(self):

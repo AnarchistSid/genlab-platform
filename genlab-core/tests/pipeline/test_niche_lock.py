@@ -4,6 +4,7 @@ The lock prevents two pipeline runs for the same niche from racing on
 shared state: .tmp/runs/ directory, Postgres stories upserts, content_memory
 writes, and the in-memory seen_urls set.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,6 +19,7 @@ def test_lock_acquire_and_release(tmp_path: Path) -> None:
     lock_file = tmp_path / ".tmp" / "locks" / "pipeline-test.lock"
     assert lock_file.exists()
     import os
+
     assert int(lock_file.read_text().strip()) == os.getpid()
     lock.__exit__(None, None, None)
 
@@ -61,6 +63,7 @@ def test_lock_error_message_includes_holder_pid(tmp_path: Path) -> None:
         with pytest.raises(_NicheLockError) as exc_info:
             lock2.__enter__()
         import os
+
         assert str(os.getpid()) in str(exc_info.value)
     finally:
         lock1.__exit__(None, None, None)

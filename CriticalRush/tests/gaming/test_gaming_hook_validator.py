@@ -97,7 +97,8 @@ class TestLengthLimits:
     def test_valid_length_passes(self, validator):
         result = validator.validate("The new ranked season just dropped today")
         length_issues = [
-            f for f in result.gaming_failures
+            f
+            for f in result.gaming_failures
             if f in (GamingHookFailure.TOO_SHORT, GamingHookFailure.TOO_LONG)
         ]
         assert not length_issues
@@ -130,12 +131,15 @@ class TestClean:
 class TestPassingHooks:
     """Hooks that should pass all checks."""
 
-    @pytest.mark.parametrize("hook", [
-        "This ranked season changes everything now",
-        "Gamers are losing it over this mechanic",
-        "Devs just shadow-dropped the top feature",
-        "Every pro is switching to this loadout",
-    ])
+    @pytest.mark.parametrize(
+        "hook",
+        [
+            "This ranked season changes everything now",
+            "Gamers are losing it over this mechanic",
+            "Devs just shadow-dropped the top feature",
+            "Every pro is switching to this loadout",
+        ],
+    )
     def test_valid_gaming_hooks(self, validator, hook):
         result = validator.validate(hook)
         assert result.passed, f"Hook should pass: {hook!r}, issues: {result.all_issues}"

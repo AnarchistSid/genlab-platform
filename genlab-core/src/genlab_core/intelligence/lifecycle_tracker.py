@@ -6,6 +6,7 @@ enabling analysis of engagement velocity and decay patterns.
 This data feeds future predictions: "posts that get X likes in 6h
 typically reach Y total reach by 48h."
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +35,7 @@ def record_lifecycle_snapshot(
 
     try:
         import psycopg
+
         with psycopg.connect(dsn) as conn:
             conn.execute(
                 "INSERT INTO analytics (niche_id, post_id, platform, metric_type, value, collected_at, window, extra) "
@@ -47,11 +49,13 @@ def record_lifecycle_snapshot(
                     metrics.get("reach", metrics.get("views", 0)),
                     datetime.now(UTC),
                     window,
-                    __import__("json").dumps({
-                        **metrics,
-                        "window": window,
-                        "snapshot_at": datetime.now(UTC).isoformat(),
-                    }),
+                    __import__("json").dumps(
+                        {
+                            **metrics,
+                            "window": window,
+                            "snapshot_at": datetime.now(UTC).isoformat(),
+                        }
+                    ),
                 ),
             )
     except Exception as exc:
@@ -67,6 +71,7 @@ def get_lifecycle_data(post_id: str) -> list[dict[str, Any]]:
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
             rows = conn.execute(
                 "SELECT window, value as reach, collected_at, extra "

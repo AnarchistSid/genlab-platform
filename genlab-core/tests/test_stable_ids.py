@@ -15,6 +15,7 @@ from genlab_core.cache.stable_ids import (
 
 # --- normalize_url -----------------------------------------------------------
 
+
 class TestNormalizeUrl:
     def test_strips_tracking_params(self):
         url = "https://example.com/article?utm_source=twitter&utm_medium=social&id=123"
@@ -69,6 +70,7 @@ class TestNormalizeUrl:
 
 # --- generate_story_id -------------------------------------------------------
 
+
 class TestGenerateStoryId:
     def test_deterministic(self):
         id1 = generate_story_id("https://example.com/article", "2026-02-15T10:00:00Z")
@@ -78,7 +80,7 @@ class TestGenerateStoryId:
     def test_64_hex_chars(self):
         result = generate_story_id("https://example.com/article", "2026-02-15T10:00:00Z")
         assert len(result) == 64
-        assert all(c in '0123456789abcdef' for c in result)
+        assert all(c in "0123456789abcdef" for c in result)
 
     def test_ignores_time_component(self):
         id1 = generate_story_id("https://example.com/article", "2026-02-15T10:00:00Z")
@@ -92,11 +94,14 @@ class TestGenerateStoryId:
 
     def test_tracking_params_ignored(self):
         id1 = generate_story_id("https://example.com/article", "2026-02-15T10:00:00Z")
-        id2 = generate_story_id("https://example.com/article?utm_source=twitter", "2026-02-15T10:00:00Z")
+        id2 = generate_story_id(
+            "https://example.com/article?utm_source=twitter", "2026-02-15T10:00:00Z"
+        )
         assert id1 == id2
 
 
 # --- generate_candidate_id ---------------------------------------------------
+
 
 class TestGenerateCandidateId:
     def test_deterministic(self):
@@ -115,6 +120,7 @@ class TestGenerateCandidateId:
 
 
 # --- generate_claim_id -------------------------------------------------------
+
 
 class TestGenerateClaimId:
     def test_format(self):
@@ -135,6 +141,7 @@ class TestGenerateClaimId:
 
 # --- generate_asset_id -------------------------------------------------------
 
+
 class TestGenerateAssetId:
     def test_format(self):
         result = generate_asset_id("story123", "https://cdn.example.com/img.jpg", "image")
@@ -149,6 +156,7 @@ class TestGenerateAssetId:
 
 # --- generate_post_id --------------------------------------------------------
 
+
 class TestGeneratePostId:
     def test_deterministic(self):
         id1 = generate_post_id("candidate123", "2026-02-15")
@@ -161,6 +169,7 @@ class TestGeneratePostId:
 
 
 # --- generate_cluster_id -----------------------------------------------------
+
 
 class TestGenerateClusterId:
     def test_deterministic(self):
@@ -186,6 +195,7 @@ class TestGenerateClusterId:
 
 # --- generate_global_asset_id ------------------------------------------------
 
+
 class TestGenerateGlobalAssetId:
     def test_deterministic(self):
         id1 = generate_global_asset_id("https://cdn.example.com/img.jpg", "image")
@@ -209,6 +219,7 @@ class TestGenerateGlobalAssetId:
 
 
 # --- generate_ugc_asset_id ---------------------------------------------------
+
 
 class TestGenerateUgcAssetId:
     def test_deterministic(self):

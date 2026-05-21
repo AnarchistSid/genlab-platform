@@ -9,6 +9,7 @@ Usage:
     uv run --package genlab-core python scripts/social_analytics.py --days 7
     uv run --package genlab-core python scripts/social_analytics.py --json
 """
+
 # NOTE: Run via: uv run --package genlab-core python scripts/social_analytics.py
 import argparse
 import json
@@ -36,12 +37,16 @@ def _refresh_youtube_token() -> str | None:
     refresh_token = os.getenv("YOUTUBE_REFRESH_TOKEN")
     if not all([client_id, client_secret, refresh_token]):
         return None
-    resp = requests.post("https://oauth2.googleapis.com/token", data={
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-        "grant_type": "refresh_token",
-    }, timeout=15)
+    resp = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=15,
+    )
     if resp.ok:
         return resp.json().get("access_token")
     logger.warning("YouTube token refresh failed: %s", resp.text[:200])
@@ -60,7 +65,8 @@ def get_youtube_analytics(days: int = 7) -> dict[str, Any]:
     resp = requests.get(
         "https://www.googleapis.com/youtube/v3/channels",
         params={"part": "statistics,snippet", "mine": "true"},
-        headers=headers, timeout=15,
+        headers=headers,
+        timeout=15,
     )
     if not resp.ok:
         return {"platform": "youtube", "error": resp.text[:200]}
@@ -83,27 +89,33 @@ def get_youtube_analytics(days: int = 7) -> dict[str, Any]:
             "type": "video",
             "publishedAfter": (datetime.now(UTC) - timedelta(days=days)).isoformat(),
         },
-        headers=headers, timeout=15,
+        headers=headers,
+        timeout=15,
     )
-    recent_ids = [item["id"]["videoId"] for item in resp2.json().get("items", [])] if resp2.ok else []
+    recent_ids = (
+        [item["id"]["videoId"] for item in resp2.json().get("items", [])] if resp2.ok else []
+    )
 
     video_stats = []
     if recent_ids:
         resp3 = requests.get(
             "https://www.googleapis.com/youtube/v3/videos",
             params={"part": "statistics,snippet", "id": ",".join(recent_ids)},
-            headers=headers, timeout=15,
+            headers=headers,
+            timeout=15,
         )
         if resp3.ok:
             for v in resp3.json().get("items", []):
                 vs = v["statistics"]
-                video_stats.append({
-                    "title": v["snippet"]["title"][:60],
-                    "views": int(vs.get("viewCount", 0)),
-                    "likes": int(vs.get("likeCount", 0)),
-                    "comments": int(vs.get("commentCount", 0)),
-                    "published": v["snippet"]["publishedAt"],
-                })
+                video_stats.append(
+                    {
+                        "title": v["snippet"]["title"][:60],
+                        "views": int(vs.get("viewCount", 0)),
+                        "likes": int(vs.get("likeCount", 0)),
+                        "comments": int(vs.get("commentCount", 0)),
+                        "published": v["snippet"]["publishedAt"],
+                    }
+                )
 
     return {
         "platform": "youtube",
@@ -162,13 +174,15 @@ def get_instagram_analytics(days: int = 7) -> dict[str, Any]:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
             if ts >= since:
-                media.append({
-                    "caption": (m.get("caption") or "")[:60],
-                    "likes": m.get("like_count", 0),
-                    "comments": m.get("comments_count", 0),
-                    "type": m.get("media_type"),
-                    "posted": m["timestamp"],
-                })
+                media.append(
+                    {
+                        "caption": (m.get("caption") or "")[:60],
+                        "likes": m.get("like_count", 0),
+                        "comments": m.get("comments_count", 0),
+                        "type": m.get("media_type"),
+                        "posted": m["timestamp"],
+                    }
+                )
 
     return {
         "platform": "instagram",
@@ -213,13 +227,15 @@ def get_facebook_analytics(days: int = 7) -> dict[str, Any]:
     posts = []
     if resp2.ok:
         for p in resp2.json().get("data", []):
-            posts.append({
-                "message": (p.get("message") or "")[:60],
-                "likes": p.get("likes", {}).get("summary", {}).get("total_count", 0),
-                "comments": p.get("comments", {}).get("summary", {}).get("total_count", 0),
-                "shares": p.get("shares", {}).get("count", 0),
-                "posted": p.get("created_time"),
-            })
+            posts.append(
+                {
+                    "message": (p.get("message") or "")[:60],
+                    "likes": p.get("likes", {}).get("summary", {}).get("total_count", 0),
+                    "comments": p.get("comments", {}).get("summary", {}).get("total_count", 0),
+                    "shares": p.get("shares", {}).get("count", 0),
+                    "posted": p.get("created_time"),
+                }
+            )
 
     return {
         "platform": "facebook",
@@ -249,7 +265,8 @@ def get_x_analytics(days: int = 7) -> dict[str, Any]:
     resp = requests.get(
         "https://api.twitter.com/2/users/me",
         params={"user.fields": "public_metrics,username"},
-        auth=auth, timeout=15,
+        auth=auth,
+        timeout=15,
     )
     if not resp.ok:
         return {"platform": "x_twitter", "error": f"user_fetch_failed: {resp.text[:200]}"}
@@ -266,20 +283,23 @@ def get_x_analytics(days: int = 7) -> dict[str, Any]:
             "max_results": 10,
             "tweet.fields": "public_metrics,created_at",
         },
-        auth=auth, timeout=15,
+        auth=auth,
+        timeout=15,
     )
     tweets = []
     if resp2.ok:
         for t in resp2.json().get("data", []):
             tm = t.get("public_metrics", {})
-            tweets.append({
-                "text": t["text"][:60],
-                "likes": tm.get("like_count", 0),
-                "retweets": tm.get("retweet_count", 0),
-                "replies": tm.get("reply_count", 0),
-                "impressions": tm.get("impression_count", 0),
-                "posted": t.get("created_at"),
-            })
+            tweets.append(
+                {
+                    "text": t["text"][:60],
+                    "likes": tm.get("like_count", 0),
+                    "retweets": tm.get("retweet_count", 0),
+                    "replies": tm.get("reply_count", 0),
+                    "impressions": tm.get("impression_count", 0),
+                    "posted": t.get("created_at"),
+                }
+            )
 
     return {
         "platform": "x_twitter",
@@ -331,12 +351,14 @@ def get_threads_analytics(days: int = 7) -> dict[str, Any]:
                     continue
             except (ValueError, TypeError):
                 pass
-            posts.append({
-                "text": (t.get("text") or "")[:60],
-                "likes": t.get("likes", 0),
-                "replies": t.get("replies", 0),
-                "posted": ts_str,
-            })
+            posts.append(
+                {
+                    "text": (t.get("text") or "")[:60],
+                    "likes": t.get("likes", 0),
+                    "replies": t.get("replies", 0),
+                    "posted": ts_str,
+                }
+            )
 
     return {
         "platform": "threads",
@@ -383,7 +405,9 @@ def print_summary(data: dict[str, Any]) -> None:
             print(f"  {platform.upper():12s}  ⚠ {d['error']}")
             continue
 
-        followers = d.get("followers") if d.get("followers") is not None else d.get("subscribers", "?")
+        followers = (
+            d.get("followers") if d.get("followers") is not None else d.get("subscribers", "?")
+        )
         print(f"  {platform.upper():12s}  {followers:>8} followers", end="")
         if d.get("username"):
             print(f"  (@{d['username']})", end="")
@@ -392,7 +416,13 @@ def print_summary(data: dict[str, Any]) -> None:
         posts = d.get("recent_videos") or d.get("recent_posts") or d.get("recent_tweets") or []
         if posts:
             top = posts[0]
-            title = top.get("title") or top.get("caption") or top.get("text") or top.get("message") or ""
+            title = (
+                top.get("title")
+                or top.get("caption")
+                or top.get("text")
+                or top.get("message")
+                or ""
+            )
             likes = top.get("likes") or top.get("views") or 0
             metric_name = "views" if "views" in top else "likes"
             print(f"               Top: {title[:45]}... ({likes} {metric_name})")

@@ -4,6 +4,7 @@ Migrated from AdaptGamingContent (289 lines) to the shared path (Sprint 69).
 The base class now handles all 8 platform rules. This subclass adds
 gaming-specific extras (safe-zone flag for 9:16 video).
 """
+
 from __future__ import annotations
 
 from pathlib import Path

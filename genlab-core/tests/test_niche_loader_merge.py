@@ -4,6 +4,7 @@ Four niches had dedup thresholds in scoring_weights.yaml that the pipeline
 was never reading. The loader now merges them into niche_config under
 both 'scoring_weights' and 'dedup' keys.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,9 +36,7 @@ def test_promotes_dedup_block_to_top_level(tmp_path: Path) -> None:
     root = _write_niche(
         tmp_path,
         niche_yaml={"niche_id": "test"},
-        scoring_yaml={
-            "dedup": {"jaccard_threshold": 0.70, "tfidf_threshold": 0.65}
-        },
+        scoring_yaml={"dedup": {"jaccard_threshold": 0.70, "tfidf_threshold": 0.65}},
     )
     cfg = load_niche_config("test", root)
     assert cfg["dedup"]["jaccard_threshold"] == 0.70

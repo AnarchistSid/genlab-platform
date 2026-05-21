@@ -15,6 +15,7 @@ Requires: ``qrcode[pil]`` (qrcode + Pillow)
 If qrcode is not installed, ``generate_qr_code`` returns None with a warning
 instead of crashing the pipeline.
 """
+
 from __future__ import annotations
 
 import logging
@@ -72,7 +73,9 @@ def generate_qr_code(
         try:
             import qrcode
         except ImportError:
-            logger.warning("[QRGenerator] qrcode package not installed — run: pip install qrcode[pil]")
+            logger.warning(
+                "[QRGenerator] qrcode package not installed — run: pip install qrcode[pil]"
+            )
             return None
 
     if base_url is None:
@@ -122,7 +125,9 @@ def generate_all_qr_codes(
     results: dict[str, Path | None] = {}
     for _niche_id, channel_slug in _CHANNEL_SLUGS.items():
         results[channel_slug] = generate_qr_code(
-            channel_slug, base_url=base_url, output_dir=output_dir,
+            channel_slug,
+            base_url=base_url,
+            output_dir=output_dir,
         )
     return results
 

@@ -16,9 +16,11 @@ from unittest.mock import MagicMock, patch
 # ffmpeg_filters tests
 # ---------------------------------------------------------------------------
 
+
 class TestFFmpegFilters:
     def test_xfade_map_has_expected_keys(self):
         from niches.gaming.media.ffmpeg_gaming import XFADE_MAP
+
         assert "hard_cut" in XFADE_MAP
         assert "zoom_impact" in XFADE_MAP
         assert "glitch" in XFADE_MAP
@@ -28,24 +30,28 @@ class TestFFmpegFilters:
 
     def test_build_scale_crop_near_target_ratio(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         # 9:16 source → should just scale
         result = build_scale_crop(1080, 1920, 1080, 1920)
         assert "scale=1080:1920" in result
 
     def test_build_scale_crop_landscape_to_portrait(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         # 16:9 → 9:16 crop
         result = build_scale_crop(1920, 1080, 1080, 1920)
         assert "crop=" in result
 
     def test_build_scale_crop_pillarbox_mode(self):
         from genlab_core.media.ffmpeg_utils import build_scale_crop
+
         result = build_scale_crop(1920, 1080, 1080, 1920, mode="pillarbox")
         assert "boxblur" in result
         assert "overlay" in result
 
     def test_position_to_xy_known_positions(self):
         from genlab_core.media.ffmpeg_utils import position_to_xy
+
         x, y = position_to_xy("center")
         assert "w-text_w" in x
         assert "h-text_h" in y
@@ -56,15 +62,23 @@ class TestFFmpegFilters:
 
     def test_position_to_xy_unknown_defaults_to_zero(self):
         from genlab_core.media.ffmpeg_utils import position_to_xy
+
         x, y = position_to_xy("nonexistent")
         assert x == "0"
         assert y == "0"
 
     def test_build_drawtext_basic(self):
         from genlab_core.media.ffmpeg_utils import build_drawtext
+
         result = build_drawtext(
-            text="Hello", font_file="/font.ttf", size=48,
-            color="white", x="0", y="0", start=0.0, end=3.0,
+            text="Hello",
+            font_file="/font.ttf",
+            size=48,
+            color="white",
+            x="0",
+            y="0",
+            start=0.0,
+            end=3.0,
         )
         assert "drawtext=" in result
         assert "fontfile=/font.ttf" in result
@@ -73,19 +87,34 @@ class TestFFmpegFilters:
 
     def test_build_drawtext_with_stroke(self):
         from genlab_core.media.ffmpeg_utils import build_drawtext
+
         result = build_drawtext(
-            text="Test", font_file="/f.ttf", size=36,
-            color="white", x="0", y="0", start=0, end=3,
-            stroke_color="black", stroke_width=2,
+            text="Test",
+            font_file="/f.ttf",
+            size=36,
+            color="white",
+            x="0",
+            y="0",
+            start=0,
+            end=3,
+            stroke_color="black",
+            stroke_width=2,
         )
         assert "bordercolor=black" in result
         assert "borderw=2" in result
 
     def test_build_drawtext_escapes_special_chars(self):
         from genlab_core.media.ffmpeg_utils import build_drawtext
+
         result = build_drawtext(
-            text="it's a: [test]", font_file="/f.ttf", size=36,
-            color="white", x="0", y="0", start=0, end=3,
+            text="it's a: [test]",
+            font_file="/f.ttf",
+            size=36,
+            color="white",
+            x="0",
+            y="0",
+            start=0,
+            end=3,
         )
         assert "\\:" in result
         assert "\\[" in result
@@ -93,10 +122,12 @@ class TestFFmpegFilters:
 
     def test_build_xfade_hard_cut_returns_none(self):
         from niches.gaming.media.ffmpeg_gaming import build_xfade_transition
+
         assert build_xfade_transition("hard_cut") is None
 
     def test_build_xfade_zoom_impact(self):
         from niches.gaming.media.ffmpeg_gaming import build_xfade_transition
+
         result = build_xfade_transition("zoom_impact", duration=0.5, offset=10.0)
         assert "smoothup" in result
         assert "duration=0.5" in result
@@ -104,11 +135,13 @@ class TestFFmpegFilters:
 
     def test_build_xfade_unknown_falls_back_to_fade(self):
         from niches.gaming.media.ffmpeg_gaming import build_xfade_transition
+
         result = build_xfade_transition("unknown_transition", duration=0.3, offset=5.0)
         assert "fade" in result
 
     def test_build_loudnorm_filter(self):
         from genlab_core.media.ffmpeg_utils import build_loudnorm_filter
+
         result = build_loudnorm_filter(target_i=-14.0, target_tp=-1.5, target_lra=11.0)
         assert "loudnorm" in result
         assert "I=-14.0" in result
@@ -117,6 +150,7 @@ class TestFFmpegFilters:
 # ---------------------------------------------------------------------------
 # concat_with_transitions offset bug fix tests
 # ---------------------------------------------------------------------------
+
 
 class TestConcatOffsetFix:
     """Verify the offset calculation fix in concat_with_transitions.
@@ -128,6 +162,7 @@ class TestConcatOffsetFix:
     def _extract_offsets(self, filter_complex: str) -> list[float]:
         """Extract offset values from a filter_complex string."""
         import re
+
         return [float(m) for m in re.findall(r"offset=([\d.]+)", filter_complex)]
 
     @patch("niches.gaming.media.ffmpeg_gaming.probe_media")
@@ -241,12 +276,14 @@ class TestConcatOffsetFix:
 
     def test_empty_clips_returns_false(self):
         from niches.gaming.media.ffmpeg_gaming import concat_with_transitions
+
         assert concat_with_transitions([], "/out.mp4", []) is False
 
 
 # ---------------------------------------------------------------------------
 # compilation_planner tests
 # ---------------------------------------------------------------------------
+
 
 def _make_clip(clip_id, score, game, duration=10, tier="GREEN", local_path="/clip.mp4"):
     return {
@@ -264,6 +301,7 @@ def _make_clip(clip_id, score, game, duration=10, tier="GREEN", local_path="/cli
 class TestCompilationPlanner:
     def test_filter_eligible_excludes_red_tier(self):
         from niches.gaming.tools.compilation_planner import filter_eligible_clips
+
         clips = [
             _make_clip("a", 0.8, "Valorant", tier="RED"),
             _make_clip("b", 0.7, "CS2", tier="GREEN"),
@@ -274,6 +312,7 @@ class TestCompilationPlanner:
 
     def test_filter_eligible_excludes_no_local_path(self):
         from niches.gaming.tools.compilation_planner import filter_eligible_clips
+
         clips = [
             _make_clip("a", 0.8, "Valorant", local_path=None),
             _make_clip("b", 0.7, "CS2"),
@@ -283,6 +322,7 @@ class TestCompilationPlanner:
 
     def test_filter_eligible_excludes_zero_duration(self):
         from niches.gaming.tools.compilation_planner import filter_eligible_clips
+
         clips = [
             _make_clip("a", 0.8, "Valorant", duration=0),
         ]
@@ -290,6 +330,7 @@ class TestCompilationPlanner:
 
     def test_select_clips_diversity_first(self):
         from niches.gaming.tools.compilation_planner import select_clips_for_compilation
+
         clips = [
             _make_clip("a", 0.9, "Valorant"),
             _make_clip("b", 0.85, "CS2"),
@@ -312,6 +353,7 @@ class TestCompilationPlanner:
 
     def test_select_clips_returns_empty_when_too_few(self):
         from niches.gaming.tools.compilation_planner import select_clips_for_compilation
+
         clips = [_make_clip("a", 0.9, "Valorant")]
         rules = {
             "compilation_types": {
@@ -322,6 +364,7 @@ class TestCompilationPlanner:
 
     def test_order_by_pacing_escalating(self):
         from niches.gaming.tools.compilation_planner import order_by_pacing
+
         clips = [
             _make_clip("a", 0.9, "V"),
             _make_clip("b", 0.5, "V"),
@@ -333,6 +376,7 @@ class TestCompilationPlanner:
 
     def test_order_by_pacing_front_loaded(self):
         from niches.gaming.tools.compilation_planner import order_by_pacing
+
         clips = [
             _make_clip("a", 0.5, "V"),
             _make_clip("b", 0.9, "V"),
@@ -343,6 +387,7 @@ class TestCompilationPlanner:
 
     def test_assign_transitions_first_clip_is_hard_cut(self):
         from niches.gaming.tools.compilation_planner import assign_transitions
+
         clips = [_make_clip("a", 0.9, "V"), _make_clip("b", 0.8, "V")]
         weights = {"hard_cut": 0.6, "zoom_impact": 0.4}
         result = assign_transitions(clips, weights)
@@ -350,12 +395,14 @@ class TestCompilationPlanner:
 
     def test_calculate_trim_points_caps_long_clips(self):
         from niches.gaming.tools.compilation_planner import calculate_trim_points
+
         clips = [_make_clip("a", 0.9, "V", duration=60)]
         result = calculate_trim_points(clips, target_duration=45, max_single_ratio=0.35)
         assert result[0]["effective_duration_seconds"] <= 45 * 0.35
 
     def test_generate_commentary_slots_minimum_lines(self):
         from niches.gaming.tools.compilation_planner import generate_commentary_slots
+
         clips = [
             {**_make_clip("a", 0.9, "V"), "effective_duration_seconds": 10},
             {**_make_clip("b", 0.8, "V"), "effective_duration_seconds": 10},
@@ -368,6 +415,7 @@ class TestCompilationPlanner:
 
     def test_compute_diversity_score(self):
         from niches.gaming.tools.compilation_planner import compute_diversity_score
+
         clips_3_games = [
             _make_clip("a", 0.9, "Valorant"),
             _make_clip("b", 0.8, "CS2"),
@@ -380,6 +428,7 @@ class TestCompilationPlanner:
 
     def test_compute_pacing_score_perfect_escalation(self):
         from niches.gaming.tools.compilation_planner import compute_pacing_score
+
         clips = [
             _make_clip("a", 0.5, "V"),
             _make_clip("b", 0.7, "V"),
@@ -389,6 +438,7 @@ class TestCompilationPlanner:
 
     def test_build_compilation_plan_returns_dict(self):
         from niches.gaming.tools.compilation_planner import build_compilation_plan
+
         clips = [
             _make_clip("a", 0.9, "Valorant", duration=10),
             _make_clip("b", 0.85, "CS2", duration=10),
@@ -398,7 +448,8 @@ class TestCompilationPlanner:
         rules = {
             "compilation_types": {
                 "short_compilation": {
-                    "min_clips": 3, "max_clips": 8,
+                    "min_clips": 3,
+                    "max_clips": 8,
                     "target_duration_seconds": 45,
                     "max_single_clip_ratio": 0.35,
                     "pacing": "escalating",
@@ -416,6 +467,7 @@ class TestCompilationPlanner:
 
     def test_compilation_id_is_deterministic(self):
         from niches.gaming.tools.compilation_planner import _compilation_id
+
         id1 = _compilation_id("fails", "2025-01-01", 1)
         id2 = _compilation_id("fails", "2025-01-01", 1)
         assert id1 == id2
@@ -424,6 +476,7 @@ class TestCompilationPlanner:
 
     def test_detect_clip_theme(self):
         from niches.gaming.tools.compilation_planner import detect_clip_theme
+
         theme_config = {
             "fails": {"keywords": ["fail", "died"]},
             "clutch": {"keywords": ["clutch", "ace"]},
@@ -440,23 +493,28 @@ class TestCompilationPlanner:
 # video_hasher tests
 # ---------------------------------------------------------------------------
 
+
 class TestVideoHasher:
     def test_hamming_distance_identical(self):
         from niches.gaming.tools.video_hasher import hamming_distance
+
         assert hamming_distance("abcdef1234567890", "abcdef1234567890") == 0
 
     def test_hamming_distance_single_bit(self):
         from niches.gaming.tools.video_hasher import hamming_distance
+
         # 0x0 vs 0x1 = 1 bit difference
         assert hamming_distance("0", "1") == 1
 
     def test_hamming_distance_all_different(self):
         from niches.gaming.tools.video_hasher import hamming_distance
+
         # 0x0 vs 0xf = 4 bits
         assert hamming_distance("0", "f") == 4
 
     def test_hash_store_add_and_find(self):
         from niches.gaming.tools.video_hasher import HashStore
+
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             store_path = f.name
         # Remove the empty file so HashStore.load() starts fresh
@@ -485,6 +543,7 @@ class TestVideoHasher:
 
     def test_hash_store_no_false_positive(self):
         from niches.gaming.tools.video_hasher import HashStore
+
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             store_path = f.name
 
@@ -501,6 +560,7 @@ class TestVideoHasher:
 # ---------------------------------------------------------------------------
 # render_gaming_video dual-path tests
 # ---------------------------------------------------------------------------
+
 
 class TestRenderDualPath:
     def test_compilation_mode_requires_3_clips(self):
@@ -576,6 +636,7 @@ class TestRenderDualPath:
 
     def test_get_clip_path_returns_none_for_missing_clip(self):
         from niches.gaming.stages.render_gaming_video import RenderGamingVideo
+
         stage = RenderGamingVideo()
         assert stage._get_clip_path({}) is None
         assert stage._get_clip_path({"media": {}}) is None
@@ -583,6 +644,7 @@ class TestRenderDualPath:
 
     def test_get_clip_path_returns_path_for_existing_file(self):
         from niches.gaming.stages.render_gaming_video import RenderGamingVideo
+
         stage = RenderGamingVideo()
 
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
@@ -597,6 +659,7 @@ class TestRenderDualPath:
 
     def test_skipped_when_no_clip_and_no_hook(self):
         from niches.gaming.stages.render_gaming_video import RenderGamingVideo
+
         stage = RenderGamingVideo()
 
         stories = [{"title": "No media", "media": {}, "content": {}}]

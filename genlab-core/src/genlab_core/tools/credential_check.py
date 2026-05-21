@@ -7,6 +7,7 @@ of failures.
 Usage:
     python -m genlab_core.tools.credential_check
 """
+
 from __future__ import annotations
 
 import os

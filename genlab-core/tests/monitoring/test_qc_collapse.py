@@ -8,6 +8,7 @@ cleared).
 
 After the fix: a single non-zero QC run clears the alert immediately.
 """
+
 from __future__ import annotations
 
 from genlab_core.monitoring.health_monitor import check_qc_collapse
@@ -37,9 +38,9 @@ class TestQcCollapseConsecutiveOnly:
         """
         reports = [
             _report("25.0%"),  # latest (recovery)
-            _report("0.0%"),   # previous
-            _report("0.0%"),   # before that
-            _report("0.0%"),   # and before
+            _report("0.0%"),  # previous
+            _report("0.0%"),  # before that
+            _report("0.0%"),  # and before
         ]
         alerts = check_qc_collapse(reports, "sports")
         assert alerts == []

@@ -1,4 +1,5 @@
 """Tests for persona configuration loading and system prompt building."""
+
 from __future__ import annotations
 
 import os

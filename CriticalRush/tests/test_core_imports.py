@@ -25,6 +25,7 @@ def test_strategy_is_abstract():
 
 def test_project_root_resolution():
     from pathlib import Path
+
     root = settings.get_project_root()
     assert isinstance(root, Path)
     assert root.exists()

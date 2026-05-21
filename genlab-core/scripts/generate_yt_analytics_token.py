@@ -34,6 +34,7 @@ After updating .env, scp it to Hetzner and the next metric_collector
 tick will start filling avg_view_duration / subscriber_gained from real
 analytics data.
 """
+
 from __future__ import annotations
 
 import http.server
@@ -47,12 +48,10 @@ import webbrowser
 import requests
 
 _CLIENT_ID = (
-    os.environ.get("YOUTUBE_ANALYTICS_CLIENT_ID")
-    or os.environ.get("YOUTUBE_CLIENT_ID", "")
+    os.environ.get("YOUTUBE_ANALYTICS_CLIENT_ID") or os.environ.get("YOUTUBE_CLIENT_ID", "")
 ).strip()
 _CLIENT_SECRET = (
-    os.environ.get("YOUTUBE_ANALYTICS_CLIENT_SECRET")
-    or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+    os.environ.get("YOUTUBE_ANALYTICS_CLIENT_SECRET") or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
 ).strip()
 _REDIRECT_URI = "http://localhost:8765/"
 _SCOPES = [
@@ -74,10 +73,7 @@ def main() -> int:
         "access_type": "offline",
         "prompt": "consent",  # force refresh_token issuance
     }
-    auth_url = (
-        "https://accounts.google.com/o/oauth2/v2/auth?"
-        + urllib.parse.urlencode(auth_params)
-    )
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(auth_params)
 
     print("Opening browser to:", auth_url)
     print()
@@ -96,9 +92,7 @@ def main() -> int:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html")
                 self.end_headers()
-                self.wfile.write(
-                    b"<h1>Got it.</h1><p>You can close this tab.</p>"
-                )
+                self.wfile.write(b"<h1>Got it.</h1><p>You can close this tab.</p>")
             else:
                 self.send_response(400)
                 self.end_headers()

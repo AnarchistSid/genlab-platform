@@ -7,6 +7,7 @@ Create Date: 2026-03-17 14:00:00.000000
 Phase 2: Stories + Assets tables with Row Level Security.
 Stories holds the fetched-story backlog; Assets holds media references per story.
 """
+
 from collections.abc import Sequence
 
 from alembic import op

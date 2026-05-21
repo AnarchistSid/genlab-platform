@@ -15,6 +15,7 @@ Tables affected:
   - publishing_analytics: 2 columns (blueprint_id, error_message)
   - stories: 2 columns (source, summary)
 """
+
 from collections.abc import Sequence
 
 from alembic import op

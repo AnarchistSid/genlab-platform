@@ -1,4 +1,5 @@
 """Threads poller tests — Sprint 29."""
+
 from __future__ import annotations
 
 import asyncio
@@ -51,6 +52,7 @@ class TestThreadsPollingConstant:
 
     def test_youtube_polls_less_frequently_than_threads(self):
         from genlab_core.engagement.poller import YOUTUBE_POLL_INTERVAL
+
         assert YOUTUBE_POLL_INTERVAL > THREADS_POLL_INTERVAL
 
 
@@ -60,10 +62,22 @@ class TestThreadsPollerFiltersOwnReplies:
     def test_own_replies_filtered_out(self, mock_threads_creds):
         me_resp = _make_me_resp("myaccount")
         media_resp = _make_media_resp(["post_1"])
-        replies_resp = _make_replies_resp([
-            {"id": "r_self", "text": "Thanks for watching!", "username": "myaccount", "timestamp": "2026-03-10T12:00:00Z"},
-            {"id": "r_fan", "text": "Great content!", "username": "superfan", "timestamp": "2026-03-10T12:05:00Z"},
-        ])
+        replies_resp = _make_replies_resp(
+            [
+                {
+                    "id": "r_self",
+                    "text": "Thanks for watching!",
+                    "username": "myaccount",
+                    "timestamp": "2026-03-10T12:00:00Z",
+                },
+                {
+                    "id": "r_fan",
+                    "text": "Great content!",
+                    "username": "superfan",
+                    "timestamp": "2026-03-10T12:05:00Z",
+                },
+            ]
+        )
 
         def mock_get(url, **kwargs):
             if "/me" in url:
@@ -84,9 +98,16 @@ class TestThreadsPollerFiltersOwnReplies:
         """If every reply is from the account owner, return empty."""
         me_resp = _make_me_resp("myaccount")
         media_resp = _make_media_resp(["post_1"])
-        replies_resp = _make_replies_resp([
-            {"id": "r1", "text": "First!", "username": "myaccount", "timestamp": "2026-03-10T12:00:00Z"},
-        ])
+        replies_resp = _make_replies_resp(
+            [
+                {
+                    "id": "r1",
+                    "text": "First!",
+                    "username": "myaccount",
+                    "timestamp": "2026-03-10T12:00:00Z",
+                },
+            ]
+        )
 
         def mock_get(url, **kwargs):
             if "/me" in url:
@@ -108,12 +129,26 @@ class TestThreadsPollerHandlesPagination:
         me_resp = _make_me_resp("framedrift")
         media_resp = _make_media_resp(["post_1", "post_2"])
 
-        replies_post1 = _make_replies_resp([
-            {"id": "r1", "text": "Nice outfit!", "username": "user_a", "timestamp": "2026-03-10T10:00:00Z"},
-        ])
-        replies_post2 = _make_replies_resp([
-            {"id": "r2", "text": "Where can I buy this?", "username": "user_b", "timestamp": "2026-03-10T11:00:00Z"},
-        ])
+        replies_post1 = _make_replies_resp(
+            [
+                {
+                    "id": "r1",
+                    "text": "Nice outfit!",
+                    "username": "user_a",
+                    "timestamp": "2026-03-10T10:00:00Z",
+                },
+            ]
+        )
+        replies_post2 = _make_replies_resp(
+            [
+                {
+                    "id": "r2",
+                    "text": "Where can I buy this?",
+                    "username": "user_b",
+                    "timestamp": "2026-03-10T11:00:00Z",
+                },
+            ]
+        )
 
         call_count = {"replies": 0}
 
@@ -159,9 +194,7 @@ class TestThreadsPollerErrorHandling:
 
         me_resp = _make_me_resp()
         media_resp = MagicMock()
-        media_resp.raise_for_status.side_effect = _requests.exceptions.HTTPError(
-            "401 Unauthorized"
-        )
+        media_resp.raise_for_status.side_effect = _requests.exceptions.HTTPError("401 Unauthorized")
 
         def mock_get(url, **kwargs):
             if "/me" in url:
@@ -178,9 +211,16 @@ class TestThreadsPollerErrorHandling:
         me_resp = _make_me_resp("framedrift")
         media_resp = _make_media_resp(["post_ok", "post_fail"])
 
-        ok_resp = _make_replies_resp([
-            {"id": "r1", "text": "Love it", "username": "fan", "timestamp": "2026-03-10T10:00:00Z"},
-        ])
+        ok_resp = _make_replies_resp(
+            [
+                {
+                    "id": "r1",
+                    "text": "Love it",
+                    "username": "fan",
+                    "timestamp": "2026-03-10T10:00:00Z",
+                },
+            ]
+        )
         fail_resp = _make_replies_resp([], status_code=403)
 
         call_count = {"replies": 0}
@@ -220,9 +260,16 @@ class TestThreadsPollerErrorHandling:
 
         me_resp = _make_me_resp("framedrift")
         media_resp = _make_media_resp(["post_1"])
-        replies_resp = _make_replies_resp([
-            {"id": "r1", "text": "Cool", "username": "fan", "timestamp": "2026-03-10T10:00:00Z"},
-        ])
+        replies_resp = _make_replies_resp(
+            [
+                {
+                    "id": "r1",
+                    "text": "Cool",
+                    "username": "fan",
+                    "timestamp": "2026-03-10T10:00:00Z",
+                },
+            ]
+        )
 
         captured_params = {}
 

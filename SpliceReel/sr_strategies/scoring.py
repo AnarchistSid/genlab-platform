@@ -124,10 +124,7 @@ class MovieScoringStrategy(ScoringStrategy):
             "novelty": self._score_novelty(item),
         }
 
-        weighted_sum = sum(
-            scores[dim] * weights.get(dim, 0)
-            for dim in scores
-        )
+        weighted_sum = sum(scores[dim] * weights.get(dim, 0) for dim in scores)
 
         # Lifecycle multiplier — from config, NOT hardcoded
         lifecycle_str = item.get("lifecycle_stage", "unknown")
@@ -160,11 +157,28 @@ class MovieScoringStrategy(ScoringStrategy):
         title = (story.get("title", "") + " " + story.get("summary", "")).lower()
         # Gaming keywords that indicate wrong niche
         gaming_signals = [
-            "marvel rivals", "fortnite", "call of duty", "cod ", "gta ",
-            "overwatch", "valorant", "league of legends", "apex legends",
-            "nintendo switch", "playstation", "xbox", "steam deck",
-            "esports", "e-sports", "game pass", "patch notes", "nerf ",
-            "buff ", "season pass", "battle royale", "video game",
+            "marvel rivals",
+            "fortnite",
+            "call of duty",
+            "cod ",
+            "gta ",
+            "overwatch",
+            "valorant",
+            "league of legends",
+            "apex legends",
+            "nintendo switch",
+            "playstation",
+            "xbox",
+            "steam deck",
+            "esports",
+            "e-sports",
+            "game pass",
+            "patch notes",
+            "nerf ",
+            "buff ",
+            "season pass",
+            "battle royale",
+            "video game",
         ]
         movie_rescue = ["movie", "film", "trailer", "box office", "cinema", "director"]
         if any(g in title for g in gaming_signals):
@@ -202,7 +216,9 @@ class MovieScoringStrategy(ScoringStrategy):
             if vp >= min_visual:
                 visual_passed.append(s)
             else:
-                logger.info("[movies] Visual potential rejected (%.1f): %s", vp, s.get("title", "")[:60])
+                logger.info(
+                    "[movies] Visual potential rejected (%.1f): %s", vp, s.get("title", "")[:60]
+                )
         stories = visual_passed
 
         scored = [self.score_item(s) for s in stories]
@@ -241,7 +257,11 @@ class MovieScoringStrategy(ScoringStrategy):
 
         logger.info(
             "[movies] Scored %d -> %d stories (dropped %d below %.2f, enriched %d via OMDb)",
-            len(stories), len(above), dropped, min_score, enriched_count,
+            len(stories),
+            len(above),
+            dropped,
+            min_score,
+            enriched_count,
         )
         return context
 
@@ -289,8 +309,7 @@ class MovieScoringStrategy(ScoringStrategy):
 
                 weights = self._scoring.get("weights", {})
                 weighted_sum = sum(
-                    item["scores"][dim] * weights.get(dim, 0)
-                    for dim in item["scores"]
+                    item["scores"][dim] * weights.get(dim, 0) for dim in item["scores"]
                 )
                 final = weighted_sum * item["lifecycle_multiplier"] * item["franchise_multiplier"]
                 item["score"] = round(final, 4)
@@ -300,7 +319,9 @@ class MovieScoringStrategy(ScoringStrategy):
 
                 logger.info(
                     "[score] OMDb enriched '%s': RT=%s IMDB=%s",
-                    item["film_title"], result.rt_score, result.imdb_rating,
+                    item["film_title"],
+                    result.rt_score,
+                    result.imdb_rating,
                 )
 
         return enriched

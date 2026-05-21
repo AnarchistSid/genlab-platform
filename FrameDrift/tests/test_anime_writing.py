@@ -14,17 +14,22 @@ from fd_strategies.writing import (
 def strategy(tmp_path):
     """Create strategy with test templates config."""
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "templates.yaml").write_text(yaml.dump({
-        "captions": {
-            "target_length": 300,
-            "cta_library": ["follow for daily anime moments"],
-            "hashtag_pool": ["#anime", "#manga", "#otaku", "#FrameDrift"],
-            "hashtags_per_post": 4,
-        },
-        "platforms": {},
-    }))
+    (config_dir / "templates.yaml").write_text(
+        yaml.dump(
+            {
+                "captions": {
+                    "target_length": 300,
+                    "cta_library": ["follow for daily anime moments"],
+                    "hashtag_pool": ["#anime", "#manga", "#otaku", "#FrameDrift"],
+                    "hashtags_per_post": 4,
+                },
+                "platforms": {},
+            }
+        )
+    )
     with patch("fd_strategies.writing.NICHE_ROOT", tmp_path):
         s = AnimeWritingStrategy()
         s._ensure_config()
@@ -79,9 +84,13 @@ class TestLLMWriting:
 
         mock_client = MagicMock()
 
-        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client), \
-             patch("genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"), \
-             patch("genlab_core.writing.video_content_writer.write_video_content") as mock_wvc:
+        with (
+            patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client),
+            patch(
+                "genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"
+            ),
+            patch("genlab_core.writing.video_content_writer.write_video_content") as mock_wvc,
+        ):
             mock_wvc.return_value = {
                 "hook": "Gojo just went limitless",
                 "instagram_caption": "Best anime scene #Anime",
@@ -104,9 +113,16 @@ class TestLLMWriting:
 
         mock_client = MagicMock()
 
-        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client), \
-             patch("genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"), \
-             patch("genlab_core.writing.video_content_writer.write_video_content", side_effect=Exception("API error")):
+        with (
+            patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client),
+            patch(
+                "genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"
+            ),
+            patch(
+                "genlab_core.writing.video_content_writer.write_video_content",
+                side_effect=Exception("API error"),
+            ),
+        ):
             ctx = {"stories": [_make_story()]}
             result = strategy.execute(ctx)
 

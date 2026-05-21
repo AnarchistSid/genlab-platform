@@ -124,7 +124,11 @@ class CompositeScorer:
             VideoScore with breakdown and pass/fail flag.
         """
         view_velocity = float(video.get("view_velocity", 0))
-        velocity_score = min(view_velocity / self.velocity_threshold, 1.0) if self.velocity_threshold > 0 else 0.0
+        velocity_score = (
+            min(view_velocity / self.velocity_threshold, 1.0)
+            if self.velocity_threshold > 0
+            else 0.0
+        )
 
         # Clamp inputs to valid ranges
         trend_mult = max(0.0, min(float(trend_multiplier), 3.0))
@@ -182,14 +186,19 @@ class CompositeScorer:
         if failed_count > 0:
             logger.info(
                 "[CompositeScorer:%s] %d/%d videos passed quality gate (threshold=%.2f)",
-                self.niche_id, len(passed), len(scored), self.min_composite,
+                self.niche_id,
+                len(passed),
+                len(scored),
+                self.min_composite,
             )
 
         if not passed:
             logger.warning(
                 "[CompositeScorer:%s] No videos passed quality gate — "
                 "0/%d above %.2f composite threshold",
-                self.niche_id, len(scored), self.min_composite,
+                self.niche_id,
+                len(scored),
+                self.min_composite,
             )
 
         passed.sort(key=lambda s: s.composite, reverse=True)
@@ -204,24 +213,83 @@ class CompositeScorer:
 # Score 0.0–1.0; stories below the threshold are dropped before VideoSourcer.
 
 _ZERO_VISUAL_PATTERNS = [
-    "opinion:", "editorial:", "weekly releases", "release schedule",
-    "manga releases", "podcast", "interview:", "analysis:",
-    "doesn't need to", "should give up", "here's why", "the case for",
-    "the case against", "north american releases", "adds digitally",
-    "web novels", "buying guide", "best of 20",
+    "opinion:",
+    "editorial:",
+    "weekly releases",
+    "release schedule",
+    "manga releases",
+    "podcast",
+    "interview:",
+    "analysis:",
+    "doesn't need to",
+    "should give up",
+    "here's why",
+    "the case for",
+    "the case against",
+    "north american releases",
+    "adds digitally",
+    "web novels",
+    "buying guide",
+    "best of 20",
 ]
 
 _STRONG_VISUAL_SIGNALS: dict[str, list[str]] = {
-    "sports": ["highlights", "scored", "dunk", "play", "win", "loss",
-               "record", "comeback", "ejected", "clutch", "game winner"],
-    "gaming": ["gameplay", "clip", "stream", "tournament", "patch",
-               "banned", "viral", "world record", "speedrun", "trailer"],
-    "movies": ["trailer", "clip", "scene", "teaser", "footage",
-               "box office", "premiere", "first look"],
-    "anime": ["episode", "fight", "scene", "finale", "trailer",
-              "moment", "animation", "arc", "premiere"],
-    "ai_creators": ["demo", "tool", "generates", "creates", "watch",
-                    "shows", "reveals", "launches"],
+    "sports": [
+        "highlights",
+        "scored",
+        "dunk",
+        "play",
+        "win",
+        "loss",
+        "record",
+        "comeback",
+        "ejected",
+        "clutch",
+        "game winner",
+    ],
+    "gaming": [
+        "gameplay",
+        "clip",
+        "stream",
+        "tournament",
+        "patch",
+        "banned",
+        "viral",
+        "world record",
+        "speedrun",
+        "trailer",
+    ],
+    "movies": [
+        "trailer",
+        "clip",
+        "scene",
+        "teaser",
+        "footage",
+        "box office",
+        "premiere",
+        "first look",
+    ],
+    "anime": [
+        "episode",
+        "fight",
+        "scene",
+        "finale",
+        "trailer",
+        "moment",
+        "animation",
+        "arc",
+        "premiere",
+    ],
+    "ai_creators": [
+        "demo",
+        "tool",
+        "generates",
+        "creates",
+        "watch",
+        "shows",
+        "reveals",
+        "launches",
+    ],
 }
 
 
@@ -240,7 +308,8 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
         if pattern in text:
             logger.debug(
                 "[VISUAL_SCORE] 0.0 (matched '%s'): %s",
-                pattern, story.get("title", "")[:60],
+                pattern,
+                story.get("title", "")[:60],
             )
             return 0.0
 

@@ -1,4 +1,5 @@
 """Tests for genlab_core.engagement.spam_filter."""
+
 import unittest
 
 from genlab_core.engagement.spam_filter import is_spam

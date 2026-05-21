@@ -35,9 +35,13 @@ def hamming_distance(hash_a: str, hash_b: str) -> int:
 def _extract_keyframes(video_path: str, out_dir: str) -> list[str]:
     """Extract evenly-spaced keyframes from a video via FFmpeg."""
     cmd = [
-        "ffprobe", "-v", "quiet",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "csv=p=0",
         video_path,
     ]
     try:
@@ -55,9 +59,16 @@ def _extract_keyframes(video_path: str, out_dir: str) -> list[str]:
         ts = interval * (i + 1)
         out_path = str(Path(out_dir) / f"frame_{i:02d}.png")
         cmd = [
-            "ffmpeg", "-y", "-ss", f"{ts:.2f}",
-            "-i", video_path,
-            "-frames:v", "1", "-q:v", "2",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{ts:.2f}",
+            "-i",
+            video_path,
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
             out_path,
         ]
         try:
@@ -131,12 +142,14 @@ class HashStore:
 
     def add(self, clip_id: str, hash_hex: str, source_url: str) -> None:
         """Add a new hash entry."""
-        self.entries.append({
-            "clip_id": clip_id,
-            "hash_hex": hash_hex,
-            "source_url": source_url,
-            "added_at": datetime.now(UTC).isoformat(),
-        })
+        self.entries.append(
+            {
+                "clip_id": clip_id,
+                "hash_hex": hash_hex,
+                "source_url": source_url,
+                "added_at": datetime.now(UTC).isoformat(),
+            }
+        )
 
     def find_near_duplicates(self, hash_hex: str, threshold: int = 10) -> list[dict]:
         """Find entries with Hamming distance below threshold."""

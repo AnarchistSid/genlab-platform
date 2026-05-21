@@ -1,4 +1,5 @@
 """Tests for env_writer — atomic .env file updates."""
+
 from __future__ import annotations
 
 import os

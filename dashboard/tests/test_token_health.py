@@ -37,6 +37,7 @@ def client():
 def _clear_cache():
     """Clear token health cache before each test."""
     from server.api.token_health import _health_cache
+
     _health_cache["data"] = None
     _health_cache["ts"] = 0.0
 
@@ -104,9 +105,7 @@ class TestTokenHealthEndpoint:
     @patch("server.api.token_health._check_instagram")
     @patch("server.api.token_health._check_youtube")
     @patch("server.api.token_health._check_facebook")
-    def test_tiktok_audit_false(
-        self, mock_fb, mock_yt, mock_ig, mock_threads, mock_tiktok, client
-    ):
+    def test_tiktok_audit_false(self, mock_fb, mock_yt, mock_ig, mock_threads, mock_tiktok, client):
         mock_tiktok.return_value = {
             "platform": "tiktok",
             "access_token_status": "ok",

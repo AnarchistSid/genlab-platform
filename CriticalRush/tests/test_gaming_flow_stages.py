@@ -7,10 +7,7 @@ from pathlib import Path
 
 import yaml
 
-NICHE_YAML = (
-    Path(__file__).resolve().parent.parent
-    / "niches" / "gaming" / "config" / "niche.yaml"
-)
+NICHE_YAML = Path(__file__).resolve().parent.parent / "niches" / "gaming" / "config" / "niche.yaml"
 
 
 def test_gaming_flow_stages_match_niche_yaml():
@@ -40,15 +37,18 @@ def test_gaming_flow_has_no_hardcoded_stage_list():
 
     source = inspect.getsource(gf)
 
-    assert "PIPELINE_STAGES" not in source, \
+    assert "PIPELINE_STAGES" not in source, (
         "gaming_flow.py still has hardcoded PIPELINE_STAGES constant"
+    )
 
     # Module-level _make_task() calls with hardcoded module paths should be gone
     # (they should now be generated dynamically from niche.yaml)
-    assert 'fetch_stories = _make_task(' not in source, \
+    assert "fetch_stories = _make_task(" not in source, (
         "gaming_flow.py still has module-level hardcoded task definitions"
-    assert 'publish_content = _make_task(' not in source, \
+    )
+    assert "publish_content = _make_task(" not in source, (
         "gaming_flow.py still has module-level hardcoded task definitions"
+    )
 
 
 def test_gaming_flow_load_stages_returns_list():

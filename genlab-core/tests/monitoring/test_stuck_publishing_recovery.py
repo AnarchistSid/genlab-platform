@@ -1,4 +1,5 @@
 """Regression tests for check_stuck_publishing in health_monitor."""
+
 from __future__ import annotations
 
 import os

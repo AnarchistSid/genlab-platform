@@ -1,4 +1,5 @@
 """JSON schema validation for CriticalRush pipeline outputs."""
+
 import json
 import logging
 from pathlib import Path

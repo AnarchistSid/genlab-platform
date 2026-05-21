@@ -4,6 +4,7 @@ The check fires when uncommitted edits accumulate on the production host
 — the 2026-05-17 audit found 25+ Python files with real forward-fixes
 sitting in the working tree for months, invisible to systemctl/journalctl.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -75,10 +76,9 @@ class TestGitDriftCheck:
 
     def test_mixed_drift_both_alerts(self):
         """Both python and yaml drift can fire simultaneously."""
-        files = (
-            [f"genlab-core/src/genlab_core/file_{i}.py" for i in range(16)]
-            + [f"config/niche_{i}.yaml" for i in range(35)]
-        )
+        files = [f"genlab-core/src/genlab_core/file_{i}.py" for i in range(16)] + [
+            f"config/niche_{i}.yaml" for i in range(35)
+        ]
         with patch("subprocess.run", return_value=_fake_git_status(files)):
             alerts = check_git_drift()
         checks = {a.check for a in alerts}
@@ -89,10 +89,12 @@ class TestGitDriftCheck:
         result = MagicMock()
         result.returncode = 0
         # Mix of 4 modified + 5 untracked python files
-        result.stdout = "\n".join([
-            *[f" M genlab-core/src/genlab_core/m_{i}.py" for i in range(4)],
-            *[f"?? genlab-core/src/genlab_core/u_{i}.py" for i in range(5)],
-        ])
+        result.stdout = "\n".join(
+            [
+                *[f" M genlab-core/src/genlab_core/m_{i}.py" for i in range(4)],
+                *[f"?? genlab-core/src/genlab_core/u_{i}.py" for i in range(5)],
+            ]
+        )
         with patch("subprocess.run", return_value=result):
             alerts = check_git_drift()
         # Only 4 tracked-modified counted, below threshold
@@ -103,9 +105,7 @@ class TestGitDriftCheck:
         result = MagicMock()
         result.returncode = 0
         # All in unrelated paths — outside genlab-core/, scripts/, dashboard/, etc.
-        result.stdout = "\n".join(
-            f" M random/external/path_{i}.py" for i in range(20)
-        )
+        result.stdout = "\n".join(f" M random/external/path_{i}.py" for i in range(20))
         with patch("subprocess.run", return_value=result):
             alerts = check_git_drift()
         assert alerts == []

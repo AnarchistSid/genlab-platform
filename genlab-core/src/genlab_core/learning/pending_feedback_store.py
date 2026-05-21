@@ -8,6 +8,7 @@ is ready for bandit partial_fit().
 Uses BacklogClient.pending_feedback proxy (GraphTableProxy) for
 all SharePoint operations.
 """
+
 from __future__ import annotations
 
 import json
@@ -65,11 +66,15 @@ class PendingFeedbackStore:
             self._proxy.create(fields)
             logger.info(
                 "[feedback] recorded: %s on %s (arm=%s)",
-                task.content_id, task.platform, task.bandit_arm,
+                task.content_id,
+                task.platform,
+                task.bandit_arm,
             )
         except Exception as e:
             logger.warning(
-                "[feedback] create failed for %s: %s", task.content_id, e,
+                "[feedback] create failed for %s: %s",
+                task.content_id,
+                e,
             )
 
     def get_pending(
@@ -83,9 +88,7 @@ class PendingFeedbackStore:
                 formula="{collection_status}='awaiting_6h'",
             )
             for status in ("awaiting_24h", "awaiting_48h", "awaiting_168h"):
-                items.extend(
-                    self._proxy.all(formula=f"{{collection_status}}='{status}'")
-                )
+                items.extend(self._proxy.all(formula=f"{{collection_status}}='{status}'"))
 
             tasks = []
             for item in items:
@@ -160,7 +163,9 @@ class PendingFeedbackStore:
 
             logger.info(
                 "[feedback] updated %s window=%s status=%s",
-                task.platform_post_id, window, task.collection_status,
+                task.platform_post_id,
+                window,
+                task.collection_status,
             )
         except Exception as e:
             logger.warning("[feedback] update_window failed: %s", e)

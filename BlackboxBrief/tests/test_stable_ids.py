@@ -58,7 +58,7 @@ class TestGenerateStoryId:
     def test_64_hex_chars(self):
         result = generate_story_id("https://example.com/article", "2026-02-15T10:00:00Z")
         assert len(result) == 64
-        assert all(c in '0123456789abcdef' for c in result)
+        assert all(c in "0123456789abcdef" for c in result)
 
     def test_ignores_time_component(self):
         """Same date, different times should produce the same ID."""
@@ -171,6 +171,7 @@ class TestColumnMapCacheTTL:
     def test_cache_has_ttl_constant(self):
         """Module must define a TTL constant for column map cache."""
         from genlab_core.http.graph_proxy import _COLUMN_MAP_TTL
+
         assert isinstance(_COLUMN_MAP_TTL, (int, float))
         assert _COLUMN_MAP_TTL > 0
 

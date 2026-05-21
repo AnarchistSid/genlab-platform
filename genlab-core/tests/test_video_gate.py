@@ -50,17 +50,19 @@ class TestVideoGate:
         stories = [
             {"story_id": "story-001", "title": "Has a clip"},
         ]
-        clip_index = _make_clip_index({
-            "story-001": {
-                "story_id": "story-001",
-                "success": True,
-                "clip_path": "/tmp/clips/story-001.mp4",
-                "source_url": "https://youtube.com/watch?v=abc",
-                "backend": "yt-dlp",
-                "duration_seconds": 30.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-001": {
+                    "story_id": "story-001",
+                    "success": True,
+                    "clip_path": "/tmp/clips/story-001.mp4",
+                    "source_url": "https://youtube.com/watch?v=abc",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 30.0,
+                    "error": "",
+                },
+            }
+        )
 
         # Mock Path so the file "exists" and is large enough
         mock_stat = MagicMock()
@@ -84,17 +86,19 @@ class TestVideoGate:
         stories = [
             {"story_id": "story-001", "title": "Tiny clip"},
         ]
-        clip_index = _make_clip_index({
-            "story-001": {
-                "story_id": "story-001",
-                "success": True,
-                "clip_path": "/tmp/clips/story-001.mp4",
-                "source_url": "https://youtube.com/watch?v=abc",
-                "backend": "yt-dlp",
-                "duration_seconds": 2.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-001": {
+                    "story_id": "story-001",
+                    "success": True,
+                    "clip_path": "/tmp/clips/story-001.mp4",
+                    "source_url": "https://youtube.com/watch?v=abc",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 2.0,
+                    "error": "",
+                },
+            }
+        )
 
         # Mock Path so the file exists but is too small
         mock_stat = MagicMock()
@@ -121,17 +125,19 @@ class TestVideoGate:
         stories = [
             {"story_id": "story-textonly", "title": "Schmitt leads Giants vs A's"},
         ]
-        clip_index = _make_clip_index({
-            "story-textonly": {
-                "story_id": "story-textonly",
-                "success": True,
-                "clip_path": "/tmp/clips/textonly.mp4",
-                "source_url": "https://youtube.com/watch?v=espn-preview",
-                "backend": "yt-dlp",
-                "duration_seconds": 12.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-textonly": {
+                    "story_id": "story-textonly",
+                    "success": True,
+                    "clip_path": "/tmp/clips/textonly.mp4",
+                    "source_url": "https://youtube.com/watch?v=espn-preview",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 12.0,
+                    "error": "",
+                },
+            }
+        )
 
         # Mock Path so the file appears large enough to clear the size gate.
         mock_stat = MagicMock()
@@ -139,15 +145,17 @@ class TestVideoGate:
 
         # Mock the probe to return Schmitt-shaped values: 26 kbps video,
         # ~20 KB/s (well below both thresholds).
-        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
-             patch(
-                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
-                 return_value={
-                     "bitrate_bps": 26_000.0,
-                     "duration_sec": 12.0,
-                     "bytes_per_sec": 20 * 1024.0,
-                 },
-             ):
+        with (
+            patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath,
+            patch(
+                "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                return_value={
+                    "bitrate_bps": 26_000.0,
+                    "duration_sec": 12.0,
+                    "bytes_per_sec": 20 * 1024.0,
+                },
+            ),
+        ):
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True
             mock_path_instance.stat.return_value = mock_stat
@@ -172,29 +180,33 @@ class TestVideoGate:
         stories = [
             {"story_id": "story-real", "title": "Actual highlight clip"},
         ]
-        clip_index = _make_clip_index({
-            "story-real": {
-                "story_id": "story-real",
-                "success": True,
-                "clip_path": "/tmp/clips/real.mp4",
-                "source_url": "https://youtube.com/watch?v=highlights",
-                "backend": "yt-dlp",
-                "duration_seconds": 25.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-real": {
+                    "story_id": "story-real",
+                    "success": True,
+                    "clip_path": "/tmp/clips/real.mp4",
+                    "source_url": "https://youtube.com/watch?v=highlights",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 25.0,
+                    "error": "",
+                },
+            }
+        )
         mock_stat = MagicMock()
         mock_stat.st_size = 3 * 1024 * 1024  # 3 MB
 
-        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
-             patch(
-                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
-                 return_value={
-                     "bitrate_bps": 600_000.0,
-                     "duration_sec": 25.0,
-                     "bytes_per_sec": 120 * 1024.0,
-                 },
-             ):
+        with (
+            patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath,
+            patch(
+                "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                return_value={
+                    "bitrate_bps": 600_000.0,
+                    "duration_sec": 25.0,
+                    "bytes_per_sec": 120 * 1024.0,
+                },
+            ),
+        ):
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True
             mock_path_instance.stat.return_value = mock_stat
@@ -212,29 +224,33 @@ class TestVideoGate:
         bytes/sec is below the floor, the gate should still reject.
         """
         stories = [{"story_id": "story-static", "title": "Static slideshow"}]
-        clip_index = _make_clip_index({
-            "story-static": {
-                "story_id": "story-static",
-                "success": True,
-                "clip_path": "/tmp/clips/static.mp4",
-                "source_url": "https://youtube.com/watch?v=slideshow",
-                "backend": "yt-dlp",
-                "duration_seconds": 30.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-static": {
+                    "story_id": "story-static",
+                    "success": True,
+                    "clip_path": "/tmp/clips/static.mp4",
+                    "source_url": "https://youtube.com/watch?v=slideshow",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 30.0,
+                    "error": "",
+                },
+            }
+        )
         mock_stat = MagicMock()
         mock_stat.st_size = 400 * 1024  # 400 KB
 
-        with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath, \
-             patch(
-                 "genlab_core.pipeline.stages.video_gate._probe_video_quality",
-                 return_value={
-                     "bitrate_bps": 0.0,  # container lied
-                     "duration_sec": 30.0,
-                     "bytes_per_sec": (400 * 1024) / 30.0,  # ~13.6 KB/s
-                 },
-             ):
+        with (
+            patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath,
+            patch(
+                "genlab_core.pipeline.stages.video_gate._probe_video_quality",
+                return_value={
+                    "bitrate_bps": 0.0,  # container lied
+                    "duration_sec": 30.0,
+                    "bytes_per_sec": (400 * 1024) / 30.0,  # ~13.6 KB/s
+                },
+            ),
+        ):
             mock_path_instance = MagicMock()
             mock_path_instance.exists.return_value = True
             mock_path_instance.stat.return_value = mock_stat
@@ -255,27 +271,29 @@ class TestVideoGate:
             {"story_id": "story-bad", "title": "Bad"},
             {"story_id": "story-also-bad", "title": "Also Bad"},
         ]
-        clip_index = _make_clip_index({
-            "story-ok": {
-                "story_id": "story-ok",
-                "success": True,
-                "clip_path": "/tmp/clips/ok.mp4",
-                "source_url": "https://youtube.com/watch?v=ok",
-                "backend": "yt-dlp",
-                "duration_seconds": 25.0,
-                "error": "",
-            },
-            "story-bad": {
-                "story_id": "story-bad",
-                "success": False,
-                "clip_path": "",
-                "source_url": "https://youtube.com/watch?v=bad",
-                "backend": "yt-dlp",
-                "duration_seconds": 0,
-                "error": "download failed",
-            },
-            # story-also-bad not in clips at all
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-ok": {
+                    "story_id": "story-ok",
+                    "success": True,
+                    "clip_path": "/tmp/clips/ok.mp4",
+                    "source_url": "https://youtube.com/watch?v=ok",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 25.0,
+                    "error": "",
+                },
+                "story-bad": {
+                    "story_id": "story-bad",
+                    "success": False,
+                    "clip_path": "",
+                    "source_url": "https://youtube.com/watch?v=bad",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 0,
+                    "error": "download failed",
+                },
+                # story-also-bad not in clips at all
+            }
+        )
 
         with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath:
             mock_path_instance = MagicMock()
@@ -323,17 +341,19 @@ class TestVideoGate:
         stories = [
             {"story_id": "story-001", "title": "Remote clip"},
         ]
-        clip_index = _make_clip_index({
-            "story-001": {
-                "story_id": "story-001",
-                "success": True,
-                "clip_path": "/remote/clips/story-001.mp4",
-                "source_url": "https://youtube.com/watch?v=abc",
-                "backend": "yt-dlp",
-                "duration_seconds": 20.0,
-                "error": "",
-            },
-        })
+        clip_index = _make_clip_index(
+            {
+                "story-001": {
+                    "story_id": "story-001",
+                    "success": True,
+                    "clip_path": "/remote/clips/story-001.mp4",
+                    "source_url": "https://youtube.com/watch?v=abc",
+                    "backend": "yt-dlp",
+                    "duration_seconds": 20.0,
+                    "error": "",
+                },
+            }
+        )
 
         with patch("genlab_core.pipeline.stages.video_gate.Path") as MockPath:
             mock_path_instance = MagicMock()

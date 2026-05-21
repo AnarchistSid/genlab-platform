@@ -3,6 +3,7 @@
 Covers keyword matching edge cases, network selection, niche isolation,
 seasonal filtering, CTA/hashtag stripping, and the end-to-end execute() path.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -17,6 +18,7 @@ from genlab_core.monetization.affiliate_matcher import (
 # ---------------------------------------------------------------------------
 # Shared helpers & fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_catalog(niche_id: str = "gaming", products: list | None = None) -> dict:
     """Build a minimal affiliate catalog dict."""
@@ -202,7 +204,9 @@ class TestHashtagStripping:
         # Only hashtag reference, no plain-text "cinema"
         text = "Amazing scene today #Cinema #Trending"
         result = match_product(text, "movies", catalog, seasonal_config={})
-        assert result is None, "Hashtag #Cinema should be stripped; keyword 'cinema' should not match"
+        assert result is None, (
+            "Hashtag #Cinema should be stripped; keyword 'cinema' should not match"
+        )
 
     def test_plain_text_still_matches_after_hashtag_strip(self):
         """Plain text 'cinema' (not a hashtag) should still match."""
@@ -238,9 +242,7 @@ class TestCTAStripping:
                 {
                     "name": "PS5 Console",
                     "keywords": ["ps5", "console"],
-                    "networks": {
-                        "amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}
-                    },
+                    "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
                 }
             ],
         )
@@ -257,9 +259,7 @@ class TestCTAStripping:
                 {
                     "name": "PS5 Console",
                     "keywords": ["ps5", "console"],
-                    "networks": {
-                        "amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}
-                    },
+                    "networks": {"amazon": {"url": "https://amzn.to/ps5", "commission_pct": 4.0}},
                 }
             ],
         )
@@ -300,7 +300,9 @@ class TestSeasonalNicheFilter:
         catalog = _make_catalog("anime", [])
         text = "amazing headset for gaming and audio setup"
         result = match_product(text, "anime", catalog, seasonal_config=seasonal_config)
-        assert result is None, "Seasonal product targeted at 'gaming' must not match in 'anime' niche"
+        assert result is None, (
+            "Seasonal product targeted at 'gaming' must not match in 'anime' niche"
+        )
 
     def test_seasonal_product_correct_niche_matches(self):
         """Seasonal product with niche_id='gaming' matches when niche_id='gaming'."""
@@ -377,7 +379,9 @@ class TestNicheIsolation:
         result = match_product(text, "gaming", catalog, seasonal_config={})
         # Gaming niche has PS5 and RTX, not Blu-ray
         if result is not None:
-            assert result["name"] != "4K Blu-ray Player", "Blu-ray (movies) must not match in gaming"
+            assert result["name"] != "4K Blu-ray Player", (
+                "Blu-ray (movies) must not match in gaming"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -394,9 +398,7 @@ class TestMultiKeywordPriority:
                 {
                     "name": "Generic Controller",
                     "keywords": ["controller"],
-                    "networks": {
-                        "amazon": {"url": "https://amzn.to/ctrl", "commission_pct": 3.0}
-                    },
+                    "networks": {"amazon": {"url": "https://amzn.to/ctrl", "commission_pct": 3.0}},
                 },
                 {
                     "name": "PS5 DualSense Controller",
@@ -420,9 +422,7 @@ class TestMultiKeywordPriority:
                 {
                     "name": "Gaming Mouse",
                     "keywords": ["mouse", "logitech"],
-                    "networks": {
-                        "amazon": {"url": "https://amzn.to/mouse", "commission_pct": 3.0}
-                    },
+                    "networks": {"amazon": {"url": "https://amzn.to/mouse", "commission_pct": 3.0}},
                 }
             ],
         )
@@ -686,15 +686,18 @@ class TestAffiliateMatchExecute:
 
         stage = AffiliateMatch()
         import json
+
         context = {
             "niche_id": "gaming",
             "stories": [
                 {
                     "title": "PS5 Review",
-                    "content": json.dumps({
-                        "hook": "PS5 playstation console launch",
-                        "instagram": {"caption": "gaming setup"},
-                    }),
+                    "content": json.dumps(
+                        {
+                            "hook": "PS5 playstation console launch",
+                            "instagram": {"caption": "gaming setup"},
+                        }
+                    ),
                 }
             ],
         }

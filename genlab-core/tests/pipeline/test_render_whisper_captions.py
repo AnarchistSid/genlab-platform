@@ -144,9 +144,7 @@ class TestABTestAssignment:
     def test_ab_enabled_100pct_control_forces_wpm(self, tmp_path):
         """With wpm_control_pct=1.0, all stories get wpm_control."""
         story = self._story_with_render(tmp_path)
-        context = self._make_context(
-            ab_enabled=True, wpm_control_pct=1.0, stories=[story]
-        )
+        context = self._make_context(ab_enabled=True, wpm_control_pct=1.0, stories=[story])
 
         with patch.object(self.stage, "_render_captions", return_value=None) as mock_render:
             result = self.stage.execute(context)
@@ -160,9 +158,7 @@ class TestABTestAssignment:
     def test_ab_enabled_0pct_control_forces_synced(self, tmp_path):
         """With wpm_control_pct=0.0, all stories get synced."""
         story = self._story_with_render(tmp_path)
-        context = self._make_context(
-            ab_enabled=True, wpm_control_pct=0.0, stories=[story]
-        )
+        context = self._make_context(ab_enabled=True, wpm_control_pct=0.0, stories=[story])
 
         with patch.object(self.stage, "_render_captions", return_value=None) as mock_render:
             result = self.stage.execute(context)
@@ -175,9 +171,7 @@ class TestABTestAssignment:
     def test_ab_deterministic_with_seed(self, tmp_path):
         """With a fixed seed, assignment is deterministic and splits correctly."""
         stories = [self._story_with_render(tmp_path, idx=i) for i in range(20)]
-        context = self._make_context(
-            ab_enabled=True, wpm_control_pct=0.30, stories=stories
-        )
+        context = self._make_context(ab_enabled=True, wpm_control_pct=0.30, stories=stories)
 
         random.seed(42)
         with patch.object(self.stage, "_render_captions", return_value=None):

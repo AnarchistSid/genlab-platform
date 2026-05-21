@@ -24,29 +24,87 @@ logger = logging.getLogger(__name__)
 
 # Google Trends category IDs
 TRENDS_CATEGORIES = {
-    "gaming": 8,       # Video Games
-    "sports": 20,      # Sports
-    "movies": 34,      # Movies
-    "anime": 0,        # No direct category — use keyword filtering
+    "gaming": 8,  # Video Games
+    "sports": 20,  # Sports
+    "movies": 34,  # Movies
+    "anime": 0,  # No direct category — use keyword filtering
     "ai_creators": 5,  # Computers & Electronics
 }
 
 NICHE_SEED_KEYWORDS = {
-    "gaming": ["gaming", "video games", "esports", "playstation", "xbox",
-               "nintendo", "steam", "twitch", "fortnite", "valorant",
-               "minecraft", "call of duty", "gta", "elden ring"],
-    "sports": ["sports", "NBA", "NFL", "soccer", "premier league",
-               "MLB", "NHL", "UFC", "tennis", "cricket", "march madness",
-               "champions league", "world cup"],
-    "movies": ["movies", "film", "cinema", "trailer", "box office",
-               "oscar", "marvel", "disney", "netflix", "streaming",
-               "director", "actor", "sequel"],
-    "anime": ["anime", "manga", "crunchyroll", "one piece", "dragon ball",
-              "naruto", "jujutsu kaisen", "demon slayer", "my hero academia",
-              "studio ghibli", "isekai"],
-    "ai_creators": ["artificial intelligence", "AI", "machine learning",
-                    "chatgpt", "openai", "claude", "gemini", "llm",
-                    "deep learning", "neural network", "midjourney", "sora"],
+    "gaming": [
+        "gaming",
+        "video games",
+        "esports",
+        "playstation",
+        "xbox",
+        "nintendo",
+        "steam",
+        "twitch",
+        "fortnite",
+        "valorant",
+        "minecraft",
+        "call of duty",
+        "gta",
+        "elden ring",
+    ],
+    "sports": [
+        "sports",
+        "NBA",
+        "NFL",
+        "soccer",
+        "premier league",
+        "MLB",
+        "NHL",
+        "UFC",
+        "tennis",
+        "cricket",
+        "march madness",
+        "champions league",
+        "world cup",
+    ],
+    "movies": [
+        "movies",
+        "film",
+        "cinema",
+        "trailer",
+        "box office",
+        "oscar",
+        "marvel",
+        "disney",
+        "netflix",
+        "streaming",
+        "director",
+        "actor",
+        "sequel",
+    ],
+    "anime": [
+        "anime",
+        "manga",
+        "crunchyroll",
+        "one piece",
+        "dragon ball",
+        "naruto",
+        "jujutsu kaisen",
+        "demon slayer",
+        "my hero academia",
+        "studio ghibli",
+        "isekai",
+    ],
+    "ai_creators": [
+        "artificial intelligence",
+        "AI",
+        "machine learning",
+        "chatgpt",
+        "openai",
+        "claude",
+        "gemini",
+        "llm",
+        "deep learning",
+        "neural network",
+        "midjourney",
+        "sora",
+    ],
 }
 
 
@@ -107,6 +165,7 @@ class GoogleTrendsIntel:
         if self._pytrends is None:
             try:
                 from pytrends.request import TrendReq
+
                 self._pytrends = TrendReq(hl="en-US", tz=self.tz)
             except ImportError:
                 pass
@@ -163,7 +222,11 @@ class GoogleTrendsIntel:
         # Tier 4: Stale cache (expired but better than nothing)
         stale = _read_stale_cache(niche_id)
         if stale:
-            logger.warning("[%s] Google Trends unavailable — using stale cache (%d topics)", niche_id, len(stale))
+            logger.warning(
+                "[%s] Google Trends unavailable — using stale cache (%d topics)",
+                niche_id,
+                len(stale),
+            )
             return stale[:top_n]
 
         seeds = NICHE_SEED_KEYWORDS.get(niche_id, ["trending", niche_id])
@@ -182,9 +245,9 @@ class GoogleTrendsIntel:
 
         # Google Trends RSS category IDs (different from YouTube categories)
         _RSS_CATEGORIES = {
-            "gaming": "8",       # Games
-            "sports": "20",      # Sports
-            "movies": "34",      # Movies
+            "gaming": "8",  # Games
+            "sports": "20",  # Sports
+            "movies": "34",  # Movies
             "ai_creators": "5",  # Computers & Electronics
             # anime: no direct category — use general + keyword filter
         }
@@ -205,7 +268,9 @@ class GoogleTrendsIntel:
                     if title_el is not None and title_el.text:
                         topics.append(title_el.text.strip())
                 if topics:
-                    logger.info("[%s] Trends RSS category %s: %d topics", niche_id, cat_id, len(topics))
+                    logger.info(
+                        "[%s] Trends RSS category %s: %d topics", niche_id, cat_id, len(topics)
+                    )
                     return topics[:20]
             except Exception as e:
                 logger.debug("[%s] Category RSS failed (cat=%s): %s", niche_id, cat_id, e)

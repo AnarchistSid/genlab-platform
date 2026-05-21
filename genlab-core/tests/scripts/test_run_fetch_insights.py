@@ -71,10 +71,10 @@ class TestGetEligibleRecords:
         """Posts 4-168h old with status SUCCESS should be eligible for 6h window."""
         client = MagicMock()
         client.publishing_analytics.all.return_value = [
-            self._make_record("p1", "instagram", "anime", 3),    # too recent (< 4h)
-            self._make_record("p2", "instagram", "anime", 6),    # in window
-            self._make_record("p3", "youtube", "anime", 24),     # in window
-            self._make_record("p4", "facebook", "anime", 100),   # in window (< 168h)
+            self._make_record("p1", "instagram", "anime", 3),  # too recent (< 4h)
+            self._make_record("p2", "instagram", "anime", 6),  # in window
+            self._make_record("p3", "youtube", "anime", 24),  # in window
+            self._make_record("p4", "facebook", "anime", 100),  # in window (< 168h)
         ]
 
         eligible = _get_eligible_records(client, "anime", 6)
@@ -90,7 +90,7 @@ class TestGetEligibleRecords:
         client.publishing_analytics.all.return_value = [
             self._make_record("p1", "instagram", "anime", 18, status="INSIGHTS_6H"),  # too recent
             self._make_record("p2", "instagram", "anime", 24, status="INSIGHTS_6H"),  # in window
-            self._make_record("p3", "youtube", "anime", 48, status="INSIGHTS_6H"),    # in window
+            self._make_record("p3", "youtube", "anime", 48, status="INSIGHTS_6H"),  # in window
         ]
 
         eligible = _get_eligible_records(client, "anime", 24)

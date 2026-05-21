@@ -1,4 +1,5 @@
 """Extended toxicity gate tests -- threshold behavior, model loading, and edge cases."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -23,9 +24,12 @@ class TestInboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.01, "severe_toxicity": 0.001,
-            "obscene": 0.005, "identity_attack": 0.002,
-            "insult": 0.01, "threat": 0.001,
+            "toxicity": 0.01,
+            "severe_toxicity": 0.001,
+            "obscene": 0.005,
+            "identity_attack": 0.002,
+            "insult": 0.01,
+            "threat": 0.001,
         }
         result = gate.check_inbound("I love this video!")
         assert not result.is_toxic
@@ -35,9 +39,12 @@ class TestInboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.95, "severe_toxicity": 0.8,
-            "obscene": 0.9, "identity_attack": 0.1,
-            "insult": 0.85, "threat": 0.05,
+            "toxicity": 0.95,
+            "severe_toxicity": 0.8,
+            "obscene": 0.9,
+            "identity_attack": 0.1,
+            "insult": 0.85,
+            "threat": 0.05,
         }
         result = gate.check_inbound("test toxic content")
         assert result.is_toxic
@@ -95,7 +102,9 @@ class TestOutboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.01, "insult": 0.02, "obscene": 0.01,
+            "toxicity": 0.01,
+            "insult": 0.02,
+            "obscene": 0.01,
         }
         assert gate.is_clean_outbound("Thanks for watching!")
 
@@ -104,7 +113,9 @@ class TestOutboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.1, "insult": 0.35, "obscene": 0.05,
+            "toxicity": 0.1,
+            "insult": 0.35,
+            "obscene": 0.05,
         }
         assert not gate.is_clean_outbound("snarky reply")
 
@@ -113,7 +124,9 @@ class TestOutboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.1, "insult": 0.1, "threat": 0.31,
+            "toxicity": 0.1,
+            "insult": 0.1,
+            "threat": 0.31,
         }
         assert not gate.is_clean_outbound("reply with subtle threat")
 
@@ -122,7 +135,9 @@ class TestOutboundCheck:
         gate = ToxicityGate()
         gate._model = MagicMock()
         gate._model.predict.return_value = {
-            "toxicity": 0.3, "insult": 0.3, "obscene": 0.3,
+            "toxicity": 0.3,
+            "insult": 0.3,
+            "obscene": 0.3,
         }
         assert gate.is_clean_outbound("borderline reply")
 
@@ -167,8 +182,10 @@ class TestConvenienceWrapper:
 class TestToxicityResultDataclass:
     def test_result_has_all_fields(self):
         r = ToxicityResult(
-            is_toxic=True, max_dimension="toxicity",
-            max_score=0.95, all_scores={"toxicity": 0.95},
+            is_toxic=True,
+            max_dimension="toxicity",
+            max_score=0.95,
+            all_scores={"toxicity": 0.95},
         )
         assert r.is_toxic
         assert r.max_dimension == "toxicity"
@@ -178,8 +195,10 @@ class TestToxicityResultDataclass:
     def test_result_is_not_frozen(self):
         """ToxicityResult is a plain dataclass (not frozen)."""
         r = ToxicityResult(
-            is_toxic=False, max_dimension="insult",
-            max_score=0.1, all_scores={},
+            is_toxic=False,
+            max_dimension="insult",
+            max_score=0.1,
+            all_scores={},
         )
         r.is_toxic = True
         assert r.is_toxic is True
@@ -187,8 +206,10 @@ class TestToxicityResultDataclass:
     def test_error_result_has_empty_scores(self):
         """Error results should have empty scores dict."""
         r = ToxicityResult(
-            is_toxic=False, max_dimension="error",
-            max_score=0.0, all_scores={},
+            is_toxic=False,
+            max_dimension="error",
+            max_score=0.0,
+            all_scores={},
         )
         assert r.all_scores == {}
         assert r.max_dimension == "error"

@@ -40,32 +40,30 @@ logger = logging.getLogger(__name__)
 # Patterns that indicate the rest of the headline is editorial, not a game name.
 _EDITORIAL_SPLITS = re.compile(
     r"\s*(?:"
-    r"(?:is\s+the\s+#?\d)|"          # "is the #1 seller..."
+    r"(?:is\s+the\s+#?\d)|"  # "is the #1 seller..."
     r"(?:players?\s+(?:are|accidentally|need|can't))|"  # "players accidentally..."
-    r"(?:day\s+one\s+check)|"         # "day one check-in"
-    r"(?:launches?\b)|"               # "Launches, Immediately..."
-    r"(?:impressions?\b)|"            # "impressions"
-    r"(?:review\b)|"                  # "Review"
-    r"(?:preview\b)|"                 # "Preview"
-    r"(?:guide\b)|"                   # "Guide"
-    r"(?:tips?\b)|"                   # "Tips"
-    r"(?:best\s)|"                    # "Best Marathon characters..."
-    r"(?:\d+\s+things?\b)|"           # "7 Things..."
-    r"(?:how\s+to\b)|"               # "How to..."
-    r"(?:promises?\b)|"              # "Promises War On..."
-    r"(?:update\b)|"                  # "update"
-    r"(?:patch\s+notes?\b)|"          # "patch notes"
-    r"(?:dlc\b)|"                     # "DLC"
-    r"(?:announced?\b)|"             # "announced"
-    r"(?:trailer\b)"                  # "trailer"
+    r"(?:day\s+one\s+check)|"  # "day one check-in"
+    r"(?:launches?\b)|"  # "Launches, Immediately..."
+    r"(?:impressions?\b)|"  # "impressions"
+    r"(?:review\b)|"  # "Review"
+    r"(?:preview\b)|"  # "Preview"
+    r"(?:guide\b)|"  # "Guide"
+    r"(?:tips?\b)|"  # "Tips"
+    r"(?:best\s)|"  # "Best Marathon characters..."
+    r"(?:\d+\s+things?\b)|"  # "7 Things..."
+    r"(?:how\s+to\b)|"  # "How to..."
+    r"(?:promises?\b)|"  # "Promises War On..."
+    r"(?:update\b)|"  # "update"
+    r"(?:patch\s+notes?\b)|"  # "patch notes"
+    r"(?:dlc\b)|"  # "DLC"
+    r"(?:announced?\b)|"  # "announced"
+    r"(?:trailer\b)"  # "trailer"
     r")",
     re.IGNORECASE,
 )
 
 # Common suffixes to strip from the extracted game name.
-_SUFFIX_NOISE = re.compile(
-    r"\s*[-–—:,]\s*$"
-)
+_SUFFIX_NOISE = re.compile(r"\s*[-–—:,]\s*$")
 
 
 def _extract_game_name(headline: str) -> str | None:
@@ -106,15 +104,17 @@ def _extract_game_name_llm(headline: str, api_key: str) -> str | None:
         response = client.messages.create(
             model=get_model("extract_game_name"),
             max_tokens=60,
-            messages=[{
-                "role": "user",
-                "content": (
-                    "Given this gaming article headline, what game is it about? "
-                    "Reply with only the game name, nothing else. If you cannot "
-                    "determine the game, reply with exactly: unknown\n\n"
-                    f"Headline: {headline}"
-                ),
-            }],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Given this gaming article headline, what game is it about? "
+                        "Reply with only the game name, nothing else. If you cannot "
+                        "determine the game, reply with exactly: unknown\n\n"
+                        f"Headline: {headline}"
+                    ),
+                }
+            ],
         )
         return response.content[0].text.strip()
 
@@ -124,6 +124,7 @@ def _extract_game_name_llm(headline: str, api_key: str) -> str | None:
 
         # Cost tracking (best-effort; _call returns text only, so estimate tokens)
         from genlab_core.intelligence.cost_accumulator import get_accumulator
+
         acc = get_accumulator()
         if acc:
             # Approximate: short prompt (~50 tokens in, ~10 tokens out)
@@ -151,6 +152,7 @@ class EnrichWithIGDB:
         """Lazy-initialize the IGDB client."""
         if self._client is None:
             from niches.gaming.tools.igdb_client import IGDBClient
+
             self._client = IGDBClient()
         return self._client
 
@@ -195,7 +197,9 @@ class EnrichWithIGDB:
                             story[key] = value
                     logger.info(
                         "[ENRICH] '%s' → game='%s' → igdb=%s",
-                        title, game_name, result.get("igdb_game_id"),
+                        title,
+                        game_name,
+                        result.get("igdb_game_id"),
                     )
                 after_keys = set(story.keys())
 
@@ -210,10 +214,7 @@ class EnrichWithIGDB:
             if i < len(stories) - 1:
                 time.sleep(self.INTER_STORY_DELAY_SECONDS)
 
-        unlocked = sum(
-            1 for s in stories
-            if s.get("igdb_game_id") or s.get("steam_app_id")
-        )
+        unlocked = sum(1 for s in stories if s.get("igdb_game_id") or s.get("steam_app_id"))
 
         context.setdefault("run_stats", {})["igdb_enrichment"] = {
             "enriched_count": enriched_count,
@@ -224,7 +225,10 @@ class EnrichWithIGDB:
         logger.info(
             "[ENRICH] %d enriched, %d already had IDs, %d failed "
             "— IGDB clip sourcing unlocked for %d stories",
-            enriched_count, skipped_count, failed_count, unlocked,
+            enriched_count,
+            skipped_count,
+            failed_count,
+            unlocked,
         )
 
         return context

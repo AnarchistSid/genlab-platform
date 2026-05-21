@@ -95,14 +95,18 @@ def _enforce_hashtag_count(
         hashtags = hashtags + to_add
         logger.warning(
             "[ADAPT] Instagram: padded hashtags from %d to %d (added %s)",
-            count, len(hashtags), " ".join(to_add),
+            count,
+            len(hashtags),
+            " ".join(to_add),
         )
     elif count > max_count:
         trimmed = hashtags[max_count:]
         hashtags = hashtags[:max_count]
         logger.warning(
             "[ADAPT] Instagram: trimmed hashtags from %d to %d (removed %s)",
-            count, max_count, " ".join(trimmed),
+            count,
+            max_count,
+            " ".join(trimmed),
         )
 
     return caption, hashtags
@@ -166,9 +170,7 @@ def adapt_story_content(
         tw["tweet"] = adapted.caption
 
         # Format first_reply with gaming template
-        link_template = x_overrides.get(
-            "link_reply_template", "Source: {url}"
-        )
+        link_template = x_overrides.get("link_reply_template", "Source: {url}")
         if adapted.first_comment:
             tw["first_reply"] = link_template.format(url=adapted.first_comment)
         elif source_url:
@@ -181,12 +183,8 @@ def adapt_story_content(
         if rendered_path and aspect in ("9:16", "9/16", "vertical"):
             if not tw.get("safe_zone_enforced"):
                 tw["safe_zone_enforced"] = True
-                tw["safe_zone_padding_pct"] = x_overrides.get(
-                    "safe_zone_padding_pct", 0.08
-                )
-                logger.info(
-                    "[ADAPT] X/Twitter: set safe_zone_enforced for 9:16 video"
-                )
+                tw["safe_zone_padding_pct"] = x_overrides.get("safe_zone_padding_pct", 0.08)
+                logger.info("[ADAPT] X/Twitter: set safe_zone_enforced for 9:16 video")
 
     # --- Facebook ---
     fb = content.get("facebook", {})
@@ -203,9 +201,10 @@ def adapt_story_content(
 
         # Truncate to platform limit
         if len(fb["caption"]) > max_caption:
-            fb["caption"] = fb["caption"][:max_caption - 1] + "…"
+            fb["caption"] = fb["caption"][: max_caption - 1] + "…"
             logger.warning(
-                "[ADAPT] Facebook: caption truncated to %d chars", max_caption,
+                "[ADAPT] Facebook: caption truncated to %d chars",
+                max_caption,
             )
 
     # --- TikTok ---
@@ -226,12 +225,16 @@ def adapt_story_content(
         tk_hashtags = tk.get("hashtags", [])
         tk_pool = hashtag_pool + ["#fyp", "#foryou", "#foryoupage"]
         _, tk["hashtags"] = _enforce_hashtag_count(
-            tk["caption"], tk_hashtags, tk_pool, 3, 5,
+            tk["caption"],
+            tk_hashtags,
+            tk_pool,
+            3,
+            5,
         )
 
         # Truncate
         if len(tk["caption"]) > max_caption:
-            tk["caption"] = tk["caption"][:max_caption - 1] + "…"
+            tk["caption"] = tk["caption"][: max_caption - 1] + "…"
             logger.warning("[ADAPT] TikTok: caption truncated to %d chars", max_caption)
 
     # --- Threads ---
@@ -250,7 +253,7 @@ def adapt_story_content(
         # Threads is text-first — ensure caption is conversational
         # Truncate to 500 chars
         if len(th["caption"]) > max_caption:
-            th["caption"] = th["caption"][:max_caption - 1] + "…"
+            th["caption"] = th["caption"][: max_caption - 1] + "…"
             logger.warning("[ADAPT] Threads: caption truncated to %d chars", max_caption)
 
     return content

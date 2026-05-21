@@ -48,7 +48,10 @@ def sample_context():
                 "score": 0.92,
                 "content": {
                     "hook": "The rivalry that defines basketball.",
-                    "instagram": {"caption": "Game 7. Lakers. Celtics. History.", "hashtags": ["#NBA", "#Finals"]},
+                    "instagram": {
+                        "caption": "Game 7. Lakers. Celtics. History.",
+                        "hashtags": ["#NBA", "#Finals"],
+                    },
                     "youtube": {"title": "Lakers vs Celtics G7", "description": "Full breakdown"},
                     "x_twitter": {"tweet": "The rivalry continues."},
                     "facebook": {"caption": "Lakers vs Celtics — Game 7 tonight."},
@@ -139,8 +142,10 @@ class TestVisualReadyStatus:
 
 class TestErrorHandling:
     def test_skips_when_no_credentials(self, stage):
-        with patch(SETTINGS_PATCH) as mock_settings, \
-             patch.dict("os.environ", {"GENLAB_USE_POSTGRES": ""}, clear=False):
+        with (
+            patch(SETTINGS_PATCH) as mock_settings,
+            patch.dict("os.environ", {"GENLAB_USE_POSTGRES": ""}, clear=False),
+        ):
             mock_settings.azure_tenant_id = ""
             mock_settings.azure_client_id = ""
             mock_settings.azure_client_secret = ""

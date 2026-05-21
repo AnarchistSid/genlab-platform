@@ -1,4 +1,5 @@
 """Publishing gatekeeping — composable gates that run on raw blueprint dicts."""
+
 from __future__ import annotations
 
 import json
@@ -53,6 +54,7 @@ class PublishGatekeeper:
         if isinstance(urgency_raw, str):
             try:
                 import json
+
                 urgency_raw = json.loads(urgency_raw)
             except (json.JSONDecodeError, TypeError):
                 urgency_raw = {}
@@ -91,7 +93,11 @@ class PublishGatekeeper:
                     gate_name="schedule_gate",
                 )
         except (ValueError, TypeError):
-            return GateResult(allowed=False, reason=f"Unparseable schedule: {scheduled}", gate_name="schedule_gate")
+            return GateResult(
+                allowed=False,
+                reason=f"Unparseable schedule: {scheduled}",
+                gate_name="schedule_gate",
+            )
         return GateResult(allowed=True, reason="due", gate_name="schedule_gate")
 
     def _score_floor_gate(self, bp: dict, platform: str) -> GateResult:

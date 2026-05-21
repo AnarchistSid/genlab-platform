@@ -3,6 +3,7 @@
 Routes:
     GET /api/v1/health/detailed  -- comprehensive system health check
 """
+
 from __future__ import annotations
 
 import json
@@ -39,8 +40,10 @@ def _check_services() -> dict[str, dict]:
     # to it. 2026-05-21 audit found Redis: Down in dashboard while
     # the container was Up 2 weeks (healthy).
     import os
+
     try:
         import redis as _redis
+
         client = _redis.Redis(
             host=os.environ.get("REDIS_HOST", "localhost"),
             port=int(os.environ.get("REDIS_PORT", "6379")),
@@ -60,7 +63,9 @@ def _check_services() -> dict[str, dict]:
     try:
         result = subprocess.run(
             ["curl", "-sf", "http://localhost:4200/api/health"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         services["prefect"] = {"status": "up" if result.returncode == 0 else "down"}
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -122,9 +127,7 @@ def _get_last_run_per_niche() -> dict[str, dict | None]:
         if "started_at" not in run_info:
             try:
                 mtime = run_dir.stat().st_mtime
-                run_info["started_at"] = datetime.fromtimestamp(
-                    mtime, tz=UTC
-                ).isoformat()
+                run_info["started_at"] = datetime.fromtimestamp(mtime, tz=UTC).isoformat()
             except OSError:
                 pass
 
@@ -165,10 +168,7 @@ def _calculate_error_rate_24h() -> dict:
             content = log_file.read_text(errors="replace")
             lines = content.splitlines()
             total_lines += len(lines)
-            error_lines += sum(
-                1 for line in lines
-                if "ERROR" in line or "CRITICAL" in line
-            )
+            error_lines += sum(1 for line in lines if "ERROR" in line or "CRITICAL" in line)
         except OSError:
             continue
 
@@ -205,7 +205,8 @@ def _get_poller_status() -> dict[str, dict]:
 
     try:
         poller_logs = [
-            f for f in _LOGS_DIR.iterdir()
+            f
+            for f in _LOGS_DIR.iterdir()
             if f.name.startswith("engagement_poller_") and f.suffix == ".log"
         ]
     except OSError:
@@ -221,9 +222,7 @@ def _get_poller_status() -> dict[str, dict]:
             pollers[name] = {
                 "total_lines": len(lines),
                 "error_count": error_count,
-                "last_modified": datetime.fromtimestamp(
-                    mtime, tz=UTC
-                ).isoformat(),
+                "last_modified": datetime.fromtimestamp(mtime, tz=UTC).isoformat(),
             }
         except OSError:
             pollers[name] = {"error": "unable to read log"}
@@ -234,13 +233,16 @@ def _get_poller_status() -> dict[str, dict]:
 def _check_postgres() -> dict:
     """Check PostgreSQL connectivity."""
     import os
+
     dsn = os.getenv("DATABASE_URL", "")
     if not dsn or os.getenv("GENLAB_USE_POSTGRES", "").lower() != "true":
         return {"status": "not_configured"}
     try:
         result = subprocess.run(
             ["pg_isready", "-h", "localhost", "-p", "5432", "-U", "genlab"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return {"status": "up" if result.returncode == 0 else "down"}
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -253,7 +255,9 @@ def _get_launchagent_status() -> dict[str, str]:
     try:
         result = subprocess.run(
             ["launchctl", "list"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         running_labels = set()
         for line in result.stdout.splitlines():
@@ -267,6 +271,7 @@ def _get_launchagent_status() -> dict[str, str]:
         # Also check for plist files that aren't loaded
         import glob
         import os
+
         home = os.path.expanduser("~")
         for plist in glob.glob(f"{home}/Library/LaunchAgents/com.genlab.*.plist"):
             label = os.path.basename(plist).replace(".plist", "")
@@ -289,6 +294,7 @@ def _get_active_backends() -> dict:
     if sb_path.is_file():
         try:
             import yaml
+
             with open(sb_path) as f:
                 sb_config = yaml.safe_load(f) or {}
             backends.update(sb_config)
@@ -301,17 +307,19 @@ def _get_active_backends() -> dict:
 def detailed_health():
     """Return comprehensive system health."""
     try:
-        return api_success(data={
-            "services": _check_services(),
-            "last_run": _get_last_run_per_niche(),
-            "error_rate_24h": _calculate_error_rate_24h(),
-            "disk_usage": _get_disk_usage(),
-            "engagement_pollers": _get_poller_status(),
-            "postgres": _check_postgres(),
-            "launch_agents": _get_launchagent_status(),
-            "storage_backend": _get_active_backends(),
-            "checked_at": datetime.now(UTC).isoformat(),
-        })
+        return api_success(
+            data={
+                "services": _check_services(),
+                "last_run": _get_last_run_per_niche(),
+                "error_rate_24h": _calculate_error_rate_24h(),
+                "disk_usage": _get_disk_usage(),
+                "engagement_pollers": _get_poller_status(),
+                "postgres": _check_postgres(),
+                "launch_agents": _get_launchagent_status(),
+                "storage_backend": _get_active_backends(),
+                "checked_at": datetime.now(UTC).isoformat(),
+            }
+        )
     except Exception as exc:
         logger.exception("Health check failed: %s", exc)
         return api_error(error=str(exc), code=500)

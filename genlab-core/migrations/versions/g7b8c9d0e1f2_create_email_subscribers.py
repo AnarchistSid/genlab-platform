@@ -4,6 +4,7 @@ Revision ID: g7b8c9d0e1f2
 Revises: f6a7b8c9d0e1
 Create Date: 2026-03-23 12:00:00.000000+00:00
 """
+
 from alembic import op
 
 revision = "g7b8c9d0e1f2"

@@ -20,7 +20,9 @@ class TestNicheConfig:
     def test_pipeline_has_19_enabled_stages(self):
         cfg = _load("niche.yaml")
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
-        assert len(enabled) == 21  # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
+        assert (
+            len(enabled) == 21
+        )  # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
 
     def test_enabled_stages_reference_allowed_packages(self):
         cfg = _load("niche.yaml")
@@ -60,7 +62,9 @@ class TestScoringWeights:
         lm = cfg["film_lifecycle_multipliers"]
         assert lm["opening_weekend"] == 1.6
         assert lm["long_tail"] == 0.7
-        assert lm["unknown"] == 1.0  # Neutral — RSS items without lifecycle data shouldn't be penalized
+        assert (
+            lm["unknown"] == 1.0
+        )  # Neutral — RSS items without lifecycle data shouldn't be penalized
 
 
 class TestTemplates:

@@ -8,6 +8,7 @@ class TestFetchAnimePromos:
 
     def test_skips_non_anime_niche(self):
         from genlab_core.pipeline.stages.fetch_anime_promos import FetchAnimePromos
+
         stage = FetchAnimePromos()
         ctx = {"niche_id": "sports", "stories": []}
         result = stage.execute(ctx)
@@ -15,6 +16,7 @@ class TestFetchAnimePromos:
 
     def test_jikan_returns_youtube_ids(self):
         from genlab_core.pipeline.stages.fetch_anime_promos import _fetch_jikan_promos
+
         mock_data = {
             "data": [
                 {
@@ -42,6 +44,7 @@ class TestFetchAnimePromos:
 
     def test_jikan_handles_rate_limit(self):
         from genlab_core.pipeline.stages.fetch_anime_promos import _fetch_jikan_promos
+
         with patch("genlab_core.pipeline.stages.fetch_anime_promos.requests.get") as mock_get:
             mock_resp = MagicMock()
             mock_resp.status_code = 429
@@ -51,6 +54,7 @@ class TestFetchAnimePromos:
 
     def test_anilist_returns_youtube_trailers(self):
         from genlab_core.pipeline.stages.fetch_anime_promos import _fetch_anilist_trailers
+
         mock_data = {
             "data": {
                 "Page": {
@@ -84,13 +88,26 @@ class TestFetchAnimePromos:
 
     def test_execute_adds_stories_to_context(self):
         from genlab_core.pipeline.stages.fetch_anime_promos import FetchAnimePromos
+
         stage = FetchAnimePromos()
         ctx = {"niche_id": "anime", "stories": [], "sources_config": {}}
 
-        with patch("genlab_core.pipeline.stages.fetch_anime_promos._fetch_jikan_promos") as mock_jikan, \
-             patch("genlab_core.pipeline.stages.fetch_anime_promos._fetch_anilist_trailers") as mock_anilist:
+        with (
+            patch(
+                "genlab_core.pipeline.stages.fetch_anime_promos._fetch_jikan_promos"
+            ) as mock_jikan,
+            patch(
+                "genlab_core.pipeline.stages.fetch_anime_promos._fetch_anilist_trailers"
+            ) as mock_anilist,
+        ):
             mock_jikan.return_value = [
-                {"title": "Test Anime", "video_id": "yt1", "url": "https://youtube.com/watch?v=yt1", "source": "jikan_promos", "_trending_video": True}
+                {
+                    "title": "Test Anime",
+                    "video_id": "yt1",
+                    "url": "https://youtube.com/watch?v=yt1",
+                    "source": "jikan_promos",
+                    "_trending_video": True,
+                }
             ]
             mock_anilist.return_value = []
             result = stage.execute(ctx)
@@ -105,6 +122,7 @@ class TestFetchTMDBTrailers:
 
     def test_skips_non_movies_niche(self):
         from genlab_core.pipeline.stages.fetch_tmdb_trailers import FetchTMDBTrailers
+
         stage = FetchTMDBTrailers()
         ctx = {"niche_id": "gaming"}
         result = stage.execute(ctx)
@@ -112,6 +130,7 @@ class TestFetchTMDBTrailers:
 
     def test_skips_when_no_api_key(self):
         from genlab_core.pipeline.stages.fetch_tmdb_trailers import FetchTMDBTrailers
+
         stage = FetchTMDBTrailers()
         with patch.dict("os.environ", {}, clear=True):
             ctx = {"niche_id": "movies", "sources_config": {}}
@@ -121,6 +140,7 @@ class TestFetchTMDBTrailers:
     def test_fetch_trailer_ids_filters_official_youtube(self):
         import genlab_core.pipeline.stages.fetch_tmdb_trailers as _mod
         from genlab_core.pipeline.stages.fetch_tmdb_trailers import _fetch_movie_trailer_ids
+
         mock_videos = {
             "results": [
                 {"key": "yt_official", "site": "YouTube", "type": "Trailer", "official": True},
@@ -151,6 +171,7 @@ class TestFetchTwitchClips:
 
     def test_skips_non_gaming_niche(self):
         from genlab_core.pipeline.stages.fetch_twitch_clips import FetchTwitchClips
+
         stage = FetchTwitchClips()
         ctx = {"niche_id": "movies"}
         result = stage.execute(ctx)
@@ -158,6 +179,7 @@ class TestFetchTwitchClips:
 
     def test_skips_when_no_credentials(self):
         from genlab_core.pipeline.stages.fetch_twitch_clips import FetchTwitchClips
+
         stage = FetchTwitchClips()
         with patch.dict("os.environ", {}, clear=True):
             ctx = {"niche_id": "gaming", "sources_config": {}}
@@ -167,6 +189,7 @@ class TestFetchTwitchClips:
     def test_clip_url_uses_page_url(self):
         """Clip URL should be the Twitch clip page URL (yt-dlp downloads natively)."""
         from genlab_core.pipeline.stages.fetch_twitch_clips import _fetch_clips_for_game
+
         mock_data = {
             "data": [
                 {
@@ -199,6 +222,7 @@ class TestFetchSteamTrailers:
 
     def test_skips_non_gaming_niche(self):
         from genlab_core.pipeline.stages.fetch_steam_trailers import FetchSteamTrailers
+
         stage = FetchSteamTrailers()
         ctx = {"niche_id": "anime"}
         result = stage.execute(ctx)
@@ -206,6 +230,7 @@ class TestFetchSteamTrailers:
 
     def test_prefers_480p_quality(self):
         from genlab_core.pipeline.stages.fetch_steam_trailers import _fetch_trailers_for_app
+
         mock_data = {
             "730": {
                 "success": True,
@@ -239,6 +264,7 @@ class TestFetchScoreBat:
 
     def test_skips_non_sports_niche(self):
         from genlab_core.pipeline.stages.fetch_scorebat import FetchScoreBatHighlights
+
         stage = FetchScoreBatHighlights()
         ctx = {"niche_id": "gaming"}
         result = stage.execute(ctx)
@@ -246,9 +272,20 @@ class TestFetchScoreBat:
 
     def test_filters_by_competition(self):
         from genlab_core.pipeline.stages.fetch_scorebat import _fetch_highlights
+
         mock_data = [
-            {"title": "Arsenal vs Chelsea", "competition": {"name": "Premier League"}, "url": "https://sb.com/1", "embed": "<embed>"},
-            {"title": "Random Cup Match", "competition": {"name": "Random Cup"}, "url": "https://sb.com/2", "embed": "<embed>"},
+            {
+                "title": "Arsenal vs Chelsea",
+                "competition": {"name": "Premier League"},
+                "url": "https://sb.com/1",
+                "embed": "<embed>",
+            },
+            {
+                "title": "Random Cup Match",
+                "competition": {"name": "Random Cup"},
+                "url": "https://sb.com/2",
+                "embed": "<embed>",
+            },
         ]
         with patch("genlab_core.pipeline.stages.fetch_scorebat.requests.get") as mock_get:
             mock_resp = MagicMock()

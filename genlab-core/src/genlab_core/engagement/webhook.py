@@ -8,6 +8,7 @@ Used for real-time comment notifications from Meta. Requires:
 
 Start: uvicorn genlab_core.engagement.webhook:app --host 0.0.0.0 --port 8080
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -38,6 +39,7 @@ def _resolve_niche(media_id: str) -> str:
         return env_niche
     try:
         from genlab_core.http.backlog_client import BacklogClient
+
         client = BacklogClient()
         records = client.publishing_analytics.all(
             formula=f"AND({{platform}}='instagram', SEARCH('{media_id}', {{post_id}}))",
@@ -81,9 +83,7 @@ async def receive_meta_event(request: Request):
     # Signature verification
     if _APP_SECRET:
         sig_header = request.headers.get("X-Hub-Signature-256", "")
-        expected = "sha256=" + hmac.new(
-            _APP_SECRET.encode(), body, hashlib.sha256
-        ).hexdigest()
+        expected = "sha256=" + hmac.new(_APP_SECRET.encode(), body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig_header, expected):
             raise HTTPException(status_code=403, detail="Invalid signature")
 

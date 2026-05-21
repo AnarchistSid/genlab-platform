@@ -1,4 +1,5 @@
 """Tests for video_content_writer."""
+
 from unittest.mock import MagicMock
 
 from genlab_core.writing.video_content_writer import NICHE_VOICE, write_video_content
@@ -74,7 +75,9 @@ class TestVideoContentWriter:
             '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
         )
         write_video_content(
-            _make_video(), "sports", llm,
+            _make_video(),
+            "sports",
+            llm,
             existing_hooks=["Old hook 1", "Old hook 2"],
         )
         # Verify the LLM was called with system prompt containing existing hooks
@@ -103,7 +106,9 @@ class TestVideoContentWriter:
             '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
         )
         write_video_content(
-            _make_video(), "sports", llm,
+            _make_video(),
+            "sports",
+            llm,
             extra_instructions="BANNED PHRASES:\n  - the sports world is watching",
         )
         call_args = llm.complete.call_args
@@ -132,7 +137,9 @@ class TestVideoContentWriter:
             '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
         )
         write_video_content(
-            _make_video(), "sports", llm,
+            _make_video(),
+            "sports",
+            llm,
             extra_instructions="TONE: Be exciting",
         )
         call_args = llm.complete.call_args

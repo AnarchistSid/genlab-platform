@@ -183,7 +183,7 @@ class BanditOptimizer:
 
             # Update selected arm
             dim_state["alphas"][arm_idx] += reward
-            dim_state["betas"][arm_idx] += (1.0 - reward)
+            dim_state["betas"][arm_idx] += 1.0 - reward
             dim_state["pulls"][arm_idx] += 1
 
         self.total_trials += 1
@@ -220,7 +220,7 @@ class BanditOptimizer:
             self._apply_discount(dim_state)
 
             dim_state["alphas"][arm_idx] += reward
-            dim_state["betas"][arm_idx] += (1.0 - reward)
+            dim_state["betas"][arm_idx] += 1.0 - reward
             dim_state["pulls"][arm_idx] += 1
 
         self.total_trials += 1

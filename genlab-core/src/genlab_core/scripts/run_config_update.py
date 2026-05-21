@@ -10,6 +10,7 @@ Usage:
     uv run --package genlab-core python -m genlab_core.scripts.run_config_update --dry-run
     uv run --package genlab-core python -m genlab_core.scripts.run_config_update --niche-id gaming
 """
+
 from __future__ import annotations
 
 import argparse
@@ -35,7 +36,9 @@ NICHE_CONFIG_DIRS: dict[str, str] = {
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Weekly config auto-update from bandit learning")
-    parser.add_argument("--niche-id", default="all", choices=list(NICHE_CONFIG_DIRS.keys()) + ["all"])
+    parser.add_argument(
+        "--niche-id", default="all", choices=list(NICHE_CONFIG_DIRS.keys()) + ["all"]
+    )
     parser.add_argument("--dry-run", action="store_true", help="Log changes without writing")
     args = parser.parse_args()
 
@@ -54,10 +57,13 @@ def main() -> int:
     # is set to CriticalRush in .env, making it resolve to GenLab/CriticalRush/
     # instead of GenLab/.
     import os
-    _PROJECT_ROOT = Path(os.environ.get(
-        "GENLAB_PROJECT_ROOT",
-        str(Path(__file__).resolve().parent.parent.parent.parent.parent),
-    ))
+
+    _PROJECT_ROOT = Path(
+        os.environ.get(
+            "GENLAB_PROJECT_ROOT",
+            str(Path(__file__).resolve().parent.parent.parent.parent.parent),
+        )
+    )
 
     client = BacklogClient()
     store = PendingFeedbackStore(client)
@@ -97,7 +103,13 @@ def main() -> int:
         total_changes += len(changes)
 
         for change in changes:
-            logger.info("  %s: %s → %s (was %s)", change["file"], change["field"], change["new"], change["old"])
+            logger.info(
+                "  %s: %s → %s (was %s)",
+                change["file"],
+                change["field"],
+                change["new"],
+                change["old"],
+            )
 
         if changes and not args.dry_run:
             _persist_changes(niche_id, changes, dry_run=args.dry_run)
@@ -147,13 +159,21 @@ def _persist_changes(niche_id: str, changes: list[dict], dry_run: bool) -> None:
                             change.get("reason", ""),
                             int(change.get("n", 0) or 0),
                             dry_run,
-                            _json.dumps({
-                                k: v for k, v in change.items()
-                                if k not in (
-                                    "file", "field", "old", "new",
-                                    "reason", "n",
-                                )
-                            }),
+                            _json.dumps(
+                                {
+                                    k: v
+                                    for k, v in change.items()
+                                    if k
+                                    not in (
+                                        "file",
+                                        "field",
+                                        "old",
+                                        "new",
+                                        "reason",
+                                        "n",
+                                    )
+                                }
+                            ),
                         ),
                     )
             conn.commit()

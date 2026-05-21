@@ -1,4 +1,5 @@
 """TikTok client stub tests."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,8 +13,12 @@ def test_tiktok_disabled_by_default():
 
     client = TikTokClient()
     payload = PublishPayload(
-        caption="Test", media_paths=[Path("/tmp/v.mp4")],
-        media_type="video", hashtags=[], hook="", niche_id="gaming",
+        caption="Test",
+        media_paths=[Path("/tmp/v.mp4")],
+        media_type="video",
+        hashtags=[],
+        hook="",
+        niche_id="gaming",
     )
     result = client.publish(payload)
     assert result.success is False

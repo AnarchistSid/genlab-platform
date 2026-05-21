@@ -22,29 +22,49 @@ class TestDeriveQueueStatus:
         assert _derive_queue_status({"status": "PUBLISHED"}) == QUEUE_STATUS_PUBLISHED
 
     def test_approved_no_error(self):
-        assert _derive_queue_status({"status": "VISUAL_READY", "action_taken": "approved"}) == QUEUE_STATUS_APPROVED
+        assert (
+            _derive_queue_status({"status": "VISUAL_READY", "action_taken": "approved"})
+            == QUEUE_STATUS_APPROVED
+        )
 
     def test_approved_with_publish_error(self):
-        assert _derive_queue_status({
-            "status": "VISUAL_READY",
-            "action_taken": "approved",
-            "error_log": "timeout",
-        }) == QUEUE_STATUS_FAILED
+        assert (
+            _derive_queue_status(
+                {
+                    "status": "VISUAL_READY",
+                    "action_taken": "approved",
+                    "error_log": "timeout",
+                }
+            )
+            == QUEUE_STATUS_FAILED
+        )
 
     def test_held(self):
-        assert _derive_queue_status({"status": "VISUAL_READY", "action_taken": "held"}) == QUEUE_STATUS_HELD
+        assert (
+            _derive_queue_status({"status": "VISUAL_READY", "action_taken": "held"})
+            == QUEUE_STATUS_HELD
+        )
 
     def test_pending_blank_action(self):
-        assert _derive_queue_status({"status": "VISUAL_READY", "action_taken": ""}) == QUEUE_STATUS_PENDING
+        assert (
+            _derive_queue_status({"status": "VISUAL_READY", "action_taken": ""})
+            == QUEUE_STATUS_PENDING
+        )
 
     def test_pending_no_action(self):
         assert _derive_queue_status({"status": "VISUAL_READY"}) == QUEUE_STATUS_PENDING
 
     def test_case_insensitive_action(self):
-        assert _derive_queue_status({"status": "VISUAL_READY", "action_taken": "Approved"}) == QUEUE_STATUS_APPROVED
+        assert (
+            _derive_queue_status({"status": "VISUAL_READY", "action_taken": "Approved"})
+            == QUEUE_STATUS_APPROVED
+        )
 
     def test_whitespace_in_action(self):
-        assert _derive_queue_status({"status": "VISUAL_READY", "action_taken": " approved "}) == QUEUE_STATUS_APPROVED
+        assert (
+            _derive_queue_status({"status": "VISUAL_READY", "action_taken": " approved "})
+            == QUEUE_STATUS_APPROVED
+        )
 
 
 class TestPublishingQueueManager:
@@ -54,7 +74,8 @@ class TestPublishingQueueManager:
         self._fetch_patcher = patch(
             "core.publishing_queue._fetch_blueprints_sync",
             side_effect=lambda status_filter="VISUAL_READY": [
-                r for r in self._records
+                r
+                for r in self._records
                 if r.get("fields", {}).get("status", "VISUAL_READY") == status_filter
             ],
         )
@@ -75,37 +96,45 @@ class TestPublishingQueueManager:
         return {"id": id_, "fields": fields}
 
     def test_get_queue_returns_all(self):
-        mgr = self._make_manager([
-            self._record("1", action_taken=""),
-            self._record("2", action_taken="approved"),
-            self._record("3", action_taken="held"),
-        ])
+        mgr = self._make_manager(
+            [
+                self._record("1", action_taken=""),
+                self._record("2", action_taken="approved"),
+                self._record("3", action_taken="held"),
+            ]
+        )
         items = mgr.get_queue()
         assert len(items) == 3
 
     def test_get_queue_filter_by_status(self):
-        mgr = self._make_manager([
-            self._record("1", action_taken=""),
-            self._record("2", action_taken="approved"),
-            self._record("3", action_taken="held"),
-        ])
+        mgr = self._make_manager(
+            [
+                self._record("1", action_taken=""),
+                self._record("2", action_taken="approved"),
+                self._record("3", action_taken="held"),
+            ]
+        )
         pending = mgr.get_queue(queue_status="PENDING_APPROVAL")
         assert len(pending) == 1
         assert pending[0]["id"] == "1"
 
     def test_get_queue_sorts_pending_first(self):
-        mgr = self._make_manager([
-            self._record("1", action_taken="approved"),
-            self._record("2", action_taken=""),
-        ])
+        mgr = self._make_manager(
+            [
+                self._record("1", action_taken="approved"),
+                self._record("2", action_taken=""),
+            ]
+        )
         items = mgr.get_queue()
         assert items[0]["queue_status"] == QUEUE_STATUS_PENDING
 
     def test_get_queue_niche_filter(self):
-        mgr = self._make_manager([
-            self._record("1", niche_id="ai_creators"),
-            self._record("2", niche_id="gaming"),
-        ])
+        mgr = self._make_manager(
+            [
+                self._record("1", niche_id="ai_creators"),
+                self._record("2", niche_id="gaming"),
+            ]
+        )
         items = mgr.get_queue(niche_id="gaming")
         assert len(items) == 1
         assert items[0]["id"] == "2"
@@ -117,13 +146,15 @@ class TestPublishingQueueManager:
         assert len(items) == 3
 
     def test_get_stats(self):
-        mgr = self._make_manager([
-            self._record("1", action_taken=""),
-            self._record("2", action_taken=""),
-            self._record("3", action_taken="approved"),
-            self._record("4", action_taken="held"),
-            self._record("5", status="PUBLISHED"),
-        ])
+        mgr = self._make_manager(
+            [
+                self._record("1", action_taken=""),
+                self._record("2", action_taken=""),
+                self._record("3", action_taken="approved"),
+                self._record("4", action_taken="held"),
+                self._record("5", status="PUBLISHED"),
+            ]
+        )
         stats = mgr.get_stats()
         assert stats["pending"] == 2
         assert stats["approved"] == 1
@@ -160,24 +191,21 @@ class TestPublishingQueueManager:
     def test_is_publishable_approved(self):
         mock_client = MagicMock()
         mock_client.blueprints.get.return_value = {
-            "id": "42", "fields": {"action_taken": "approved"}
+            "id": "42",
+            "fields": {"action_taken": "approved"},
         }
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("42") is True
 
     def test_is_publishable_not_approved(self):
         mock_client = MagicMock()
-        mock_client.blueprints.get.return_value = {
-            "id": "42", "fields": {"action_taken": "held"}
-        }
+        mock_client.blueprints.get.return_value = {"id": "42", "fields": {"action_taken": "held"}}
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("42") is False
 
     def test_is_publishable_blank(self):
         mock_client = MagicMock()
-        mock_client.blueprints.get.return_value = {
-            "id": "42", "fields": {"action_taken": ""}
-        }
+        mock_client.blueprints.get.return_value = {"id": "42", "fields": {"action_taken": ""}}
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("42") is False
 
@@ -193,24 +221,21 @@ class TestPublishGateInvariant:
 
     def test_gate_blocks_pending(self):
         mock_client = MagicMock()
-        mock_client.blueprints.get.return_value = {
-            "id": "1", "fields": {"action_taken": ""}
-        }
+        mock_client.blueprints.get.return_value = {"id": "1", "fields": {"action_taken": ""}}
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("1") is False
 
     def test_gate_blocks_held(self):
         mock_client = MagicMock()
-        mock_client.blueprints.get.return_value = {
-            "id": "1", "fields": {"action_taken": "held"}
-        }
+        mock_client.blueprints.get.return_value = {"id": "1", "fields": {"action_taken": "held"}}
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("1") is False
 
     def test_gate_allows_approved(self):
         mock_client = MagicMock()
         mock_client.blueprints.get.return_value = {
-            "id": "1", "fields": {"action_taken": "approved"}
+            "id": "1",
+            "fields": {"action_taken": "approved"},
         }
         mgr = PublishingQueueManager(client=mock_client)
         assert mgr.is_publishable("1") is True

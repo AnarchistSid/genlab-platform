@@ -12,6 +12,7 @@ Usage:
     python3 scripts/content_memory.py --sync             # Force sync local cache ↔ SharePoint
     python3 scripts/content_memory.py --ingest --niche gaming  # Niche-tagged ingestion
 """
+
 import argparse
 import hashlib
 import json
@@ -43,9 +44,15 @@ def _load_content_memory_list_id() -> str:
     """Read Content_Memory list_id from lists_config.yaml."""
     try:
         import yaml
+
         config_path = os.environ.get(
             "BACKLOG_CONFIG_PATH",
-            str(Path(__file__).resolve().parent.parent / "genlab-core" / "config" / "lists_config.yaml"),
+            str(
+                Path(__file__).resolve().parent.parent
+                / "genlab-core"
+                / "config"
+                / "lists_config.yaml"
+            ),
         )
         with open(config_path) as f:
             config = yaml.safe_load(f)
@@ -71,7 +78,9 @@ def _get_proxy():
         client = BacklogClient()
         proxy = getattr(client, "content_memory", None)
         if proxy is None:
-            logger.warning("BacklogClient has no content_memory proxy — falling back to local-only mode")
+            logger.warning(
+                "BacklogClient has no content_memory proxy — falling back to local-only mode"
+            )
             return None
         _proxy = proxy
         return _proxy
@@ -81,6 +90,7 @@ def _get_proxy():
 
 
 # ── Local cache ─────────────────────────────────────────────────────
+
 
 def _ensure_dirs():
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,12 +107,13 @@ def _load_local() -> list[dict]:
 
 def _save_local(posts: list[dict]):
     _ensure_dirs()
-    tmp = POSTS_FILE.with_suffix('.tmp')
+    tmp = POSTS_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(posts, indent=2, default=str))
     os.replace(tmp, POSTS_FILE)  # atomic on POSIX
 
 
 # ── SharePoint CRUD ─────────────────────────────────────────────────
+
 
 def _sp_create(post: dict) -> str | None:
     """Create a post in SharePoint. Returns record ID or None."""
@@ -150,21 +161,23 @@ def _sp_load_all() -> list[dict]:
                 posted = posted.isoformat()
             if hasattr(ingested, "isoformat"):
                 ingested = ingested.isoformat()
-            posts.append({
-                "content_hash": f.get("content_hash", ""),
-                "platform": f.get("platform", ""),
-                "text": f.get("post_text", ""),
-                "engagement": f.get("engagement", 0) or 0,
-                "likes": f.get("likes", 0) or 0,
-                "comments": f.get("comments_count", 0) or 0,
-                "posted_at": posted or "",
-                "media_type": f.get("media_type", ""),
-                "ingested_at": ingested or "",
-                "niche_id": f.get("niche_id", ""),
-                "is_viral": bool(f.get("is_viral")),
-                "viral_multiplier": f.get("viral_multiplier", 0) or 0,
-                "_sp_id": rec.get("id", ""),
-            })
+            posts.append(
+                {
+                    "content_hash": f.get("content_hash", ""),
+                    "platform": f.get("platform", ""),
+                    "text": f.get("post_text", ""),
+                    "engagement": f.get("engagement", 0) or 0,
+                    "likes": f.get("likes", 0) or 0,
+                    "comments": f.get("comments_count", 0) or 0,
+                    "posted_at": posted or "",
+                    "media_type": f.get("media_type", ""),
+                    "ingested_at": ingested or "",
+                    "niche_id": f.get("niche_id", ""),
+                    "is_viral": bool(f.get("is_viral")),
+                    "viral_multiplier": f.get("viral_multiplier", 0) or 0,
+                    "_sp_id": rec.get("id", ""),
+                }
+            )
         return posts
     except Exception as e:
         logger.warning("SharePoint load failed: %s", e)
@@ -197,7 +210,11 @@ def _load_posts(force: bool = False) -> list[dict]:
     """Load posts: in-process cache → SharePoint → local JSON."""
     global _posts_cache, _posts_cache_ts
 
-    if not force and _posts_cache is not None and (_time.monotonic() - _posts_cache_ts) < _POSTS_CACHE_TTL:
+    if (
+        not force
+        and _posts_cache is not None
+        and (_time.monotonic() - _posts_cache_ts) < _POSTS_CACHE_TTL
+    ):
         return _posts_cache
 
     sp_posts = _sp_load_all()
@@ -222,22 +239,73 @@ def _invalidate_cache():
 
 # ── Text processing ─────────────────────────────────────────────────
 
+
 def _content_hash(text: str) -> str:
-    cleaned = re.sub(r'[^a-z0-9\s]', '', text.lower().strip())
-    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r"[^a-z0-9\s]", "", text.lower().strip())
+    cleaned = re.sub(r"\s+", " ", cleaned)
     return hashlib.md5(cleaned.encode()).hexdigest()[:12]
 
 
 def _tokenize(text: str) -> set[str]:
-    text = re.sub(r'[^a-z0-9\s]', '', text.lower())
+    text = re.sub(r"[^a-z0-9\s]", "", text.lower())
     words = text.split()
-    stops = {'the', 'a', 'an', 'is', 'was', 'are', 'were', 'be', 'been',
-             'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-             'would', 'could', 'should', 'may', 'might', 'can', 'shall',
-             'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
-             'up', 'about', 'into', 'through', 'and', 'but', 'or', 'nor',
-             'not', 'so', 'yet', 'both', 'either', 'neither', 'this',
-             'that', 'these', 'those', 'just', 'its', 'it', 'they'}
+    stops = {
+        "the",
+        "a",
+        "an",
+        "is",
+        "was",
+        "are",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "can",
+        "shall",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "up",
+        "about",
+        "into",
+        "through",
+        "and",
+        "but",
+        "or",
+        "nor",
+        "not",
+        "so",
+        "yet",
+        "both",
+        "either",
+        "neither",
+        "this",
+        "that",
+        "these",
+        "those",
+        "just",
+        "its",
+        "it",
+        "they",
+    }
     return {w for w in words if w not in stops and len(w) > 2}
 
 
@@ -262,6 +330,7 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
 
 # ── Public API ──────────────────────────────────────────────────────
 
+
 def flag_viral(content_hash: str, multiplier: float, platform: str = "") -> bool:
     """Mark a post as viral in SharePoint and local cache.
 
@@ -275,10 +344,13 @@ def flag_viral(content_hash: str, multiplier: float, platform: str = "") -> bool
                 max_records=1,
             )
             if records:
-                proxy.update(records[0]["id"], {
-                    "is_viral": True,
-                    "viral_multiplier": round(multiplier, 1),
-                })
+                proxy.update(
+                    records[0]["id"],
+                    {
+                        "is_viral": True,
+                        "viral_multiplier": round(multiplier, 1),
+                    },
+                )
                 logger.info("Flagged %s as viral (%sx) in SharePoint", content_hash, multiplier)
                 return True
         except Exception as e:
@@ -382,7 +454,9 @@ def ingest_from_analytics(days: int = 30, niche_id: str | None = None) -> dict[s
                     "engagement": engagement,
                     "likes": post.get("likes", 0) or post.get("views", 0) or 0,
                     "comments": post.get("comments", 0) or 0,
-                    "posted_at": post.get("published") or post.get("posted") or post.get("created_at"),
+                    "posted_at": post.get("published")
+                    or post.get("posted")
+                    or post.get("created_at"),
                     "media_type": post.get("type"),
                     "ingested_at": datetime.now(UTC).isoformat(),
                     "niche_id": niche_id,
@@ -417,13 +491,15 @@ def check_duplicate(text: str, threshold: float = 0.4) -> list[dict]:
     for post in posts:
         sim = _jaccard_similarity(text, post.get("text", ""))
         if sim >= threshold:
-            matches.append({
-                "text": post["text"][:100],
-                "platform": post["platform"],
-                "similarity": round(sim, 3),
-                "engagement": post.get("engagement", 0),
-                "posted_at": post.get("posted_at"),
-            })
+            matches.append(
+                {
+                    "text": post["text"][:100],
+                    "platform": post["platform"],
+                    "similarity": round(sim, 3),
+                    "engagement": post.get("engagement", 0),
+                    "posted_at": post.get("posted_at"),
+                }
+            )
     return sorted(matches, key=lambda x: x["similarity"], reverse=True)
 
 
@@ -434,14 +510,16 @@ def find_similar(text: str, top_n: int = 5) -> list[dict]:
     for post in posts:
         sim = _jaccard_similarity(text, post.get("text", ""))
         if sim > 0.05:
-            scored.append({
-                "text": post["text"][:100],
-                "platform": post["platform"],
-                "similarity": round(sim, 3),
-                "engagement": post.get("engagement", 0),
-                "likes": post.get("likes", 0),
-                "posted_at": post.get("posted_at"),
-            })
+            scored.append(
+                {
+                    "text": post["text"][:100],
+                    "platform": post["platform"],
+                    "similarity": round(sim, 3),
+                    "engagement": post.get("engagement", 0),
+                    "likes": post.get("likes", 0),
+                    "posted_at": post.get("posted_at"),
+                }
+            )
     return sorted(scored, key=lambda x: x["similarity"], reverse=True)[:top_n]
 
 
@@ -451,13 +529,15 @@ def get_winners(top_n: int = 10) -> list[dict]:
     ranked = sorted(posts, key=lambda x: x.get("engagement", 0), reverse=True)
     winners = []
     for post in ranked[:top_n]:
-        winners.append({
-            "text": post["text"][:80],
-            "platform": post["platform"],
-            "engagement": post.get("engagement", 0),
-            "likes": post.get("likes", 0),
-            "posted_at": post.get("posted_at"),
-        })
+        winners.append(
+            {
+                "text": post["text"][:80],
+                "platform": post["platform"],
+                "engagement": post.get("engagement", 0),
+                "likes": post.get("likes", 0),
+                "posted_at": post.get("posted_at"),
+            }
+        )
     return winners
 
 
@@ -498,9 +578,7 @@ def get_winning_patterns() -> dict[str, Any]:
             platform_engagement[p] = []
         platform_engagement[p].append(post.get("engagement", 0))
 
-    platform_avg = {
-        p: round(sum(v) / len(v), 1) for p, v in platform_engagement.items()
-    }
+    platform_avg = {p: round(sum(v) / len(v), 1) for p, v in platform_engagement.items()}
 
     return {
         "analyzed_posts": len(posts),
@@ -572,17 +650,21 @@ if __name__ == "__main__":
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print(f"Ingested {result['new_posts_ingested']} new posts "
-                  f"({result['synced_to_sharepoint']} synced to SharePoint, "
-                  f"total: {result['total_posts']})")
+            print(
+                f"Ingested {result['new_posts_ingested']} new posts "
+                f"({result['synced_to_sharepoint']} synced to SharePoint, "
+                f"total: {result['total_posts']})"
+            )
 
     elif args.sync:
         result = sync_to_sharepoint()
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print(f"Synced {result['synced']} posts to SharePoint "
-                  f"(skipped {result['skipped']} existing)")
+            print(
+                f"Synced {result['synced']} posts to SharePoint "
+                f"(skipped {result['skipped']} existing)"
+            )
 
     elif args.check:
         dupes = check_duplicate(args.check)
@@ -621,7 +703,9 @@ if __name__ == "__main__":
         if args.json:
             print(json.dumps(patterns, indent=2, default=str))
         else:
-            print(f"\nWinning Content Patterns ({patterns.get('analyzed_posts', 0)} posts analyzed)")
+            print(
+                f"\nWinning Content Patterns ({patterns.get('analyzed_posts', 0)} posts analyzed)"
+            )
             print("\n  Words that win:")
             for hw in patterns.get("hot_words", [])[:10]:
                 bar = "#" * min(int(hw["winner_ratio"]), 20)
@@ -631,4 +715,6 @@ if __name__ == "__main__":
                 print(f"    {p:12s} {avg:>10.0f}")
 
     else:
-        print("Usage: --ingest | --check 'topic' | --similar 'text' | --winners | --patterns | --sync")
+        print(
+            "Usage: --ingest | --check 'topic' | --similar 'text' | --winners | --patterns | --sync"
+        )

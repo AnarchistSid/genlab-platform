@@ -68,7 +68,7 @@ class MovieHookStrategy(BaseHookStrategy):
         cleaned = raw
         for p in prefixes:
             if cleaned.startswith(p):
-                cleaned = cleaned[len(p):].strip()
+                cleaned = cleaned[len(p) :].strip()
         return cleaned
 
     def _substitute_placeholders(self, formula: str, story: dict) -> str:

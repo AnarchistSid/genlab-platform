@@ -1,4 +1,5 @@
 """Tests for genlab_core.publishing.analytics_recorder."""
+
 from unittest.mock import MagicMock
 
 from genlab_core.publishing.analytics_recorder import record_publish

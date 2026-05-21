@@ -3,6 +3,7 @@
 Validates that the credential checker correctly identifies missing
 and present env vars, with proper exit codes.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -18,13 +19,9 @@ from genlab_core.tools.credential_check import (
 # ---------------------------------------------------------------------------
 
 # All required env vars across all platforms
-ALL_REQUIRED_VARS = {
-    var for vars_list in REQUIRED_PLATFORMS.values() for var in vars_list
-}
+ALL_REQUIRED_VARS = {var for vars_list in REQUIRED_PLATFORMS.values() for var in vars_list}
 
-ALL_OPTIONAL_VARS = {
-    var for vars_list in OPTIONAL_PLATFORMS.values() for var in vars_list
-}
+ALL_OPTIONAL_VARS = {var for vars_list in OPTIONAL_PLATFORMS.values() for var in vars_list}
 
 
 def _set_all_required(monkeypatch: pytest.MonkeyPatch) -> None:

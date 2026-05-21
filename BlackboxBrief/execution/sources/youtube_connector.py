@@ -16,8 +16,7 @@ def _build_service():
 
     if not client_id or not client_secret or not refresh_token:
         raise ValueError(
-            "Missing YouTube OAuth credentials (YOUTUBE_CLIENT_ID, "
-            "YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN)"
+            "Missing YouTube OAuth credentials (YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN)"
         )
 
     try:
@@ -38,7 +37,7 @@ def _build_service():
 
 def _chunks(items: List[str], size: int) -> Iterable[List[str]]:
     for i in range(0, len(items), size):
-        yield items[i:i + size]
+        yield items[i : i + size]
 
 
 def _parse_iso_duration_seconds(raw: str) -> int:
@@ -68,9 +67,15 @@ def _channel_meets_quality_bar(service: Any, channel_id: str) -> bool:
     300K / 683).
     """
     try:
-        resp = service.channels().list(
-            part="statistics", id=channel_id, maxResults=1,
-        ).execute()
+        resp = (
+            service.channels()
+            .list(
+                part="statistics",
+                id=channel_id,
+                maxResults=1,
+            )
+            .execute()
+        )
         items = resp.get("items", [])
         if not items:
             return False
@@ -120,12 +125,16 @@ def _resolve_channel_id(service: Any, seed: str) -> Optional[str]:
 
     # Fallback: search channel by query seed.
     try:
-        resp = service.search().list(
-            part="snippet",
-            q=clean,
-            type="channel",
-            maxResults=5,
-        ).execute()
+        resp = (
+            service.search()
+            .list(
+                part="snippet",
+                q=clean,
+                type="channel",
+                maxResults=5,
+            )
+            .execute()
+        )
         items = resp.get("items", [])
         # Walk top-N candidates and return the first that meets the bar.
         for it in items:
@@ -150,11 +159,13 @@ def _build_entry(snippet: Dict[str, Any], video_meta: Dict[str, Any]) -> Dict[st
     thumb_hq = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
 
     summary_lines = [description[:350]] if description else []
-    summary_lines.extend([
-        f"Watch: {watch_url}",
-        f"Thumbnail: {thumb_max}",
-        f"ThumbnailBackup: {thumb_hq}",
-    ])
+    summary_lines.extend(
+        [
+            f"Watch: {watch_url}",
+            f"Thumbnail: {thumb_max}",
+            f"ThumbnailBackup: {thumb_hq}",
+        ]
+    )
 
     return {
         "title": title or f"YouTube Creator Video ({vid})",
@@ -202,17 +213,21 @@ def fetch_source(src: Dict[str, Any]) -> Dict[str, Any]:
     # Keyword discovery
     if mode in {"keyword_discovery", "mixed"}:
         for query in query_seeds:
-            resp = service.search().list(
-                part="snippet",
-                q=query,
-                type="video",
-                order="date",
-                publishedAfter=after,
-                maxResults=per_seed,
-                videoDuration=video_duration,
-                relevanceLanguage="en",
-                safeSearch="moderate",
-            ).execute()
+            resp = (
+                service.search()
+                .list(
+                    part="snippet",
+                    q=query,
+                    type="video",
+                    order="date",
+                    publishedAfter=after,
+                    maxResults=per_seed,
+                    videoDuration=video_duration,
+                    relevanceLanguage="en",
+                    safeSearch="moderate",
+                )
+                .execute()
+            )
             _add_search_items(resp.get("items", []))
             if len(video_snippets) >= max_results:
                 break
@@ -224,17 +239,21 @@ def fetch_source(src: Dict[str, Any]) -> Dict[str, Any]:
             if not channel_id:
                 continue
 
-            resp = service.search().list(
-                part="snippet",
-                channelId=channel_id,
-                type="video",
-                order="date",
-                publishedAfter=after,
-                maxResults=per_seed,
-                videoDuration=video_duration,
-                relevanceLanguage="en",
-                safeSearch="moderate",
-            ).execute()
+            resp = (
+                service.search()
+                .list(
+                    part="snippet",
+                    channelId=channel_id,
+                    type="video",
+                    order="date",
+                    publishedAfter=after,
+                    maxResults=per_seed,
+                    videoDuration=video_duration,
+                    relevanceLanguage="en",
+                    safeSearch="moderate",
+                )
+                .execute()
+            )
             _add_search_items(resp.get("items", []))
             if len(video_snippets) >= max_results:
                 break
@@ -251,10 +270,14 @@ def fetch_source(src: Dict[str, Any]) -> Dict[str, Any]:
 
     details: Dict[str, Dict[str, Any]] = {}
     for chunk in _chunks(video_ids, 50):
-        resp = service.videos().list(
-            part="snippet,contentDetails,statistics",
-            id=",".join(chunk),
-        ).execute()
+        resp = (
+            service.videos()
+            .list(
+                part="snippet,contentDetails,statistics",
+                id=",".join(chunk),
+            )
+            .execute()
+        )
         for item in resp.get("items", []):
             details[item.get("id", "")] = item
 

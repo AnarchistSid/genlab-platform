@@ -17,6 +17,7 @@ and prints the .env lines you need to paste in.
 The browser MUST be logged in to the niche's Twitter account before opening
 the URL — that's how Twitter knows which account to issue tokens for.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,10 @@ def main() -> int:
     try:
         import tweepy
     except ImportError:
-        print("ERROR: tweepy not installed. Run via `uv run --package genlab-core ...`.", file=sys.stderr)
+        print(
+            "ERROR: tweepy not installed. Run via `uv run --package genlab-core ...`.",
+            file=sys.stderr,
+        )
         return 2
 
     auth = tweepy.OAuth1UserHandler(consumer_key, consumer_secret, callback="oob")

@@ -10,6 +10,7 @@ Covers:
   - CircuitOpenError attributes
   - Stats / diagnostics
 """
+
 from __future__ import annotations
 
 import threading
@@ -31,6 +32,7 @@ from genlab_core.http.circuit_breaker import (
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def cb():
     """Fresh circuit breaker with low thresholds for fast testing."""
@@ -51,6 +53,7 @@ def _reset_singletons():
 
 
 # ── CircuitBreaker: state transitions ────────────────────────────────
+
 
 class TestCircuitBreakerStates:
     """State machine transitions."""
@@ -102,6 +105,7 @@ class TestCircuitBreakerStates:
 
 # ── CircuitBreaker: sliding window ───────────────────────────────────
 
+
 class TestSlidingWindow:
     """Failures outside the window do not count."""
 
@@ -133,6 +137,7 @@ class TestSlidingWindow:
 
 
 # ── CircuitBreaker.call() ────────────────────────────────────────────
+
 
 class TestCircuitBreakerCall:
     """Calling functions through the circuit breaker."""
@@ -184,6 +189,7 @@ class TestCircuitBreakerCall:
 
 # ── CircuitBreaker.reset() ───────────────────────────────────────────
 
+
 class TestCircuitBreakerReset:
     def test_reset_from_open(self, cb: CircuitBreaker):
         for _ in range(3):
@@ -201,6 +207,7 @@ class TestCircuitBreakerReset:
 
 
 # ── CircuitBreaker.stats ─────────────────────────────────────────────
+
 
 class TestCircuitBreakerStats:
     def test_stats_initial(self, cb: CircuitBreaker):
@@ -222,6 +229,7 @@ class TestCircuitBreakerStats:
 
 
 # ── CircuitBreaker: thread safety ────────────────────────────────────
+
 
 class TestCircuitBreakerThreadSafety:
     def test_concurrent_failures(self):
@@ -247,6 +255,7 @@ class TestCircuitBreakerThreadSafety:
 
 # ── CircuitOpenError ─────────────────────────────────────────────────
 
+
 class TestCircuitOpenError:
     def test_attributes(self):
         err = CircuitOpenError("my_service", retry_after=12.5)
@@ -260,6 +269,7 @@ class TestCircuitOpenError:
 
 
 # ── @resilient decorator ─────────────────────────────────────────────
+
 
 class TestResilientDecorator:
     """Integration of retry + circuit breaker."""
@@ -314,6 +324,7 @@ class TestResilientDecorator:
 
     def test_resilient_selective_exceptions(self, cb: CircuitBreaker):
         """Only retry specified exception types."""
+
         @resilient(
             cb,
             max_attempts=3,
@@ -351,6 +362,7 @@ class TestResilientDecorator:
 
 # ── Pre-configured instances ─────────────────────────────────────────
 
+
 class TestPreConfiguredInstances:
     def test_sharepoint_cb_config(self):
         assert SHAREPOINT_CB.name == "sharepoint"
@@ -377,6 +389,7 @@ class TestPreConfiguredInstances:
 
 # ── get_circuit_breaker() ────────────────────────────────────────────
 
+
 class TestGetCircuitBreaker:
     def test_known_platforms(self):
         assert get_circuit_breaker("instagram") is META_API_CB
@@ -395,6 +408,7 @@ class TestGetCircuitBreaker:
 
 
 # ── repr ─────────────────────────────────────────────────────────────
+
 
 class TestCircuitBreakerRepr:
     def test_repr(self, cb: CircuitBreaker):

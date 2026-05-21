@@ -5,6 +5,7 @@ that call ThreadsClient.publish_text() / publish_image() / publish_video().
 
 The canonical implementation is genlab_core.platforms.threads.ThreadsClient.
 """
+
 from __future__ import annotations
 
 from genlab_core.platforms.threads import ThreadsClient as _PlatformThreadsClient

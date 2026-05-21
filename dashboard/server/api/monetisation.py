@@ -5,6 +5,7 @@ Routes:
     POST /api/v1/monetisation/trigger   -- manually run the tracker (background thread)
     POST /api/v1/monetisation/send-deal -- send deal notification emails to channel subscribers
 """
+
 import logging
 import os
 import time as _time
@@ -88,13 +89,12 @@ def monetisation_progress():
                         pass
             # Correct is_monetised: ALL metrics must be met
             met_count = sum(
-                1 for m in plat_data["metrics"]
+                1
+                for m in plat_data["metrics"]
                 if m["is_threshold_met"] and m["target_value"] is not None
             )
-            target_count = sum(
-                1 for m in plat_data["metrics"] if m["target_value"] is not None
-            )
-            plat_data["is_monetised"] = (met_count == target_count and target_count > 0)
+            target_count = sum(1 for m in plat_data["metrics"] if m["target_value"] is not None)
+            plat_data["is_monetised"] = met_count == target_count and target_count > 0
 
     return api_success(data=grouped)
 
@@ -116,10 +116,12 @@ def trigger_tracker():
             from genlab_core.http.backlog_client import BacklogClient
             from genlab_core.monitoring.monetisation_tracker import MonetisationTracker
 
-            genlab_root = Path(os.environ.get(
-                "GENLAB_PROJECT_ROOT",
-                str(Path(__file__).resolve().parent.parent.parent.parent),
-            ))
+            genlab_root = Path(
+                os.environ.get(
+                    "GENLAB_PROJECT_ROOT",
+                    str(Path(__file__).resolve().parent.parent.parent.parent),
+                )
+            )
             config_path = genlab_root / "genlab-core" / "config" / "monetisation_targets.yaml"
             client = BacklogClient()
             tracker = MonetisationTracker(client, config_path=config_path)

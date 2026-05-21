@@ -1,4 +1,5 @@
 """Auth middleware — passthrough in single_admin mode, JWT-based in multi_team."""
+
 from __future__ import annotations
 
 from functools import wraps
@@ -25,5 +26,7 @@ class AuthMiddleware:
                     return api_error(error="Missing auth token", code=401)
                 # Future: decode JWT, check team membership, verify permission
                 return api_error(error="multi_team auth not yet implemented", code=501)
+
             return wrapper
+
         return decorator

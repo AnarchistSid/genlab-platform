@@ -11,6 +11,7 @@ Conservative update rules:
   - Never update if the change is < CHANGE_THRESHOLD (10%)
   - Log every change (and every skipped update) at INFO level
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 CHANGE_THRESHOLD = 0.10  # 10% — minimum difference to justify a config update
-MIN_DATA_POINTS = 20     # Minimum 48h-complete records before updating any dimension
+MIN_DATA_POINTS = 20  # Minimum 48h-complete records before updating any dimension
 _IST_OFFSET = timedelta(hours=5, minutes=30)  # schedule.yaml uses IST
 
 
@@ -52,21 +53,20 @@ class ConfigUpdater:
                                    "n", "reason"}
         """
         records_with_reward = [
-            r for r in feedback_records
+            r
+            for r in feedback_records
             if getattr(r, "reward_48h", None) is not None
             and "48h" in getattr(r, "completed_windows", [])
         ]
 
         cutoff = datetime.now(tz=UTC) - timedelta(days=30)
-        recent = [
-            r for r in records_with_reward
-            if r.published_at >= cutoff
-        ]
+        recent = [r for r in records_with_reward if r.published_at >= cutoff]
 
         if len(recent) < MIN_DATA_POINTS:
             logger.info(
                 "[CONFIG_UPDATE] Only %d records in last 30 days (need %d) — skipping",
-                len(recent), MIN_DATA_POINTS,
+                len(recent),
+                MIN_DATA_POINTS,
             )
             return []
 
@@ -81,9 +81,7 @@ class ConfigUpdater:
         )
         return changes
 
-    def _update_posting_schedule(
-        self, records: list, dry_run: bool
-    ) -> list[dict]:
+    def _update_posting_schedule(self, records: list, dry_run: bool) -> list[dict]:
         """Compare average reward by posting hour per platform.
         Update schedule.yaml if the best hour differs from current by > 10%.
         """
@@ -95,9 +93,7 @@ class ConfigUpdater:
         with open(schedule_path) as f:
             schedule = yaml.safe_load(f) or {}
 
-        rewards_by_slot: dict[str, dict[int, list[float]]] = defaultdict(
-            lambda: defaultdict(list)
-        )
+        rewards_by_slot: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
         for r in records:
             hour = (r.published_at + _IST_OFFSET).hour
             rewards_by_slot[r.platform][hour].append(r.reward_48h)
@@ -112,7 +108,10 @@ class ConfigUpdater:
             if n < MIN_DATA_POINTS:
                 logger.info(
                     "[CONFIG_UPDATE] %s best_hour=%02d:00 only has n=%d — skipping (need %d)",
-                    platform, best_hour, n, MIN_DATA_POINTS,
+                    platform,
+                    best_hour,
+                    n,
+                    MIN_DATA_POINTS,
                 )
                 continue
 
@@ -125,7 +124,10 @@ class ConfigUpdater:
             if clock_diff < CHANGE_THRESHOLD * 24:  # 10% of 24h = 2.4h
                 logger.info(
                     "[CONFIG_UPDATE] %s hour change %02d->%02d small (%dh) — skipping",
-                    platform, current_hour, best_hour, clock_diff,
+                    platform,
+                    current_hour,
+                    best_hour,
+                    clock_diff,
                 )
                 continue
 
@@ -139,7 +141,11 @@ class ConfigUpdater:
             }
             logger.info(
                 "[CONFIG_UPDATE] schedule.yaml: posting_slot %s %s -> %s (n=%d, avg_reward=%.4f)",
-                platform, change["old_value"], change["new_value"], n, best_avg,
+                platform,
+                change["old_value"],
+                change["new_value"],
+                n,
+                best_avg,
             )
             changes.append(change)
 
@@ -148,9 +154,7 @@ class ConfigUpdater:
 
         return changes
 
-    def _update_hook_type_ratios(
-        self, records: list, dry_run: bool
-    ) -> list[dict]:
+    def _update_hook_type_ratios(self, records: list, dry_run: bool) -> list[dict]:
         """Compare average reward by hook_type.
         Update templates.yaml hook_type_ratios if learned distribution differs.
         """
@@ -184,7 +188,9 @@ class ConfigUpdater:
 
         total = sum(mean_rewards.values())
         if total < 1e-6:
-            logger.info("[CONFIG_UPDATE] All hook types near-zero reward — skipping hook ratio update")
+            logger.info(
+                "[CONFIG_UPDATE] All hook types near-zero reward — skipping hook ratio update"
+            )
             return []
         optimal_ratios = {ht: v / total for ht, v in mean_rewards.items()}
 
@@ -205,7 +211,10 @@ class ConfigUpdater:
             }
             logger.info(
                 "[CONFIG_UPDATE] templates.yaml: hook_type_ratios.%s %.3f -> %.3f (n=%d)",
-                hook_type, current_ratio, optimal_ratio, n,
+                hook_type,
+                current_ratio,
+                optimal_ratio,
+                n,
             )
             changes.append(change)
 
@@ -228,9 +237,7 @@ class ConfigUpdater:
             return int(first_slot.split(":")[0])
         return None
 
-    def _write_posting_hour(
-        self, path: Path, schedule: dict, platform: str, new_hour: int
-    ) -> None:
+    def _write_posting_hour(self, path: Path, schedule: dict, platform: str, new_hour: int) -> None:
         """Write the updated posting hour back to schedule.yaml."""
         slots = schedule.get("posting_slots", {}).get(platform, [])
         if slots and isinstance(slots[0], str) and ":" in slots[0]:

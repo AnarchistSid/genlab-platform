@@ -36,12 +36,26 @@ class TestFetchRedditVideos:
             json=lambda: {
                 "data": {
                     "children": [
-                        {"data": {"title": "Low", "score": 50, "is_video": True,
-                                  "media": {"reddit_video": {"fallback_url": "http://v.redd.it/a"}},
-                                  "permalink": "/r/nba/1", "url": "http://v.redd.it/a"}},
-                        {"data": {"title": "High", "score": 5000, "is_video": True,
-                                  "media": {"reddit_video": {"fallback_url": "http://v.redd.it/b"}},
-                                  "permalink": "/r/nba/2", "url": "http://v.redd.it/b"}},
+                        {
+                            "data": {
+                                "title": "Low",
+                                "score": 50,
+                                "is_video": True,
+                                "media": {"reddit_video": {"fallback_url": "http://v.redd.it/a"}},
+                                "permalink": "/r/nba/1",
+                                "url": "http://v.redd.it/a",
+                            }
+                        },
+                        {
+                            "data": {
+                                "title": "High",
+                                "score": 5000,
+                                "is_video": True,
+                                "media": {"reddit_video": {"fallback_url": "http://v.redd.it/b"}},
+                                "permalink": "/r/nba/2",
+                                "url": "http://v.redd.it/b",
+                            }
+                        },
                     ]
                 }
             },
@@ -60,16 +74,32 @@ class TestFetchRedditVideos:
             json=lambda: {
                 "data": {
                     "children": [
-                        {"data": {"title": "Text", "score": 9999, "is_video": False,
-                                  "permalink": "/r/nba/1", "url": "http://self.reddit"}},
-                        {"data": {"title": "Video", "score": 9999, "is_video": True,
-                                  "media": {"reddit_video": {"fallback_url": "http://v.redd.it/c"}},
-                                  "permalink": "/r/nba/2", "url": "http://v.redd.it/c"}},
+                        {
+                            "data": {
+                                "title": "Text",
+                                "score": 9999,
+                                "is_video": False,
+                                "permalink": "/r/nba/1",
+                                "url": "http://self.reddit",
+                            }
+                        },
+                        {
+                            "data": {
+                                "title": "Video",
+                                "score": 9999,
+                                "is_video": True,
+                                "media": {"reddit_video": {"fallback_url": "http://v.redd.it/c"}},
+                                "permalink": "/r/nba/2",
+                                "url": "http://v.redd.it/c",
+                            }
+                        },
                     ]
                 }
             },
         )
         with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "x", "REDDIT_CLIENT_SECRET": "y"}):
-            result = fetch_reddit_videos([{"subreddit": "r/nba", "min_score": 100, "content_type": "video"}])
+            result = fetch_reddit_videos(
+                [{"subreddit": "r/nba", "min_score": 100, "content_type": "video"}]
+            )
         assert len(result) == 1
         assert result[0]["is_video"] is True

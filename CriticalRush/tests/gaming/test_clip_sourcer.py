@@ -19,6 +19,7 @@ class TestFromConfig:
     def test_loads_without_error(self, tmp_path):
         """from_config() loads even if sources.yaml doesn't exist."""
         from niches.gaming.tools.clip_sourcer import GamingClipSourcer
+
         sourcer = GamingClipSourcer.from_config(tmp_path)
         assert sourcer is not None
         assert sourcer.config.max_duration_seconds == 60
@@ -31,6 +32,7 @@ class TestFromConfig:
             "clip_sourcer:\n  max_duration_seconds: 30\n  twitch_clip_limit: 10\n"
         )
         from niches.gaming.tools.clip_sourcer import GamingClipSourcer
+
         sourcer = GamingClipSourcer.from_config(tmp_path)
         assert sourcer.config.max_duration_seconds == 30
         assert sourcer.config.twitch_clip_limit == 10
@@ -40,6 +42,7 @@ class TestTierSkipping:
     def test_tier1_skipped_when_no_steam_app_id(self):
         """Tier 1 (Steam) is skipped when steam_app_id is None."""
         from niches.gaming.tools.clip_sourcer import SteamTrailerFetcher
+
         fetcher = SteamTrailerFetcher()
         result = fetcher.fetch(None, Path("/tmp"))
         assert result is None
@@ -125,6 +128,7 @@ class TestPexelsAttribution:
         with patch("genlab_core.settings.settings") as mock_settings:
             mock_settings.pexels_api_key = "test_key"
             from niches.gaming.tools.clip_sourcer import PexelsFallbackFetcher
+
             fetcher = PexelsFallbackFetcher(query_template="{game_title} gameplay")
 
         result = fetcher.fetch("Test Game", tmp_path)
@@ -141,15 +145,18 @@ class TestProbeVideo:
         """probe_video correctly parses ffprobe JSON output."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "streams": [
-                    {"codec_type": "video", "width": 1920, "height": 1080},
-                ],
-                "format": {"duration": "45.5"},
-            }),
+            stdout=json.dumps(
+                {
+                    "streams": [
+                        {"codec_type": "video", "width": 1920, "height": 1080},
+                    ],
+                    "format": {"duration": "45.5"},
+                }
+            ),
         )
 
         from niches.gaming.tools.clip_sourcer import probe_video
+
         result = probe_video("/fake/path.mp4")
         assert result is not None
         assert result["width"] == 1920
@@ -161,5 +168,6 @@ class TestProbeVideo:
     def test_probe_returns_none_on_failure(self, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stdout="")
         from niches.gaming.tools.clip_sourcer import probe_video
+
         result = probe_video("/fake/path.mp4")
         assert result is None

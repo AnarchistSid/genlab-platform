@@ -7,6 +7,7 @@ Usage:
     python -m genlab_core.monetization.commission_sync
     python -m genlab_core.monetization.commission_sync --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -63,15 +64,17 @@ def check_rates(catalog: dict) -> list[dict]:
                 expected = known.get(category, known.get("_default"))
 
                 if expected is not None and abs(catalog_rate - expected) > 0.01:
-                    changes.append({
-                        "product": name,
-                        "niche": niche_id,
-                        "network": network,
-                        "category": category,
-                        "catalog_rate": catalog_rate,
-                        "expected_rate": expected,
-                        "status": "rate_mismatch",
-                    })
+                    changes.append(
+                        {
+                            "product": name,
+                            "niche": niche_id,
+                            "network": network,
+                            "category": category,
+                            "catalog_rate": catalog_rate,
+                            "expected_rate": expected,
+                            "status": "rate_mismatch",
+                        }
+                    )
 
     return changes
 
@@ -96,8 +99,11 @@ def main():
     for c in changes:
         logger.info(
             "  %s / %s / %s: catalog=%.1f%% expected=%.1f%%",
-            c["niche"], c["product"], c["network"],
-            c["catalog_rate"], c["expected_rate"],
+            c["niche"],
+            c["product"],
+            c["network"],
+            c["catalog_rate"],
+            c["expected_rate"],
         )
 
     if not args.dry_run:

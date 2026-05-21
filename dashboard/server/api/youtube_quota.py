@@ -3,6 +3,7 @@
 Routes:
     GET /api/v1/monitoring/youtube-quota  -- daily quota usage + upload count
 """
+
 from __future__ import annotations
 
 import logging

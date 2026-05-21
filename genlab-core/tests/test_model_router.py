@@ -1,4 +1,5 @@
 """Tests for genlab_core.cost.model_router."""
+
 import os
 import tempfile
 from unittest.mock import patch

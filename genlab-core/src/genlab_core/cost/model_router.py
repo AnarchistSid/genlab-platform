@@ -8,6 +8,7 @@ call get_model(task_type) to get the correct model string.
     model = get_model("unknown_task")          # -> default_model
     model = get_model("generate_hooks", budget_ratio=0.28)  # budget override
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,7 +22,9 @@ import yaml
 log = logging.getLogger(__name__)
 
 # model_router.py → cost/ → genlab_core/ → src/ → genlab-core/ → configs/
-_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent.parent / "configs" / "model_routing.yaml"
+_DEFAULT_CONFIG_PATH = (
+    Path(__file__).resolve().parent.parent.parent.parent / "configs" / "model_routing.yaml"
+)
 
 
 @lru_cache(maxsize=1)

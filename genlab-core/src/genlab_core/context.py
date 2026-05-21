@@ -48,7 +48,9 @@ class PipelineContext:
 
     # ── Stage data (populated progressively) ──────────────────
     stories: list[dict[str, Any]] = field(default_factory=list)
-    blueprints: list[dict[str, Any]] = field(default_factory=list)  # Legacy — stages use context['stories']
+    blueprints: list[dict[str, Any]] = field(
+        default_factory=list
+    )  # Legacy — stages use context['stories']
 
     # ── Accumulated metrics per stage ─────────────────────────
     run_stats: dict[str, Any] = field(default_factory=dict)
@@ -85,14 +87,16 @@ class PipelineContext:
             error: The exception that occurred.
             fatal: If True, sets ``is_aborted`` so the runner stops.
         """
-        self.errors.append({
-            "stage": stage,
-            "error_type": type(error).__name__,
-            "message": str(error),
-            "traceback": traceback.format_exception(error),
-            "fatal": fatal,
-            "timestamp": datetime.now(UTC).isoformat(),
-        })
+        self.errors.append(
+            {
+                "stage": stage,
+                "error_type": type(error).__name__,
+                "message": str(error),
+                "traceback": traceback.format_exception(error),
+                "fatal": fatal,
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
         if fatal:
             self.is_aborted = True
 
@@ -111,9 +115,7 @@ class PipelineContext:
 # ---------------------------------------------------------------------------
 # ContextVar — ambient access to the current PipelineContext
 # ---------------------------------------------------------------------------
-_current_context: ContextVar[PipelineContext | None] = ContextVar(
-    "current_context", default=None
-)
+_current_context: ContextVar[PipelineContext | None] = ContextVar("current_context", default=None)
 
 
 def set_current_context(ctx: PipelineContext) -> Token[PipelineContext | None]:

@@ -27,11 +27,13 @@ def _match_keywords(space: Dict[str, Any], keywords: List[str]) -> bool:
     if not keywords:
         return True
 
-    blob = " ".join([
-        str(space.get("id", "")),
-        str(space.get("author", "")),
-        " ".join(space.get("tags", []) or []),
-    ]).lower()
+    blob = " ".join(
+        [
+            str(space.get("id", "")),
+            str(space.get("author", "")),
+            " ".join(space.get("tags", []) or []),
+        ]
+    ).lower()
     return any(k.lower() in blob for k in keywords)
 
 
@@ -134,13 +136,15 @@ def fetch_source(src: Dict[str, Any]) -> Dict[str, Any]:
             continue
         seen_links.add(link)
 
-        entries.append({
-            "title": f"HF Space Demo: {sid}",
-            "link": link,
-            "summary": "\n".join(summary_lines),
-            "published": _to_iso(det.get("lastModified", "") or sp.get("createdAt", "")),
-            "author": author,
-        })
+        entries.append(
+            {
+                "title": f"HF Space Demo: {sid}",
+                "link": link,
+                "summary": "\n".join(summary_lines),
+                "published": _to_iso(det.get("lastModified", "") or sp.get("createdAt", "")),
+                "author": author,
+            }
+        )
 
         if len(entries) >= max_results:
             break

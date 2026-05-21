@@ -9,6 +9,7 @@ Usage:
     client = PaapiClient(access_key="...", secret_key="...", partner_tag="your-tag-20")
     products = client.search("PS5 console", search_index="VideoGames")
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -44,6 +45,7 @@ NICHE_SEARCH_INDEX = {
 @dataclass
 class PaapiProduct:
     """Product returned from PA-API."""
+
     asin: str
     title: str
     price: float
@@ -212,6 +214,7 @@ class PaapiClient:
         path = self._cache_dir / f"{key}.json"
         try:
             from dataclasses import asdict
+
             data = {
                 "ts": time.time(),
                 "products": [asdict(p) for p in products],

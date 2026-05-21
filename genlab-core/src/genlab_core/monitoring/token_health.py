@@ -40,10 +40,15 @@ def check_anthropic() -> dict:
     """Test Anthropic API key by making a minimal request."""
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        return {"platform": "anthropic", "status": "missing", "message": "ANTHROPIC_API_KEY not set"}
+        return {
+            "platform": "anthropic",
+            "status": "missing",
+            "message": "ANTHROPIC_API_KEY not set",
+        }
 
     try:
         import anthropic
+
         client = anthropic.Anthropic()
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -70,6 +75,7 @@ def check_openai() -> dict:
 
     try:
         from openai import OpenAI
+
         client = OpenAI()
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -101,14 +107,21 @@ def check_meta_token() -> dict:
     """
     token = os.getenv("META_ACCESS_TOKEN", "").strip()
     if not token:
-        return {"platform": "instagram", "status": "missing", "message": "META_ACCESS_TOKEN not set"}
+        return {
+            "platform": "instagram",
+            "status": "missing",
+            "message": "META_ACCESS_TOKEN not set",
+        }
 
     page_id = os.getenv("META_FB_PAGE_ID", "").strip()
 
     try:
         verify_resp = requests.get(
             f"https://graph.facebook.com/v21.0/{page_id or 'me'}",
-            params={"fields": "id,name,instagram_business_account{username}", "access_token": token},
+            params={
+                "fields": "id,name,instagram_business_account{username}",
+                "access_token": token,
+            },
             timeout=15,
         )
 
@@ -117,7 +130,11 @@ def check_meta_token() -> dict:
             error_code = error_data.get("code", 0)
             error_msg = error_data.get("message", verify_resp.text)[:200]
 
-            if error_code == 190 or "expired" in error_msg.lower() or "invalid" in error_msg.lower():
+            if (
+                error_code == 190
+                or "expired" in error_msg.lower()
+                or "invalid" in error_msg.lower()
+            ):
                 return {
                     "platform": "instagram",
                     "status": "expired",
@@ -180,7 +197,11 @@ def check_tiktok() -> dict:
 
     issued_str = os.getenv("TIKTOK_TOKEN_ISSUED_AT", "").strip()
     if not issued_str:
-        return {"platform": "tiktok", "status": "healthy", "message": "Token set but age unknown (TIKTOK_TOKEN_ISSUED_AT missing)"}
+        return {
+            "platform": "tiktok",
+            "status": "healthy",
+            "message": "Token set but age unknown (TIKTOK_TOKEN_ISSUED_AT missing)",
+        }
 
     try:
         issued_at = datetime.fromisoformat(issued_str)
@@ -193,23 +214,40 @@ def check_tiktok() -> dict:
         audit_note = "" if audit else " (SELF_ONLY until audit approved)"
 
         if remaining > 6:
-            return {"platform": "tiktok", "status": "healthy",
-                    "message": f"Token valid ({remaining:.0f}h remaining){audit_note}"}
+            return {
+                "platform": "tiktok",
+                "status": "healthy",
+                "message": f"Token valid ({remaining:.0f}h remaining){audit_note}",
+            }
         elif remaining > 1:
-            return {"platform": "tiktok", "status": "healthy",
-                    "message": f"Token expires soon ({remaining:.1f}h remaining){audit_note}"}
+            return {
+                "platform": "tiktok",
+                "status": "healthy",
+                "message": f"Token expires soon ({remaining:.1f}h remaining){audit_note}",
+            }
         else:
-            return {"platform": "tiktok", "status": "expired",
-                    "message": f"Token expired or expiring ({remaining:.1f}h remaining) — needs refresh{audit_note}"}
+            return {
+                "platform": "tiktok",
+                "status": "expired",
+                "message": f"Token expired or expiring ({remaining:.1f}h remaining) — needs refresh{audit_note}",
+            }
     except (ValueError, TypeError) as e:
-        return {"platform": "tiktok", "status": "error", "message": f"Cannot parse TIKTOK_TOKEN_ISSUED_AT: {e}"}
+        return {
+            "platform": "tiktok",
+            "status": "error",
+            "message": f"Cannot parse TIKTOK_TOKEN_ISSUED_AT: {e}",
+        }
 
 
 def check_threads() -> dict:
     """Check Threads token health (60-day expiry)."""
     token = os.getenv("THREADS_ACCESS_TOKEN", "").strip()
     if not token:
-        return {"platform": "threads", "status": "missing", "message": "THREADS_ACCESS_TOKEN not set"}
+        return {
+            "platform": "threads",
+            "status": "missing",
+            "message": "THREADS_ACCESS_TOKEN not set",
+        }
 
     issued_str = os.getenv("THREADS_TOKEN_ISSUED_AT", "").strip()
     if not issued_str:
@@ -223,19 +261,32 @@ def check_threads() -> dict:
         remaining = 60 - age_days
 
         if remaining > 15:
-            return {"platform": "threads", "status": "healthy",
-                    "message": f"Token valid ({remaining} days remaining)",
-                    "days_remaining": remaining}
+            return {
+                "platform": "threads",
+                "status": "healthy",
+                "message": f"Token valid ({remaining} days remaining)",
+                "days_remaining": remaining,
+            }
         elif remaining > 2:
-            return {"platform": "threads", "status": "healthy",
-                    "message": f"Token expiring soon ({remaining} days remaining) — refresh recommended",
-                    "days_remaining": remaining}
+            return {
+                "platform": "threads",
+                "status": "healthy",
+                "message": f"Token expiring soon ({remaining} days remaining) — refresh recommended",
+                "days_remaining": remaining,
+            }
         else:
-            return {"platform": "threads", "status": "expired",
-                    "message": f"Token critical ({remaining} days remaining) — refresh immediately",
-                    "days_remaining": remaining}
+            return {
+                "platform": "threads",
+                "status": "expired",
+                "message": f"Token critical ({remaining} days remaining) — refresh immediately",
+                "days_remaining": remaining,
+            }
     except (ValueError, TypeError) as e:
-        return {"platform": "threads", "status": "error", "message": f"Cannot parse THREADS_TOKEN_ISSUED_AT: {e}"}
+        return {
+            "platform": "threads",
+            "status": "error",
+            "message": f"Cannot parse THREADS_TOKEN_ISSUED_AT: {e}",
+        }
 
 
 # ══════════════════════════════════════════════════════════════
@@ -252,6 +303,7 @@ def check_backlog() -> dict:
         # Postgres health check — simple SELECT 1
         try:
             from genlab_core.storage.postgres import PostgresBackend
+
             pg = PostgresBackend(dsn=dsn)
             rows = pg.find("blueprints", max_records=1)
             return {
@@ -270,15 +322,20 @@ def check_backlog() -> dict:
             "platform": "database",
             "status": "missing",
             "message": "No database configured. Set GENLAB_USE_POSTGRES=true + DATABASE_URL, "
-                       "or AZURE_TENANT_ID + AZURE_CLIENT_ID for SharePoint.",
+            "or AZURE_TENANT_ID + AZURE_CLIENT_ID for SharePoint.",
         }
 
     try:
         from genlab_core.http.backlog_client import BacklogClient
+
         client = BacklogClient()
         ok = client.health_check()
         if ok:
-            return {"platform": "database", "status": "healthy", "message": "Microsoft Lists connected"}
+            return {
+                "platform": "database",
+                "status": "healthy",
+                "message": "Microsoft Lists connected",
+            }
         return {"platform": "database", "status": "error", "message": "Health check returned False"}
     except Exception as e:
         return {"platform": "database", "status": "error", "message": str(e)[:200]}
@@ -334,11 +391,13 @@ def _run_native_platform_checks() -> list[dict]:
             logger.debug("Native check %s → %s", pid, ts.valid)
         except Exception as exc:
             logger.warning("Native health check failed for %s: %s", pid, exc)
-            results.append({
-                "platform": pid,
-                "status": "error",
-                "message": f"Native client check raised: {exc}",
-            })
+            results.append(
+                {
+                    "platform": pid,
+                    "status": "error",
+                    "message": f"Native client check raised: {exc}",
+                }
+            )
 
     return results
 
@@ -397,16 +456,24 @@ def main():
     logger.info("=" * 60)
 
     for r in summary["results"]:
-        icon = {"healthy": "\u2705", "refreshed": "\U0001f504", "missing": "\u26a0\ufe0f",
-                "expired": "\u274c", "error": "\u274c", "credits_depleted": "\U0001f4b8",
-                "refresh_failed": "\u26a0\ufe0f"}.get(r["status"], "\u2753")
+        icon = {
+            "healthy": "\u2705",
+            "refreshed": "\U0001f504",
+            "missing": "\u26a0\ufe0f",
+            "expired": "\u274c",
+            "error": "\u274c",
+            "credits_depleted": "\U0001f4b8",
+            "refresh_failed": "\u26a0\ufe0f",
+        }.get(r["status"], "\u2753")
         logger.info("  %s %s: %s", icon, r["platform"].upper(), r["message"])
 
     logger.info("-" * 60)
     logger.info(
         "Summary: %d/%d healthy, %d unhealthy, %d missing",
-        summary["healthy"], summary["total_checked"],
-        summary["unhealthy"], summary["missing"],
+        summary["healthy"],
+        summary["total_checked"],
+        summary["unhealthy"],
+        summary["missing"],
     )
     logger.info("=" * 60)
 
@@ -421,6 +488,7 @@ def main():
     latest_path.write_text(json.dumps(summary, indent=2))
 
     import sys
+
     sys.exit(0 if summary["all_healthy"] else 1)
 
 
@@ -432,13 +500,17 @@ _ERR_INVALID_TOKEN = 190
 _ERR_EXPIRED_TOKEN = 463
 
 # Permissions required for video publishing
-_REQUIRED_PUBLISH_PERMISSIONS = frozenset({
-    "publish_video",
-    "pages_manage_posts",
-})
+_REQUIRED_PUBLISH_PERMISSIONS = frozenset(
+    {
+        "publish_video",
+        "pages_manage_posts",
+    }
+)
 
 
-def _verify_page_token(page_id: str, access_token: str, api_version: str = "v21.0") -> dict[str, Any]:
+def _verify_page_token(
+    page_id: str, access_token: str, api_version: str = "v21.0"
+) -> dict[str, Any]:
     """Verify the Facebook Page access token is valid and has required permissions.
 
     Two-step check:
@@ -599,9 +671,17 @@ def check_youtube() -> dict:
     if not client_id:
         return {"platform": "youtube", "status": "missing", "message": "YOUTUBE_CLIENT_ID not set"}
     if not client_secret:
-        return {"platform": "youtube", "status": "missing", "message": "YOUTUBE_CLIENT_SECRET not set"}
+        return {
+            "platform": "youtube",
+            "status": "missing",
+            "message": "YOUTUBE_CLIENT_SECRET not set",
+        }
     if not refresh_token:
-        return {"platform": "youtube", "status": "missing", "message": "YOUTUBE_REFRESH_TOKEN not set"}
+        return {
+            "platform": "youtube",
+            "status": "missing",
+            "message": "YOUTUBE_REFRESH_TOKEN not set",
+        }
 
     # Try google-auth path first (same approach as YouTubeClient in BlackboxBrief)
     try:
@@ -620,7 +700,11 @@ def check_youtube() -> dict:
         resp = service.channels().list(part="id,statistics", mine=True).execute()
         items = resp.get("items", [])
         if not items:
-            return {"platform": "youtube", "status": "error", "message": "No channel found for this OAuth token"}
+            return {
+                "platform": "youtube",
+                "status": "error",
+                "message": "No channel found for this OAuth token",
+            }
 
         channel_id = items[0]["id"]
         subs = int(items[0].get("statistics", {}).get("subscriberCount", 0))
@@ -654,7 +738,11 @@ def check_youtube() -> dict:
                 "message": "YouTube OAuth token valid (token-exchange check — google-auth not installed)",
             }
         error = data.get("error_description", data.get("error", "Unknown error"))
-        return {"platform": "youtube", "status": "error", "message": f"Token exchange failed: {error}"}
+        return {
+            "platform": "youtube",
+            "status": "error",
+            "message": f"Token exchange failed: {error}",
+        }
 
     except Exception as e:
         return {"platform": "youtube", "status": "error", "message": str(e)[:200]}
@@ -703,7 +791,11 @@ def check_twitter() -> dict:
                 timeout=15,
             )
             if resp.status_code == 200:
-                return {"platform": "twitter", "status": "healthy", "message": "X API connected (bearer token)"}
+                return {
+                    "platform": "twitter",
+                    "status": "healthy",
+                    "message": "X API connected (bearer token)",
+                }
             if resp.status_code == 403:
                 return {
                     "platform": "twitter",
@@ -711,7 +803,11 @@ def check_twitter() -> dict:
                     "message": "X API reachable (403 on /users/me is expected on free tier)",
                 }
             if resp.status_code == 401:
-                return {"platform": "twitter", "status": "expired", "message": "Bearer token invalid or revoked"}
+                return {
+                    "platform": "twitter",
+                    "status": "expired",
+                    "message": "Bearer token invalid or revoked",
+                }
             return {"platform": "twitter", "status": "error", "message": f"HTTP {resp.status_code}"}
         except Exception as e:
             return {"platform": "twitter", "status": "error", "message": str(e)[:200]}

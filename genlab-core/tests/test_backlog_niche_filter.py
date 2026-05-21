@@ -1,4 +1,5 @@
 """Tests for multi-tenancy niche_id filtering in BacklogClient."""
+
 import pytest
 from genlab_core.http.backlog_client import _inject_niche_filter
 

@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 class VideoValidationError(RuntimeError):
     """Raised when a rendered video fails post-encode quality validation."""
 
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 NICHE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -73,7 +74,16 @@ HOOK_MAX_CHARS_PER_LINE = 32
 HOOK_MAX_TOTAL_CHARS = 80
 
 # Platform → aspect ratio mapping (all platforms unified to 9:16 vertical)
-VERTICAL_PLATFORMS = {"instagram", "youtube", "youtube_shorts", "tiktok", "threads", "facebook", "x_twitter", "twitter"}
+VERTICAL_PLATFORMS = {
+    "instagram",
+    "youtube",
+    "youtube_shorts",
+    "tiktok",
+    "threads",
+    "facebook",
+    "x_twitter",
+    "twitter",
+}
 LANDSCAPE_PLATFORMS: set[str] = set()
 
 
@@ -91,11 +101,15 @@ def get_render_spec(platform: str) -> RenderSpec:
     """Return the correct render spec for a platform."""
     if platform in VERTICAL_PLATFORMS:
         return RenderSpec(
-            width=1080, height=1920, aspect="9:16",
+            width=1080,
+            height=1920,
+            aspect="9:16",
             conversion="pillarbox_blur",
         )
     return RenderSpec(
-        width=1920, height=1080, aspect="16:9",
+        width=1920,
+        height=1080,
+        aspect="16:9",
         conversion="passthrough",
     )
 
@@ -196,6 +210,7 @@ class RenderGamingVideo(VisualRenderStrategy):
 
         run_id = "unknown"
         from genlab_core.context import get_current_context
+
         ctx = get_current_context()
         if ctx:
             run_id = ctx.run_id
@@ -209,10 +224,7 @@ class RenderGamingVideo(VisualRenderStrategy):
         }
 
         # Count stories with local clips for path decision
-        stories_with_clips = [
-            s for s in stories
-            if self._get_clip_path(s) is not None
-        ]
+        stories_with_clips = [s for s in stories if self._get_clip_path(s) is not None]
 
         use_compilation = (
             flags.get("use_compilation_mode", True)
@@ -222,7 +234,10 @@ class RenderGamingVideo(VisualRenderStrategy):
         if use_compilation:
             self._ensure_config()
             comp_result = self._render_compilation(
-                stories, run_id, stats, flags,
+                stories,
+                run_id,
+                stats,
+                flags,
             )
             if comp_result:
                 context.setdefault("blueprints", []).append(comp_result)
@@ -241,16 +256,18 @@ class RenderGamingVideo(VisualRenderStrategy):
                 if comp_path:
                     # Apply FrameCompositor to add logo + channel name + hook
                     # (compilation path previously skipped branding — Sprint 59 TODO)
-                    primary_story = next(
-                        (s for s in stories if s.get("_in_compilation")), None
-                    )
+                    primary_story = next((s for s in stories if s.get("_in_compilation")), None)
                     hook_text = (primary_story or {}).get("hook", "") if primary_story else ""
                     if not hook_text:
-                        hook_text = comp_result.get("hook", stories[0].get("hook", "")) if stories else ""
+                        hook_text = (
+                            comp_result.get("hook", stories[0].get("hook", "")) if stories else ""
+                        )
                     try:
                         fc = self._get_frame_compositor()
                         comp_dur = comp_result.get("duration_seconds") or 55
-                        branded_path = str(Path(comp_path).parent / f"{Path(comp_path).stem}_branded.mp4")
+                        branded_path = str(
+                            Path(comp_path).parent / f"{Path(comp_path).stem}_branded.mp4"
+                        )
                         # Use overlay_branding (not compose) — compilation is
                         # already 1080x1920, compose() would classify it as
                         # "portrait" and skip branding entirely.
@@ -264,7 +281,10 @@ class RenderGamingVideo(VisualRenderStrategy):
                         comp_result["rendered_path"] = branded_path
                         logger.info("[RENDER] Branding overlaid on compilation: %s", branded_path)
                     except Exception as e:
-                        logger.warning("[RENDER] Branding overlay failed on compilation: %s — using unbranded", e)
+                        logger.warning(
+                            "[RENDER] Branding overlay failed on compilation: %s — using unbranded",
+                            e,
+                        )
 
                     assigned = False
                     for story in stories:
@@ -279,7 +299,9 @@ class RenderGamingVideo(VisualRenderStrategy):
 
         # Determine which aspect ratios are needed from enabled platforms
         platforms_enabled = flags.get("platforms_enabled", [])
-        need_vertical = any(p in VERTICAL_PLATFORMS for p in platforms_enabled) or not platforms_enabled
+        need_vertical = (
+            any(p in VERTICAL_PLATFORMS for p in platforms_enabled) or not platforms_enabled
+        )
         need_landscape = any(p in LANDSCAPE_PLATFORMS for p in platforms_enabled)
 
         # Path B: single-clip render for stories not in compilation
@@ -310,9 +332,7 @@ class RenderGamingVideo(VisualRenderStrategy):
             # Try short-video-maker service first (vertical only)
             if flags.get("use_short_video_maker", False):
                 output_path = output_dir / f"{slug}.mp4"
-                rendered_path = self._try_short_video_maker(
-                    clip_path, hook, str(output_path)
-                )
+                rendered_path = self._try_short_video_maker(clip_path, hook, str(output_path))
                 if rendered_path:
                     render_method = "short_video_maker"
                     rendered_variants["vertical"] = rendered_path
@@ -369,11 +389,10 @@ class RenderGamingVideo(VisualRenderStrategy):
                     logger.error(
                         "[RENDER] post-encode validation failed — blocking publish. "
                         "variant=%s path=%s",
-                        vkey, vpath,
+                        vkey,
+                        vpath,
                     )
-                    raise VideoValidationError(
-                        f"Post-encode validation failed for {vkey}: {vpath}"
-                    )
+                    raise VideoValidationError(f"Post-encode validation failed for {vkey}: {vpath}")
 
             # Store both the default path and per-platform variants
             story.setdefault("media", {})["rendered_path"] = rendered_path
@@ -394,7 +413,9 @@ class RenderGamingVideo(VisualRenderStrategy):
         context.setdefault("run_stats", {})["render"] = stats
         logger.info(
             "[RENDER] %d rendered, %d failed, %d skipped, compilation=%s",
-            stats["rendered"], stats["failed"], stats["skipped"],
+            stats["rendered"],
+            stats["failed"],
+            stats["skipped"],
             stats["compilation_built"],
         )
         return context
@@ -491,11 +512,13 @@ class RenderGamingVideo(VisualRenderStrategy):
             )
             if success and Path(norm_path).exists():
                 normalized_paths.append(norm_path)
-                plan_clip_data.append({
-                    "clip_id": clip_id,
-                    "story": story,
-                    "plan_clip": plan_clip,
-                })
+                plan_clip_data.append(
+                    {
+                        "clip_id": clip_id,
+                        "story": story,
+                        "plan_clip": plan_clip,
+                    }
+                )
                 # Mark story as part of compilation
                 story["_in_compilation"] = True
             else:
@@ -529,7 +552,9 @@ class RenderGamingVideo(VisualRenderStrategy):
         # Add text overlays
         overlays = self._build_overlay_list(plan_clip_data, normalized_paths)
         if overlays:
-            overlay_path = str(output_dir / f"compilation_{_slugify(plan.get('theme', 'mixed'))}_overlay.mp4")
+            overlay_path = str(
+                output_dir / f"compilation_{_slugify(plan.get('theme', 'mixed'))}_overlay.mp4"
+            )
             overlay_success = add_text_overlay(
                 input_path=comp_path,
                 output_path=overlay_path,
@@ -638,19 +663,22 @@ class RenderGamingVideo(VisualRenderStrategy):
                 font_file = fonts.get(font_key, {}).get("file", "")
                 if font_file:
                     font_path = str(PROJECT_ROOT / font_file)
-                    overlays.append({
-                        "text": streamer,
-                        "font_file": font_path,
-                        "size": tmpl.get("size_px", 48),
-                        "color": tmpl.get("color", "white"),
-                        "position": tmpl.get("position", "bottom_left"),
-                        "margin_x": tmpl.get("margin_x", 40),
-                        "margin_y": tmpl.get("margin_y", 120),
-                        "start_time": running_time,
-                        "end_time": running_time + min(tmpl.get("duration_seconds", 3), clip_dur),
-                        "stroke_color": tmpl.get("stroke_color"),
-                        "stroke_width": tmpl.get("stroke_width", 0),
-                    })
+                    overlays.append(
+                        {
+                            "text": streamer,
+                            "font_file": font_path,
+                            "size": tmpl.get("size_px", 48),
+                            "color": tmpl.get("color", "white"),
+                            "position": tmpl.get("position", "bottom_left"),
+                            "margin_x": tmpl.get("margin_x", 40),
+                            "margin_y": tmpl.get("margin_y", 120),
+                            "start_time": running_time,
+                            "end_time": running_time
+                            + min(tmpl.get("duration_seconds", 3), clip_dur),
+                            "stroke_color": tmpl.get("stroke_color"),
+                            "stroke_width": tmpl.get("stroke_width", 0),
+                        }
+                    )
 
             # Game title overlay
             game_title = story.get("game_title", "")
@@ -660,19 +688,22 @@ class RenderGamingVideo(VisualRenderStrategy):
                 font_file = fonts.get(font_key, {}).get("file", "")
                 if font_file:
                     font_path = str(PROJECT_ROOT / font_file)
-                    overlays.append({
-                        "text": game_title,
-                        "font_file": font_path,
-                        "size": tmpl.get("size_px", 36),
-                        "color": tmpl.get("color", "#FFD700"),
-                        "position": tmpl.get("position", "top_right"),
-                        "margin_x": tmpl.get("margin_x", 40),
-                        "margin_y": tmpl.get("margin_y", 60),
-                        "start_time": running_time,
-                        "end_time": running_time + min(tmpl.get("duration_seconds", 3), clip_dur),
-                        "stroke_color": tmpl.get("stroke_color"),
-                        "stroke_width": tmpl.get("stroke_width", 0),
-                    })
+                    overlays.append(
+                        {
+                            "text": game_title,
+                            "font_file": font_path,
+                            "size": tmpl.get("size_px", 36),
+                            "color": tmpl.get("color", "#FFD700"),
+                            "position": tmpl.get("position", "top_right"),
+                            "margin_x": tmpl.get("margin_x", 40),
+                            "margin_y": tmpl.get("margin_y", 60),
+                            "start_time": running_time,
+                            "end_time": running_time
+                            + min(tmpl.get("duration_seconds", 3), clip_dur),
+                            "stroke_color": tmpl.get("stroke_color"),
+                            "stroke_width": tmpl.get("stroke_width", 0),
+                        }
+                    )
 
             running_time += clip_dur
 
@@ -693,9 +724,7 @@ class RenderGamingVideo(VisualRenderStrategy):
             return clip_path
         return None
 
-    def _try_short_video_maker(
-        self, clip_path: str, hook: str, output_path: str
-    ) -> str | None:
+    def _try_short_video_maker(self, clip_path: str, hook: str, output_path: str) -> str | None:
         """Try the short-video-maker Docker service."""
         try:
             svm_url = settings.short_video_maker_url
@@ -736,7 +765,10 @@ class RenderGamingVideo(VisualRenderStrategy):
             return None
 
     def _render_with_ffmpeg(
-        self, clip_path: str, hook: str, output_path: str,
+        self,
+        clip_path: str,
+        hook: str,
+        output_path: str,
         story: dict[str, Any] | None = None,
         spec: RenderSpec | None = None,
     ) -> str | None:
@@ -780,7 +812,10 @@ class RenderGamingVideo(VisualRenderStrategy):
         hook_file = None
         try:
             hook_file = tempfile.NamedTemporaryFile(
-                mode="w", suffix=".txt", delete=False, encoding="utf-8",
+                mode="w",
+                suffix=".txt",
+                delete=False,
+                encoding="utf-8",
             )
             hook_file.write(wrapped_hook)
             hook_file.close()
@@ -827,8 +862,7 @@ class RenderGamingVideo(VisualRenderStrategy):
             # Detect audio in the clip (input 0) — never map audio from cover image
             clip_info = probe(clip_path)
             clip_has_audio = (
-                clip_info is not None
-                and clip_info.get("audio", {}).get("channels", 0) > 0
+                clip_info is not None and clip_info.get("audio", {}).get("channels", 0) > 0
             )
 
             cmd = ["ffmpeg", "-y", "-i", clip_path]
@@ -836,20 +870,30 @@ class RenderGamingVideo(VisualRenderStrategy):
                 # Add cover art as second input; loop it to match clip duration
                 cmd += ["-loop", "1", "-i", bg_image_path]
             cmd += [
-                "-t", str(target_duration),
-                "-filter_complex", filter_complex,
-                "-map", "[out]",
+                "-t",
+                str(target_duration),
+                "-filter_complex",
+                filter_complex,
+                "-map",
+                "[out]",
             ]
             if clip_has_audio:
                 cmd += ["-map", "0:a", "-c:a", "aac", "-b:a", "192k"]
             encode_args = [
-                "-c:v", "libx264",
-                "-crf", "17",
-                "-pix_fmt", "yuv420p",
-                "-color_primaries", "bt709",
-                "-color_trc", "bt709",
-                "-colorspace", "bt709",
-                "-movflags", "+faststart",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "17",
+                "-pix_fmt",
+                "yuv420p",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-colorspace",
+                "bt709",
+                "-movflags",
+                "+faststart",
                 output_path,
             ]
 
@@ -858,12 +902,20 @@ class RenderGamingVideo(VisualRenderStrategy):
             if clip_duration > 60:
                 logger.info(
                     "[RENDER] Truncating clip from %.0fs to 60s: %s",
-                    clip_duration, clip_path,
+                    clip_duration,
+                    clip_path,
                 )
                 truncated = clip_path.replace(".mp4", "_trunc.mp4")
                 trunc_cmd = [
-                    "ffmpeg", "-y", "-i", clip_path,
-                    "-t", "60", "-c", "copy", truncated,
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    clip_path,
+                    "-t",
+                    "60",
+                    "-c",
+                    "copy",
+                    truncated,
                 ]
                 try:
                     subprocess.run(trunc_cmd, capture_output=True, timeout=30)
@@ -883,7 +935,10 @@ class RenderGamingVideo(VisualRenderStrategy):
                 full_cmd = cmd + ["-preset", preset] + encode_args
                 try:
                     result = subprocess.run(
-                        full_cmd, capture_output=True, text=True, timeout=actual_timeout,
+                        full_cmd,
+                        capture_output=True,
+                        text=True,
+                        timeout=actual_timeout,
                     )
                     if result.returncode == 0 and Path(output_path).exists():
                         if preset != "medium":
@@ -892,12 +947,15 @@ class RenderGamingVideo(VisualRenderStrategy):
                     if result.returncode != 0:
                         logger.warning(
                             "[RENDER] FFmpeg failed (preset=%s, exit %d): %s",
-                            preset, result.returncode, result.stderr[:300],
+                            preset,
+                            result.returncode,
+                            result.stderr[:300],
                         )
                 except subprocess.TimeoutExpired:
                     logger.warning(
                         "[RENDER] FFmpeg timed out (preset=%s, %ds) — %s",
-                        preset, actual_timeout,
+                        preset,
+                        actual_timeout,
                         "retrying with ultrafast" if preset == "medium" else "giving up",
                     )
                     # Clean up partial output before retry

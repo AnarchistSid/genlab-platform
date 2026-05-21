@@ -7,6 +7,7 @@ Two thresholds:
   inbound:  Skip comments with toxicity > 0.7. No engagement with harassment.
   outbound: Block replies where any toxicity dimension > 0.3.
 """
+
 from __future__ import annotations
 
 import logging

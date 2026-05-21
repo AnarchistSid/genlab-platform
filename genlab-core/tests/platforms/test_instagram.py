@@ -1,4 +1,5 @@
 """Tests for InstagramClient — mocks all HTTP."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,6 +12,7 @@ from genlab_core.platforms.models import InstagramSpecific, PublishPayload
 @pytest.fixture
 def ig_client():
     from genlab_core.platforms.instagram import InstagramClient
+
     return InstagramClient(
         access_token="EAA_TEST_TOKEN",
         ig_user_id="17841400000000001",
@@ -21,7 +23,9 @@ def ig_client():
 @pytest.fixture(autouse=True)
 def _mock_cdn_upload():
     """All Instagram publish tests need CDN upload mocked (local paths don't exist)."""
-    with patch("genlab_core.platforms.cdn_upload.upload_to_cdn", return_value="https://cdn.test/clip.mp4"):
+    with patch(
+        "genlab_core.platforms.cdn_upload.upload_to_cdn", return_value="https://cdn.test/clip.mp4"
+    ):
         yield
 
 
@@ -277,9 +281,11 @@ class TestEngagement:
         """Reply endpoint must use graph.facebook.com."""
         captured = []
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
+
             def cap(url, *a, **kw):
                 captured.append(url)
                 return MagicMock(status_code=200, json=lambda: {"id": "r1"})
+
             mock_req.post.side_effect = cap
             ig_client.post_reply("comment_x", "Hi!", context_id="media_y")
 
@@ -320,6 +326,7 @@ class TestHealthCheck:
     def test_health_check_platform_id(self, ig_client):
         """platform attribute on InstagramClient is 'instagram'."""
         from genlab_core.platforms.instagram import InstagramClient
+
         assert InstagramClient.platform_id == "instagram"
 
 
@@ -330,6 +337,7 @@ class TestInit:
         monkeypatch.setenv("META_IG_USER_ID", "11111111111111111")
 
         from genlab_core.platforms.instagram import InstagramClient
+
         client = InstagramClient()
         assert client._access_token == "EAA_from_env"
         assert client._ig_user_id == "11111111111111111"
@@ -338,6 +346,7 @@ class TestInit:
         """Explicit constructor args override env vars."""
         monkeypatch.setenv("META_ACCESS_TOKEN", "EAA_from_env")
         from genlab_core.platforms.instagram import InstagramClient
+
         client = InstagramClient(access_token="EAA_explicit", ig_user_id="99999")
         assert client._access_token == "EAA_explicit"
         assert client._ig_user_id == "99999"
@@ -345,6 +354,7 @@ class TestInit:
     def test_base_url_uses_api_version(self):
         """Base URL includes the configured api_version."""
         from genlab_core.platforms.instagram import InstagramClient
+
         client = InstagramClient(
             access_token="t",
             ig_user_id="u",
@@ -363,15 +373,15 @@ class TestInit:
             _DEFAULT_MAX_POLL_SECONDS,
             InstagramClient,
         )
+
         client = InstagramClient(access_token="t", ig_user_id="u")
         assert client._max_poll_seconds == _DEFAULT_MAX_POLL_SECONDS
 
     def test_max_poll_seconds_custom(self):
         """Custom poll timeout is stored on the instance."""
         from genlab_core.platforms.instagram import InstagramClient
-        client = InstagramClient(
-            access_token="t", ig_user_id="u", max_poll_seconds=600
-        )
+
+        client = InstagramClient(access_token="t", ig_user_id="u", max_poll_seconds=600)
         assert client._max_poll_seconds == 600
 
 
@@ -407,9 +417,11 @@ class TestVerifyChannel:
         """verify_channel must use graph.facebook.com."""
         captured = []
         with patch("genlab_core.platforms.instagram.requests") as mock_req:
+
             def cap(url, *a, **kw):
                 captured.append(url)
                 return MagicMock(status_code=200, json=lambda: {"id": "123"})
+
             mock_req.get.side_effect = cap
             ig_client.verify_channel()
 

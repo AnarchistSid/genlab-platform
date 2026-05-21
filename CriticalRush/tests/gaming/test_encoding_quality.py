@@ -47,6 +47,7 @@ def _assert_quality_args(cmd: list[str], expected_crf: str = "17"):
 # ffmpeg_gaming.normalize_clip
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeClipEncoding:
     @patch("niches.gaming.media.ffmpeg_gaming.subprocess.run")
     @patch("niches.gaming.media.ffmpeg_gaming.probe_media")
@@ -79,6 +80,7 @@ class TestNormalizeClipEncoding:
 # ---------------------------------------------------------------------------
 # ffmpeg_gaming.concat_with_transitions
 # ---------------------------------------------------------------------------
+
 
 class TestConcatWithTransitionsEncoding:
     @patch("niches.gaming.media.ffmpeg_gaming.probe_media")
@@ -121,6 +123,7 @@ class TestConcatWithTransitionsEncoding:
 # ffmpeg_gaming.add_text_overlay
 # ---------------------------------------------------------------------------
 
+
 class TestAddTextOverlayEncoding:
     @patch("niches.gaming.media.ffmpeg_gaming.subprocess.run")
     def test_uses_quality_args(self, mock_run):
@@ -128,15 +131,17 @@ class TestAddTextOverlayEncoding:
 
         mock_run.return_value = MagicMock(returncode=0)
 
-        overlays = [{
-            "text": "Test",
-            "font_file": "/font.ttf",
-            "size": 48,
-            "color": "white",
-            "position": "center",
-            "start_time": 0.0,
-            "end_time": 3.0,
-        }]
+        overlays = [
+            {
+                "text": "Test",
+                "font_file": "/font.ttf",
+                "size": 48,
+                "color": "white",
+                "position": "center",
+                "start_time": 0.0,
+                "end_time": 3.0,
+            }
+        ]
         add_text_overlay("/in.mp4", "/out.mp4", overlays)
 
         cmd = _extract_cmd(mock_run)
@@ -146,6 +151,7 @@ class TestAddTextOverlayEncoding:
 # ---------------------------------------------------------------------------
 # render_gaming_video._render_with_ffmpeg
 # ---------------------------------------------------------------------------
+
 
 class TestRenderWithFfmpegEncoding:
     @patch("niches.gaming.stages.render_gaming_video.get_duration", return_value=25.0)
@@ -196,8 +202,10 @@ class TestRenderWithFfmpegEncoding:
 
         stage = RenderGamingVideo()
 
-        with patch.object(Path, "exists", return_value=True), \
-             patch.object(Path, "stat", return_value=MagicMock(st_size=1024)):
+        with (
+            patch.object(Path, "exists", return_value=True),
+            patch.object(Path, "stat", return_value=MagicMock(st_size=1024)),
+        ):
             stage._render_with_ffmpeg("/clip.mp4", "Test hook", "/out.mp4")
 
         # First call should be the truncation command
@@ -230,6 +238,7 @@ class TestRenderWithFfmpegEncoding:
 # ---------------------------------------------------------------------------
 # clip_sourcer._normalize_to_h264
 # ---------------------------------------------------------------------------
+
 
 class TestNormalizeToH264Encoding:
     @patch("niches.gaming.tools.clip_sourcer.subprocess.run")
@@ -268,13 +277,26 @@ class TestNormalizeToH264Encoding:
 # Regression guard: no CRF 23 in source files
 # ---------------------------------------------------------------------------
 
+
 class TestNoCrf23InSource:
     """Scan source files to ensure CRF 23 is not hardcoded anywhere."""
 
     _FILES = [
-        Path(__file__).resolve().parent.parent.parent / "niches" / "gaming" / "media" / "ffmpeg_gaming.py",
-        Path(__file__).resolve().parent.parent.parent / "niches" / "gaming" / "stages" / "render_gaming_video.py",
-        Path(__file__).resolve().parent.parent.parent / "niches" / "gaming" / "tools" / "clip_sourcer.py",
+        Path(__file__).resolve().parent.parent.parent
+        / "niches"
+        / "gaming"
+        / "media"
+        / "ffmpeg_gaming.py",
+        Path(__file__).resolve().parent.parent.parent
+        / "niches"
+        / "gaming"
+        / "stages"
+        / "render_gaming_video.py",
+        Path(__file__).resolve().parent.parent.parent
+        / "niches"
+        / "gaming"
+        / "tools"
+        / "clip_sourcer.py",
     ]
 
     @pytest.mark.parametrize("filepath", _FILES, ids=lambda p: p.name)
@@ -284,6 +306,7 @@ class TestNoCrf23InSource:
         content = filepath.read_text()
         # Check for patterns like '"23"' near 'crf' (within 30 chars)
         import re
+
         matches = re.findall(r'["\']crf["\'].*?["\']23["\']', content, re.IGNORECASE)
         alt_matches = re.findall(r'["\']23["\'].*?["\']crf["\']', content, re.IGNORECASE)
         assert not matches, f"Found CRF 23 in {filepath.name}: {matches}"

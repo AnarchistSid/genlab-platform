@@ -68,12 +68,10 @@ class NicheProfile:
     def _compile_patterns(self) -> None:
         """Compile keyword lists into regex patterns for word-boundary matching."""
         self._positive_patterns = [
-            re.compile(r"\b" + re.escape(kw.lower()) + r"\b")
-            for kw in self.positive_keywords
+            re.compile(r"\b" + re.escape(kw.lower()) + r"\b") for kw in self.positive_keywords
         ]
         self._negative_patterns = [
-            re.compile(r"\b" + re.escape(kw.lower()) + r"\b")
-            for kw in self.negative_keywords
+            re.compile(r"\b" + re.escape(kw.lower()) + r"\b") for kw in self.negative_keywords
         ]
 
 

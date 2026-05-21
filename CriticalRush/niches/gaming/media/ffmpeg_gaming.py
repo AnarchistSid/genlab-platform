@@ -24,14 +24,26 @@ from genlab_core.media.ffmpeg_utils import (
 
 # Gaming quality encoding args (bt709 color space, CRF 17)
 _QUALITY_ARGS = [
-    "-c:v", "libx264", "-preset", "slow",
-    "-crf", "17",
-    "-pix_fmt", "yuv420p",
-    "-color_primaries", "bt709",
-    "-color_trc", "bt709",
-    "-colorspace", "bt709",
-    "-c:a", "aac", "-b:a", "192k",
-    "-movflags", "+faststart",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "slow",
+    "-crf",
+    "17",
+    "-pix_fmt",
+    "yuv420p",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-colorspace",
+    "bt709",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-movflags",
+    "+faststart",
 ]
 
 logger = logging.getLogger(__name__)
@@ -148,10 +160,7 @@ def concat_with_transitions(
     transitions = transitions or []
 
     # If all transitions are hard_cut, use simple concat
-    if all(
-        t.get("type") == "hard_cut" or t.get("type") is None
-        for t in transitions
-    ):
+    if all(t.get("type") == "hard_cut" or t.get("type") is None for t in transitions):
         return concat(clip_paths, output_path, temp_dir=temp_dir)
 
     # Build xfade filter graph
@@ -183,7 +192,9 @@ def concat_with_transitions(
             current_offset = offset
         else:
             offset = current_offset + durations[i] - t_dur
-            xfade_filter = f"xfade=transition={XFADE_MAP.get(t_type, 'fade')}:duration={t_dur}:offset={offset}"
+            xfade_filter = (
+                f"xfade=transition={XFADE_MAP.get(t_type, 'fade')}:duration={t_dur}:offset={offset}"
+            )
             current_offset = offset
 
         if i == 0:
@@ -213,9 +224,11 @@ def concat_with_transitions(
         map_args = ["-map", "[vout]"]
 
     cmd = [
-        ffmpeg, "-y",
+        ffmpeg,
+        "-y",
         *input_args,
-        "-filter_complex", filter_complex,
+        "-filter_complex",
+        filter_complex,
         *map_args,
         *_QUALITY_ARGS,
         output_path,

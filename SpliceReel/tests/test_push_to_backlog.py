@@ -48,7 +48,10 @@ def sample_context():
                 "score": 0.88,
                 "content": {
                     "hook": "The spice must flow — one more time.",
-                    "instagram": {"caption": "Dune 3 is happening.", "hashtags": ["#Dune", "#SciFi"]},
+                    "instagram": {
+                        "caption": "Dune 3 is happening.",
+                        "hashtags": ["#Dune", "#SciFi"],
+                    },
                     "youtube": {"title": "Dune 3 Confirmed", "description": "Everything we know"},
                     "x_twitter": {"tweet": "Dune Part Three. 2028."},
                     "facebook": {"caption": "Warner Bros confirms Dune Part Three."},

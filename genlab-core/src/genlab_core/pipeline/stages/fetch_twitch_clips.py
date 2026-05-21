@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 _DEFAULT_GAME_IDS = [
     # NOTE: "509658" (Just Chatting) REMOVED — it's an IRL category, not a game.
     # It's always #1 on Twitch, causing 24% of gaming content to be non-gaming spam.
-    "32982",    # Grand Theft Auto V
-    "516575",   # Valorant
-    "21779",    # League of Legends
-    "33214",    # Fortnite
-    "32399",    # Counter-Strike 2
-    "263490",   # Rust
-    "518203",   # Apex Legends
-    "511224",   # Call of Duty: Warzone
-    "29595",    # Dota 2
-    "27471",    # Minecraft
+    "32982",  # Grand Theft Auto V
+    "516575",  # Valorant
+    "21779",  # League of Legends
+    "33214",  # Fortnite
+    "32399",  # Counter-Strike 2
+    "263490",  # Rust
+    "518203",  # Apex Legends
+    "511224",  # Call of Duty: Warzone
+    "29595",  # Dota 2
+    "27471",  # Minecraft
 ]
 
 
@@ -87,17 +87,19 @@ def _fetch_clips_for_game(
             clip_page_url = clip.get("url", "")
             if not clip_page_url:
                 continue
-            results.append({
-                "title": clip.get("title", ""),
-                "clip_url": clip_page_url,
-                "url": clip_page_url,
-                "view_count": clip.get("view_count", 0),
-                "game_id": game_id,
-                "broadcaster": clip.get("broadcaster_name", ""),
-                "duration": clip.get("duration", 0),
-                "source": "twitch_clips",
-                "created_at": clip.get("created_at", ""),
-            })
+            results.append(
+                {
+                    "title": clip.get("title", ""),
+                    "clip_url": clip_page_url,
+                    "url": clip_page_url,
+                    "view_count": clip.get("view_count", 0),
+                    "game_id": game_id,
+                    "broadcaster": clip.get("broadcaster_name", ""),
+                    "duration": clip.get("duration", 0),
+                    "source": "twitch_clips",
+                    "created_at": clip.get("created_at", ""),
+                }
+            )
         return results
     except Exception as e:
         logger.warning("[TwitchClips] Fetch failed for game %s: %s", game_id, e)
@@ -164,27 +166,29 @@ class FetchTwitchClips:
                 clip_url = clip["clip_url"]
                 sid = generate_story_id(clip_url, now_iso)
                 broadcaster = clip.get("broadcaster", "")
-                new_stories.append({
-                    "story_id": sid,
-                    "title": clip["title"],
-                    "source": "twitch_clips",
-                    "source_url": clip.get("url", clip_url),
-                    "canonical_url": clip_url,
-                    "published_at": clip.get("created_at", now_iso),
-                    "fetched_at": now_iso,
-                    "summary": f"Twitch clip by {broadcaster}",
-                    "view_count": clip.get("view_count", 0),
-                    "duration_seconds": clip.get("duration", 0),
-                    "niche_id": niche_id,
-                    "video_source": "twitch",
-                    # Attribution: Twitch Creator Terms require crediting streamer
-                    "broadcaster": broadcaster,
-                    "attribution": f"Clip from {broadcaster} on Twitch" if broadcaster else "",
-                    # Pre-filled clip info so DownloadTopVideos can use directly
-                    "_trending_video": True,
-                    "_clip_url": clip_url,
-                    "source_mention_count": 2,
-                })
+                new_stories.append(
+                    {
+                        "story_id": sid,
+                        "title": clip["title"],
+                        "source": "twitch_clips",
+                        "source_url": clip.get("url", clip_url),
+                        "canonical_url": clip_url,
+                        "published_at": clip.get("created_at", now_iso),
+                        "fetched_at": now_iso,
+                        "summary": f"Twitch clip by {broadcaster}",
+                        "view_count": clip.get("view_count", 0),
+                        "duration_seconds": clip.get("duration", 0),
+                        "niche_id": niche_id,
+                        "video_source": "twitch",
+                        # Attribution: Twitch Creator Terms require crediting streamer
+                        "broadcaster": broadcaster,
+                        "attribution": f"Clip from {broadcaster} on Twitch" if broadcaster else "",
+                        # Pre-filled clip info so DownloadTopVideos can use directly
+                        "_trending_video": True,
+                        "_clip_url": clip_url,
+                        "source_mention_count": 2,
+                    }
+                )
 
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}

@@ -5,6 +5,7 @@ Usage:
     python run_pipeline.py --dry-run
     python run_pipeline.py --force-publish
 """
+
 from __future__ import annotations
 
 import sys

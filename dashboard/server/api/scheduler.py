@@ -6,6 +6,7 @@ Provides REST control over the GenLabScheduler:
   POST /api/v1/scheduler/jobs/<job_id>/resume
   POST /api/v1/scheduler/trigger/<job_id>
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ scheduler_bp = Blueprint("scheduler", __name__, url_prefix="/api/v1/scheduler")
 def scheduler_status():
     """Return current status of all scheduled jobs."""
     from server.core.scheduler import get_scheduler
+
     sched = get_scheduler()
     return api_success(data={"jobs": sched.list_jobs()})
 
@@ -31,6 +33,7 @@ def scheduler_status():
 def pause_job(job_id: str):
     """Pause a scheduled job."""
     from server.core.scheduler import get_scheduler
+
     try:
         get_scheduler().pause_job(job_id)
         return api_success(message=f"Job {job_id} paused")
@@ -43,6 +46,7 @@ def pause_job(job_id: str):
 def resume_job(job_id: str):
     """Resume a paused job."""
     from server.core.scheduler import get_scheduler
+
     try:
         get_scheduler().resume_job(job_id)
         return api_success(message=f"Job {job_id} resumed")
@@ -55,6 +59,7 @@ def resume_job(job_id: str):
 def trigger_job(job_id: str):
     """Trigger a job to run immediately."""
     from server.core.scheduler import get_scheduler
+
     try:
         get_scheduler().trigger_job(job_id)
         return api_success(message=f"Job {job_id} triggered")

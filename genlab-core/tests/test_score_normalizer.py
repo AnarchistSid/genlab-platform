@@ -1,6 +1,5 @@
 """Tests for genlab_core.intelligence.score_normalizer."""
 
-
 from genlab_core.intelligence.score_normalizer import (
     ScoringWeightLoader,
     WelfordNormalizer,
@@ -90,7 +89,11 @@ class TestWelfordBasic:
 
 if HAS_HYPOTHESIS:
 
-    @given(st.lists(st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=100))
+    @given(
+        st.lists(
+            st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=100
+        )
+    )
     @hyp_settings(max_examples=200)
     def test_welford_mean_matches_sample_mean(values):
         norm = WelfordNormalizer()
@@ -99,7 +102,11 @@ if HAS_HYPOTHESIS:
         expected = sum(values) / len(values)
         assert abs(norm.mean - expected) < 1e-6, f"mean {norm.mean} != expected {expected}"
 
-    @given(st.lists(st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=100))
+    @given(
+        st.lists(
+            st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=100
+        )
+    )
     @hyp_settings(max_examples=200)
     def test_welford_variance_non_negative(values):
         norm = WelfordNormalizer()
@@ -108,7 +115,9 @@ if HAS_HYPOTHESIS:
         assert norm.variance >= 0
 
     @given(
-        st.lists(st.floats(min_value=-1e4, max_value=1e4, allow_nan=False), min_size=2, max_size=50),
+        st.lists(
+            st.floats(min_value=-1e4, max_value=1e4, allow_nan=False), min_size=2, max_size=50
+        ),
         st.floats(min_value=-1e6, max_value=1e6, allow_nan=False),
     )
     @hyp_settings(max_examples=200)
@@ -119,7 +128,9 @@ if HAS_HYPOTHESIS:
         result = norm.normalise(query, clip=True)
         assert 0.0 <= result <= 1.0
 
-    @given(st.lists(st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=50))
+    @given(
+        st.lists(st.floats(min_value=-1e6, max_value=1e6, allow_nan=False), min_size=2, max_size=50)
+    )
     @hyp_settings(max_examples=100)
     def test_welford_roundtrip_preserves_state(values):
         norm = WelfordNormalizer()
@@ -237,6 +248,7 @@ class TestScoringWeightLoader:
 
         # Modify file
         import time
+
         time.sleep(0.1)  # ensure mtime changes
         yaml_file.write_text("section:\n  a: 2.0\n  b: 3.0\n")
 

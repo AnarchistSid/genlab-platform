@@ -12,6 +12,7 @@ required for the per-platform quality architecture:
   inadvertently switching color primaries. bt709 must be confirmed on
   every variant before upload to prevent washed-out appearance.
 """
+
 import json
 import logging
 import subprocess
@@ -20,9 +21,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-def check_vmaf(
-    master: Path, variant: Path, platform: str
-) -> tuple[bool, float]:
+def check_vmaf(master: Path, variant: Path, platform: str) -> tuple[bool, float]:
     """
     Compare platform variant quality against master using VMAF.
 
@@ -54,12 +53,18 @@ def check_vmaf(
     # score 98.1 against the same files.
     cmd = [
         ffmpeg,
-        "-nostats", "-loglevel", "error",
-        "-i", str(master),
-        "-i", str(variant),
+        "-nostats",
+        "-loglevel",
+        "error",
+        "-i",
+        str(master),
+        "-i",
+        str(variant),
         "-filter_complex",
         f"[0:v][1:v]libvmaf=log_fmt=json:log_path={vmaf_log}",
-        "-f", "null", "-",
+        "-f",
+        "null",
+        "-",
     ]
     try:
         subprocess.run(
@@ -156,7 +161,8 @@ def check_color_space(path: Path, platform: str) -> bool:
             colorspace = stream.get("color_space", "")
 
             bad = [
-                v for v in [primaries, transfer, colorspace]
+                v
+                for v in [primaries, transfer, colorspace]
                 if v and v != "bt709" and v != "unknown" and v in _BAD_COLORSPACES
             ]
             if bad:

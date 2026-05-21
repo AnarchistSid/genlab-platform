@@ -3,6 +3,7 @@
 Tests verify monetisation-aware weight adjustments and reward computation.
 No external dependencies — all channel metrics are injected directly.
 """
+
 from __future__ import annotations
 
 import pytest

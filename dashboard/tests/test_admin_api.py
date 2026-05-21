@@ -1,4 +1,5 @@
 """Tests for admin API endpoints: health, pending replies, niche config/credentials."""
+
 import json
 import sys
 from pathlib import Path
@@ -59,7 +60,12 @@ class TestHealthDetailed:
     ):
         mock_services.return_value = {"redis": {"status": "up"}, "dashboard": {"status": "up"}}
         mock_runs.return_value = {"gaming": {"run_id": "gaming_20260316"}, "ai_creators": None}
-        mock_errors.return_value = {"total_lines": 100, "error_lines": 5, "error_rate_pct": 5.0, "files_checked": 3}
+        mock_errors.return_value = {
+            "total_lines": 100,
+            "error_lines": 5,
+            "error_rate_pct": 5.0,
+            "files_checked": 3,
+        }
         mock_disk.return_value = {"used_pct": 42.5, "total_gb": 500, "used_gb": 212, "free_gb": 288}
         mock_pollers.return_value = {"engagement_poller_twitter_gaming": {"error_count": 2}}
         mock_pg.return_value = {"status": "not_configured"}
@@ -87,6 +93,7 @@ class TestHealthServiceChecks:
     def test_check_services_redis_up(self, mock_run):
         mock_run.return_value = MagicMock(returncode=0, stdout="PONG\n")
         from server.api.health import _check_services
+
         services = _check_services()
         assert services["redis"]["status"] == "up"
         assert services["dashboard"]["status"] == "up"
@@ -95,12 +102,14 @@ class TestHealthServiceChecks:
     def test_check_services_redis_down(self, mock_run):
         mock_run.side_effect = FileNotFoundError("redis-cli not found")
         from server.api.health import _check_services
+
         services = _check_services()
         assert services["redis"]["status"] == "down"
 
     def test_get_last_run_per_niche_empty_dir(self, tmp_path):
         import server.api.health as health_mod
         from server.api.health import _get_last_run_per_niche
+
         with patch.object(health_mod, "_RUNS_DIR", tmp_path):
             result = _get_last_run_per_niche()
         assert all(v is None for v in result.values())
@@ -114,6 +123,7 @@ class TestHealthServiceChecks:
 
         import server.api.health as health_mod
         from server.api.health import _get_last_run_per_niche
+
         with patch.object(health_mod, "_RUNS_DIR", tmp_path):
             result = _get_last_run_per_niche()
 
@@ -135,6 +145,7 @@ class TestHealthServiceChecks:
 
         import server.api.health as health_mod
         from server.api.health import _get_last_run_per_niche
+
         with patch.object(health_mod, "_RUNS_DIR", tmp_path):
             result = _get_last_run_per_niche()
 
@@ -144,6 +155,7 @@ class TestHealthServiceChecks:
     def test_calculate_error_rate_24h_no_logs(self, tmp_path):
         import server.api.health as health_mod
         from server.api.health import _calculate_error_rate_24h
+
         with patch.object(health_mod, "_LOGS_DIR", tmp_path):
             result = _calculate_error_rate_24h()
         assert result["total_lines"] == 0
@@ -155,6 +167,7 @@ class TestHealthServiceChecks:
 
         import server.api.health as health_mod
         from server.api.health import _calculate_error_rate_24h
+
         with patch.object(health_mod, "_LOGS_DIR", tmp_path):
             result = _calculate_error_rate_24h()
         assert result["total_lines"] == 4
@@ -163,6 +176,7 @@ class TestHealthServiceChecks:
 
     def test_get_disk_usage_returns_pct(self):
         from server.api.health import _get_disk_usage
+
         result = _get_disk_usage()
         assert "used_pct" in result
         assert result["used_pct"] >= 0
@@ -170,6 +184,7 @@ class TestHealthServiceChecks:
     def test_get_poller_status_empty(self, tmp_path):
         import server.api.health as health_mod
         from server.api.health import _get_poller_status
+
         with patch.object(health_mod, "_LOGS_DIR", tmp_path):
             result = _get_poller_status()
         assert result == {}
@@ -180,6 +195,7 @@ class TestHealthServiceChecks:
 
         import server.api.health as health_mod
         from server.api.health import _get_poller_status
+
         with patch.object(health_mod, "_LOGS_DIR", tmp_path):
             result = _get_poller_status()
 
@@ -199,6 +215,7 @@ class TestPendingReplies:
     @pytest.fixture(autouse=True)
     def _use_tmp_replies_file(self, tmp_path):
         import server.api.engagement as eng_mod
+
         self._replies_file = tmp_path / "pending_replies.json"
         self._original = eng_mod._PENDING_REPLIES_FILE
         eng_mod._PENDING_REPLIES_FILE = self._replies_file
@@ -410,6 +427,7 @@ class TestNicheConfig:
 
     def test_config_missing_dir_returns_404(self, client):
         import server.api.niches as niches_mod
+
         with patch.object(niches_mod, "_config_dir_for_niche", return_value=None):
             resp = client.get("/api/v1/niches/gaming/config")
         assert resp.status_code == 404
@@ -443,11 +461,16 @@ class TestNicheCredentials:
         """When no env vars are set, all platforms show 'missing'."""
         # Ensure gaming vars are not set
         for var in [
-            "CRITICALRUSH_META_ACCESS_TOKEN", "CRITICALRUSH_META_IG_USER_ID",
-            "CRITICALRUSH_YOUTUBE_REFRESH_TOKEN", "CRITICALRUSH_META_PAGE_ID",
-            "CRITICALRUSH_X_API_KEY", "CRITICALRUSH_X_API_SECRET",
-            "CRITICALRUSH_X_ACCESS_TOKEN", "CRITICALRUSH_X_ACCESS_TOKEN_SECRET",
-            "CRITICALRUSH_THREADS_ACCESS_TOKEN", "CRITICALRUSH_TIKTOK_ACCESS_TOKEN",
+            "CRITICALRUSH_META_ACCESS_TOKEN",
+            "CRITICALRUSH_META_IG_USER_ID",
+            "CRITICALRUSH_YOUTUBE_REFRESH_TOKEN",
+            "CRITICALRUSH_META_PAGE_ID",
+            "CRITICALRUSH_X_API_KEY",
+            "CRITICALRUSH_X_API_SECRET",
+            "CRITICALRUSH_X_ACCESS_TOKEN",
+            "CRITICALRUSH_X_ACCESS_TOKEN_SECRET",
+            "CRITICALRUSH_THREADS_ACCESS_TOKEN",
+            "CRITICALRUSH_TIKTOK_ACCESS_TOKEN",
         ]:
             monkeypatch.delenv(var, raising=False)
 

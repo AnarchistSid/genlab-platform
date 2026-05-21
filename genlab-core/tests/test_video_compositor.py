@@ -1,4 +1,5 @@
 """Tests for genlab_core.media.video_compositor — Gen Lab visual standards."""
+
 from __future__ import annotations
 
 import re
@@ -54,7 +55,9 @@ class TestBuildSandwichFilter:
     """The sandwich filter must produce drawbox for both top and bottom bars."""
 
     def test_contains_drawbox_for_top_bar(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._build_sandwich_filter(config)
         top_h = int(VERTICAL_HEIGHT * config.top_bar_height_pct) & ~1
@@ -62,7 +65,9 @@ class TestBuildSandwichFilter:
         assert f"h={top_h}" in result
 
     def test_contains_drawbox_for_bottom_bar(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._build_sandwich_filter(config)
         bot_h = int(VERTICAL_HEIGHT * config.bottom_bar_height_pct) & ~1
@@ -71,7 +76,9 @@ class TestBuildSandwichFilter:
         assert f"h={bot_h}" in result
 
     def test_both_bars_use_black(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._build_sandwich_filter(config)
         # Two drawbox calls, both with color=black
@@ -103,13 +110,17 @@ class TestOverlayLogo:
     """Logo must be at x=24 and y within the top bar."""
 
     def test_logo_x_is_24(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_logo(config)
         assert f"x={LOGO_LEFT_MARGIN}" in result
 
     def test_logo_y_within_top_bar(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_logo(config)
         top_h = int(VERTICAL_HEIGHT * config.top_bar_height_pct)
@@ -117,12 +128,12 @@ class TestOverlayLogo:
         y_match = re.search(r"y=(\d+)", result)
         assert y_match is not None
         y_val = int(y_match.group(1))
-        assert 0 <= y_val < top_h, (
-            f"Logo y={y_val} must be within top bar [0, {top_h})"
-        )
+        assert 0 <= y_val < top_h, f"Logo y={y_val} must be within top bar [0, {top_h})"
 
     def test_logo_vertically_centered_in_bar(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_logo(config)
         top_h = int(VERTICAL_HEIGHT * config.top_bar_height_pct)
@@ -137,14 +148,18 @@ class TestOverlayHookText:
     """Hook text must truncate at max_lines when text is long."""
 
     def test_short_text_no_truncation(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_hook_text("Short hook", config)
         assert "drawtext" in result
         assert "..." not in result
 
     def test_long_text_truncated_at_2_lines(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         long_hook = (
             "This is an extremely long hook text that should definitely "
@@ -158,7 +173,9 @@ class TestOverlayHookText:
         assert "..." in result
 
     def test_exactly_two_lines_no_ellipsis(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         # Text that fits in 2 lines should not be truncated
         medium_hook = "Breaking: New GPU launch confirmed for next month"
@@ -166,13 +183,17 @@ class TestOverlayHookText:
         assert "drawtext" in result
 
     def test_hook_text_is_white(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_hook_text("Test hook", config)
         assert "fontcolor=white" in result
 
     def test_hook_font_size_matches_config(
-        self, compositor: VideoCompositor, config: VisualConfig,
+        self,
+        compositor: VideoCompositor,
+        config: VisualConfig,
     ) -> None:
         result = compositor._overlay_hook_text("Test", config)
         assert f"fontsize={config.hook_font_size}" in result
@@ -204,7 +225,10 @@ class TestDeriveLandscape:
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         vertical = tmp_assets["clip"]
         output = tmp_assets["output"]
@@ -234,18 +258,25 @@ class TestDeriveLandscape:
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         compositor.derive_landscape(
-            tmp_assets["clip"], tmp_assets["output"],
-            width=1280, height=720,
+            tmp_assets["clip"],
+            tmp_assets["output"],
+            width=1280,
+            height=720,
         )
         cmd_str = " ".join(mock_run.call_args[0][0])
         assert "1280" in cmd_str
         assert "720" in cmd_str
 
     def test_missing_vertical_master_raises(
-        self, compositor: VideoCompositor, tmp_path: Path,
+        self,
+        compositor: VideoCompositor,
+        tmp_path: Path,
     ) -> None:
         missing = tmp_path / "nonexistent.mp4"
         with pytest.raises(FileNotFoundError, match="Vertical master not found"):
@@ -259,7 +290,8 @@ class TestComposeVertical:
     """compose_vertical must validate inputs and call FFmpeg correctly."""
 
     def test_missing_logo_raises_file_not_found(
-        self, tmp_assets: dict[str, Path],
+        self,
+        tmp_assets: dict[str, Path],
     ) -> None:
         cfg = VisualConfig(
             niche_id="broken",
@@ -269,11 +301,14 @@ class TestComposeVertical:
         comp = VideoCompositor(cfg)
         with pytest.raises(FileNotFoundError, match="Logo not found"):
             comp.compose_vertical(
-                [tmp_assets["clip"]], "hook", tmp_assets["output"],
+                [tmp_assets["clip"]],
+                "hook",
+                tmp_assets["output"],
             )
 
     def test_missing_logo_error_mentions_niche(
-        self, tmp_assets: dict[str, Path],
+        self,
+        tmp_assets: dict[str, Path],
     ) -> None:
         cfg = VisualConfig(
             niche_id="gaming",
@@ -283,22 +318,30 @@ class TestComposeVertical:
         comp = VideoCompositor(cfg)
         with pytest.raises(FileNotFoundError, match="gaming"):
             comp.compose_vertical(
-                [tmp_assets["clip"]], "hook", tmp_assets["output"],
+                [tmp_assets["clip"]],
+                "hook",
+                tmp_assets["output"],
             )
 
     def test_empty_clips_raises(
-        self, compositor: VideoCompositor, tmp_assets: dict[str, Path],
+        self,
+        compositor: VideoCompositor,
+        tmp_assets: dict[str, Path],
     ) -> None:
         with pytest.raises(ValueError, match="At least one source clip"):
             compositor.compose_vertical([], "hook", tmp_assets["output"])
 
     def test_missing_clip_raises(
-        self, compositor: VideoCompositor, tmp_path: Path,
+        self,
+        compositor: VideoCompositor,
+        tmp_path: Path,
     ) -> None:
         missing_clip = tmp_path / "nonexistent_clip.mp4"
         with pytest.raises(FileNotFoundError, match="Source clip not found"):
             compositor.compose_vertical(
-                [missing_clip], "hook", tmp_path / "out.mp4",
+                [missing_clip],
+                "hook",
+                tmp_path / "out.mp4",
             )
 
     @patch("genlab_core.media.video_compositor.probe_video_metadata")
@@ -313,12 +356,17 @@ class TestComposeVertical:
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         mock_probe.return_value = {"width": 120, "height": 60}
 
         compositor.compose_vertical(
-            [tmp_assets["clip"]], "Test hook", tmp_assets["output"],
+            [tmp_assets["clip"]],
+            "Test hook",
+            tmp_assets["output"],
         )
 
         mock_run.assert_called_once()
@@ -342,7 +390,10 @@ class TestComposeVertical:
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         mock_probe.return_value = {"width": 120, "height": 60}
 
@@ -374,9 +425,13 @@ class TestComposeVertical:
         # run_ffmpeg uses check=True, so subprocess.run raises CalledProcessError
         # on non-zero exit rather than returning a CompletedProcess with bad rc.
         mock_run.side_effect = subprocess.CalledProcessError(
-            returncode=1, cmd="ffmpeg", stderr="Error: something broke",
+            returncode=1,
+            cmd="ffmpeg",
+            stderr="Error: something broke",
         )
         with pytest.raises(RuntimeError, match="FFmpeg failed.*sandwich"):
             compositor.compose_vertical(
-                [tmp_assets["clip"]], "hook", tmp_assets["output"],
+                [tmp_assets["clip"]],
+                "hook",
+                tmp_assets["output"],
             )

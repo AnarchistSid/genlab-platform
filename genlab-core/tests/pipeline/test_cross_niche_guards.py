@@ -1,4 +1,5 @@
 """Tests for cluster-A leak guards: stage-prefix at boot + source allowlist at push."""
+
 from __future__ import annotations
 
 import pytest
@@ -13,7 +14,8 @@ class TestStagePrefixGuard:
     def test_ai_creators_rejects_sr_strategies(self) -> None:
         with pytest.raises(NicheConfigError, match="CROSS-NICHE LEAK BLOCKED"):
             GenericPipelineRunner._check_foreign_stage(
-                "ai_creators", "sr_strategies.fetch_film_news",
+                "ai_creators",
+                "sr_strategies.fetch_film_news",
             )
 
     def test_ai_creators_rejects_fetch_tmdb_trailers(self) -> None:
@@ -26,37 +28,43 @@ class TestStagePrefixGuard:
 
     def test_ai_creators_allows_bb_strategies(self) -> None:
         GenericPipelineRunner._check_foreign_stage(
-            "ai_creators", "bb_strategies.content_research",
+            "ai_creators",
+            "bb_strategies.content_research",
         )
 
     def test_ai_creators_allows_shared_genlab_core(self) -> None:
         GenericPipelineRunner._check_foreign_stage(
-            "ai_creators", "genlab_core.pipeline.stages.express_lane",
+            "ai_creators",
+            "genlab_core.pipeline.stages.express_lane",
         )
 
     def test_movies_allows_tmdb_trailers(self) -> None:
         # TMDB is legitimate FOR movies — must NOT be blocked.
         GenericPipelineRunner._check_foreign_stage(
-            "movies", "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+            "movies",
+            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
         )
 
     def test_gaming_rejects_anime_promos(self) -> None:
         with pytest.raises(NicheConfigError):
             GenericPipelineRunner._check_foreign_stage(
-                "gaming", "genlab_core.pipeline.stages.fetch_anime_promos",
+                "gaming",
+                "genlab_core.pipeline.stages.fetch_anime_promos",
             )
 
     def test_sports_rejects_twitch_clips(self) -> None:
         with pytest.raises(NicheConfigError):
             GenericPipelineRunner._check_foreign_stage(
-                "sports", "genlab_core.pipeline.stages.fetch_twitch_clips",
+                "sports",
+                "genlab_core.pipeline.stages.fetch_twitch_clips",
             )
 
     def test_unknown_niche_id_passes(self) -> None:
         # Unknown niche has no forbidden list — pipeline-level checks
         # handle this case separately.
         GenericPipelineRunner._check_foreign_stage(
-            "future_niche", "anywhere.anything",
+            "future_niche",
+            "anywhere.anything",
         )
 
 

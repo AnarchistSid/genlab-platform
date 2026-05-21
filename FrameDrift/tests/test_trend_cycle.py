@@ -51,7 +51,14 @@ class TestTrendCycleMultiplier:
         assert em > pk > dc
 
     def test_declining_is_lowest(self):
-        config = {"trend_cycle_multipliers": {"emerging": 1.4, "peak": 1.0, "declining": 0.5, "unknown": 0.7}}
+        config = {
+            "trend_cycle_multipliers": {
+                "emerging": 1.4,
+                "peak": 1.0,
+                "declining": 0.5,
+                "unknown": 0.7,
+            }
+        }
         dc = get_trend_cycle_multiplier(TrendCycleStage.DECLINING, config)
         un = get_trend_cycle_multiplier(TrendCycleStage.UNKNOWN, config)
         assert dc < un

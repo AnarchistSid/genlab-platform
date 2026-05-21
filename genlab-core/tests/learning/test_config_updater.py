@@ -43,15 +43,18 @@ class TestConfigUpdater:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         templates = config_dir / "templates.yaml"
-        templates.write_text(yaml.dump({
-            "hook_type_ratios": {"gameplay_first": 0.505, "other_type": 0.495},
-        }))
+        templates.write_text(
+            yaml.dump(
+                {
+                    "hook_type_ratios": {"gameplay_first": 0.505, "other_type": 0.495},
+                }
+            )
+        )
 
         updater = ConfigUpdater(config_dir=config_dir)
         # Both types have near-identical rewards → optimal ratios ≈ current.
-        records = (
-            _make_records(25, hook_type="gameplay_first", reward=0.50)
-            + _make_records(25, hook_type="other_type", reward=0.49)
+        records = _make_records(25, hook_type="gameplay_first", reward=0.50) + _make_records(
+            25, hook_type="other_type", reward=0.49
         )
         changes = updater.run(feedback_records=records)
 
@@ -75,9 +78,13 @@ class TestConfigUpdater:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         templates = config_dir / "templates.yaml"
-        templates.write_text(yaml.dump({
-            "hook_type_ratios": {"gameplay_first": 0.30},
-        }))
+        templates.write_text(
+            yaml.dump(
+                {
+                    "hook_type_ratios": {"gameplay_first": 0.30},
+                }
+            )
+        )
 
         updater = ConfigUpdater(config_dir=config_dir)
         # 25 records of same type → optimal ratio = 1.0, current = 0.30 → big change
@@ -93,9 +100,13 @@ class TestConfigUpdater:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         templates = config_dir / "templates.yaml"
-        templates.write_text(yaml.dump({
-            "hook_type_ratios": {"old_hook": 0.90},
-        }))
+        templates.write_text(
+            yaml.dump(
+                {
+                    "hook_type_ratios": {"old_hook": 0.90},
+                }
+            )
+        )
 
         updater = ConfigUpdater(config_dir=config_dir)
         # new_hook with high reward should appear in ratios
@@ -112,9 +123,13 @@ class TestConfigUpdater:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         templates = config_dir / "templates.yaml"
-        templates.write_text(yaml.dump({
-            "hook_type_ratios": {"old_hook": 0.90},
-        }))
+        templates.write_text(
+            yaml.dump(
+                {
+                    "hook_type_ratios": {"old_hook": 0.90},
+                }
+            )
+        )
 
         updater = ConfigUpdater(config_dir=config_dir)
         records = _make_records(25, hook_type="new_hook", reward=0.80)
@@ -134,14 +149,17 @@ class TestConfigUpdater:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         templates = config_dir / "templates.yaml"
-        templates.write_text(yaml.dump({
-            "hook_type_ratios": {"hook_a": 0.50, "hook_b": 0.50},
-        }))
+        templates.write_text(
+            yaml.dump(
+                {
+                    "hook_type_ratios": {"hook_a": 0.50, "hook_b": 0.50},
+                }
+            )
+        )
 
         updater = ConfigUpdater(config_dir=config_dir)
-        records = (
-            _make_records(25, hook_type="hook_a", reward=0.0)
-            + _make_records(25, hook_type="hook_b", reward=0.0)
+        records = _make_records(25, hook_type="hook_a", reward=0.0) + _make_records(
+            25, hook_type="hook_b", reward=0.0
         )
         changes = updater._update_hook_type_ratios(records, dry_run=True)
         assert changes == []

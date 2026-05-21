@@ -3,6 +3,7 @@
 Routes:
     GET /api/v1/metrics/publishing  -- publishing health metrics
 """
+
 import logging
 import os
 
@@ -20,6 +21,7 @@ def publishing_metrics():
     try:
         import psycopg
         from psycopg.rows import dict_row
+
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
             return api_error(error="DATABASE_URL not configured", code=503)
@@ -53,8 +55,7 @@ def publishing_metrics():
             """).fetchall()
 
             daily_trend = [
-                {"date": str(r["day"]), "ok": r["ok"] or 0, "fail": r["fail"] or 0}
-                for r in trend
+                {"date": str(r["day"]), "ok": r["ok"] or 0, "fail": r["fail"] or 0} for r in trend
             ]
 
             # Error distribution (last 7 days) — from error_message column
@@ -72,6 +73,7 @@ def publishing_metrics():
             error_dist = {"TRANSIENT": 0, "QUOTA": 0, "CREDENTIAL": 0, "CONTENT": 0, "PERMANENT": 0}
             try:
                 from genlab_core.publishing.error_classifier import classify
+
                 for r in errors:
                     cls = classify(r["err"] or "", "")
                     error_dist[cls] = error_dist.get(cls, 0) + (r["cnt"] or 0)
@@ -124,13 +126,15 @@ def publishing_metrics():
                     "rate": int(r["ok"] / total * 100) if total else 0,
                 }
 
-        return api_success(data={
-            "success_rate_7d": success_rates,
-            "daily_trend": daily_trend,
-            "error_distribution": error_dist,
-            "platform_status": platform_status,
-            "by_niche": by_niche,
-        })
+        return api_success(
+            data={
+                "success_rate_7d": success_rates,
+                "daily_trend": daily_trend,
+                "error_distribution": error_dist,
+                "platform_status": platform_status,
+                "by_niche": by_niche,
+            }
+        )
 
     except Exception as e:
         logger.error("[Metrics] Publishing query failed: %s", e, exc_info=True)

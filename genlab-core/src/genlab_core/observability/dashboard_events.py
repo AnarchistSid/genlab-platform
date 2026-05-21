@@ -4,6 +4,7 @@ Usage:
     from genlab_core.observability.dashboard_events import push_event
     push_event("pipeline_complete", "Pipeline Complete", "Gaming run finished in 45s", niche_id="gaming")
 """
+
 from __future__ import annotations
 
 import logging

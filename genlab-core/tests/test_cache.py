@@ -42,7 +42,7 @@ class TestCacheTTL:
         cache.set("test_key", "data")
         cache_file = cache.cache_dir / "test_key.json"
         data = json.loads(cache_file.read_text())
-        data['timestamp'] = "2020-01-01T00:00:00"
+        data["timestamp"] = "2020-01-01T00:00:00"
         cache_file.write_text(json.dumps(data))
         result = cache.get("test_key", ttl_hours=1)
         assert result is None
@@ -86,10 +86,11 @@ class TestCacheEviction:
         # Backdate the old key
         old_file = cache.cache_dir / "old_key.json"
         data = json.loads(old_file.read_text())
-        data['timestamp'] = "2020-01-01T00:00:00"
+        data["timestamp"] = "2020-01-01T00:00:00"
         old_file.write_text(json.dumps(data))
         # Set mtime to the past for purge_expired (uses mtime)
         import os
+
         os.utime(old_file, (0, 0))
         deleted = cache.purge_expired(ttl_hours=1)
         assert deleted >= 1

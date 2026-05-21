@@ -90,13 +90,15 @@ class TestSmartQuoteInHookNormalized:
         from genlab_core.writing.video_content_writer import write_video_content
 
         # LLM returns a hook with smart quotes
-        fake_response = json.dumps({
-            "hook": "Gojo\u2019s return breaks everything",
-            "instagram_caption": "test caption #AI",
-            "twitter_content": "test",
-            "youtube_content": "test?",
-            "facebook_content": "test question",
-        })
+        fake_response = json.dumps(
+            {
+                "hook": "Gojo\u2019s return breaks everything",
+                "instagram_caption": "test caption #AI",
+                "twitter_content": "test",
+                "youtube_content": "test?",
+                "facebook_content": "test question",
+            }
+        )
 
         mock_client = MagicMock()
         mock_client.complete.return_value = fake_response
@@ -127,11 +129,8 @@ class TestSmartQuoteInHookNormalized:
         import importlib
         import sys
 
-
         mock_response = MagicMock()
-        mock_response.content = [
-            MagicMock(text="Jokic\u2019s 40-point Game 7 masterclass")
-        ]
+        mock_response.content = [MagicMock(text="Jokic\u2019s 40-point Game 7 masterclass")]
 
         mock_client = MagicMock()
         mock_client.messages.create.return_value = mock_response
@@ -144,6 +143,7 @@ class TestSmartQuoteInHookNormalized:
             with patch.dict(sys.modules, {"anthropic": fake_anthropic}):
                 # Reload to pick up the patched module
                 import genlab_core.writing.llm_hook_generator as mod
+
                 importlib.reload(mod)
                 hook = mod.generate_hook(
                     story={"title": "Jokic drops 40", "summary": "Big game"},
@@ -159,21 +159,28 @@ class TestSmartQuoteInHookNormalized:
         """Left single smart quote U+2018 is also normalized."""
         from genlab_core.writing.video_content_writer import write_video_content
 
-        fake_response = json.dumps({
-            "hook": "\u2018Elden Ring\u2019 hits 5M sales",
-            "instagram_caption": "test #Gaming",
-            "twitter_content": "test",
-            "youtube_content": "test?",
-            "facebook_content": "test",
-        })
+        fake_response = json.dumps(
+            {
+                "hook": "\u2018Elden Ring\u2019 hits 5M sales",
+                "instagram_caption": "test #Gaming",
+                "twitter_content": "test",
+                "youtube_content": "test?",
+                "facebook_content": "test",
+            }
+        )
 
         mock_client = MagicMock()
         mock_client.complete.return_value = fake_response
 
         result = write_video_content(
-            video={"title": "Elden Ring", "channel_name": "Test",
-                   "view_count": 1000, "view_velocity": 100,
-                   "tags": [], "description_snippet": ""},
+            video={
+                "title": "Elden Ring",
+                "channel_name": "Test",
+                "view_count": 1000,
+                "view_velocity": 100,
+                "tags": [],
+                "description_snippet": "",
+            },
             niche_id="gaming",
             llm_client=mock_client,
         )
@@ -185,21 +192,28 @@ class TestSmartQuoteInHookNormalized:
         """Double smart quotes U+201C/U+201D are normalized."""
         from genlab_core.writing.video_content_writer import write_video_content
 
-        fake_response = json.dumps({
-            "hook": "\u201cNew era\u201d for competitive gaming",
-            "instagram_caption": "test #Gaming",
-            "twitter_content": "test",
-            "youtube_content": "test?",
-            "facebook_content": "test",
-        })
+        fake_response = json.dumps(
+            {
+                "hook": "\u201cNew era\u201d for competitive gaming",
+                "instagram_caption": "test #Gaming",
+                "twitter_content": "test",
+                "youtube_content": "test?",
+                "facebook_content": "test",
+            }
+        )
 
         mock_client = MagicMock()
         mock_client.complete.return_value = fake_response
 
         result = write_video_content(
-            video={"title": "Competitive", "channel_name": "Test",
-                   "view_count": 1000, "view_velocity": 100,
-                   "tags": [], "description_snippet": ""},
+            video={
+                "title": "Competitive",
+                "channel_name": "Test",
+                "view_count": 1000,
+                "view_velocity": 100,
+                "tags": [],
+                "description_snippet": "",
+            },
             niche_id="gaming",
             llm_client=mock_client,
         )

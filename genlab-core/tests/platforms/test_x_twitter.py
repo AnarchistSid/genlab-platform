@@ -1,4 +1,5 @@
 """Tests for XTwitterClient — mocks tweepy throughout."""
+
 from __future__ import annotations
 
 import time
@@ -23,10 +24,12 @@ def tw_client(monkeypatch):
 
     # Stub tweepy so module loads without real installation issues in CI
     import sys
+
     fake_tweepy = MagicMock()
     sys.modules.setdefault("tweepy", fake_tweepy)
 
     from genlab_core.platforms.x_twitter import XTwitterClient
+
     return XTwitterClient(
         api_key="test_api_key",
         api_secret="test_api_secret",
@@ -81,9 +84,11 @@ class TestPublish:
         mock_tweet_resp = MagicMock()
         mock_tweet_resp.data = {"id": "tweet_999"}
 
-        with patch.object(tw_client, "_get_api_v1") as mock_v1_fn, \
-             patch.object(tw_client, "_get_client") as mock_client_fn, \
-             patch("genlab_core.platforms.x_twitter.Path.exists", return_value=True):
+        with (
+            patch.object(tw_client, "_get_api_v1") as mock_v1_fn,
+            patch.object(tw_client, "_get_client") as mock_client_fn,
+            patch("genlab_core.platforms.x_twitter.Path.exists", return_value=True),
+        ):
             mock_v1 = MagicMock()
             mock_v1.media_upload.return_value = mock_media
             mock_v1_fn.return_value = mock_v1
@@ -181,6 +186,7 @@ class TestPublish:
     def test_publish_api_error_returns_failure(self, tw_client):
         """When tweepy raises TweepyException, publish() returns failure."""
         import sys
+
         tweepy = sys.modules.get("tweepy")
         if tweepy is None:
             pytest.skip("tweepy not available")
@@ -386,6 +392,7 @@ class TestHealthCheck:
     def test_health_check_403_valid_free_tier(self, tw_client):
         """403 Forbidden → valid for free tier; treat as valid."""
         import sys
+
         tweepy = sys.modules.get("tweepy")
 
         # Create a Forbidden exception class
@@ -413,6 +420,7 @@ class TestHealthCheck:
     def test_health_check_401_invalid(self, tw_client):
         """401 Unauthorized → invalid token."""
         import sys
+
         tweepy = sys.modules.get("tweepy")
 
         class FakeUnauthorized(Exception):
@@ -436,6 +444,7 @@ class TestHealthCheck:
     def test_health_check_platform_id(self, tw_client):
         """XTwitterClient.platform_id class attribute is 'x_twitter'."""
         from genlab_core.platforms.x_twitter import XTwitterClient
+
         assert XTwitterClient.platform_id == "x_twitter"
 
 
@@ -448,6 +457,7 @@ class TestRateLimit:
     def test_rate_limit_flag_blocks_publish(self, tw_client):
         """After a 429, _rate_limited=True short-circuits further publish calls."""
         import sys
+
         tweepy = sys.modules.get("tweepy")
 
         class FakeTooManyRequests(Exception):
@@ -470,6 +480,7 @@ class TestRateLimit:
 
         # Manually force rate limit via module-level globals (what production code uses)
         import genlab_core.platforms.x_twitter as _xt_mod
+
         _xt_mod._module_rate_limited = True
         _xt_mod._module_rate_limited_at = time.monotonic()
 
@@ -523,10 +534,12 @@ class TestInit:
         monkeypatch.setenv("X_ACCESS_SECRET", "env_access_secret")
 
         import sys
+
         fake_tweepy = MagicMock()
         sys.modules.setdefault("tweepy", fake_tweepy)
 
         from genlab_core.platforms.x_twitter import XTwitterClient
+
         client = XTwitterClient()
         assert client._api_key == "env_key"
         assert client._api_secret == "env_secret"
@@ -541,10 +554,12 @@ class TestInit:
         monkeypatch.setenv("X_ACCESS_SECRET", "env_access_secret")
 
         import sys
+
         fake_tweepy = MagicMock()
         sys.modules.setdefault("tweepy", fake_tweepy)
 
         from genlab_core.platforms.x_twitter import XTwitterClient
+
         client = XTwitterClient(
             api_key="explicit_key",
             api_secret="explicit_secret",
@@ -557,4 +572,5 @@ class TestInit:
     def test_platform_id_attribute(self):
         """XTwitterClient.platform_id == 'x_twitter'."""
         from genlab_core.platforms.x_twitter import XTwitterClient
+
         assert XTwitterClient.platform_id == "x_twitter"

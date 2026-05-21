@@ -4,6 +4,7 @@ Handles Instagram webhook verification (GET) and event ingestion (POST).
 Currently logs events only -- processing to be implemented when Meta approves
 the webhook subscription.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -22,7 +23,9 @@ webhook_bp = Blueprint("webhook", __name__, url_prefix="/api/v1/webhooks")
 # Meta sends a verify_token during subscription setup
 _VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "")
 if not _VERIFY_TOKEN:
-    logger.warning("META_WEBHOOK_VERIFY_TOKEN not set — webhook verification will reject all requests")
+    logger.warning(
+        "META_WEBHOOK_VERIFY_TOKEN not set — webhook verification will reject all requests"
+    )
 _APP_SECRET = os.environ.get("META_APP_SECRET", "")
 
 
@@ -41,7 +44,9 @@ def verify_webhook():
         logger.info("[Webhook] Meta verification successful")
         return Response(challenge, status=200, content_type="text/plain")
 
-    logger.warning("[Webhook] Meta verification failed: mode=%s token_match=%s", mode, token == _VERIFY_TOKEN)
+    logger.warning(
+        "[Webhook] Meta verification failed: mode=%s token_match=%s", mode, token == _VERIFY_TOKEN
+    )
     abort(403)
 
 
@@ -79,10 +84,14 @@ def receive_webhook():
     # showed ~1 instagram event/day for two weeks with zero forwards.
     forwardable_fields = (
         # Instagram product field names
-        "comments", "mentions", "live_comments", "story_insights",
+        "comments",
+        "mentions",
+        "live_comments",
+        "story_insights",
         # FB Page product field names (delivered when Page is subscribed
         # with subscribed_fields=feed, mention, etc.)
-        "feed", "mention",
+        "feed",
+        "mention",
     )
 
     comment_count = 0
@@ -99,13 +108,16 @@ def receive_webhook():
         # see immediately what Meta is actually delivering.
         logger.info(
             "[Webhook] Entry %s: %d changes, fields=%s",
-            entry_id, len(changes), fields_seen,
+            entry_id,
+            len(changes),
+            fields_seen,
         )
 
     if comment_count > 0:
         # Forward full payload to the standalone engagement webhook server
         try:
             import requests as _requests
+
             _requests.post(
                 "http://127.0.0.1:8765/webhooks/meta",
                 json=payload,
@@ -113,7 +125,8 @@ def receive_webhook():
             )
             logger.info(
                 "[Webhook] Forwarded %d engagement events to engagement server (fields=%s)",
-                comment_count, fields_seen,
+                comment_count,
+                fields_seen,
             )
         except Exception as exc:
             logger.warning("[Webhook] Failed to forward to engagement server: %s", exc)
@@ -122,7 +135,8 @@ def receive_webhook():
         # so future "missing field name" issues surface immediately.
         logger.info(
             "[Webhook] No forwardable fields in %s event (got %s)",
-            object_type, fields_seen,
+            object_type,
+            fields_seen,
         )
 
     # Meta requires 200 response within 20 seconds
@@ -151,12 +165,15 @@ def data_deletion():
     logger.info("[Webhook] Data deletion request for user %s", user_id)
 
     import hashlib as _hl
+
     confirmation_code = _hl.sha256(f"del-{user_id}".encode()).hexdigest()[:16]
 
-    return api_success(data={
-        "url": f"https://review.aspirehub.ai/api/v1/webhooks/meta/deletion/status?code={confirmation_code}",
-        "confirmation_code": confirmation_code,
-    })
+    return api_success(
+        data={
+            "url": f"https://review.aspirehub.ai/api/v1/webhooks/meta/deletion/status?code={confirmation_code}",
+            "confirmation_code": confirmation_code,
+        }
+    )
 
 
 @webhook_bp.route("/meta/deletion/status", methods=["GET"])
@@ -169,7 +186,5 @@ def _verify_signature(payload: bytes, signature_header: str) -> bool:
     """Verify X-Hub-Signature-256 using app secret."""
     if not signature_header.startswith("sha256="):
         return False
-    expected = "sha256=" + hmac.HMAC(
-        _APP_SECRET.encode(), payload, hashlib.sha256
-    ).hexdigest()
+    expected = "sha256=" + hmac.HMAC(_APP_SECRET.encode(), payload, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature_header)

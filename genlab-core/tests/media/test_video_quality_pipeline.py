@@ -6,6 +6,7 @@ Tests cover:
   3. VideoCompositor integration — platform param flows through render
   4. ValidateVideos VMAF gate — re-encode on VMAF < 85, reject on second failure
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -126,11 +127,7 @@ class TestPlatformEncodeOverrides:
     def test_load_returns_dict_of_render_specs(self, tmp_path: Path) -> None:
         from genlab_core.media.video_compositor import load_platform_encode_overrides
 
-        yaml_content = (
-            "instagram:\n"
-            "  crf: 12\n"
-            "  preset: veryslow\n"
-        )
+        yaml_content = "instagram:\n  crf: 12\n  preset: veryslow\n"
         yaml_file = tmp_path / "platform_encode_specs.yaml"
         yaml_file.write_text(yaml_content)
 
@@ -172,10 +169,7 @@ class TestPlatformEncodeOverrides:
     def test_unknown_platform_key_ignored(self, tmp_path: Path) -> None:
         from genlab_core.media.video_compositor import load_platform_encode_overrides
 
-        yaml_content = (
-            "instagram:\n  crf: 12\n"
-            "nonexistent_platform:\n  crf: 99\n"
-        )
+        yaml_content = "instagram:\n  crf: 12\nnonexistent_platform:\n  crf: 99\n"
         yaml_file = tmp_path / "specs.yaml"
         yaml_file.write_text(yaml_content)
 
@@ -216,7 +210,10 @@ class TestCompositorPlatformParam:
         from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
 
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         mock_probe.return_value = {"width": 120, "height": 60}
 
@@ -227,7 +224,9 @@ class TestCompositorPlatformParam:
         )
         comp = VideoCompositor(cfg)
         comp.compose_vertical(
-            [tmp_assets["clip"]], "Hook text", tmp_assets["output"],
+            [tmp_assets["clip"]],
+            "Hook text",
+            tmp_assets["output"],
         )
 
         # The ffmpeg command should use instagram's codec (libx264)
@@ -250,7 +249,10 @@ class TestCompositorPlatformParam:
         from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
 
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
         mock_probe.return_value = {"width": 120, "height": 60}
 
@@ -261,7 +263,9 @@ class TestCompositorPlatformParam:
         )
         comp = VideoCompositor(cfg)
         comp.compose_vertical(
-            [tmp_assets["clip"]], "Hook text", tmp_assets["output"],
+            [tmp_assets["clip"]],
+            "Hook text",
+            tmp_assets["output"],
             platform="youtube",
         )
 
@@ -335,7 +339,9 @@ class TestValidateVideosVMAFGate:
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_pass_marks_valid(
-        self, mock_probe: MagicMock, tmp_path: Path,
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -353,7 +359,9 @@ class TestValidateVideosVMAFGate:
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_fail_triggers_reencode(
-        self, mock_probe: MagicMock, tmp_path: Path,
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -363,13 +371,16 @@ class TestValidateVideosVMAFGate:
         # First VMAF fails (score 70), re-encode succeeds, second VMAF passes
         vmaf_calls = iter([(False, 70.0), (True, 88.0)])
 
-        with patch(
-            "genlab_core.pipeline.stages.validate_videos.check_vmaf",
-            side_effect=lambda m, v, p: next(vmaf_calls),
-        ), patch(
-            "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
-            return_value=tmp_path / "reel_vmaf_fixed.mp4",
-        ) as mock_reencode:
+        with (
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.check_vmaf",
+                side_effect=lambda m, v, p: next(vmaf_calls),
+            ),
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
+                return_value=tmp_path / "reel_vmaf_fixed.mp4",
+            ) as mock_reencode,
+        ):
             result = ValidateVideos().execute(ctx)
 
         mock_reencode.assert_called_once()
@@ -379,19 +390,24 @@ class TestValidateVideosVMAFGate:
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_fail_twice_rejects(
-        self, mock_probe: MagicMock, tmp_path: Path,
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
         mock_probe.return_value = _make_probe_data()
         ctx = self._make_context(tmp_path)
 
-        with patch(
-            "genlab_core.pipeline.stages.validate_videos.check_vmaf",
-            return_value=(False, 70.0),
-        ), patch(
-            "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
-            return_value=tmp_path / "reel_vmaf_fixed.mp4",
+        with (
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.check_vmaf",
+                return_value=(False, 70.0),
+            ),
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
+                return_value=tmp_path / "reel_vmaf_fixed.mp4",
+            ),
         ):
             result = ValidateVideos().execute(ctx)
 
@@ -401,19 +417,24 @@ class TestValidateVideosVMAFGate:
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_reencode_failure_rejects(
-        self, mock_probe: MagicMock, tmp_path: Path,
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
         mock_probe.return_value = _make_probe_data()
         ctx = self._make_context(tmp_path)
 
-        with patch(
-            "genlab_core.pipeline.stages.validate_videos.check_vmaf",
-            return_value=(False, 70.0),
-        ), patch(
-            "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
-            return_value=None,
+        with (
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.check_vmaf",
+                return_value=(False, 70.0),
+            ),
+            patch(
+                "genlab_core.pipeline.stages.validate_videos.ValidateVideos._vmaf_reencode",
+                return_value=None,
+            ),
         ):
             result = ValidateVideos().execute(ctx)
 
@@ -422,7 +443,9 @@ class TestValidateVideosVMAFGate:
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_disabled_via_config(
-        self, mock_probe: MagicMock, tmp_path: Path,
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -447,7 +470,10 @@ class TestVMAFReencode:
     @patch("genlab_core.pipeline.stages.validate_videos.get_ffmpeg_binary", return_value="ffmpeg")
     @patch("subprocess.run")
     def test_reencode_reduces_crf_by_3(
-        self, mock_run: MagicMock, _mock_bin: MagicMock, tmp_path: Path,
+        self,
+        mock_run: MagicMock,
+        _mock_bin: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -456,8 +482,12 @@ class TestVMAFReencode:
         out = tmp_path / "reel_vmaf_fixed.mp4"
 
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr="",
+            args=[],
+            returncode=0,
+            stdout="",
+            stderr="",
         )
+
         # Make the output file exist so the method returns it
         def create_output(*args, **kwargs):
             out.write_bytes(b"\x00" * 256)
@@ -476,7 +506,10 @@ class TestVMAFReencode:
     @patch("genlab_core.pipeline.stages.validate_videos.get_ffmpeg_binary", return_value="ffmpeg")
     @patch("subprocess.run")
     def test_reencode_minimum_crf_is_12(
-        self, mock_run: MagicMock, _mock_bin: MagicMock, tmp_path: Path,
+        self,
+        mock_run: MagicMock,
+        _mock_bin: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -501,7 +534,10 @@ class TestVMAFReencode:
     @patch("genlab_core.pipeline.stages.validate_videos.get_ffmpeg_binary", return_value="ffmpeg")
     @patch("subprocess.run")
     def test_reencode_returns_none_on_ffmpeg_failure(
-        self, mock_run: MagicMock, _mock_bin: MagicMock, tmp_path: Path,
+        self,
+        mock_run: MagicMock,
+        _mock_bin: MagicMock,
+        tmp_path: Path,
     ) -> None:
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
 
@@ -509,7 +545,10 @@ class TestVMAFReencode:
         video.write_bytes(b"\x00" * 256)
 
         mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="error",
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="error",
         )
 
         result = ValidateVideos._vmaf_reencode(video, current_crf=18)

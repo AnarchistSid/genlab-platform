@@ -17,6 +17,7 @@ Usage:
     await twitch_limiter.async_acquire()
     response = await client.get(url)
 """
+
 from __future__ import annotations
 
 import asyncio

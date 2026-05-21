@@ -12,6 +12,7 @@ Two execution modes:
              stages:
                - class: genlab_core.media.download_top_videos.DownloadTopVideos
 """
+
 from __future__ import annotations
 
 import argparse
@@ -69,13 +70,12 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     # "Some android client https formats have been skipped... SABR-only
     # streaming experiment". Putting ios + tv + web_safari first sidesteps
     # the experiment until yt-dlp's stable channel catches up.
-    extractor_args = (
-        "youtube:player_client=ios,tv,web_safari,android,web"
-    )
+    extractor_args = "youtube:player_client=ios,tv,web_safari,android,web"
     session_path = os.path.join(project_root, ".youtube_session.json")
     if os.path.exists(session_path):
         try:
             import json as _json
+
             with open(session_path) as fh:
                 session = _json.load(fh)
             visitor_data = session.get("visitor_data", "")
@@ -87,19 +87,27 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
 
     cmd = [
         "yt-dlp",
-        "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]"
-              "/best[height<=1080][ext=mp4]/best",
-        "-o", output_path,
+        "-f",
+        "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+        "-o",
+        output_path,
         "--no-playlist",
-        "--socket-timeout", "30",
-        "--retries", "2",
-        "--extractor-args", extractor_args,
+        "--socket-timeout",
+        "30",
+        "--retries",
+        "2",
+        "--extractor-args",
+        extractor_args,
         # User agent matching a real Android YouTube app
-        "--user-agent", "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
+        "--user-agent",
+        "com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip",
         # Sleep between requests to avoid triggering rate limit / bot detection
-        "--sleep-requests", "2",
-        "--sleep-interval", "5",
-        "--max-sleep-interval", "15",
+        "--sleep-requests",
+        "2",
+        "--sleep-interval",
+        "5",
+        "--max-sleep-interval",
+        "15",
     ]
 
     # Route through Cloudflare WARP SOCKS proxy when available.
@@ -123,8 +131,7 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
             with open(cookies_path) as fh:
                 content = fh.read()
             has_real_cookies = any(
-                line.strip() and not line.startswith("#")
-                for line in content.splitlines()
+                line.strip() and not line.startswith("#") for line in content.splitlines()
             )
         except OSError:
             pass
@@ -134,6 +141,7 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     # Use browser TLS impersonation via curl_cffi (real Chrome fingerprint)
     try:
         import curl_cffi  # noqa: F401
+
         cmd.extend(["--impersonate", "chrome-136"])
     except ImportError:
         pass
@@ -185,10 +193,14 @@ def _probe_duration(path: str) -> float:
     """
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "csv=p=0",
         path,
     ]
     try:
@@ -209,10 +221,14 @@ def _has_video_stream(path: str) -> bool:
     """Return True if the file contains at least one video stream."""
     cmd = [
         "ffprobe",
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=codec_type",
-        "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_type",
+        "-of",
+        "csv=p=0",
         path,
     ]
     try:
@@ -257,6 +273,7 @@ def _validate_download(path: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Core download function
 # ---------------------------------------------------------------------------
+
 
 def download_videos_for_stories(
     stories: list[dict[str, Any]],
@@ -310,13 +327,17 @@ def download_videos_for_stories(
             # Generate stable story_id from title hash — niche strategies
             # don't always set story_id before the download stage.
             import hashlib
+
             story_id = hashlib.sha256(title.encode()).hexdigest()
             story["story_id"] = story_id
             logger.debug("Story %d: generated story_id from title hash", i)
 
         logger.info(
             "[%d/%d] Sourcing video for: %s (story_id=%s)",
-            i, len(top_stories), title[:60], story_id[:12],
+            i,
+            len(top_stories),
+            title[:60],
+            story_id[:12],
         )
 
         # Find a video URL via the fallback chain
@@ -388,7 +409,9 @@ def download_videos_for_stories(
                     video_url = alt_result.url
                     backend = alt_result.backend
                     logger.info(
-                        "  Retrying with %s: %s", backend, video_url[:80],
+                        "  Retrying with %s: %s",
+                        backend,
+                        video_url[:80],
                     )
                     dl_result = _download_video(video_url, output_path)
 
@@ -423,7 +446,9 @@ def download_videos_for_stories(
 
         if not validation["valid"]:
             logger.warning(
-                "  Validation failed for %s: %s", actual_path, validation["reason"],
+                "  Validation failed for %s: %s",
+                actual_path,
+                validation["reason"],
             )
             entries[story_id] = {
                 "story_id": story_id,
@@ -496,6 +521,7 @@ def _find_downloaded_file(expected_path: str) -> str | None:
 # Clip index builder
 # ---------------------------------------------------------------------------
 
+
 def build_clip_index(
     run_id: str,
     entries: dict[str, dict[str, Any]],
@@ -532,6 +558,7 @@ def build_clip_index(
 # Pipeline stage class
 # ---------------------------------------------------------------------------
 
+
 class DownloadTopVideos:
     """Pipeline stage for GenericPipelineRunner.
 
@@ -560,14 +587,13 @@ class DownloadTopVideos:
         niche_id = context.get("niche_id", "")
 
         config = context.get("niche_config", context.get("config", {}))
-        max_stories = (
-            config.get("pipeline", {}).get("max_items_per_run", 10)
-        )
+        max_stories = config.get("pipeline", {}).get("max_items_per_run", 10)
 
         if not stories:
             logger.warning("[DownloadTopVideos] No stories in context")
             context["clip_index"] = build_clip_index(
-                context.get("run_id", "unknown"), {},
+                context.get("run_id", "unknown"),
+                {},
             )
             context["clip_index_path"] = ""
             return context
@@ -575,7 +601,8 @@ class DownloadTopVideos:
         if not run_dir:
             logger.error("[DownloadTopVideos] No run_dir in context")
             context["clip_index"] = build_clip_index(
-                context.get("run_id", "unknown"), {},
+                context.get("run_id", "unknown"),
+                {},
             )
             context["clip_index_path"] = ""
             return context
@@ -615,6 +642,7 @@ class DownloadTopVideos:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """CLI entry point for download_top_videos."""
@@ -665,7 +693,9 @@ def main() -> None:
 
     logger.info(
         "Processing %d stories (max %d) for niche '%s'",
-        len(stories), args.max_stories, args.niche,
+        len(stories),
+        args.max_stories,
+        args.niche,
     )
 
     entries = download_videos_for_stories(

@@ -20,13 +20,16 @@ def _mock_heavy_imports():
 
     with (
         patch.dict("os.environ", {"GENLAB_USE_POSTGRES": "", "DATABASE_URL": ""}, clear=False),
-        patch.dict("sys.modules", {
-            "azure": MagicMock(),
-            "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
-            "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
-            "kiota_abstractions": MagicMock(),
-            "kiota_abstractions.api_error": MagicMock(),
-        }),
+        patch.dict(
+            "sys.modules",
+            {
+                "azure": MagicMock(),
+                "azure.identity": MagicMock(ClientSecretCredential=mock_cred_cls),
+                "msgraph": MagicMock(GraphServiceClient=mock_graph_cls),
+                "kiota_abstractions": MagicMock(),
+                "kiota_abstractions.api_error": MagicMock(),
+            },
+        ),
         patch("genlab_core.http.backlog_client.GraphTableProxy"),
     ):
         yield
@@ -35,6 +38,7 @@ def _mock_heavy_imports():
 @pytest.fixture
 def mock_config(tmp_path):
     import yaml
+
     config = {
         "Stories": {"list_id": "list-stories"},
         "Blueprints": {"list_id": "list-blueprints"},
@@ -60,6 +64,7 @@ def _make_client(mock_config):
 
     with patch("genlab_core.settings.settings", mock_settings):
         from genlab_core.http.backlog_client import BacklogClient
+
         client = BacklogClient(config_path=mock_config)
     return client
 

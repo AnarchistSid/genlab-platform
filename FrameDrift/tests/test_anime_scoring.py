@@ -10,30 +10,35 @@ from fd_strategies.scoring import AnimeScoringStrategy
 @pytest.fixture
 def strategy(tmp_path):
     import yaml
+
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "scoring_weights.yaml").write_text(yaml.dump({
-        "scoring_dimensions": {
-            "weights": {
-                "timeliness": 0.30,
-                "magnitude": 0.35,
-                "engagement_potential": 0.25,
-                "novelty": 0.10,
-            },
-            "timeliness": {"decay_half_life_hours": 24.0},
-            "magnitude": {"celebrity_multiplier": 1.9, "collaboration_multiplier": 1.5},
-        },
-        "trend_cycle_multipliers": {
-            "emerging": 1.4,
-            "peak": 1.0,
-            "declining": 0.5,
-            "unknown": 0.7,
-        },
-        "thresholds": {
-            "min_score": 0.42,
-            "top_items_per_run": 4,
-        },
-    }))
+    (config_dir / "scoring_weights.yaml").write_text(
+        yaml.dump(
+            {
+                "scoring_dimensions": {
+                    "weights": {
+                        "timeliness": 0.30,
+                        "magnitude": 0.35,
+                        "engagement_potential": 0.25,
+                        "novelty": 0.10,
+                    },
+                    "timeliness": {"decay_half_life_hours": 24.0},
+                    "magnitude": {"celebrity_multiplier": 1.9, "collaboration_multiplier": 1.5},
+                },
+                "trend_cycle_multipliers": {
+                    "emerging": 1.4,
+                    "peak": 1.0,
+                    "declining": 0.5,
+                    "unknown": 0.7,
+                },
+                "thresholds": {
+                    "min_score": 0.42,
+                    "top_items_per_run": 4,
+                },
+            }
+        )
+    )
     with patch("fd_strategies.scoring.NICHE_ROOT", tmp_path):
         s = AnimeScoringStrategy()
         s._ensure_config()
@@ -72,9 +77,7 @@ class TestAnimeScoring:
 
     def test_24h_decay_applied(self, strategy):
         recent = _make_story(fetched_at=datetime.now(UTC).isoformat())
-        old = _make_story(
-            fetched_at=(datetime.now(UTC) - timedelta(hours=24)).isoformat()
-        )
+        old = _make_story(fetched_at=(datetime.now(UTC) - timedelta(hours=24)).isoformat())
         scored_r = strategy.score_item(recent)
         scored_o = strategy.score_item(old)
         assert scored_r["scores"]["timeliness"] > scored_o["scores"]["timeliness"]
@@ -91,4 +94,6 @@ class TestAnimeScoring:
         low = _make_story(source_mention_count=1)
         scored_h = strategy.score_item(high)
         scored_l = strategy.score_item(low)
-        assert scored_h["scores"]["engagement_potential"] > scored_l["scores"]["engagement_potential"]
+        assert (
+            scored_h["scores"]["engagement_potential"] > scored_l["scores"]["engagement_potential"]
+        )

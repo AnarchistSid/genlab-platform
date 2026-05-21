@@ -24,6 +24,7 @@ Flow (reply):
 Threads long-lived tokens expire in 60 days.  needs_refresh is set True when
 the token is ≥ 50 days old (readable from THREADS_TOKEN_ISSUED_AT).
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,7 +50,6 @@ _NEEDS_REFRESH_AFTER_DAYS = 50
 _VIDEO_PROCESSING_WAIT = 30
 
 
-
 # _safe_json imported from genlab_core.platforms.models
 
 
@@ -72,9 +72,7 @@ class ThreadsClient:
         access_token: str | None = None,
         user_id: str | None = None,
     ) -> None:
-        self._access_token: str = access_token or os.environ.get(
-            "THREADS_ACCESS_TOKEN", ""
-        )
+        self._access_token: str = access_token or os.environ.get("THREADS_ACCESS_TOKEN", "")
         self._user_id: str = user_id or os.environ.get("THREADS_USER_ID", "")
         self._base_url = "https://graph.threads.net/v1.0"
         # Threads API: 250 posts/hr. Conservative rate limiter.
@@ -134,9 +132,7 @@ class ThreadsClient:
     # Engageable protocol
     # ------------------------------------------------------------------
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool:
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
         """Reply to a Threads post.
 
         Creates a TEXT reply container with ``reply_to_id``, then publishes it.
@@ -187,9 +183,7 @@ class ThreadsClient:
         Returns:
             ``True`` always (no-op).
         """
-        logger.debug(
-            "Threads: like() called for %s (no-op — API unsupported)", target_id
-        )
+        logger.debug("Threads: like() called for %s (no-op — API unsupported)", target_id)
         return True
 
     # ------------------------------------------------------------------
@@ -227,10 +221,7 @@ class ThreadsClient:
                     details=data,
                 )
 
-            error_msg = (
-                data.get("error", {}).get("message", "")
-                or f"HTTP {resp.status_code}"
-            )
+            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,
@@ -272,9 +263,15 @@ class ThreadsClient:
         # Poll container status instead of fixed sleep
         container_status = self._poll_container(container_id, max_seconds=120)
         if container_status == "ERROR":
-            return PublishResult(platform=self.platform_id, success=False, error="Threads container processing error")
+            return PublishResult(
+                platform=self.platform_id, success=False, error="Threads container processing error"
+            )
         if container_status == "TIMEOUT":
-            return PublishResult(platform=self.platform_id, success=False, error="Threads container processing timeout (120s)")
+            return PublishResult(
+                platform=self.platform_id,
+                success=False,
+                error="Threads container processing timeout (120s)",
+            )
 
         post_id = self._threads_publish(container_id=container_id)
         if post_id is None:
@@ -461,18 +458,19 @@ class ThreadsClient:
                 else:
                     logger.warning(
                         "[Threads] container poll HTTP %d for %s",
-                        resp.status_code, container_id[:16],
+                        resp.status_code,
+                        container_id[:16],
                     )
             except Exception as exc:
                 consecutive_errors += 1
                 logger.warning(
                     "[Threads] container poll request error for %s (%d/3): %s",
-                    container_id[:16], consecutive_errors, exc,
+                    container_id[:16],
+                    consecutive_errors,
+                    exc,
                 )
                 if consecutive_errors >= 3:
-                    logger.error(
-                        "[Threads] container poll gave up after 3 consecutive errors"
-                    )
+                    logger.error("[Threads] container poll gave up after 3 consecutive errors")
                     return "ERROR"
             time.sleep(5)  # uses module-level time import (mockable in tests)
         return "TIMEOUT"
@@ -506,6 +504,7 @@ class ThreadsClient:
             return s
         # If path is not an HTTP URL, upload to CDN first
         from genlab_core.platforms.cdn_upload import upload_to_cdn
+
         cdn_url = upload_to_cdn(Path(path), require_external=True)
         if cdn_url:
             return cdn_url
@@ -557,7 +556,7 @@ class ThreadsClient:
         Returns True if token is valid (refreshed or not needed).
         Returns False if refresh failed.
         """
-        if not hasattr(self, '_token_needs_refresh') or not self._token_needs_refresh():
+        if not hasattr(self, "_token_needs_refresh") or not self._token_needs_refresh():
             return True
 
         try:
@@ -583,16 +582,22 @@ class ThreadsClient:
                     # token and trigger refresh every single time.
                     try:
                         from genlab_core.utils.env_writer import update_env_file
-                        update_env_file({
-                            "THREADS_ACCESS_TOKEN": new_token,
-                            "THREADS_TOKEN_ISSUED_AT": issued_at,
-                        })
+
+                        update_env_file(
+                            {
+                                "THREADS_ACCESS_TOKEN": new_token,
+                                "THREADS_TOKEN_ISSUED_AT": issued_at,
+                            }
+                        )
                     except Exception as exc:
                         logger.warning(
                             "[Threads] Token refreshed but .env persistence failed: %s",
                             exc,
                         )
-                    logger.info("[Threads] Token refreshed successfully (expires in %ds)", data.get("expires_in", 0))
+                    logger.info(
+                        "[Threads] Token refreshed successfully (expires in %ds)",
+                        data.get("expires_in", 0),
+                    )
                     return True
             logger.warning("[Threads] Token refresh failed: %s", resp.text[:200])
             return False

@@ -25,6 +25,7 @@ No data migration is needed — verified pre-migration that no
 arm_id appears in more than one niche on production (5 niches × 9 arms
 = 45 rows, all niche-scoped).
 """
+
 from alembic import op
 
 revision = "i9d0e1f2g3h4"
@@ -100,9 +101,5 @@ def downgrade() -> None:
     END $$;
     """)
 
-    op.execute(
-        "ALTER TABLE bandit_arms DROP CONSTRAINT bandit_arms_niche_id_arm_id_key"
-    )
-    op.execute(
-        "ALTER TABLE bandit_arms ADD CONSTRAINT bandit_arms_arm_id_key UNIQUE (arm_id)"
-    )
+    op.execute("ALTER TABLE bandit_arms DROP CONSTRAINT bandit_arms_niche_id_arm_id_key")
+    op.execute("ALTER TABLE bandit_arms ADD CONSTRAINT bandit_arms_arm_id_key UNIQUE (arm_id)")

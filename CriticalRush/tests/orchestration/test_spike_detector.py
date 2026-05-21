@@ -1,6 +1,5 @@
 """Tests for Steam spike detection algorithm."""
 
-
 from niches.gaming.flows.spike_detector_flow import (
     MIN_OBSERVATIONS,
     PCT_CHANGE_THRESHOLD,
@@ -53,7 +52,7 @@ class TestDetectSpikes:
         state = self._make_state_with_history(
             "123",
             [1000] * 10,  # stable history
-            [5] * 10,     # stable rank
+            [5] * 10,  # stable rank
         )
         current = {"123": {"name": "TestGame", "players": 1050, "rank": 5}}
         spikes, _ = detect_spikes(current, state)
@@ -92,6 +91,7 @@ class TestDetectSpikes:
     def test_cooldown_prevents_retrigger(self):
         """A recently triggered game should not re-trigger within cooldown."""
         import time
+
         state = self._make_state_with_history(
             "111",
             [1000] * 10,

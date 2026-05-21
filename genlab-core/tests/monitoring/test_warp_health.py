@@ -10,6 +10,7 @@ The test cases mirror the failure modes observed in production:
   * Daemon enabled=disabled (won't restart on reboot)
   * Port closed (whole-OS tunnel mode instead of SOCKS)
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -20,11 +21,7 @@ from genlab_core.monitoring.health_monitor import check_warp_health
 def _show_result(load_state="loaded", active_state="active", sub_state="running"):
     """Build a fake `systemctl show warp-svc` result."""
     r = MagicMock()
-    r.stdout = (
-        f"LoadState={load_state}\n"
-        f"ActiveState={active_state}\n"
-        f"SubState={sub_state}\n"
-    )
+    r.stdout = f"LoadState={load_state}\nActiveState={active_state}\nSubState={sub_state}\n"
     return r
 
 
@@ -47,12 +44,14 @@ def _ss_result(listening: bool):
 
 def _run_router(show, ss):
     """subprocess.run side_effect that routes by command."""
+
     def _side_effect(cmd, *_a, **_k):
         if cmd[0] == "systemctl":
             return show
         if cmd[0] == "ss":
             return ss
         return MagicMock()
+
     return _side_effect
 
 
@@ -161,10 +160,7 @@ class TestWarpHealthCheck:
         assert len(alerts) == 1
         assert alerts[0].check == "warp_down"
         # Verify `ss` was never invoked
-        ss_calls = [
-            c for c in mock_run.call_args_list
-            if c.args and c.args[0][0] == "ss"
-        ]
+        ss_calls = [c for c in mock_run.call_args_list if c.args and c.args[0][0] == "ss"]
         assert ss_calls == []
 
     def test_subprocess_exception_silent(self):

@@ -22,6 +22,7 @@ class TestPushToBacklogConfigResolution(unittest.TestCase):
 
     def _make_stage(self):
         from genlab_core.pipeline.stages.push_to_backlog import PushToBacklog
+
         return PushToBacklog()
 
     @patch("genlab_core.pipeline.stages.push_to_backlog.BacklogClient")
@@ -46,6 +47,7 @@ class TestPushToBacklogConfigResolution(unittest.TestCase):
     def test_get_client_resolves_from_niche_root(self, MockClient, tmp_path=None):
         """When context has niche_root with config/lists_config.yaml, that path is used."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             niche_root = Path(tmpdir)
             config_dir = niche_root / "config"
@@ -86,6 +88,7 @@ class TestPushToBacklogConfigResolution(unittest.TestCase):
     def test_get_client_niche_root_without_config_file_falls_through(self, MockClient):
         """When niche_root is set but config/lists_config.yaml doesn't exist, falls through."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # niche_root exists but has no config/lists_config.yaml
             MockClient.return_value = MagicMock()
@@ -120,6 +123,7 @@ class TestPushToBacklogConfigResolution(unittest.TestCase):
     def test_explicit_path_takes_priority_over_niche_root(self, MockClient):
         """backlog_config_path wins even when niche_root also has a config."""
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             niche_root = Path(tmpdir)
             config_dir = niche_root / "config"
@@ -149,7 +153,11 @@ class TestPipelineRunnerNicheRoot(unittest.TestCase):
     @patch("genlab_core.pipeline.pipeline_runner.load_niche_config")
     @patch("genlab_core.pipeline.pipeline_runner.get_feature_flags")
     def test_niche_root_in_context_dict_via_stage(
-        self, mock_flags, mock_config, mock_log, mock_factory,
+        self,
+        mock_flags,
+        mock_config,
+        mock_log,
+        mock_factory,
     ):
         """A stage receives niche_root in its context dict."""
         import tempfile
@@ -177,6 +185,7 @@ class TestPipelineRunnerNicheRoot(unittest.TestCase):
         # Make factory.run() actually call stage.execute() with the context_dict
         def run_side_effect(declaration, stage, context_dict, pipeline_ctx):
             from genlab_core.pipeline.stage_runner import StageResult
+
             captured_context.update(context_dict)
             return StageResult(stage_name="FakeStage", success=True, elapsed_seconds=0.1)
 

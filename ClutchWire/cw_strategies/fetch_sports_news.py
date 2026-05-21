@@ -105,19 +105,23 @@ class ESPNFetcher:
                     if team_name:
                         teams.append(team_name)
 
-            items.append(SportsStoryItem(
-                title=name,
-                source="espn_scoreboard",
-                source_url=event.get("links", [{}])[0].get("href", "") if event.get("links") else "",
-                sport=self._league_to_sport(league),
-                league=league,
-                published_at=event.get("date", ""),
-                fetched_at=now_iso,
-                teams=teams,
-                game_type=game_type,
-                is_live=is_live,
-                summary=status_obj.get("type", {}).get("shortDetail", ""),
-            ))
+            items.append(
+                SportsStoryItem(
+                    title=name,
+                    source="espn_scoreboard",
+                    source_url=event.get("links", [{}])[0].get("href", "")
+                    if event.get("links")
+                    else "",
+                    sport=self._league_to_sport(league),
+                    league=league,
+                    published_at=event.get("date", ""),
+                    fetched_at=now_iso,
+                    teams=teams,
+                    game_type=game_type,
+                    is_live=is_live,
+                    summary=status_obj.get("type", {}).get("shortDetail", ""),
+                )
+            )
 
         return items
 
@@ -152,16 +156,18 @@ class ESPNFetcher:
             links = article.get("links", {})
             web_link = links.get("web", {}).get("href", "") if isinstance(links, dict) else ""
 
-            items.append(SportsStoryItem(
-                title=headline,
-                source="espn_news",
-                source_url=web_link,
-                sport=self._league_to_sport(league),
-                league=league,
-                published_at=published,
-                fetched_at=now_iso,
-                summary=description,
-            ))
+            items.append(
+                SportsStoryItem(
+                    title=headline,
+                    source="espn_news",
+                    source_url=web_link,
+                    sport=self._league_to_sport(league),
+                    league=league,
+                    published_at=published,
+                    fetched_at=now_iso,
+                    summary=description,
+                )
+            )
 
         return items
 
@@ -209,9 +215,7 @@ class RSSFetcher:
                 if not url:
                     continue
                 try:
-                    items.extend(
-                        self._fetch_feed(url, name, weight, tier_name, now_iso)
-                    )
+                    items.extend(self._fetch_feed(url, name, weight, tier_name, now_iso))
                 except Exception:
                     logger.exception("[RSS] Failed to fetch %s", name)
 
@@ -220,7 +224,11 @@ class RSSFetcher:
 
     @staticmethod
     def _fetch_feed(
-        url: str, name: str, weight: float, tier: str, now_iso: str,
+        url: str,
+        name: str,
+        weight: float,
+        tier: str,
+        now_iso: str,
     ) -> list[SportsStoryItem]:
         feed = feedparser.parse(url)
         items: list[SportsStoryItem] = []
@@ -230,15 +238,17 @@ class RSSFetcher:
             if hasattr(entry, "published"):
                 published = entry.published
 
-            items.append(SportsStoryItem(
-                title=entry.get("title", ""),
-                source=f"rss_{name.lower().replace(' ', '_')}",
-                source_url=entry.get("link", ""),
-                published_at=published,
-                fetched_at=now_iso,
-                summary=entry.get("summary", ""),
-                extra={"tier": tier, "weight": weight},
-            ))
+            items.append(
+                SportsStoryItem(
+                    title=entry.get("title", ""),
+                    source=f"rss_{name.lower().replace(' ', '_')}",
+                    source_url=entry.get("link", ""),
+                    published_at=published,
+                    fetched_at=now_iso,
+                    summary=entry.get("summary", ""),
+                    extra={"tier": tier, "weight": weight},
+                )
+            )
 
         return items
 

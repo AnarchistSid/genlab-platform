@@ -170,8 +170,8 @@ class TestAlignWords:
         assert result[1]["word"] == "will"
         assert result[1]["start"] is not None
         assert result[1]["end"] is not None
-        assert result[1]["start"] >= 0.3   # after AI ends
-        assert result[1]["end"] <= 0.6     # before change starts
+        assert result[1]["start"] >= 0.3  # after AI ends
+        assert result[1]["end"] <= 0.6  # before change starts
         assert result[2]["word"] == "change"
         assert result[2]["start"] == 0.6
 

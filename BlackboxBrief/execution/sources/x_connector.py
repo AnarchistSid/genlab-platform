@@ -15,10 +15,7 @@ def _build_client() -> Any:
     access_secret = (os.getenv("X_ACCESS_SECRET") or "").strip()
 
     if not api_key or not api_secret or not access_token or not access_secret:
-        raise ValueError(
-            "Missing X credentials (X_API_KEY, X_API_SECRET, "
-            "X_ACCESS_TOKEN, X_ACCESS_SECRET)"
-        )
+        raise ValueError("Missing X credentials (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET)")
 
     try:
         import tweepy
@@ -90,13 +87,15 @@ def _tweet_entries(resp: Any) -> List[Dict[str, Any]]:
         summary_bits.extend([f"Media: {u}" for u in media_urls[:4]])
         summary_bits.append(f"Tweet: {link}")
 
-        entries.append({
-            "title": title,
-            "link": link,
-            "summary": "\n".join([s for s in summary_bits if s]),
-            "published": _to_iso(getattr(tweet, "created_at", None)),
-            "author": f"@{username}",
-        })
+        entries.append(
+            {
+                "title": title,
+                "link": link,
+                "summary": "\n".join([s for s in summary_bits if s]),
+                "published": _to_iso(getattr(tweet, "created_at", None)),
+                "author": f"@{username}",
+            }
+        )
 
     return entries
 
@@ -107,7 +106,7 @@ def _search_keywords(client: Any, queries: List[str], per_query: int, days: int)
 
     full_since = datetime.now(timezone.utc) - timedelta(days=days)
     recent_days = min(days, max(1, int(os.getenv("X_RECENT_SEARCH_MAX_DAYS", "6"))))
-    recent_since = (datetime.now(timezone.utc) - timedelta(days=recent_days))
+    recent_since = datetime.now(timezone.utc) - timedelta(days=recent_days)
     full_since_iso = full_since.strftime("%Y-%m-%dT%H:%M:%SZ")
     recent_since_iso = recent_since.strftime("%Y-%m-%dT%H:%M:%SZ")
 

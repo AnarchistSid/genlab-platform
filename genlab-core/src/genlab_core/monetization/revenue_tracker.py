@@ -3,6 +3,7 @@
 Provides functions to record revenue events and query aggregate revenue
 data for the dashboard API.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,6 +31,7 @@ def record_revenue(
     report_date = report_date or date.today()
     try:
         import os
+
         dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
         conn = psycopg.connect(dsn)
         with conn:
@@ -38,8 +40,17 @@ def record_revenue(
                    (niche_id, network, revenue_amount, currency, clicks, conversions,
                     product_id, blueprint_id, date)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                (niche_id, network, revenue_amount, currency, clicks, conversions,
-                 product_id, blueprint_id, report_date),
+                (
+                    niche_id,
+                    network,
+                    revenue_amount,
+                    currency,
+                    clicks,
+                    conversions,
+                    product_id,
+                    blueprint_id,
+                    report_date,
+                ),
             )
         conn.close()
     except Exception:
@@ -57,16 +68,17 @@ def get_revenue_summary(
     since = date.today() - timedelta(days=window_days)
     try:
         import os
+
         dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
         conn = psycopg.connect(dsn, row_factory=dict_row)
         cur = conn.cursor()
 
         # Set RLS context
-        cur.execute("SELECT set_config('app.niche_id', %s, true)",
-                    (niche_id or "",))
+        cur.execute("SELECT set_config('app.niche_id', %s, true)", (niche_id or "",))
 
         # Per-niche totals
-        cur.execute("""
+        cur.execute(
+            """
             SELECT niche_id,
                    SUM(revenue_amount) as total_revenue,
                    SUM(clicks) as total_clicks,
@@ -75,11 +87,14 @@ def get_revenue_summary(
             FROM affiliate_revenue
             WHERE date >= %s
             GROUP BY niche_id ORDER BY total_revenue DESC
-        """, (since,))
+        """,
+            (since,),
+        )
         by_niche = cur.fetchall()
 
         # Per-network totals
-        cur.execute("""
+        cur.execute(
+            """
             SELECT network,
                    SUM(revenue_amount) as total_revenue,
                    SUM(clicks) as total_clicks,
@@ -87,16 +102,21 @@ def get_revenue_summary(
             FROM affiliate_revenue
             WHERE date >= %s
             GROUP BY network ORDER BY total_revenue DESC
-        """, (since,))
+        """,
+            (since,),
+        )
         by_network = cur.fetchall()
 
         # Daily trend
-        cur.execute("""
+        cur.execute(
+            """
             SELECT date, SUM(revenue_amount) as revenue, SUM(clicks) as clicks
             FROM affiliate_revenue
             WHERE date >= %s
             GROUP BY date ORDER BY date
-        """, (since,))
+        """,
+            (since,),
+        )
         daily = cur.fetchall()
 
         conn.close()
@@ -106,8 +126,11 @@ def get_revenue_summary(
             "by_niche": [dict(r) for r in by_niche],
             "by_network": [dict(r) for r in by_network],
             "daily_trend": [
-                {"date": str(r["date"]), "revenue": float(r["revenue"] or 0),
-                 "clicks": int(r["clicks"] or 0)}
+                {
+                    "date": str(r["date"]),
+                    "revenue": float(r["revenue"] or 0),
+                    "clicks": int(r["clicks"] or 0),
+                }
                 for r in daily
             ],
             "total_revenue": sum(float(r.get("total_revenue") or 0) for r in by_niche),

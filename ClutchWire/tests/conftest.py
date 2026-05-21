@@ -1,4 +1,5 @@
 """Add ClutchWire root to sys.path for cw_strategies imports."""
+
 import sys
 from pathlib import Path
 

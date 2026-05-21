@@ -46,8 +46,8 @@ class CrispyScorer:
     def __init__(self, config: dict, project_root: str) -> None:
         self.config = config
         self.project_root = project_root
-        self._models: dict = {}      # game_key -> loaded numpy weights
-        self._masks: dict = {}       # game_key -> PIL mask image (or None)
+        self._models: dict = {}  # game_key -> loaded numpy weights
+        self._masks: dict = {}  # game_key -> PIL mask image (or None)
         self._game_name_map: dict = {}  # lowercased game name -> game_key
         self._build_game_name_map()
 
@@ -117,7 +117,9 @@ class CrispyScorer:
     # --- Coordinate computation ---
 
     def _compute_crop_box(
-        self, region_cfg: dict, stretch: bool = False,
+        self,
+        region_cfg: dict,
+        stretch: bool = False,
     ) -> tuple[int, int, int, int]:
         """Compute pixel crop coordinates from Crispy Box parameters.
 
@@ -140,7 +142,9 @@ class CrispyScorer:
     # --- Neural network forward pass ---
 
     def _forward_pass(
-        self, inputs: np.ndarray, weights: list[np.ndarray],
+        self,
+        inputs: np.ndarray,
+        weights: list[np.ndarray],
     ) -> np.ndarray:
         """Run sigmoid MLP forward pass (replicates Crispy NeuralNetwork.query).
 
@@ -154,7 +158,9 @@ class CrispyScorer:
     # --- Game-specific preprocessing ---
 
     def _preprocess_frame(
-        self, frame: np.ndarray, game_key: str,
+        self,
+        frame: np.ndarray,
+        game_key: str,
     ) -> np.ndarray | None:
         """Apply game-specific preprocessing to a BGR video frame.
 
@@ -165,7 +171,8 @@ class CrispyScorer:
         """
         cfg = self.config["models"][game_key]
         crop_x, crop_y, crop_w, crop_h = self._compute_crop_box(
-            cfg["kill_feed_region"], stretch=False,
+            cfg["kill_feed_region"],
+            stretch=False,
         )
 
         # Convert BGR (cv2) -> RGB (PIL)
@@ -190,12 +197,18 @@ class CrispyScorer:
 
         # Extract R channel -> 1D array -> normalize (Crispy convention)
         r_channel = processed.getchannel("R")
-        pixels = list(r_channel.getdata()) if hasattr(r_channel, "getdata") else list(r_channel.tobytes())
+        pixels = (
+            list(r_channel.getdata())
+            if hasattr(r_channel, "getdata")
+            else list(r_channel.tobytes())
+        )
         arr = (np.asarray(pixels, dtype=float) / 255.0 * 0.99) + 0.01
         return arr
 
     def _preprocess_valorant(
-        self, image: Image.Image, mask: Image.Image | None,
+        self,
+        image: Image.Image,
+        mask: Image.Image | None,
     ) -> Image.Image:
         """Replicate Crispy's Valorant preprocessing pipeline.
 
@@ -205,7 +218,8 @@ class CrispyScorer:
         image = ImageOps.grayscale(image)
 
         def apply_filter_and_ops(
-            img: Image.Image, img_filter: ImageFilter.Filter,
+            img: Image.Image,
+            img_filter: ImageFilter.Filter,
         ) -> Image.Image:
             filtered = img.filter(img_filter)
             filtered = filtered.crop(
@@ -231,7 +245,9 @@ class CrispyScorer:
         return final
 
     def _preprocess_csgo2(
-        self, image: Image.Image, mask: Image.Image | None,
+        self,
+        image: Image.Image,
+        mask: Image.Image | None,
     ) -> Image.Image:
         """Replicate Crispy's CS2 preprocessing pipeline.
 

@@ -29,8 +29,10 @@ except ImportError:
     # Prefect eliminated in Sprint 68 — decorators are no-ops
     def flow(fn=None, **kwargs):
         return fn if fn else lambda f: f
+
     def task(fn=None, **kwargs):
         return fn if fn else lambda f: f
+
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +40,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 STATE_PATH = PROJECT_ROOT / ".tmp" / "spike_detector_state.json"
 
 # Detection thresholds
-Z_SCORE_THRESHOLD = 2.0         # Standard deviations above mean
-PCT_CHANGE_THRESHOLD = 0.50     # 50% increase over rolling average
-RANK_VELOCITY_THRESHOLD = 5     # Rank improvement of 5+ positions
-MIN_OBSERVATIONS = 6            # Need at least 6 data points (30 min)
-COOLDOWN_SECONDS = 3600         # Don't re-trigger for same game within 1h
+Z_SCORE_THRESHOLD = 2.0  # Standard deviations above mean
+PCT_CHANGE_THRESHOLD = 0.50  # 50% increase over rolling average
+RANK_VELOCITY_THRESHOLD = 5  # Rank improvement of 5+ positions
+MIN_OBSERVATIONS = 6  # Need at least 6 data points (30 min)
+COOLDOWN_SECONDS = 3600  # Don't re-trigger for same game within 1h
 
 # Steam API
 STEAM_FEATURED_URL = "https://store.steampowered.com/api/featuredcategories"
@@ -209,7 +211,11 @@ def detect_spikes(
             triggered[app_id] = now
             logger.info(
                 "[Spike] DETECTED: %s — %d players, z=%.1f, pct=%.1f%%, rank_vel=%.1f",
-                name, players, z, pct_change * 100, rank_vel,
+                name,
+                players,
+                z,
+                pct_change * 100,
+                rank_vel,
             )
 
     state["games"] = games_state
@@ -243,7 +249,8 @@ def trigger_pipeline_for_spike(spikes: list[dict[str, Any]]) -> str | None:
     if run_id:
         logger.info(
             "[Spike] Triggered gaming-pipeline (run=%s) for spikes: %s",
-            run_id, spike_names,
+            run_id,
+            spike_names,
         )
     else:
         logger.error("[Spike] Failed to trigger gaming-pipeline for spikes: %s", spike_names)
@@ -255,10 +262,11 @@ def trigger_pipeline_for_spike(spikes: list[dict[str, Any]]) -> str | None:
 # Main flow
 # ---------------------------------------------------------------------------
 
+
 @flow(
     name="steam-spike-detector",
     description="Poll Steam for player-count spikes every 5 minutes. "
-                "Triggers a gaming pipeline run when spikes are confirmed.",
+    "Triggers a gaming pipeline run when spikes are confirmed.",
     retries=0,
     timeout_seconds=120,
 )

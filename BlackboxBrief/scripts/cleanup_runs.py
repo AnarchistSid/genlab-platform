@@ -14,6 +14,7 @@ Retention windows (optimised for 1-post/channel/day regime, ~1 GB/day):
 Usage:
     python scripts/cleanup_runs.py [--dry-run]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -65,26 +66,26 @@ def release_publish_lock(lock_path: Path) -> None:
     except Exception:
         pass
 
+
 # Retention policies for unmanaged .tmp subdirectories.
 # (runs/ managed by DiskQuotaManager, media/ by _cleanup_media — do NOT add here)
 _EXTRA_RETENTION = [
-    {"dir": "audio",   "max_age_days": 14, "max_mb": 500},   # was 7d — small footprint, useful for re-renders
-    {"dir": "renders", "max_age_days": 7,  "max_mb": 2048},  # was 3d/1GB — keep for platform retry window
-    {"dir": "logs",    "max_age_days": 14, "max_mb": 200, "truncate_lines": 10_000},
+    {"dir": "audio", "max_age_days": 14, "max_mb": 500},  # was 7d — small footprint, useful for re-renders
+    {"dir": "renders", "max_age_days": 7, "max_mb": 2048},  # was 3d/1GB — keep for platform retry window
+    {"dir": "logs", "max_age_days": 14, "max_mb": 200, "truncate_lines": 10_000},
 ]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Daily run cleanup")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Log what would be deleted without deleting")
+    parser.add_argument("--dry-run", action="store_true", help="Log what would be deleted without deleting")
     args = parser.parse_args()
 
     config = {
         "agents": {
             AGENT_NAME: {
                 "runs_dir": RUNS_DIR,
-                "quota_gb": 20,       # 20 GB cap (at ~1 GB/day, 7-day retention fits easily)
+                "quota_gb": 20,  # 20 GB cap (at ~1 GB/day, 7-day retention fits easily)
                 "warn_pct": 70,
                 "evict_pct": 85,
                 "protect_recent": 5,  # was 3 — keep a week's worth at 1 run/day
@@ -96,8 +97,7 @@ def main() -> None:
 
     status = manager.get_status(AGENT_NAME)
     logger.info(
-        "Disk status: used=%.1f GB (%.1f%%), quota=%.1f GB, "
-        "runs=%d, evictable=%d (%.1f GB)",
+        "Disk status: used=%.1f GB (%.1f%%), quota=%.1f GB, runs=%d, evictable=%d (%.1f GB)",
         status.used_bytes / (1024**3),
         status.pct_used,
         status.quota_bytes / (1024**3),
@@ -227,13 +227,11 @@ def _cleanup_extras(dry_run: bool = False) -> None:
                 kept = lines[-truncate_lines:]
                 saved = size - sum(len(ln) for ln in kept)
                 if dry_run:
-                    logger.info("  [%s] Would truncate %s (save %.1f MB)",
-                                label, f.name, saved / (1024**2))
+                    logger.info("  [%s] Would truncate %s (save %.1f MB)", label, f.name, saved / (1024**2))
                 else:
                     with open(f, "wb") as fh:
                         fh.writelines(kept)
-                    logger.info("[%s] Truncated %s (saved %.1f MB)",
-                                label, f.name, saved / (1024**2))
+                    logger.info("[%s] Truncated %s (saved %.1f MB)", label, f.name, saved / (1024**2))
 
         # Phase 2: delete files older than max_age_days
         deleted = 0
@@ -250,8 +248,7 @@ def _cleanup_extras(dry_run: bool = False) -> None:
                 continue
             if st.st_mtime < cutoff:
                 if dry_run:
-                    logger.info("  [%s] Would delete (age): %s (%.1f MB)",
-                                label, f.name, st.st_size / (1024**2))
+                    logger.info("  [%s] Would delete (age): %s (%.1f MB)", label, f.name, st.st_size / (1024**2))
                 else:
                     f.unlink()
                     deleted += 1
@@ -276,8 +273,7 @@ def _cleanup_extras(dry_run: bool = False) -> None:
                 if total_remaining <= max_bytes:
                     break
                 if dry_run:
-                    logger.info("  [%s] Would delete (cap): %s (%.1f MB)",
-                                label, f.name, sz / (1024**2))
+                    logger.info("  [%s] Would delete (cap): %s (%.1f MB)", label, f.name, sz / (1024**2))
                 else:
                     f.unlink()
                     deleted += 1

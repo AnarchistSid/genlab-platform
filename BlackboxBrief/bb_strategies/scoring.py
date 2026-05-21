@@ -1,4 +1,5 @@
 """BB scoring strategy — wraps dedupe_rank_items.py."""
+
 from __future__ import annotations
 
 import json
@@ -86,7 +87,11 @@ class BBScoringStrategy(ScoringStrategy):
 
         logger.info(
             "[ai_creators] Ranked %d stories in %.1fs (url-%d title-%d quality-%d)",
-            len(items), total_time, url_removed, title_removed, quality_removed,
+            len(items),
+            total_time,
+            url_removed,
+            title_removed,
+            quality_removed,
         )
 
         # Also filter context["stories"] with visual potential gate
@@ -104,7 +109,8 @@ class BBScoringStrategy(ScoringStrategy):
                 visual_rejected += 1
                 logger.info(
                     "[ai_creators] Visual potential rejected (%.1f): %s",
-                    vp, s.get("title", "")[:60],
+                    vp,
+                    s.get("title", "")[:60],
                 )
         context["stories"] = visual_passed
 

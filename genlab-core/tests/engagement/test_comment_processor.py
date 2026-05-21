@@ -1,4 +1,5 @@
 """Tests for comment_processor — idempotency, spam, routing."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -106,9 +107,7 @@ class TestLikeIdempotency:
 class TestRateLimitRetry:
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
-    def test_rate_limit_raises_for_dramatiq_retry(
-        self, mock_replied, mock_spam, agent_root
-    ):
+    def test_rate_limit_raises_for_dramatiq_retry(self, mock_replied, mock_spam, agent_root):
         import dramatiq
         from genlab_core.engagement.comment_processor import process_reply_event
 
@@ -117,8 +116,10 @@ class TestRateLimitRetry:
         mock_result.is_toxic = False
         mock_gate.return_value.check_inbound.return_value = mock_result
 
-        with patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate), \
-             patch("genlab_core.engagement.comment_processor._rate_limiter") as mock_rl:
+        with (
+            patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate),
+            patch("genlab_core.engagement.comment_processor._rate_limiter") as mock_rl,
+        ):
             mock_rl.acquire.return_value = False
             # The processor raises dramatiq.Retry (not RuntimeError) so the
             # broker re-queues with a calibrated delay instead of letting
@@ -139,8 +140,14 @@ class TestIdempotencyOnFailure:
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
     @patch("genlab_core.engagement.comment_processor._rate_limiter")
     def test_failed_reply_does_not_mark_replied(
-        self, mock_rl, mock_replied, mock_spam, mock_gate_cls,
-        mock_engine_cls, mock_delay, agent_root,
+        self,
+        mock_rl,
+        mock_replied,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_delay,
+        agent_root,
     ):
         """When platform client returns False (failure), _mark_replied must NOT run."""
         from genlab_core.engagement.comment_processor import _has_replied, process_reply_event
@@ -165,8 +172,14 @@ class TestIdempotencyOnFailure:
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
     @patch("genlab_core.engagement.comment_processor._rate_limiter")
     def test_successful_reply_marks_replied(
-        self, mock_rl, mock_replied, mock_spam, mock_gate_cls,
-        mock_engine_cls, mock_delay, agent_root,
+        self,
+        mock_rl,
+        mock_replied,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_delay,
+        agent_root,
     ):
         """When platform client returns True (success), _mark_replied MUST run."""
         from genlab_core.engagement.comment_processor import process_reply_event
@@ -180,8 +193,10 @@ class TestIdempotencyOnFailure:
 
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you liked it"
 
-        with patch("genlab_core.engagement.comment_processor._post_reply", return_value=True), \
-             patch("genlab_core.engagement.comment_processor._mark_replied") as mock_mark:
+        with (
+            patch("genlab_core.engagement.comment_processor._post_reply", return_value=True),
+            patch("genlab_core.engagement.comment_processor._mark_replied") as mock_mark,
+        ):
             process_reply_event(_make_event(comment_id="ok_c1"))
 
         mock_mark.assert_called_once_with("ok_c1", "youtube")
@@ -197,8 +212,14 @@ class TestBacklogClientWiring:
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
     @patch("genlab_core.engagement.comment_processor._rate_limiter")
     def test_successful_reply_updates_sharepoint(
-        self, mock_rl, mock_replied, mock_spam, mock_gate_cls,
-        mock_engine_cls, mock_delay, agent_root,
+        self,
+        mock_rl,
+        mock_replied,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_delay,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import process_reply_event
 
@@ -213,14 +234,23 @@ class TestBacklogClientWiring:
         mock_bl = MagicMock()
         mock_bl.write_pending_engagement.return_value = "sp-42"
 
-        with patch("genlab_core.engagement.comment_processor._post_reply", return_value=True), \
-             patch("genlab_core.engagement.comment_processor._mark_replied"), \
-             patch("genlab_core.engagement.comment_processor.classify_reply_action", return_value="auto"), \
-             patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl):
+        with (
+            patch("genlab_core.engagement.comment_processor._post_reply", return_value=True),
+            patch("genlab_core.engagement.comment_processor._mark_replied"),
+            patch(
+                "genlab_core.engagement.comment_processor.classify_reply_action",
+                return_value="auto",
+            ),
+            patch(
+                "genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl
+            ),
+        ):
             process_reply_event(_make_event(comment_id="bl_c1"))
 
         mock_bl.write_pending_engagement.assert_called_once()
-        mock_bl.update_engagement_status.assert_called_once_with("sp-42", "replied", reply_text="Thanks! Glad you enjoyed it [automated reply]")
+        mock_bl.update_engagement_status.assert_called_once_with(
+            "sp-42", "replied", reply_text="Thanks! Glad you enjoyed it [automated reply]"
+        )
 
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0)
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
@@ -229,8 +259,14 @@ class TestBacklogClientWiring:
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
     @patch("genlab_core.engagement.comment_processor._rate_limiter")
     def test_failed_reply_updates_sharepoint_as_failed(
-        self, mock_rl, mock_replied, mock_spam, mock_gate_cls,
-        mock_engine_cls, mock_delay, agent_root,
+        self,
+        mock_rl,
+        mock_replied,
+        mock_spam,
+        mock_gate_cls,
+        mock_engine_cls,
+        mock_delay,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import process_reply_event
 
@@ -245,27 +281,42 @@ class TestBacklogClientWiring:
         mock_bl = MagicMock()
         mock_bl.write_pending_engagement.return_value = "sp-99"
 
-        with patch("genlab_core.engagement.comment_processor._post_reply", return_value=False), \
-             patch("genlab_core.engagement.comment_processor.classify_reply_action", return_value="auto"), \
-             patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl):
+        with (
+            patch("genlab_core.engagement.comment_processor._post_reply", return_value=False),
+            patch(
+                "genlab_core.engagement.comment_processor.classify_reply_action",
+                return_value="auto",
+            ),
+            patch(
+                "genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl
+            ),
+        ):
             process_reply_event(_make_event(comment_id="fail_bl"))
 
         mock_bl.update_engagement_status.assert_called_once_with(
-            "sp-99", "failed", error_msg="Platform API call failed",
+            "sp-99",
+            "failed",
+            error_msg="Platform API call failed",
         )
 
     @patch("genlab_core.engagement.comment_processor.ToxicityGate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=True)
     @patch("genlab_core.engagement.comment_processor._has_replied", return_value=False)
     def test_spam_updates_sharepoint_as_skipped(
-        self, mock_replied, mock_spam, mock_gate_cls, agent_root,
+        self,
+        mock_replied,
+        mock_spam,
+        mock_gate_cls,
+        agent_root,
     ):
         from genlab_core.engagement.comment_processor import process_reply_event
 
         mock_bl = MagicMock()
         mock_bl.write_pending_engagement.return_value = "sp-spam"
 
-        with patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl):
+        with patch(
+            "genlab_core.engagement.comment_processor._get_backlog_client", return_value=mock_bl
+        ):
             process_reply_event(_make_event(comment_id="spam_c1", comment_text="FREE MONEY"))
 
         mock_bl.update_engagement_status.assert_called_once_with("sp-spam", "skipped")
@@ -274,7 +325,9 @@ class TestBacklogClientWiring:
         """Pipeline runs normally when BacklogClient is not configured."""
         from genlab_core.engagement.comment_processor import process_reply_event
 
-        with patch("genlab_core.engagement.comment_processor._get_backlog_client", return_value=None):
+        with patch(
+            "genlab_core.engagement.comment_processor._get_backlog_client", return_value=None
+        ):
             # Spam event — should complete without errors even without BacklogClient
             process_reply_event(
                 _make_event(comment_id="no_bl", comment_text="FREE MONEY http://scam.com"),

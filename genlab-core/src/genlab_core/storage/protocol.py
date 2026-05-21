@@ -4,6 +4,7 @@ All table operations go through this protocol so BacklogClient can
 route to either SharePoint (via GraphTableProxy) or PostgreSQL
 without changing its domain methods.
 """
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable

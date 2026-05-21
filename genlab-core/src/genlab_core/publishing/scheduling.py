@@ -72,7 +72,7 @@ def build_caption(
     if len(full) > body_limit:
         # Truncate body at last space before limit to avoid splitting words/emoji
         truncated = full[:body_limit]
-        last_space = truncated.rfind(' ')
+        last_space = truncated.rfind(" ")
         if last_space > body_limit * 0.8:  # Only if space is reasonably close
             full = truncated[:last_space]
         else:

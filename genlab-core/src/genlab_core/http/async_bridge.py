@@ -10,6 +10,7 @@ Usage:
 
     result = run_async(some_async_function())
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -68,6 +69,4 @@ def run_async(coro, timeout: float = 60.0):
         return future.result(timeout=timeout)
     except concurrent.futures.TimeoutError:
         future.cancel()
-        raise TimeoutError(
-            f"Async call timed out after {timeout}s"
-        ) from None
+        raise TimeoutError(f"Async call timed out after {timeout}s") from None

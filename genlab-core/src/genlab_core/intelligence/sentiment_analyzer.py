@@ -5,6 +5,7 @@ into: positive, negative, neutral, question, request.
 
 For production: replace with a fine-tuned model or Anthropic API call.
 """
+
 from __future__ import annotations
 
 import re
@@ -15,7 +16,10 @@ SentimentLabel = Literal["positive", "negative", "neutral", "question", "request
 
 # Weighted keyword lists
 _POSITIVE_PATTERNS = [
-    (r"\b(love|amazing|awesome|incredible|fire|goat|goated|sick|insane|beautiful|perfect|best)\b", 2),
+    (
+        r"\b(love|amazing|awesome|incredible|fire|goat|goated|sick|insane|beautiful|perfect|best)\b",
+        2,
+    ),
     (r"\b(great|good|nice|cool|dope|lit|valid|W|huge|massive|clutch)\b", 1),
     (r"(🔥|❤️|😍|💪|👏|🙌|💯|⭐|🎉|😂|🤩)", 1),
     (r"\b(thank|thanks|appreciate|respect|legend)\b", 1),

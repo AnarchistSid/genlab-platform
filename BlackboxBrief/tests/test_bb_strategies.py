@@ -5,6 +5,7 @@ Verifies:
 - Each is a subclass of the correct genlab_core ABC
 - execute() delegates to the underlying BB script functions
 """
+
 from __future__ import annotations
 
 import os

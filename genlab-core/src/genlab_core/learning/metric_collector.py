@@ -7,6 +7,7 @@ store. At the 48h window, computes a shaped reward via RewardShaper.
 Run standalone:
     python -m genlab_core.learning.metric_collector
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,11 +20,14 @@ BanditUpdater = Callable[[str, str, str, float, dict | None], None]
 
 logger = logging.getLogger(__name__)
 
+
 def flow(fn=None, **kwargs):  # type: ignore[misc]
     return fn if fn else lambda f: f
 
+
 def task(fn=None, **kwargs):  # type: ignore[misc]
     return fn if fn else lambda f: f
+
 
 # Internal imports must come *after* the prefect-stub decorators above so that
 # any module that re-exports flow/task picks up these no-op fallbacks when
@@ -39,6 +43,7 @@ from genlab_core.learning.reward_shaper import RewardShaper  # noqa: E402
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
 # ---------------------------------------------------------------------------
+
 
 @task(name="fetch_platform_metrics", retries=1)
 def fetch_platform_metrics(
@@ -60,7 +65,9 @@ def fetch_platform_metrics(
         try:
             return _fetch_instagram_reels_6h(raw_id, niche_id=niche_id)
         except Exception as exc:
-            logger.warning("[metric_collector] instagram reels 6h fetch failed for %s: %s", post_id, exc)
+            logger.warning(
+                "[metric_collector] instagram reels 6h fetch failed for %s: %s", post_id, exc
+            )
             return {}
 
     fetchers = {
@@ -161,14 +168,17 @@ def _get_yt_analytics_access_token(niche_id: str = "") -> str:
         return token
     except Exception as exc:
         logger.debug(
-            "[metric_collector] yt analytics token refresh failed for "
-            "niche=%s: %s", niche_id or "<unset>", exc,
+            "[metric_collector] yt analytics token refresh failed for niche=%s: %s",
+            niche_id or "<unset>",
+            exc,
         )
         return ""
 
 
 def _fetch_youtube_analytics_extras(
-    video_id: str, channel_id: str, niche_id: str = "",
+    video_id: str,
+    channel_id: str,
+    niche_id: str = "",
 ) -> dict:
     """Pull avg_view_duration + subscribers_gained from YouTube Analytics v2.
 
@@ -208,10 +218,7 @@ def _fetch_youtube_analytics_extras(
                 "ids": f"channel=={channel_id}",
                 "startDate": start_date,
                 "endDate": end_date,
-                "metrics": (
-                    "estimatedMinutesWatched,averageViewDuration,"
-                    "subscribersGained,shares"
-                ),
+                "metrics": ("estimatedMinutesWatched,averageViewDuration,subscribersGained,shares"),
                 "filters": f"video=={video_id}",
                 "dimensions": "video",
             },
@@ -222,7 +229,8 @@ def _fetch_youtube_analytics_extras(
         if resp.status_code in (400, 403):
             logger.debug(
                 "[metric_collector] yt analytics soft-fail %d for %s",
-                resp.status_code, video_id,
+                resp.status_code,
+                video_id,
             )
             return {}
         resp.raise_for_status()
@@ -449,11 +457,7 @@ def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
     """
     import requests
 
-    metrics_param = (
-        "post_video_view_time,"
-        "post_video_avg_time_watched,"
-        "post_video_social_actions"
-    )
+    metrics_param = "post_video_view_time,post_video_avg_time_watched,post_video_social_actions"
     try:
         resp = requests.get(
             f"https://graph.facebook.com/v21.0/{reel_id}/video_insights",
@@ -463,14 +467,16 @@ def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
         if resp.status_code != 200:
             logger.debug(
                 "[metric_collector] fb reel insights soft-fail %d for %s",
-                resp.status_code, reel_id,
+                resp.status_code,
+                reel_id,
             )
             return {}
         body = resp.json()
     except Exception as exc:
         logger.debug(
             "[metric_collector] fb reel insights fetch failed for %s: %s",
-            reel_id, exc,
+            reel_id,
+            exc,
         )
         return {}
 
@@ -523,7 +529,8 @@ def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
         if resp.status_code != 200:
             logger.debug(
                 "[metric_collector] fb video object soft-fail %d for %s",
-                resp.status_code, post_id,
+                resp.status_code,
+                post_id,
             )
             return {}
         body = resp.json()
@@ -601,7 +608,8 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
         else:
             logger.debug(
                 "[metric_collector] fb insights soft-fail %d for %s",
-                resp.status_code, post_id,
+                resp.status_code,
+                post_id,
             )
     except Exception as exc:
         logger.debug("[metric_collector] fb insights fetch failed for %s: %s", post_id, exc)
@@ -642,7 +650,8 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
         # estimate since it's the authoritative total.
         if reel_insights.get("total_view_time_ms", 0) > 0:
             metrics["minutes_viewed"] = round(
-                reel_insights["total_view_time_ms"] / 60_000.0, 2,
+                reel_insights["total_view_time_ms"] / 60_000.0,
+                2,
             )
         # completion_rate: avg_watch_ms / (length_s × 1000), clamped [0,1].
         avg_ms = reel_insights.get("avg_view_time_ms", 0.0)
@@ -785,6 +794,7 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 # Core flow
 # ---------------------------------------------------------------------------
 
+
 def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     """Return channel-level metrics from the monetisationprogress table.
 
@@ -815,15 +825,13 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
                     """,
                     (niche_id, platform),
                 )
-                return {
-                    str(name): float(val)
-                    for name, val in cur.fetchall()
-                    if val is not None
-                }
+                return {str(name): float(val) for name, val in cur.fetchall() if val is not None}
     except Exception as exc:
         logger.debug(
             "[reward] get_channel_metrics failed for %s/%s: %s",
-            niche_id, platform, exc,
+            niche_id,
+            platform,
+            exc,
         )
         return {}
 
@@ -841,9 +849,7 @@ def compute_reward(
     and the channel is within 20% of any monetisation threshold for
     this platform. Without ``niche_id``, falls back to base weights.
     """
-    channel_metrics = (
-        get_channel_metrics(niche_id, platform) if niche_id else None
-    )
+    channel_metrics = get_channel_metrics(niche_id, platform) if niche_id else None
     return shaper.compute_reward(
         platform=platform,
         metrics=metrics,
@@ -1102,7 +1108,9 @@ def process_pending_task(
         except Exception as exc:
             logger.debug(
                 "[metric_collector] Analytics upsert failed for %s/%s: %s",
-                task_record.platform, task_record.platform_post_id, exc,
+                task_record.platform,
+                task_record.platform_post_id,
+                exc,
             )
 
     store.update_window(task_record, window, reward_48h=reward_48h)
@@ -1129,6 +1137,7 @@ def collect_metrics(
     if backlog_client is None:
         try:
             from genlab_core.http.backlog_client import BacklogClient
+
             backlog_client = BacklogClient()
         except Exception as exc:
             logger.error("[metric_collector] Failed to create BacklogClient: %s", exc)
@@ -1157,7 +1166,10 @@ def collect_metrics(
                 not_due += 1
                 continue
             if process_pending_task(
-                task_record, store, shaper, now=now,
+                task_record,
+                store,
+                shaper,
+                now=now,
                 bandit_updater=bandit_updater,
                 backlog_client=backlog_client,
             ):
@@ -1175,7 +1187,10 @@ def collect_metrics(
 
     logger.info(
         "[metric_collector] Processed %d / %d tasks (not_due=%d, failed=%d)",
-        processed, len(pending), not_due, failed,
+        processed,
+        len(pending),
+        not_due,
+        failed,
     )
 
     # Health check fires only when something *should* have processed but
@@ -1188,7 +1203,9 @@ def collect_metrics(
             "[metric_collector] HEALTH CHECK: 0/%d eligible tasks processed "
             "(of %d total, %d not yet due) — learning loop may be stalled. "
             "Check fetch_platform_metrics + next_collection_window logic.",
-            due_tasks, len(pending), not_due,
+            due_tasks,
+            len(pending),
+            not_due,
         )
 
     return processed
@@ -1284,11 +1301,7 @@ def _default_bandit_updater(
             linucb_state_dict = None
             if item_arm == content_type and linucb_ctx_array is not None:
                 try:
-                    raw_state = (
-                        fields.get("linucb_state")
-                        or fields.get("LinUCB_State")
-                        or ""
-                    )
+                    raw_state = fields.get("linucb_state") or fields.get("LinUCB_State") or ""
                     if raw_state:
                         arm = LinUCBArm.from_dict(_json.loads(raw_state))
                     else:
@@ -1297,13 +1310,17 @@ def _default_bandit_updater(
                     linucb_state_dict = arm.to_dict()
                     logger.info(
                         "[bandit_updater] LinUCB updated: %s/%s n_obs=%d",
-                        niche_id, item_arm, arm.n_obs,
+                        niche_id,
+                        item_arm,
+                        arm.n_obs,
                     )
                 except Exception as linucb_exc:
                     logger.warning(
                         "[bandit_updater] LinUCB update failed for %s/%s "
                         "(falling back to Thompson): %s",
-                        niche_id, item_arm, linucb_exc,
+                        niche_id,
+                        item_arm,
+                        linucb_exc,
                     )
 
             save_arm(
@@ -1317,7 +1334,12 @@ def _default_bandit_updater(
             updated.append(item_arm)
             logger.info(
                 "[bandit_updater] %s/%s reward=%.3f → a=%.2f b=%.2f n_plays=%d",
-                niche_id, item_arm, reward_clipped, alpha, beta, n_plays,
+                niche_id,
+                item_arm,
+                reward_clipped,
+                alpha,
+                beta,
+                n_plays,
             )
 
         # Sanity log: if we asked for N arms but updated fewer, surface
@@ -1326,9 +1348,10 @@ def _default_bandit_updater(
         missing = target_arms - set(updated)
         if missing:
             logger.warning(
-                "[bandit_updater] %d arm(s) requested but not found in "
-                "bandit_arms (niche=%s): %s",
-                len(missing), niche_id, sorted(missing),
+                "[bandit_updater] %d arm(s) requested but not found in bandit_arms (niche=%s): %s",
+                len(missing),
+                niche_id,
+                sorted(missing),
             )
     except Exception as exc:
         logger.warning("[bandit_updater] Failed: %s", exc)

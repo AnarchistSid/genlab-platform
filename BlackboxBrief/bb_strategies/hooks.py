@@ -8,6 +8,7 @@ Previous version (82 lines) used a standalone _hooks.py formula engine
 with engagement scoring. That engine is preserved at _hooks.py but no
 longer called from the pipeline.
 """
+
 from __future__ import annotations
 
 import re
@@ -21,7 +22,18 @@ BB_ROOT = Path(__file__).resolve().parent.parent
 _TOOL_KEYWORDS = {"launch", "release", "drop", "update", "announce", "available", "beta", "alpha", "new version"}
 _CREATOR_KEYWORDS = {"made", "created", "built", "generated", "pushed", "used", "demo", "recreated", "showed"}
 _MILESTONE_KEYWORDS = {"million", "billion", "users", "downloads", "record", "fastest", "hit", "reached", "scored"}
-_CONTROVERSY_KEYWORDS = {"debate", "controversy", "vs", "versus", "fight", "war", "lawsuit", "ban", "problem", "dangerous"}
+_CONTROVERSY_KEYWORDS = {
+    "debate",
+    "controversy",
+    "vs",
+    "versus",
+    "fight",
+    "war",
+    "lawsuit",
+    "ban",
+    "problem",
+    "dangerous",
+}
 _CURIOSITY_KEYWORDS = {"secret", "hidden", "quietly", "nobody knows", "doesn't want", "behind the scenes"}
 _VIRAL_KEYWORDS = {"viral", "views", "trending", "broke", "insane", "wild", "unreal", "out-performed"}
 
@@ -92,17 +104,56 @@ class BBHookStrategy(BaseHookStrategy):
 # ── Extraction helpers ──────────────────────────────────────────
 
 _KNOWN_COMPANIES = {
-    "openai", "google", "anthropic", "meta", "microsoft", "nvidia",
-    "adobe", "apple", "amazon", "stability", "midjourney", "runway",
-    "luma", "pika", "kling", "sora", "deepseek", "mistral", "cohere",
-    "hugging face", "replicate", "comfyui", "eleven labs",
+    "openai",
+    "google",
+    "anthropic",
+    "meta",
+    "microsoft",
+    "nvidia",
+    "adobe",
+    "apple",
+    "amazon",
+    "stability",
+    "midjourney",
+    "runway",
+    "luma",
+    "pika",
+    "kling",
+    "sora",
+    "deepseek",
+    "mistral",
+    "cohere",
+    "hugging face",
+    "replicate",
+    "comfyui",
+    "eleven labs",
 }
 
 _KNOWN_PRODUCTS = {
-    "gpt", "chatgpt", "gpt-4", "gpt-5", "claude", "gemini", "sora",
-    "midjourney", "dall-e", "stable diffusion", "kling", "runway",
-    "luma", "pika", "flux", "seedance", "comfyui", "whisper",
-    "copilot", "cursor", "v0", "devin", "ray", "wan",
+    "gpt",
+    "chatgpt",
+    "gpt-4",
+    "gpt-5",
+    "claude",
+    "gemini",
+    "sora",
+    "midjourney",
+    "dall-e",
+    "stable diffusion",
+    "kling",
+    "runway",
+    "luma",
+    "pika",
+    "flux",
+    "seedance",
+    "comfyui",
+    "whisper",
+    "copilot",
+    "cursor",
+    "v0",
+    "devin",
+    "ray",
+    "wan",
 }
 
 

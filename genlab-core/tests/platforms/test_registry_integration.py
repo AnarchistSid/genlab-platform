@@ -1,4 +1,5 @@
 """Verify all registered platform clients can be instantiated."""
+
 from __future__ import annotations
 
 from unittest.mock import patch

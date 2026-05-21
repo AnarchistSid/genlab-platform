@@ -8,6 +8,7 @@ Usage:
     uv run --package genlab-core python -m genlab_core.scripts.train_hook_classifier
     uv run --package genlab-core python -m genlab_core.scripts.train_hook_classifier --niche-id gaming
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,6 +35,7 @@ def main() -> int:
         from pathlib import Path
 
         from dotenv import load_dotenv
+
         genlab_root = Path(__file__).resolve().parents[4]
         load_dotenv(genlab_root / ".env", override=False)
     except ImportError:

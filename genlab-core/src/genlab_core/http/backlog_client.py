@@ -15,6 +15,7 @@ Config path resolution (in order):
   2. BACKLOG_CONFIG_PATH env var
   3. Auto-detect: walk up from caller's working directory
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -34,22 +35,41 @@ logger = logging.getLogger(__name__)
 # Canonical blueprint status progression — used by ScheduleGuardedProxy and
 # BacklogClient for demotion detection.  Keep this list in pipeline order.
 STATUS_ORDER: list[str] = [
-    "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED",
-    "DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHED",
-    "ANALYZED", "ARCHIVED",
+    "INTAKE",
+    "VALIDATED",
+    "INTEL_READY",
+    "RESEARCHED",
+    "DRAFTED",
+    "VISUAL_READY",
+    "SCHEDULED",
+    "PUBLISHED",
+    "ANALYZED",
+    "ARCHIVED",
 ]
 
 # Shared error tuple for backlog operations
 try:
     from kiota_abstractions.api_error import APIError as GraphAPIError
     from requests.exceptions import RequestException
+
     BACKLOG_OP_ERRORS = (
-        RequestException, TimeoutError, OSError, RuntimeError,
-        ValueError, KeyError, TypeError, GraphAPIError,
+        RequestException,
+        TimeoutError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        KeyError,
+        TypeError,
+        GraphAPIError,
     )
 except ImportError:
     BACKLOG_OP_ERRORS = (
-        TimeoutError, OSError, RuntimeError, ValueError, KeyError, TypeError,
+        TimeoutError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        KeyError,
+        TypeError,
     )
 
 
@@ -232,8 +252,13 @@ class BacklogClient:
     }
 
     ASSET_SOURCE_TYPE_ALLOWED = {
-        "og_image", "og_video", "schema_org", "hero_image",
-        "video_embed", "stock_search", "generated",
+        "og_image",
+        "og_video",
+        "schema_org",
+        "hero_image",
+        "video_embed",
+        "stock_search",
+        "generated",
     }
 
     _STATUS_ORDER = STATUS_ORDER
@@ -262,10 +287,20 @@ class BacklogClient:
             self._pg = _pg
 
             ALL_TABLES = [
-                "Stories", "Blueprints", "Templates", "Assets", "Sources",
-                "Publishing_Analytics", "Analytics", "AB_Tests",
-                "Audience_Snapshots", "PendingEngagement", "PendingFeedback",
-                "BanditArms", "Content_Memory", "MonetisationProgress",
+                "Stories",
+                "Blueprints",
+                "Templates",
+                "Assets",
+                "Sources",
+                "Publishing_Analytics",
+                "Analytics",
+                "AB_Tests",
+                "Audience_Snapshots",
+                "PendingEngagement",
+                "PendingFeedback",
+                "BanditArms",
+                "Content_Memory",
+                "MonetisationProgress",
             ]
 
             # Map CamelCase list names to actual PostgreSQL table names.
@@ -294,7 +329,9 @@ class BacklogClient:
                 sql_table = _SQL_TABLE_MAP.get(table.lower(), table.lower())
                 setattr(self, attr, PostgresTableProxy(_pg, sql_table))
 
-            self._sp_proxies = {t: getattr(self, attr_map.get(t.lower(), t.lower()), None) for t in ALL_TABLES}
+            self._sp_proxies = {
+                t: getattr(self, attr_map.get(t.lower(), t.lower()), None) for t in ALL_TABLES
+            }
             self._backend_cache = {"postgres": _pg}
 
             logger.info("[BacklogClient] Postgres-only mode — no SharePoint connection")
@@ -319,9 +356,7 @@ class BacklogClient:
             )
 
         cred = ClientSecretCredential(tenant, client_id_val, secret)
-        self._graph = GraphServiceClient(
-            cred, scopes=["https://graph.microsoft.com/.default"]
-        )
+        self._graph = GraphServiceClient(cred, scopes=["https://graph.microsoft.com/.default"])
 
         # Resolve config path
         if config_path is not None:
@@ -446,12 +481,14 @@ class BacklogClient:
                 dsn = os.getenv("DATABASE_URL", "")
                 if dsn:
                     from genlab_core.storage.postgres import PostgresBackend
+
                     cache[engine] = PostgresBackend(dsn=dsn)
                 else:
                     engine = "sharepoint"  # fallback
 
             if engine == "sharepoint" and engine not in cache:
                 from genlab_core.storage.sharepoint import SharePointBackend
+
                 cache[engine] = SharePointBackend(self._sp_proxies)
 
         return cache[engine]
@@ -467,9 +504,7 @@ class BacklogClient:
                 return name
         return "Other"
 
-    def _normalize_asset_source_type(
-        self, raw_source: str | None, asset_type: str
-    ) -> str:
+    def _normalize_asset_source_type(self, raw_source: str | None, asset_type: str) -> str:
         raw = (raw_source or "").strip().lower()
         atype = (asset_type or "").strip().lower()
 
@@ -528,52 +563,65 @@ class BacklogClient:
         if story.get("niche_id"):
             fields["niche_id"] = story["niche_id"]
         record = self._sp_call(
-            self._backend("Stories").create, "Stories", fields,
+            self._backend("Stories").create,
+            "Stories",
+            fields,
         )
         return record["id"]
 
     def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> dict | None:
         formula = f"{{story_id}}='{_esc(story_id)}'"
         records = self._sp_call(
-            self._backend("Stories").find, "Stories",
-            formula=formula, niche_id=niche_id, max_records=1,
+            self._backend("Stories").find,
+            "Stories",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=1,
         )
         return records[0] if records else None
 
-    def update_story_status(self, story_id: str, status: str, *, niche_id: str | None = None, **kwargs):
+    def update_story_status(
+        self, story_id: str, status: str, *, niche_id: str | None = None, **kwargs
+    ):
         story = self.find_story_by_story_id(story_id, niche_id=niche_id)
         if not story:
             raise ValueError(f"Story {story_id} not found")
         self._sp_call(
-            self._backend("Stories").update, "Stories",
-            story["id"], {"status": status, **kwargs},
+            self._backend("Stories").update,
+            "Stories",
+            story["id"],
+            {"status": status, **kwargs},
         )
 
     def batch_create_stories(self, stories: list[dict]) -> list[str]:
         records = []
         for story in stories:
             scores = story.get("scores", {})
-            records.append({
-                "story_id": story["story_id"],
-                "title": story["title"],
-                "url": story["url"],
-                "source": self._resolve_source(story),
-                "published_at": story.get("published_at"),
-                "summary": story.get("summary", ""),
-                "priority": story.get("priority", scores.get("priority", 0.5)),
-                "status": "INTAKE",
-                "themes": story.get("themes", []),
-                "authority_score": scores.get("authority", 0.0),
-                "recency_score": scores.get("recency", 0.0),
-                "novelty_score": scores.get("novelty", 0.0),
-            })
+            records.append(
+                {
+                    "story_id": story["story_id"],
+                    "title": story["title"],
+                    "url": story["url"],
+                    "source": self._resolve_source(story),
+                    "published_at": story.get("published_at"),
+                    "summary": story.get("summary", ""),
+                    "priority": story.get("priority", scores.get("priority", 0.5)),
+                    "status": "INTAKE",
+                    "themes": story.get("themes", []),
+                    "authority_score": scores.get("authority", 0.0),
+                    "recency_score": scores.get("recency", 0.0),
+                    "novelty_score": scores.get("novelty", 0.0),
+                }
+            )
         created = self._backend("Stories").batch_create("Stories", records)
         return [r["id"] for r in created]
 
     # ===== BLUEPRINTS =====
 
     def create_blueprint(
-        self, blueprint: dict, story_record: dict | None = None,
+        self,
+        blueprint: dict,
+        story_record: dict | None = None,
         template_record: dict | None = None,
     ) -> str:
         story = story_record or self.find_story_by_story_id(blueprint["story_id"])
@@ -627,14 +675,24 @@ class BacklogClient:
 
         try:
             record = self._backend("Blueprints").create(
-                "Blueprints", fields, typecast=True,
+                "Blueprints",
+                fields,
+                typecast=True,
             )
         except Exception as e:
             err_str = str(e)
-            if "UNKNOWN_FIELD_NAME" in err_str or "columnNotFound" in err_str or "not recognized" in err_str:
+            if (
+                "UNKNOWN_FIELD_NAME" in err_str
+                or "columnNotFound" in err_str
+                or "not recognized" in err_str
+            ):
                 for f in (
-                    "template_id", "template_name", "topic_category",
-                    "hook_formula", "published_hour", "published_day",
+                    "template_id",
+                    "template_name",
+                    "topic_category",
+                    "hook_formula",
+                    "published_hour",
+                    "published_day",
                     "clip_url",
                 ):
                     fields.pop(f, None)
@@ -643,16 +701,27 @@ class BacklogClient:
                 raise
         return record["id"]
 
-    def find_blueprint_by_candidate_id(self, candidate_id: str, *, niche_id: str | None = None) -> dict | None:
+    def find_blueprint_by_candidate_id(
+        self, candidate_id: str, *, niche_id: str | None = None
+    ) -> dict | None:
         formula = f"{{candidate_id}}='{_esc(candidate_id)}'"
         records = self._sp_call(
-            self._backend("Blueprints").find, "Blueprints",
-            formula=formula, niche_id=niche_id, max_records=1,
+            self._backend("Blueprints").find,
+            "Blueprints",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=1,
         )
         return records[0] if records else None
 
     def update_blueprint_status(
-        self, candidate_id: str, status: str, *, niche_id: str | None = None, force: bool = False, **kwargs
+        self,
+        candidate_id: str,
+        status: str,
+        *,
+        niche_id: str | None = None,
+        force: bool = False,
+        **kwargs,
     ):
         blueprint = self.find_blueprint_by_candidate_id(candidate_id, niche_id=niche_id)
         if not blueprint:
@@ -660,8 +729,10 @@ class BacklogClient:
         if not force:
             self.assert_not_scheduled(blueprint, status)
         self._backend("Blueprints").update(
-            "Blueprints", blueprint["id"],
-            {"status": status, **kwargs}, typecast=True,
+            "Blueprints",
+            blueprint["id"],
+            {"status": status, **kwargs},
+            typecast=True,
         )
 
     def get_blueprints_safe_to_cleanup(
@@ -681,8 +752,10 @@ class BacklogClient:
     def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> list[dict]:
         formula = f"{{status}}='{_esc(status)}'"
         return self._sp_call(
-            self._backend("Blueprints").find, "Blueprints",
-            formula=formula, niche_id=niche_id,
+            self._backend("Blueprints").find,
+            "Blueprints",
+            formula=formula,
+            niche_id=niche_id,
         )
 
     def batch_create_blueprints(self, blueprints: list[dict]) -> list[str]:
@@ -709,20 +782,22 @@ class BacklogClient:
                 if template:
                     template_record_id = template["id"]
 
-            records.append({
-                "candidate_id": bp["candidate_id"],
-                "story": [story["id"]],
-                "template": [template_record_id] if template_record_id else [],
-                "topic": bp.get("topic", ""),
-                "angle": bp.get("angle", ""),
-                "format": bp.get("format"),
-                "hook": bp.get("hook", ""),
-                "structure": "\n".join(bp.get("structure", [])),
-                "cta": bp.get("cta", ""),
-                "priority_score": bp.get("priority_score", 0.5),
-                "status": "INTEL_READY",
-                "why_this_will_work": bp.get("why_this_will_work", ""),
-            })
+            records.append(
+                {
+                    "candidate_id": bp["candidate_id"],
+                    "story": [story["id"]],
+                    "template": [template_record_id] if template_record_id else [],
+                    "topic": bp.get("topic", ""),
+                    "angle": bp.get("angle", ""),
+                    "format": bp.get("format"),
+                    "hook": bp.get("hook", ""),
+                    "structure": "\n".join(bp.get("structure", [])),
+                    "cta": bp.get("cta", ""),
+                    "priority_score": bp.get("priority_score", 0.5),
+                    "status": "INTEL_READY",
+                    "why_this_will_work": bp.get("why_this_will_work", ""),
+                }
+            )
 
         created = self._backend("Blueprints").batch_create("Blueprints", records)
         return [r["id"] for r in created]
@@ -809,7 +884,9 @@ class BacklogClient:
         if quality_fields:
             try:
                 record = be.create(
-                    "Assets", {**fields, **quality_fields}, typecast=True,
+                    "Assets",
+                    {**fields, **quality_fields},
+                    typecast=True,
                 )
                 return record["id"]
             except Exception as e:
@@ -822,7 +899,10 @@ class BacklogClient:
     def find_asset_by_asset_id(self, asset_id: str, *, niche_id: str | None = None) -> dict | None:
         formula = f"{{asset_id}}='{_esc(asset_id)}'"
         records = self._backend("Assets").find(
-            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+            "Assets",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=1,
         )
         return records[0] if records else None
 
@@ -830,7 +910,10 @@ class BacklogClient:
         escaped = url.replace("'", "\\'")
         formula = f"{{url}}='{escaped}'"
         records = self._backend("Assets").find(
-            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+            "Assets",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=1,
         )
         return records[0] if records else None
 
@@ -840,18 +923,27 @@ class BacklogClient:
             return []
         formula = f"{{story_link}}='{_esc(story['id'])}'"
         return self._backend("Assets").find(
-            "Assets", formula=formula, niche_id=niche_id,
+            "Assets",
+            formula=formula,
+            niche_id=niche_id,
         )
 
-    def update_asset_status(self, asset_id: str, status: str, *, niche_id: str | None = None, **kwargs):
+    def update_asset_status(
+        self, asset_id: str, status: str, *, niche_id: str | None = None, **kwargs
+    ):
         formula = f"{{asset_id}}='{_esc(asset_id)}'"
         records = self._backend("Assets").find(
-            "Assets", formula=formula, niche_id=niche_id, max_records=1,
+            "Assets",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=1,
         )
         if not records:
             raise ValueError(f"Asset {asset_id} not found")
         self._backend("Assets").update(
-            "Assets", records[0]["id"], {"status": status, **kwargs},
+            "Assets",
+            records[0]["id"],
+            {"status": status, **kwargs},
         )
 
     def batch_create_assets(self, assets: list[dict]) -> list[str]:
@@ -870,16 +962,19 @@ class BacklogClient:
     # ===== SOURCES =====
 
     def create_source(self, source: dict) -> str:
-        record = self._backend("Sources").create("Sources", {
-            "source_id": source["source_id"],
-            "domain": source["domain"],
-            "name": source.get("name", source["domain"]),
-            "url": source["url"],
-            "type": source["type"],
-            "priority": source.get("priority", 1.0),
-            "enabled": source.get("enabled", True),
-            "authority_score": source.get("authority_score", 0.5),
-        })
+        record = self._backend("Sources").create(
+            "Sources",
+            {
+                "source_id": source["source_id"],
+                "domain": source["domain"],
+                "name": source.get("name", source["domain"]),
+                "url": source["url"],
+                "type": source["type"],
+                "priority": source.get("priority", 1.0),
+                "enabled": source.get("enabled", True),
+                "authority_score": source.get("authority_score", 0.5),
+            },
+        )
         return record["id"]
 
     def update_source_fetch_status(self, source_id: str, status: str):
@@ -921,7 +1016,10 @@ class BacklogClient:
             return None
         try:
             result = self._backend("Blueprints").upload_attachment(
-                "Blueprints", record_id, field_name, str(file_path),
+                "Blueprints",
+                record_id,
+                field_name,
+                str(file_path),
             )
             return result
         except Exception as exc:
@@ -973,25 +1071,30 @@ class BacklogClient:
         be = self._backend("Publishing_Analytics")
         try:
             existing = self._sp_call(
-                be.find, "Publishing_Analytics",
+                be.find,
+                "Publishing_Analytics",
                 formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
                 max_records=1,
             )
             if existing:
                 self._sp_call(
-                    be.update, "Publishing_Analytics",
-                    existing[0]["id"], fields, typecast=True,
+                    be.update,
+                    "Publishing_Analytics",
+                    existing[0]["id"],
+                    fields,
+                    typecast=True,
                 )
                 return existing[0]["id"]
             else:
                 record = self._sp_call(
-                    be.create, "Publishing_Analytics", fields, typecast=True,
+                    be.create,
+                    "Publishing_Analytics",
+                    fields,
+                    typecast=True,
                 )
                 return record["id"]
         except CircuitOpenError:
-            logger.warning(
-                "Publishing analytics log skipped — SharePoint circuit open"
-            )
+            logger.warning("Publishing analytics log skipped — SharePoint circuit open")
             return None
         except Exception as exc:
             logger.warning("Publishing analytics log failed: %s", exc)
@@ -1012,8 +1115,11 @@ class BacklogClient:
             parts.append(f"{{status}}='{_esc(status)}'")
         formula = f"AND({', '.join(parts)})" if parts else ""
         return self._sp_call(
-            self._backend("Publishing_Analytics").find, "Publishing_Analytics",
-            formula=formula or None, niche_id=niche_id, max_records=limit,
+            self._backend("Publishing_Analytics").find,
+            "Publishing_Analytics",
+            formula=formula or None,
+            niche_id=niche_id,
+            max_records=limit,
         )
 
     # ===== ANALYTICS =====
@@ -1058,9 +1164,7 @@ class BacklogClient:
         if viral_score is not None:
             viral_score = round(viral_score, 4)
         else:
-            viral_score = round(
-                engagement_rate * 0.25 + share_rate * 0.40 + save_rate * 0.35, 4
-            )
+            viral_score = round(engagement_rate * 0.25 + share_rate * 0.40 + save_rate * 0.35, 4)
 
         fields = {
             "post_id": composite_id,
@@ -1100,8 +1204,13 @@ class BacklogClient:
             fields["niche_id"] = niche_id
 
         _OPTIONAL_FIELDS = {
-            "platform", "candidate_id", "published_at",
-            "format", "fetch_window", "story_title", "niche_id",
+            "platform",
+            "candidate_id",
+            "published_at",
+            "format",
+            "fetch_window",
+            "story_title",
+            "niche_id",
         }
 
         be = self._backend("Analytics")
@@ -1146,7 +1255,9 @@ class BacklogClient:
             return None
         try:
             record = self._backend("AB_Tests").create(
-                "AB_Tests", test, typecast=True,
+                "AB_Tests",
+                test,
+                typecast=True,
             )
             return record["id"]
         except Exception as exc:
@@ -1158,7 +1269,10 @@ class BacklogClient:
             return []
         formula = f"{{status}}='{_esc(status)}'" if status else None
         return self._backend("AB_Tests").find(
-            "AB_Tests", formula=formula, niche_id=niche_id, max_records=50,
+            "AB_Tests",
+            formula=formula,
+            niche_id=niche_id,
+            max_records=50,
         )
 
     def update_ab_test(self, test_id: str, fields: dict):
@@ -1171,7 +1285,10 @@ class BacklogClient:
         )
         if records:
             self._backend("AB_Tests").update(
-                "AB_Tests", records[0]["id"], fields, typecast=True,
+                "AB_Tests",
+                records[0]["id"],
+                fields,
+                typecast=True,
             )
 
     # ===== ENGAGEMENT (Sprint 23 — observe-only) =====
@@ -1245,7 +1362,9 @@ class BacklogClient:
             error_msg: Error message (if status=failed)
         """
         if not self.pending_engagement:
-            logger.warning("BacklogClient: pending_engagement proxy not configured — skipping status update")
+            logger.warning(
+                "BacklogClient: pending_engagement proxy not configured — skipping status update"
+            )
             return
 
         # pending_review is set by comment_processor when a reply needs
@@ -1258,8 +1377,13 @@ class BacklogClient:
         # the same comments every poller cycle (separate fix in
         # comment_processor adds _mark_replied for review-routed too).
         VALID_STATUSES = {
-            "replied", "liked", "skipped", "failed",
-            "rate_limited", "pending", "pending_review",
+            "replied",
+            "liked",
+            "skipped",
+            "failed",
+            "rate_limited",
+            "pending",
+            "pending_review",
         }
         if status not in VALID_STATUSES:
             logger.warning("BacklogClient: invalid engagement status '%s'", status)
@@ -1317,6 +1441,7 @@ class BacklogClient:
         except Exception as e:
             err_str = str(e)
             from genlab_core.settings import settings
+
             secret = settings.azure_client_secret or ""
             if secret and secret in err_str:
                 err_str = err_str.replace(secret, "***REDACTED***")

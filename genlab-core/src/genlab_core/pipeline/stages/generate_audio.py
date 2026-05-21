@@ -88,14 +88,26 @@ class GenerateAudio:
                         import subprocess
 
                         from genlab_core.media.ffmpeg import get_ffmpeg_binary
-                        subprocess.run([
-                            get_ffmpeg_binary(), "-y", "-i", str(out_path),
-                            "-af", "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB",
-                            str(trimmed_path),
-                        ], check=True, capture_output=True, timeout=30)
+
+                        subprocess.run(
+                            [
+                                get_ffmpeg_binary(),
+                                "-y",
+                                "-i",
+                                str(out_path),
+                                "-af",
+                                "silenceremove=start_periods=1:start_silence=0.1:start_threshold=-50dB",
+                                str(trimmed_path),
+                            ],
+                            check=True,
+                            capture_output=True,
+                            timeout=30,
+                        )
                         if trimmed_path.exists() and trimmed_path.stat().st_size > 100:
                             trimmed_path.replace(out_path)
-                            logger.debug("[GenerateAudio] Trimmed leading silence from %s", out_path.name)
+                            logger.debug(
+                                "[GenerateAudio] Trimmed leading silence from %s", out_path.name
+                            )
                     except Exception:
                         pass  # Non-fatal — use untrimmed audio
 
@@ -113,7 +125,9 @@ class GenerateAudio:
 
         logger.info(
             "[GenerateAudio] %d generated, %d skipped, %d errors",
-            generated, skipped, errors,
+            generated,
+            skipped,
+            errors,
         )
 
         context.setdefault("run_stats", {})["audio"] = {

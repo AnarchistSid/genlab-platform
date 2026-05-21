@@ -34,6 +34,7 @@ _AMAZON_SEARCH_URL = "https://www.amazon.com/s?k=headphones&tag=genlab-21"
 
 # ── is_mobile ────────────────────────────────────────────────────────────────
 
+
 def test_is_mobile_iphone():
     assert is_mobile(_UA_IPHONE) is True
 
@@ -47,6 +48,7 @@ def test_is_mobile_desktop():
 
 
 # ── generate_deep_link ────────────────────────────────────────────────────────
+
 
 def test_deep_link_android_amazon():
     result = generate_deep_link(_AMAZON_URL, _UA_ANDROID)
@@ -118,6 +120,7 @@ def test_deep_link_ipad_is_ios():
 
 
 # ── render_deep_link_page ─────────────────────────────────────────────────────
+
 
 def test_render_page_contains_both_urls():
     dl = DeepLink(

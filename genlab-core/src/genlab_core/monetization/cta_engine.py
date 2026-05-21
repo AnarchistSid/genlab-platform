@@ -57,6 +57,7 @@ def append_utm_params(
     utm_str = urlencode(utm)
     return f"{url}{separator}{utm_str}"
 
+
 # ── Platform caption length limits ─────────────────────────────────────────────
 _PLATFORM_LIMITS: dict[str, int] = {
     "instagram": 2200,
@@ -75,6 +76,7 @@ def _get_bandit():
         return _bandit
     try:
         from genlab_core.monetization.cta_bandit import CTABandit
+
         _bandit = CTABandit()
         return _bandit
     except Exception as e:
@@ -117,7 +119,10 @@ def _enforce_length(content: str, platform: str, cta_len: int, disclosure_len: i
     cta_tail = content[original_len:]
     logger.debug(
         "[CTAEngine] Truncated %s caption from %d to %d chars (limit=%d)",
-        platform, len(content), len(truncated_original) + len(cta_tail), limit,
+        platform,
+        len(content),
+        len(truncated_original) + len(cta_tail),
+        limit,
     )
     return truncated_original + cta_tail
 
@@ -268,8 +273,10 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
             fb_disclosure_snippet = f"\n\n{fb_disclosure}"
             fb_content = fb_content.rstrip() + fb_disclosure_snippet
             fb_content = _enforce_length(
-                fb_content, "facebook",
-                len(fb_disclosure_snippet), len(fb_disclosure_snippet),
+                fb_content,
+                "facebook",
+                len(fb_disclosure_snippet),
+                len(fb_disclosure_snippet),
             )
         fields["facebook_content"] = fb_content
 
@@ -320,7 +327,7 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
             if len(th_content) > 500:
                 # Threads has 500 char limit
                 overage = len(th_content) - 500
-                th_content = th_content[:len(th_content) - len(th_cta) - overage] + th_cta
+                th_content = th_content[: len(th_content) - len(th_cta) - overage] + th_cta
             fields["threads_content"] = th_content
 
     # Store the selected variant arm_id for downstream attribution

@@ -13,6 +13,7 @@ Why this works:
 - No catalog maintenance required — works for any topic
 - Always relevant to the actual content
 """
+
 from __future__ import annotations
 
 import logging
@@ -150,7 +151,8 @@ def _subject_in_content(subject: str, text: str) -> bool:
     """
     text_lower = text.lower()
     tokens = [
-        t for t in re.split(r"\W+", subject.lower())
+        t
+        for t in re.split(r"\W+", subject.lower())
         if t and len(t) > 2  # skip articles + tiny tokens
     ]
     if not tokens:
@@ -189,7 +191,8 @@ def dynamic_match(text: str, niche_id: str, geo: str = "IN") -> dict[str, Any] |
     if niche_id in _VERBATIM_REQUIRED and not _subject_in_content(subject, text):
         logger.info(
             "[DynamicMatcher] %s: dropping match — subject '%s' not in source text",
-            niche_id, subject,
+            niche_id,
+            subject,
         )
         return None
 
@@ -207,16 +210,20 @@ def dynamic_match(text: str, niche_id: str, geo: str = "IN") -> dict[str, Any] |
             NICHE_SEARCH_INDEX,
             PaapiClient,
         )
+
         paapi = PaapiClient(region=("in" if geo == "IN" else "us"))
         if paapi.is_configured:
             search_index = NICHE_SEARCH_INDEX.get(niche_id, "All")
             verified = paapi.search(
-                product_name, search_index=search_index, max_results=1,
+                product_name,
+                search_index=search_index,
+                max_results=1,
             )
             if not verified:
                 logger.info(
                     "[DynamicMatcher] %s: PA-API found no product for '%s' — skipping match",
-                    niche_id, product_name,
+                    niche_id,
+                    product_name,
                 )
                 return None
     except Exception as exc:
@@ -231,7 +238,9 @@ def dynamic_match(text: str, niche_id: str, geo: str = "IN") -> dict[str, Any] |
 
     logger.info(
         "[DynamicMatcher] %s: extracted subject '%s' -> %s",
-        niche_id, subject, product_name,
+        niche_id,
+        subject,
+        product_name,
     )
 
     # Return in the same format as static catalog products

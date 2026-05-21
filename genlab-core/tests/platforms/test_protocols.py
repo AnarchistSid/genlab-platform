@@ -1,4 +1,5 @@
 """Tests for platform protocol definitions."""
+
 from __future__ import annotations
 
 
@@ -7,6 +8,7 @@ def test_publisher_protocol_is_runtime_checkable():
 
     class FakePublisher:
         platform_id = "fake"
+
         def publish(self, payload):
             pass
 
@@ -28,6 +30,7 @@ def test_engageable_protocol_is_runtime_checkable():
     class FakeEngageable:
         def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
             return True
+
         def like(self, target_id: str, *, context_id: str = "") -> bool:
             return True
 

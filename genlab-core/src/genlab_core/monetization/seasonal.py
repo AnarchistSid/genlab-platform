@@ -3,6 +3,7 @@
 Loads seasonal events from config and provides active event products
 that override the static catalog during shopping events.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,7 +43,9 @@ def get_active_events(config: dict[str, Any], today: date | None = None) -> list
     return active
 
 
-def get_seasonal_products(config: dict[str, Any], today: date | None = None) -> list[dict[str, Any]]:
+def get_seasonal_products(
+    config: dict[str, Any], today: date | None = None
+) -> list[dict[str, Any]]:
     """Return all products from currently active seasonal events."""
     products = []
     for event in get_active_events(config, today):

@@ -51,9 +51,7 @@ try:
     _CV2_AVAILABLE = True
 except ImportError:
     _CV2_AVAILABLE = False
-    logger.info(
-        "opencv-python not installed — smart crop will use centre-crop fallback"
-    )
+    logger.info("opencv-python not installed — smart crop will use centre-crop fallback")
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -74,10 +72,18 @@ _MOTION_THRESHOLD = 2.0
 _CROP_TIMEOUT = 120
 # Encode args for the crop intermediate (quality-preserving, fast).
 _CROP_ENCODE_ARGS = [
-    "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-    "-pix_fmt", "yuv420p",
-    "-c:a", "copy",
-    "-movflags", "+faststart",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "copy",
+    "-movflags",
+    "+faststart",
 ]
 
 
@@ -158,7 +164,9 @@ class SmartCropper:
         if aspect < self._min_landscape_aspect:
             logger.debug(
                 "Clip %s aspect %.2f < %.2f — no crop needed",
-                clip.name, aspect, self._min_landscape_aspect,
+                clip.name,
+                aspect,
+                self._min_landscape_aspect,
             )
             return _no_crop(w, h)
 
@@ -175,8 +183,10 @@ class SmartCropper:
                 return CropRegion(
                     strategy=CropStrategy.FACE_CENTER,
                     x_offset=x_off,
-                    crop_width=crop_w, crop_height=crop_h,
-                    source_width=w, source_height=h,
+                    crop_width=crop_w,
+                    crop_height=crop_h,
+                    source_width=w,
+                    source_height=h,
                     confidence=0.8,
                 )
 
@@ -186,8 +196,10 @@ class SmartCropper:
                 return CropRegion(
                     strategy=CropStrategy.MOTION_CENTER,
                     x_offset=x_off,
-                    crop_width=crop_w, crop_height=crop_h,
-                    source_width=w, source_height=h,
+                    crop_width=crop_w,
+                    crop_height=crop_h,
+                    source_width=w,
+                    source_height=h,
                     confidence=0.6,
                 )
 
@@ -196,8 +208,10 @@ class SmartCropper:
         return CropRegion(
             strategy=CropStrategy.CENTER,
             x_offset=x_off,
-            crop_width=crop_w, crop_height=crop_h,
-            source_width=w, source_height=h,
+            crop_width=crop_w,
+            crop_height=crop_h,
+            source_width=w,
+            source_height=h,
             confidence=1.0,
         )
 
@@ -208,14 +222,16 @@ class SmartCropper:
 
         output.parent.mkdir(parents=True, exist_ok=True)
         crop_filter = (
-            f"crop={region.crop_width}:{region.crop_height}"
-            f":{region.x_offset}:{region.y_offset}"
+            f"crop={region.crop_width}:{region.crop_height}:{region.x_offset}:{region.y_offset}"
         )
         ffmpeg = get_ffmpeg_binary()
         cmd = [
-            ffmpeg, "-y",
-            "-i", str(clip),
-            "-vf", crop_filter,
+            ffmpeg,
+            "-y",
+            "-i",
+            str(clip),
+            "-vf",
+            crop_filter,
             *_CROP_ENCODE_ARGS,
             str(output),
         ]
@@ -225,12 +241,14 @@ class SmartCropper:
             result.check("smart_crop")
         else:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=_CROP_TIMEOUT,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=_CROP_TIMEOUT,
             )
             if result.returncode != 0:
                 raise RuntimeError(
-                    f"Smart crop failed (exit {result.returncode}):\n"
-                    + result.stderr[-2000:]
+                    f"Smart crop failed (exit {result.returncode}):\n" + result.stderr[-2000:]
                 )
         return output
 
@@ -246,15 +264,21 @@ class SmartCropper:
 
         logger.info(
             "Smart crop: %s → %s (strategy=%s, x_offset=%d, confidence=%.1f)",
-            clip.name, output.name, region.strategy.value,
-            region.x_offset, region.confidence,
+            clip.name,
+            output.name,
+            region.strategy.value,
+            region.x_offset,
+            region.confidence,
         )
         return self.apply(clip, region, output)
 
     # ── Face detection (OpenCV Haar cascade) ──────────────────────────────────
 
     def _detect_face_center(
-        self, clip: Path, w: int, h: int,
+        self,
+        clip: Path,
+        w: int,
+        h: int,
     ) -> int | None:
         """Return median face-centre X from first N frames, or None."""
         cap = cv2.VideoCapture(str(clip))
@@ -274,7 +298,10 @@ class SmartCropper:
                 break
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = cascade.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=8, minSize=(30, 30),
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=8,
+                minSize=(30, 30),
             )
             if len(faces) > 0:
                 best = max(faces, key=lambda f: f[2] * f[3])
@@ -291,7 +318,10 @@ class SmartCropper:
     # ── Motion detection (Farneback optical flow) ─────────────────────────────
 
     def _detect_motion_center(
-        self, clip: Path, w: int, h: int,
+        self,
+        clip: Path,
+        w: int,
+        h: int,
     ) -> int | None:
         """Return weighted motion-centre X across sampled frames, or None."""
         cap = cv2.VideoCapture(str(clip))
@@ -320,8 +350,16 @@ class SmartCropper:
 
                 if prev_gray is not None:
                     flow = cv2.calcOpticalFlowFarneback(
-                        prev_gray, small, None,
-                        0.5, 3, 15, 3, 5, 1.2, 0,
+                        prev_gray,
+                        small,
+                        None,
+                        0.5,
+                        3,
+                        15,
+                        3,
+                        5,
+                        1.2,
+                        0,
                     )
                     mag = np.sqrt(flow[..., 0] ** 2 + flow[..., 1] ** 2)
                     significant = mag > _MOTION_THRESHOLD
@@ -330,11 +368,15 @@ class SmartCropper:
                         col_motion = np.sum(mag * significant, axis=0)
                         total = float(np.sum(col_motion))
                         if total > 0:
-                            centre_x = int(
-                                np.average(
-                                    np.arange(small_w), weights=col_motion,
+                            centre_x = (
+                                int(
+                                    np.average(
+                                        np.arange(small_w),
+                                        weights=col_motion,
+                                    )
                                 )
-                            ) * ds
+                                * ds
+                            )
                             motion_weights.append((centre_x, total))
 
                 prev_gray = small
@@ -354,7 +396,8 @@ class SmartCropper:
     # ── Batch helper ──────────────────────────────────────────────────────────
 
     def pre_crop_clips(
-        self, clips: list[Path],
+        self,
+        clips: list[Path],
     ) -> tuple[list[Path], str | None]:
         """Pre-crop a list of clips, returning (new_clips_list, temp_dir).
 
@@ -377,8 +420,12 @@ class SmartCropper:
             out = Path(temp_dir) / f"cropped_{i}{clip.suffix}"
             logger.info(
                 "Smart crop [%d/%d]: %s → %s (%s, x=%d)",
-                i + 1, len(clips), clip.name, out.name,
-                region.strategy.value, region.x_offset,
+                i + 1,
+                len(clips),
+                clip.name,
+                out.name,
+                region.strategy.value,
+                region.x_offset,
             )
             self.apply(clip, region, out)
             result.append(out)
@@ -401,6 +448,9 @@ def _clamp_offset(x: int, source_w: int, crop_w: int) -> int:
 def _no_crop(w: int, h: int) -> CropRegion:
     return CropRegion(
         strategy=CropStrategy.NONE,
-        x_offset=0, crop_width=w, crop_height=h,
-        source_width=w, source_height=h,
+        x_offset=0,
+        crop_width=w,
+        crop_height=h,
+        source_width=w,
+        source_height=h,
     )

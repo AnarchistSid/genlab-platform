@@ -3,6 +3,7 @@
 Uses Resend (https://resend.com) for transactional email.
 Set RESEND_API_KEY in .env to enable.
 """
+
 import logging
 import os
 
@@ -34,9 +35,7 @@ def send_deal_notification(
 
         resend.api_key = _RESEND_API_KEY
 
-        subject = f"Deal Alert: {product_name}" + (
-            f" -- {discount_text}" if discount_text else ""
-        )
+        subject = f"Deal Alert: {product_name}" + (f" -- {discount_text}" if discount_text else "")
 
         html = f"""
         <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
@@ -45,7 +44,7 @@ def send_deal_notification(
             </h2>
             <div style="padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin-top: 16px;">
                 <h3>{product_name}</h3>
-                {f'<p style="color: #ef4444; font-weight: bold;">{discount_text}</p>' if discount_text else ''}
+                {f'<p style="color: #ef4444; font-weight: bold;">{discount_text}</p>' if discount_text else ""}
                 <a href="{product_url}" style="display: block; text-align: center; padding: 12px; background: #6366f1; color: #fff; text-decoration: none; border-radius: 6px; margin-top: 12px;">
                     Get Deal
                 </a>
@@ -101,8 +100,7 @@ def send_batch_deals(
     try:
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
             rows = conn.execute(
-                "SELECT email FROM email_subscribers "
-                "WHERE channel_slug = %s AND is_active = true",
+                "SELECT email FROM email_subscribers WHERE channel_slug = %s AND is_active = true",
                 (channel_slug,),
             ).fetchall()
 

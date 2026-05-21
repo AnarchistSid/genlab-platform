@@ -4,6 +4,7 @@ The persona is defined in niches/*/config/persona.yaml and controls
 voice, vocabulary, and appropriate topics. The LLM generates the
 creative reply; the persona YAML constrains its style.
 """
+
 from __future__ import annotations
 
 import logging
@@ -81,6 +82,7 @@ class PersonaEngine:
         """
         if self._client is None:
             import anthropic
+
             self._client = anthropic.Anthropic()
         client = self._client
         system = self._build_system_prompt()
@@ -92,6 +94,7 @@ class PersonaEngine:
 
         for attempt in range(max_retries + 1):
             try:
+
                 def _llm_call():
                     return client.messages.create(
                         model="claude-haiku-4-5-20251001",
@@ -114,19 +117,16 @@ class PersonaEngine:
                 return reply
 
             except CircuitOpenError:
-                logger.warning(
-                    "[PERSONA] Anthropic circuit open — cannot generate reply"
-                )
+                logger.warning("[PERSONA] Anthropic circuit open — cannot generate reply")
                 return None
             except Exception as e:
                 logger.warning(
                     "[PERSONA] Reply generation failed (attempt %d): %s",
-                    attempt + 1, e,
+                    attempt + 1,
+                    e,
                 )
                 if attempt >= max_retries:
                     return None
 
-        logger.warning(
-            "[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1
-        )
+        logger.warning("[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1)
         return None

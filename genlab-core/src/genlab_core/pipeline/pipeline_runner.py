@@ -28,6 +28,7 @@ Usage::
     )
     ctx = runner.run("gaming")
 """
+
 from __future__ import annotations
 
 import fcntl
@@ -99,7 +100,9 @@ class _NicheLock:
         os.fsync(self._fd)
         logger.info(
             "[Pipeline] Acquired niche lock '%s' (pid=%d, lock=%s)",
-            self._niche_id, os.getpid(), self._lock_path,
+            self._niche_id,
+            os.getpid(),
+            self._lock_path,
         )
         return self
 
@@ -182,10 +185,7 @@ class GenericPipelineRunner:
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
         if niche_id not in self._niche_roots:
-            raise ValueError(
-                f"Unsupported niche '{niche_id}'. "
-                f"Supported: {self.supported_niches}"
-            )
+            raise ValueError(f"Unsupported niche '{niche_id}'. Supported: {self.supported_niches}")
 
         # Acquire per-niche file lock. Non-blocking: if another pipeline
         # instance is already running this niche we raise immediately
@@ -217,7 +217,9 @@ class GenericPipelineRunner:
 
         log_dir = self._genlab_root / ".tmp"
         log_handler, stage_filter, _log_path = install_log_handler(
-            niche_id, run_id, log_dir,
+            niche_id,
+            run_id,
+            log_dir,
         )
 
         # Inject niche_root into config so _load_stages can add it to sys.path
@@ -230,7 +232,8 @@ class GenericPipelineRunner:
             if stages_filter:
                 filter_lower = [f.lower() for f in stages_filter]
                 filtered = [
-                    (s, d) for s, d in zip(stages, declarations, strict=False)
+                    (s, d)
+                    for s, d in zip(stages, declarations, strict=False)
                     if s.__class__.__name__.lower() in filter_lower
                 ]
                 if filtered:
@@ -288,15 +291,19 @@ class GenericPipelineRunner:
                     decl, stage = batch[0]
                     result = runner_factory.run(decl, stage, context_dict, ctx)
                     context_dict.setdefault("run_stats", {}).setdefault(
-                        "_stage_timings", {},
+                        "_stage_timings",
+                        {},
                     )[result.stage_name] = result.elapsed_seconds
                 else:
                     results = runner_factory.run_parallel(
-                        batch, context_dict, ctx,
+                        batch,
+                        context_dict,
+                        ctx,
                     )
                     for result in results:
                         context_dict.setdefault("run_stats", {}).setdefault(
-                            "_stage_timings", {},
+                            "_stage_timings",
+                            {},
                         )[result.stage_name] = result.elapsed_seconds
 
             ctx.stories = context_dict.get("stories", ctx.stories)
@@ -318,7 +325,8 @@ class GenericPipelineRunner:
             except Exception as exc:
                 logger.warning(
                     "[Pipeline] Lock release failed for niche '%s': %s",
-                    niche_id, exc,
+                    niche_id,
+                    exc,
                 )
 
     @staticmethod
@@ -356,41 +364,62 @@ class GenericPipelineRunner:
     # contaminated with another niche's stages (cluster A scp leak pattern),
     # the foreign import is rejected at boot before any DB writes happen.
     _FOREIGN_PREFIX_MAP: dict[str, frozenset[str]] = {
-        "ai_creators": frozenset({
-            "sr_strategies", "cw_strategies", "fd_strategies",
-            "CriticalRush.niches.gaming",
-            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
-            "genlab_core.pipeline.stages.fetch_scorebat",
-            "genlab_core.pipeline.stages.fetch_anime_promos",
-            "genlab_core.pipeline.stages.fetch_twitch_clips",
-        }),
-        "gaming": frozenset({
-            "bb_strategies", "sr_strategies", "cw_strategies", "fd_strategies",
-            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
-            "genlab_core.pipeline.stages.fetch_scorebat",
-            "genlab_core.pipeline.stages.fetch_anime_promos",
-        }),
-        "sports": frozenset({
-            "bb_strategies", "sr_strategies", "fd_strategies",
-            "CriticalRush.niches.gaming",
-            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
-            "genlab_core.pipeline.stages.fetch_anime_promos",
-            "genlab_core.pipeline.stages.fetch_twitch_clips",
-        }),
-        "movies": frozenset({
-            "bb_strategies", "cw_strategies", "fd_strategies",
-            "CriticalRush.niches.gaming",
-            "genlab_core.pipeline.stages.fetch_scorebat",
-            "genlab_core.pipeline.stages.fetch_anime_promos",
-            "genlab_core.pipeline.stages.fetch_twitch_clips",
-        }),
-        "anime": frozenset({
-            "bb_strategies", "sr_strategies", "cw_strategies",
-            "CriticalRush.niches.gaming",
-            "genlab_core.pipeline.stages.fetch_tmdb_trailers",
-            "genlab_core.pipeline.stages.fetch_scorebat",
-            "genlab_core.pipeline.stages.fetch_twitch_clips",
-        }),
+        "ai_creators": frozenset(
+            {
+                "sr_strategies",
+                "cw_strategies",
+                "fd_strategies",
+                "CriticalRush.niches.gaming",
+                "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+                "genlab_core.pipeline.stages.fetch_scorebat",
+                "genlab_core.pipeline.stages.fetch_anime_promos",
+                "genlab_core.pipeline.stages.fetch_twitch_clips",
+            }
+        ),
+        "gaming": frozenset(
+            {
+                "bb_strategies",
+                "sr_strategies",
+                "cw_strategies",
+                "fd_strategies",
+                "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+                "genlab_core.pipeline.stages.fetch_scorebat",
+                "genlab_core.pipeline.stages.fetch_anime_promos",
+            }
+        ),
+        "sports": frozenset(
+            {
+                "bb_strategies",
+                "sr_strategies",
+                "fd_strategies",
+                "CriticalRush.niches.gaming",
+                "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+                "genlab_core.pipeline.stages.fetch_anime_promos",
+                "genlab_core.pipeline.stages.fetch_twitch_clips",
+            }
+        ),
+        "movies": frozenset(
+            {
+                "bb_strategies",
+                "cw_strategies",
+                "fd_strategies",
+                "CriticalRush.niches.gaming",
+                "genlab_core.pipeline.stages.fetch_scorebat",
+                "genlab_core.pipeline.stages.fetch_anime_promos",
+                "genlab_core.pipeline.stages.fetch_twitch_clips",
+            }
+        ),
+        "anime": frozenset(
+            {
+                "bb_strategies",
+                "sr_strategies",
+                "cw_strategies",
+                "CriticalRush.niches.gaming",
+                "genlab_core.pipeline.stages.fetch_tmdb_trailers",
+                "genlab_core.pipeline.stages.fetch_scorebat",
+                "genlab_core.pipeline.stages.fetch_twitch_clips",
+            }
+        ),
     }
 
     @classmethod
@@ -408,7 +437,8 @@ class GenericPipelineRunner:
 
     def _load_stages(
         self,
-        niche_id: str, config: dict[str, Any],
+        niche_id: str,
+        config: dict[str, Any],
     ) -> tuple[list[Any], list[dict[str, Any]]]:
         """Dynamically load pipeline stages from niche configuration.
 
@@ -463,8 +493,7 @@ class GenericPipelineRunner:
                 module = importlib.import_module(module_path)
             except ImportError as e:
                 raise ImportError(
-                    f"Cannot import stage module '{module_path}' "
-                    f"for niche '{niche_id}': {e}"
+                    f"Cannot import stage module '{module_path}' for niche '{niche_id}': {e}"
                 ) from e
 
             try:
@@ -481,6 +510,7 @@ class GenericPipelineRunner:
 
         logger.info(
             "[Pipeline] Loaded %d stages for niche '%s'",
-            len(stages), niche_id,
+            len(stages),
+            niche_id,
         )
         return stages, declarations

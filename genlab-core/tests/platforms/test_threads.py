@@ -1,4 +1,5 @@
 """Tests for ThreadsClient — mocks all HTTP."""
+
 from __future__ import annotations
 
 import os
@@ -83,7 +84,9 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
             else:
                 # Permalink fetch
-                return MagicMock(ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/456"})
+                return MagicMock(
+                    ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/456"}
+                )
 
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
@@ -115,7 +118,9 @@ class TestPublish:
             params = kwargs.get("params", {})
             if isinstance(params, dict) and params.get("fields") == "status":
                 return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
-            return MagicMock(ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/99"})
+            return MagicMock(
+                ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/99"}
+            )
 
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
@@ -169,9 +174,7 @@ class TestPublish:
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time") as mock_time:
                 mock_req.post.side_effect = mock_post
-                mock_req.get.return_value = MagicMock(
-                    ok=True, json=lambda: {"permalink": ""}
-                )
+                mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
                 threads_client.publish(payload)
 
         mock_time.sleep.assert_not_called()
@@ -205,9 +208,7 @@ class TestPublish:
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time") as mock_time:
                 mock_req.post.side_effect = mock_post
-                mock_req.get.return_value = MagicMock(
-                    ok=True, json=lambda: {"permalink": ""}
-                )
+                mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
                 result = threads_client.publish(payload)
 
         assert result.success is True
@@ -233,9 +234,7 @@ class TestPublish:
         with patch("genlab_core.platforms.threads.requests") as mock_req:
             with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = capture_post
-                mock_req.get.return_value = MagicMock(
-                    ok=True, json=lambda: {"permalink": ""}
-                )
+                mock_req.get.return_value = MagicMock(ok=True, json=lambda: {"permalink": ""})
                 threads_client.publish(payload)
 
         # First call is container creation

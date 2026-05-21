@@ -5,6 +5,7 @@ ALWAYS use graph.facebook.com — NEVER graph.instagram.com.
 
 Implements Publisher + Engageable + HealthCheckable protocols.
 """
+
 from __future__ import annotations
 
 import logging
@@ -101,6 +102,7 @@ class InstagramClient:
 
         if not video_url.startswith("http"):
             from genlab_core.platforms.cdn_upload import upload_to_cdn
+
             # Retry CDN upload once on failure (large files can timeout on first attempt)
             cdn_url = None
             _cdn_last_exc = None
@@ -112,9 +114,7 @@ class InstagramClient:
                 except Exception as _cdn_exc:
                     _cdn_last_exc = _cdn_exc
                     if _cdn_attempt == 0:
-                        logger.warning(
-                            "CDN upload failed (attempt 1), retrying: %s", _cdn_exc
-                        )
+                        logger.warning("CDN upload failed (attempt 1), retrying: %s", _cdn_exc)
                         continue
                     raise
                 if _cdn_attempt == 0 and not cdn_url:
@@ -122,6 +122,7 @@ class InstagramClient:
             if not cdn_url:
                 tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
                 from pathlib import Path as _Path
+
                 exists = _Path(video_url).exists() if video_url else False
                 return PublishResult(
                     platform=self.platform_id,
@@ -188,9 +189,7 @@ class InstagramClient:
     # Engageable protocol
     # ------------------------------------------------------------------
 
-    def post_reply(
-        self, parent_id: str, text: str, *, context_id: str = ""
-    ) -> bool:
+    def post_reply(self, parent_id: str, text: str, *, context_id: str = "") -> bool:
         """Reply to an Instagram comment.
 
         Args:
@@ -210,9 +209,7 @@ class InstagramClient:
             )
             data = _safe_json(resp)
             if resp.status_code == 200 and "id" in data:
-                logger.info(
-                    "Instagram: replied to comment %s (media=%s)", parent_id, context_id
-                )
+                logger.info("Instagram: replied to comment %s (media=%s)", parent_id, context_id)
                 return True
             logger.warning(
                 "Instagram: reply failed (HTTP %d): %s",
@@ -266,10 +263,7 @@ class InstagramClient:
                     message=f"Token valid for account '{name}' (id={data['id']})",
                     details=data,
                 )
-            error_msg = (
-                data.get("error", {}).get("message", "")
-                or f"HTTP {resp.status_code}"
-            )
+            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
             return TokenStatus(
                 valid=False,
                 platform=self.platform_id,
@@ -320,13 +314,8 @@ class InstagramClient:
                     username,
                 )
                 return True
-            error_msg = (
-                data.get("error", {}).get("message", "")
-                or f"HTTP {resp.status_code}"
-            )
-            logger.error(
-                "Instagram: channel verification failed: %s", error_msg
-            )
+            error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
+            logger.error("Instagram: channel verification failed: %s", error_msg)
             return False
         except Exception as exc:
             logger.error("Instagram: channel verification exception: %s", exc)
@@ -493,14 +482,13 @@ class InstagramClient:
                     self._last_error = f"Container processing error: {error_detail or data}"
                     logger.error(
                         "Reel container processing error: %s (detail: %s)",
-                        data, error_detail,
+                        data,
+                        error_detail,
                     )
                     return None
 
                 # IN_PROGRESS or UNKNOWN — keep waiting
-                logger.debug(
-                    "Reel container status=%s (%.0fs elapsed)", status_code, elapsed
-                )
+                logger.debug("Reel container status=%s (%.0fs elapsed)", status_code, elapsed)
             except Exception as exc:
                 logger.warning("Reel status poll error (retrying): %s", exc)
 

@@ -4,6 +4,7 @@ Examines engagement patterns to recommend posting frequency per niche.
 For new channels (< 30 days), recommends higher frequency to build
 algorithmic favor. For established channels, analyzes diminishing returns.
 """
+
 from __future__ import annotations
 
 import logging

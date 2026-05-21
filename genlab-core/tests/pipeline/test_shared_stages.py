@@ -16,9 +16,11 @@ from unittest.mock import MagicMock, patch
 
 # ── QCGates ────────────────────────────────────────────────────
 
+
 class TestQCGates:
     def _make(self):
         from genlab_core.pipeline.stages.qc_gates import QCGates
+
         return QCGates()
 
     def test_empty_blueprints(self):
@@ -96,9 +98,11 @@ class TestQCGates:
 
 # ── ViralityScoring ─────────────────────────────────────────────
 
+
 class TestViralityScoring:
     def _make(self):
         from genlab_core.pipeline.stages.virality_scoring import ViralityScoring
+
         return ViralityScoring()
 
     def test_empty_blueprints(self):
@@ -261,9 +265,11 @@ class TestViralityScoring:
 
 # ── ExpressLane ─────────────────────────────────────────────────
 
+
 class TestExpressLane:
     def _make(self):
         from genlab_core.pipeline.stages.express_lane import ExpressLane
+
         return ExpressLane()
 
     def test_empty_stories(self):
@@ -302,7 +308,10 @@ class TestExpressLane:
         ctx = {
             "stories": [
                 {"title": "Minor news", "summary": "Nothing special"},
-                {"title": "Breaking: Google acquires Anthropic for $50B", "summary": "Just announced"},
+                {
+                    "title": "Breaking: Google acquires Anthropic for $50B",
+                    "summary": "Just announced",
+                },
             ],
         }
         result = stage.execute(ctx)
@@ -325,9 +334,11 @@ class TestExpressLane:
 
 # ── RenderTextOverlays ──────────────────────────────────────────
 
+
 class TestRenderTextOverlays:
     def _make(self):
         from genlab_core.pipeline.stages.render_text_overlays import RenderTextOverlays
+
         return RenderTextOverlays()
 
     def test_empty_stories(self):
@@ -399,9 +410,11 @@ class TestRenderTextOverlays:
 
 # ── GenerateAudio ───────────────────────────────────────────────
 
+
 class TestGenerateAudio:
     def _make(self):
         from genlab_core.pipeline.stages.generate_audio import GenerateAudio
+
         return GenerateAudio()
 
     def test_empty_blueprints(self):
@@ -434,9 +447,11 @@ class TestGenerateAudio:
 
 # ── ValidateVideos ──────────────────────────────────────────────
 
+
 class TestValidateVideos:
     def _make(self):
         from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
         return ValidateVideos()
 
     def test_empty_stories(self):
@@ -674,9 +689,11 @@ class TestValidateVideos:
 
 # ── FetchInsights ───────────────────────────────────────────────
 
+
 class TestFetchInsights:
     def _make(self):
         from genlab_core.pipeline.stages.fetch_insights import FetchInsights
+
         return FetchInsights()
 
     def test_no_backlog_client(self):
@@ -747,9 +764,11 @@ class TestFetchInsights:
 
 # ── RunReport ───────────────────────────────────────────────────
 
+
 class TestRunReport:
     def _make(self):
         from genlab_core.pipeline.stages.run_report import RunReport
+
         return RunReport()
 
     def test_writes_report(self):
@@ -761,7 +780,9 @@ class TestRunReport:
             ):
                 ctx = {
                     "stories": [{"id": "bp1", "title": "Test"}],
-                    "run_stats": {"qc": {"passed": 1, "failed": 0, "total": 1, "pass_rate": "100.0%"}},
+                    "run_stats": {
+                        "qc": {"passed": 1, "failed": 0, "total": 1, "pass_rate": "100.0%"}
+                    },
                     "niche_config": {"niche_id": "test"},
                 }
                 stage.execute(ctx)
@@ -814,8 +835,7 @@ class TestRunReport:
                 report = json.loads((Path(tmpdir) / "run_report.json").read_text())
                 assert report["status"] == "failed"
                 assert any(
-                    "Zero blueprints produced from 3 stories" in v
-                    for v in report["slo_violations"]
+                    "Zero blueprints produced from 3 stories" in v for v in report["slo_violations"]
                 ), report["slo_violations"]
 
     def test_nonzero_blueprints_is_success(self):
@@ -837,16 +857,16 @@ class TestRunReport:
                 stage.execute(ctx)
                 report = json.loads((Path(tmpdir) / "run_report.json").read_text())
                 assert report["status"] == "success"
-                assert not any(
-                    "Zero blueprints" in v for v in report["slo_violations"]
-                )
+                assert not any("Zero blueprints" in v for v in report["slo_violations"])
 
 
 # ── PerformanceLearner ──────────────────────────────────────────
 
+
 class TestPerformanceLearner:
     def _make(self):
         from genlab_core.pipeline.stages.performance_learner import PerformanceLearner
+
         return PerformanceLearner()
 
     def test_skips_no_engagement(self):

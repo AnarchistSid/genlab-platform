@@ -15,6 +15,7 @@ Programmatic usage::
 This module discovers niche root directories from the GENLAB_ROOT, maps
 niche_ids to their channel folders, and delegates to GenericPipelineRunner.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -34,13 +35,15 @@ logger = logging.getLogger(__name__)
 
 # ── Valid niche IDs ──────────────────────────────────────────────────────────
 
-VALID_NICHE_IDS = frozenset({
-    "ai_creators",
-    "gaming",
-    "sports",
-    "movies",
-    "anime",
-})
+VALID_NICHE_IDS = frozenset(
+    {
+        "ai_creators",
+        "gaming",
+        "sports",
+        "movies",
+        "anime",
+    }
+)
 
 # ── Niche → channel directory name mapping ───────────────────────────────────
 # Each niche_id maps to the directory name under GENLAB_ROOT that contains
@@ -104,14 +107,12 @@ def _build_niche_roots(
         dir_name = NICHE_DIR_NAMES.get(niche_id)
         if dir_name is None:
             raise ValueError(
-                f"Unknown niche_id '{niche_id}'. "
-                f"Valid niches: {sorted(VALID_NICHE_IDS)}"
+                f"Unknown niche_id '{niche_id}'. Valid niches: {sorted(VALID_NICHE_IDS)}"
             )
         niche_root = genlab_root / dir_name
         if not niche_root.is_dir():
             raise FileNotFoundError(
-                f"Channel directory not found: {niche_root} "
-                f"(niche_id='{niche_id}')"
+                f"Channel directory not found: {niche_root} (niche_id='{niche_id}')"
             )
         roots[niche_id] = niche_root
     return roots
@@ -144,10 +145,7 @@ def _parse_niche_arg(niche_arg: str) -> list[str]:
     niche_ids = [n.strip() for n in niche_arg.split(",") if n.strip()]
     invalid = [n for n in niche_ids if n not in VALID_NICHE_IDS]
     if invalid:
-        raise ValueError(
-            f"Invalid niche ID(s): {invalid}. "
-            f"Valid niches: {sorted(VALID_NICHE_IDS)}"
-        )
+        raise ValueError(f"Invalid niche ID(s): {invalid}. Valid niches: {sorted(VALID_NICHE_IDS)}")
     if not niche_ids:
         raise ValueError("No niche IDs provided.")
 
@@ -230,7 +228,9 @@ def run_pipeline(
         pre_run_hook=_pre_run_check,
     )
     return runner.run(
-        niche_id, dry_run=dry_run, verbose=verbose,
+        niche_id,
+        dry_run=dry_run,
+        verbose=verbose,
         stages_filter=stages,
     )
 
@@ -265,13 +265,9 @@ def run_multi(
     results: dict[str, PipelineContext] = {}
 
     for niche_id in niche_ids:
-        logger.info(
-            "[CLI] ════════════════════════════════════════════════════"
-        )
+        logger.info("[CLI] ════════════════════════════════════════════════════")
         logger.info("[CLI] Starting pipeline: %s", niche_id)
-        logger.info(
-            "[CLI] ════════════════════════════════════════════════════"
-        )
+        logger.info("[CLI] ════════════════════════════════════════════════════")
 
         runner = GenericPipelineRunner(
             niche_roots={niche_id: niche_roots[niche_id]},
@@ -281,14 +277,19 @@ def run_multi(
 
         try:
             ctx = runner.run(
-                niche_id, dry_run=dry_run, verbose=verbose,
+                niche_id,
+                dry_run=dry_run,
+                verbose=verbose,
                 stages_filter=stages,
             )
             results[niche_id] = ctx
             status = "ABORTED" if ctx.is_aborted else "OK"
             logger.info(
                 "[CLI] Finished %s: %s (stories=%d, errors=%d)",
-                niche_id, status, len(ctx.stories), len(ctx.errors),
+                niche_id,
+                status,
+                len(ctx.stories),
+                len(ctx.errors),
             )
         except Exception as exc:
             logger.error("[CLI] Pipeline failed for '%s': %s", niche_id, exc)
@@ -321,9 +322,7 @@ def _print_summary(results: dict[str, PipelineContext]) -> None:
 
     total_errors = sum(len(ctx.errors) for ctx in results.values())
     aborted = sum(1 for ctx in results.values() if ctx.is_aborted)
-    print(f"\n  Niches: {len(results)}  "
-          f"Total errors: {total_errors}  "
-          f"Aborted: {aborted}")
+    print(f"\n  Niches: {len(results)}  Total errors: {total_errors}  Aborted: {aborted}")
     print(f"{'=' * 60}")
 
 
@@ -397,6 +396,7 @@ def main(argv: list[str] | None = None) -> int:
     log_level = logging.DEBUG if args.verbose else logging.INFO
     try:
         from genlab_core.observability.logging import configure_logging
+
         is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
         configure_logging(json_output=is_json, level=log_level)
     except ImportError:
@@ -409,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
 
     logger.info(
         "[CLI] GenLab pipeline starting: niches=%s, dry_run=%s",
-        niche_ids, args.dry_run,
+        niche_ids,
+        args.dry_run,
     )
 
     if len(niche_ids) == 1:

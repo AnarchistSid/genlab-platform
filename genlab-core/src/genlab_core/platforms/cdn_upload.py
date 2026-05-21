@@ -12,6 +12,7 @@ Upload strategy (ordered by reliability):
 Files served via tunnel don't expire (available as long as the file exists
 on disk). External CDN files auto-expire (24h default).
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,7 @@ def _get_media_share_dir() -> Path:
 
 class _CircuitBreaker:
     """Simple circuit breaker for CDN providers."""
+
     def __init__(self, name: str, threshold: int = 3, reset_seconds: int = 3600):
         self.name = name
         self._failures = 0
@@ -61,7 +63,10 @@ class _CircuitBreaker:
         self._failures += 1
         if self._failures >= self._threshold:
             self._opened_at = _time.time()
-            logger.warning("[CDN] Circuit breaker OPEN for %s after %d failures", self.name, self._failures)
+            logger.warning(
+                "[CDN] Circuit breaker OPEN for %s after %d failures", self.name, self._failures
+            )
+
 
 _litterbox_cb = _CircuitBreaker("litterbox")
 _tmpfiles_cb = _CircuitBreaker("tmpfiles")
@@ -84,6 +89,7 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
 
         # Use hash prefix to avoid collisions between niches
         import hashlib
+
         file_hash = hashlib.sha256(str(file_path).encode()).hexdigest()[:8]
         dest = share_dir / f"{file_hash}_{file_path.name}"
         if not dest.exists() or dest.stat().st_size != file_path.stat().st_size:
@@ -105,7 +111,9 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
                 return public_url
             else:
                 logger.warning(
-                    "CDN tunnel: HEAD returned %d for %s", resp.status_code, public_url,
+                    "CDN tunnel: HEAD returned %d for %s",
+                    resp.status_code,
+                    public_url,
                 )
         except requests.RequestException as exc:
             logger.warning("CDN tunnel: verification failed: %s", exc)
@@ -113,7 +121,9 @@ def _serve_via_tunnel(file_path: Path) -> str | None:
         # Tunnel verification failed — fall through to external CDN so
         # Instagram/Threads can actually fetch the video.  A 530 here means
         # Meta's servers will also get a 530 → error 2207077.
-        logger.warning("CDN tunnel (unverified): %s — falling through to external CDN", file_path.name)
+        logger.warning(
+            "CDN tunnel (unverified): %s — falling through to external CDN", file_path.name
+        )
         return None
 
     except Exception as exc:
@@ -129,7 +139,9 @@ def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str
 
     file_size = file_path.stat().st_size
     if file_size > 200 * 1024 * 1024:  # 200MB litterbox limit
-        logger.info("[CDN] File too large for litterbox (%d MB), skipping", file_size // (1024 * 1024))
+        logger.info(
+            "[CDN] File too large for litterbox (%d MB), skipping", file_size // (1024 * 1024)
+        )
         return None
 
     for attempt in range(max_attempts):
@@ -151,11 +163,13 @@ def _upload_to_litterbox(file_path: Path, expiry: str, max_attempts: int) -> str
             logger.warning("CDN litterbox: attempt %d/%d timed out", attempt + 1, max_attempts)
             _litterbox_cb.record_failure()
         except requests.RequestException as exc:
-            logger.warning("CDN litterbox: attempt %d/%d failed: %s", attempt + 1, max_attempts, exc)
+            logger.warning(
+                "CDN litterbox: attempt %d/%d failed: %s", attempt + 1, max_attempts, exc
+            )
             _litterbox_cb.record_failure()
 
         if attempt < max_attempts - 1:
-            delay = min(2 * (2 ** attempt), 30)
+            delay = min(2 * (2**attempt), 30)
             _time.sleep(delay)
 
     return None
@@ -169,7 +183,9 @@ def _upload_to_tmpfiles(file_path: Path) -> str | None:
 
     file_size = file_path.stat().st_size
     if file_size > 100 * 1024 * 1024:  # 100MB tmpfiles limit
-        logger.info("[CDN] File too large for tmpfiles (%d MB), skipping", file_size // (1024 * 1024))
+        logger.info(
+            "[CDN] File too large for tmpfiles (%d MB), skipping", file_size // (1024 * 1024)
+        )
         return None
 
     try:
@@ -227,7 +243,13 @@ def upload_to_cdn(
         return None
 
     size_mb = file_path.stat().st_size / (1024 * 1024)
-    logger.info("CDN upload: %s (%.1f MB, expiry=%s, external=%s)", file_path.name, size_mb, expiry, require_external)
+    logger.info(
+        "CDN upload: %s (%.1f MB, expiry=%s, external=%s)",
+        file_path.name,
+        size_mb,
+        expiry,
+        require_external,
+    )
 
     if not require_external:
         # Tier 1: Cloudflare tunnel (most reliable for direct access)

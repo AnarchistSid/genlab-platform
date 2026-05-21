@@ -74,9 +74,7 @@ class RenderWhisperCaptions:
 
             # Get caption text -- try hook_text, then hook, then title
             caption_text = (
-                media.get("hook_text")
-                or story.get("hook")
-                or story.get("title", "")
+                media.get("hook_text") or story.get("hook") or story.get("title", "")
             ).strip()
 
             if not caption_text:
@@ -249,9 +247,7 @@ class RenderWhisperCaptions:
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             if proc.returncode == 0 and output_path.exists():
-                logger.info(
-                    "[WHISPER_CAPTIONS] %s captioned -> %s", item_key, output_path
-                )
+                logger.info("[WHISPER_CAPTIONS] %s captioned -> %s", item_key, output_path)
                 return str(output_path)
             else:
                 logger.warning(

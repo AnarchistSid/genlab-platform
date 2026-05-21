@@ -1,4 +1,5 @@
 """Tests for /api/v1/learning endpoints — bandit state and hook classifier status."""
+
 import json
 import sys
 import types
@@ -50,10 +51,16 @@ class TestBanditState:
         fake_backlog_mod = types.ModuleType("genlab_core.http.backlog_client")
         fake_backlog_mod.BacklogClient = MagicMock
 
-        with patch.dict("sys.modules", {
-            "genlab_core.learning.arm_loader": fake_arm_loader,
-            "genlab_core.http.backlog_client": fake_backlog_mod,
-        }), patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "genlab_core.learning.arm_loader": fake_arm_loader,
+                    "genlab_core.http.backlog_client": fake_backlog_mod,
+                },
+            ),
+            patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()),
+        ):
             resp = client.get("/api/v1/learning/bandit-state")
 
         assert resp.status_code == 200
@@ -86,10 +93,16 @@ class TestBanditState:
         lmod._bandit_cache["data"] = None
         lmod._bandit_cache["ts"] = 0.0
 
-        with patch.dict("sys.modules", {
-            "genlab_core.learning.arm_loader": fake_arm_loader,
-            "genlab_core.http.backlog_client": fake_backlog_mod,
-        }), patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()):
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "genlab_core.learning.arm_loader": fake_arm_loader,
+                    "genlab_core.http.backlog_client": fake_backlog_mod,
+                },
+            ),
+            patch("server.core.graph_sync.get_sync_client", return_value=MagicMock()),
+        ):
             resp1 = client.get("/api/v1/learning/bandit-state")
             resp2 = client.get("/api/v1/learning/bandit-state")
 
@@ -107,9 +120,12 @@ class TestBanditState:
         lmod._bandit_cache["ts"] = 0.0
 
         # Setting module to None in sys.modules causes ImportError on import
-        with patch.dict("sys.modules", {
-            "genlab_core.learning.arm_loader": None,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "genlab_core.learning.arm_loader": None,
+            },
+        ):
             resp = client.get("/api/v1/learning/bandit-state")
 
         assert resp.status_code == 500

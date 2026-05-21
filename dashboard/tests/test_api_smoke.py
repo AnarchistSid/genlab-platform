@@ -6,6 +6,7 @@ platform_posts, youtube_quota, legal.
 Each test mocks external dependencies (BacklogClient, YouTubeQuotaTracker)
 and verifies the route returns a successful HTTP status code.
 """
+
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,6 +33,7 @@ def client():
 
 
 # ── Helpers ─────────────────────────────────────────────────
+
 
 def _mock_backlog_client():
     """Build a BacklogClient mock with common proxy attributes."""
@@ -112,8 +114,10 @@ class TestConfigAPI:
 
     def test_templates_with_mock(self, client):
         mock_client = _mock_backlog_client()
-        with patch("server.api.config_routes._load_yaml", return_value=None), \
-             patch("server.core.graph_sync.get_sync_client", return_value=mock_client):
+        with (
+            patch("server.api.config_routes._load_yaml", return_value=None),
+            patch("server.core.graph_sync.get_sync_client", return_value=mock_client),
+        ):
             resp = client.get("/api/v1/config/templates")
         assert resp.status_code == 200
 
@@ -130,6 +134,7 @@ class TestConfigAPI:
 
     def test_save_notifications_accepts_valid_prefs(self, client, tmp_path):
         import server.api.config_routes as cfg_mod
+
         csrf = self._get_csrf(client)
         with patch.object(cfg_mod, "_NOTIF_PREFS_FILE", tmp_path / "prefs.json"):
             resp = client.post(
@@ -141,6 +146,7 @@ class TestConfigAPI:
 
     def test_save_notifications_rejects_bad_webhook(self, client, tmp_path):
         import server.api.config_routes as cfg_mod
+
         csrf = self._get_csrf(client)
         with patch.object(cfg_mod, "_NOTIF_PREFS_FILE", tmp_path / "prefs.json"):
             resp = client.post(
@@ -202,6 +208,7 @@ class TestOverviewAPI:
     @patch("server.api.overview.RUNS_DIR", Path("/tmp/nonexistent_runs"))
     def test_cross_niche_overview_returns_200(self, mock_get, client):
         import server.api.overview as ov_mod
+
         # Clear cache
         ov_mod._overview_cache["data"] = None
         ov_mod._overview_cache["ts"] = 0.0
@@ -220,6 +227,7 @@ class TestOverviewAPI:
     @patch("server.api.overview.RUNS_DIR", Path("/tmp/nonexistent_runs"))
     def test_overview_uses_cache(self, mock_get, client):
         import server.api.overview as ov_mod
+
         ov_mod._overview_cache["data"] = None
         ov_mod._overview_cache["ts"] = 0.0
 
@@ -237,6 +245,7 @@ class TestOverviewAPI:
     @patch("server.api.overview.RUNS_DIR", Path("/tmp/nonexistent_runs"))
     def test_overview_handles_client_failure(self, mock_get, client):
         import server.api.overview as ov_mod
+
         ov_mod._overview_cache["data"] = None
         ov_mod._overview_cache["ts"] = 0.0
 
@@ -376,11 +385,14 @@ class TestAnalyticsAPI:
     @pytest.fixture(autouse=True)
     def _mock_analytics_client(self):
         mock_client = _mock_backlog_client()
-        with patch("server.api.analytics._get_client", return_value=mock_client), \
-             patch("server.api.analytics._cached_analytics_all", return_value=[]), \
-             patch("server.api.analytics._cached_pub_analytics_all", return_value=[]):
+        with (
+            patch("server.api.analytics._get_client", return_value=mock_client),
+            patch("server.api.analytics._cached_analytics_all", return_value=[]),
+            patch("server.api.analytics._cached_pub_analytics_all", return_value=[]),
+        ):
             # Clear analytics module caches
             import server.api.analytics as a_mod
+
             a_mod._overview_cache["data"] = None
             a_mod._overview_cache["ts"] = 0.0
             a_mod._table_cache.clear()

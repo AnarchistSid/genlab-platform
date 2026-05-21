@@ -4,6 +4,7 @@ Verifies _flatten_whisper_words handles the segment format produced by
 CriticalRush's caption_generator.py (which uses 'probability' key
 instead of 'confidence').
 """
+
 from genlab_core.media.whisper_timing import _flatten_whisper_words
 
 

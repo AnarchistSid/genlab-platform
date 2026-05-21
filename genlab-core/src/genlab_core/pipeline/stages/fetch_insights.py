@@ -65,7 +65,10 @@ class FetchInsights:
         except Exception:
             logger.exception("[FetchInsights] Failed to query Publishing_Analytics")
             context.setdefault("run_stats", {})["insights"] = {
-                "fetched": 0, "skipped": 0, "errors": 1, "platforms": {},
+                "fetched": 0,
+                "skipped": 0,
+                "errors": 1,
+                "platforms": {},
             }
             return context
 
@@ -89,9 +92,7 @@ class FetchInsights:
             # Parse publish time and check age
             try:
                 if isinstance(published_at, str):
-                    pub_dt = datetime.fromisoformat(
-                        published_at.replace("Z", "+00:00")
-                    )
+                    pub_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
                 else:
                     pub_dt = published_at
             except (ValueError, TypeError):
@@ -108,7 +109,8 @@ class FetchInsights:
 
             # Fetch metrics
             stats = platform_stats.setdefault(
-                platform, {"fetched": 0, "errors": 0},
+                platform,
+                {"fetched": 0, "errors": 0},
             )
             try:
                 fetch_config = {**config, "niche_id": niche_id}
@@ -147,14 +149,17 @@ class FetchInsights:
             except Exception:
                 logger.exception(
                     "[FetchInsights] %s fetch failed for post %s",
-                    platform, post_id,
+                    platform,
+                    post_id,
                 )
                 stats["errors"] += 1
                 errors += 1
 
         logger.info(
             "[FetchInsights] %d fetched, %d skipped, %d errors | %s",
-            fetched, skipped, errors,
+            fetched,
+            skipped,
+            errors,
             {k: v for k, v in platform_stats.items() if v["fetched"] or v["errors"]},
         )
         context.setdefault("run_stats", {})["insights"] = {
@@ -196,7 +201,8 @@ class FetchInsights:
             except CircuitOpenError:
                 logger.warning(
                     "[FetchInsights] %s circuit open — skipping %s",
-                    platform, post_id,
+                    platform,
+                    post_id,
                 )
                 return None
         return fetcher(raw_id, config)
@@ -207,6 +213,7 @@ class FetchInsights:
         # Try per-niche token first, then global fallback
         niche_id = config.get("niche_id", "")
         from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
         creds = resolve_meta_credentials(niche_id)
         token = creds.get("ig_access_token", "")
         if not token:
@@ -214,6 +221,7 @@ class FetchInsights:
 
         try:
             import requests
+
             # Basic metrics
             url = f"https://graph.facebook.com/v21.0/{post_id}"
             params = {
@@ -260,6 +268,7 @@ class FetchInsights:
 
         try:
             import requests
+
             url = "https://www.googleapis.com/youtube/v3/videos"
             params = {
                 "part": "statistics",
@@ -287,12 +296,14 @@ class FetchInsights:
         """Fetch FB metrics via Graph API."""
         niche_id = config.get("niche_id", "")
         from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
         token, _page_id = resolve_fb_credentials(niche_id)
         if not token:
             return None
 
         try:
             import requests
+
             url = f"https://graph.facebook.com/v21.0/{post_id}"
             params = {
                 "fields": "shares,reactions.summary(total_count),comments.summary(total_count)",
@@ -320,6 +331,7 @@ class FetchInsights:
 
         try:
             import requests
+
             url = f"https://api.twitter.com/2/tweets/{post_id}"
             params = {"tweet.fields": "public_metrics"}
             headers = {"Authorization": f"Bearer {bearer}"}

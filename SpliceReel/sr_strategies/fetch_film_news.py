@@ -30,16 +30,34 @@ NICHE_ROOT = Path(__file__).resolve().parent.parent
 
 # Franchise detection — film title keyword -> franchise name
 FRANCHISE_KEYWORDS: dict[str, str] = {
-    "avengers": "MCU", "marvel": "MCU", "iron man": "MCU", "thor": "MCU",
-    "captain america": "MCU", "spider-man": "MCU", "black panther": "MCU",
-    "guardians": "MCU", "ant-man": "MCU", "doctor strange": "MCU",
-    "star wars": "Star_Wars", "jedi": "Star_Wars", "sith": "Star_Wars",
-    "batman": "DC", "superman": "DC", "wonder woman": "DC", "aquaman": "DC",
-    "fast": "Fast_Furious", "furious": "Fast_Furious",
-    "toy story": "Pixar", "pixar": "Pixar", "inside out": "Pixar",
-    "frozen": "Disney_Animation", "disney": "Disney_Animation",
-    "halloween": "Horror_Franchise", "a quiet place": "Horror_Franchise",
-    "scream": "Horror_Franchise", "conjuring": "Horror_Franchise",
+    "avengers": "MCU",
+    "marvel": "MCU",
+    "iron man": "MCU",
+    "thor": "MCU",
+    "captain america": "MCU",
+    "spider-man": "MCU",
+    "black panther": "MCU",
+    "guardians": "MCU",
+    "ant-man": "MCU",
+    "doctor strange": "MCU",
+    "star wars": "Star_Wars",
+    "jedi": "Star_Wars",
+    "sith": "Star_Wars",
+    "batman": "DC",
+    "superman": "DC",
+    "wonder woman": "DC",
+    "aquaman": "DC",
+    "fast": "Fast_Furious",
+    "furious": "Fast_Furious",
+    "toy story": "Pixar",
+    "pixar": "Pixar",
+    "inside out": "Pixar",
+    "frozen": "Disney_Animation",
+    "disney": "Disney_Animation",
+    "halloween": "Horror_Franchise",
+    "a quiet place": "Horror_Franchise",
+    "scream": "Horror_Franchise",
+    "conjuring": "Horror_Franchise",
 }
 
 
@@ -131,8 +149,11 @@ class TMDBFetcher:
                 last_err = exc
                 if attempt < 2:
                     import time
-                    time.sleep(2 ** attempt)
-                    logger.debug("[tmdb] %s attempt %d failed: %s — retrying", endpoint, attempt + 1, exc)
+
+                    time.sleep(2**attempt)
+                    logger.debug(
+                        "[tmdb] %s attempt %d failed: %s — retrying", endpoint, attempt + 1, exc
+                    )
         else:
             raise last_err  # type: ignore[misc]
 
@@ -153,21 +174,23 @@ class TMDBFetcher:
 
             lifecycle = detect_lifecycle_stage(release_dt)
 
-            items.append(FilmStoryItem(
-                title=title,
-                source=source,
-                source_url=f"https://www.themoviedb.org/movie/{film_id}",
-                published_at=now_iso,
-                fetched_at=now_iso,
-                summary=movie.get("overview", ""),
-                film_title=title,
-                film_id=film_id,
-                release_date=release_str,
-                lifecycle_stage=lifecycle.value,
-                franchise=detect_franchise(title),
-                tmdb_popularity=float(movie.get("popularity", 0)),
-                tmdb_vote_average=float(movie.get("vote_average", 0)),
-            ))
+            items.append(
+                FilmStoryItem(
+                    title=title,
+                    source=source,
+                    source_url=f"https://www.themoviedb.org/movie/{film_id}",
+                    published_at=now_iso,
+                    fetched_at=now_iso,
+                    summary=movie.get("overview", ""),
+                    film_title=title,
+                    film_id=film_id,
+                    release_date=release_str,
+                    lifecycle_stage=lifecycle.value,
+                    franchise=detect_franchise(title),
+                    tmdb_popularity=float(movie.get("popularity", 0)),
+                    tmdb_vote_average=float(movie.get("vote_average", 0)),
+                )
+            )
 
         logger.info("[tmdb] %s: %d films", source, len(items))
         return items
@@ -206,7 +229,10 @@ class EntertainmentRSSFetcher:
 
     @staticmethod
     def _fetch_feed(
-        url: str, name: str, tier: str, now_iso: str,
+        url: str,
+        name: str,
+        tier: str,
+        now_iso: str,
     ) -> list[FilmStoryItem]:
         feed = feedparser.parse(url)
         items: list[FilmStoryItem] = []
@@ -223,28 +249,36 @@ class EntertainmentRSSFetcher:
             title_lower = title.lower()
             is_trailer = any(w in title_lower for w in ["trailer", "teaser", "first look"])
             is_box_office = any(w in title_lower for w in ["box office", "opening", "million"])
-            is_awards = any(w in title_lower for w in [
-                "oscar", "golden globe", "bafta", "nominated", "nomination", "winner",
-            ])
+            is_awards = any(
+                w in title_lower
+                for w in [
+                    "oscar",
+                    "golden globe",
+                    "bafta",
+                    "nominated",
+                    "nomination",
+                    "winner",
+                ]
+            )
 
-            "rss_" + hashlib.sha256(
-                (name + title).encode()
-            ).hexdigest()[:16]
+            "rss_" + hashlib.sha256((name + title).encode()).hexdigest()[:16]
 
-            items.append(FilmStoryItem(
-                title=title,
-                source=f"rss_{name.lower().replace(' ', '_')}",
-                source_url=entry.get("link", ""),
-                published_at=published or now_iso,
-                fetched_at=now_iso,
-                summary=entry.get("summary", ""),
-                film_title=title,
-                franchise=detect_franchise(title),
-                is_trailer_drop=is_trailer,
-                is_box_office_news=is_box_office,
-                is_award_news=is_awards,
-                extra={"tier": tier},
-            ))
+            items.append(
+                FilmStoryItem(
+                    title=title,
+                    source=f"rss_{name.lower().replace(' ', '_')}",
+                    source_url=entry.get("link", ""),
+                    published_at=published or now_iso,
+                    fetched_at=now_iso,
+                    summary=entry.get("summary", ""),
+                    film_title=title,
+                    franchise=detect_franchise(title),
+                    is_trailer_drop=is_trailer,
+                    is_box_office_news=is_box_office,
+                    is_award_news=is_awards,
+                    extra={"tier": tier},
+                )
+            )
 
         return items
 
@@ -279,10 +313,12 @@ def fetch_all_film_news(config: dict | None = None) -> list[dict[str, Any]]:
         "unknown": 3,
     }
 
-    all_items.sort(key=lambda x: (
-        lifecycle_priority.get(x.lifecycle_stage, 3),
-        -x.tmdb_popularity,
-    ))
+    all_items.sort(
+        key=lambda x: (
+            lifecycle_priority.get(x.lifecycle_stage, 3),
+            -x.tmdb_popularity,
+        )
+    )
 
     logger.info("[fetch] SpliceReel: %d total film stories", len(all_items))
     return [item.to_dict() for item in all_items]

@@ -10,6 +10,7 @@ Providers:
     EdgeTTS        — Microsoft Edge TTS (free, neural voices)
     GoogleTTS      — Google Translate TTS (free, lowest quality)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,12 +34,18 @@ def _probe_duration(path: Path) -> float:
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 str(path),
             ],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return float(result.stdout.strip())
     except Exception:
@@ -94,6 +101,7 @@ class ElevenLabsTTS:
             return False
         try:
             import elevenlabs  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -107,7 +115,8 @@ class ElevenLabsTTS:
 
         if not self.available:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="ElevenLabs not available (missing SDK or API key)",
             )
 
@@ -135,7 +144,8 @@ class ElevenLabsTTS:
             elapsed = time.time() - start
             logger.error("ElevenLabs API error (%.1fs): %s", elapsed, exc)
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error=f"ElevenLabs API error: {exc}",
                 elapsed=round(elapsed, 2),
             )
@@ -143,7 +153,8 @@ class ElevenLabsTTS:
         elapsed = time.time() - start
         if not output_path.exists() or output_path.stat().st_size == 0:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="ElevenLabs returned empty audio",
                 elapsed=round(elapsed, 2),
             )
@@ -153,7 +164,10 @@ class ElevenLabsTTS:
 
         logger.info(
             "ElevenLabs: %.1fs audio, $%.4f (%d chars, %.1fs elapsed)",
-            duration, cost, len(text), elapsed,
+            duration,
+            cost,
+            len(text),
+            elapsed,
         )
 
         return TTSResult(
@@ -199,6 +213,7 @@ class OpenAITTS:
             return False
         try:
             import openai  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -212,7 +227,8 @@ class OpenAITTS:
 
         if not self.available:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="OpenAI TTS not available (missing SDK or API key)",
             )
 
@@ -234,7 +250,8 @@ class OpenAITTS:
             elapsed = time.time() - start
             logger.error("OpenAI TTS API error (%.1fs): %s", elapsed, exc)
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error=f"OpenAI TTS API error: {exc}",
                 elapsed=round(elapsed, 2),
             )
@@ -242,7 +259,8 @@ class OpenAITTS:
         elapsed = time.time() - start
         if not output_path.exists() or output_path.stat().st_size == 0:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="OpenAI TTS returned empty audio",
                 elapsed=round(elapsed, 2),
             )
@@ -252,7 +270,11 @@ class OpenAITTS:
 
         logger.info(
             "OpenAI TTS: %.1fs audio, $%.4f (voice=%s, model=%s, %.1fs elapsed)",
-            duration, cost, self.voice, self.model, elapsed,
+            duration,
+            cost,
+            self.voice,
+            self.model,
+            elapsed,
         )
 
         return TTSResult(
@@ -293,6 +315,7 @@ class EdgeTTS:
     def available(self) -> bool:
         try:
             import edge_tts  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -306,7 +329,8 @@ class EdgeTTS:
 
         if not self.available:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="edge-tts package not installed",
             )
 
@@ -328,13 +352,15 @@ class EdgeTTS:
         except RuntimeError:
             # Already in an async context — fall back to thread
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 pool.submit(lambda: asyncio.run(_generate())).result(timeout=30)
 
         elapsed = time.time() - start
         if not output_path.exists() or output_path.stat().st_size == 0:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="Edge-TTS produced empty output",
                 elapsed=round(elapsed, 2),
             )
@@ -372,6 +398,7 @@ class GoogleTTS:
     def available(self) -> bool:
         try:
             import gtts  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -385,7 +412,8 @@ class GoogleTTS:
 
         if not self.available:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="gtts package not installed",
             )
 
@@ -400,7 +428,8 @@ class GoogleTTS:
             elapsed = time.time() - start
             logger.error("gTTS error (%.1fs): %s", elapsed, exc)
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error=f"gTTS error: {exc}",
                 elapsed=round(elapsed, 2),
             )
@@ -408,7 +437,8 @@ class GoogleTTS:
         elapsed = time.time() - start
         if not output_path.exists() or output_path.stat().st_size == 0:
             return TTSResult(
-                success=False, provider=self.name,
+                success=False,
+                provider=self.name,
                 error="gTTS produced empty output",
                 elapsed=round(elapsed, 2),
             )

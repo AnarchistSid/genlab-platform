@@ -1,4 +1,5 @@
 """Dashboard test configuration — use SharePoint mocks, not live Postgres."""
+
 import os
 
 # Disable Postgres so dashboard tests use their SharePoint mocks

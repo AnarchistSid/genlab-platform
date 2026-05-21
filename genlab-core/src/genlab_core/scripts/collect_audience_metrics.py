@@ -11,6 +11,7 @@ Usage:
     uv run python -m genlab_core.scripts.collect_audience_metrics
     uv run python -m genlab_core.scripts.collect_audience_metrics --dry-run
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,7 @@ def _load_env(niche_id: str) -> None:
     """Load root .env + niche-specific .env."""
     try:
         from dotenv import load_dotenv
+
         load_dotenv(GENLAB_ROOT / ".env", override=False)
         dir_name = NICHE_ENVS[niche_id][0]
         niche_env = GENLAB_ROOT / dir_name / ".env"
@@ -179,8 +181,9 @@ def save_snapshot(conn, niche_id: str, platform: str, metrics: dict[str, Any], t
         )
 
 
-def update_monetisation_progress(conn, niche_id: str, platform: str, metric_name: str,
-                                  current: float, today: date) -> None:
+def update_monetisation_progress(
+    conn, niche_id: str, platform: str, metric_name: str, current: float, today: date
+) -> None:
     """Upsert monetisationprogress with current value, 7d delta, days-to-threshold estimate."""
     conn.execute("SELECT set_config('app.niche_id', %s, true)", (niche_id,))
     target = MONETISATION_TARGETS.get(platform, {}).get(metric_name)
@@ -221,8 +224,19 @@ def update_monetisation_progress(conn, niche_id: str, platform: str, metric_name
                         is_threshold_met = EXCLUDED.is_threshold_met,
                         as_of_date = EXCLUDED.as_of_date,
                         updated_at = NOW()""",
-        (niche_id, platform, metric_name, current, target, pct, delta_7d, days_est, is_met,
-         "api", str(today)),
+        (
+            niche_id,
+            platform,
+            metric_name,
+            current,
+            target,
+            pct,
+            delta_7d,
+            days_est,
+            is_met,
+            "api",
+            str(today),
+        ),
     )
 
 
@@ -240,6 +254,7 @@ def main() -> None:
     # Load root env first
     try:
         from dotenv import load_dotenv
+
         load_dotenv(GENLAB_ROOT / ".env", override=False)
     except ImportError:
         pass
@@ -274,23 +289,33 @@ def main() -> None:
         # Instagram
         ig = fetch_instagram(prefix)
         if ig:
-            logger.info("  IG @%s: %s followers, %s posts",
-                        ig.get("username", "?"), ig.get("followers", 0), ig.get("media_count", 0))
+            logger.info(
+                "  IG @%s: %s followers, %s posts",
+                ig.get("username", "?"),
+                ig.get("followers", 0),
+                ig.get("media_count", 0),
+            )
             if not args.dry_run:
                 save_snapshot(conn, niche_id, "instagram", ig, today)
-                update_monetisation_progress(conn, niche_id, "instagram", "followers",
-                                              ig.get("followers", 0), today)
+                update_monetisation_progress(
+                    conn, niche_id, "instagram", "followers", ig.get("followers", 0), today
+                )
             total_metrics += len([v for v in ig.values() if not isinstance(v, str)])
 
         # YouTube
         yt = fetch_youtube(prefix)
         if yt:
-            logger.info("  YT: %s subs, %s views, %s videos",
-                        yt.get("subscribers", 0), yt.get("total_views", 0), yt.get("video_count", 0))
+            logger.info(
+                "  YT: %s subs, %s views, %s videos",
+                yt.get("subscribers", 0),
+                yt.get("total_views", 0),
+                yt.get("video_count", 0),
+            )
             if not args.dry_run:
                 save_snapshot(conn, niche_id, "youtube", yt, today)
-                update_monetisation_progress(conn, niche_id, "youtube", "subscribers",
-                                              yt.get("subscribers", 0), today)
+                update_monetisation_progress(
+                    conn, niche_id, "youtube", "subscribers", yt.get("subscribers", 0), today
+                )
             total_metrics += len(yt)
 
         # Facebook
@@ -299,8 +324,9 @@ def main() -> None:
             logger.info("  FB: %s followers", fb.get("followers", 0))
             if not args.dry_run:
                 save_snapshot(conn, niche_id, "facebook", fb, today)
-                update_monetisation_progress(conn, niche_id, "facebook", "followers",
-                                              fb.get("followers", 0), today)
+                update_monetisation_progress(
+                    conn, niche_id, "facebook", "followers", fb.get("followers", 0), today
+                )
             total_metrics += len(fb)
 
         # Threads

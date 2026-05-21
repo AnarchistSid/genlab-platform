@@ -113,15 +113,9 @@ class SandboxedFFmpegRunner:
         egress_allow: list[str] | None = None,
     ) -> None:
         self._genlab_root = genlab_root.resolve()
-        self._server_url = server_url or os.getenv(
-            "OPENSANDBOX_SERVER", "http://127.0.0.1:8080"
-        )
-        self._image = image or os.getenv(
-            "OPENSANDBOX_RENDER_IMAGE", "jrottenberg/ffmpeg:7-ubuntu"
-        )
-        self._ttl = ttl_seconds or int(
-            os.getenv("OPENSANDBOX_RENDER_TTL", "600")
-        )
+        self._server_url = server_url or os.getenv("OPENSANDBOX_SERVER", "http://127.0.0.1:8080")
+        self._image = image or os.getenv("OPENSANDBOX_RENDER_IMAGE", "jrottenberg/ffmpeg:7-ubuntu")
+        self._ttl = ttl_seconds or int(os.getenv("OPENSANDBOX_RENDER_TTL", "600"))
         self._egress_allow = egress_allow  # None = deny-all (default for render)
         self._network_policy = _build_network_policy(egress_allow)
         self._sandbox = None
@@ -137,14 +131,14 @@ class SandboxedFFmpegRunner:
         host_str = str(Path(host_path).resolve())
         genlab_str = str(self._genlab_root)
         if host_str.startswith(genlab_str):
-            relative = host_str[len(genlab_str):]
+            relative = host_str[len(genlab_str) :]
             return f"{self.workspace_mount}{relative}"
         return host_str
 
     def sandbox_to_host_path(self, sandbox_path: str) -> str:
         """Convert a sandbox mount path back to the host path."""
         if sandbox_path.startswith(self.workspace_mount):
-            relative = sandbox_path[len(self.workspace_mount):]
+            relative = sandbox_path[len(self.workspace_mount) :]
             return str(self._genlab_root / relative.lstrip("/"))
         return sandbox_path
 
@@ -357,6 +351,5 @@ class SandboxRunResult:
         """Raise RuntimeError if the command failed."""
         if not self.ok:
             raise RuntimeError(
-                f"Sandbox command failed [{label}] (exit {self.exit_code}):\n"
-                + self.stderr[-2000:]
+                f"Sandbox command failed [{label}] (exit {self.exit_code}):\n" + self.stderr[-2000:]
             )

@@ -75,4 +75,3 @@ def emit_error_event(
     log_method = logger.error if severity in {"error", "critical"} else logger.warning
     log_method("error_event=%s", json.dumps(event, sort_keys=True), exc_info=bool(exc))
     return event
-
