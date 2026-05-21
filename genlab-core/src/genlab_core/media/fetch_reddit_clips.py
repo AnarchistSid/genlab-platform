@@ -239,6 +239,53 @@ def fetch_subreddit(
         "[reddit] r/%s yielded %d/%d video stories (listing=%s, t=%s)",
         subreddit, len(stories), len(children), listing, time_window,
     )
+
+    # Listing fallback: the sub responded but today's "top" happens to be
+    # images/text only. Try "hot" once before giving up — catches niches
+    # like anime where some subs only have a video at the #4-10 spots, not
+    # the top one. Only worth doing when we got SOME posts but no videos:
+    # if children=0 the sub is empty/private and fallback won't help.
+    if listing == "top" and len(stories) == 0 and len(children) > 0:
+        return _fetch_listing(subreddit, niche_id, "hot", time_window, limit, timeout)
+    return stories
+
+
+def _fetch_listing(
+    subreddit: str,
+    niche_id: str,
+    listing: str,
+    time_window: str,
+    limit: int,
+    timeout: int,
+) -> list[dict]:
+    """Inner fetch used by the listing-fallback path. Same shape as
+    fetch_subreddit but without the recursive retry — one shot only."""
+    url = f"https://www.reddit.com/r/{subreddit}/{listing}.json"
+    params: dict[str, Any] = {"limit": limit, "raw_json": 1}
+    try:
+        resp = requests.get(
+            url,
+            params=params,
+            headers={"User-Agent": _REDDIT_UA},
+            timeout=timeout,
+            proxies=_REDDIT_PROXIES,
+        )
+        if resp.status_code == 429:
+            return []
+        resp.raise_for_status()
+        body = resp.json()
+    except Exception:
+        return []
+    children = body.get("data", {}).get("children", [])
+    stories: list[dict] = []
+    for entry in children:
+        story = _normalise_post(entry, niche_id, subreddit)
+        if story:
+            stories.append(story)
+    logger.info(
+        "[reddit] r/%s fallback to %s yielded %d/%d video stories",
+        subreddit, listing, len(stories), len(children),
+    )
     return stories
 
 
@@ -261,9 +308,20 @@ def fetch_for_niche(
         Deduped list of stories (by canonical_url) ranked by
         ``view_velocity`` descending.
     """
+    import time as _time
+
     seen_urls: set[str] = set()
     all_stories: list[dict] = []
-    for sub in subreddits:
+    # Anonymous Reddit allows ~60 req/hr per IP. A daily fetch hitting
+    # 9 subreddits in ~5 seconds reliably gets 429s on the last few subs
+    # when routed through a single TOR exit (observed 2026-05-21). A 2s
+    # spacer between subs spreads the burst enough that a typical TOR
+    # exit doesn't trip the limit. Total per-niche delay: ~18s, fine
+    # for a once-daily cron. Real fix is Reddit OAuth (600/min).
+    inter_sub_sleep = float(os.environ.get("REDDIT_INTER_SUB_SLEEP_SEC", "2.0"))
+    for idx, sub in enumerate(subreddits):
+        if idx > 0 and inter_sub_sleep > 0:
+            _time.sleep(inter_sub_sleep)
         if isinstance(sub, dict):
             name = sub.get("name", "")
             sub_listing = sub.get("listing", listing)
