@@ -954,3 +954,22 @@ content_filter:
     - election
     - congress
     - parliament
+
+reddit:
+  # FetchRedditClips stage — AI-focused subs surface model demos +
+  # paper drops within minutes. r/singularity has highest video
+  # signal; r/LocalLLaMA + r/MachineLearning are technical depth.
+  # r/ChatGPT + r/Anthropic are mainstream-AI clip volume.
+  enabled: true
+  listing: top
+  time_window: day
+  per_sub_limit: 15
+  subreddits:
+    - name: "singularity"
+    - name: "OpenAI"
+    - name: "ChatGPT"
+    - name: "Anthropic"
+    - name: "MachineLearning"
+    - name: "LocalLLaMA"
+    - name: "artificial"
+    - name: "StableDiffusion"

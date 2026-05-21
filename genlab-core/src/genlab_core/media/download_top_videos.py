@@ -47,6 +47,103 @@ _DOWNLOAD_TIMEOUT = 120
 # Download helpers
 # ---------------------------------------------------------------------------
 
+_COBALT_API = os.environ.get("COBALT_API_URL", "https://api.cobalt.tools/api/json").strip()
+_COBALT_TIMEOUT = 30  # seconds for the cobalt POST itself
+_COBALT_FETCH_TIMEOUT = 180  # seconds for the actual stream download
+
+
+def _download_via_cobalt(url: str, output_path: str) -> dict[str, Any]:
+    """Fallback downloader using a Cobalt API instance.
+
+    Cobalt is a free open-source media downloader that wraps yt-dlp +
+    its own extractors behind a stable REST endpoint. When yt-dlp's
+    stable channel breaks (SABR experiment, format-string changes,
+    bot-detection waves) Cobalt is usually already patched on the
+    public instance, giving us a working second leg without waiting
+    for yt-dlp upstream.
+
+    Cobalt returns either:
+      * {"status": "redirect", "url": "..."} — direct download URL
+      * {"status": "stream",   "url": "..."} — cobalt-proxied stream
+
+    Both shapes are handled the same way: GET the URL, write bytes.
+    """
+    import time as _time
+
+    import requests
+
+    t0 = _time.monotonic()
+    if not _COBALT_API:
+        return {"success": False, "duration": 0.0, "error": "cobalt API unset"}
+
+    try:
+        resp = requests.post(
+            _COBALT_API,
+            json={
+                "url": url,
+                "videoQuality": "1080",
+                "downloadMode": "auto",
+                "filenameStyle": "basic",
+            },
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "GenLab/0.1",
+            },
+            timeout=_COBALT_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            elapsed = _time.monotonic() - t0
+            return {
+                "success": False, "duration": elapsed,
+                "error": f"cobalt HTTP {resp.status_code}: {resp.text[:200]}",
+            }
+        body = resp.json()
+        status = body.get("status", "")
+        if status in ("error", "rate-limit"):
+            return {
+                "success": False, "duration": _time.monotonic() - t0,
+                "error": f"cobalt status={status}: {body.get('text', '')[:200]}",
+            }
+        download_url = body.get("url", "")
+        if not download_url:
+            return {
+                "success": False, "duration": _time.monotonic() - t0,
+                "error": f"cobalt missing url field: {body}",
+            }
+
+        # Stream the bytes ourselves. Cobalt URLs are short-lived
+        # signed redirects so we can't hand them to a downstream
+        # process — fetch + write here.
+        with requests.get(
+            download_url,
+            stream=True,
+            timeout=_COBALT_FETCH_TIMEOUT,
+            headers={"User-Agent": "GenLab/0.1"},
+        ) as fetch:
+            fetch.raise_for_status()
+            with open(output_path, "wb") as fh:
+                for chunk in fetch.iter_content(chunk_size=64 * 1024):
+                    if chunk:
+                        fh.write(chunk)
+        elapsed = _time.monotonic() - t0
+        size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+        if size < 1024:
+            return {
+                "success": False, "duration": elapsed,
+                "error": f"cobalt returned {size}B (truncated)",
+            }
+        logger.info(
+            "[cobalt] downloaded %s -> %s (%.1f MB in %.1fs)",
+            url, output_path, size / 1024 / 1024, elapsed,
+        )
+        return {"success": True, "duration": elapsed, "error": ""}
+    except Exception as exc:
+        elapsed = _time.monotonic() - t0
+        logger.warning("[cobalt] failed for %s: %s", url, exc)
+        return {"success": False, "duration": elapsed, "error": f"cobalt: {exc}"}
+
+
 def _download_video(url: str, output_path: str) -> dict[str, Any]:
     """Download a video using yt-dlp subprocess.
 
@@ -137,6 +234,7 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
     except ImportError:
         pass
     t0 = time.monotonic()
+    ytdlp_error = ""
     try:
         result = subprocess.run(
             cmd,
@@ -145,26 +243,44 @@ def _download_video(url: str, output_path: str) -> dict[str, Any]:
             timeout=_DOWNLOAD_TIMEOUT,
         )
         elapsed = time.monotonic() - t0
-        if result.returncode != 0:
-            err_msg = (result.stderr or result.stdout or "unknown error").strip()
-            # Truncate very long error messages
-            if len(err_msg) > 500:
-                err_msg = err_msg[:500] + "..."
-            logger.warning("yt-dlp failed for %s: %s", url, err_msg[:200])
-            return {"success": False, "duration": elapsed, "error": err_msg}
-        return {"success": True, "duration": elapsed, "error": ""}
+        if result.returncode == 0:
+            return {"success": True, "duration": elapsed, "error": ""}
+        ytdlp_error = (result.stderr or result.stdout or "unknown error").strip()
+        if len(ytdlp_error) > 500:
+            ytdlp_error = ytdlp_error[:500] + "..."
+        logger.warning("yt-dlp failed for %s: %s", url, ytdlp_error[:200])
     except subprocess.TimeoutExpired:
         elapsed = time.monotonic() - t0
+        ytdlp_error = "download timed out"
         logger.warning("yt-dlp timed out after %ds for %s", _DOWNLOAD_TIMEOUT, url)
-        return {"success": False, "duration": elapsed, "error": "download timed out"}
     except FileNotFoundError:
         elapsed = time.monotonic() - t0
         logger.error("yt-dlp not found in PATH")
+        # No fallback possible if the subprocess can't even start.
         return {"success": False, "duration": elapsed, "error": "yt-dlp not installed"}
     except Exception as exc:
         elapsed = time.monotonic() - t0
+        ytdlp_error = str(exc)
         logger.warning("yt-dlp unexpected error for %s: %s", url, exc)
-        return {"success": False, "duration": elapsed, "error": str(exc)}
+
+    # yt-dlp lost. Try Cobalt as a fallback before giving up. Cobalt
+    # is a separate codebase + endpoint, so when yt-dlp stable hits
+    # a SABR/bot-detection wave Cobalt is usually still working.
+    # 2026-05-21: introduced after yt-dlp's android client got
+    # blocked by the SABR streaming experiment and sports lost 10/10
+    # clips for a day.
+    if not _COBALT_API or _COBALT_API.lower() in ("none", "disabled", "off"):
+        return {"success": False, "duration": elapsed, "error": ytdlp_error}
+    logger.info("[downloader] yt-dlp failed → trying Cobalt for %s", url)
+    cobalt = _download_via_cobalt(url, output_path)
+    if cobalt["success"]:
+        cobalt["error"] = f"yt-dlp failed: {ytdlp_error[:100]} — recovered via cobalt"
+        return cobalt
+    return {
+        "success": False,
+        "duration": elapsed + cobalt["duration"],
+        "error": f"yt-dlp: {ytdlp_error[:100]} | cobalt: {cobalt['error'][:100]}",
+    }
 
 
 def _probe_duration(path: str) -> float:

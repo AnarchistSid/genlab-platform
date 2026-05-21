@@ -82,6 +82,9 @@ pipeline:
     - class: genlab_core.pipeline.stages.fetch_anime_promos.FetchAnimePromos
       retries: 1
       retry_delay_seconds: 15
+    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
+      retries: 1
+      retry_delay_seconds: 15
     - class: fd_strategies.content_research.AnimeContentResearchStrategy
       retries: 1
       retry_delay_seconds: 30

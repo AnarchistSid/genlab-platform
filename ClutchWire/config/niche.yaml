@@ -62,6 +62,9 @@ pipeline:
     - class: genlab_core.pipeline.stages.fetch_scorebat.FetchScoreBatHighlights
       retries: 1
       retry_delay_seconds: 15
+    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
+      retries: 1
+      retry_delay_seconds: 15
     - class: cw_strategies.content_research.SportContentResearchStrategy
       retries: 1
       retry_delay_seconds: 30

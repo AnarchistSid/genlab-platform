@@ -45,21 +45,23 @@ igdb:
     - "total_rating"
 
 reddit:
+  # FetchRedditClips stage — pulls trending VIDEO posts. The previous
+  # set (gaming/pcgaming/Games/PS5) is mostly text-discussion. These
+  # subs are video-heavy with high upvote signal that correlates to
+  # clip quality.
+  enabled: true
+  listing: top
+  time_window: day
+  per_sub_limit: 15
   subreddits:
-    - name: "gaming"
-      weight: 1.0
-    - name: "pcgaming"
-      weight: 0.9
-    - name: "Games"
-      weight: 0.8
-    - name: "PS5"
-      weight: 0.7
-    - name: "XboxSeriesX"
-      weight: 0.7
-    - name: "NintendoSwitch"
-      weight: 0.7
-    - name: "Steam"
-      weight: 0.6
+    - name: "GamingClips"
+    - name: "LivestreamFail"
+    - name: "gamingvids"
+    - name: "speedrun"
+    - name: "valorant"
+    - name: "leagueoflegends"
+    - name: "VALORANTclips"
+    - name: "FortNiteBR"
   velocity_window_hours: 6
   fetch_interval_minutes: 30
 

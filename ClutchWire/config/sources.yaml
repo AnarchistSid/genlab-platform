@@ -160,21 +160,26 @@ scorebat:
 rate_limit_per_hour: 200
 
 reddit:
+  # FetchRedditClips stage — pulls trending VIDEO posts from sport
+  # subreddits that surface game clips within minutes of happening.
+  # Game-thread subs have the most viral moments; general r/sports is
+  # mostly news text. Sports subs DMCA-takedown-aggressively so we
+  # need this redundancy on top of YouTube + ScoreBat.
+  enabled: true
+  listing: top
+  time_window: day
+  per_sub_limit: 15
   subreddits:
-    - name: "sports"
-      weight: 1.0
-    - name: "nba"
-      weight: 0.9
-    - name: "soccer"
-      weight: 0.9
-    - name: "nfl"
-      weight: 0.9
-    - name: "mma"
-      weight: 0.8
-    - name: "tennis"
-      weight: 0.7
+    - name: "nbahighlights"
+    - name: "nflstreams"  # short clips, not full games
+    - name: "soccerhighlights"
+    - name: "footballhighlights"
+    - name: "MMA"
+    - name: "boxing"
     - name: "formula1"
-      weight: 0.7
+    - name: "Cricket"
+    - name: "baseball"
+    - name: "hockey"
   velocity_window_hours: 1
   fetch_interval_minutes: 30
 

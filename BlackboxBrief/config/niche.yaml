@@ -63,6 +63,9 @@ pipeline:
     - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
       retries: 1
       retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
+      retries: 1
+      retry_delay_seconds: 15
     - class: bb_strategies.content_research.BBContentResearchStrategy
       retries: 1
       retry_delay_seconds: 30

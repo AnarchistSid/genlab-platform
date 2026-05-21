@@ -182,12 +182,24 @@ google_trends:
   category: 185
 
 reddit:
-  enabled: false
+  # FetchRedditClips stage — pulls is_video=true posts + YouTube/
+  # Streamable links from animation-heavy subs. r/AnimeSakuga is the
+  # key one (animation cuts, fight scenes); the others surface viral
+  # episode moments and meme reels.
+  enabled: true
+  listing: top
+  time_window: day
+  per_sub_limit: 15
   subreddits:
-    - anime
-    - animenews
-    - manga
-    - animesuggest
+    - name: "AnimeSakuga"
+    - name: "Animemes"
+    - name: "anime"
+    - name: "animeclips"
+    - name: "AnimeImpulse"
+    - name: "OnePiece"
+    - name: "Naruto"
+    - name: "Jujutsufolk"
+    - name: "ShingekiNoKyojin"
 
 # Reddit video fetcher (genlab_core.intel.reddit_fetcher)
 reddit_sources:

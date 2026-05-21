@@ -479,3 +479,22 @@ content_filter:
     - dubbed
     - subbed
     - family vlog
+
+reddit:
+  # FetchRedditClips stage — film discourse subs surface viral clips
+  # within minutes of premieres + reaction videos. r/movieclips and
+  # r/cinematography are the gold for cinematic moments; r/movies
+  # has volume but more text.
+  enabled: true
+  listing: top
+  time_window: day
+  per_sub_limit: 15
+  subreddits:
+    - name: "movieclips"
+    - name: "cinematography"
+    - name: "MovieDetails"
+    - name: "movies"
+    - name: "boxoffice"
+    - name: "marvelstudios"
+    - name: "DC_Cinematic"
+    - name: "horror"

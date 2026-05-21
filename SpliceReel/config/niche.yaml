@@ -70,6 +70,9 @@ pipeline:
     - class: genlab_core.pipeline.stages.fetch_tmdb_trailers.FetchTMDBTrailers
       retries: 1
       retry_delay_seconds: 15
+    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
+      retries: 1
+      retry_delay_seconds: 15
     - class: sr_strategies.content_research.MovieContentResearchStrategy
       retries: 1
       retry_delay_seconds: 30
