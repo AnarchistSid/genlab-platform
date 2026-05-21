@@ -256,11 +256,28 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
             "-movflags", "+faststart",
             str(variant_path),
         ])
-        subprocess.run(cmd, check=True, capture_output=True, timeout=300)
+        # 600s timeout (was 300) gives "fast" preset enough headroom
+        # for the longest 60s reels on the 2 vCPU Hetzner VPS. The
+        # combination of slow CPU + "medium" preset + max_duration=60
+        # was reliably tripping the old 300s ceiling and dropping us
+        # into the "using original" fallback that ships uncapped-bitrate
+        # uploads — IG/FB/Threads then silently reject them. Once the
+        # box gets a faster CPU or HW accel, drop this back.
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
         dur_msg = f", trimmed to {max_duration}s" if max_duration else ""
         logger.info("[publish] Transcoded %s for %s (%s CRF %s%s)",
                     source.name, platform, spec.codec, spec.crf, dur_msg)
         return variant_path
+    except subprocess.TimeoutExpired as exc:
+        # Surface timeout distinctly so the dashboard alerting can
+        # treat it differently from a genuine encode error (timeout
+        # usually means upstream is fine but needs more CPU).
+        logger.warning(
+            "[publish] Transcode TIMEOUT for %s/%s after %ds — using original "
+            "(uncapped bitrate may be rejected by platform)",
+            platform, source.name, getattr(exc, "timeout", 600),
+        )
+        return source
     except Exception as exc:
         logger.warning("[publish] Transcode failed for %s/%s: %s — using original",
                        platform, source.name, exc)

@@ -181,12 +181,19 @@ MASTER_SPEC = RenderSpec(
 #   YouTube:    re-encodes everything; cap looser (≤8 Mbps)
 #   TikTok:     accepts up to 12 Mbps for Reels-style
 PLATFORM_SPECS: dict[Platform, RenderSpec] = {
+    # Preset = "fast" across all platforms. 2026-05-21 forensics:
+    # "medium" preset hit the 300s subprocess timeout on the 2 vCPU
+    # Hetzner VPS for 60s anime reels, dropping us into the "using
+    # original" fallback path that ships uncapped-bitrate uploads
+    # (IG/FB/Threads then reject them silently). "fast" cuts encode
+    # time ~2x with negligible quality loss at the CRF values we use,
+    # and all platforms re-encode their incoming videos anyway.
     Platform.YOUTUBE: RenderSpec(
         codec="libx264",  # x265 OOMs on 4GB VPS; x264 is safe and YouTube re-encodes anyway
         fps="source",  # 60fps gaming preserved through to YouTube
         audio_bitrate="320k",
         crf=20,
-        preset="medium",  # slow + x264 is diminishing returns for YouTube
+        preset="fast",  # was "medium" — hit 300s timeout on long reels
         maxrate="8M",
         bufsize="16M",
     ),
@@ -195,7 +202,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="192k",
         crf=22,
-        preset="medium",
+        preset="fast",
         maxrate="4M",
         bufsize="8M",
     ),
@@ -204,7 +211,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="192k",
         crf=20,
-        preset="medium",
+        preset="fast",
         maxrate="6M",
         bufsize="12M",
     ),
@@ -213,7 +220,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="192k",
         crf=22,
-        preset="medium",
+        preset="fast",
         maxrate="5M",
         bufsize="10M",
         safe_zone_top_pct=0.14,
@@ -226,7 +233,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="128k",
         crf=22,
-        preset="medium",
+        preset="fast",
         maxrate="3M",
         bufsize="6M",
     ),
@@ -237,7 +244,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="192k",
         crf=20,
-        preset="medium",
+        preset="fast",
         maxrate="5M",
         bufsize="10M",
     ),
@@ -246,7 +253,7 @@ PLATFORM_SPECS: dict[Platform, RenderSpec] = {
         fps=30,
         audio_bitrate="192k",
         crf=22,
-        preset="medium",
+        preset="fast",
         maxrate="4M",
         bufsize="8M",
     ),

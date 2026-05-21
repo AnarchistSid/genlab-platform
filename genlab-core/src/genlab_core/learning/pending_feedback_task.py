@@ -73,11 +73,20 @@ class PendingFeedbackTask(BaseModel):
         """
         import json as _json
 
+        # task_id must include platform: the publisher calls create()
+        # once per platform with the same content_id, and pending_feedback
+        # has UNIQUE(task_id). Without the platform suffix only the first
+        # platform (IG by alphabetical order) gets a row — every other
+        # platform raises "duplicate key value violates unique constraint
+        # pending_feedback_task_id_key". 2026-05-21 forensics: 62 IG / 7
+        # YT / 0 FB / 0 X / 0 Threads rows in the last 14 days, meaning
+        # the bandit has effectively only received Instagram reward signal
+        # since the table was designed.
         fields: dict = {
             "Title": f"{self.platform}__{self.platform_post_id}",
             # Postgres promoted columns (lowercase)
             "niche_id": self.niche_id,
-            "task_id": self.content_id,
+            "task_id": f"{self.content_id}__{self.platform}",
             "post_id": self.platform_post_id,
             "platform": self.platform,
             "arm_id": self.bandit_arm or "",
