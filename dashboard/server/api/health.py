@@ -32,16 +32,29 @@ def _check_services() -> dict[str, dict]:
     """Ping Redis and confirm dashboard is alive."""
     services: dict[str, dict] = {}
 
-    # Redis
+    # Redis — connect via TCP using the python redis library, NOT
+    # via the `redis-cli` subprocess. The CLI isn't installed on
+    # Hetzner (Redis runs in Docker) so the old check always reported
+    # "Down" even though the engagement worker was actively talking
+    # to it. 2026-05-21 audit found Redis: Down in dashboard while
+    # the container was Up 2 weeks (healthy).
+    import os
     try:
-        result = subprocess.run(
-            ["redis-cli", "ping"],
-            capture_output=True, text=True, timeout=5,
+        import redis as _redis
+        client = _redis.Redis(
+            host=os.environ.get("REDIS_HOST", "localhost"),
+            port=int(os.environ.get("REDIS_PORT", "6379")),
+            socket_connect_timeout=2,
+            socket_timeout=2,
         )
-        up = result.returncode == 0 and "PONG" in result.stdout
-        services["redis"] = {"status": "up" if up else "down"}
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        services["redis"] = {"status": "down", "error": "redis-cli unavailable or timed out"}
+        if client.ping():
+            services["redis"] = {"status": "up"}
+        else:
+            services["redis"] = {"status": "down", "error": "ping returned falsy"}
+    except ImportError:
+        services["redis"] = {"status": "down", "error": "redis lib not installed"}
+    except Exception as exc:
+        services["redis"] = {"status": "down", "error": str(exc)[:120]}
 
     # Prefect
     try:

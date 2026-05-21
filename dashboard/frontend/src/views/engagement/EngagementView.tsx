@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { useRecentComments } from "@/hooks/use-engagement";
+import {
+  useEngagementStatus,
+  useRecentComments,
+} from "@/hooks/use-engagement";
 import { getActiveNiches } from "@/niches/registry";
 import { PLATFORM_IDS, getPlatformInfo } from "@/lib/platforms";
 import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/error-state";
 import { KpiCard } from "@/components/shared/kpi-card";
-import type { EngagementComment } from "@/api/types";
+import type {
+  EngagementComment,
+  EngagementStatusResponse,
+} from "@/api/types";
 import { CommentFeed } from "./CommentFeed";
 import { ReplyQueue } from "./ReplyQueue";
 
@@ -21,15 +27,30 @@ const PLATFORMS = [
   ...PLATFORM_IDS.map((id) => ({ value: id, label: getPlatformInfo(id).label })),
 ];
 
-// ── Derive stats from comments ───────────────────────────────
+// ── Derive stats from comments + engagement status ───────────
 
-function deriveStats(comments: EngagementComment[]) {
+function deriveStats(
+  comments: EngagementComment[],
+  status: EngagementStatusResponse | undefined,
+) {
   const platforms = new Set(comments.map((c) => c.platform.toLowerCase()));
+  const totals = status?.totals ?? { pending: 0, replied: 0, failed: 0, skipped: 0 };
+  // KPI mapping (correcting the previous all-zero hardcode):
+  //   TOTAL COMMENTS  = recent IG comments fetched (live feed)
+  //   AUTO-REPLIED    = totals.replied (worker auto-posted)
+  //   PENDING REVIEW  = totals.pending (waiting in queue, includes
+  //                     pending_review since the status endpoint
+  //                     buckets non-terminal as "pending")
+  //   PLATFORMS ACTIVE= union of platforms with recent comments OR
+  //                     replied-today buckets (was: comments only,
+  //                     undercount when comments lag)
+  const repliedPlatforms = Object.keys(status?.replied_today_by_platform ?? {});
+  const activePlatforms = new Set([...platforms, ...repliedPlatforms]);
   return {
     total: comments.length,
-    autoReplied: 0,          // no data yet — engine hasn't generated replies
-    pendingReview: 0,        // ditto
-    platformsActive: platforms.size,
+    autoReplied: totals.replied,
+    pendingReview: totals.pending,
+    platformsActive: activePlatforms.size,
   };
 }
 
@@ -40,9 +61,10 @@ export default function EngagementView() {
   const [platformFilter, setPlatformFilter] = useState("");
 
   const resp = useRecentComments();
+  const statusResp = useEngagementStatus();
   const comments: EngagementComment[] = resp.data ?? [];
 
-  const stats = deriveStats(comments);
+  const stats = deriveStats(comments, statusResp.data);
 
   // Error state — show banner when query failed and no cached data
   if (resp.isError && comments.length === 0) {

@@ -9,3 +9,11 @@ export function useRecentComments() {
     staleTime: 5 * 60_000,
   });
 }
+
+export function useEngagementStatus() {
+  return useQuery({
+    queryKey: queryKeys.engagement.status(),
+    queryFn: engagementApi.status,
+    staleTime: 60_000,
+  });
+}

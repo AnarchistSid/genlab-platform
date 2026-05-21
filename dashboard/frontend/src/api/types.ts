@@ -670,10 +670,26 @@ export interface NotificationPreferences {
 
 // ── Engagement Status ───────────────────────────────────────
 
+// Shape returned by GET /api/v1/engagement/status — counts of
+// pending/replied/failed/skipped engagement queue rows per niche
+// plus a totals roll-up.
 export interface EngagementStatusResponse {
-  pollers: Record<string, string>;
-  webhook_active: boolean;
-  last_check: string | null;
+  by_niche: Record<
+    string,
+    {
+      pending: number;
+      replied: number;
+      failed: number;
+      skipped: number;
+    }
+  >;
+  totals: {
+    pending: number;
+    replied: number;
+    failed: number;
+    skipped: number;
+  };
+  replied_today_by_platform: Record<string, number>;
 }
 
 // ── Cross-Niche Analytics ────────────────────────────────────
