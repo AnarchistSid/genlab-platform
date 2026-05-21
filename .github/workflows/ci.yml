@@ -16,9 +16,11 @@ jobs:
       # ruff isn't declared as a workspace dependency, so `uv run ruff`
       # resolves nothing. `uvx` runs the tool in an ephemeral environment
       # without polluting any package's deps — the right pattern for
-      # repo-level lint tooling.
-      - run: uvx ruff check .
-      - run: uvx ruff format --check .
+      # repo-level lint tooling. Pinned version so CI matches local
+      # results bit-for-bit; bump deliberately when ready to absorb new
+      # rule additions.
+      - run: uvx ruff@0.15.14 check .
+      - run: uvx ruff@0.15.14 format --check .
 
   test:
     runs-on: ubuntu-latest
