@@ -33,6 +33,18 @@ export default defineConfig({
   build: {
     outDir: "dist",
     sourcemap: "hidden",
+    // Preserve old hash-named chunks across builds so in-flight tabs
+    // loaded with the previous index.html can still fetch their
+    // lazy-loaded routes after a deploy. Vite normally wipes outDir
+    // before each build, which deletes the prior build's chunks and
+    // causes "Failed to fetch dynamically imported module" errors on
+    // route navigation in tabs that haven't been hard-refreshed.
+    // index.html is still overwritten (it's a fixed filename) so fresh
+    // tabs get the latest chunk references. Hash-named chunks (the
+    // *only* assets that need preservation) accumulate harmlessly —
+    // typical drift is ~1MB/month; cleanup via `find dist/assets/
+    // -mtime +30 -delete` whenever disk pressure warrants.
+    emptyOutDir: false,
     rollupOptions: {
       output: {
         manualChunks: {
