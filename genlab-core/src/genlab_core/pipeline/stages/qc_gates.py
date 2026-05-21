@@ -71,6 +71,12 @@ class QCGates:
 
         passed = 0
         failed = 0
+        # Aggregate per-issue counts so the run_report surfaces what's
+        # actually wrong instead of just "20% passed". Without this the
+        # only signal on a degrading QC pass rate was the rate itself —
+        # operators had to grep journal logs to find specific failures.
+        failure_reasons: dict[str, int] = {}
+        failure_examples: list[dict[str, object]] = []
 
         for bp in blueprints:
             try:
@@ -81,24 +87,47 @@ class QCGates:
                     passed += 1
                 else:
                     failed += 1
+                    issues = status.get("issues", []) or []
+                    for issue in issues:
+                        # Truncate values from the issue string so the
+                        # aggregate key isn't unique per blueprint
+                        # (e.g. "Body too long: 350 > 300 words" →
+                        # "Body too long"). Keep the first ":" prefix.
+                        key = str(issue).split(":", 1)[0].strip()
+                        failure_reasons[key] = failure_reasons.get(key, 0) + 1
+                    if len(failure_examples) < 5:
+                        failure_examples.append({
+                            "candidate_id": bp.get("candidate_id", "unknown"),
+                            "title": (bp.get("title") or "")[:80],
+                            "issues": issues[:5],
+                        })
+                    logger.info(
+                        "[QCGates] FAILED %s — %s",
+                        bp.get("candidate_id", "unknown"),
+                        "; ".join(str(i) for i in issues[:3]),
+                    )
                     # Apply score penalty
                     if "priority_score" in bp:
                         bp["priority_score"] = max(
                             0, bp["priority_score"] - self.SCORE_PENALTY
                         )
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "[QCGates] Error validating blueprint %s",
                     bp.get("candidate_id", "unknown"),
                 )
                 bp["validation_status"] = {"all_passed": False, "error": True}
+                failure_reasons["validation_exception"] = (
+                    failure_reasons.get("validation_exception", 0) + 1
+                )
                 failed += 1
 
         total = passed + failed
         rate = f"{passed / total:.1%}" if total else "n/a"
         logger.info(
-            "[QCGates] %d/%d passed (%s), %d failed",
+            "[QCGates] %d/%d passed (%s), %d failed; reasons=%s",
             passed, total, rate, failed,
+            sorted(failure_reasons.items(), key=lambda kv: -kv[1]) or "[]",
         )
 
         context.setdefault("run_stats", {})["qc"] = {
@@ -106,6 +135,8 @@ class QCGates:
             "failed": failed,
             "total": total,
             "pass_rate": rate,
+            "failure_reasons": failure_reasons,
+            "failure_examples": failure_examples,
         }
 
         return context

@@ -103,17 +103,43 @@ if [ -d "$SHARED_TMP" ]; then
         fi
     done
 
-    # Clean rerender subdirs older than 14 days (but protect active)
-    find "$SHARED_TMP/rerender" -maxdepth 1 -type d -mtime +14 2>/dev/null | while read dir; do
-        if is_dir_protected "$dir"; then
-            echo "  PROTECTED rerender: $(basename $dir)" >> "$LOG"
-        else
-            rm -rf "$dir"
-            echo "  Removed rerender: $(basename $dir)" >> "$LOG"
-        fi
-    done
+    # Clean rerender subdirs older than 14 days (but protect active).
+    # ``|| true`` keeps set -e from killing the script when the
+    # rerender dir doesn't exist (find produces empty stdin, the
+    # while loop exits 1, pipefail propagates that).
+    find "$SHARED_TMP/rerender" -maxdepth 1 -type d -mtime +14 2>/dev/null \
+        | while read dir; do
+            [ -z "$dir" ] && continue
+            if is_dir_protected "$dir"; then
+                echo "  PROTECTED rerender: $(basename $dir)" >> "$LOG"
+            else
+                rm -rf "$dir"
+                echo "  Removed rerender: $(basename $dir)" >> "$LOG"
+            fi
+        done || true
 
-    echo "  Shared .tmp/runs: cleaned=$cleaned, protected=$protected_count" >> "$LOG"
+    # Step 2b: Purge clips/ subdirectories from runs ≥24h old. The
+    # downloaded source MP4s are only needed during the render step;
+    # after that the run's visuals/ contains the published variant.
+    # Without this, sports runs accumulate at ~340MB of clip source
+    # per day — the per-run hold of 5 then keeps ~1.7GB stranded
+    # even if blueprints have moved past VISUAL_READY. Adds the
+    # protected check so we don't yank clips from a run whose
+    # blueprint is mid-render.
+    clips_purged=0
+    while IFS= read -r clips_dir; do
+        [ -z "$clips_dir" ] && continue
+        run_dir=$(dirname "$clips_dir")
+        if is_dir_protected "$run_dir"; then
+            continue
+        fi
+        size=$(du -sb "$clips_dir" 2>/dev/null | cut -f1)
+        rm -rf "$clips_dir"
+        clips_purged=$((clips_purged + 1))
+        echo "  Purged clips/: $(basename "$run_dir") (freed ${size:-0}b)" >> "$LOG"
+    done < <(find "$SHARED_TMP" -mindepth 2 -maxdepth 2 -type d -name clips -mtime +0 2>/dev/null)
+
+    echo "  Shared .tmp/runs: cleaned=$cleaned, protected=$protected_count, clips_purged=$clips_purged" >> "$LOG"
 fi
 
 # ── Step 3: BB cleanup (has its own cleanup script) ──

@@ -21,6 +21,8 @@ import time
 from pathlib import Path
 from typing import Literal
 
+import dramatiq
+
 from genlab_core.engagement.persona_engine import PersonaEngine
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.rate_limiter import EngagementRateLimiter
@@ -105,6 +107,17 @@ RATE_CAPS: dict[str, int] = {
     "facebook": 20,
     "x_twitter": 4,    # 50/day / ~12 active hours
     "threads": 3,      # 15/day / ~5 active session hours
+}
+
+# Token refill interval (milliseconds) per platform, used as the
+# dramatiq retry min_backoff so a rate-limited message waits the
+# expected time for a token to free up instead of bouncing through
+# dramatiq's default exponential backoff (which capped out before
+# the slowest platforms — threads, x_twitter — could refill even
+# one token, multiplying every rate-limited message into 4 errors).
+RATE_REFILL_MS: dict[str, int] = {
+    platform: max(60_000, int(3_600_000 / max(rate, 1)))
+    for platform, rate in RATE_CAPS.items()
 }
 
 _rate_limiter = EngagementRateLimiter(RATE_CAPS)
@@ -413,12 +426,25 @@ def process_reply_event(event: dict) -> None:
             bl.update_engagement_status(sp_item_id, "skipped")
         return
 
-    # 4. Rate limit — raise to trigger Dramatiq retry with backoff
+    # 4. Rate limit — bounce the message into the future via dramatiq.Retry
+    # so it lands when a token is actually expected to be available.
+    # Previous behaviour raised RuntimeError, which let dramatiq's
+    # default exponential backoff (60s → 120s → 240s, max 3 retries)
+    # chase a token bucket refilling at ~20-min intervals. Every
+    # rate-limited message produced 4 error logs and rarely succeeded.
+    # 2026-05-21 forensics: 888 failures / 0 successes in 2h.
     if not _rate_limiter.acquire(platform):
-        logger.warning("Engagement: rate limit reached for %s, retrying %s", platform, comment_id)
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "rate_limited")
-        raise RuntimeError(f"Rate limit exceeded for {platform}")
+        backoff_ms = RATE_REFILL_MS.get(platform, 600_000)
+        logger.info(
+            "Engagement: rate limit reached for %s, retry in %.0fs (%s)",
+            platform, backoff_ms / 1000, comment_id,
+        )
+        raise dramatiq.Retry(  # type: ignore[name-defined]
+            message=f"rate_limited:{platform}",
+            delay=backoff_ms,
+        )
 
     # 5. Generate reply
     persona = _load_persona(niche_id)
@@ -510,8 +536,15 @@ def process_like_event(event: dict) -> None:
         return
 
     if not _rate_limiter.acquire(platform):
-        logger.warning("Engagement: rate limit reached for %s, retrying like %s", platform, comment_id)
-        raise RuntimeError(f"Rate limit exceeded for {platform}")
+        backoff_ms = RATE_REFILL_MS.get(platform, 600_000)
+        logger.info(
+            "Engagement: rate limit reached for %s, retry like %s in %.0fs",
+            platform, comment_id, backoff_ms / 1000,
+        )
+        raise dramatiq.Retry(  # type: ignore[name-defined]
+            message=f"rate_limited:{platform}",
+            delay=backoff_ms,
+        )
 
     delay = human_delay()
     time.sleep(delay)
