@@ -1643,7 +1643,18 @@ def serve_spa(path):
         abort(404)
     file_path = _DASHBOARD_DIST / path
     if _DASHBOARD_DIST.exists() and file_path.exists() and file_path.is_file():
-        return send_from_directory(str(_DASHBOARD_DIST), path)
+        resp = send_from_directory(str(_DASHBOARD_DIST), path)
+        # Vite emits hash-named files under /assets/ — the URL changes
+        # whenever the file content changes, so we can cache aggressively.
+        # Marking immutable tells browsers to skip even the conditional
+        # revalidation round-trip on every navigation.
+        # Non-asset static files (favicon.ico, manifest.json, etc.) get a
+        # moderate cache so they're still revalidated periodically.
+        if path.startswith("assets/"):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            resp.headers["Cache-Control"] = "public, max-age=3600, must-revalidate"
+        return resp
     # Client-side route — let React Router handle it
     if _DASHBOARD_DIST.exists() and (_DASHBOARD_DIST / "index.html").exists():
         resp = send_from_directory(str(_DASHBOARD_DIST), "index.html")
