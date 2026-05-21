@@ -17,9 +17,8 @@ from __future__ import annotations
 import json
 import logging
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -133,7 +132,7 @@ class CTABandit:
             logger.debug("[CTABandit] No state file found at %s, using priors", self._state_path)
             return
         try:
-            with open(self._state_path, "r", encoding="utf-8") as f:
+            with open(self._state_path, encoding="utf-8") as f:
                 state = json.load(f)
             restored = 0
             for platform, variants in self._variants.items():

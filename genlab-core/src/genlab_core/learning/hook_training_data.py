@@ -192,7 +192,7 @@ def compute_engagement_labels(
     reward_threshold = float(np.percentile(rewards, 75))
 
     labels = []
-    for ex, r in zip(examples, rewards):
+    for ex, r in zip(examples, rewards, strict=False):
         # Primary signal: engagement above 75th percentile
         if r >= reward_threshold:
             labels.append(1)

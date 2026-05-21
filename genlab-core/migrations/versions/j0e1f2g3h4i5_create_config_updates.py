@@ -26,7 +26,6 @@ need to roll back a YAML change do so by editing the file directly;
 the history row stays for audit.
 """
 from alembic import op
-import sqlalchemy as sa
 
 revision = "j0e1f2g3h4i5"
 down_revision = "i9d0e1f2g3h4"

@@ -3,7 +3,6 @@
 Routes:
     GET /api/v1/metrics/publishing  -- publishing health metrics
 """
-import json
 import logging
 import os
 

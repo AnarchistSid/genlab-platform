@@ -52,6 +52,7 @@ def _shutdown_loop() -> None:
 
 
 import atexit
+
 atexit.register(_shutdown_loop)
 
 

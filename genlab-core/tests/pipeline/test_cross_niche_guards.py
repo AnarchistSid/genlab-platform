@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.exceptions import NicheConfigError
 from genlab_core.pipeline.pipeline_runner import GenericPipelineRunner
 from genlab_core.pipeline.stages.push_to_backlog import _is_foreign_source

@@ -5,18 +5,14 @@ seasonal filtering, CTA/hashtag stripping, and the end-to-end execute() path.
 """
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 from genlab_core.monetization.affiliate_matcher import (
+    AffiliateMatch,
     _keyword_hits,
     match_product,
     select_best_network,
-    AffiliateMatch,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers & fixtures

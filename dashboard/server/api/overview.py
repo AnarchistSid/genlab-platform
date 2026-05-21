@@ -264,7 +264,7 @@ def _build_overview() -> dict:
     if client:
         try:
             pub_analytics = client.publishing_analytics.all(
-                formula=f"AND({{status}}='SUCCESS')",
+                formula="AND({status}='SUCCESS')",
                 max_records=200,
             )
             for pa in pub_analytics:

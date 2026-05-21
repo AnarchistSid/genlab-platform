@@ -8,7 +8,7 @@ import os
 
 from flask import Blueprint, request
 
-from server.core.responses import api_error, api_success
+from server.core.responses import api_success
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("events_api", __name__, url_prefix="/api/v1/events")

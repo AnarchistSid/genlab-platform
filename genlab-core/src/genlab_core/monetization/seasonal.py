@@ -22,7 +22,7 @@ def load_seasonal_config(path: Path | None = None) -> dict[str, Any]:
     p = path or _SEASONAL_PATH
     if not p.exists():
         return {}
-    with open(p, "r", encoding="utf-8") as fh:
+    with open(p, encoding="utf-8") as fh:
         return yaml.safe_load(fh) or {}
 
 

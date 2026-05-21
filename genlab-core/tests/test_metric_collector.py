@@ -1718,8 +1718,8 @@ class TestFetchYouTubeAnalyticsExtras:
 
     def test_analytics_extras_empty_when_no_shared_token(self, monkeypatch):
         """No YOUTUBE_ANALYTICS_REFRESH_TOKEN → skip, no API call."""
-        from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
         from genlab_core.learning import metric_collector as mc
+        from genlab_core.learning.metric_collector import _fetch_youtube_analytics_extras
 
         mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
         monkeypatch.setattr(

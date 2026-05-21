@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from genlab_core.settings import settings
 from genlab_core.tts import TTSCascade
 
 logger = logging.getLogger(__name__)

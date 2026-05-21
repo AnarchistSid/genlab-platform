@@ -102,6 +102,7 @@ def publishing_alerts():
         # WARNING: Placeholder URLs (example.com) in affiliate catalog
         try:
             from pathlib import Path
+
             import yaml
             _catalog_path = (
                 Path(__file__).resolve().parent.parent.parent.parent
@@ -114,14 +115,14 @@ def publishing_alerts():
             )
             placeholder_alert_enabled = False
             if _alerting_path.exists():
-                with open(_alerting_path, "r", encoding="utf-8") as af:
+                with open(_alerting_path, encoding="utf-8") as af:
                     alerting_cfg = yaml.safe_load(af) or {}
                 placeholder_alert_enabled = (
                     alerting_cfg.get("affiliate", {}).get("placeholder_url_alert", False)
                 )
 
             if placeholder_alert_enabled and _catalog_path.exists():
-                with open(_catalog_path, "r", encoding="utf-8") as cf:
+                with open(_catalog_path, encoding="utf-8") as cf:
                     catalog = yaml.safe_load(cf) or {}
                 placeholder_count = 0
                 placeholder_products = []

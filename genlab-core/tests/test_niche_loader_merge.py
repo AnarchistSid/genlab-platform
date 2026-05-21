@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-
 from genlab_core.niche_loader import load_niche_config
 
 

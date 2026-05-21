@@ -360,8 +360,8 @@ class TestInit:
         spurious timeout failures on motion-heavy reels.
         """
         from genlab_core.platforms.instagram import (
-            InstagramClient,
             _DEFAULT_MAX_POLL_SECONDS,
+            InstagramClient,
         )
         client = InstagramClient(access_token="t", ig_user_id="u")
         assert client._max_poll_seconds == _DEFAULT_MAX_POLL_SECONDS

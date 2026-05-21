@@ -35,7 +35,8 @@ from typing import Any
 
 import requests
 
-from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus, safe_json as _safe_json
+from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
+from genlab_core.platforms.models import safe_json as _safe_json
 from genlab_core.ratelimit.token_bucket import TokenBucket
 
 logger = logging.getLogger(__name__)

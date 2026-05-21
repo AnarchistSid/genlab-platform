@@ -22,9 +22,9 @@ class BBContentResearchStrategy(ContentResearchStrategy):
 
     def execute(self, context: Any) -> Any:
         from genlab_core.cache.disk_cache import Cache
+        from genlab_core.intel.rss_parser import parse_fetch_log
 
         from bb_strategies._fetch import fetch_all_sources, load_sources
-        from genlab_core.intel.rss_parser import parse_fetch_log
 
         run_id = context.get("run_id", "")
         run_dir = BB_ROOT / ".tmp" / "runs" / run_id

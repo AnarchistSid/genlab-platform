@@ -134,7 +134,7 @@ class ViralityScoring:
                 bp["virality_features"] = features
                 scored += 1
                 total_score += score
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "[ViralityScoring] Error scoring %s",
                     bp.get("candidate_id", "unknown"),

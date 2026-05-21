@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from genlab_core.monetization.cta_engine import inject_cta
 
 

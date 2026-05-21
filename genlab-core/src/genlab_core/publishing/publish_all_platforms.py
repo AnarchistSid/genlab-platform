@@ -44,7 +44,7 @@ from genlab_core.platforms.models import (
 )
 from genlab_core.platforms.registry import get_client
 from genlab_core.publishing.analytics_recorder import record_publish
-from genlab_core.publishing.error_classifier import classify, should_retry, retry_delay_seconds
+from genlab_core.publishing.error_classifier import classify, retry_delay_seconds, should_retry
 from genlab_core.publishing.niche_credentials import (
     resolve_fb_credentials,
     resolve_meta_credentials,
@@ -204,9 +204,11 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         return variant_path
 
     try:
-        from genlab_core.media.ffmpeg import get_ffmpeg_binary
         import subprocess
+
         import yaml as _yaml
+
+        from genlab_core.media.ffmpeg import get_ffmpeg_binary
 
         ffmpeg = get_ffmpeg_binary()
 
@@ -317,6 +319,7 @@ def _post_affiliate_reply(
             # Instagram doesn't support bio link updates via API, so
             # the best approach is a first comment with the clickable link.
             import requests as _req
+
             from genlab_core.publishing.niche_credentials import resolve_meta_credentials
             meta_creds = resolve_meta_credentials(niche_id)
             access_token = meta_creds.get("ig_access_token", "")

@@ -110,7 +110,6 @@ class TestRateLimitRetry:
         self, mock_replied, mock_spam, agent_root
     ):
         import dramatiq
-
         from genlab_core.engagement.comment_processor import process_reply_event
 
         mock_gate = MagicMock()

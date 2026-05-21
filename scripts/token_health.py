@@ -17,16 +17,11 @@ import logging
 import sys
 
 from genlab_core.monitoring.token_health import run_all_checks
-from genlab_core.monitoring.check_token_health import (
-    check_facebook,
-    check_youtube,
-    check_twitter,
-)
 from genlab_core.publishing.niche_credentials import (
     NICHE_CREDENTIAL_PREFIXES,
     resolve_meta_credentials,
-    resolve_youtube_credentials,
     resolve_threads_credentials,
+    resolve_youtube_credentials,
 )
 
 logger = logging.getLogger(__name__)

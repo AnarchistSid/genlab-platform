@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.monetization.revenue_predictor import RevenuePredictor, _estimate_price_by_category
 
 

@@ -6,8 +6,6 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-import pytest
-
 from genlab_core.monetization.paapi_client import (
     NICHE_SEARCH_INDEX,
     PaapiClient,

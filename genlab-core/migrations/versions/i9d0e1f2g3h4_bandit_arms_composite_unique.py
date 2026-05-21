@@ -27,7 +27,6 @@ arm_id appears in more than one niche on production (5 niches × 9 arms
 """
 from alembic import op
 
-
 revision = "i9d0e1f2g3h4"
 down_revision = "h8c9d0e1f2g3"
 branch_labels = None

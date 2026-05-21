@@ -318,7 +318,6 @@ def recent_comments():
         return api_success(data=_recent_cache["data"])
 
     import requests as _requests
-
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
     all_comments: list[dict] = []
@@ -403,7 +402,6 @@ def fetch_comments():
     Useful for backfilling engagement data that webhooks missed.
     """
     import requests as _requests
-
     from genlab_core.publishing.niche_credentials import resolve_meta_credentials
 
     total_comments = 0

@@ -15,9 +15,7 @@ import logging
 import os
 import pathlib
 import subprocess
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ class Alert:
 def _load_recent_reports(niche_id: str, days: int = 3) -> list[dict]:
     """Load run_report.json files for a niche from the last N days."""
     prefix = f"{niche_id}_"
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     reports = []
     if not RUNS_DIR.exists():
         return reports
@@ -273,7 +271,7 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
         last_update = cur.fetchone()[0]
         conn.close()
         if last_update:
-            days_stale = (datetime.now(timezone.utc) - last_update).days
+            days_stale = (datetime.now(UTC) - last_update).days
             if days_stale > 7:
                 alerts.append(Alert(
                     check="bandit_stale",

@@ -6,10 +6,7 @@ No network calls are made.
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Import the script directly (it lives in scripts/, not a package)

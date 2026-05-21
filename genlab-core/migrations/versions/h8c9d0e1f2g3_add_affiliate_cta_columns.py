@@ -4,8 +4,8 @@ Revision ID: h8c9d0e1f2g3
 Revises: g7b8c9d0e1f2
 Create Date: 2026-03-25 16:00:00.000000+00:00
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "h8c9d0e1f2g3"
 down_revision = "g7b8c9d0e1f2"

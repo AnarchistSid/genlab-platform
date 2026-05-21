@@ -4,8 +4,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from genlab_core.monetization.cta_bandit import CTABandit, CTAVariant
 
 # Path to the real config file

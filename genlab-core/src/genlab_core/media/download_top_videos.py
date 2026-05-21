@@ -656,7 +656,7 @@ def main() -> None:
             trend_pack = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
         logger.error("Failed to read trend_pack.json: %s", exc)
-        raise SystemExit(2)
+        raise SystemExit(2) from exc
 
     stories = trend_pack.get("stories", [])
     if not stories:

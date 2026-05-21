@@ -760,8 +760,7 @@ class TestRunReport:
                 return_value=Path(tmpdir),
             ):
                 ctx = {
-                    "stories": [{"title": "Test"}],
-                    "stories": [{"id": "bp1"}],
+                    "stories": [{"id": "bp1", "title": "Test"}],
                     "run_stats": {"qc": {"passed": 1, "failed": 0, "total": 1, "pass_rate": "100.0%"}},
                     "niche_config": {"niche_id": "test"},
                 }
@@ -780,7 +779,6 @@ class TestRunReport:
                 return_value=Path(tmpdir),
             ):
                 ctx = {
-                    "stories": [],
                     "stories": [],
                     "run_stats": {},
                     "niche_config": {"niche_id": "test"},

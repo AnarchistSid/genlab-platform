@@ -16,6 +16,7 @@ def test_youtube_id_extracted_from_reddit_summary():
 def test_routed_niches_merge_not_overwrite():
     """Upsert SQL must merge routed_niches arrays, not overwrite."""
     import inspect
+
     from genlab_core.pipeline.shared_ingestion import SharedIngestionPipeline
 
     source = inspect.getsource(SharedIngestionPipeline._write_to_pool)

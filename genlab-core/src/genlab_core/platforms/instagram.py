@@ -20,6 +20,8 @@ from genlab_core.platforms.models import (
     PublishPayload,
     PublishResult,
     TokenStatus,
+)
+from genlab_core.platforms.models import (
     safe_json as _safe_json,
 )
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.pipeline.pipeline_runner import _NicheLock, _NicheLockError
 
 

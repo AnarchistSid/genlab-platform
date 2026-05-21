@@ -31,8 +31,9 @@ def main() -> int:
 
     # Source .env for DATABASE_URL
     try:
-        from dotenv import load_dotenv
         from pathlib import Path
+
+        from dotenv import load_dotenv
         genlab_root = Path(__file__).resolve().parents[4]
         load_dotenv(genlab_root / ".env", override=False)
     except ImportError:

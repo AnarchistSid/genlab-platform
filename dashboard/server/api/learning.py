@@ -63,6 +63,7 @@ def _learning_aggregates() -> dict:
     caps. Uses one connection + four aggregates.
     """
     import os
+
     import psycopg
     from psycopg.rows import dict_row
 
@@ -241,6 +242,7 @@ def config_updates():
     separately so the UI can label preview rows.
     """
     import os
+
     import psycopg
     from psycopg.rows import dict_row
 

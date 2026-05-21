@@ -14,7 +14,7 @@ def _group_stages(stages, declarations):
     current_group = None
     current_batch = []
 
-    for decl, stage in zip(declarations, stages):
+    for decl, stage in zip(declarations, stages, strict=False):
         group = decl.get("parallel_group")
 
         if group and group == current_group:

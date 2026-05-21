@@ -25,13 +25,13 @@ def flow(fn=None, **kwargs):  # type: ignore[misc]
 def task(fn=None, **kwargs):  # type: ignore[misc]
     return fn if fn else lambda f: f
 
+from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
 from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
 from genlab_core.learning.pending_feedback_task import (
     CollectionWindow,
     PendingFeedbackTask,
 )
 from genlab_core.learning.reward_shaper import RewardShaper
-from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
@@ -183,8 +183,9 @@ def _fetch_youtube_analytics_extras(
       * empty row set (data not yet aggregated)
       * any other exception
     """
-    import requests
     from datetime import timedelta
+
+    import requests
 
     if not channel_id:
         return {}
@@ -227,7 +228,7 @@ def _fetch_youtube_analytics_extras(
         if not rows:
             return {}
         headers_meta = [col.get("name") for col in body.get("columnHeaders", [])]
-        data = dict(zip(headers_meta, rows[0]))
+        data = dict(zip(headers_meta, rows[0], strict=False))
         return {
             "minutes_viewed": float(data.get("estimatedMinutesWatched", 0)),
             "avg_view_duration": float(data.get("averageViewDuration", 0)),
@@ -794,6 +795,7 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     """
     try:
         import os
+
         import psycopg
 
         db_url = os.environ.get("DATABASE_URL", "").strip()

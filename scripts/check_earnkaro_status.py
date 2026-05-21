@@ -1,6 +1,7 @@
 """Check EarnKaro affiliate URL status — reports placeholders vs real URLs."""
-import yaml
 from pathlib import Path
+
+import yaml
 
 catalog_path = Path(__file__).parent.parent / "genlab-core" / "config" / "affiliate_catalog.yaml"
 

@@ -495,21 +495,27 @@ def get_csrf_token():
 
 
 # ── Register API v1 modules ──────────────────────────────
+from server.api.alerts import bp as alerts_bp
 from server.api.analytics import bp as analytics_bp
+from server.api.audience import bp as audience_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.config_routes import bp as config_bp
 from server.api.config_routes import settings_bp
 from server.api.engagement import bp as engagement_bp
+from server.api.events import bp as events_bp
 from server.api.health import bp as health_bp
 from server.api.learning import bp as learning_bp
 from server.api.legal import legal_bp
+from server.api.links import bp as links_bp
+from server.api.metrics import bp as metrics_bp
 from server.api.monetisation import bp as monetisation_bp
 from server.api.niches import bp as niches_bp
 from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
 from server.api.publishing_queue import bp as queue_bp
+from server.api.revenue import bp as revenue_bp
 from server.api.runway import bp as runway_bp
 from server.api.schedule import bp as schedule_bp
 from server.api.scheduler import scheduler_bp
@@ -518,12 +524,6 @@ from server.api.token_health import bp as token_health_bp
 from server.api.trends import bp as trends_bp
 from server.api.webhook_receiver import webhook_bp
 from server.api.youtube_quota import bp as youtube_quota_bp
-from server.api.links import bp as links_bp
-from server.api.revenue import bp as revenue_bp
-from server.api.alerts import bp as alerts_bp
-from server.api.metrics import bp as metrics_bp
-from server.api.audience import bp as audience_bp
-from server.api.events import bp as events_bp
 
 app.register_blueprint(blueprints_bp)
 app.register_blueprint(stories_bp)

@@ -121,7 +121,7 @@ class YouTubeAnalyticsClient:
 
             row = rows[0]
             headers = [col.get("name") for col in response.get("columnHeaders", [])]
-            data = dict(zip(headers, row))
+            data = dict(zip(headers, row, strict=False))
 
             return YouTubeAnalyticsMetrics(
                 video_id=video_id,

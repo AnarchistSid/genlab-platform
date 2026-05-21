@@ -158,7 +158,8 @@ def _load_replied_set() -> set:
     membership checks. Only loads records from the last 30 days to prevent
     unbounded growth. Triggers rotation when file exceeds 50K lines.
     """
-    from datetime import UTC, datetime as _dt, timedelta
+    from datetime import UTC, timedelta
+    from datetime import datetime as _dt
 
     path = _replied_set_path()
     if not path.exists():
@@ -244,7 +245,8 @@ def _has_replied(comment_id: str, platform: str) -> bool:
 
 def _mark_replied(comment_id: str, platform: str) -> None:
     """Append an idempotency record. Uses file-level locking for safety."""
-    from datetime import UTC, datetime as _dt
+    from datetime import UTC
+    from datetime import datetime as _dt
 
     path = _replied_set_path()
     # Cache key uses only (c, p) for O(1) lookup compatibility with _has_replied

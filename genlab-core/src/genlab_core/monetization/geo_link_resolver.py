@@ -11,9 +11,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 
 logger = logging.getLogger(__name__)
 

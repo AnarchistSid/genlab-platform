@@ -208,4 +208,4 @@ class DedupEngine:
                         texts[j][:70], texts[i][:70],
                     )
 
-        return [item for item, k in zip(items, keep) if k]
+        return [item for item, k in zip(items, keep, strict=False) if k]

@@ -71,7 +71,7 @@ class _NicheLock:
         self._lock_path = self._lock_dir / f"pipeline-{niche_id}.lock"
         self._fd: int | None = None
 
-    def __enter__(self) -> "_NicheLock":
+    def __enter__(self) -> _NicheLock:
         self._lock_dir.mkdir(parents=True, exist_ok=True)
         self._fd = os.open(
             str(self._lock_path),
@@ -92,7 +92,7 @@ class _NicheLock:
             raise _NicheLockError(
                 f"Niche '{self._niche_id}' is already running "
                 f"(lock held by pid {holder}). Refusing to race."
-            )
+            ) from None
         # Record our PID in the lock file so other processes can see who holds it
         os.ftruncate(self._fd, 0)
         os.write(self._fd, f"{os.getpid()}\n".encode())
@@ -230,11 +230,11 @@ class GenericPipelineRunner:
             if stages_filter:
                 filter_lower = [f.lower() for f in stages_filter]
                 filtered = [
-                    (s, d) for s, d in zip(stages, declarations)
+                    (s, d) for s, d in zip(stages, declarations, strict=False)
                     if s.__class__.__name__.lower() in filter_lower
                 ]
                 if filtered:
-                    stages, declarations = zip(*filtered)
+                    stages, declarations = zip(*filtered, strict=False)
                     stages, declarations = list(stages), list(declarations)
                 else:
                     logger.warning(
@@ -336,7 +336,7 @@ class GenericPipelineRunner:
         current_group: str | None = None
         current_batch: list[tuple] = []
 
-        for decl, stage in zip(declarations, stages):
+        for decl, stage in zip(declarations, stages, strict=False):
             group = decl.get("parallel_group")
 
             if group and group == current_group:

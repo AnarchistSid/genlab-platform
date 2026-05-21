@@ -1,6 +1,6 @@
 """Tests for push_to_backlog dedup hardening."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 def _recent_iso(days_ago: int = 5) -> str:
@@ -18,7 +18,7 @@ def _recent_iso(days_ago: int = 5) -> str:
     on 2026-05-15, breaking the tests with confusing "empty dedup set"
     failures.
     """
-    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
 
 
 def test_title_similarity_catches_near_duplicate():
@@ -254,7 +254,7 @@ def test_candidate_id_non_blocking_statuses_do_not_block():
     and 'auto_archived_missing_media' action_takens ended up there,
     permanently shadowing their source content.
     """
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import MagicMock
 
     from genlab_core.pipeline.stages.push_to_backlog import PushToBacklog
 

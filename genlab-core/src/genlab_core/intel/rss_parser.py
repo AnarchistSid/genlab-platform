@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -55,7 +55,7 @@ def extract_domain(url: str) -> str:
     try:
         domain = urlparse(url).netloc.lower()
         return domain[4:] if domain.startswith("www.") else domain
-    except Exception as exc:
+    except Exception:
         return ""
 
 
@@ -100,7 +100,7 @@ def _is_reddit_permalink(url: str) -> bool:
     try:
         host = urlparse(url).netloc.lower()
         path = urlparse(url).path.lower()
-    except Exception as exc:
+    except Exception:
         return False
     if not host.endswith("reddit.com"):
         return False
@@ -158,7 +158,7 @@ def parse_entry(entry: dict[str, Any], source_priority: float) -> dict[str, Any]
         "author": entry.get("author", ""),
         "source_priority": source_priority,
         "injection_flags": injection_flags,
-        "parsed_at": datetime.now(timezone.utc).isoformat(),
+        "parsed_at": datetime.now(UTC).isoformat(),
     }
     if primary.get("source_post_url"):
         parsed["source_post_url"] = normalize_url(primary["source_post_url"])

@@ -512,11 +512,11 @@ def review_action(record_id):
 
         # Store editorial metadata for approved blueprints (YouTube AI policy compliance)
         if action_taken == "approved":
-            from datetime import datetime, timezone
             import json as _json
+            from datetime import datetime
             editorial = {
                 "reviewed_by": "editorial",
-                "reviewed_at": datetime.now(timezone.utc).isoformat(),
+                "reviewed_at": datetime.now(UTC).isoformat(),
                 "editorial_note": data.get("notes", "") or data.get("editorial_note", ""),
                 "hook_modified": bool(data.get("hook_override")),
             }

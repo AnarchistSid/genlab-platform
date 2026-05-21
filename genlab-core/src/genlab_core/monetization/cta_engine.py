@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 import re
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qs, urljoin
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urlparse
 
 logger = logging.getLogger(__name__)
 

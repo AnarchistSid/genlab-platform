@@ -282,12 +282,13 @@ class TestBanditArmBoost(unittest.TestCase):
         self.assertEqual(_get_bandit_arm_boost(client, "gaming"), {})
 
     def test_boosts_lie_in_documented_range(self):
+        import random as _random
+
         from genlab_core.pipeline.stages.push_to_backlog import (
             _BANDIT_BOOST_CEIL,
             _BANDIT_BOOST_FLOOR,
             _get_bandit_arm_boost,
         )
-        import random as _random
 
         _random.seed(42)
         client = MagicMock()
@@ -309,8 +310,9 @@ class TestBanditArmBoost(unittest.TestCase):
         Low-alpha arm should sample near 0.0 → boost near floor.
         Averaged over many draws to defeat sampling variance.
         """
-        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
         import random as _random
+
+        from genlab_core.pipeline.stages.push_to_backlog import _get_bandit_arm_boost
 
         _random.seed(123)
         client = MagicMock()

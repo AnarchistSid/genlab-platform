@@ -320,7 +320,7 @@ class ScoreGamingClips(ScoringStrategy):
         if hl_weight > 0:
             real_hl_scores = []
             fallback_indices = []
-            for i, (c, orig) in enumerate(zip(scored, clips)):
+            for i, (c, orig) in enumerate(zip(scored, clips, strict=False)):
                 had_local = orig.get("local_path") is not None
                 has_crispy = self._crispy_scorer is not None and (
                     hasattr(self._crispy_scorer, "is_enabled")

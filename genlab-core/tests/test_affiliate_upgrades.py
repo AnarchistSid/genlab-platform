@@ -16,14 +16,8 @@ zero hits; the dynamic Amazon-search matcher has its own quality gates.
 """
 from __future__ import annotations
 
-import json
-from unittest.mock import patch, MagicMock
-
-import pytest
-
 from genlab_core.monetization.affiliate_matcher import match_product
 from genlab_core.monetization.cta_engine import append_utm_params
-
 
 # ---------------------------------------------------------------------------
 # UTM parameter tests

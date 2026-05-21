@@ -1,5 +1,4 @@
 """Tests for genlab_core.monetization.deep_linker."""
-import pytest
 
 from genlab_core.monetization.deep_linker import (
     DeepLink,

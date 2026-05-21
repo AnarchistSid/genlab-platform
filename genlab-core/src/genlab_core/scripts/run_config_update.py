@@ -119,8 +119,9 @@ def _persist_changes(niche_id: str, changes: list[dict], dry_run: bool) -> None:
     dashboard's Config Updates tab consumes these rows.
     """
     try:
-        import os
         import json as _json
+        import os
+
         import psycopg
 
         db_url = os.environ.get("DATABASE_URL", "").strip()

@@ -26,7 +26,6 @@ Why ISO 8601 not Unix timestamp:
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 from datetime import UTC, datetime

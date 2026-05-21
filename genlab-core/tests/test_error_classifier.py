@@ -1,14 +1,11 @@
 """Tests for genlab_core.publishing.error_classifier."""
 from __future__ import annotations
 
-import pytest
-
 from genlab_core.publishing.error_classifier import (
     classify,
     retry_delay_seconds,
     should_retry,
 )
-
 
 # ---------------------------------------------------------------------------
 # classify()

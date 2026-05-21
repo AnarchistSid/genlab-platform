@@ -1,11 +1,7 @@
 """Tests for seasonal product rotation (affiliate_seasonal.yaml + seasonal.py)."""
 from __future__ import annotations
 
-import textwrap
 from datetime import date
-from pathlib import Path
-
-import pytest
 
 from genlab_core.monetization.seasonal import (
     get_active_events,
@@ -216,7 +212,6 @@ def test_empty_config_file(tmp_path):
 def test_load_real_seasonal_config():
     """The bundled affiliate_seasonal.yaml parses correctly and has events."""
     # Resolve path: seasonal.py → monetization/ → genlab_core/ → src/ → genlab-core/
-    from genlab_core.monetization import seasonal as _seasonal_mod
 
     config = load_seasonal_config()  # uses default _SEASONAL_PATH
     # If the real file exists it should have events; if not, empty dict is also OK

@@ -22,15 +22,14 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
+import time as _time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time as _time
 
 import feedparser
 import psycopg
@@ -834,7 +833,7 @@ class SharedIngestionPipeline:
         if len(self._entries) < 2:
             return
 
-        from genlab_core.intelligence.dedup_engine import jaccard_similarity, DedupEngine
+        from genlab_core.intelligence.dedup_engine import DedupEngine, jaccard_similarity
 
         existing_titles = self._load_recent_pool_titles(limit=3000)
 

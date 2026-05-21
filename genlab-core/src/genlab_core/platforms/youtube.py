@@ -621,7 +621,7 @@ class YouTubeClient:
 
             row = rows[0]
             headers = [col.get("name") for col in response.get("columnHeaders", [])]
-            data = dict(zip(headers, row))
+            data = dict(zip(headers, row, strict=False))
 
             watch_minutes = float(data.get("estimatedMinutesWatched", 0))
             avg_view_duration_s = float(data.get("averageViewDuration", 0))

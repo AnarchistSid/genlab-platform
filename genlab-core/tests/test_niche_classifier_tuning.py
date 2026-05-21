@@ -1,8 +1,8 @@
 """Tests for classifier tuning at 10x volume."""
+from unittest.mock import patch
+
 import pytest
 import yaml
-from pathlib import Path
-from unittest.mock import patch
 
 
 @pytest.fixture

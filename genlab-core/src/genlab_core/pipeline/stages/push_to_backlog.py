@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -318,6 +318,7 @@ def _load_linucb_arms(client, niche_id: str) -> dict:
     """
     try:
         import json as _json
+
         from genlab_core.learning.linucb import CONTEXT_DIM, LinUCBArm
     except ImportError:
         return {}
@@ -531,8 +532,8 @@ class PushToBacklog:
         non_blocking_skipped = 0
         recent_bps: list = []
         try:
-            from datetime import datetime, timedelta, timezone as _tz2
-            _hook_cutoff = datetime.now(_tz2.utc) - timedelta(days=30)
+            from datetime import datetime, timedelta
+            _hook_cutoff = datetime.now(UTC) - timedelta(days=30)
             recent_bps = client.blueprints.all(
                 formula=f"{{niche_id}}='{niche_id}'",
                 max_records=2000,
@@ -605,12 +606,12 @@ class PushToBacklog:
         _existing_stories_for_titles: list = []
         _cm_records_for_titles: list = []
         try:
+            from datetime import datetime, timedelta
             from hashlib import sha256 as _sha256
-            from datetime import datetime, timedelta, timezone as _tz
             _dedup_days = context.get("niche_config", {}).get(
                 "pipeline", {}
             ).get("dedup_window_days", 14)
-            _dedup_cutoff = datetime.now(_tz.utc) - timedelta(days=_dedup_days)
+            _dedup_cutoff = datetime.now(UTC) - timedelta(days=_dedup_days)
             # Historical note: an earlier version of formula_sql had a parameter
             # ordering bug with mixed > and = operators, forcing Python-side
             # date filtering. That bug is fixed — tests verify mixed-operator
@@ -1107,7 +1108,7 @@ class PushToBacklog:
                                 "last_seen": datetime.now(UTC).isoformat(),
                             })
                             seen_urls.add(story_id)
-                    except Exception as exc:
+                    except Exception:
                         pass  # non-critical — other dedup layers cover it
             except Exception as e:
                 logger.warning("[PUSH] Blueprint '%s' failed: %s", title, e)

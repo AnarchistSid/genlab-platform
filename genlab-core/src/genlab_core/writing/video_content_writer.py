@@ -358,8 +358,9 @@ def write_video_content(
         # sanitizer in base_writing, and if the LLM then reproduces the
         # attacker's instructions in the hook/caption, we should drop it
         # rather than render it onto a video that ships to 5 channels.
-        from genlab_core.cache.text_sanitizer import check_for_injection
         import re as _re
+
+        from genlab_core.cache.text_sanitizer import check_for_injection
         _url_re = _re.compile(r"https?://|www\.|bit\.ly|tinyurl|goo\.gl")
         for field_name in ("hook", "instagram_caption", "twitter_content",
                            "youtube_content", "facebook_content", "threads_content"):

@@ -19,7 +19,12 @@ import sys
 import uuid
 from typing import Any
 
-from genlab_core.storage.postgres import PROMOTED_COLUMNS, PostgresBackend, _quote_col, _validate_table
+from genlab_core.storage.postgres import (
+    PROMOTED_COLUMNS,
+    PostgresBackend,
+    _quote_col,
+    _validate_table,
+)
 
 logger = logging.getLogger(__name__)
 

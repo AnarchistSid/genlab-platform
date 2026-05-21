@@ -11,7 +11,7 @@ from pathlib import Path
 
 from flask import Blueprint
 
-from server.core.responses import api_error, api_success
+from server.core.responses import api_success
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("trends_api", __name__, url_prefix="/api/v1/trends")

@@ -17,7 +17,7 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 import yaml
@@ -184,7 +184,7 @@ def _load_catalog() -> dict:
     if _catalog_cache and (now - _catalog_cache_ts) < _CATALOG_TTL:
         return _catalog_cache
     try:
-        with open(_CATALOG_PATH, "r", encoding="utf-8") as f:
+        with open(_CATALOG_PATH, encoding="utf-8") as f:
             _catalog_cache = yaml.safe_load(f) or {}
             _catalog_cache_ts = now
             return _catalog_cache

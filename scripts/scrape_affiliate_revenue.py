@@ -83,7 +83,6 @@ def scrape_admitad() -> bool:
         return False
 
     import urllib.request
-    import base64
 
     try:
         # Get OAuth token (credentials in POST body, not Basic auth)

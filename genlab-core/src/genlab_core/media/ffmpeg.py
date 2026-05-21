@@ -607,7 +607,6 @@ def render_master_sync(source: Path, output: Path) -> Path:
 
     if loop is not None:
         # Already in an async context — use run_coroutine_threadsafe
-        import concurrent.futures
         future = asyncio.run_coroutine_threadsafe(render_master(source, output), loop)
         return future.result(timeout=600)
     else:
@@ -624,7 +623,6 @@ def transcode_for_platforms_sync(
         loop = None
 
     if loop is not None:
-        import concurrent.futures
         future = asyncio.run_coroutine_threadsafe(
             transcode_for_platforms(master, output_dir, platforms), loop,
         )

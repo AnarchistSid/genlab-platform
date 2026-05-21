@@ -9,7 +9,6 @@ import html
 import json
 import re
 from dataclasses import dataclass
-from urllib.parse import quote as url_quote
 
 _MOBILE_PATTERNS = [re.compile(p, re.I) for p in [r"iPhone|iPad|iPod", r"Android", r"Mobile"]]
 _IOS_PATTERN = re.compile(r"iPhone|iPad|iPod", re.I)

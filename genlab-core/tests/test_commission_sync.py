@@ -1,10 +1,7 @@
 """Tests for genlab_core.monetization.commission_sync."""
 from __future__ import annotations
 
-import pytest
-
-from genlab_core.monetization.commission_sync import check_rates, _KNOWN_RATES
-
+from genlab_core.monetization.commission_sync import check_rates
 
 # ---------------------------------------------------------------------------
 # Helpers to build minimal catalog structures

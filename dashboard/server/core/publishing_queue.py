@@ -18,9 +18,10 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+from collections.abc import Generator
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 import yaml
 

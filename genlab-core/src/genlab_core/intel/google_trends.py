@@ -65,7 +65,7 @@ def _read_cache(niche_id: str) -> list[str] | None:
             return None
         data = json.loads(cache_file.read_text())
         return data if isinstance(data, list) and data else None
-    except Exception as exc:  # noqa: logging below
+    except Exception:  # logging happens at caller
         return None
 
 
@@ -87,7 +87,7 @@ def _read_stale_cache(niche_id: str) -> list[str] | None:
     try:
         data = json.loads(cache_file.read_text())
         return data if isinstance(data, list) and data else None
-    except Exception as exc:  # noqa: logging below
+    except Exception:  # logging happens at caller
         return None
 
 
@@ -307,5 +307,5 @@ class GoogleTrendsIntel:
                         return 1.5
 
             return 1.0
-        except Exception as exc:  # noqa: logging below
+        except Exception:  # logging happens at caller
             return 1.0

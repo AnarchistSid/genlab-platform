@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from genlab_core.engagement.persona_schema import NichePersona, VoiceConfig, ReplyConstraints
+from genlab_core.engagement.persona_schema import NichePersona, ReplyConstraints, VoiceConfig
 
 
 def _make_persona() -> NichePersona:

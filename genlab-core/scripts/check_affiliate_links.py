@@ -21,7 +21,6 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -68,7 +67,7 @@ def parse_catalog_urls(catalog: dict) -> list[dict]:
             product_name: str = product.get("name", "unknown")
             networks: dict = product.get("networks", {})
             for network, network_data in networks.items():
-                url: Optional[str] = network_data.get("url")
+                url: str | None = network_data.get("url")
                 if not url:
                     continue
                 if "example.com" in url:
@@ -237,7 +236,7 @@ def main() -> None:
             time.sleep(RATE_LIMIT_SLEEP)
 
     # Summary
-    print(f"\n--- Summary ---")
+    print("\n--- Summary ---")
     print(f"  Total checked : {total}")
     print(f"  Healthy       : {healthy_count}")
     print(f"  Broken        : {len(broken)}")

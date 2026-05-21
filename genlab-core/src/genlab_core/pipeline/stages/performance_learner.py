@@ -108,7 +108,7 @@ class PerformanceLearner:
                 )
                 return None
             return proxy
-        except Exception as exc:
+        except Exception:
             logger.exception("[PerformanceLearner] Proxy creation failed")
             return None
 

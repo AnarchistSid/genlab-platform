@@ -17,7 +17,6 @@ Usage:
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import os
 import re
@@ -26,7 +25,7 @@ from typing import Any
 
 import yaml
 
-from genlab_core.monetization.seasonal import load_seasonal_config, get_seasonal_products
+from genlab_core.monetization.seasonal import get_seasonal_products, load_seasonal_config
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +82,7 @@ def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
     values from the environment.
     """
     path = catalog_path or _CATALOG_PATH
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         catalog = yaml.safe_load(fh)
 
     # Expand ${...} env var placeholders in all network URLs

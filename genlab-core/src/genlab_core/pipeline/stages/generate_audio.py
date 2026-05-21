@@ -86,6 +86,7 @@ class GenerateAudio:
                     trimmed_path = out_path.parent / f"{out_path.stem}_trimmed{out_path.suffix}"
                     try:
                         import subprocess
+
                         from genlab_core.media.ffmpeg import get_ffmpeg_binary
                         subprocess.run([
                             get_ffmpeg_binary(), "-y", "-i", str(out_path),
@@ -103,7 +104,7 @@ class GenerateAudio:
                     generated += 1
                 else:
                     skipped += 1
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "[GenerateAudio] TTS failed for %s",
                     bp.get("candidate_id", "unknown"),
