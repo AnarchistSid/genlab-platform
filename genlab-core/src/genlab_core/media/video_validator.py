@@ -42,22 +42,30 @@ def check_vmaf(
 
     ffmpeg = get_ffmpeg_binary()
     vmaf_log = f"/tmp/vmaf_{platform}.json"
+    # `-nostats -loglevel error` is critical here: without it ffmpeg
+    # emits ~40 KB of "frame=N fps=..." progress lines to stderr while
+    # the libvmaf filter runs. subprocess.run(capture_output=True) buffers
+    # stderr into an OS pipe (~64 KB default), the pipe fills mid-render,
+    # ffmpeg blocks on stderr write, subprocess hits the 300s timeout and
+    # raises, the JSON file never gets finalised, and check_vmaf returns
+    # the fail-open (True, 0.0). 2026-05-21 forensics found this skipped
+    # every single VMAF check in production despite ffmpeg-static having
+    # --enable-libvmaf compiled in. Manual run-as-genlab produced VMAF
+    # score 98.1 against the same files.
     cmd = [
         ffmpeg,
-        "-i",
-        str(master),
-        "-i",
-        str(variant),
+        "-nostats", "-loglevel", "error",
+        "-i", str(master),
+        "-i", str(variant),
         "-filter_complex",
         f"[0:v][1:v]libvmaf=log_fmt=json:log_path={vmaf_log}",
-        "-f",
-        "null",
-        "-",
+        "-f", "null", "-",
     ]
     try:
         subprocess.run(
             cmd,
-            capture_output=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             timeout=300,
         )
     except Exception as e:

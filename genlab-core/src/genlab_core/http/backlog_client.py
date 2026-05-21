@@ -1248,7 +1248,19 @@ class BacklogClient:
             logger.warning("BacklogClient: pending_engagement proxy not configured — skipping status update")
             return
 
-        VALID_STATUSES = {"replied", "liked", "skipped", "failed", "rate_limited", "pending"}
+        # pending_review is set by comment_processor when a reply needs
+        # human approval before posting. Without it in this set, the
+        # status update was rejected silently and the row stayed at
+        # the previous state — meaning the dashboard's review queue
+        # was permanently empty even though 200+ replies/day were
+        # being generated and routed to "review". 2026-05-21 audit
+        # found this combined with the engagement worker re-queueing
+        # the same comments every poller cycle (separate fix in
+        # comment_processor adds _mark_replied for review-routed too).
+        VALID_STATUSES = {
+            "replied", "liked", "skipped", "failed",
+            "rate_limited", "pending", "pending_review",
+        }
         if status not in VALID_STATUSES:
             logger.warning("BacklogClient: invalid engagement status '%s'", status)
             return

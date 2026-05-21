@@ -27,7 +27,6 @@ from typing import Any
 import yaml
 from genlab_core.settings import settings
 from genlab_core.tts import TTSCascade
-from genlab_core.tts.providers import EdgeTTS, ElevenLabsTTS
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +37,22 @@ _cascade = None
 
 
 def _get_tts_cascade() -> TTSCascade:
-    """Build or return a cached TTSCascade (ElevenLabs → edge-tts)."""
+    """Build or return a cached TTSCascade.
+
+    Uses genlab_core.tts.factory.build_tts_cascade() so this stage gets
+    OpenAI TTS in the fallback chain along with ElevenLabs and the
+    free providers. Previously this function built its own cascade
+    with only ElevenLabs+EdgeTTS — but ELEVENLABS_API_KEY isn't set on
+    Hetzner and edge-tts package isn't installed, so the cascade had
+    ZERO working providers and every gaming reel shipped silently
+    with no commentary. 2026-05-21 forensics: 5 TTS failures per
+    gaming run, 0 generated.
+    """
     global _cascade
     if _cascade is not None:
         return _cascade
-    providers = []
-    api_key = getattr(settings, "elevenlabs_api_key", None) or ""
-    if api_key:
-        voice_id = getattr(settings, "elevenlabs_voice_id", None) or "21m00Tcm4TlvDq8ikWAM"
-        providers.append(ElevenLabsTTS(api_key=api_key, voice_id=voice_id))
-    providers.append(EdgeTTS(voice="en-US-GuyNeural"))
-    _cascade = TTSCascade(providers=providers)
+    from genlab_core.tts.factory import build_tts_cascade
+    _cascade = build_tts_cascade()
     return _cascade
 
 

@@ -412,29 +412,60 @@ def generate_hook(
     if not candidates:
         return (None, chosen_style) if return_style else None
 
-    # Score candidates and pick the best
+    # Score candidates and pick the best. Two-layer score:
+    #   1. Heuristic on feature vector (always available, hand-tuned)
+    #   2. Hook classifier learned from 48h reward signal (per niche;
+    #      neutral 0.5 when the niche's classifier isn't trained yet)
+    # The classifier shifts ranking by ±25% when confident (away from
+    # 0.5); when it's neutral the heuristic is the sole signal. This
+    # uses the per-niche models trained by genlab-core/scripts/
+    # train_hook_classifier.py — see 2026-05-21 hook_training_data ID
+    # bridge fix, which was the prerequisite for these models to exist.
     if len(candidates) == 1:
         best = candidates[0]
     else:
         try:
+            from genlab_core.learning.hook_classifier import HookClassifier
             from genlab_core.learning.hook_features import build_feature_vector
+
+            # Lazy singleton per niche — model load is ~30ms each call.
+            global _hook_classifier_cache  # type: ignore[name-defined]
+            try:
+                cache = _hook_classifier_cache
+            except NameError:
+                cache = {}
+                globals()["_hook_classifier_cache"] = cache
+            clf = cache.get(niche_id)
+            if clf is None:
+                clf = HookClassifier(niche_id=niche_id)
+                cache[niche_id] = clf
 
             scored = []
             for h in candidates:
                 feats = build_feature_vector(h)
-                # Simple scoring: prefer longer hooks with questions, numbers, and superlatives
-                score = (
+                heuristic = (
                     feats.get("word_count", 0) * 0.1
                     + feats.get("has_question", 0) * 2.0
                     + feats.get("has_number", 0) * 1.5
                     + feats.get("has_superlative", 0) * 1.0
                     + feats.get("unique_word_ratio", 0) * 1.0
                 )
-                scored.append((h, score))
+                clf_score = clf.score_hook(h)  # 0..1, 0.5 = neutral
+                # Convert clf delta from neutral into a ±25% multiplier
+                # so a confident "this hook will work" shifts ranking
+                # while a neutral classifier leaves the heuristic alone.
+                multiplier = 1.0 + (clf_score - 0.5) * 0.5
+                final = heuristic * multiplier
+                scored.append((h, final, clf_score))
             scored.sort(key=lambda x: x[1], reverse=True)
             best = scored[0][0]
-        except Exception:
-            # If scoring fails, return the first candidate
+            logger.debug(
+                "[%s] Hook ranked %d candidates with classifier "
+                "(clf_score of best=%.3f)",
+                niche_id, len(scored), scored[0][2],
+            )
+        except Exception as exc:
+            logger.debug("[%s] Classifier-aware scoring failed: %s", niche_id, exc)
             best = candidates[0]
 
     logger.info(

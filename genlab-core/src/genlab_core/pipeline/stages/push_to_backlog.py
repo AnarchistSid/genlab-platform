@@ -308,9 +308,84 @@ def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
 _get_arm_boost = _get_bandit_arm_boost
 
 
-def _apply_engagement_boost(base_score: float, arm_id: str, boosts: dict[str, float]) -> float:
-    """Apply engagement-based boost to priority score."""
+def _load_linucb_arms(client, niche_id: str) -> dict:
+    """Load persisted LinUCBArm state for each arm in the niche.
+
+    Returns a dict mapping arm_id -> LinUCBArm. Returns {} on any error
+    so callers degrade to Thompson-only ranking. Cached at module level
+    per (niche_id, generation count) so we don't deserialize matrices
+    on every story.
+    """
+    try:
+        import json as _json
+        from genlab_core.learning.linucb import CONTEXT_DIM, LinUCBArm
+    except ImportError:
+        return {}
+
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return {}
+
+    arms: dict = {}
+    try:
+        for item in proxy.all():
+            fields = item.get("fields", item)
+            if fields.get("niche_id") != niche_id:
+                continue
+            arm_id = fields.get("arm_id", "")
+            if not arm_id:
+                continue
+            raw = fields.get("linucb_state") or ""
+            if not raw:
+                arms[arm_id] = LinUCBArm(d=CONTEXT_DIM)
+                continue
+            try:
+                state = _json.loads(raw) if isinstance(raw, str) else raw
+                arms[arm_id] = LinUCBArm.from_dict(state)
+            except Exception:
+                arms[arm_id] = LinUCBArm(d=CONTEXT_DIM)
+    except Exception as exc:
+        logger.debug("[PUSH] LinUCB load failed: %s", exc)
+        return {}
+    return arms
+
+
+def _apply_engagement_boost(
+    base_score: float,
+    arm_id: str,
+    boosts: dict[str, float],
+    linucb_arms: dict | None = None,
+    story: dict | None = None,
+    niche_id: str | None = None,
+) -> float:
+    """Apply engagement-based boost to priority score.
+
+    When ``linucb_arms`` + ``story`` + ``niche_id`` are provided, the
+    Thompson-sampled boost is further shifted by the per-arm LinUCB UCB
+    score against this story's context vector. Above-prior LinUCB scores
+    push the boost up; below-prior pushes it down. With LinUCB neutral
+    (n_obs<5 or singular matrix) the Thompson boost is the sole signal.
+
+    Why this wiring exists: LinUCBArm.update() is called on every 48h
+    reward and persisted as the linucb_state JSONB column, but until
+    2026-05-21 no production code path called LinUCBArm.predict() at
+    selection time. The matrices were data-collected-but-never-read.
+    """
     multiplier = boosts.get(arm_id, 1.0)
+    if linucb_arms and story is not None and niche_id and arm_id in linucb_arms:
+        try:
+            arm = linucb_arms[arm_id]
+            if arm.n_obs >= 5:
+                from genlab_core.learning.linucb import build_content_context
+                ctx = build_content_context(story, niche_id)
+                ucb = arm.predict(ctx)
+                # UCB lives roughly in [0, 1.5] for our reward scale.
+                # Treat 0.5 as neutral so well-calibrated arms with low
+                # exploration bonus settle near 1.0x. Cap delta at ±20%.
+                delta = max(-0.20, min(0.20, (ucb - 0.5) * 0.4))
+                multiplier = multiplier * (1.0 + delta)
+        except Exception as exc:
+            logger.debug("[PUSH] LinUCB scoring failed: %s", exc)
     return round(base_score * multiplier, 4)
 
 
@@ -501,6 +576,18 @@ class PushToBacklog:
                 "[PUSH] Loaded %s boosts for %d arms: %s",
                 boost_source, len(arm_boosts),
                 {k: f"{v:.2f}" for k, v in arm_boosts.items()},
+            )
+
+        # Load LinUCB matrices for context-aware boost adjustment per
+        # story. Falls back gracefully when bandit_arms have no
+        # linucb_state yet (returns empty arms with n_obs=0 → apply
+        # site short-circuits because of the n_obs>=5 guard).
+        linucb_arms = _load_linucb_arms(client, niche_id)
+        if linucb_arms:
+            with_obs = sum(1 for a in linucb_arms.values() if a.n_obs >= 5)
+            logger.info(
+                "[PUSH] Loaded LinUCB matrices for %d arms (%d with n_obs>=5)",
+                len(linucb_arms), with_obs,
             )
 
         # Load content_memory hashes + active-blueprint URLs for cross-run dedup.
@@ -908,6 +995,9 @@ class PushToBacklog:
                             else story.get("composite_score") if story.get("composite_score") is not None
                             else story.get("score", 0.5),
                             arm_id, arm_boosts,
+                            linucb_arms=linucb_arms,
+                            story=story,
+                            niche_id=niche_id,
                         ),
                         "status": "VISUAL_READY" if rendered_path else "DRAFTED",
                         "format": "reel",

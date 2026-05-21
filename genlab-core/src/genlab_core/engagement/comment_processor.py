@@ -405,6 +405,17 @@ def process_reply_event(event: dict) -> None:
         )
         return
 
+    # Likewise for comments already queued for human review — without
+    # this the same comment gets a fresh persona invocation (Anthropic
+    # call) every poller cycle while sitting in the review queue.
+    if _has_replied(f"review:{comment_id}", platform):
+        logger.debug(
+            "Engagement: previously queued %s for review on %s, "
+            "ignoring re-queue",
+            comment_id, platform,
+        )
+        return
+
     # Record to SharePoint (optional — fails gracefully)
     bl = _get_backlog_client()
     sp_item_id = None
@@ -518,6 +529,14 @@ def process_reply_event(event: dict) -> None:
         logger.info("Engagement: queued reply for %s to human review", comment_id)
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "pending_review", reply_text=reply)
+        # Mark the comment as handled so the next poller cycle doesn't
+        # re-queue it and force another LLM reply generation. Without
+        # this, every comment routed to "review" gets a fresh persona
+        # invocation each poll cycle (~10 min for YT, ~5 min for X),
+        # burning Anthropic credits + creating duplicate review rows.
+        # 2026-05-21 forensics: same 2 comment IDs queued every 7 min
+        # for hours.
+        _mark_replied(f"review:{comment_id}", platform)
         return
 
     # action == "auto" — post immediately
