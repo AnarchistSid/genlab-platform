@@ -79,13 +79,13 @@ class TestLinUCBArm:
         arm = LinUCBArm(d=2, alpha=1.0)
         x = np.array([1.0, 0.5])
 
-        score_before = arm.predict(x)
+        arm.predict(x)
 
         # Add many observations to make A larger -> A^{-1} smaller -> less exploration
         for _ in range(100):
             arm.update(x, reward=0.5)
 
-        score_after = arm.predict(x)
+        arm.predict(x)
         # The exploration bonus sqrt(x^T A^{-1} x) should decrease
         # We can verify by checking that the exploration part is smaller
         A_inv = np.linalg.inv(arm.A)

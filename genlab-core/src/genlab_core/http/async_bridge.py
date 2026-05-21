@@ -51,7 +51,7 @@ def _shutdown_loop() -> None:
         _LOOP.call_soon_threadsafe(_LOOP.stop)
 
 
-import atexit
+import atexit  # noqa: E402 — keep adjacent to its register() call for visibility
 
 atexit.register(_shutdown_loop)
 

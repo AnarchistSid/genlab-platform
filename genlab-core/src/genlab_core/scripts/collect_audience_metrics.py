@@ -267,7 +267,7 @@ def main() -> None:
 
     total_metrics = 0
 
-    for niche_id, (dir_name, prefix) in NICHE_ENVS.items():
+    for niche_id, (_dir_name, prefix) in NICHE_ENVS.items():
         _load_env(niche_id)
         logger.info("Fetching %s...", niche_id)
 

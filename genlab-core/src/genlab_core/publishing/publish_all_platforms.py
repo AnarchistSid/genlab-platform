@@ -747,12 +747,10 @@ def run_publish(
 
     # 4. Daily cap check (per-platform)
     platforms_to_publish = []
-    all_capped = True
     for p in enabled_platforms:
         if daily_cap and not daily_cap.can_publish(p):
             logger.info("[publish] %s: daily cap reached, skipping", p)
         else:
-            all_capped = False
             platforms_to_publish.append(p)
 
     if not platforms_to_publish:
@@ -1000,7 +998,7 @@ def run_publish(
     # ── Retry pass: check recent PUBLISHED blueprints for failed platforms ──
     # Only check blueprints published in the last 7 days (not the entire history)
     try:
-        seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+        (datetime.now(UTC) - timedelta(days=7)).isoformat()
         published_bps = backlog_client.get_blueprints_by_status(
             "PUBLISHED", niche_id=niche_id, max_records=50,
         )

@@ -35,7 +35,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # -- Platform enum -------------------------------------------------------------
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     YOUTUBE = "youtube"
     INSTAGRAM = "instagram"
     TIKTOK = "tiktok"

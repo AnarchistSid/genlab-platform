@@ -77,7 +77,7 @@ def _fetch_clips_for_game(
             return []
         results = []
         for clip in r.json().get("data", []):
-            thumbnail = clip.get("thumbnail_url", "")
+            clip.get("thumbnail_url", "")
             # Twitch CDN pattern: thumbnail URL → MP4
             # e.g. https://clips-media-assets2.twitch.tv/.../AT-xxx-preview-480x272.jpg
             # MP4: split on "-preview-", take [0], add ".mp4"

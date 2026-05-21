@@ -25,13 +25,16 @@ def flow(fn=None, **kwargs):  # type: ignore[misc]
 def task(fn=None, **kwargs):  # type: ignore[misc]
     return fn if fn else lambda f: f
 
-from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot
-from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
-from genlab_core.learning.pending_feedback_task import (
+# Internal imports must come *after* the prefect-stub decorators above so that
+# any module that re-exports flow/task picks up these no-op fallbacks when
+# Prefect is not installed.
+from genlab_core.intelligence.lifecycle_tracker import record_lifecycle_snapshot  # noqa: E402
+from genlab_core.learning.pending_feedback_store import PendingFeedbackStore  # noqa: E402
+from genlab_core.learning.pending_feedback_task import (  # noqa: E402
     CollectionWindow,
     PendingFeedbackTask,
 )
-from genlab_core.learning.reward_shaper import RewardShaper
+from genlab_core.learning.reward_shaper import RewardShaper  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)

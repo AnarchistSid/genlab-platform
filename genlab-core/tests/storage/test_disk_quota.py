@@ -213,7 +213,7 @@ class TestEviction:
         # current_free ~45 KB, need_to_free ~15 KB.
         # low_score (30 KB) is enough — high_score (20 KB) survives.
         mgr = DiskQuotaManager(_cfg(runs, quota_kb=100, protect_recent=1))
-        evicted = mgr.evict("test", target_free_bytes=60 * 1024)
+        mgr.evict("test", target_free_bytes=60 * 1024)
 
         assert not (runs / "low_score").exists()
         assert (runs / "high_score").exists()

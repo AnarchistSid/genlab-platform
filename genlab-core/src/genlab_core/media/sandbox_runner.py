@@ -85,8 +85,8 @@ def _execution_to_result(execution) -> SandboxRunResult:
     The Execution model doesn't expose exit_code directly — we infer it
     from the error field (None = success, non-None = failure).
     """
-    stdout = "".join(l.text for l in execution.logs.stdout)
-    stderr = "".join(l.text for l in execution.logs.stderr)
+    stdout = "".join(line.text for line in execution.logs.stdout)
+    stderr = "".join(line.text for line in execution.logs.stderr)
     # Execution.error is None on success, an ExecutionError on failure
     exit_code = 0 if execution.error is None else 1
     return SandboxRunResult(exit_code=exit_code, stdout=stdout, stderr=stderr)

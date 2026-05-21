@@ -12,10 +12,10 @@ and caption tone.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 
 
-class FilmLifecycleStage(str, Enum):
+class FilmLifecycleStage(StrEnum):
     PRE_RELEASE = "pre_release"
     OPENING_WEEKEND = "opening_weekend"
     LONG_TAIL = "long_tail"

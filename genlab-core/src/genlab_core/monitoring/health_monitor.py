@@ -432,7 +432,7 @@ def check_missing_media(niche_id: str) -> list[Alert]:
         rows = cur.fetchall()
         broken = []
         total_with_paths = 0
-        for bp_id, title, vp in rows:
+        for bp_id, _title, vp in rows:
             if not vp:
                 broken.append(bp_id)
                 continue

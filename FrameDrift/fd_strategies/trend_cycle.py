@@ -22,10 +22,10 @@ Score multipliers:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 
-class TrendCycleStage(str, Enum):
+class TrendCycleStage(StrEnum):
     EMERGING = "emerging"
     PEAK = "peak"
     DECLINING = "declining"
@@ -60,7 +60,7 @@ def detect_trend_cycle(
     modes = (config or {}).get("freshness", {}).get("trend_cycle_modes", {})
     emerging_window = modes.get("emerging_window_hours", 24)
     peak_window = modes.get("peak_window_hours", 72)
-    declining_threshold = modes.get("declining_threshold_hours", 96)
+    modes.get("declining_threshold_hours", 96)
 
     # Classification matrix: age × mention count
     if source_mention_count >= 4:

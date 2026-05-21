@@ -14,6 +14,7 @@ from genlab_core.media.ffmpeg import (
     get_ffprobe_binary,
     resolve_twitter_spec,
 )
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # RenderSpec.to_output_args()
@@ -112,11 +113,11 @@ class TestRenderSpecOutputArgs:
 
 class TestRenderSpecValidation:
     def test_invalid_crf_too_high(self):
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):
             RenderSpec(crf=64)
 
     def test_invalid_crf_negative(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             RenderSpec(crf=-1)
 
     def test_valid_crf_zero(self):

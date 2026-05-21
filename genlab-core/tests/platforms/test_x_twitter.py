@@ -463,10 +463,10 @@ class TestRateLimit:
 
             if tweepy is not None:
                 with patch.object(tweepy, "TooManyRequests", FakeTooManyRequests, create=True):
-                    result1 = tw_client.publish(payload)
+                    tw_client.publish(payload)
             else:
                 with patch.object(tw_client, "_is_rate_limit_error", return_value=True):
-                    result1 = tw_client.publish(payload)
+                    tw_client.publish(payload)
 
         # Manually force rate limit via module-level globals (what production code uses)
         import genlab_core.platforms.x_twitter as _xt_mod

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 from genlab_core.engagement.persona_schema import NichePersona, ReplyConstraints, VoiceConfig
+from pydantic import ValidationError
 
 _GENLAB_ROOT = Path(
     os.environ.get(
@@ -82,7 +83,7 @@ class TestVoiceConfigValidation:
 
     def test_formality_rejects_non_numeric(self):
         """Formality must be numeric — string raises validation error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             VoiceConfig(formality="high")
 
 

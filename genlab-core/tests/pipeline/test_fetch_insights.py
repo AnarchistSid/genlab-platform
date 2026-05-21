@@ -127,7 +127,7 @@ class TestFetchInsightsSharePoint:
         # Mock _fetch_platform to return metrics
         stage._fetch_platform = MagicMock(return_value={"views": 100, "likes": 10})
 
-        result = stage.execute(context)
+        stage.execute(context)
 
         # Should have called publishing_analytics.update to mark as fetched
         mock_client.publishing_analytics.update.assert_called_once()

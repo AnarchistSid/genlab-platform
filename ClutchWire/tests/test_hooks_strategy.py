@@ -170,7 +170,7 @@ class TestHookLLMSkip:
             _make_story(title="Story 2", teams=["Lakers"]),
         ]
         ctx = {"stories": stories}
-        result = strategy.execute(ctx)
+        strategy.execute(ctx)
         hooks = [s["content"]["hook"] for s in stories]
         # All hooks should be unique (case-insensitive)
         assert len(set(h.lower() for h in hooks)) == len(hooks)

@@ -183,7 +183,7 @@ def get_publisher_tier(
     game_registry: dict,
 ) -> str:
     """Look up publisher tier for a game title from game_registry.yaml."""
-    for game_key, game_info in game_registry.get("games", {}).items():
+    for _game_key, game_info in game_registry.get("games", {}).items():
         if game_info.get("display_name", "").lower() == game_title.lower():
             tier = game_info.get("publisher_tier")
             if tier:

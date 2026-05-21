@@ -250,7 +250,7 @@ def generate_commentary_slots(
     running_time = 0.0
     styles_cycle = ["hype", "reaction"]
     style_idx = 0
-    for i, clip in enumerate(clips[:-1]):
+    for _i, clip in enumerate(clips[:-1]):
         running_time += clip.get("effective_duration_seconds", clip.get("duration_seconds", 0))
         if len(slots) < min_lines - 1:
             slots.append({

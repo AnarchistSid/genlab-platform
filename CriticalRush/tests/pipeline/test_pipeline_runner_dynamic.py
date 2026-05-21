@@ -120,7 +120,7 @@ class TestDynamicStageLoading:
         """pipeline_runner.py contains no hardcoded gaming stage imports."""
         from core import pipeline_runner
         source = inspect.getsource(pipeline_runner)
-        for stage_name in [
+        for _stage_name in [
             "FetchGamingStories", "FilterGamingStories", "ScoreGamingClips",
             "EnrichWithIGDB", "ExtractGamingMedia", "WriteGamingContent",
             "AdaptGamingContent", "RenderGamingVideo", "GenerateGamingAudio",

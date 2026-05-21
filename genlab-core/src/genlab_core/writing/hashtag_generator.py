@@ -144,7 +144,7 @@ def generate_youtube_tags(
     YouTube uses tags differently — more keywords, no # prefix.
     """
     title = story.get("title", "") or ""
-    hook = story.get("hook", "") or story.get("hook_text", "") or ""
+    story.get("hook", "") or story.get("hook_text", "") or ""
 
     tags: list[str] = []
 

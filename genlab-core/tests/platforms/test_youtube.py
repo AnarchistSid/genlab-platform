@@ -88,7 +88,7 @@ class TestPublish:
         """publish() always returns PublishResult with platform='youtube'."""
         with (
             patch("genlab_core.platforms.youtube.requests") as mock_req,
-            patch("genlab_core.platforms.youtube.Credentials") as mock_creds_cls,
+            patch("genlab_core.platforms.youtube.Credentials"),
             patch("genlab_core.platforms.youtube.build") as mock_build,
             patch("genlab_core.platforms.youtube.MediaFileUpload"),
         ):

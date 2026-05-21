@@ -36,7 +36,7 @@ class TestYouTubeSubscriberBoost:
         channel = {"subscriber_count": 850.0}
         weights = shaper.get_adjusted_weights("youtube", channel)
 
-        base = BASE_WEIGHTS["youtube"]["subscriber_gained"]
+        BASE_WEIGHTS["youtube"]["subscriber_gained"]
         # After boost, subscriber_gained should be larger than its base
         # proportion. The boost is 2.0x on base, then re-normalised.
         base_normalised = _normalise_weights(dict(BASE_WEIGHTS["youtube"]))

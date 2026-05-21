@@ -205,7 +205,7 @@ def refresh_token(platform: str):
         try:
             from genlab_core.publishing.threads_client import ThreadsClient
             client = ThreadsClient()
-            new_token = client.refresh_token()
+            client.refresh_token()
             # Invalidate cache
             _health_cache["data"] = None
             return api_success(data={"status": "refreshed", "platform": "threads"})

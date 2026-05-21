@@ -55,7 +55,7 @@ def pull_training_data(
     """
     from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
 
-    store = PendingFeedbackStore(backlog_client)
+    PendingFeedbackStore(backlog_client)
 
     # Step 1: Get completed feedback tasks via the analytics proxy.
     # PendingFeedbackStore stores items in a SharePoint list accessible

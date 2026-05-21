@@ -314,7 +314,7 @@ class YouTubeTrailerFetcher:
             query = self._search_template.format(game_title=game_title)
             output_path = output_dir / f"yt_{game_title.replace(' ', '_')[:40]}.mp4"
 
-            cmd = [
+            [
                 "yt-dlp",
                 f"ytsearch3:{query}",
                 "--format", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]",

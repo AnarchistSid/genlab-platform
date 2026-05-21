@@ -47,7 +47,7 @@ class TestComputeEngagementLabelsThresholdAt75thPercentile:
         labels = compute_engagement_labels(examples)
 
         # 75th percentile = 0.5, all rewards == 0.5 >= 0.5 => all label=1
-        assert all(l == 1 for l in labels)
+        assert all(label == 1 for label in labels)
 
     def test_empty_returns_empty(self):
         """Empty input returns empty labels."""
@@ -62,7 +62,7 @@ class TestComputeEngagementLabelsWithTinyDatasetFallback:
         labels = compute_engagement_labels(examples)
 
         assert len(labels) == 3
-        assert all(l == 0 for l in labels)
+        assert all(label == 0 for label in labels)
 
     def test_exactly_5_uses_real_threshold(self):
         """5 examples is the minimum for real percentile computation."""

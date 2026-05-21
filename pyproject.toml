@@ -38,4 +38,18 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+# Tests routinely do sys.path mutation before imports and use `assert`.
+"**/tests/**" = ["S101", "E402"]
+# Dashboard server adds BlackboxBrief root to sys.path via GENLAB_PROJECT_ROOT
+# (see dashboard/CLAUDE.md) before importing execution.*. Same pattern in
+# every API module.
+"dashboard/server/**" = ["E402"]
+# Scripts and migrations import after dotenv.load_dotenv() or sys.path
+# adjustment — intentional pattern, not a code smell to flag every commit.
+"scripts/**" = ["E402"]
+"**/migrations/**" = ["E402"]
+# The 4 production-code E402 sites in genlab-core/src have inline noqa
+# annotations where the import-after-stub-decorator pattern is genuinely
+# intentional (metric_collector defines stub `flow`/`task` decorators
+# before importing the real flow modules); kept explicit per-line to
+# document intent.

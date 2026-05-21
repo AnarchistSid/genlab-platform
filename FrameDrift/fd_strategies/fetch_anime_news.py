@@ -161,7 +161,7 @@ class AnimeRSSFetcher:
                 published = entry.published
 
             story_type = _detect_story_type(title)
-            story_id = "anime_" + hashlib.sha256(
+            "anime_" + hashlib.sha256(
                 (name + title).encode()
             ).hexdigest()[:16]
 
@@ -209,9 +209,9 @@ class AnimeRSSFetcher:
             groups[key].append(item)
 
         result: list[AnimeStoryItem] = []
-        now_iso = datetime.now(UTC).isoformat()
+        datetime.now(UTC).isoformat()
 
-        for key, group_items in groups.items():
+        for group_items in groups.values():
             group_items.sort(key=lambda x: x.published_at)
             representative = group_items[0]
             mention_count = len(group_items)

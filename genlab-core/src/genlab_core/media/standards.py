@@ -17,12 +17,12 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 # ── Platform enum (mirrors media.ffmpeg.Platform, kept here to avoid coupling) ─
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     YOUTUBE = "youtube"
     INSTAGRAM = "instagram"
     TIKTOK = "tiktok"

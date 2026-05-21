@@ -498,7 +498,7 @@ def _build_overview(niche_id: str, days: int, window: str) -> dict:
                 # Try to find blueprint via post_id match in publishing_analytics
                 post_id = f.get("post_id", "")
                 # Strip platform prefix (e.g. "instagram:12345" → "12345")
-                raw_id = post_id.split(":", 1)[-1] if ":" in post_id else post_id
+                post_id.split(":", 1)[-1] if ":" in post_id else post_id
                 # Search for matching blueprint via niche's recent published posts
                 for bp_f in niche_bp_map.get(record_niche, []):
                     if bp_f.get("hook"):

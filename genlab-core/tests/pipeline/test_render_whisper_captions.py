@@ -84,7 +84,7 @@ class TestRenderWhisperCaptions:
 
         # Patch Path.exists so the output file "exists" after FFmpeg
         with patch("pathlib.Path.exists", return_value=True):
-            result = self.stage._render_captions(
+            self.stage._render_captions(
                 video_path=Path("/tmp/video.mp4"),
                 caption_text="test",
                 ws_config={"enabled": True, "model_size": "base"},

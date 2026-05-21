@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import tempfile
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -86,7 +86,7 @@ _CROP_ENCODE_ARGS = [
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-class CropStrategy(str, Enum):
+class CropStrategy(StrEnum):
     """Which algorithm determined the crop region."""
 
     FACE_CENTER = "face_center"

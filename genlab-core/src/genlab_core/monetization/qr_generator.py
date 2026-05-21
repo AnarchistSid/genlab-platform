@@ -62,9 +62,12 @@ def generate_qr_code(
     Returns:
         Path to the generated QR code PNG, or None if generation fails.
     """
+    # Conditional imports: `qrcode[pil]` extra brings StyledPilImage. Without
+    # the [pil] extra only base qrcode is available. The styled image is
+    # optional polish — if missing, base qrcode still produces a valid QR.
     try:
         import qrcode
-        from qrcode.image.styledpil import StyledPilImage
+        from qrcode.image.styledpil import StyledPilImage  # noqa: F401 — availability probe
     except ImportError:
         try:
             import qrcode
@@ -117,7 +120,7 @@ def generate_all_qr_codes(
         base_url = _default_base_url()
 
     results: dict[str, Path | None] = {}
-    for niche_id, channel_slug in _CHANNEL_SLUGS.items():
+    for _niche_id, channel_slug in _CHANNEL_SLUGS.items():
         results[channel_slug] = generate_qr_code(
             channel_slug, base_url=base_url, output_dir=output_dir,
         )

@@ -514,7 +514,7 @@ def fetch_insights_for_window(
     }
 
     if dry_run:
-        for r, reason in eligible:
+        for r, _reason in eligible:
             f = r.get("fields", {})
             age = _post_age_hours(f.get("published_at", ""))
             logger.info(
@@ -524,7 +524,7 @@ def fetch_insights_for_window(
             )
         return stats
 
-    for r, reason in eligible:
+    for r, _reason in eligible:
         f = r.get("fields", {})
         post_id = f.get("post_id", "")
         platform = f.get("platform", "")

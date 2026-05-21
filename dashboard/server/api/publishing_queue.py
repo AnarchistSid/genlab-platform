@@ -82,7 +82,7 @@ def approve_item(record_id):
     data = request.json or {}
     try:
         mgr = _get_queue_manager()
-        result = mgr.approve(
+        mgr.approve(
             record_id,
             notes=data.get("notes", ""),
             niche_id=data.get("niche_id", ""),
@@ -115,7 +115,7 @@ def hold_item(record_id):
     reason = data.get("reason", "")
     try:
         mgr = _get_queue_manager()
-        result = mgr.hold(record_id, reason=reason)
+        mgr.hold(record_id, reason=reason)
 
         try:
             from server.review_server import socketio
@@ -141,7 +141,7 @@ def release_item(record_id):
         return api_error(error="Invalid record ID")
     try:
         mgr = _get_queue_manager()
-        result = mgr.release(record_id)
+        mgr.release(record_id)
 
         try:
             from server.review_server import socketio

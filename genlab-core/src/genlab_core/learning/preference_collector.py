@@ -63,7 +63,7 @@ def collect_weekly_pairs(window_days: int = 7) -> int:
             key = f"{r['niche_id']}:{r['platform']}"
             groups.setdefault(key, []).append(r)
 
-        for key, items in groups.items():
+        for items in groups.values():
             if len(items) < 4:
                 continue
 

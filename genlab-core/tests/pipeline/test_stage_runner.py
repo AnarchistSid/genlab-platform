@@ -123,7 +123,7 @@ class TestSandboxAwareStageRunner:
 
         with patch(
             "genlab_core.pipeline.stage_runner.SandboxAwareStageRunner.run_stage"
-        ) as mock_run:
+        ):
             # Instead, test the actual fallback path
             pass
 
@@ -262,7 +262,7 @@ class TestStageRunnerFactory:
         filt = StageLoggingFilter()
         factory = StageRunnerFactory(genlab_root=GENLAB_ROOT, stage_log_filter=filt)
 
-        stage = FakeStage()
+        FakeStage()
         pipeline_ctx = MagicMock()
 
         # During execution, filter should have the stage name

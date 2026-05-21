@@ -140,7 +140,7 @@ class TestCrossMentionGroupingV2:
     def test_tier1_fresh_single_source_is_emerging(self):
         """Tier-1 fresh single-source items should be classified EMERGING."""
         from datetime import datetime
-        item = AnimeStoryItem(
+        AnimeStoryItem(
             title="Fresh Tier 1 Story",
             source="rss_ann",
             trend_name="fresh tier story",

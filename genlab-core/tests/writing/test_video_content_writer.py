@@ -73,7 +73,7 @@ class TestVideoContentWriter:
             '{"hook":"New hook","instagram_caption":"x #Sports",'
             '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
         )
-        result = write_video_content(
+        write_video_content(
             _make_video(), "sports", llm,
             existing_hooks=["Old hook 1", "Old hook 2"],
         )
@@ -102,7 +102,7 @@ class TestVideoContentWriter:
             '{"hook":"Test","instagram_caption":"x #Sports",'
             '"twitter_content":"x","youtube_content":"x","facebook_content":"x"}'
         )
-        result = write_video_content(
+        write_video_content(
             _make_video(), "sports", llm,
             extra_instructions="BANNED PHRASES:\n  - the sports world is watching",
         )

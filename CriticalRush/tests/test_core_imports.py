@@ -12,7 +12,7 @@ def test_pipeline_context_construction():
 
 def test_feature_flag_default():
     ctx = PipelineContext(niche_id="gaming", run_id="test_001")
-    assert ctx.get_flag("use_gaming_clip_sourcer", default=False) == False
+    assert not ctx.get_flag("use_gaming_clip_sourcer", default=False)
 
 
 def test_settings_importable():

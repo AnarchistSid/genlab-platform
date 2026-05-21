@@ -320,7 +320,7 @@ class TikTokClient:
             )
             resp.raise_for_status()
             data = resp.json().get("data", {})
-            creator_info = data.get("creator_avatar_url") and data  # has data
+            data.get("creator_avatar_url") and data  # has data
             max_dur = data.get("max_video_post_duration_sec")
             if max_dur:
                 logger.info("[TIKTOK] Creator max duration: %ds", max_dur)

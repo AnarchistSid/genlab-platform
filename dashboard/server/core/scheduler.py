@@ -228,7 +228,7 @@ class GenLabScheduler:
             raise KeyError(f"Job not found: {job_id}")
         # Use reschedule with a one-off date trigger at "now"
         import datetime as _dt
-        now = _dt.datetime.now(_dt.UTC)
+        _dt.datetime.now(_dt.UTC)
         # Run in a thread to avoid blocking
         import threading
         threading.Thread(target=job.func, daemon=True).start()

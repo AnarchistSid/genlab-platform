@@ -375,7 +375,7 @@ class FrameCompositor:
 
         logger.info(f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}...")
         try:
-            result = run_ffmpeg(
+            run_ffmpeg(
                 ffmpeg_cmd,
                 timeout=ff.timeout_seconds,
                 fallback_preset=ff.fallback_preset,

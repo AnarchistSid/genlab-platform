@@ -96,7 +96,7 @@ class TestPushToBacklogConfigResolution(unittest.TestCase):
                 "niche_root": tmpdir,
             }
 
-            client = stage._get_client(context)
+            stage._get_client(context)
 
             # Should fall through to no-arg default
             MockClient.assert_called_once_with()

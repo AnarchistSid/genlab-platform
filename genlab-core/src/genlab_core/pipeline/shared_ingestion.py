@@ -60,7 +60,7 @@ def _content_hash(url: str) -> str:
     return hashlib.sha256(url.encode()).hexdigest()[:32]
 
 
-import re as _re
+import re as _re  # noqa: E402 — kept adjacent to the regex constants it powers
 
 _YT_ID_RE = _re.compile(
     r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)'

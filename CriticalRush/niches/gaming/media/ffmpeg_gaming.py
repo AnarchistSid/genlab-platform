@@ -60,8 +60,8 @@ def normalize_clip(
     ffmpeg = get_ffmpeg_binary()
     info = probe_media(input_path) or {}
     video = info.get("video", {})
-    w = video.get("width", target_width)
-    h = video.get("height", target_height)
+    video.get("width", target_width)
+    video.get("height", target_height)
 
     vf = f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
 

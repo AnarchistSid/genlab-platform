@@ -121,7 +121,7 @@ def analyze_platform(platform: str, data: dict) -> dict[str, Any]:
 
     # Also compute hour-only aggregates (ignoring day)
     hour_totals: dict[int, list[float]] = defaultdict(list)
-    for (day, hour), scores in heatmap.items():
+    for (_day, hour), scores in heatmap.items():
         hour_totals[hour].extend(scores)
 
     best_hours = sorted(

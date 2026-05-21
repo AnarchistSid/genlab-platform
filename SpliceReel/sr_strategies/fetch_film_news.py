@@ -227,7 +227,7 @@ class EntertainmentRSSFetcher:
                 "oscar", "golden globe", "bafta", "nominated", "nomination", "winner",
             ])
 
-            story_id = "rss_" + hashlib.sha256(
+            "rss_" + hashlib.sha256(
                 (name + title).encode()
             ).hexdigest()[:16]
 

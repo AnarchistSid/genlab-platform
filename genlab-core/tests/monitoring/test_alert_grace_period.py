@@ -66,7 +66,7 @@ class TestResolveGracePeriod:
         conn, cur = _mock_conn(fetchone_returns=[None])  # no dedup hit
 
         with patch("psycopg.connect", return_value=conn):
-            written = write_alerts_to_db([
+            write_alerts_to_db([
                 Alert("git_drift", "warning", "x")
             ])
 

@@ -78,15 +78,14 @@ def monetisation_progress():
             grouped[niche][platform]["is_monetised"] = True
 
     # Compute per-niche overall pct (average across metrics that have targets)
-    for niche_id, platforms in grouped.items():
+    for _niche_id, platforms in grouped.items():
         pcts = []
-        all_met = True
         for plat_data in platforms.values():
             for m in plat_data["metrics"]:
                 if m["pct_complete"] is not None:
                     pcts.append(m["pct_complete"])
                     if not m["is_threshold_met"]:
-                        all_met = False
+                        pass
             # Correct is_monetised: ALL metrics must be met
             met_count = sum(
                 1 for m in plat_data["metrics"]

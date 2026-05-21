@@ -365,7 +365,7 @@ class TestBanditArmBoost(unittest.TestCase):
             "gameplay_clip": (3.0, 5.0),
             "patch_news": (2.0, 8.0),
         })
-        boosts = _get_bandit_arm_boost(client, "gaming")
+        _get_bandit_arm_boost(client, "gaming")
 
         story = {"title": "New Patch 1.42 buffs healers", "summary": ""}
         content = {"hook": "Patch dropped"}

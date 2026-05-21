@@ -146,13 +146,13 @@ class TestFetchPlatformInsights:
     @patch("genlab_core.scripts.run_fetch_insights._fetch_facebook")
     def test_facebook_dispatched(self, mock_fb):
         mock_fb.return_value = {"likes": 10}
-        result = _fetch_platform_insights("facebook", "fb1", niche_id="ai_creators")
+        _fetch_platform_insights("facebook", "fb1", niche_id="ai_creators")
         mock_fb.assert_called_once_with("fb1", niche_id="ai_creators")
 
     @patch("genlab_core.scripts.run_fetch_insights._fetch_twitter")
     def test_twitter_dispatched(self, mock_tw):
         mock_tw.return_value = {"likes": 5}
-        result = _fetch_platform_insights("x", "tw1", niche_id="gaming")
+        _fetch_platform_insights("x", "tw1", niche_id="gaming")
         mock_tw.assert_called_once_with("tw1")
 
     def test_unknown_platform_returns_none(self):

@@ -76,7 +76,7 @@ class TestDiskQuotaManager:
 
     def test_evict_removes_lowest_score_first(self, config_yaml, runs_dir):
         # Create 4 run dirs, protect_recent=2, so 2 are evictable
-        for i, (name, score, size) in enumerate([
+        for i, (name, _score, size) in enumerate([
             ("run_old_low", 0.1, 500_000),   # evictable, low score
             ("run_old_high", 0.9, 500_000),  # evictable, high score
             ("run_recent_1", 0.5, 500_000),  # protected (recent)
@@ -150,7 +150,7 @@ class TestDiskQuotaManager:
         os.utime(d, (1_000_000, 1_000_000))
 
         mgr = DiskQuotaManager.from_yaml(config_yaml)
-        evicted = mgr.evict("test_agent", target_free_bytes=2 * 1024**3)
+        mgr.evict("test_agent", target_free_bytes=2 * 1024**3)
 
         assert not clips.exists(), "clips/ should be evicted from published run"
         assert d.exists(), "published run itself should not be deleted"

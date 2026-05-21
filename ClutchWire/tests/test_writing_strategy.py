@@ -77,7 +77,7 @@ class TestWriteExecute:
 
         mock_client = MagicMock()
 
-        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client) as mock_cls, \
+        with patch("genlab_core.writing.llm_client.AnthropicLLMClient", return_value=mock_client), \
              patch("genlab_core.cost.model_router.get_model", return_value="claude-haiku-4-5-20251001"), \
              patch("genlab_core.writing.video_content_writer.write_video_content") as mock_wvc:
             mock_wvc.return_value = {

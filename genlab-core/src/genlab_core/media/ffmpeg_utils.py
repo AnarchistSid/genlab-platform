@@ -793,7 +793,7 @@ def reencode_for_cdn(
 
     current_kbps = target_bitrate_kbps
 
-    for attempt in range(1, 3):
+    for _attempt in range(1, 3):
         if not _encode(current_kbps):
             return str(video_path)
 
@@ -958,7 +958,7 @@ def add_text_overlay(
     ffmpeg = get_ffmpeg_binary()
     # Build drawtext filter chain
     filters = []
-    for i, ov in enumerate(overlays):
+    for _i, ov in enumerate(overlays):
         text = escape_drawtext(ov.get("text", ""))
         x = ov.get("x", "(w-text_w)/2")
         y = ov.get("y", 50)

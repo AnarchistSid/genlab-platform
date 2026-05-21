@@ -416,7 +416,7 @@ class TestGenerateAudio:
             "stories": [{"hook": "Test", "body": "Content"}],
             "niche_config": {"audio": {"enabled": False}},
         }
-        result = stage.execute(ctx)
+        stage.execute(ctx)
         # Should return early without processing
         assert "audio" not in ctx.get("run_stats", {})
 
@@ -764,7 +764,7 @@ class TestRunReport:
                     "run_stats": {"qc": {"passed": 1, "failed": 0, "total": 1, "pass_rate": "100.0%"}},
                     "niche_config": {"niche_id": "test"},
                 }
-                result = stage.execute(ctx)
+                stage.execute(ctx)
                 report_path = Path(tmpdir) / "run_report.json"
                 assert report_path.exists()
                 report = json.loads(report_path.read_text())
@@ -783,7 +783,7 @@ class TestRunReport:
                     "run_stats": {},
                     "niche_config": {"niche_id": "test"},
                 }
-                result = stage.execute(ctx)
+                stage.execute(ctx)
                 report_path = Path(tmpdir) / "run_report.json"
                 assert report_path.exists()
 

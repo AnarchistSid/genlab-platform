@@ -84,6 +84,6 @@ class TestTemplatesStoryCategories:
 
     def test_categories_have_formulas(self):
         data = _load("templates.yaml")
-        for cat_name, cat_config in data["hooks"]["story_categories"].items():
+        for _cat_name, cat_config in data["hooks"]["story_categories"].items():
             assert "formulas" in cat_config
             assert len(cat_config["formulas"]) >= 1

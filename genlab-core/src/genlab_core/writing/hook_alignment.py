@@ -22,7 +22,7 @@ def validate_alignment(hook_text: str, narration_opening: str,
 
     hook_lower = hook_text.lower().strip()
     narr_lower = narration_opening.lower().strip()
-    title_lower = (video_title or "").lower().strip()
+    (video_title or "").lower().strip()
 
     # Extract key entities (names, numbers, teams)
     hook_entities = set(re.findall(r"[A-Z][a-z]+(?:\s[A-Z][a-z]+)?|\d+", hook_text))

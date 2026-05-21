@@ -60,7 +60,7 @@ class BBHookStrategy(BaseHookStrategy):
     def _substitute_placeholders(self, formula: str, story: dict) -> str:
         """Replace {placeholders} in hook formulas with story data."""
         title = story.get("title", "")
-        source = story.get("source", "")
+        story.get("source", "")
 
         # Extract company/product names from title
         company = _extract_company(title)

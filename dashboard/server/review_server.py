@@ -1101,7 +1101,7 @@ def _resolve_video_url(blueprint: dict) -> str | None:
         return cdn_url
 
     # 2. Use tunnel URL if configured
-    tunnel_base = os.getenv("CLOUDFLARE_TUNNEL_URL", "").rstrip("/")
+    os.getenv("CLOUDFLARE_TUNNEL_URL", "").rstrip("/")
     rendered_path = fields.get("rendered_path") or fields.get("video_path")
     if not rendered_path:
         # Try extracting from visual_paths

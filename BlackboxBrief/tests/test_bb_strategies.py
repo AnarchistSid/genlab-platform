@@ -62,7 +62,7 @@ class TestContentResearch:
                 "execution.parse_extract.parse_fetch_log",
                 return_value=mock_items,
             ) as mock_parse,
-            patch("genlab_core.cache.disk_cache.Cache") as mock_cache_cls,
+            patch("genlab_core.cache.disk_cache.Cache"),
         ):
             context = {"run_id": "test_run_001"}
             result = strategy.execute(context)

@@ -86,7 +86,7 @@ class TestPublish:
                 return MagicMock(ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/456"})
 
         with patch("genlab_core.platforms.threads.requests") as mock_req:
-            with patch("genlab_core.platforms.threads.time") as mock_time:
+            with patch("genlab_core.platforms.threads.time"):
                 mock_req.post.side_effect = mock_post
                 mock_req.get.side_effect = mock_get
                 result = threads_client.publish(payload)

@@ -97,7 +97,7 @@ def fetch_reddit_videos(
                     continue
 
                 is_video = post.get("is_video", False)
-                has_media = bool(post.get("media"))
+                bool(post.get("media"))
 
                 if content_type == "video" and not is_video:
                     continue
