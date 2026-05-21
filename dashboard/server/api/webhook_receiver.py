@@ -71,16 +71,36 @@ def receive_webhook():
     entries = payload.get("entry", [])
     logger.info("[Webhook] Received %s event with %d entries", object_type, len(entries))
 
-    # Forward to the engagement webhook server for Dramatiq processing
+    # Field names worth forwarding to the engagement server. Both Instagram
+    # product fields and FB Page product fields are included since the same
+    # receiver serves both subscriptions. Pre-2026-05-21 this set was only
+    # the IG side, which silently dropped every FB Page event because the
+    # field-name check failed. Diagnosed when verifying production logs
+    # showed ~1 instagram event/day for two weeks with zero forwards.
+    forwardable_fields = (
+        # Instagram product field names
+        "comments", "mentions", "live_comments", "story_insights",
+        # FB Page product field names (delivered when Page is subscribed
+        # with subscribed_fields=feed, mention, etc.)
+        "feed", "mention",
+    )
+
     comment_count = 0
+    fields_seen: list[str] = []
     for entry in entries:
         entry_id = entry.get("id", "?")
         changes = entry.get("changes", [])
-        logger.info("[Webhook] Entry %s: %d changes", entry_id, len(changes))
         for change in changes:
             field = change.get("field", "")
-            if field in ("comments", "mentions", "live_comments"):
+            fields_seen.append(field)
+            if field in forwardable_fields:
                 comment_count += 1
+        # Single info line per entry with full field-name list so operators
+        # see immediately what Meta is actually delivering.
+        logger.info(
+            "[Webhook] Entry %s: %d changes, fields=%s",
+            entry_id, len(changes), fields_seen,
+        )
 
     if comment_count > 0:
         # Forward full payload to the standalone engagement webhook server
@@ -91,9 +111,19 @@ def receive_webhook():
                 json=payload,
                 timeout=5,
             )
-            logger.info("[Webhook] Forwarded %d comment events to engagement server", comment_count)
+            logger.info(
+                "[Webhook] Forwarded %d engagement events to engagement server (fields=%s)",
+                comment_count, fields_seen,
+            )
         except Exception as exc:
             logger.warning("[Webhook] Failed to forward to engagement server: %s", exc)
+    else:
+        # Explicitly log when fields are received but not in the forward set
+        # so future "missing field name" issues surface immediately.
+        logger.info(
+            "[Webhook] No forwardable fields in %s event (got %s)",
+            object_type, fields_seen,
+        )
 
     # Meta requires 200 response within 20 seconds
     return api_success(data={"status": "received", "comments_forwarded": comment_count})
