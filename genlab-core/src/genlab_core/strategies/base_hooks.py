@@ -216,7 +216,28 @@ class BaseHookStrategy(HookStrategy):
                     cleaned = re.sub(r"^#\w+\s*", "", cleaned).strip()
                     if len(cleaned) > 60:
                         cleaned = cleaned[:57].rsplit(" ", 1)[0] + "..."
-                    if cleaned and not self._is_banned(cleaned):
+                    # Title is only a usable hook if it has hook-shape:
+                    # ends in a question OR contains an action verb (not
+                    # just a bare noun phrase). Without this guard the
+                    # 2026-05-21 audit found us shipping "Forza Horizon
+                    # 6", "Deep Rock Galactic: Rogue Core", "Atletico
+                    # Madrid - Athletic Bilbao" as hooks — those are
+                    # match listings, not curiosity hooks.
+                    has_question = cleaned.rstrip().endswith("?")
+                    has_verb = bool(re.search(
+                        r"\b(is|was|did|are|just|hit|got|made|drops?|broke|"
+                        r"won|lost|leaked|killed|saved|ended|started|"
+                        r"happened|caught|forced|destroyed|exposed|"
+                        r"changes?|matters?|reveals?)\b",
+                        cleaned, re.IGNORECASE,
+                    ))
+                    long_enough = len(cleaned) >= 25
+                    looks_hooky = (has_question or has_verb) and long_enough
+                    if (
+                        cleaned
+                        and looks_hooky
+                        and not self._is_banned(cleaned)
+                    ):
                         story.setdefault("content", {})["hook"] = cleaned
                         story.pop("_skip_llm", None)
                         used_hooks.add(cleaned.lower())
@@ -226,11 +247,33 @@ class BaseHookStrategy(HookStrategy):
                             self._niche_id, cleaned[:60],
                         )
                         continue
-                logger.info(
-                    "[%s] LLM skip not recoverable, leaving for push_to_backlog drop: %s",
-                    self._niche_id, story.get("title", "")[:40],
-                )
-                continue
+                    if cleaned and not looks_hooky:
+                        # Fall through to the template-formula path —
+                        # raw titles like "Forza Horizon 6" need to be
+                        # wrapped in a curiosity formula, not shipped
+                        # as-is. Drop the skip flag so the path below
+                        # runs; the formula generator handles bare
+                        # subjects.
+                        logger.info(
+                            "[%s] Title not hook-shaped, deferring to "
+                            "template formula: %s",
+                            self._niche_id, cleaned[:60],
+                        )
+                        story.pop("_skip_llm", None)
+                        # don't continue — let the formula path below handle it
+                    else:
+                        logger.info(
+                            "[%s] LLM skip not recoverable (title empty/banned), "
+                            "leaving for push_to_backlog drop: %s",
+                            self._niche_id, (story.get("title") or "")[:40],
+                        )
+                        continue
+                else:
+                    logger.info(
+                        "[%s] LLM skip not recoverable (no title), leaving for drop",
+                        self._niche_id,
+                    )
+                    continue
 
             # Skip if the writing stage already produced an LLM hook
             existing_hook = story.get("content", {}).get("hook", "")

@@ -35,7 +35,13 @@ logger = logging.getLogger(__name__)
 # any word — i.e. the hook OPENS with the "<entity> just <action>"
 # template.  A hook with "just" later in the sentence is fine.
 _BANNED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^(\S+\s+){0,3}just\s+\w+", re.IGNORECASE),
+    # "<entity> just <action>" headline lead-in. Previous version was
+    # capped at 3 entity tokens which let multi-word names pass — e.g.
+    # "Cyclops & The Thing just broke..." (4 tokens) shipped through.
+    # 2026-05-21 audit found six such hooks in the published log. Widen
+    # to 8 tokens so even chunky team-list openers ("Mitchell, Allen &
+    # Merrill just dropped") get caught.
+    re.compile(r"^(\S+\s+){0,8}just\s+\w+", re.IGNORECASE),
 ]
 
 
@@ -181,6 +187,23 @@ _BANNED_PHRASES = [
     "absolutely unhinged",
     "are losing it rn",
     "just became unmissable",
+    # Generic LLM tells — every one of these was on the "soft warn"
+    # list in the system prompt but never enforced by code, so the
+    # LLM kept emitting them anyway. Audit on 2026-05-21 found
+    # "literally" + "insane" + "game changer" in published hooks.
+    "literally",
+    "absolutely insane",
+    "absolutely crazy",
+    "absolutely wild",
+    "mind-blowing",
+    "mind blowing",
+    "game changer",
+    "game-changer",
+    "the future is here",
+    "everything you need to know",
+    "you won't believe what",
+    "this could change",
+    "wait until you see",
     "hit different",
 ]
 
