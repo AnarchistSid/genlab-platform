@@ -142,6 +142,25 @@ if [ -d "$SHARED_TMP" ]; then
     echo "  Shared .tmp/runs: cleaned=$cleaned, protected=$protected_count, clips_purged=$clips_purged" >> "$LOG"
 fi
 
+# ── Step 2c: Postgres pending_engagement queue rot ──
+# The engagement worker writes a row per inbound comment, advances it
+# through states (skipped/replied/rate_limited/failed/...). Terminal-
+# state rows older than 7 days are operational dead weight — they
+# never advance. 2026-05-21 forensics: 4459 rate_limited + 667 ancient
+# pending rows accumulated since April 4. Cleanup runs daily so the
+# table stays bounded.
+if [ -n "${DATABASE_URL:-}" ]; then
+    deleted=$(docker exec -i genlab-postgres psql -U genlab -d genlab -t -A -c "
+        WITH d AS (
+            DELETE FROM pending_engagement
+            WHERE status IN ('rate_limited','pending','skipped','failed','PENDING','RETRYING')
+              AND updated_at < NOW() - INTERVAL '7 days'
+            RETURNING 1
+        ) SELECT count(*) FROM d;
+    " 2>/dev/null || echo 0)
+    echo "  pending_engagement: purged $deleted rows (>7d in terminal state)" >> "$LOG"
+fi
+
 # ── Step 3: BB cleanup (has its own cleanup script) ──
 if [ -f "$GENLAB/BlackboxBrief/scripts/cleanup_runs.py" ]; then
     "$UV" run --project "$GENLAB/BlackboxBrief" python "$GENLAB/BlackboxBrief/scripts/cleanup_runs.py" >> "$LOG" 2>&1 || true

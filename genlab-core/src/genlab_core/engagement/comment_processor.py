@@ -394,6 +394,17 @@ def process_reply_event(event: dict) -> None:
         logger.info("Engagement: already replied to %s on %s, skipping", comment_id, platform)
         return
 
+    # Same idempotency for comments we previously decided to skip
+    # (spam or toxic) — without this, the poller re-queues the same
+    # comment indefinitely. 2026-05-21 forensics: 2 toxic comments
+    # were getting reprocessed every ~10 minutes for days.
+    if _has_replied(f"skip:{comment_id}", platform):
+        logger.debug(
+            "Engagement: previously skipped %s on %s, ignoring re-queue",
+            comment_id, platform,
+        )
+        return
+
     # Record to SharePoint (optional — fails gracefully)
     bl = _get_backlog_client()
     sp_item_id = None
@@ -413,6 +424,13 @@ def process_reply_event(event: dict) -> None:
         logger.info("Engagement: skipping spam comment %s", comment_id)
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "skipped")
+        # Record the skip so the next poller pass doesn't re-queue the
+        # same comment 10 minutes from now. Without this the engagement
+        # worker spins forever on the same handful of unrepliable
+        # comments — 2026-05-21 forensics found 2 toxic comments being
+        # re-evaluated every poller cycle, log lines confirming "tox=
+        # 0.95" → skip, again, repeat.
+        _mark_replied(f"skip:{comment_id}", platform)
         return
 
     # 3. Inbound toxicity gate
@@ -424,6 +442,7 @@ def process_reply_event(event: dict) -> None:
         )
         if bl and sp_item_id:
             bl.update_engagement_status(sp_item_id, "skipped")
+        _mark_replied(f"skip:{comment_id}", platform)
         return
 
     # 4. Rate limit — bounce the message into the future via dramatiq.Retry
