@@ -83,10 +83,17 @@ class TestSourceFilters:
         assert filters["score_boost"]["premiere"] == 0.15
 
     def test_google_trends_stub_mode_comment(self):
-        """Verify stub_mode is true and the comment explains why."""
+        """Verify google_trends config is present with a boolean stub_mode.
+
+        Originally pinned stub_mode=True (pytrends offline-only). Flipped
+        to False on 2026-04-11 after pytrends was verified working on the
+        VPS. Loosened to "key exists + is bool" so the test isn't a
+        canary every time the production toggle flips.
+        """
         config = _load_sources_yaml()
         gt = config["google_trends"]
-        assert gt["stub_mode"] is True
+        assert "stub_mode" in gt
+        assert isinstance(gt["stub_mode"], bool)
 
     def test_case_insensitive_matching(self):
         stories = [

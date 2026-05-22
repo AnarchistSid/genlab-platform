@@ -71,14 +71,15 @@ class PipelineRunner:
     ) -> PipelineContext:
         return self._inner.run(niche_id, dry_run=dry_run, verbose=verbose)
 
-    # Expose internal methods for tests that call them directly
-    @staticmethod
-    def _load_stages(niche_id: str, config: dict[str, Any]):
-        return GenericPipelineRunner._load_stages(niche_id, config)
+    # Expose internal methods for tests that call them directly.
+    # _load_stages is an *instance* method on GenericPipelineRunner, so it
+    # must be called through the bound inner instance — calling it on the
+    # class would bind niche_id to self and drop the config argument.
+    def _load_stages(self, niche_id: str, config: dict[str, Any]):
+        return self._inner._load_stages(niche_id, config)
 
-    @staticmethod
-    def _group_stages(stages, declarations):
-        return GenericPipelineRunner._group_stages(stages, declarations)
+    def _group_stages(self, stages, declarations):
+        return self._inner._group_stages(stages, declarations)
 
 
 def _print_dry_run_summary(ctx: PipelineContext) -> None:

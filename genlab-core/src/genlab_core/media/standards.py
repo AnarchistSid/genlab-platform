@@ -89,16 +89,21 @@ _LANDSCAPE_FRAME_X_PREM = FrameStandard(width=1920, height=1080, aspect_ratio="1
 
 _DEFAULT_LAYOUT = LayoutStandard()
 
+# codec/crf values are kept in lockstep with PLATFORM_SPECS in
+# genlab_core.media.ffmpeg (enforced by test_video_standards). Those were
+# retuned 2026-05-21 for the 4GB Hetzner VPS: x265 → x264 everywhere
+# (x265 OOMs) and CRF raised (encode-time budget; platforms re-encode on
+# ingest anyway). When you change one, change both.
 _STANDARDS: dict[Platform, PlatformStandard] = {
     Platform.INSTAGRAM: PlatformStandard(
         platform=Platform.INSTAGRAM,
-        video=VideoStandard(codec="libx264", crf=15, preset="slow"),
+        video=VideoStandard(codec="libx264", crf=22, preset="slow"),
         frame=_VERTICAL_FRAME,
         layout=_DEFAULT_LAYOUT,
     ),
     Platform.YOUTUBE: PlatformStandard(
         platform=Platform.YOUTUBE,
-        video=VideoStandard(codec="libx265", crf=18, preset="slow"),
+        video=VideoStandard(codec="libx264", crf=20, preset="slow"),
         frame=_VERTICAL_FRAME_SOURCE_FPS,
         layout=_DEFAULT_LAYOUT,
     ),
@@ -106,7 +111,7 @@ _STANDARDS: dict[Platform, PlatformStandard] = {
         platform=Platform.TIKTOK,
         video=VideoStandard(
             codec="libx264",
-            crf=15,
+            crf=20,
             preset="slow",
             max_bitrate_kbps=12_000,
         ),
@@ -115,25 +120,25 @@ _STANDARDS: dict[Platform, PlatformStandard] = {
     ),
     Platform.FACEBOOK: PlatformStandard(
         platform=Platform.FACEBOOK,
-        video=VideoStandard(codec="libx264", crf=17, preset="medium"),
+        video=VideoStandard(codec="libx264", crf=22, preset="medium"),
         frame=_LANDSCAPE_FRAME_FB,
         layout=_DEFAULT_LAYOUT,
     ),
     Platform.X_STANDARD: PlatformStandard(
         platform=Platform.X_STANDARD,
-        video=VideoStandard(codec="libx264", crf=20, preset="medium"),
+        video=VideoStandard(codec="libx264", crf=22, preset="medium"),
         frame=_LANDSCAPE_FRAME_X_STD,
         layout=_DEFAULT_LAYOUT,
     ),
     Platform.X_PREMIUM: PlatformStandard(
         platform=Platform.X_PREMIUM,
-        video=VideoStandard(codec="libx264", crf=17, preset="slow"),
+        video=VideoStandard(codec="libx264", crf=20, preset="slow"),
         frame=_LANDSCAPE_FRAME_X_PREM,
         layout=_DEFAULT_LAYOUT,
     ),
     Platform.THREADS: PlatformStandard(
         platform=Platform.THREADS,
-        video=VideoStandard(codec="libx264", crf=15, preset="slow"),
+        video=VideoStandard(codec="libx264", crf=22, preset="slow"),
         frame=_VERTICAL_FRAME,
         layout=_DEFAULT_LAYOUT,
     ),

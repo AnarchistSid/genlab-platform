@@ -7,7 +7,7 @@ and correct behavior with mock models.
 from __future__ import annotations
 
 from genlab_core.learning.hook_classifier import HookClassifier, train_and_save
-from genlab_core.learning.hook_training_data import HookExample
+from genlab_core.learning.hook_training_data import MIN_EXAMPLES, HookExample
 
 
 class TestPredictProbaReturnsNeutralWhenNoModel:
@@ -30,7 +30,13 @@ class TestPredictProbaReturnsNeutralWhenNoModel:
 
 class TestTrainSkipsWhenBelowMinExamples:
     def test_train_skips_with_few_examples(self, tmp_path):
-        """Training returns False when example count < MIN_EXAMPLES."""
+        """Training returns False when example count < MIN_EXAMPLES.
+
+        Uses MIN_EXAMPLES - 1 so the test tracks the threshold (lowered
+        from 200 to 50 in Sprint 68) instead of hardcoding a count that
+        silently crosses the boundary on the next tuning change.
+        """
+        n = MIN_EXAMPLES - 1
         examples = [
             HookExample(
                 hook_text=f"Test hook {i}",
@@ -38,9 +44,9 @@ class TestTrainSkipsWhenBelowMinExamples:
                 niche_id="test",
                 reward_48h=float(i) / 10,
             )
-            for i in range(50)  # Well below MIN_EXAMPLES (200)
+            for i in range(n)
         ]
-        labels = [0] * 25 + [1] * 25
+        labels = [i % 2 for i in range(n)]
 
         result = train_and_save(examples, labels, niche_id="test", models_dir=tmp_path)
         assert result is False
