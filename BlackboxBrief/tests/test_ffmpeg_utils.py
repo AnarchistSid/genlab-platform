@@ -73,8 +73,9 @@ def test_no_192k_in_assemble_video_reel():
     exists. The check via genlab_core.media.ffmpeg's PLATFORM_SPECS
     covers the same invariant for the current rendering path.
     """
-    import pytest
     from pathlib import Path
+
+    import pytest
 
     src = Path(__file__).resolve().parent.parent / "execution" / "assemble_video_reel.py"
     if not src.exists():
