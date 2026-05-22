@@ -134,21 +134,25 @@ def test_retry_delay_quota_any_attempt():
     assert retry_delay_seconds("QUOTA", 5) == 86400
 
 
+# TRANSIENT backoff schedule is [600, 3600, 14400] = 10m, 1h, 4h
+# (see retry_delay_seconds + its comment). Tests previously asserted
+# the older 1h/4h/12h scale; the schedule was shortened so transient
+# failures retry sooner.
 def test_retry_delay_exponential_attempt_0():
-    assert retry_delay_seconds("TRANSIENT", 0) == 3600
+    assert retry_delay_seconds("TRANSIENT", 0) == 600
 
 
 def test_retry_delay_exponential_attempt_1():
-    assert retry_delay_seconds("TRANSIENT", 1) == 14400
+    assert retry_delay_seconds("TRANSIENT", 1) == 3600
 
 
 def test_retry_delay_exponential_attempt_2():
-    assert retry_delay_seconds("TRANSIENT", 2) == 43200
+    assert retry_delay_seconds("TRANSIENT", 2) == 14400
 
 
 def test_retry_delay_exponential_clamps_at_max():
-    # Beyond index 2, should clamp to max delay
-    assert retry_delay_seconds("TRANSIENT", 99) == 43200
+    # Beyond index 2, should clamp to max delay (14400 = 4h)
+    assert retry_delay_seconds("TRANSIENT", 99) == 14400
 
 
 # ---------------------------------------------------------------------------
