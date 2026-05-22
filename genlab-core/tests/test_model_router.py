@@ -23,23 +23,29 @@ class TestGetModel:
         # Hook generation uses Haiku for cost efficiency
         assert "haiku" in model.lower() or "sonnet" in model.lower()
 
-    def test_script_generation_returns_haiku(self):
-        assert "haiku" in get_model("generate_script").lower()
+    def test_script_generation_routes_to_bulk_model(self):
+        # Bulk/internal tasks route to GPT-4o-mini (≈85% cheaper than
+        # Haiku) per the cost-optimization routing config.
+        assert get_model("generate_script") == "gpt-4o-mini"
 
-    def test_utility_task_returns_haiku(self):
-        assert "haiku" in get_model("extract_game_name").lower()
+    def test_utility_task_routes_to_cheapest(self):
+        # Utility extraction routes to the cheapest tier (gpt-4.1-nano).
+        assert get_model("extract_game_name") == "gpt-4.1-nano"
 
     def test_unknown_task_returns_default(self):
         model = get_model("nonexistent_task_xyz")
         assert "haiku" in model.lower()  # default_model from YAML
 
-    def test_budget_10pct_downgrades(self):
+    def test_budget_10pct_downgrades_to_mid(self):
+        # At low budget, the creative-tier Haiku task downgrades to the
+        # mid (bulk) model rather than burning premium spend.
         model = get_model("generate_hooks", budget_ratio=0.15)
-        assert "haiku" in model.lower()  # expensive_to_mid fallback
+        assert model == "gpt-4o-mini"
 
     def test_budget_25pct_uses_cheapest(self):
+        # Even tighter budget → cheapest model.
         model = get_model("generate_hooks", budget_ratio=0.30)
-        assert "haiku" in model.lower()  # mid_to_cheapest fallback
+        assert model == "gpt-4.1-nano"
 
     def test_config_not_found_uses_hardcoded_default(self):
         with patch.dict(os.environ, {"MODEL_ROUTING_CONFIG": "/nonexistent/path.yaml"}):

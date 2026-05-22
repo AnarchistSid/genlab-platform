@@ -89,21 +89,30 @@ class TestHealthDetailed:
 class TestHealthServiceChecks:
     """Unit tests for individual health check functions."""
 
-    @patch("server.api.health.subprocess.run")
-    def test_check_services_redis_up(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="PONG\n")
+    def test_check_services_redis_up(self):
+        """Redis is up when ping() returns truthy.
+
+        Implementation switched from `redis-cli PING` subprocess to the
+        python redis library's ping() in the 2026-05-21 wave-6 audit (the
+        CLI wasn't installed on Hetzner where Redis runs in Docker, so
+        the subprocess approach always reported Down).
+        """
         from server.api.health import _check_services
 
-        services = _check_services()
+        mock_client = MagicMock()
+        mock_client.ping.return_value = True
+        with patch("redis.Redis", return_value=mock_client):
+            services = _check_services()
         assert services["redis"]["status"] == "up"
         assert services["dashboard"]["status"] == "up"
 
-    @patch("server.api.health.subprocess.run")
-    def test_check_services_redis_down(self, mock_run):
-        mock_run.side_effect = FileNotFoundError("redis-cli not found")
+    def test_check_services_redis_down(self):
+        """Redis status is `down` when ping raises."""
         from server.api.health import _check_services
 
-        services = _check_services()
+        with patch("redis.Redis") as mock_redis_cls:
+            mock_redis_cls.return_value.ping.side_effect = ConnectionError("unreachable")
+            services = _check_services()
         assert services["redis"]["status"] == "down"
 
     def test_get_last_run_per_niche_empty_dir(self, tmp_path):

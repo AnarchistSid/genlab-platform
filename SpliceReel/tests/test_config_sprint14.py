@@ -20,9 +20,9 @@ class TestNicheConfig:
     def test_pipeline_has_19_enabled_stages(self):
         cfg = _load("niche.yaml")
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
-        assert (
-            len(enabled) == 21
-        )  # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
+        # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
+        # + FetchRedditClips + AffiliateMatch (Wave 8 — source diversification)
+        assert len(enabled) == 23
 
     def test_enabled_stages_reference_allowed_packages(self):
         cfg = _load("niche.yaml")
