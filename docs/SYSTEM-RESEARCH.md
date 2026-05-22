@@ -234,6 +234,7 @@ clutchwire 136, splicereel 134.
 | Cost / quota control | Real YT-quota minimization; **spend entirely unmeasured** (R-27) |
 | Monetization | Compliant & built, but **unmeasured & Amazon-only** (R-23/R-31/R-32) |
 | Ops: deploy / CI / monitoring | Weakest link |
+| Dependency / version currency | Mostly current, but **3 active deprecations** (X v1.1 media R-42, dead Gemini ID R-43, Meta v21 + ~June-2026 metric retirement R-44) + missed cost features (no prompt caching / Batch — U-01/02). Full sweep → §8 |
 
 ---
 
@@ -283,6 +284,10 @@ effort):
    fix the dashboard slot lock, reconcile the double publish windows.
 7. **R-27 + R-25** — record LLM `usage` into one tracker (make <$5/day observable) and fix the
    VMAF reference (or drop the gate). Both are "the gate exists but measures nothing."
+8. **R-42** — X video uploads call the v1.1 `media/upload` endpoint that was retired 2025-06-09;
+   X reels are likely already failing. Verify on host, then move to v2 `/2/media/upload`.
+9. **R-44** — Meta FB/IG reach/impression metrics retire **~June 2026**; the insight collectors
+   will silently zero out and starve the reward loop. Audit insight fields before the deadline.
 
 | ID | Severity | Status | Risk | Pointer / fix |
 |---|---|---|---|---|
@@ -327,10 +332,40 @@ effort):
 | R-39 | MEDIUM | Open | Render-time spec gaps: no max-duration trim (>60s reels produced then silently dropped downstream as `too_long`); silent/no-audio sources render then get dropped (`no_audio_stream`); the TTS cascade is **never wired into the render path** (the documented ElevenLabs→gTTS audio guarantee is doc-only). | trim at render; wire TTS or document video-first source-audio policy |
 | R-40 | MEDIUM | Open | `PUBLISH_FAILED` revive (publisher, `:~732`) can race a fresh `PushToBacklog` re-create for the same event → two live blueprints; the revive strips `candidate_id` (`:~1196`) so the UNIQUE constraint can't catch it. Also: the `candidate_id` UNIQUE constraint is the real dup backstop, but only for *identical* candidate_id — a different video_id for the same trending event slips through the (lock-free) video_id/Jaccard pre-checks. | dedupe on event, not just candidate_id |
 | R-41 | HIGH | Open | **"Scheduled posts are sacred" is UNENFORCED in production (verified 2026-05-22).** BOTH guard layers are off on the Postgres-primary path: (1) `ScheduleGuardedProxy` is never applied — the Postgres branch sets `self.blueprints = PostgresTableProxy(...)` raw (`backlog_client.py:330`) and `return`s (`:338`) before the wrap at `:392` (legacy SharePoint only); (2) the method-level guard `update_blueprint_status`→`assert_not_scheduled` (`:717,531`) is called by **no production code** — `publish_all_platforms.py` (`:708/715/722/831/900/1209`) and `push_to_backlog.py` (`:1199`) write status via `blueprints.update(...)` directly. So a re-run/publisher can demote or overwrite a `scheduled_for` blueprint — a non-negotiable `cleanup_safety.md` rule. Regressed silently when Postgres became primary (Sprint 65). | wrap the Postgres `blueprints` proxy in `ScheduleGuardedProxy`; route status writes through `update_blueprint_status` |
+| R-42 | HIGH | Open | **X/Twitter video upload uses a retired API (verified 2026-05-22).** `_get_api_v1()` builds a `tweepy.API` v1.1 client (`x_twitter.py:109`) and `:275` calls `api_v1.media_upload(...)`; the v1.1 `media/upload` endpoint was **sunset 2025-06-09** (~11 months ago). tweepy 4.16 (locked) exposes no v2 `Client.media_upload`, so every video tweet's media step likely errors → X reels SKIPPED/FAILED, masked by the silent-SKIP cascade (R-11/R-36). OAuth1.0a tweet creation (`create_tweet`) is unaffected. | migrate to v2 `POST /2/media/upload` (OAuth1.0a still valid; needs `media.write`) or a tweepy version exposing v2 media. **[verify on host]** whether X video publishes are currently failing |
+| R-43 | MEDIUM | Open | **Dead Gemini model ID (verified 2026-05-22).** The `video_analysis` tier is pinned to `gemini-2.5-flash-preview-04-17` (`llm/router.py:72`, `model_routing.yaml:41`), a preview **deprecated 2025-07-15** → the endpoint 404s. Latent if the tier is rarely exercised; a hard error the moment it is. | bump to GA `gemini-2.5-flash`. **[verify on host]** whether `video_analysis` is ever invoked |
+| R-44 | HIGH | Open | **Meta Graph API aging + imminent metric retirement.** All FB/IG calls pin `v21.0` across ~20 sites (client defaults `facebook.py:66`, `instagram.py:59`) — 4 majors behind v25.0 (no hard sunset yet, ~12mo out). **More urgent:** legacy FB/IG reach & impression metrics retire **~June 2026**; the insight collectors (`metric_collector.py:378+`, `fetch_insights.py:226+`) request these fields and will **silently zero out**, starving the learning-loop reward inputs (compounds R-23/R-27 + bandit data-starvation). | centralize the version in one constant + bump to v25.0; audit/replace retiring insight fields before June 2026 |
 
 ---
 
 ## 6. Findings log (append-only, newest first)
+
+### 2026-05-22 — Upgrade & version-currency sweep (5 parallel streams)
+Method: 5 parallel agents researched independent upgrade dimensions (Python deps, frontend/Node,
+runtime+CI tooling, external API versions, AI/ML models+prompt stack), web-verifying "latest" as
+of today. Full opportunity table promoted to **§8 (U-01…U-23)**; active breakage/deadlines
+promoted to **§5 as R-42…R-44**. Headlines:
+- **Three active deprecations, not just stale pins:** X video upload still calls the v1.1
+  `media/upload` retired 2025-06-09 (R-42, verified `x_twitter.py:109,275`); the Gemini
+  `video_analysis` tier points at a preview ID deprecated 2025-07-15 (R-43, verified
+  `router.py:72`/`model_routing.yaml:41`); Meta Graph is pinned `v21.0` (4 majors behind) **and**
+  legacy FB/IG reach/impression metrics retire ~June 2026, which will silently zero the insight
+  collectors that feed the reward loop (R-44).
+- **Biggest cost win is missed feature adoption, not a version bump:** zero prompt caching
+  anywhere in genlab-core (verified — no `cache_control`), no Batch API, and `usage` recorded at
+  only 1 of ~6 Anthropic call sites — directly compounding R-27 (cost unmeasured). U-01/02/03.
+- **Mostly current otherwise:** Claude model IDs are correct (Haiku 4.5 / Sonnet 4.6, not legacy);
+  yt-dlp, psycopg3, pydantic, ruff (0.15.14, 1 day old), most deps at/near latest. The frontend's
+  only real work is three coordinated majors (Vite 8 / TS 6 / ESLint 10), de-risked poorly by the
+  no-vitest-CI gap (R-04).
+- **One upgrade trap:** gunicorn 26 removes the eventlet worker the dashboard relies on
+  (`review_server_wrapper.sh:48`) — pin `<26` until the worker is migrated to gthread (U-07).
+- **Footprint:** detoxify→torch is the heaviest runtime cost on the 4GB box; a lighter Albert
+  (`original-small`) or ONNX (`speedtoxify`) path exists (U-04, compounds R-03).
+- **New doc-drift (→ R-06):** the "Prefect flows" claim is aspirational — `metric_collector.py`
+  uses no-op stub `flow`/`task` decorators (L23-29) and Prefect is in no pyproject/uv.lock;
+  `ffmpeg-python` is not a dependency (FFmpeg is subprocess-only); `cost_accumulator.py` lists
+  stale model IDs (`claude-sonnet-4-5-20250514`, `claude-opus-4-6` — Opus is never used).
 
 ### 2026-05-22 — Deep-dive wave 3: render, publish, concurrency, cost, monetization
 Five exhaustive verified investigations. Produced R-21…R-40. Detail (incl. items not in the
@@ -539,3 +574,48 @@ Two issues worth remembering surfaced during this:
   can it be gated by a human-set flag instead of text regex?
 - Does any production code path read `niche.yaml → platforms_enabled` (which lists tiktok), or
   is the hardcoded publisher default the only enablement source? (R-15 blast radius)
+- **[verify on host]** Are X video publishes currently failing on the retired v1.1 `media/upload`
+  (R-42)? Check `Publishing_Analytics` for X FAILED/SKIPPED on video posts since ~2025-06.
+- **[verify on host]** Is the Gemini `video_analysis` tier (R-43) ever actually invoked, or is it
+  dead-but-never-called? Determines whether R-43 is active or merely latent.
+- Which exact FB/IG insight fields do `metric_collector.py`/`fetch_insights.py` request, and which
+  are in the ~June-2026 reach/impression retirement (R-44)? Audit the field lists before the date.
+
+---
+
+## 8. Upgrade register (append-only; U-NN stable IDs)
+
+Version-currency + modernization sweep (5 parallel streams, 2026-05-22). Distinct from §5: these
+are **opportunities / maintenance**, not active risks — except where a row cross-references a risk.
+"Latest" web-verified as of 2026-05-22 (knowledge-cutoff-independent). Active *breakage/deadlines*
+this sweep surfaced were promoted into §5 as **R-42** (X media), **R-43** (Gemini ID), **R-44**
+(Meta Graph). Effort: S = trivial/hours, M = a day-ish, L = multi-day.
+
+**Do-first (highest value/effort):** U-01 prompt caching, U-06 requests CVE, U-16 ruff pre-commit
+drift, U-03 usage recording (unblocks R-27), U-07 gunicorn pin (a trap, not optional).
+
+| ID | Class | Effort | Item | Pointer |
+|---|---|---|---|---|
+| U-01 | COST-WIN | M | **Adopt Anthropic prompt caching.** No `cache_control` anywhere in genlab-core (verified). Mark the shared system prompt + few-shot ephemeral → ~90% input-token discount + faster TTFT. Highest leverage on the high-volume reply path and the 3-calls-per-hook loop. Cross-ref R-27. | `engagement/persona_engine.py:99`, `writing/llm_hook_generator.py:386,522`, `llm/router.py:178`, `writing/llm_client.py:55` |
+| U-02 | COST-WIN | M | **Anthropic Batch API for daily content/hooks** (50% off). 1 reel/channel/day rendered before the 06:30 UTC window = non-realtime → ideal batch workload. | content-writing + hook stages |
+| U-03 | UPGRADE | S | **Record `response.usage` (incl. cache tokens) at every Anthropic call site** — only `llm_client.complete()` does today. Directly unblocks the R-27 "cost unmeasured" gap. | `router.py:178`, `persona_engine.py:99`, `llm_hook_generator.py:386,522` |
+| U-04 | COST-WIN | S | **Detoxify `original` → `original-small`** (Albert backbone, same Jigsaw categories, lighter torch/RAM on the 4GB box — compounds R-03). `speedtoxify` (ONNX) is an even lighter spike. | `engagement/toxicity_gate.py:41` |
+| U-05 | UPGRADE | S | OpenAI TTS `tts-1-hd` → `gpt-4o-mini-tts`; ElevenLabs legacy `client.generate()` → `text_to_speech.convert()` (survives a future SDK major). | `tts/providers.py:198,129` |
+| U-06 | SECURITY | S | **`requests` → 2.34.2** (CVE-2026-25645). Constraint already permits; `uv lock --upgrade-package requests`. Low practical impact (no `extract_zipped_paths` use) but free hygiene. | root + per-pkg `pyproject.toml` |
+| U-07 | TRAP | S | **Pin `gunicorn<26`** — v26 removes the eventlet worker the dashboard runs (`--worker-class eventlet`). Migrate to `gthread` (psycopg is sync → clean swap; also retires the discouraged eventlet dep) *before* any v26 move. | `dashboard/runbooks/review_server_wrapper.sh:48` |
+| U-08 | SAFE-MINOR | S | One `uv lock --upgrade` sweep: openai 2.26→2.38, elevenlabs 2.38→2.45, anthropic 0.102→0.104, pydantic 2.12→2.13, redis 7.3→7.4, fastapi 0.135→0.136, sqlalchemy (transitive), google-api-python-client. **Avoid** sqlalchemy 2.1 / redis 8.0 (betas). | `pyproject.toml` + `uv.lock` |
+| U-09 | OPERATIONAL | S (recurring) | **yt-dlp routine refresh.** On latest (2026.3.17) today, but it's the single most likely silent-break point for 4 channels' fetch — treat `uv lock --upgrade-package yt-dlp` as monthly maintenance, not one-time. | `CriticalRush` dep |
+| U-10 | MAINT-RISK | M | **pytrends is archived** (last release Apr 2023, repo archived). Evaluate `pytrends-modern` / `trendspyg` before Google Trends next breaks the FrameDrift + intel path. | `FrameDrift` dep; `intel/google_trends.py` |
+| U-11 | SAFE-MINOR | S | Frontend minor batch: react/react-dom 19.2.4→.6, tailwind + `@tailwindcss/vite` 4.2.1→4.3.0 (lockstep), framer-motion, react-router-dom, zod, immer, jsdom, lucide-react 0.575→1.0, react-query-devtools→5.100.x. No security advisories. | `dashboard/frontend/package.json` |
+| U-12 | PREREQ | S | **Pin a Node baseline** (`engines.node` + `.nvmrc` @ Node 22 LTS). None today (no engines / .nvmrc / CI node). Prerequisite for U-13. | `dashboard/frontend` |
+| U-13 | MAJOR | M | ESLint 9→10 (+ `@eslint/js`, `typescript-eslint`). Flat config already used → low migration; main work = JSX ref-tracking `no-unused-vars` change. Node floor `^20.19‖^22.13‖>=24`. | frontend devDeps |
+| U-14 | MAJOR | M-L | Vite 7→8 (Rolldown) + `@vitejs/plugin-react` 5→6 (lockstep). Config renames (`rollupOptions`→`rolldownOptions`, auto-compat layer); main risk = React Compiler interaction. Validate via `npm run build`. | frontend |
+| U-15 | MAJOR | L | TypeScript 5.9→6 (do **last**). Strict-by-default + `baseUrl`/`moduleResolution:classic` removals; `ts5to6` codemod + `ignoreDeprecations:"6.0"` escape hatch. Needs a build gate CI lacks (see U-18 + no-vitest-CI gap). | frontend `tsconfig*` |
+| U-16 | TRIVIAL | S | **Bump pre-commit ruff hook `v0.11.12` → `0.15.14`** to match CI. The 2026 style guide landed in ruff 0.15.0 → local `pre-commit` and CI `ruff format --check` disagree today. Ruff itself already latest. | `.pre-commit-config.yaml` |
+| U-17 | POLICY | S | **Python version policy.** Floor `requires-python>=3.12` but CI only runs 3.13; 3.14 is GA. Either add a 3.12+3.13(+3.14) matrix to prove the floor, or raise the floor to 3.13 + bump ruff `target-version` / mypy. | all `pyproject.toml`, CI |
+| U-18 | HYGIENE | M | **Consolidate `ci.yml`+`test.yml`** (divergent uv pin 0.10.x vs unpinned, Python none vs 3.13, Postgres `genlab` vs `genlab_test`); add the missing frontend `npm run build` gate (Dockerfile already builds it). Reframes R-04 as an upgrade. | `.github/workflows/` |
+| U-19 | SUPPLY-CHAIN | S | **Pin floating Docker tags:** `ghcr.io/astral-sh/uv:latest`, `gyoridavid/short-video-maker:latest-tiny`. | `dashboard/Dockerfile`; BB short-video-maker compose |
+| U-20 | SAFE | S | uv 0.10.9→0.11.11; `astral-sh/setup-uv` v7→v8. | CI + workspace |
+| U-21 | INFO | S | mypy configured (`[tool.mypy]`) but **never run in CI** + unpinned → type-checking unenforced. Add a CI step if desired. (overlaps R-04) | `.github/workflows/` |
+| U-22 | LOW | S | Verify `actions/cache@v5` tag resolves (web shows v4 as latest documented major); else pin v4. | `ci.yml` |
+| U-23 | OPTIONAL | M | Optional majors, both current pins still supported: Postgres 16→18; Node 22→24 (Active LTS). Defer unless doing a sweep. | compose + Dockerfile |
