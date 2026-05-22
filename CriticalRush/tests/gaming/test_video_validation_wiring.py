@@ -150,6 +150,12 @@ class TestCompilationValidation:
             patch.object(Path, "exists", return_value=True),
             patch("niches.gaming.stages.render_gaming_video.get_duration", return_value=10.0),
             patch("niches.gaming.stages.render_gaming_video.compute_hash", return_value=None),
+            # Stub the dedup HashStore so the test doesn't touch a real
+            # .tmp/video_hashes.json — the blanket Path.exists=True patch above
+            # would otherwise make HashStore.load() open a file that is absent
+            # on a fresh checkout (FileNotFoundError instead of the expected
+            # VideoValidationError).
+            patch("niches.gaming.stages.render_gaming_video.HashStore"),
             patch(
                 "niches.gaming.stages.render_gaming_video.validate_platform_variant",
                 return_value=False,

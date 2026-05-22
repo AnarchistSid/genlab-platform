@@ -61,12 +61,12 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
-    @patch("genlab_core.engagement.comment_processor.ToxicityGate")
+    @patch("genlab_core.engagement.comment_processor._toxicity_gate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_reply_posted_and_marked_idempotent(
         self,
         mock_spam,
-        mock_gate_cls,
+        mock_gate,
         mock_engine_cls,
         mock_time,
         mock_delay,
@@ -79,10 +79,15 @@ class TestFullReplyPipeline:
         )
         from genlab_core.platforms.protocols import Engageable
 
-        # Toxicity gate: clean inbound
+        # Toxicity gate: clean inbound. Patch the module-level singleton
+        # (_toxicity_gate), not the ToxicityGate class — the singleton is
+        # instantiated at import so a class patch is too late. max_score
+        # must be a real float: the Sprint-63 auto/review/discard router
+        # compares it numerically.
         mock_result = MagicMock()
         mock_result.is_toxic = False
-        mock_gate_cls.return_value.check_inbound.return_value = mock_result
+        mock_result.max_score = 0.0
+        mock_gate.check_inbound.return_value = mock_result
 
         # Persona engine: return a reply
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for watching!"
@@ -105,10 +110,12 @@ class TestFullReplyPipeline:
             }
             process_reply_event(event)
 
-        # Reply posted via unified client
+        # Reply posted via unified client. The processor appends a bot
+        # disclosure suffix before posting (transparency requirement), so
+        # the posted text includes " [automated reply]".
         mock_client.post_reply.assert_called_once_with(
             parent_id="c200",
-            text="Thanks for watching!",
+            text="Thanks for watching! [automated reply]",
             context_id="v1",
         )
 
@@ -127,12 +134,12 @@ class TestFullReplyPipeline:
     @patch("genlab_core.engagement.comment_processor.human_delay", return_value=0.0)
     @patch("genlab_core.engagement.comment_processor.time")
     @patch("genlab_core.engagement.comment_processor.PersonaEngine")
-    @patch("genlab_core.engagement.comment_processor.ToxicityGate")
+    @patch("genlab_core.engagement.comment_processor._toxicity_gate")
     @patch("genlab_core.engagement.comment_processor.is_spam", return_value=False)
     def test_x_twitter_reply_uses_correct_client(
         self,
         mock_spam,
-        mock_gate_cls,
+        mock_gate,
         mock_engine_cls,
         mock_time,
         mock_delay,
@@ -146,8 +153,13 @@ class TestFullReplyPipeline:
 
         mock_result = MagicMock()
         mock_result.is_toxic = False
-        mock_gate_cls.return_value.check_inbound.return_value = mock_result
-        mock_engine_cls.return_value.generate_reply.return_value = "Nice take!"
+        mock_result.max_score = 0.0
+        mock_gate.check_inbound.return_value = mock_result
+        # Reply must match a SAFE_PATTERN to be auto-posted (the Sprint-63
+        # router only auto-posts known-safe acknowledgments). "Thanks..."
+        # matches; an arbitrary phrase would route to review and never
+        # reach post_reply.
+        mock_engine_cls.return_value.generate_reply.return_value = "Thanks for the thread!"
 
         mock_client = MagicMock(spec=Engageable)
         mock_client.post_reply.return_value = True
@@ -169,7 +181,7 @@ class TestFullReplyPipeline:
 
         mock_client.post_reply.assert_called_once_with(
             parent_id="tw123",
-            text="Nice take!",
+            text="Thanks for the thread! [automated reply]",
             context_id="t1",
         )
 
@@ -251,14 +263,16 @@ class TestPipelineShortCircuits:
     ):
         from genlab_core.engagement.comment_processor import process_reply_event
 
-        mock_gate = MagicMock()
         toxic_result = MagicMock()
         toxic_result.is_toxic = True
         toxic_result.max_dimension = "toxicity"
         toxic_result.max_score = 0.95
-        mock_gate.return_value.check_inbound.return_value = toxic_result
 
-        with patch("genlab_core.engagement.comment_processor.ToxicityGate", mock_gate):
+        # Patch the module-level singleton, not the class — process_reply_event
+        # calls _toxicity_gate.check_inbound(), and the singleton is built at
+        # import so patching ToxicityGate (the class) has no effect.
+        with patch("genlab_core.engagement.comment_processor._toxicity_gate") as mock_gate:
+            mock_gate.check_inbound.return_value = toxic_result
             process_reply_event(
                 {
                     "comment_id": "toxic1",

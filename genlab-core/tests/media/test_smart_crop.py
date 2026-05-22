@@ -120,8 +120,18 @@ class TestDetectLandscape:
         assert region_relaxed.strategy == CropStrategy.CENTER
 
 
+@pytest.mark.skipif(
+    not smart_crop_available(),
+    reason="opencv-python not installed — cannot patch smart_crop.cv2 internals",
+)
 class TestDetectFaceCenter:
-    """Test face detection with mocked OpenCV."""
+    """Test face detection with mocked OpenCV.
+
+    These patch the module-level ``cv2``/``np`` names, which only exist
+    when opencv-python imported successfully. When opencv is absent
+    (optional dependency, not in CI's frozen install) the patch targets
+    don't exist, so the whole class skips.
+    """
 
     @patch("genlab_core.media.smart_crop.probe_video_metadata")
     def test_face_detected_uses_face_strategy(self, mock_probe):
@@ -349,9 +359,28 @@ class TestSmartCropAvailable:
 FIXTURES = Path(__file__).parent / "_fixtures"
 
 _has_fixtures = FIXTURES.exists() and (FIXTURES / "landscape_motion.mp4").exists()
+
+
+def _ffprobe_available() -> bool:
+    """True when ffprobe can be resolved (detect() probes clips with it)."""
+    try:
+        from genlab_core.media.ffmpeg import get_ffprobe_binary
+
+        get_ffprobe_binary()
+        return True
+    except Exception:
+        return False
+
+
+# These run REAL detection against the synthetic fixtures, so they need
+# three things: the fixtures, opencv (the face/motion cascade), AND ffprobe
+# (detect() probes each clip's dimensions first — without it probe returns
+# {} and detect() falls back to CropStrategy.NONE, failing the strategy
+# assertions). opencv ships as a workspace dependency, but ffprobe is only
+# present where FFmpeg is installed; skip cleanly elsewhere rather than fail.
 _skip_integration = pytest.mark.skipif(
-    not _has_fixtures,
-    reason="test fixtures not generated",
+    not _has_fixtures or not smart_crop_available() or not _ffprobe_available(),
+    reason="fixtures missing, opencv unavailable, or ffprobe (FFmpeg) not installed",
 )
 
 

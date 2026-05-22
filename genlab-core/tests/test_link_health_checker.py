@@ -190,10 +190,20 @@ class TestParseCatalogUrls:
 
     def test_real_catalog_skips_placeholders(self) -> None:
         """Integration smoke: parse the real affiliate_catalog.yaml and verify no
-        example.com URLs are included."""
+        example.com URLs are included.
+
+        affiliate_catalog.yaml is gitignored (contains live affiliate
+        deep-links / partner identifiers), so it isn't present in a fresh
+        CI checkout. Skip rather than fail when it's absent — the
+        placeholder-filtering logic itself is covered by the unit tests
+        above with inline fixtures.
+        """
+        import pytest
         import yaml
 
         catalog_path = Path(__file__).parent.parent / "config" / "affiliate_catalog.yaml"
+        if not catalog_path.exists():
+            pytest.skip("affiliate_catalog.yaml gitignored — not present in CI checkout")
         with catalog_path.open("r", encoding="utf-8") as fh:
             real_catalog = yaml.safe_load(fh)
 
