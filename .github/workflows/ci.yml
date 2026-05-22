@@ -44,6 +44,11 @@ jobs:
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      # smart_crop integration tests probe fixtures with ffprobe; without
+      # FFmpeg they skip (guarded), but install it so they actually run —
+      # this is the only job that exercises that coverage (test.yml's
+      # test-core deselects integration tests via -k).
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv sync --frozen
       - run: uv run --package genlab-core pytest genlab-core/tests/ -x -q --ignore=genlab-core/tests/storage/ --ignore=genlab-core/tests/integration/
         env:
