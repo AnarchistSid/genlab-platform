@@ -17,10 +17,10 @@ def _gaming_config():
 
 class TestDynamicStageLoading:
     def test_gaming_stages_load_correctly(self):
-        """Gaming niche loads its 25 enabled stages from niche.yaml."""
+        """Gaming niche loads its 26 enabled stages from niche.yaml."""
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", _gaming_config())
-        assert len(stages) == 25
+        assert len(stages) == 26
         assert stages[0].__class__.__name__ == "ExpressLane"
         assert stages[-1].__class__.__name__ == "RunReport"
 
@@ -30,6 +30,7 @@ class TestDynamicStageLoading:
             "ExpressLane",
             "FetchTrendingVideos",
             "FetchTwitchClips",
+            "FetchRedditClips",
             "FetchSteamTrailers",
             "FetchGamingStories",
             "FilterGamingStories",

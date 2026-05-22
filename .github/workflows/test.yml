@@ -65,6 +65,7 @@ jobs:
   test-channels:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         package: [clutchwire, splicereel, framedrift, blackbox-brief, criticalrush]
         include:
@@ -88,5 +89,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      # Channel render tests build FFmpeg command lines (subprocess is mocked,
+      # but get_ffmpeg_binary() resolves a real path) — install the binary so
+      # command construction doesn't raise "FFmpeg not found".
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv sync --frozen
       - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q
