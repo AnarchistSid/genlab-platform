@@ -120,8 +120,18 @@ class TestDetectLandscape:
         assert region_relaxed.strategy == CropStrategy.CENTER
 
 
+@pytest.mark.skipif(
+    not smart_crop_available(),
+    reason="opencv-python not installed — cannot patch smart_crop.cv2 internals",
+)
 class TestDetectFaceCenter:
-    """Test face detection with mocked OpenCV."""
+    """Test face detection with mocked OpenCV.
+
+    These patch the module-level ``cv2``/``np`` names, which only exist
+    when opencv-python imported successfully. When opencv is absent
+    (optional dependency, not in CI's frozen install) the patch targets
+    don't exist, so the whole class skips.
+    """
 
     @patch("genlab_core.media.smart_crop.probe_video_metadata")
     def test_face_detected_uses_face_strategy(self, mock_probe):
@@ -349,9 +359,14 @@ class TestSmartCropAvailable:
 FIXTURES = Path(__file__).parent / "_fixtures"
 
 _has_fixtures = FIXTURES.exists() and (FIXTURES / "landscape_motion.mp4").exists()
+# These run REAL OpenCV detection, so they need both the synthetic video
+# fixtures AND opencv-python installed. opencv is an optional dependency
+# (not in the base install); without it detect() returns CropStrategy.NONE
+# and the strategy assertions fail. CI doesn't install opencv, so skip
+# there rather than fail.
 _skip_integration = pytest.mark.skipif(
-    not _has_fixtures,
-    reason="test fixtures not generated",
+    not _has_fixtures or not smart_crop_available(),
+    reason="test fixtures not generated or opencv-python not installed",
 )
 
 

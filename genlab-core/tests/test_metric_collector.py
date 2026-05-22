@@ -233,7 +233,7 @@ class TestFetchFacebook:
         assert _fetch_facebook("fbpost1") == {}
 
     def test_includes_video_views_when_present(self, monkeypatch):
-        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -272,7 +272,7 @@ class TestFetchFacebook:
         assert "post_video_avg_time_watched" in params["metric"]
 
     def test_omits_video_keys_when_not_present(self, monkeypatch):
-        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -1519,7 +1519,7 @@ class TestFetchYouTubeAnalyticsExtras:
         )
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {
+            lambda niche_id="": {
                 "client_id": "shared_cid",
                 "client_secret": "shared_csec",
                 "refresh_token": "shared_analytics_rtok",
@@ -1535,7 +1535,10 @@ class TestFetchYouTubeAnalyticsExtras:
         from genlab_core.learning import metric_collector as mc
 
         mc._yt_token_cache.update({"token": "", "niche": "", "ts": 0.0})
-        mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
+        # _yt_analytics_token_cache is now a per-niche dict keyed by
+        # niche_id (each value {"token", "ts"}), so clear() it rather than
+        # overwriting with the old flat {"token","ts"} shape.
+        mc._yt_analytics_token_cache.clear()
 
     def test_analytics_extras_merged_into_result(self, monkeypatch):
         """Successful Analytics call replaces stub zeros."""
@@ -1684,7 +1687,7 @@ class TestFetchYouTubeAnalyticsExtras:
         self._clear_caches()
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
         )
 
         post_count = {"n": 0}
@@ -1712,7 +1715,7 @@ class TestFetchYouTubeAnalyticsExtras:
         self._clear_caches()
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
         )
 
         def fake_post(url, data=None, timeout=None, **_):
@@ -1764,7 +1767,7 @@ class TestFetchYouTubeAnalyticsExtras:
         mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": ""},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": ""},
         )
 
         with patch("requests.get") as mock_get:
