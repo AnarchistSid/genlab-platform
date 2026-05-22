@@ -41,7 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: uv sync --frozen
@@ -56,7 +56,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: uv sync --frozen
@@ -86,7 +86,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.10.x"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       # Channel render tests build FFmpeg command lines (subprocess is mocked,
