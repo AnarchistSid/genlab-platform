@@ -177,10 +177,10 @@ class SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox.config import ConnectionConfigSync
-        from opensandbox.models import Host, Volume
+        from opensandbox.config import ConnectionConfigSync  # noqa: I001
+        from opensandbox.models import Host, Volume  # noqa: I001
 
-        from opensandbox import SandboxSync
+        from opensandbox import SandboxSync  # noqa: I001
 
         cmd_list = cmd if isinstance(cmd, list) else shlex.split(cmd)
         cmd_list = self.rewrite_ffmpeg_cmd(cmd_list)
@@ -225,10 +225,10 @@ class SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox.config import ConnectionConfig
-        from opensandbox.models import Host, Volume
+        from opensandbox.config import ConnectionConfig  # noqa: I001
+        from opensandbox.models import Host, Volume  # noqa: I001
 
-        from opensandbox import Sandbox
+        from opensandbox import Sandbox  # noqa: I001
 
         volume = Volume(
             name="genlab",
@@ -297,10 +297,10 @@ class SandboxedFFmpegRunner:
         if not _check_opensandbox():
             raise RuntimeError("opensandbox package not installed")
 
-        from opensandbox.config import ConnectionConfigSync
-        from opensandbox.models import Host, Volume
+        from opensandbox.config import ConnectionConfigSync  # noqa: I001
+        from opensandbox.models import Host, Volume  # noqa: I001
 
-        from opensandbox import SandboxSync
+        from opensandbox import SandboxSync  # noqa: I001
 
         volume = Volume(
             name="genlab",

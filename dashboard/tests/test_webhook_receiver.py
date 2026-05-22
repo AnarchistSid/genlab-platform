@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -30,14 +31,21 @@ def client():
 
 class TestMetaWebhook:
     def test_verify_valid_token(self, client):
-        resp = client.get(
-            "/api/v1/webhooks/meta",
-            query_string={
-                "hub.mode": "subscribe",
-                "hub.verify_token": "test_verify_token_123",
-                "hub.challenge": "test_challenge_123",
-            },
-        )
+        # The receiver compares against the _VERIFY_TOKEN module global,
+        # which is read from META_WEBHOOK_VERIFY_TOKEN at import time.
+        # In CI that env var is unset, so patch the resolved global to
+        # the token this test sends.
+        import server.api.webhook_receiver as wr
+
+        with patch.object(wr, "_VERIFY_TOKEN", "test_verify_token_123"):
+            resp = client.get(
+                "/api/v1/webhooks/meta",
+                query_string={
+                    "hub.mode": "subscribe",
+                    "hub.verify_token": "test_verify_token_123",
+                    "hub.challenge": "test_challenge_123",
+                },
+            )
         assert resp.status_code == 200
         assert resp.data.decode() == "test_challenge_123"
 

@@ -327,7 +327,7 @@ class TestFetchFacebookVideoObject:
         /insights 400s on every Reel ID. The video object query recovers
         real views/likes/comments so the engagement bandit gets signal.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         vobj = self._video_object_response(views=99, likes=0, comments=1, length_s=40.0)
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
@@ -360,7 +360,7 @@ class TestFetchFacebookVideoObject:
         """When /insights succeeds, don't overwrite its values with video-object
         data (insights is more granular for impressions vs. views).
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
             r = MagicMock()
@@ -429,7 +429,7 @@ class TestFetchFacebookVideoObject:
 
     def test_both_endpoints_fail_returns_safe_dict(self, monkeypatch):
         """Worst case — both /insights and video object 400. Return zeros, no crash."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, *_a, **_k):
             r = MagicMock()
@@ -511,7 +511,7 @@ class TestFetchFacebookReelInsights:
         """All three endpoints succeed (modulo insights 400) → bandit gets
         shares, completion_rate, and authoritative minutes_viewed.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(
@@ -532,7 +532,7 @@ class TestFetchFacebookReelInsights:
 
     def test_share_only_in_dict_when_present(self, monkeypatch):
         """Reels with no shares yet: social_actions has no SHARE key → 0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(social_actions={"COMMENT": 2}),
@@ -543,7 +543,7 @@ class TestFetchFacebookReelInsights:
 
     def test_completion_rate_clamped_to_one(self, monkeypatch):
         """avg_watch > length (looping replays) → completion capped at 1.0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(
@@ -557,7 +557,7 @@ class TestFetchFacebookReelInsights:
 
     def test_video_insights_failure_keeps_stubs(self, monkeypatch):
         """If /video_insights also fails, shares + completion_rate stay 0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
             r = MagicMock()
@@ -623,7 +623,7 @@ class TestFetchFacebookReelInsights:
         which is more authoritative than the (views × avg_watch) estimate
         the /insights path would produce.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(total_view_time_ms=600000.0),  # 10 min total
@@ -1519,7 +1519,7 @@ class TestFetchYouTubeAnalyticsExtras:
         )
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {
+            lambda niche_id="": {
                 "client_id": "shared_cid",
                 "client_secret": "shared_csec",
                 "refresh_token": "shared_analytics_rtok",
@@ -1535,7 +1535,10 @@ class TestFetchYouTubeAnalyticsExtras:
         from genlab_core.learning import metric_collector as mc
 
         mc._yt_token_cache.update({"token": "", "niche": "", "ts": 0.0})
-        mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
+        # _yt_analytics_token_cache is now a per-niche dict keyed by
+        # niche_id (each value {"token", "ts"}), so clear() it rather than
+        # overwriting with the old flat {"token","ts"} shape.
+        mc._yt_analytics_token_cache.clear()
 
     def test_analytics_extras_merged_into_result(self, monkeypatch):
         """Successful Analytics call replaces stub zeros."""
@@ -1684,7 +1687,7 @@ class TestFetchYouTubeAnalyticsExtras:
         self._clear_caches()
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
         )
 
         post_count = {"n": 0}
@@ -1712,7 +1715,7 @@ class TestFetchYouTubeAnalyticsExtras:
         self._clear_caches()
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": "r"},
         )
 
         def fake_post(url, data=None, timeout=None, **_):
@@ -1764,7 +1767,7 @@ class TestFetchYouTubeAnalyticsExtras:
         mc._yt_analytics_token_cache.update({"token": "", "ts": 0.0})
         monkeypatch.setattr(
             "genlab_core.publishing.niche_credentials.resolve_youtube_analytics_credentials",
-            lambda: {"client_id": "c", "client_secret": "s", "refresh_token": ""},
+            lambda niche_id="": {"client_id": "c", "client_secret": "s", "refresh_token": ""},
         )
 
         with patch("requests.get") as mock_get:
