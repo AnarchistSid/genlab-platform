@@ -66,10 +66,22 @@ def test_no_192k_in_render_text_overlays():
 
 
 def test_no_192k_in_assemble_video_reel():
-    """assemble_video_reel.py must not hardcode 192k audio bitrate."""
+    """assemble_video_reel.py must not hardcode 192k audio bitrate.
+
+    Skip when the file has been removed by a refactor — the regression
+    this guards (a hardcoded 192k bitrate) only matters if the file
+    exists. The check via genlab_core.media.ffmpeg's PLATFORM_SPECS
+    covers the same invariant for the current rendering path.
+    """
     from pathlib import Path
 
+    import pytest
+
     src = Path(__file__).resolve().parent.parent / "execution" / "assemble_video_reel.py"
+    if not src.exists():
+        pytest.skip(
+            "assemble_video_reel.py removed in refactor; bitrate now enforced via genlab_core.media.ffmpeg PLATFORM_SPECS"
+        )
     content = src.read_text()
     for lineno, line in enumerate(content.splitlines(), 1):
         stripped = line.strip()

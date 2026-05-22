@@ -41,6 +41,11 @@ packages = ["execution", "bb_strategies"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# _legacy/ holds quarantined tests for code that has been refactored
+# away (execution.parse_extract, execution.youtube_client, etc.). They
+# fail at import time because the modules no longer exist. Kept on
+# disk for archaeological reference but excluded from collection.
+norecursedirs = ["_legacy"]
 
 [tool.ruff]
 target-version = "py312"
