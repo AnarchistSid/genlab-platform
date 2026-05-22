@@ -140,11 +140,17 @@ class TestRenderSpecValidation:
 
 
 class TestPlatformSpecs:
-    def test_youtube_is_h265(self):
-        assert PLATFORM_SPECS[Platform.YOUTUBE].codec == "libx265"
+    def test_youtube_codec(self):
+        # 2026-05-21: deliberately moved YouTube from libx265 → libx264.
+        # x265 OOMs on the 4GB Hetzner VPS for 60s reels, dropping into
+        # the uncapped-bitrate fallback that platforms silently reject.
+        # YouTube re-encodes incoming video anyway, so x264 is safe.
+        assert PLATFORM_SPECS[Platform.YOUTUBE].codec == "libx264"
 
-    def test_instagram_crf_15(self):
-        assert PLATFORM_SPECS[Platform.INSTAGRAM].crf == 15
+    def test_instagram_crf(self):
+        # crf retuned 15 → 22 alongside the preset=fast change for VPS
+        # encode-time budget. Instagram re-encodes on ingest.
+        assert PLATFORM_SPECS[Platform.INSTAGRAM].crf == 22
 
     def test_x_std_width_720(self):
         assert PLATFORM_SPECS[Platform.X_STD].width == 720
@@ -153,7 +159,8 @@ class TestPlatformSpecs:
         assert PLATFORM_SPECS[Platform.X_STD].height == 1280
 
     def test_tiktok_has_maxrate(self):
-        assert PLATFORM_SPECS[Platform.TIKTOK].maxrate == "12M"
+        # maxrate retuned 12M → 6M for the VPS encode budget.
+        assert PLATFORM_SPECS[Platform.TIKTOK].maxrate == "6M"
 
     def test_facebook_has_safe_zones(self):
         fb = PLATFORM_SPECS[Platform.FACEBOOK]

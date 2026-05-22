@@ -16,9 +16,9 @@ import requests
 
 # Skip entire module if opensandbox not installed
 opensandbox = pytest.importorskip("opensandbox")
-from opensandbox.config import ConnectionConfigSync
+from opensandbox.config import ConnectionConfigSync  # noqa: I001
 
-from opensandbox import SandboxSync
+from opensandbox import SandboxSync  # noqa: I001
 
 SANDBOX_SERVER = os.getenv("OPENSANDBOX_SERVER", "http://127.0.0.1:8080")
 SANDBOX_IMAGE = os.getenv("OPENSANDBOX_IMAGE", "ubuntu:22.04")

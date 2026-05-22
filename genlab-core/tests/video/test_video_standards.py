@@ -13,9 +13,13 @@ def test_instagram_standard_uses_h264() -> None:
     assert std.video.codec == "libx264"
 
 
-def test_youtube_standard_uses_h265() -> None:
+def test_youtube_standard_uses_h264() -> None:
+    # YouTube moved off libx265 on 2026-05-21: x265 OOMs on the 4GB
+    # Hetzner VPS for 60s reels, and YouTube re-encodes incoming video
+    # anyway. Kept in lockstep with PLATFORM_SPECS (see
+    # test_standards_codec_matches_platform_specs).
     std = get_standard(Platform.YOUTUBE)
-    assert std.video.codec == "libx265"
+    assert std.video.codec == "libx264"
 
 
 def test_all_standards_have_bt709_colorspace() -> None:

@@ -23,8 +23,13 @@ def strategy(tmp_path):
                     "forbidden_styles": ["BREAKING:", "JUST IN:"],
                     "story_categories": {
                         "trailer_drop": {
+                            # Must be a formula that passes the banned-pattern
+                            # filter — "...trailer just dropped and I'm not okay"
+                            # trips an emotional-reaction ban, which made this
+                            # test fall through to random other-category
+                            # formulas (flaky ~80% fail).
                             "formulas": [
-                                "The {film_title} trailer just dropped and I'm not okay",
+                                "The first {film_title} trailer changes everything",
                             ],
                             "weight": 1.3,
                         },
