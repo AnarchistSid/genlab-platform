@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from genlab_core.monetization.affiliate_matcher import (
     AffiliateMatch,
     _keyword_hits,
@@ -438,6 +439,21 @@ class TestMultiKeywordPriority:
 
 
 class TestSelectBestNetwork:
+    @pytest.fixture(autouse=True)
+    def _healthy_links(self):
+        # select_best_network() calls geo_link_resolver._is_url_healthy(),
+        # which fires a live HTTP GET (5s timeout) on cache miss. Without
+        # this patch the tests reach the network and pass/fail on whether
+        # amzn.to / cuelinks.com / earnkaro.com happen to respond — flaky in
+        # CI. Treat every non-placeholder URL as healthy so the selection
+        # logic (commission ranking, placeholder skipping) is tested in
+        # isolation.
+        with patch(
+            "genlab_core.monetization.geo_link_resolver._is_url_healthy",
+            return_value=True,
+        ):
+            yield
+
     def test_skip_example_com_urls(self):
         """Networks with example.com URLs should be skipped."""
         product = {
