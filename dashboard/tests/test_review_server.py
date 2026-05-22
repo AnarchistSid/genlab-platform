@@ -458,6 +458,13 @@ class TestReactSPA:
     """Test the React SPA is served correctly."""
 
     def test_serves_index_html(self, client):
+        from server.review_server import _DASHBOARD_DIST
+
+        # CI doesn't build the frontend, so `/` serves the "Dashboard not
+        # built" placeholder. Only assert the real SPA shell when dist
+        # exists (matches test_serves_static_assets' guard below).
+        if not (_DASHBOARD_DIST.exists() and (_DASHBOARD_DIST / "index.html").exists()):
+            pytest.skip("dashboard/dist not built (frontend build not run in this env)")
         resp = client.get("/")
         assert resp.status_code == 200
         assert b"<!doctype html>" in resp.data.lower() or b"<!DOCTYPE html>" in resp.data
