@@ -233,7 +233,7 @@ class TestFetchFacebook:
         assert _fetch_facebook("fbpost1") == {}
 
     def test_includes_video_views_when_present(self, monkeypatch):
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -272,7 +272,7 @@ class TestFetchFacebook:
         assert "post_video_avg_time_watched" in params["metric"]
 
     def test_omits_video_keys_when_not_present(self, monkeypatch):
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
@@ -327,7 +327,7 @@ class TestFetchFacebookVideoObject:
         /insights 400s on every Reel ID. The video object query recovers
         real views/likes/comments so the engagement bandit gets signal.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         vobj = self._video_object_response(views=99, likes=0, comments=1, length_s=40.0)
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
@@ -360,7 +360,7 @@ class TestFetchFacebookVideoObject:
         """When /insights succeeds, don't overwrite its values with video-object
         data (insights is more granular for impressions vs. views).
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
             r = MagicMock()
@@ -429,7 +429,7 @@ class TestFetchFacebookVideoObject:
 
     def test_both_endpoints_fail_returns_safe_dict(self, monkeypatch):
         """Worst case — both /insights and video object 400. Return zeros, no crash."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, *_a, **_k):
             r = MagicMock()
@@ -511,7 +511,7 @@ class TestFetchFacebookReelInsights:
         """All three endpoints succeed (modulo insights 400) → bandit gets
         shares, completion_rate, and authoritative minutes_viewed.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(
@@ -532,7 +532,7 @@ class TestFetchFacebookReelInsights:
 
     def test_share_only_in_dict_when_present(self, monkeypatch):
         """Reels with no shares yet: social_actions has no SHARE key → 0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(social_actions={"COMMENT": 2}),
@@ -543,7 +543,7 @@ class TestFetchFacebookReelInsights:
 
     def test_completion_rate_clamped_to_one(self, monkeypatch):
         """avg_watch > length (looping replays) → completion capped at 1.0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(
@@ -557,7 +557,7 @@ class TestFetchFacebookReelInsights:
 
     def test_video_insights_failure_keeps_stubs(self, monkeypatch):
         """If /video_insights also fails, shares + completion_rate stay 0."""
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
 
         def fake_get(url, params=None, headers=None, timeout=None, **_):
             r = MagicMock()
@@ -623,7 +623,7 @@ class TestFetchFacebookReelInsights:
         which is more authoritative than the (views × avg_watch) estimate
         the /insights path would produce.
         """
-        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        monkeypatch.setenv("CRITICALRUSH_FB_PAGE_ACCESS_TOKEN", "tok_fb")
         with patch(
             "requests.get",
             side_effect=self._build_fake_get(total_view_time_ms=600000.0),  # 10 min total

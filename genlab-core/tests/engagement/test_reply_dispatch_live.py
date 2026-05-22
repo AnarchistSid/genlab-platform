@@ -155,7 +155,11 @@ class TestFullReplyPipeline:
         mock_result.is_toxic = False
         mock_result.max_score = 0.0
         mock_gate.check_inbound.return_value = mock_result
-        mock_engine_cls.return_value.generate_reply.return_value = "Nice take!"
+        # Reply must match a SAFE_PATTERN to be auto-posted (the Sprint-63
+        # router only auto-posts known-safe acknowledgments). "Thanks..."
+        # matches; an arbitrary phrase would route to review and never
+        # reach post_reply.
+        mock_engine_cls.return_value.generate_reply.return_value = "Thanks for the thread!"
 
         mock_client = MagicMock(spec=Engageable)
         mock_client.post_reply.return_value = True
@@ -177,7 +181,7 @@ class TestFullReplyPipeline:
 
         mock_client.post_reply.assert_called_once_with(
             parent_id="tw123",
-            text="Nice take! [automated reply]",
+            text="Thanks for the thread! [automated reply]",
             context_id="t1",
         )
 

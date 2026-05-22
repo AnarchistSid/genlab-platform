@@ -174,7 +174,7 @@ class BaseHookStrategy(HookStrategy):
                 if hook.upper().startswith(f.upper()):
                     hook = hook[len(f) :].strip()
             if len(hook) > 60:
-                hook = hook[:57].rsplit(" ", 1)[0] + "..."
+                hook = hook[:57].rsplit(" ", 1)[0].rstrip(".") + "..."
             if hook.lower() not in used_hooks and not self._is_banned(hook):
                 return hook
 
@@ -186,7 +186,7 @@ class BaseHookStrategy(HookStrategy):
         # hook already in used_hooks so callers can rely on cross-story
         # uniqueness.
         title = story.get("title", self._title_fallback_label)
-        base_hook = title[:57].rsplit(" ", 1)[0] + "..." if len(title) > 60 else title
+        base_hook = title[:57].rsplit(" ", 1)[0].rstrip(".") + "..." if len(title) > 60 else title
         if base_hook.lower() not in used_hooks:
             return base_hook
         # Disambiguate. " (2)", " (3)"... extend within the 60-char budget.
@@ -247,7 +247,7 @@ class BaseHookStrategy(HookStrategy):
                     cleaned = re.sub(r"\s*\([^)]*\)\s*", " ", cleaned).strip()
                     cleaned = re.sub(r"^#\w+\s*", "", cleaned).strip()
                     if len(cleaned) > 60:
-                        cleaned = cleaned[:57].rsplit(" ", 1)[0] + "..."
+                        cleaned = cleaned[:57].rsplit(" ", 1)[0].rstrip(".") + "..."
                     # Title is only a usable hook if it has hook-shape:
                     # ends in a question OR contains an action verb (not
                     # just a bare noun phrase). Without this guard the
@@ -338,7 +338,7 @@ class BaseHookStrategy(HookStrategy):
                 # Try to salvage the hook by cleaning artifacts
                 hook = clean_hook(hook)
                 if len(hook) > 60:
-                    hook = hook[:57].rsplit(" ", 1)[0] + "..."
+                    hook = hook[:57].rsplit(" ", 1)[0].rstrip(".") + "..."
 
             # Semantic quality gate: hook should contain at least one word
             # from the story title (specificity check)
