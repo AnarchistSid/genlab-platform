@@ -110,10 +110,12 @@ class TestFullReplyPipeline:
             }
             process_reply_event(event)
 
-        # Reply posted via unified client
+        # Reply posted via unified client. The processor appends a bot
+        # disclosure suffix before posting (transparency requirement), so
+        # the posted text includes " [automated reply]".
         mock_client.post_reply.assert_called_once_with(
             parent_id="c200",
-            text="Thanks for watching!",
+            text="Thanks for watching! [automated reply]",
             context_id="v1",
         )
 
@@ -175,7 +177,7 @@ class TestFullReplyPipeline:
 
         mock_client.post_reply.assert_called_once_with(
             parent_id="tw123",
-            text="Nice take!",
+            text="Nice take! [automated reply]",
             context_id="t1",
         )
 

@@ -50,20 +50,42 @@ class TestBanditState:
         lmod._status_cache["ts"] = 0.0
 
         fake_arms = [
-            {"fields": {"niche_id": "gaming", "arm_id": "hook_dramatic", "alpha": 10.0, "beta": 5.0}},
-            {"fields": {"niche_id": "gaming", "arm_id": "hook_question", "alpha": 3.0, "beta": 7.0}},
+            {
+                "fields": {
+                    "niche_id": "gaming",
+                    "arm_id": "hook_dramatic",
+                    "alpha": 10.0,
+                    "beta": 5.0,
+                }
+            },
+            {
+                "fields": {
+                    "niche_id": "gaming",
+                    "arm_id": "hook_question",
+                    "alpha": 3.0,
+                    "beta": 7.0,
+                }
+            },
         ]
 
         with (
-            patch("server.core.graph_sync.get_sync_client",
-                  return_value=self._fake_sync_client(fake_arms)),
-            patch("server.api.learning._learning_aggregates", return_value={
-                "feedback_by_status": {}, "rewards_count": 0, "avg_reward": 0.0,
-                "max_reward": 0.0, "analytics_count": 0,
-                "config_update_threshold": 100,
-                "config_update_progress": 0,
-                "niches_at_config_quota": [],
-            }),
+            patch(
+                "server.core.graph_sync.get_sync_client",
+                return_value=self._fake_sync_client(fake_arms),
+            ),
+            patch(
+                "server.api.learning._learning_aggregates",
+                return_value={
+                    "feedback_by_status": {},
+                    "rewards_count": 0,
+                    "avg_reward": 0.0,
+                    "max_reward": 0.0,
+                    "analytics_count": 0,
+                    "config_update_threshold": 100,
+                    "config_update_progress": 0,
+                    "niches_at_config_quota": [],
+                },
+            ),
         ):
             resp = client.get("/api/v1/learning/status")
 
@@ -93,13 +115,19 @@ class TestBanditState:
 
         with (
             patch("server.core.graph_sync.get_sync_client", return_value=fake_client),
-            patch("server.api.learning._learning_aggregates", return_value={
-                "feedback_by_status": {}, "rewards_count": 0, "avg_reward": 0.0,
-                "max_reward": 0.0, "analytics_count": 0,
-                "config_update_threshold": 100,
-                "config_update_progress": 0,
-                "niches_at_config_quota": [],
-            }),
+            patch(
+                "server.api.learning._learning_aggregates",
+                return_value={
+                    "feedback_by_status": {},
+                    "rewards_count": 0,
+                    "avg_reward": 0.0,
+                    "max_reward": 0.0,
+                    "analytics_count": 0,
+                    "config_update_threshold": 100,
+                    "config_update_progress": 0,
+                    "niches_at_config_quota": [],
+                },
+            ),
         ):
             resp1 = client.get("/api/v1/learning/status")
             resp2 = client.get("/api/v1/learning/status")
@@ -117,8 +145,10 @@ class TestBanditState:
         lmod._status_cache["data"] = None
         lmod._status_cache["ts"] = 0.0
 
-        with patch("server.core.graph_sync.get_sync_client",
-                   side_effect=RuntimeError("backlog unreachable")):
+        with patch(
+            "server.core.graph_sync.get_sync_client",
+            side_effect=RuntimeError("backlog unreachable"),
+        ):
             resp = client.get("/api/v1/learning/status")
 
         assert resp.status_code == 500

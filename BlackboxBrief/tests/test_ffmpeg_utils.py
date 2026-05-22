@@ -79,7 +79,9 @@ def test_no_192k_in_assemble_video_reel():
 
     src = Path(__file__).resolve().parent.parent / "execution" / "assemble_video_reel.py"
     if not src.exists():
-        pytest.skip("assemble_video_reel.py removed in refactor; bitrate now enforced via genlab_core.media.ffmpeg PLATFORM_SPECS")
+        pytest.skip(
+            "assemble_video_reel.py removed in refactor; bitrate now enforced via genlab_core.media.ffmpeg PLATFORM_SPECS"
+        )
     content = src.read_text()
     for lineno, line in enumerate(content.splitlines(), 1):
         stripped = line.strip()
