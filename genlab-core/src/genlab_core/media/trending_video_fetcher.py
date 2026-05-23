@@ -86,6 +86,31 @@ def reset_quota_tracker() -> None:
         QUOTA_TRACKER["rss_fetches"] = 0
 
 
+# R-28: the per-process QUOTA_TRACKER above is log-only and resets each run, so
+# "max N searches/day across the 5 channels" is unenforced — 5 processes each
+# think they have the full 10k budget. The persistent, cross-process,
+# atomically-locked YouTubeQuotaTracker (shared with the upload path) provides
+# the real global daily ceiling. Lazily created and cached; on any failure we
+# fall back to None so a quota-file problem never blocks fetching.
+_PERSISTENT_QUOTA: Any = None
+_PERSISTENT_QUOTA_FAILED = False
+
+
+def _get_persistent_quota() -> Any:
+    """Return the shared cross-process YouTube quota tracker, or None."""
+    global _PERSISTENT_QUOTA, _PERSISTENT_QUOTA_FAILED
+    if _PERSISTENT_QUOTA is not None or _PERSISTENT_QUOTA_FAILED:
+        return _PERSISTENT_QUOTA
+    try:
+        from genlab_core.monitoring.youtube_quota import YouTubeQuotaTracker
+
+        _PERSISTENT_QUOTA = YouTubeQuotaTracker()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Persistent YouTube quota tracker unavailable: %s", exc)
+        _PERSISTENT_QUOTA_FAILED = True
+    return _PERSISTENT_QUOTA
+
+
 # YouTube video category IDs
 YOUTUBE_CATEGORIES: dict[str, str] = {
     "gaming": "20",
@@ -743,6 +768,18 @@ class TrendingVideoFetcher:
         published_after: datetime,
     ) -> list[TrendingVideo]:
         """Search YouTube for recent videos matching a keyword (100 units)."""
+        # R-28: gate the 100-unit search against the shared cross-process daily
+        # budget BEFORE spending it. Without this, 5 niche processes can each
+        # blow through to 10k independently (e.g. on an RSS outage).
+        _quota = _get_persistent_quota()
+        if _quota is not None and not _quota.can_afford("search"):
+            logger.warning(
+                "[%s] YouTube daily quota near ceiling — skipping search.list for '%s' "
+                "(global cross-process budget protects the 10k/day cap)",
+                niche_id,
+                query,
+            )
+            return []
         try:
 
             def _do_search():
@@ -766,6 +803,11 @@ class TrendingVideoFetcher:
 
             resp = YOUTUBE_CB.call(_do_search)
             _increment_quota(100, f"search.list q={query[:30]}")
+            if _quota is not None:
+                try:
+                    _quota.record("search")  # persist against the global daily budget
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Persistent quota record failed (non-fatal): %s", exc)
             items = resp.json().get("items", [])
             results = []
             for item in items:
