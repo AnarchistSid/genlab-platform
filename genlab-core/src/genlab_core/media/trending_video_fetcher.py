@@ -45,7 +45,7 @@ import threading
 import time
 import urllib.request
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -109,6 +109,71 @@ def _get_persistent_quota() -> Any:
         logger.debug("Persistent YouTube quota tracker unavailable: %s", exc)
         _PERSISTENT_QUOTA_FAILED = True
     return _PERSISTENT_QUOTA
+
+
+# R-37: cross-run disk cache for YouTube fetches (contra optimization.md, the
+# fetcher re-queried YouTube every run). The mostPopular chart and keyword
+# searches are stable over hours and any repeats are caught by video_id dedup,
+# so a short TTL is safe and avoids spending quota/network on re-runs (retries,
+# manual reruns within the window).
+_FETCH_CACHE_TTL_HOURS = 6
+_FETCH_CACHE: Any = None
+_FETCH_CACHE_FAILED = False
+
+
+def _get_fetch_cache() -> Any:
+    """Return the shared on-disk fetch cache, or None on any failure."""
+    global _FETCH_CACHE, _FETCH_CACHE_FAILED
+    if _FETCH_CACHE is not None or _FETCH_CACHE_FAILED:
+        return _FETCH_CACHE
+    try:
+        from genlab_core.cache.disk_cache import Cache
+
+        _FETCH_CACHE = Cache()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Fetch disk cache unavailable: %s", exc)
+        _FETCH_CACHE_FAILED = True
+    return _FETCH_CACHE
+
+
+def _video_to_cacheable(v: TrendingVideo) -> dict:
+    """Serialize a TrendingVideo to a JSON-safe dict (datetime -> ISO string)."""
+    d = asdict(v)
+    d["published_at"] = v.published_at.isoformat()
+    return d
+
+
+def _video_from_cacheable(d: dict) -> TrendingVideo:
+    """Rebuild a TrendingVideo from its cached dict (ISO string -> datetime)."""
+    d = dict(d)
+    d["published_at"] = datetime.fromisoformat(d["published_at"])
+    return TrendingVideo(**d)
+
+
+def _cached_videos(cache_key: str) -> list[TrendingVideo] | None:
+    """Return cached videos for *cache_key* if fresh, else None."""
+    cache = _get_fetch_cache()
+    if cache is None:
+        return None
+    raw = cache.get(cache_key, ttl_hours=_FETCH_CACHE_TTL_HOURS)
+    if not raw:
+        return None
+    try:
+        return [_video_from_cacheable(d) for d in raw]
+    except Exception as exc:  # corrupt/old-shape entry — ignore and refetch
+        logger.debug("Ignoring unreadable fetch-cache entry %s: %s", cache_key, exc)
+        return None
+
+
+def _store_videos(cache_key: str, videos: list[TrendingVideo]) -> None:
+    """Persist *videos* under *cache_key* (best-effort)."""
+    cache = _get_fetch_cache()
+    if cache is None or not videos:
+        return
+    try:
+        cache.set(cache_key, [_video_to_cacheable(v) for v in videos])
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Fetch-cache store failed for %s: %s", cache_key, exc)
 
 
 # YouTube video category IDs
@@ -431,6 +496,16 @@ class TrendingVideoFetcher:
         published_after: datetime,
     ) -> list[TrendingVideo]:
         """Fetch YouTube's most popular chart for a category (1 unit)."""
+        # R-37: serve from the 6h disk cache on re-runs (0 quota, 0 network).
+        cache_key = f"yt_mostpopular_{self.region_code}_{category_id}"
+        cached = _cached_videos(cache_key)
+        if cached is not None:
+            logger.info(
+                "[cache] mostPopular cat=%s hit (%d videos, 0 quota)",
+                category_id,
+                len(cached),
+            )
+            return cached
         try:
 
             def _do_request():
@@ -457,6 +532,7 @@ class TrendingVideoFetcher:
                 v = self._parse_video(item, "mostPopular")
                 if v is not None and self._is_recent(item, published_after):
                     results.append(v)
+            _store_videos(cache_key, results)
             return results
         except CircuitOpenError:
             logger.warning(
@@ -768,6 +844,13 @@ class TrendingVideoFetcher:
         published_after: datetime,
     ) -> list[TrendingVideo]:
         """Search YouTube for recent videos matching a keyword (100 units)."""
+        # R-37: a fresh cache entry returns before we spend the 100 units (the
+        # cache check sits ABOVE the quota gate so a hit costs nothing).
+        cache_key = f"yt_search_{niche_id}_{query}"
+        cached = _cached_videos(cache_key)
+        if cached is not None:
+            logger.info("[cache] search '%s' hit (%d videos, 0 quota)", query, len(cached))
+            return cached
         # R-28: gate the 100-unit search against the shared cross-process daily
         # budget BEFORE spending it. Without this, 5 niche processes can each
         # blow through to 10k independently (e.g. on an RSS outage).
@@ -843,6 +926,7 @@ class TrendingVideoFetcher:
                         description_snippet=snippet.get("description", "")[:200],
                     )
                 )
+            _store_videos(cache_key, results)
             return results
         except CircuitOpenError:
             logger.warning("YouTube circuit open — skipping search for '%s'", query)
