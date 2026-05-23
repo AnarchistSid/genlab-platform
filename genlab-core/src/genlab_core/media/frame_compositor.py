@@ -80,6 +80,11 @@ S_LOGO_Y = S_HOOK_Y - 150
 # Shared branding
 LOGO_SIZE = 60
 LOGO_X = 45
+# Layout B (portrait): the logo is overlaid directly ON the full-screen video
+# (R-26 — portrait reels previously shipped with NO branding at all). Top-left,
+# clear of the platform UI safe zone, with a subtle dark backing for contrast.
+P_LOGO_X = 45
+P_LOGO_Y = 70
 NAME_FONT_SIZE = 24
 NAME_X = 120
 HANDLE_FONT_SIZE = 17
@@ -331,6 +336,19 @@ class FrameCompositor:
         Raises:
             RuntimeError: if FFmpeg fails.
         """
+        # R-26: the channel logo is a STRICT, mandatory invariant — a reel
+        # without it must NEVER silently ship. Previously a missing logo file
+        # degraded to text-only branding on landscape/square (and portrait had
+        # no branding at all) yet still returned success → VISUAL_READY. Fail
+        # LOUD instead so the dark-day alerting (R-65/R-01) surfaces it rather
+        # than an unbranded reel reaching publish.
+        if not (self.branding.logo_path and os.path.exists(self.branding.logo_path)):
+            raise RuntimeError(
+                f"[{self.branding.niche_id}] Channel logo missing or not found "
+                f"(logo_path={self.branding.logo_path!r}) — refusing to render an "
+                "unbranded reel; every reel MUST carry the channel logo."
+            )
+
         # Use config defaults from visuals.yaml
         ff = self.branding.ffmpeg
         if preset is None:
@@ -545,10 +563,13 @@ class FrameCompositor:
     def _build_cmd_portrait(
         self, src, hook, out, info, duration, trim_start, crf, preset, fps
     ) -> list[str]:
-        """Portrait clip: clean full-screen video, NO branding or hook overlay.
+        """Portrait clip: full-screen video with the channel logo overlaid.
 
-        Portrait sources (9:16) fill the entire 1080x1920 canvas.
-        No logo, no text, no gradient — just the video.
+        Portrait sources (9:16) fill the entire 1080x1920 canvas. R-26: the
+        logo is now overlaid in the top-left corner (these reels previously
+        shipped with zero branding, violating the "every reel has the logo"
+        invariant). A subtle dark backing keeps the logo legible over bright
+        footage. The logo file is guaranteed present by compose()'s guard.
         """
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
@@ -556,13 +577,18 @@ class FrameCompositor:
         filtergraph = (
             f"[0:v]scale={CANVAS_W}:{CANVAS_H}:"
             f"force_original_aspect_ratio=increase,"
-            f"crop={CANVAS_W}:{CANVAS_H}[out]"
+            f"crop={CANVAS_W}:{CANVAS_H}[vid];"
+            f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
+            # Subtle dark backing so the logo stays visible on bright footage.
+            f"[vid]drawbox=x={P_LOGO_X - 4}:y={P_LOGO_Y - 4}:"
+            f"w={LOGO_SIZE + 8}:h={LOGO_SIZE + 8}:color=black@0.30:t=fill[vidbg];"
+            f"[vidbg][logo]overlay={P_LOGO_X}:{P_LOGO_Y}[out]"
         )
 
         return (
             ["ffmpeg", "-y"]
             + trim_flag
-            + ["-i", src]
+            + ["-i", src, "-i", self.branding.logo_path]
             + dur_flags
             + ["-filter_complex", filtergraph, "-map", "[out]", "-map", "0:a?"]
             + self._output_flags(crf, preset, fps)
