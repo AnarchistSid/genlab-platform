@@ -56,12 +56,17 @@ def receive_webhook():
 
     Currently logs events only. Future: route to engagement collector.
     """
-    # Verify signature if app secret is configured
-    if _APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256", "")
-        if not _verify_signature(request.data, signature):
-            logger.warning("[Webhook] Invalid signature on incoming webhook")
-            abort(403)
+    # R-14: fail CLOSED. Without a configured app secret we cannot verify
+    # authenticity, so reject rather than accept forged events (which would
+    # trigger LLM replies + Anthropic spend). Previously this was gated on
+    # `if _APP_SECRET:`, so an unset secret skipped verification entirely.
+    if not _APP_SECRET:
+        logger.error("[Webhook] META_APP_SECRET not set — rejecting unverifiable webhook")
+        abort(403)
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not _verify_signature(request.data, signature):
+        logger.warning("[Webhook] Invalid signature on incoming webhook")
+        abort(403)
 
     try:
         payload = request.get_json(force=True)
@@ -151,10 +156,11 @@ def data_deletion():
     Since we don't store user data beyond comment processing,
     we acknowledge the request and return a confirmation URL.
     """
-    if _APP_SECRET:
-        signature = request.headers.get("X-Hub-Signature-256", "")
-        if not _verify_signature(request.data, signature):
-            abort(403)
+    if not _APP_SECRET:  # R-14: fail closed — reject unverifiable callbacks
+        abort(403)
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not _verify_signature(request.data, signature):
+        abort(403)
 
     try:
         payload = request.get_json(force=True)

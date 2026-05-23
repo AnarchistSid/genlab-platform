@@ -253,6 +253,20 @@ class YouTubeClient:
                 error="No media paths provided — video is required for YouTube upload",
             )
 
+        # R-30: refuse to upload if the OAuth token resolves to a different
+        # channel than expected — the one code-level guard against the
+        # cross-brand mis-publish (2026-05-18). verify_channel() is a no-op
+        # when no expected channel is configured, so this is safe by default.
+        if not self.verify_channel():
+            return PublishResult(
+                platform=self.platform_id,
+                success=False,
+                error=(
+                    "YouTube channel verification failed — token does not resolve to the "
+                    "expected channel; refusing to publish to avoid cross-channel posting"
+                ),
+            )
+
         video_path = payload.media_paths[0]
 
         # Niche → YouTube category mapping

@@ -1,5 +1,12 @@
-"""Tests for Meta webhook receiver."""
+"""Tests for Meta webhook receiver.
 
+R-14: webhook signature verification fails CLOSED — an unverifiable event
+(no app secret, no/invalid signature) is rejected, never processed. POST
+tests therefore sign their payloads with a known test secret.
+"""
+
+import hashlib
+import hmac
 import json
 import sys
 from pathlib import Path
@@ -14,12 +21,20 @@ import server.api.webhook_receiver as webhook_module
 import server.review_server as review_server_module
 from server.review_server import app
 
+_TEST_SECRET = "test_app_secret"
+
+
+def _signed(body: bytes) -> dict[str, str]:
+    """Headers with a valid X-Hub-Signature-256 for `body` (signed with _TEST_SECRET)."""
+    sig = "sha256=" + hmac.HMAC(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()
+    return {"X-Hub-Signature-256": sig, "Content-Type": "application/json"}
+
 
 @pytest.fixture(autouse=True)
 def _disable_auth(monkeypatch):
     monkeypatch.setattr(review_server_module, "_AUTH_ENABLED", False)
-    # Disable HMAC signature check so POST tests don't need a real app secret
-    monkeypatch.setattr(webhook_module, "_APP_SECRET", "")
+    # R-14: webhooks fail closed, so POST tests must sign — set a known secret.
+    monkeypatch.setattr(webhook_module, "_APP_SECRET", _TEST_SECRET)
 
 
 @pytest.fixture
@@ -31,13 +46,7 @@ def client():
 
 class TestMetaWebhook:
     def test_verify_valid_token(self, client):
-        # The receiver compares against the _VERIFY_TOKEN module global,
-        # which is read from META_WEBHOOK_VERIFY_TOKEN at import time.
-        # In CI that env var is unset, so patch the resolved global to
-        # the token this test sends.
-        import server.api.webhook_receiver as wr
-
-        with patch.object(wr, "_VERIFY_TOKEN", "test_verify_token_123"):
+        with patch.object(webhook_module, "_VERIFY_TOKEN", "test_verify_token_123"):
             resp = client.get(
                 "/api/v1/webhooks/meta",
                 query_string={
@@ -61,26 +70,43 @@ class TestMetaWebhook:
         assert resp.status_code == 403
 
     def test_receive_event(self, client):
-        payload = {
-            "object": "instagram",
-            "entry": [{"id": "123", "changes": [{"field": "mentions", "value": {}}]}],
-        }
-        resp = client.post(
-            "/api/v1/webhooks/meta",
-            data=json.dumps(payload),
-            content_type="application/json",
-        )
+        body = json.dumps(
+            {
+                "object": "instagram",
+                "entry": [{"id": "123", "changes": [{"field": "mentions", "value": {}}]}],
+            }
+        ).encode()
+        resp = client.post("/api/v1/webhooks/meta", data=body, headers=_signed(body))
         assert resp.status_code == 200
         data = resp.get_json()
-        # Response is wrapped: {"status": "success", "data": {"status": "received"}}
         inner = data.get("data", data)
         assert inner["status"] == "received"
 
     def test_receive_invalid_json(self, client):
+        body = b"not json{{{"
+        resp = client.post("/api/v1/webhooks/meta", data=body, headers=_signed(body))
+        # Past signature verification; JSON handling is graceful.
+        assert resp.status_code in (200, 400)
+
+    # ── R-14: fail-closed signature verification ──────────────────────────
+    def test_unsigned_event_rejected(self, client):
+        """A correctly-configured secret still rejects an UNSIGNED event."""
+        body = b'{"object":"instagram","entry":[]}'
+        resp = client.post("/api/v1/webhooks/meta", data=body, content_type="application/json")
+        assert resp.status_code == 403
+
+    def test_no_secret_rejected(self, client, monkeypatch):
+        """Fail CLOSED: no app secret -> unverifiable -> reject (was: accept)."""
+        monkeypatch.setattr(webhook_module, "_APP_SECRET", "")
+        body = b'{"object":"instagram","entry":[]}'
+        resp = client.post("/api/v1/webhooks/meta", data=body, content_type="application/json")
+        assert resp.status_code == 403
+
+    def test_bad_signature_rejected(self, client):
+        body = b'{"object":"instagram","entry":[]}'
         resp = client.post(
             "/api/v1/webhooks/meta",
-            data="not json{{{",
-            content_type="application/json",
+            data=body,
+            headers={"X-Hub-Signature-256": "sha256=deadbeef", "Content-Type": "application/json"},
         )
-        # Should still handle gracefully -- Flask's get_json(force=True) may parse or fail
-        assert resp.status_code in (200, 400)
+        assert resp.status_code == 403
