@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from genlab_core.publishing.error_classifier import (
     classify,
+    is_ambiguous_failure,
     retry_delay_seconds,
     should_retry,
 )
@@ -173,3 +174,37 @@ def test_priority_quota_over_transient():
 def test_priority_content_over_transient():
     # "file not found" matches CONTENT; "try again" matches TRANSIENT — CONTENT wins
     assert classify("file not found, try again") == "CONTENT"
+
+
+# ---------------------------------------------------------------------------
+# is_ambiguous_failure() — R-21: failures that may have actually landed
+# ---------------------------------------------------------------------------
+
+
+def test_ambiguous_timeout_may_have_landed():
+    # A timeout after the request was sent: the post might already exist.
+    assert is_ambiguous_failure("Read timed out") is True
+    assert is_ambiguous_failure("Publish timed out after 600s") is True
+    assert is_ambiguous_failure("Request timeout") is True
+
+
+def test_ambiguous_post_send_errors():
+    assert is_ambiguous_failure("Broken pipe") is True
+    assert is_ambiguous_failure("Max retries exceeded with url") is True
+    assert is_ambiguous_failure("IG container 2207026 expired") is True
+    assert is_ambiguous_failure("container processing error") is True
+    assert is_ambiguous_failure("Reel publish failed") is True
+
+
+def test_clearly_pre_send_failures_not_ambiguous():
+    # These never reached the platform -> safe to auto-retry, not ambiguous.
+    assert is_ambiguous_failure("connection refused") is False
+    assert is_ambiguous_failure("NameResolutionError: Failed to resolve host") is False
+    assert is_ambiguous_failure("SSLError: certificate verify failed") is False
+    assert is_ambiguous_failure("HTTP 503 Service Unavailable") is False
+    assert is_ambiguous_failure("401 unauthorized") is False
+
+
+def test_empty_error_not_ambiguous():
+    # Preserve the "prefer retry" default for vague/empty pre-send errors.
+    assert is_ambiguous_failure("") is False

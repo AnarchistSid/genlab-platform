@@ -14,7 +14,25 @@ from core.publishing_queue import (
     QUEUE_STATUS_PUBLISHED,
     PublishingQueueManager,
     _derive_queue_status,
+    _lock_key,
 )
+
+
+class TestLockKey:
+    """R-22: the advisory-lock key must be deterministic across processes."""
+
+    def test_lock_key_is_stable_sha256_not_salted_hash(self):
+        import hashlib
+
+        expected = int.from_bytes(hashlib.sha256(b"gaming").digest()[:4], "big") & 0x7FFFFFFF
+        # Deterministic sha256-derived key (NOT the per-process-salted built-in hash()).
+        assert _lock_key("gaming") == expected
+
+    def test_lock_key_deterministic_and_distinct(self):
+        assert _lock_key("gaming") == _lock_key("gaming")
+        assert _lock_key("gaming") != _lock_key("movies")
+        # Positive 31-bit int, valid for pg_advisory_xact_lock.
+        assert 0 <= _lock_key("anime") <= 0x7FFFFFFF
 
 
 class TestDeriveQueueStatus:

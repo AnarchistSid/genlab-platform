@@ -45,7 +45,12 @@ from genlab_core.platforms.models import (
 )
 from genlab_core.platforms.registry import get_client
 from genlab_core.publishing.analytics_recorder import record_publish
-from genlab_core.publishing.error_classifier import classify, retry_delay_seconds, should_retry
+from genlab_core.publishing.error_classifier import (
+    classify,
+    is_ambiguous_failure,
+    retry_delay_seconds,
+    should_retry,
+)
 from genlab_core.publishing.niche_credentials import (
     resolve_fb_credentials,
     resolve_meta_credentials,
@@ -829,15 +834,36 @@ def run_publish(
         logger.info("[publish] All platforms capped for niche=%s", niche_id)
         return EXIT_DAILY_CAP
 
-    # 5. Set status = PUBLISHING
-    try:
-        backlog_client.blueprints.update(
-            record_id,
-            {"status": "PUBLISHING"},
-            typecast=True,
-        )
-    except Exception as exc:
-        logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
+    # 5. Claim the blueprint: atomically flip VISUAL_READY -> PUBLISHING. If the
+    #    claim is lost (another publisher already took it, or it's no longer
+    #    VISUAL_READY), skip — never double-publish (R-24). The bare update used
+    #    here previously had no status guard, so two concurrent/staggered
+    #    publishers (e.g. the 06:35 and 10:30 runs, or a stray Mac launchd) could
+    #    both select and publish the same blueprint.
+    claim = getattr(backlog_client.blueprints, "claim_status", None)
+    if claim is not None:
+        try:
+            claimed = claim(record_id, expected_status="VISUAL_READY", new_status="PUBLISHING")
+        except Exception as exc:
+            logger.warning("[publish] Claim failed for %s: %s", record_id, exc)
+            claimed = False
+        if not claimed:
+            logger.info(
+                "[publish] Blueprint %s no longer VISUAL_READY (claimed elsewhere?) — "
+                "skipping to avoid double-publish",
+                record_id,
+            )
+            return EXIT_NO_BLUEPRINTS
+    else:
+        # Legacy backend without an atomic claim (SharePoint) — best-effort flip.
+        try:
+            backlog_client.blueprints.update(
+                record_id,
+                {"status": "PUBLISHING"},
+                typecast=True,
+            )
+        except Exception as exc:
+            logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
     # 6. Publish to each platform
     platform_status: dict[str, str] = {}
@@ -926,6 +952,9 @@ def run_publish(
                     "attempts": prev_attempts + 1,
                     "last_error": result.error[:200],
                     "error_class": error_class,
+                    # R-21: tag failures that may have actually landed so the
+                    # cross-run retry pass won't blindly re-publish them.
+                    "ambiguous": is_ambiguous_failure(result.error),
                 }
                 logger.error("[publish] %s: FAILED error=%s", platform, result.error)
 
@@ -1110,6 +1139,20 @@ def run_publish(
                     error_class = status_data.get("error_class", "TRANSIENT")
                     attempts = status_data.get("attempts", 0)
                     if not should_retry(error_class) or attempts >= 3:
+                        continue
+                    # R-21: never auto-re-publish a failure that may have actually
+                    # landed (timeout / broken pipe / container-expired) — that
+                    # risks a duplicate post on the live channel. Skip; these need
+                    # a "did it land" check or human review, not a blind retry.
+                    if status_data.get("ambiguous") or is_ambiguous_failure(
+                        status_data.get("last_error", "")
+                    ):
+                        logger.warning(
+                            "[publish] Skipping cross-run retry of %s for blueprint %s — "
+                            "ambiguous failure may have landed (needs manual/landing check)",
+                            plat,
+                            bp["id"][:8],
+                        )
                         continue
                     # Check backoff timing
                     next_retry = status_data.get("next_retry_after", "")

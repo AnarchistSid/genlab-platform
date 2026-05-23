@@ -43,6 +43,22 @@ def _get_client():
     return get_sync_client()
 
 
+def _lock_key(niche_id: str) -> int:
+    """Deterministic, cross-process-stable advisory-lock key for a niche.
+
+    R-22: the previous `hash(niche_id)` is salted per-process (PYTHONHASHSEED),
+    so each gunicorn worker computed a DIFFERENT key for the same niche and the
+    workers never contended on the lock — slot serialization silently never
+    happened. sha256 is stable across processes, so all workers now block on the
+    same key. (`pg_advisory_xact_lock` is a global named lock, so holding it on
+    the lock connection across the `yield` correctly serializes the slot
+    read-modify-write that runs on the pooled connection.)
+    """
+    import hashlib
+
+    return int.from_bytes(hashlib.sha256(niche_id.encode()).digest()[:4], "big") & 0x7FFFFFFF
+
+
 @contextlib.contextmanager
 def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
     """Acquire a PostgreSQL advisory lock scoped to niche_id.
@@ -64,7 +80,7 @@ def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
         yield
         return
 
-    lock_key = hash(niche_id) & 0x7FFFFFFF
+    lock_key = _lock_key(niche_id)
     try:
         with psycopg.connect(dsn) as conn:
             conn.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))

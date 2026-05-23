@@ -118,6 +118,40 @@ def classify(error_message: str, platform: str = "") -> str:
     return "TRANSIENT"
 
 
+# Errors that occur AFTER the request may have reached the platform — the post
+# might have actually landed before the response was lost. Auto-retrying these
+# risks a duplicate post (R-21), so the cross-run retry pass must NOT blindly
+# re-publish them; they need a "did it land" check or human review. This is a
+# subset of TRANSIENT; the other transients (DNS failure, connection refused,
+# SSL handshake, pre-send 50x) clearly never landed and stay safely retryable.
+_AMBIGUOUS_AFTER_SEND: list[re.Pattern] = [
+    re.compile(p, re.I)
+    for p in [
+        r"timed?\s*out",
+        r"timeout",
+        r"read timed out",
+        r"publish timed out",
+        r"broken pipe",
+        r"max retries exceeded",
+        r"reel.*publish.*failed",
+        r"container.*(?:expired|timed?\s*out|processing.*error)",
+        r"2207026",  # IG container expired (after upload)
+    ]
+]
+
+
+def is_ambiguous_failure(error_message: str) -> bool:
+    """True if the failure may have landed despite the error (timeout / broken
+    pipe / container-expired). Such errors must not be blindly auto-retried —
+    doing so risks a duplicate post (R-21). An empty/unknown error is treated
+    as NOT ambiguous, preserving the "prefer retry" default for clear pre-send
+    failures with vague messages.
+    """
+    if not error_message:
+        return False
+    return any(p.search(error_message) for p in _AMBIGUOUS_AFTER_SEND)
+
+
 def should_retry(error_class: str) -> bool:
     """Whether this error class should be retried."""
     return error_class in ("TRANSIENT", "QUOTA")
