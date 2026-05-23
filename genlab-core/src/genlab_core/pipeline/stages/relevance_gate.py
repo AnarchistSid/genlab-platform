@@ -52,12 +52,34 @@ class RelevanceGate:
             return context
 
         filter_cfg = sources_cfg.get("content_filter")
-        if not filter_cfg or not filter_cfg.get("positive_keywords"):
+        niche_id = context.get("niche_id", "unknown")
+        if not filter_cfg:
+            # No content_filter configured — relevance filtering is intentionally
+            # off for this niche (e.g. it filters at fetch time). Legitimate pass-through.
+            logger.debug("[RelevanceGate] No content_filter for %s — skipping", niche_id)
+            return context
+        if not filter_cfg.get("positive_keywords"):
+            # R-12: content_filter IS configured but has no positive_keywords — a
+            # misconfiguration that previously caused a SILENT fail-open (off-niche
+            # stories shipped unfiltered). Surface it LOUDLY (the health monitor /
+            # alerting picks up the ERROR + the run_stats error) rather than fail
+            # closed by dropping every story, which would dark the niche on a
+            # config typo (and is already caught by R-65/R-01 if it happened).
+            logger.error(
+                "[RelevanceGate] content_filter for %s has no positive_keywords — "
+                "relevance filtering is DISABLED, off-niche content may ship. Fix sources.yaml.",
+                niche_id,
+            )
+            context.setdefault("run_stats", {})["relevance_gate"] = {
+                "input_count": len(stories),
+                "kept_count": len(stories),
+                "dropped_count": 0,
+                "error": "content_filter present but positive_keywords empty — filtering disabled",
+            }
             return context
 
         from genlab_core.media.relevance_filter import RelevanceFilter
 
-        niche_id = context.get("niche_id", "unknown")
         rf = RelevanceFilter(niche_id, filter_cfg)
         before = len(stories)
         kept = rf.filter(stories)
