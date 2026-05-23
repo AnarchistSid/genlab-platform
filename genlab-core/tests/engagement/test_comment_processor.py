@@ -332,3 +332,44 @@ class TestBacklogClientWiring:
             process_reply_event(
                 _make_event(comment_id="no_bl", comment_text="FREE MONEY http://scam.com"),
             )
+
+
+class TestBotDisclosure:
+    """R-78: the '[automated reply]' suffix must not push a reply over the
+    platform char limit — the reply is trimmed, the disclosure preserved."""
+
+    def test_short_reply_unchanged_and_suffixed(self):
+        from genlab_core.engagement.comment_processor import (
+            _BOT_DISCLOSURE_SUFFIX,
+            _append_bot_disclosure,
+        )
+
+        out = _append_bot_disclosure("Nice clutch!", max_len=280)
+        assert out == "Nice clutch!" + _BOT_DISCLOSURE_SUFFIX
+        assert len(out) <= 280
+
+    def test_long_reply_trimmed_to_fit_with_suffix(self):
+        from genlab_core.engagement.comment_processor import (
+            _BOT_DISCLOSURE_SUFFIX,
+            _append_bot_disclosure,
+        )
+
+        reply = "x" * 280  # already at the limit; the suffix would overflow it
+        out = _append_bot_disclosure(reply, max_len=280)
+        assert len(out) <= 280
+        assert out.endswith(_BOT_DISCLOSURE_SUFFIX)  # disclosure kept, reply trimmed
+
+    def test_idempotent_when_already_disclosed(self):
+        from genlab_core.engagement.comment_processor import _append_bot_disclosure
+
+        already = "Thanks! [automated reply]"
+        assert _append_bot_disclosure(already, max_len=280) == already
+
+    def test_no_max_len_appends_without_trim(self):
+        from genlab_core.engagement.comment_processor import (
+            _BOT_DISCLOSURE_SUFFIX,
+            _append_bot_disclosure,
+        )
+
+        reply = "y" * 500
+        assert _append_bot_disclosure(reply) == reply + _BOT_DISCLOSURE_SUFFIX

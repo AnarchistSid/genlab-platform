@@ -91,14 +91,23 @@ def classify_reply_action(
 _BOT_DISCLOSURE_SUFFIX = " [automated reply]"
 
 
-def _append_bot_disclosure(text: str) -> str:
+def _append_bot_disclosure(text: str, max_len: int | None = None) -> str:
     """Append bot disclosure suffix to a reply for transparency.
 
-    Ensures the disclosure is not duplicated if already present.
+    Ensures the disclosure is not duplicated if already present. When
+    ``max_len`` is given, the REPLY (never the disclosure) is trimmed so the
+    total stays within the platform's character budget (R-78): the LLM
+    generates up to ``max_length_chars`` but the suffix is appended afterward,
+    so without this the reply+suffix could overflow tight limits (X 280,
+    Threads 500) and be rejected.
     """
-    if text.rstrip().endswith("[automated reply]"):
+    text = text.rstrip()
+    if text.endswith("[automated reply]"):
         return text
-    return text.rstrip() + _BOT_DISCLOSURE_SUFFIX
+    if max_len is not None and len(text) + len(_BOT_DISCLOSURE_SUFFIX) > max_len:
+        keep = max(0, max_len - len(_BOT_DISCLOSURE_SUFFIX))
+        text = text[:keep].rstrip()
+    return text + _BOT_DISCLOSURE_SUFFIX
 
 
 # Per-platform reply rate caps (actions per hour).
@@ -540,7 +549,7 @@ def process_reply_event(event: dict) -> None:
             platform=platform,
             niche_id=niche_id,
             comment_text=comment_text,
-            reply_text=_append_bot_disclosure(reply),
+            reply_text=_append_bot_disclosure(reply, persona.reply_constraints.max_length_chars),
             author=event.get("author_name", "unknown"),
             confidence=confidence,
             tox_score=tox_score,
@@ -559,8 +568,8 @@ def process_reply_event(event: dict) -> None:
         return
 
     # action == "auto" — post immediately
-    # 5d. Append bot disclosure suffix for transparency
-    reply = _append_bot_disclosure(reply)
+    # 5d. Append bot disclosure suffix for transparency (trim reply to fit, R-78)
+    reply = _append_bot_disclosure(reply, persona.reply_constraints.max_length_chars)
 
     # 6. Human-like timing delay
     delay = human_delay()
