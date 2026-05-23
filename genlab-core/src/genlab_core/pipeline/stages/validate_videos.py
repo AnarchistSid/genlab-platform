@@ -170,8 +170,32 @@ class ValidateVideos:
         """
         master_path = media.get("master_path", "")
         if not master_path or not Path(master_path).exists():
-            # No master available for comparison — skip VMAF (fail-open)
-            logger.debug("[ValidateVideos] No master_path for VMAF check — skipping")
+            # R-25: VMAF measures encode quality between two videos of the SAME
+            # content at the SAME dimensions, so it needs a LOSSLESS master of
+            # the COMPOSITE reel. The pipeline doesn't produce one (the raw
+            # source clip was a different framing/resolution — a meaningless
+            # reference that triggered wasted re-encodes), so the gate skips
+            # cleanly instead of running garbage. Fail-open: an absent gate
+            # must not block an otherwise spec-valid reel.
+            logger.info(
+                "[ValidateVideos] No same-framing lossless master available — skipping VMAF gate"
+            )
+            return "pass"
+
+        # Defense-in-depth (R-25): even if a master is supplied, VMAF across
+        # mismatched dimensions is meaningless and would trigger a wasted
+        # re-encode. Only run when the reference matches the rendered reel.
+        master_dims = self._video_dims(self._probe(Path(master_path)))
+        rendered_dims = self._video_dims(self._probe(Path(video_path)))
+        if master_dims and rendered_dims and master_dims != rendered_dims:
+            logger.warning(
+                "[ValidateVideos] VMAF master %dx%d != rendered %dx%d — skipping "
+                "(invalid reference; cannot measure encode quality across reframes)",
+                master_dims[0],
+                master_dims[1],
+                rendered_dims[0],
+                rendered_dims[1],
+            )
             return "pass"
 
         vmaf_ok, score = check_vmaf(Path(master_path), Path(video_path), "rendered")
@@ -225,6 +249,18 @@ class ValidateVideos:
             return json.loads(result.stdout)
         except (subprocess.TimeoutExpired, json.JSONDecodeError):
             return None
+
+    @staticmethod
+    def _video_dims(probe: dict[str, Any] | None) -> tuple[int, int] | None:
+        """Extract (width, height) of the first video stream, or None."""
+        if not probe:
+            return None
+        for stream in probe.get("streams", []):
+            if stream.get("codec_type") == "video":
+                w = int(stream.get("width", 0))
+                h = int(stream.get("height", 0))
+                return (w, h) if w and h else None
+        return None
 
     @staticmethod
     def _check(probe: dict[str, Any]) -> list[str]:
