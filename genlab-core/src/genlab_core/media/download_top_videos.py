@@ -712,12 +712,27 @@ def main() -> None:
     with open(clip_index_path, "w") as f:
         json.dump(clip_index, f, indent=2)
 
-    logger.info(
-        "Wrote clip_index.json: %d/%d videos downloaded, %d failed",
-        clip_index["videos_downloaded"],
-        clip_index["videos_total"],
-        clip_index["videos_failed"],
-    )
+    _downloaded = clip_index["videos_downloaded"]
+    _total = clip_index["videos_total"]
+    _failed = clip_index["videos_failed"]
+    if _total > 0 and _downloaded == 0:
+        # R-11: a total download wipeout (0/N) is a dark-day signal — usually
+        # WARP/proxy down or a YouTube block — not routine INFO. Log it at ERROR
+        # so the health monitor / alerting (R-01) surfaces it; the pipeline will
+        # otherwise produce 0 blueprints silently.
+        logger.error(
+            "[download] ZERO videos downloaded (0/%d, %d failed) — likely WARP/proxy "
+            "down or YouTube block; the pipeline will produce 0 blueprints",
+            _total,
+            _failed,
+        )
+    else:
+        logger.info(
+            "Wrote clip_index.json: %d/%d videos downloaded, %d failed",
+            _downloaded,
+            _total,
+            _failed,
+        )
 
 
 if __name__ == "__main__":
