@@ -606,16 +606,22 @@ def transcode_for_platforms_sync(
     platforms: list[Platform] | None = None,
 ) -> dict[str, Path]:
     """Sync wrapper for transcode_for_platforms — safe to call from pipeline stages."""
+    # R-56: the async signature is (master, platforms, output_dir) but this
+    # wrapper takes (master, output_dir, platforms) — the previous positional
+    # forwarding bound output_dir->platforms and platforms->output_dir. Forward
+    # by keyword so the binding can't silently swap again.
+    if platforms is None:
+        platforms = list(PLATFORM_SPECS.keys())
+
+    async def _run() -> dict:
+        return await transcode_for_platforms(master, platforms=platforms, output_dir=output_dir)
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
 
     if loop is not None:
-        future = asyncio.run_coroutine_threadsafe(
-            transcode_for_platforms(master, output_dir, platforms),
-            loop,
-        )
+        future = asyncio.run_coroutine_threadsafe(_run(), loop)
         return future.result(timeout=600)
-    else:
-        return asyncio.run(transcode_for_platforms(master, output_dir, platforms))
+    return asyncio.run(_run())
