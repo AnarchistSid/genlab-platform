@@ -858,9 +858,9 @@ class TestRunReport:
                 stage.execute(ctx)
                 report = json.loads((Path(tmpdir) / "run_report.json").read_text())
                 assert report["status"] == "failed"
-                assert any(
-                    "no stories fetched" in v for v in report["slo_violations"]
-                ), report["slo_violations"]
+                assert any("no stories fetched" in v for v in report["slo_violations"]), report[
+                    "slo_violations"
+                ]
 
     def test_nonzero_blueprints_is_success(self):
         """Guardrail: a run that produced blueprints must NOT trip the SLO."""

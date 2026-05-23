@@ -30,7 +30,12 @@ def test_missing_media_never_archives_scheduled_posts(tmp_path) -> None:
     mock_cur.fetchall.return_value = [
         ("good-bp", "ok", f'["{good_file}"]', None),  # file exists -> not broken
         ("unsched-bp", "broken", f'["{missing}"]', None),  # broken + unscheduled -> archive
-        ("sched-bp", "broken", f'["{missing}"]', "2026-06-01T06:30:00+00:00"),  # broken + scheduled -> protect
+        (
+            "sched-bp",
+            "broken",
+            f'["{missing}"]',
+            "2026-06-01T06:30:00+00:00",
+        ),  # broken + scheduled -> protect
     ]
 
     with patch.dict(

@@ -229,9 +229,7 @@ class TestBuildPayload:
         platform name "twitter" (which the default platform list uses), not
         only "x_twitter" — previously it was silently dropped for "twitter",
         losing the entire X affiliate payload."""
-        bp = _make_blueprint(
-            twitter_content=json.dumps({"routing": "single", "tweet_text": "x"})
-        )
+        bp = _make_blueprint(twitter_content=json.dumps({"routing": "single", "tweet_text": "x"}))
         bp["fields"]["twitter_first_comment"] = "Get it: https://amzn.to/abc"
         for name in ("twitter", "x_twitter"):
             payload = build_payload(bp["fields"], name)
