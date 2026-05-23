@@ -34,6 +34,7 @@ from enum import Enum
 class HookFailure(Enum):
     TOO_SHORT = "hook_too_short"
     TOO_LONG = "hook_too_long"
+    HOOK_TOO_LONG = "hook_exceeds_max_chars"
     MARKDOWN_ARTIFACTS = "markdown_artifacts"
     REDDIT_FORMATTING = "reddit_formatting"
     EXCESSIVE_PUNCT = "excessive_punctuation"
@@ -170,18 +171,28 @@ class HookValidator:
         "threads": 500,
     }
 
-    def validate(self, hook: str, platform: str) -> HookValidationResult:
-        """Validate a hook against all 9 universal rules.
+    def validate(
+        self, hook: str, platform: str, *, max_chars: int | None = None
+    ) -> HookValidationResult:
+        """Validate a hook against all universal rules.
 
         Args:
-            hook:     The hook text string to validate.
-            platform: Target platform (lowercase). Used for character limit check.
+            hook:      The hook text string to validate.
+            platform:  Target platform (lowercase). Used for character limit check.
+            max_chars: Optional hard character cap on the hook itself. The
+                per-platform ``_TITLE_LIMITS`` (e.g. instagram=2200) is a
+                *title/caption* limit and is far too loose for a hook; pass
+                ``max_chars=60`` from the hook path to enforce the "hooks ≤60
+                chars" invariant (R-52). Defaults to ``None`` so existing
+                callers (title/caption validation) are unaffected.
 
         Returns:
             HookValidationResult. Check .passed before using the hook.
         """
         result = HookValidationResult(hook=hook, platform=platform)
         self._check_length(hook, platform, result)
+        if max_chars is not None and len(hook) > max_chars:
+            result.failures.append(HookFailure.HOOK_TOO_LONG)
         self._check_markdown_artifacts(hook, result)
         self._check_reddit_formatting(hook, result)
         self._check_excessive_punctuation(hook, result)
