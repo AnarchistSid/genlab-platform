@@ -21,17 +21,20 @@ os.environ.pop("GENLAB_USE_POSTGRES", None)
 os.environ["GENLAB_USE_POSTGRES"] = ""
 
 
-# ── Python 3.14 Detoxify/PyTorch segfault workaround ─────────────────
-# PyTorch + Detoxify model loading in threaded pytest context causes
-# segfaults on Python 3.14. Skip tests that load the model directly.
-_SKIP_DETOXIFY = sys.version_info >= (3, 14)
+# ── Detoxify/PyTorch segfault workaround (R-64) ──────────────────────
+# PyTorch + Detoxify model loading in a threaded pytest context segfaults
+# (libtorch_cpu -> libomp, layer_norm) on Python 3.13 AND 3.14 — and CI
+# runs 3.13, so the guard MUST cover it. Force single-threaded OpenMP to
+# avoid the crash, and skip the one test that loads the real model.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+_SKIP_DETOXIFY = sys.version_info >= (3, 13)
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip Detoxify-dependent tests on Python 3.14+ to avoid segfaults."""
+    """Skip Detoxify-dependent tests on Python 3.13+ to avoid segfaults."""
     if not _SKIP_DETOXIFY:
         return
-    skip_marker = pytest.mark.skip(reason="Detoxify segfaults on Python 3.14+ (PyTorch threading)")
+    skip_marker = pytest.mark.skip(reason="Detoxify segfaults on Python 3.13+ (PyTorch threading)")
     # Only skip the full integration test that loads the real Detoxify model.
     # test_toxicity_extended and test_engagement_engine mock the model.
     detoxify_modules = {

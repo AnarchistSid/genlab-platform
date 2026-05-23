@@ -299,7 +299,11 @@ def _check_auth():
 
     # 2. Fall back to HTTP Basic Auth header (API clients / curl)
     auth = request.authorization
-    if auth and auth.username == _AUTH_USER and auth.password == _AUTH_PASS:
+    if (
+        auth
+        and hmac.compare_digest(auth.username or "", _AUTH_USER)
+        and hmac.compare_digest(auth.password or "", _AUTH_PASS)
+    ):
         session["authenticated"] = True
         session.permanent = True
         return None
