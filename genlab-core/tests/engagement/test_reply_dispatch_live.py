@@ -88,6 +88,9 @@ class TestFullReplyPipeline:
         mock_result.is_toxic = False
         mock_result.max_score = 0.0
         mock_gate.check_inbound.return_value = mock_result
+        # R-75: routing now scores the OUTBOUND reply too — return a clean,
+        # numeric score so the auto/review/discard router compares a real float.
+        mock_gate.check_outbound.return_value = mock_result
 
         # Persona engine: return a reply
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for watching!"
@@ -155,6 +158,9 @@ class TestFullReplyPipeline:
         mock_result.is_toxic = False
         mock_result.max_score = 0.0
         mock_gate.check_inbound.return_value = mock_result
+        # R-75: routing now scores the OUTBOUND reply too — return a clean,
+        # numeric score so the auto/review/discard router compares a real float.
+        mock_gate.check_outbound.return_value = mock_result
         # Reply must match a SAFE_PATTERN to be auto-posted (the Sprint-63
         # router only auto-posts known-safe acknowledgments). "Thanks..."
         # matches; an arbitrary phrase would route to review and never

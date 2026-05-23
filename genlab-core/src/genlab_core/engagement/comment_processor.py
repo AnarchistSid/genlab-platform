@@ -512,24 +512,31 @@ def process_reply_event(event: dict) -> None:
 
     # 5b. Confidence heuristic (PersonaEngine doesn't return a score)
     is_question = bool(re.search(r"\?", comment_text))
-    tox_score = result.max_score  # from step 3 inbound toxicity check
+    inbound_tox = result.max_score  # from step 3 inbound toxicity check
     confidence = 0.9  # base high confidence
     if len(comment_text) > 200:
         confidence -= 0.2  # long comments need more care
     if is_question:
         confidence -= 0.15  # questions need careful answers
-    if tox_score > 0.1:
-        confidence -= 0.2  # borderline toxicity
+    if inbound_tox > 0.1:
+        confidence -= 0.2  # borderline inbound toxicity → be more cautious
     confidence = max(0.0, min(1.0, confidence))
 
-    # 5c. Route: auto / review / discard
-    action = classify_reply_action(reply_text=reply, confidence=confidence, toxicity=tox_score)
+    # 5c. Route on the OUTBOUND reply's toxicity (R-75). Previously the routing
+    # used the INBOUND comment's toxicity, so the auto/review/discard decision
+    # was unrelated to the reply we're about to post — a clean comment could
+    # auto-post a toxic generated reply (and a spicy-but-clean reply to a
+    # borderline comment could be needlessly discarded). Score the reply itself.
+    outbound_tox = _toxicity_gate.check_outbound(reply).max_score
+    action = classify_reply_action(reply_text=reply, confidence=confidence, toxicity=outbound_tox)
     logger.info(
-        "Engagement: classify %s → %s (confidence=%.2f, tox=%.2f, len=%d, question=%s)",
+        "Engagement: classify %s → %s (confidence=%.2f, inbound_tox=%.2f, "
+        "outbound_tox=%.2f, len=%d, question=%s)",
         comment_id,
         action,
         confidence,
-        tox_score,
+        inbound_tox,
+        outbound_tox,
         len(comment_text),
         is_question,
     )
@@ -552,7 +559,7 @@ def process_reply_event(event: dict) -> None:
             reply_text=_append_bot_disclosure(reply, persona.reply_constraints.max_length_chars),
             author=event.get("author_name", "unknown"),
             confidence=confidence,
-            tox_score=tox_score,
+            tox_score=outbound_tox,
         )
         logger.info("Engagement: queued reply for %s to human review", comment_id)
         if bl and sp_item_id:

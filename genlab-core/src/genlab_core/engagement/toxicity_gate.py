@@ -78,14 +78,32 @@ class ToxicityGate:
             )
         return result.is_toxic
 
+    def check_outbound(self, text: str) -> ToxicityResult:
+        """Score a GENERATED REPLY's toxicity for routing decisions (R-75).
+
+        Distinct from check_inbound: this scores the reply we are about to post,
+        not the comment we received, and it fails CLOSED — on model error it
+        returns max_score=1.0 so the reply is treated as toxic (never silently
+        auto-posted). Any dimension over OUTBOUND_THRESHOLD marks it toxic.
+        """
+        try:
+            scores = self._get_model().predict(text)
+            max_dim = max(scores, key=scores.get)
+            return ToxicityResult(
+                is_toxic=any(v > self.OUTBOUND_THRESHOLD for v in scores.values()),
+                max_dimension=max_dim,
+                max_score=scores[max_dim],
+                all_scores=dict(scores),
+            )
+        except Exception as e:
+            logger.warning("[TOXICITY] Outbound check failed: %s — treating reply as toxic", e)
+            return ToxicityResult(
+                is_toxic=True, max_dimension="error", max_score=1.0, all_scores={}
+            )
+
     def is_clean_outbound(self, text: str) -> bool:
         """Return True if generated reply passes all outbound toxicity checks.
 
         Fail-closed: on model error, blocks the reply.
         """
-        try:
-            scores = self._get_model().predict(text)
-            return all(v <= self.OUTBOUND_THRESHOLD for v in scores.values())
-        except Exception as e:
-            logger.warning("[TOXICITY] Outbound check failed: %s — blocking reply", e)
-            return False
+        return not self.check_outbound(text).is_toxic
