@@ -343,6 +343,31 @@ class TestRunPublish:
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)
     @patch(_CRED_PATCH, return_value={})
+    def test_lost_claim_skips_publish(self, mock_creds, mock_get_client, mock_record):
+        """R-24: if the atomic VISUAL_READY->PUBLISHING claim is lost (another
+        publisher already took the blueprint), the run must skip and publish
+        nothing — preventing a double-publish to the live channel."""
+        bp = _make_blueprint()
+        client = _make_client_mock([bp])
+        client.blueprints.claim_status.return_value = False  # another run won the claim
+        enforcer = _make_cap_enforcer(can_publish=True)
+        mock_get_client.side_effect = self._patch_get_client(
+            {"instagram": _success_result("instagram")}
+        )
+
+        exit_code = run_publish(
+            niche_id="gaming",
+            backlog_client=client,
+            daily_cap=enforcer,
+            enabled_platforms=["instagram"],
+        )
+        assert exit_code == EXIT_NO_BLUEPRINTS
+        client.blueprints.claim_status.assert_called_once()
+        mock_get_client.assert_not_called()  # never attempted to publish
+
+    @patch(_RECORD_PATCH)
+    @patch(_CLIENT_PATCH)
+    @patch(_CRED_PATCH, return_value={})
     def test_all_platforms_fail_returns_exit_2(self, mock_creds, mock_get_client, mock_record):
         bp = _make_blueprint()
         client = _make_client_mock([bp])
@@ -489,10 +514,15 @@ class TestRunPublish:
             enabled_platforms=["instagram"],
         )
 
-        # First update should set PUBLISHING, second should set PUBLISHED
-        assert len(update_calls) >= 2
-        first_update = update_calls[0]
-        assert first_update.get("status") == "PUBLISHING"
+        # R-24: PUBLISHING is now claimed atomically (VISUAL_READY->PUBLISHING)
+        # via claim_status BEFORE any publish attempt, so a crash mid-publish
+        # leaves the row PUBLISHING for the recovery path. The terminal status
+        # (PUBLISHED) is still written via update.
+        client.blueprints.claim_status.assert_called_once()
+        claim_call = client.blueprints.claim_status.call_args
+        assert claim_call.kwargs.get("expected_status") == "VISUAL_READY"
+        assert claim_call.kwargs.get("new_status") == "PUBLISHING"
+        assert any(u.get("status") == "PUBLISHED" for u in update_calls), update_calls
 
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)

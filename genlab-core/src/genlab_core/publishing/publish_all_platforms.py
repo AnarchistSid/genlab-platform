@@ -829,15 +829,36 @@ def run_publish(
         logger.info("[publish] All platforms capped for niche=%s", niche_id)
         return EXIT_DAILY_CAP
 
-    # 5. Set status = PUBLISHING
-    try:
-        backlog_client.blueprints.update(
-            record_id,
-            {"status": "PUBLISHING"},
-            typecast=True,
-        )
-    except Exception as exc:
-        logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
+    # 5. Claim the blueprint: atomically flip VISUAL_READY -> PUBLISHING. If the
+    #    claim is lost (another publisher already took it, or it's no longer
+    #    VISUAL_READY), skip — never double-publish (R-24). The bare update used
+    #    here previously had no status guard, so two concurrent/staggered
+    #    publishers (e.g. the 06:35 and 10:30 runs, or a stray Mac launchd) could
+    #    both select and publish the same blueprint.
+    claim = getattr(backlog_client.blueprints, "claim_status", None)
+    if claim is not None:
+        try:
+            claimed = claim(record_id, expected_status="VISUAL_READY", new_status="PUBLISHING")
+        except Exception as exc:
+            logger.warning("[publish] Claim failed for %s: %s", record_id, exc)
+            claimed = False
+        if not claimed:
+            logger.info(
+                "[publish] Blueprint %s no longer VISUAL_READY (claimed elsewhere?) — "
+                "skipping to avoid double-publish",
+                record_id,
+            )
+            return EXIT_NO_BLUEPRINTS
+    else:
+        # Legacy backend without an atomic claim (SharePoint) — best-effort flip.
+        try:
+            backlog_client.blueprints.update(
+                record_id,
+                {"status": "PUBLISHING"},
+                typecast=True,
+            )
+        except Exception as exc:
+            logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
     # 6. Publish to each platform
     platform_status: dict[str, str] = {}

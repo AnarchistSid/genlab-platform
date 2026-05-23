@@ -567,6 +567,42 @@ class PostgresBackend:
                 cur.execute(sql, values)
                 conn.commit()
 
+    # ── CONDITIONAL CLAIM ───────────────────────────────────────────
+
+    def claim_status(
+        self,
+        table: str,
+        record_id: str,
+        *,
+        expected_status: str,
+        new_status: str,
+    ) -> bool:
+        """Atomically flip ``status`` only if it currently equals
+        ``expected_status``.
+
+        Returns ``True`` if this call claimed the row, ``False`` if another
+        writer already moved it (lost the race). This is the double-publish
+        guard (R-24): two concurrent publishers cannot both claim the same
+        ``VISUAL_READY`` blueprint, because the conditional ``UPDATE … WHERE
+        status = expected RETURNING id`` only matches for the first one.
+        """
+        table = _validate_table(table)
+        record_id = str(record_id).strip()
+        id_pred = "id = %s::uuid" if self._is_uuid(record_id) else "extra->>'sp_id' = %s"
+
+        pool = self._get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
+                cur.execute(
+                    f"UPDATE {table} SET status = %s, updated_at = now() "
+                    f"WHERE {id_pred} AND status = %s RETURNING id",
+                    (new_status, record_id, expected_status),
+                )
+                row = cur.fetchone()
+                conn.commit()
+                return row is not None
+
     # ── DELETE ──────────────────────────────────────────────────────
 
     def delete(self, table: str, record_id: str) -> None:
@@ -745,3 +781,12 @@ class PostgresTableProxy:
             records = table
             table = None
         return self._backend.batch_create(table or self._table, records or [])
+
+    def claim_status(self, record_id: str, *, expected_status: str, new_status: str) -> bool:
+        """Atomic conditional status flip — see PostgresBackend.claim_status (R-24)."""
+        return self._backend.claim_status(
+            self._table,
+            record_id,
+            expected_status=expected_status,
+            new_status=new_status,
+        )
