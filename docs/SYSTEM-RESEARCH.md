@@ -227,8 +227,11 @@ clutchwire 136, splicereel 134.
 | Learning — hook classifier | ML theater (inert 0.5) |
 | Engagement engine | Live, webhook-only (pollers undeployed) |
 | Dashboard | Real & load-bearing (no FE tests in CI) |
-| Storage (Postgres) | Primary, real |
-| RLS / multi-tenancy | Dormant scaffolding |
+| Storage (Postgres) | Real backend, but **write-path is protocol-violating (R-45)**, 4 tables unmigrated (R-48), DSL parse failures (R-49) — primary path fragile [verify on host] |
+| RLS / multi-tenancy | Dormant scaffolding; **write-side isolation structurally absent (no `WITH CHECK`)** — see §9 |
+| Stage-handoff integrity | Core loop sound (hook_style/arm_id verified); **seam bugs**: virality_score dropped (R-19), X affiliate name mismatch (R-46), render-validation unenforced (R-47) |
+| Content quality / gates | Strong happy-path prompts; **enforcement gates leaky** — sentence-case/CTA-last/≤60/HTML-strip unenforced, fallback hooks generic (R-50/51/52/53) |
+| Security (deps + surface) | No secrets / no code-exec (verified); but **17 py CVEs incl. lxml XXE + pillow RCE, webhook injection, timing-unsafe auth** (R-59/60/61) |
 | Render pipeline | Geometry/codec correct; **quality gate broken, logo guarantee violable** |
 | Publish reliability | Works single-host serial; **double-publish & partial-state risks** (R-21/R-24/R-29) |
 | Cost / quota control | Real YT-quota minimization; **spend entirely unmeasured** (R-27) |
@@ -289,6 +292,15 @@ effort):
 9. **R-44** — Meta FB/IG reach/impression metrics retire **~June 2026**; the insight collectors
    will silently zero out and starve the reward loop. Audit insight fields before the deadline.
 
+**Wave-4 additions (2026-05-23) that jump the queue:**
+10. **R-45** — verify on host *first*: if prod writes hit Postgres, the protocol return-contract
+    violation means story/blueprint creation `TypeError`s and **nothing publishes**. This either
+    outranks everything or reveals "Postgres is primary" is doc-drift. Cheap to confirm, huge if real.
+11. **R-59** — bump the untrusted-input CVEs (lxml XXE on RSS, pillow RCE on thumbnails, starlette
+    on the webhook). One `uv lock --upgrade` of 4-5 packages; closes real exploitable paths.
+12. **R-47** — gate `VISUAL_READY` on `video_validation.valid`. One conditional; stops VMAF/spec
+    failures (and the banned text-render edge) from auto-scheduling.
+
 | ID | Severity | Status | Risk | Pointer / fix |
 |---|---|---|---|---|
 | R-01 | CRITICAL | Open | Health monitoring effectively off — best detection code unscheduled, alerts written to an unread table, no push delivery. Nobody paged on a dark channel. | Add `genlab-health-monitor.timer` (hourly) + wire stored `slack_webhook_url` to actually POST. `monitoring/health_monitor.py` |
@@ -309,7 +321,7 @@ effort):
 | R-16 | LOW | Open | `tags` reach the LLM without `check_for_injection` (`base_writing.py:~145–149` omits tags from the loop; tags interpolated at `video_content_writer.py:~329`). Output filter is a backstop; tags capped 60 chars. | add tags to the injection-check loop |
 | R-17 | LOW | Open | Committed SharePoint List GUIDs (`ClutchWire`/`CriticalRush` `config/lists_config.yaml`) and Meta App/Page/IG IDs in `docs/` break the CLAUDE placeholder convention. Not secrets (SharePoint is legacy), but unnecessary disclosure. | placeholder-ize or note as intentional |
 | R-18 | HIGH | Open | **LinUCB trains and predicts on different feature vectors.** `build_content_context` gets the blueprint dict at store time (dims 5/6/9/11 → 0/0.5) but the story dict at predict time (real values) — 4 of 12 dims out-of-distribution. Once `n_obs≥5` accumulates, the contextual bandit nudges *wrongly*. Currently masked by data-starvation. | build context from one canonical dict at both sites (persist the full 12-vector at push time, as the updater already trusts `linucb_context`) |
-| R-19 | MEDIUM | Open | **Never-run integration tests are bit-rotted AND may reveal a real bug.** CI always deselects them (`addopts="-m 'not integration'"`, fires even on direct invocation). Force-run: 2/10 fail — `ViralityScoring.execute()` reads/writes `context["stories"]` but the test asserts `result["blueprints"]` carries `virality_score`. Either the test is stale or the score never reaches the blueprint. Also pathologically slow (~43s/test). | verify whether virality_score actually reaches published blueprints; fix or delete the integration tests; run them somewhere |
+| R-19 | MEDIUM | Open | **Never-run integration tests are bit-rotted AND may reveal a real bug.** CI always deselects them (`addopts="-m 'not integration'"`, fires even on direct invocation). Force-run: 2/10 fail — `ViralityScoring.execute()` reads/writes `context["stories"]` but the test asserts `result["blueprints"]` carries `virality_score`. **CONFIRMED (wave 4, 2026-05-23): `virality_score` never reaches the blueprint** — two root causes: (a) **no stage ever writes `context["blueprints"]`** (every stage reads/writes `context["stories"]`; `PipelineContext.blueprints` is vestigial, `context.py:51`), and (b) `ViralityScoring` writes `bp["virality_score"]` onto the story (`virality_scoring.py:136`) but `PushToBacklog`'s blueprint `fields` dict (`push_to_backlog.py:1055-1107`) never copies it → computed every run, discarded before persistence, never influences `priority_score`. Also pathologically slow (~43s/test). | copy `virality_score` into the blueprint fields at `push_to_backlog.py:1055`; fix or delete the integration tests; run them somewhere |
 | R-20 | LOW | Open | Dead-code cluster (~1,960 L, zero live refs): `platforms/dispatcher.py` (+its test), gaming `write_gaming_content_legacy.py` (535) + `adapt_gaming_content_legacy.py` (291), `CriticalRush/tests/_legacy/*.py` (8 files, 1,097, never collected — wrong filename prefix). | delete |
 | R-21 | CRITICAL | Open | **Double-publish via the retry pass.** `run_publish` re-publishes any `FAILED` platform on the last 50 PUBLISHED blueprints (`publish_all_platforms.py:~1083–1256`); the publisher fires at **06:35 AND 10:30** (`genlab-publisher.timer`). A TRANSIENT failure that actually landed (lost response after the post succeeded — `error_classifier.py:~72`) is retried with **no platform-side idempotency** → the same reel posts twice to a live channel. | conditional retry only after a "did this post land" check; add idempotency keys |
 | R-22 | CRITICAL | Open | **Dashboard slot-assignment lock is non-functional.** `_advisory_lock` opens its *own* connection and takes a txn-scoped `pg_advisory_xact_lock`, but the read-modify-write runs on a *different* (Graph-sync) connection (`publishing_queue.py:~46–75,366–378`); the lock key is `hash(niche_id)` (per-process randomized → workers never contend); and it fails open. Two approvals can assign the same slot → breaks 1/day. Zero tests. | take the lock on the writing connection, stable digest key, fail closed |
@@ -335,10 +347,108 @@ effort):
 | R-42 | HIGH | Open | **X/Twitter video upload uses a retired API (verified 2026-05-22).** `_get_api_v1()` builds a `tweepy.API` v1.1 client (`x_twitter.py:109`) and `:275` calls `api_v1.media_upload(...)`; the v1.1 `media/upload` endpoint was **sunset 2025-06-09** (~11 months ago). tweepy 4.16 (locked) exposes no v2 `Client.media_upload`, so every video tweet's media step likely errors → X reels SKIPPED/FAILED, masked by the silent-SKIP cascade (R-11/R-36). OAuth1.0a tweet creation (`create_tweet`) is unaffected. | migrate to v2 `POST /2/media/upload` (OAuth1.0a still valid; needs `media.write`) or a tweepy version exposing v2 media. **[verify on host]** whether X video publishes are currently failing |
 | R-43 | MEDIUM | Open | **Dead Gemini model ID (verified 2026-05-22).** The `video_analysis` tier is pinned to `gemini-2.5-flash-preview-04-17` (`llm/router.py:72`, `model_routing.yaml:41`), a preview **deprecated 2025-07-15** → the endpoint 404s. Latent if the tier is rarely exercised; a hard error the moment it is. | bump to GA `gemini-2.5-flash`. **[verify on host]** whether `video_analysis` is ever invoked |
 | R-44 | HIGH | Open | **Meta Graph API aging + imminent metric retirement.** All FB/IG calls pin `v21.0` across ~20 sites (client defaults `facebook.py:66`, `instagram.py:59`) — 4 majors behind v25.0 (no hard sunset yet, ~12mo out). **More urgent:** legacy FB/IG reach & impression metrics retire **~June 2026**; the insight collectors (`metric_collector.py:378+`, `fetch_insights.py:226+`) request these fields and will **silently zero out**, starving the learning-loop reward inputs (compounds R-23/R-27 + bandit data-starvation). | centralize the version in one constant + bump to v25.0; audit/replace retiring insight fields before June 2026 |
+| R-45 | CRITICAL | Open | **Postgres backend violates its own storage protocol return-contract (verified 2026-05-23).** `PostgresBackend.create` returns a bare `str` UUID (`postgres.py:406,429`) and `PostgresTableProxy.create` passes it straight through (`:712`), but the `StorageBackend` protocol promises a `dict` with `id` (SharePoint backend honours it). Callers are inconsistent: `backlog_client.py:1245` guards with `isinstance(record, dict)`, but `create_story:570`, `create_blueprint:702`, `create_template:827`, `create_asset:891/897`, `create_source:978`, `log_publish_result:1095` do `record["id"]` and `batch_create_stories:617`/`batch_create_blueprints:803` do `[r["id"] for r in created]` — all `TypeError: string indices must be integers` on the Postgres path. `update` returns `None` vs protocol `dict`. **If prod writes hit Postgres, story/blueprint creation crashes (nothing publishes); if they don't, "Postgres is primary" is doc-drift.** | normalize `PostgresBackend.create/batch_create/update` to return `{"id":…}`/`list[dict]`/`dict` (or wrap at the proxy); add a contract test asserting both backends return the same shape. **[verify on host]** whether `GENLAB_USE_POSTGRES=true` and whether writes are actually succeeding |
+| R-46 | HIGH | Open | **X affiliate first-comment never posts (name mismatch).** `publish_all_platforms.py:513` reads `twitter_first_comment` only when `platform == "x_twitter"`, but the default platform list uses `"twitter"` (`:1299`) and sibling branches handle both names (`:385` `in ("twitter","x_twitter")`, `:559` `=="twitter"`) — the asymmetry means the affiliate self-reply URL (the entire X monetization payload) is dropped. `cta_engine.py:305` writes it; `:511` Facebook's equivalent name matches and works. Compounds R-23. | normalize the platform name before the comparison, or `platform in ("twitter","x_twitter")` at `:513`. **[verify on host]** X posts for a missing first-comment |
+| R-47 | HIGH | Open | **Render quality-gate result is never enforced at persistence.** `validate_videos.py:104-146` writes `media["video_validation"]={"valid":…}` (incl. `vmaf_below_threshold`, un-fixable `wrong_dimensions`, `no_audio_stream`), but `push_to_backlog.py` gates only on `if rendered_path:` (`:1024,1101,1148`) and never reads `["video_validation"]["valid"]` — the only reader is `run_report.py` (stats). A video that FAILS VMAF/spec still gets `VISUAL_READY` + auto-schedule. Distinct from R-25 (wrong reference): even the check that *does* run is ignored. | treat `rendered_path` as publishable only when `video_validation.valid` is True; else keep DRAFTED |
+| R-48 | HIGH | Open | **Four queried tables have no migration (verified 2026-05-23).** `monetisationprogress`, `affiliate_clicks`, `ab_tests`, `audience_snapshots` are in `_VALID_TABLES`/`PROMOTED_COLUMNS` (`postgres.py:136-141,282-307`) and queried (`metric_collector.py:822,935`) but **no Alembic revision CREATEs them** (grep: 0). A fresh `alembic upgrade head` yields a DB where reads error (swallowed at `metric_collector.py:829`) → monetisation boost / audience / CTA-click paths silently dead. `env.py:26` `target_metadata=None` disables autogenerate so the drift is invisible. | add migrations creating + RLS-enabling all 4; assert table existence at startup |
+| R-49 | HIGH | Open | **`formula_to_sql` parse failures silently break CTA bandit + publish dedup on Postgres.** The DSL regex matches only `{f}='v'` with no spaces (`formula_sql.py:166`); the CTA-bandit queries use `{task_id} = '…'` *with* spaces (`metric_collector.py:918,937`) → pass through unparsed → invalid SQL → caught by `try/except` → CTA bandit never updates. Separately, queries filter on `analytics_id`/`task_id` which live only in `extra` JSONB, not as columns (`backlog_client.py:1076`) → "column does not exist" → `log_publish_result` dedup `find` errors → every publish takes the create branch → duplicate `publishing_analytics` rows. | tolerate whitespace + add a spaced-`=` branch (or retire the formula DSL for structured filters); promote `analytics_id`/`candidate_id` to columns or query `extra->>` |
+| R-50 | HIGH | Open | **Sentence-case is enforced nowhere in code, and BB's config actively demands lowercase.** No normalizer exists (grep: only prompt strings + one fallback `.capitalize()` at `video_content_writer.py:452`); the rule is only "requested" in prompts. `BlackboxBrief/config/writing.yaml:28-45` (all-lowercase caption examples + "Lowercase where natural") contradicts the shared prompt's "❌ all-lowercase reads as shitpost" (`video_content_writer.py:256-270`), and BB's `extra_instructions` are appended LAST (`:317`, higher salience) → the flagship production AI channel reliably emits lowercase captions. | add a `to_sentence_case()` post-pass on hook + caption fields; delete BB's lowercase examples |
+| R-51 | HIGH | Open | **Template-fallback hooks ship all-lowercase and dodge the banned-phrase list.** When `ANTHROPIC_API_KEY` is unset / the LLM fails, gaming ships `templates.yaml:8-26` formulas ("the {game} community is eating rn", "wait... {game} really did this??") — all-lowercase, and `_is_banned` (`base_hooks.py:202-210`) uses exact-substring so they evade the banned "the community is going wild"; `HookValidator` has no all-lowercase rule. Degraded-mode output is exactly the generic AI-tell content the system claims to ban. | rewrite formulas in sentence case; add an all-lowercase check + evasive variants to the banned list |
+| R-52 | MEDIUM | Open | **The 9-rule HookValidator is dead on the primary (LLM) path + can't enforce ≤60 chars.** `base_hooks.py:312-321` `continue`s for `written_by=="llm"` so `validator.validate()` (`:328`) runs only on template hooks; `HookValidator` has no ≤60 rule (`_TITLE_LIMITS["instagram"]=2200`, `hook_validator.py:163`) — ≤60 is only ad-hoc truncation (`video_content_writer.py:352`, `llm_hook_generator.py:396`) producing "…"-suffixed hooks rather than regeneration. | run the validator on LLM hooks too; add a hard ≤60 rule; regenerate on failure |
+| R-53 | MEDIUM | Open | **Caption platform-rule enforcement gaps (3).** IG caption assembly is `[body, cta, hashtags]` so it ends with hashtags, not the CTA — violates "must end with CTA" (`video_content_writer.py:461-467`; `caption_ends_with_cta` flag never read); only the *upper* length bound is enforced (no IG-150 / FB-200 floor, no FB trailing-`?` check, `:457-520`); LLM output is never HTML-stripped before render/Postgres (`push_to_backlog.py:1061-1078` store hook/caption raw; the Graph sanitizer is bypassed on the PG path). | reorder CTA last; add floor + FB-question validation; `strip_html_tags` on all output fields |
+| R-54 | HIGH | Open | **No global render/encode concurrency lock → the realized OOM mechanism behind R-03.** The pipeline mutex is per-niche only (`pipeline_runner.py:57-107`, docstring: "different niches … run in parallel"); no machine-wide encode semaphore exists (grep: none). Overlapping launchd schedules run N concurrent FFmpeg + VMAF passes on a 4GB box (code already notes x265 OOMs). Also: the H.264 `tee` runs up to 5 x264 encoders in one process (`ffmpeg.py:494-532`); VMAF temp-log path collides across runs (`video_validator.py:43`, keyed only by platform). | add a cross-process `render.global.lock` around render+VMAF; stagger schedules; serial transcode on ≤4GB; PID/run-id the VMAF log |
+| R-55 | HIGH | Open | **YouTube quota is unsafe across the 5 niche processes.** Upload ledger `_save()` is a non-atomic whole-file `write_text` with a per-process lock, but the file is shared by all niches (`youtube_quota.py:168-183`, `platforms/youtube.py:103`) → last-writer-wins undercount → `uploadLimitExceeded` (a known daily failure). Fetch-side quota is in-process, reset every run (`trending_video_fetcher.py:70-86`) → no aggregated daily ceiling across channels (extends R-28). | atomic write + `flock` around the upload ledger RMW (as `comment_processor.py:263` already does); route fetch counts through the persistent tracker |
+| R-56 | MEDIUM | Open | **`transcode_for_platforms_sync` swaps args positionally.** Sync wrapper `(master, output_dir, platforms)` calls the async `(master, platforms, output_dir)` (`ffmpeg.py:603-621`) → `output_dir` binds to `platforms`. Latent (the gaming path bypasses this entrypoint via FrameCompositor) but a live bug for any caller of the sync wrapper. | fix arg order; add a call-site test |
+| R-57 | MEDIUM | Open | **Disk quota daemon omits the production channel.** `disk_quota.yaml` (both copies) enumerates only criticalrush/clutchwire/splicereel/framedrift — **no `blackboxbrief`/`ai_creators`** agent, so BB's run dir (the only confirmed-live channel) is unmanaged by `quota_daemon`; configured quota totals 4×30GB=120GB on one box. Also `scan_runs` walks each run tree 3× per 60s poll (`disk_quota.py:291-296`). | add a BB agent stanza; right-size quota to actual disk; single-pass `os.walk` |
+| R-58 | MEDIUM | Open | **Content_Memory dedup loads the entire never-purged history into RAM and re-tokenizes per check.** `check_duplicate`/`find_similar` iterate `_load_posts()` → `proxy.all()` with no limit (`scripts/content_memory.py:487-523,147-184`) and re-tokenize both sides per post; CLAUDE mandates "DO NOT PURGE" → unbounded O(n) RAM+CPU that grows forever on the 4GB box. | server-side hash filter; recency/engagement window cap; precompute token sets |
+| R-59 | HIGH | Open | **Known-CVE dependencies on untrusted-input paths.** `pip-audit`: 17 vulns / 11 used packages — **lxml 6.0.2 XXE** (RSS/feed XML reads local files, PYSEC-2026-87→6.1.0), **starlette 0.52.1 host/path injection** (the FastAPI webhook, →1.0.1), **pillow 12.1.1 PSD memory-corruption/RCE + decompression-bomb DoS** (processes external thumbnails, →12.2.0), urllib3 redirect-leak (→2.7.0), idna ReDoS, cryptography name-constraint bypass, mako/pygments. `npm audit`: 5 (vite dev-server arbitrary file read GHSA-p9ff-h696-f583 — dev-only). Cross-ref U-06/U-08/U-24. | bump lxml/starlette/pillow/urllib3/cryptography first (untrusted-input sinks); then the dev-chain |
+| R-60 | MEDIUM | Open | **Webhook `media_id` formula injection.** `engagement/webhook.py:45-46` interpolates the attacker-controlled Meta `media_id` raw into `SEARCH('{media_id}', {post_id})`, bypassing the `_esc()` (`graph_proxy.py:39`) used everywhere else in `backlog_client.py`. | `_esc(media_id)` + validate it's a numeric Meta ID |
+| R-61 | MEDIUM | Open | **Timing-unsafe Basic-Auth comparison.** `review_server.py:302` uses `==` for user/pass, while the form-login path (`:341-342`) and CSRF (`:494`) correctly use `hmac.compare_digest`. Only the Basic-Auth fallback is inconsistent. | `hmac.compare_digest` |
+| R-62 | LOW | Open | **Bounded SSRF via `is_direct_video_url` catch-all.** The final pattern `https?://[^\s"']+\.(?:mp4\|webm)` (`video_sourcer.py:56`) matches any host; the URL flows from externally-controlled story fields (Reddit `fallback_url`) into yt-dlp (`download_top_videos.py:123,372`). Mitigated only when WARP/`YT_DLP_PROXY` forces external egress. | real host allowlist on the catch-all, or always proxy |
+| R-63 | MEDIUM | Open | **Postgres schema-hygiene bundle.** Zero CHECK constraints anywhere (status free-text `TEXT`, scores unbounded — a typo'd status silently breaks the state machine); `stories.score` column never written + its partial index `WHERE status='NEW'` matches 0 rows (stories are created `INTAKE`) (`postgres.py:185`, `backlog_client.py:557`); standalone `.sql` files run outside Alembic create RLS-less `content_pool`/`affiliate_clicks` + duplicate-index drift (`migrations/*.sql`); `migrate_table.py:59` `ON CONFLICT (arm_id)` is broken after migration i9 dropped that unique key; two exact-duplicate blueprint indexes (`idx_bp_niche_status`/`idx_bp_status_niche`); the universal `ORDER BY created_at DESC` is unindexed on 12/13 tables; `fk_bp_story` validates without `NOT VALID` (locks on large tables). | add CHECK constraints + status enum; fold `.sql` into Alembic with RLS; fix the ON CONFLICT key; drop dup/dead indexes; add `(status, created_at DESC)` |
 
 ---
 
 ## 6. Findings log (append-only, newest first)
+
+### 2026-05-23 — Deep-dive wave 4: handoffs, content quality, performance, schema, SaaS, deep security
+Six parallel agents took the dimensions the subsystem reviews structurally miss. Produced
+**R-45…R-63** + the new **§9 SaaS gap analysis** + U-24/U-25. Three flagship findings were
+re-verified against the repo before promotion (S-01, CD-1, S-07). Detail by stream:
+
+**1. Stage-handoff contract integrity.** The pipeline's only mutation channel is
+`context["stories"]`; `context["blueprints"]` is **vestigial** — no stage ever writes it. New seam
+bugs: **CD-1/R-46** (X affiliate first-comment dropped by `twitter`≠`x_twitter`), **CD-2/R-47**
+(render-validation result never enforced at persist), and **R-19 CONFIRMED** (`virality_score`
+computed every run, never copied into the blueprint). Lower-sev (findings-log only): **CD-3/CD-4**
+— the shared `GenerateAudio` (`generate_audio.py:114`) and gaming `commentary_audio_path` outputs
+are *doubly dead* (audio never built — `_build_script` reads top-level `bp["hook"]` but content
+lives in `story["content"]["hook"]` → empty script → skipped — and never muxed; both also run in
+`post_render`, after the render that would consume them; extends R-39); **CD-5** affiliate
+`utm_content` is empty (blueprint_id unset at `inject_cta` time, `cta_engine.py:164`); **CD-6**
+`x_twitter.first_reply` dropped at push. **Verified-correct handoffs (positives):** `hook_style`
+and `arm_id` round-trip fully (write→persist→publish→48h reward credit); the affiliate field copy;
+ExpressLane urgency; the `content["hook"]` key is consistent across writing/hooks/QC/virality/push.
+R-18's blast radius is **larger** than stated (dims 5/6/9/10/11 diverge, not 4) but same root cause.
+
+**2. Content quality & prompt engineering.** Verdict: **the happy-path prompt is genuinely strong**
+(anti-"X just Y" regex backstop, good/bad exemplars, per-niche voice + banned phrases + few-shot —
+a real strength), but **enforcement leans on LLM goodwill, not deterministic post-checks** — exactly
+backwards from "Determinism > Intelligence." New: **R-50** (sentence-case unenforced + BB demands
+lowercase), **R-51** (fallback hooks lowercase + evade banned list), **R-52** (HookValidator dead on
+LLM path, no ≤60 gate), **R-53** (CTA-not-last, no length floor / FB-question, no HTML-strip).
+Lower-sev: **CQ-05** banned-phrase naive substring → false-positives reject good hooks ("this could
+change the meta") *and* false-negatives pass bare "insane"; **CQ-09** dead duplicated
+`content_prompts.yaml` in the 3 stub channels (contains banned phrases); **CQ-10** BB
+`hook_formulas.yaml` is a banned-content minefield kept dormant only by wiring; **CQ-11** hook dedup
+is correct but *late* (LLM spends tokens, then push discards collisions — cost waste). Strongest
+niches: movies/anime/sports (clean sentence-case configs); weakest: **BlackboxBrief** (lowercase
+self-contradiction on the flagship) and **gaming** (worst fallback hooks). **CQ-08 reconciled with
+stream 6:** the engagement reply path *is* injection-checked upstream (`comment_processor.py:389`),
+so persona_engine's lack of its own check is defense-in-depth (LOW), not an open hole.
+
+**3. Performance / memory / scale.** New: **R-54/P-01** (no global render lock = the OOM mechanism
+behind R-03), **R-55/P-05+P-06** (YouTube quota cross-process unsafe), **R-56/P-04** (transcode
+arg-swap), **R-57/P-10** (quota daemon omits BB; 120GB on one box), **R-58/P-08** (Content_Memory
+unbounded in-RAM). Lower-sev: **P-02** publish ThreadPool unbounded + co-resident-with-render
+unguarded; **P-03** FFV1 master + concurrent x264 tee buffers; **P-07** VMAF temp-log path collision
++ uncapped threads; **P-09** DedupEngine dense n×n matrix (fine now, cliff at scale); **P-11**
+`scan_runs` 3× tree-walk per 60s. **First thing that breaks at 10× channels:** RAM (no render lock),
+then YouTube quota, then DB connections (~10 procs × pool-max-10 ≈ 100 vs default `max_connections`).
+**Verified-OK (positives):** video downloads/uploads are *streamed* not buffered; quota_daemon two-pass
+eviction protects published + scheduled runs (honours "sacred" rule); the *upload* quota ledger is a
+real persistent Pacific-reset hard-stop (only its atomicity is the R-55 flaw); smart_crop reads frames
+incrementally; publisher processes niches sequentially.
+
+**4. Postgres schema / migrations / queries.** Headline = **R-45** (protocol contract violation —
+verified). Plus **R-48** (4 tables unmigrated — verified), **R-49** (formula DSL parse failures →
+CTA bandit + publish dedup silently broken), **R-63** (CHECK-less schema, dead `stories.score` index,
+`.sql` outside Alembic with RLS-less tables, broken `ON CONFLICT`, dup indexes, unindexed universal
+sort). **S-10** extends R-22 (advisory lock on wrong connection, salted-`hash()` key). Connection
+pools are per-`BacklogClient`-instance (not global) at min2/max10 with no env sizing. **Verified-OK:**
+`SET LOCAL app.niche_id` is correctly transaction-scoped where used; `content_pool` claim uses
+`FOR UPDATE SKIP LOCKED` (the one race-safe primitive); batch_create pipeline mode is correct;
+TIMESTAMPTZ + sensible UNIQUE business keys throughout.
+
+**5. SaaS / multi-tenancy readiness → see new §9.** Core fact: **there is no tenant/billing/auth/
+credential-vault primitive anywhere** (repo-wide grep for tenant/billing/stripe/encrypt/vault = 0);
+`niche_id` does double duty as content-category AND tenant-key, but only the category half is real.
+Every isolation control is fail-open / admin-bypass. The path is real (engine is genuinely
+config-driven, RLS schema exists) but item 1 (data isolation) is a **security fix that must land
+before any second org's data enters the DB**.
+
+**6. Deep security + dependency scan.** Ran the scanners the prior pass didn't: **R-59** (17 py CVEs
+incl. lxml XXE / pillow RCE / starlette; 5 npm dev-chain), **R-60** (webhook `media_id` formula
+injection), **R-61** (timing-unsafe Basic-Auth), **R-62** (bounded yt-dlp SSRF). **Verified-clean
+(positives, recorded so we don't re-chase):** no committed secrets (`.env*`/`token.json`/
+`credentials.json` gitignored, none tracked); **no** unsafe deserialization or dynamic code-execution
+primitives anywhere (verified: no unsafe-load, eval, exec, or shell-spawning subprocess); Meta rule
+intact (no `graph.instagram.com`, no `ig_refresh_token`); the **primary feed-text→LLM path IS
+injection-guarded** (`base_writing.py:129-174`) and so is the engagement comment path
+(`comment_processor.py:389`); `geo_link_resolver` URLs are operator-config, not attacker-influenced
+(the wave-1 concern is real but not live SSRF); `/links/*` public routes are solid (domain-allowlisted
+redirects, parameterized SQL, escaped HTML); `serve_media` path-traversal is guarded; Flask has a 16MB
+body cap + security headers.
 
 ### 2026-05-22 — Upgrade & version-currency sweep (5 parallel streams)
 Method: 5 parallel agents researched independent upgrade dimensions (Python deps, frontend/Node,
@@ -580,6 +690,18 @@ Two issues worth remembering surfaced during this:
   dead-but-never-called? Determines whether R-43 is active or merely latent.
 - Which exact FB/IG insight fields do `metric_collector.py`/`fetch_insights.py` request, and which
   are in the ~June-2026 reach/impression retirement (R-44)? Audit the field lists before the date.
+- **[verify on host] — the highest-priority unknown:** is `GENLAB_USE_POSTGRES=true` in prod, and
+  are story/blueprint writes actually succeeding (R-45)? If yes, the protocol return-contract
+  violation should be crashing `create_story`/`create_blueprint` — so either there's a mask we
+  haven't found, or prod is silently still on the SharePoint backend (which would make "Postgres is
+  primary" doc-drift). Resolve this first; it changes the severity of R-45/R-48/R-49.
+- **[verify on host]** Are X posts actually missing the affiliate first-comment (R-46)? Check a
+  recent X post's replies vs the blueprint's `twitter_first_comment`.
+- Has a fresh `alembic upgrade head` ever been run cleanly, or does prod's DB only exist because of
+  the hand-run `.sql` files (R-48/R-63)? Determines whether the 4 missing tables exist in prod.
+- **[verify on host]** Real per-arm `n_obs` in `bandit_arms` + whether the CTA-bandit update has
+  *ever* succeeded (R-49 says its query errors on Postgres) — would confirm the monetization learning
+  loop is dead, not just starved.
 
 ---
 
@@ -619,3 +741,44 @@ drift, U-03 usage recording (unblocks R-27), U-07 gunicorn pin (a trap, not opti
 | U-21 | INFO | S | mypy configured (`[tool.mypy]`) but **never run in CI** + unpinned → type-checking unenforced. Add a CI step if desired. (overlaps R-04) | `.github/workflows/` |
 | U-22 | LOW | S | Verify `actions/cache@v5` tag resolves (web shows v4 as latest documented major); else pin v4. | `ci.yml` |
 | U-23 | OPTIONAL | M | Optional majors, both current pins still supported: Postgres 16→18; Node 22→24 (Active LTS). Defer unless doing a sweep. | compose + Dockerfile |
+| U-24 | SECURITY | S | **Python CVE remediation batch (from `pip-audit`, wave 4 / R-59).** lxml 6.0.2→6.1.0 (XXE), starlette 0.52.1→1.0.1 (host injection), pillow 12.1.1→12.2.0 (RCE/DoS), urllib3→2.7.0, idna→3.15, cryptography→46.0.7, mako→1.3.12, pygments→2.20.0, requests→2.34.2 (subsumes U-06), pytest→9.0.3. torch 2.10.0 has no fix (local-only). Lead with the untrusted-input four (lxml/starlette/pillow/urllib3). | `uv lock --upgrade` + per-pkg pins |
+| U-25 | SECURITY | S | **Frontend dev-chain vuln bumps (`npm audit`, R-59).** vite (dev-server arbitrary file read GHSA-p9ff-h696-f583 — dev-only, lands with the U-14 Vite major), postcss, ws, engine.io-client, brace-expansion. None reach the prod static bundle, but bump the lockfile. | `dashboard/frontend` lockfile |
+
+---
+
+## 9. SaaS / multi-tenancy readiness (wave 4, 2026-05-23)
+
+The MISSION is Phase 1 → multi-tenant SaaS for external micro-influencers/brands. **Core structural
+fact:** there is **no tenant abstraction anywhere** — a repo-wide grep for `tenant`/`billing`/
+`subscription`/`stripe`/`encrypt`/`fernet`/`vault`/`budget`/`spend` in `genlab-core/src` returns
+**zero hits**. `niche_id` is doing double duty as content-category AND tenant-key, but only the
+category half is real; the isolation half is dormant scaffolding. The engine *is* genuinely
+config-driven and the RLS schema exists, so this is a build-out, not a rewrite — but **every
+isolation control is currently fail-open / admin-bypass**, and item 1 below is a security fix that
+must land before any second org's data shares the database.
+
+### Gap table
+
+| Dimension | Today (file:line) | Required for external tenants | Effort | Blocking? |
+|---|---|---|---|---|
+| Tenant model | `niche_id` ∈ closed `frozenset` in ≥5 places (`publish_all_platforms.py:66`, `pipeline/cli.py:38`, prefix maps `pipeline_runner.py:366`, `push_to_backlog.py:131`, `niche_credentials.py:21`); no tenant table in 11 migrations | `tenants` table; `tenant_id` orthogonal to `niche_id` (a tenant may run *gaming* too); replace frozensets/maps with a DB lookup | L | **Yes** |
+| Data isolation (read) | RLS bypassed: policy treats `app.niche_id IN ('','all')` as admin-sees-all; filtering done by interpolating `{niche_id}='x'` into a formula (`backlog_client.py:208-223`); `find` sets the GUC only from a kwarg defaulting to `""` | per-request `SET LOCAL app.niche_id=<tenant>` from auth context; drop the `''`/`'all'` escape (fail-closed); client formula filter becomes belt-and-suspenders | L | **Yes** |
+| Data isolation (write) | `get/update/delete` hardcode admin `''` (`postgres.py:443,546,580`); `create/batch_create` set no GUC; **RLS policies have no `WITH CHECK`** → a tenant can write another tenant's `niche_id` | thread GUC from context in all 6 methods; add `WITH CHECK (niche_id=current_setting(...))` to all 12 policies | M | **Yes** |
+| AuthN/AuthZ | single shared `REVIEW_AUTH_USER/PASS` (`review_server.py:246`); session = one bool, no user/role/tenant | users table + roles + per-tenant sessions; session `tenant_id` feeds the isolation GUC | L | **Yes** |
+| Credentials per tenant | brand-prefixed env only (`niche_credentials.py:42-71`), hardcoded prefix map, no DB store, no encryption; adding a tenant = edit `.env` + redeploy | encrypted DB-backed per-tenant cred store + per-platform "connect your account" OAuth flows | XL | **Yes** |
+| Config as data | configs are files on disk (`niche_loader.py:58-69`); N tenants = N folders committed + a deploy | DB/API-driven config; the YAML schema is a clean contract, just needs a non-FS backing store | L | **Yes** |
+| Onboarding | `tools/create_niche` copies a template dir then lists 4 **manual** code/registry/env edits (`create_niche.py:124-128`) | self-serve signup→connect→configure→run, no engineer, no deploy | XL | **Yes** |
+| Billing / metering | none (zero code) | plan tiers, usage metering, Stripe, enforcement | L | No (gates revenue) |
+| Per-tenant quota | `DailyCapEnforcer` is content-cap not fair-use; one **global** `YOUTUBE_API_KEY` shared by all (`trending_video_fetcher.py:27,1099`) | per-tenant quota buckets / keys; per-tenant LLM+render cost ceilings (ties R-27/R-28) | M | No (one tenant degrades others) |
+
+### Path to multi-tenant (dependency order)
+1. **Fix data isolation first** (M) — the only item that's a *correctness/security bug today*: add `WITH CHECK` to all policies, drive `app.niche_id` from a request ContextVar in all 6 `PostgresBackend` methods, remove the `''`/`'all'` fail-open. Do this *before* a 2nd org's data enters the DB.
+2. Tenant model (L) → 3. AuthN/AuthZ (L) → 4. Config-as-data (L) → 5. Per-tenant credentials + OAuth (XL) → 6. Self-serve onboarding (XL) → 7. Billing + per-tenant quota (L+M).
+
+### SaaS-blocking isolation risks (latent today — single owner — but live the moment tenant #2 exists)
+- **SR-A (Critical):** `get/update/delete` run in admin mode ignoring tenant (`postgres.py:443,546,580`) → tenant B can read/modify/delete tenant A's record by id.
+- **SR-B (Critical):** RLS policies have only `USING`, no `WITH CHECK` → write-side cross-tenant isolation is structurally absent.
+- **SR-C (High):** `create/batch_create` never set the niche GUC → created rows' tenancy depends entirely on the Python caller.
+- **SR-D (High):** isolation enforced by SQL string interpolation (`backlog_client.py:208-223`); any read path that forgets the `niche_id` kwarg defaults to `""` → returns all tenants' rows (fail-open default).
+- **SR-E (Medium):** shared global YouTube key = cross-tenant DoS (ties R-28).
+- **SR-F (Medium):** single dashboard credential = the approval gate is tenant-blind.
