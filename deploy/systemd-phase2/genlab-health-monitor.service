@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab Health Monitor (detect + alert on pipeline/channel failures)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# R-01: runs all checks, writes to pipeline_alerts, and POSTs critical alerts
+# to GENLAB_ALERT_WEBHOOK_URL (set in /opt/genlab/.env). Without this timer the
+# detectors never ran and nobody was paged on a dark channel.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.monitoring.health_monitor
+TimeoutSec=300
