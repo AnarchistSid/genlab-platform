@@ -320,7 +320,9 @@ media:
       - "anime merchandise collection"
 
 content_filter:
-  relevance_threshold: 0.20
+  # Anime is the strictest niche (no native YouTube category) — see CLAUDE.md / R-13.
+  # Was 0.20 (a regression); restored to the documented 0.35.
+  relevance_threshold: 0.35
   positive_keywords:
     # Core terms
     - anime

@@ -163,6 +163,22 @@ class BaseWritingStrategy(WritingStrategy):
                 elif field_name == "channel_name":
                     clean_channel = ""
 
+        # Tags are a list and reach the LLM prompt too — injection-check each
+        # and drop offenders, mirroring the scalar-field handling above (R-16).
+        checked_tags = []
+        for tag in clean_tags:
+            tag_hits = check_for_injection(tag)
+            if tag_hits:
+                logger.warning(
+                    "[%s] Injection heuristic hit in tag for story %s: %s",
+                    self._niche_id,
+                    story_id[:16],
+                    tag_hits,
+                )
+                continue
+            checked_tags.append(tag)
+        clean_tags = checked_tags
+
         return {
             "video_id": clip_info.get("video_id", story.get("video_id", story_id)),
             "title": clean_title,

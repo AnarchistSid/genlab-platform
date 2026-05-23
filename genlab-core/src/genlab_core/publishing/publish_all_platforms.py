@@ -510,7 +510,10 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
     first_comment_text = ""
     if platform == "facebook":
         first_comment_text = (fields.get("facebook_first_comment", "") or "").strip()
-    elif platform == "x_twitter":
+    elif platform in ("twitter", "x_twitter"):
+        # R-46: the default platform list uses the legacy name "twitter"; this
+        # branch previously only matched "x_twitter", silently dropping the X
+        # affiliate self-reply (the entire X monetization payload).
         first_comment_text = (fields.get("twitter_first_comment", "") or "").strip()
 
     return PublishPayload(

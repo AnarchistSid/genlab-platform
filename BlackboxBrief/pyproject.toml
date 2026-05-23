@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-server = ["gunicorn>=22.0", "eventlet>=0.36"]
+server = ["gunicorn>=22.0,<26", "eventlet>=0.36"]  # U-07: gunicorn 26 removes the eventlet worker
 dev = ["pytest>=8.3", "pytest-cov>=6.0"]
 
 [tool.uv.sources]

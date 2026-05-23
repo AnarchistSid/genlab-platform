@@ -443,24 +443,30 @@ def check_missing_media(niche_id: str) -> list[Alert]:
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, title, extra->>'visual_paths' FROM blueprints "
+            "SELECT id, title, extra->>'visual_paths', scheduled_for FROM blueprints "
             "WHERE niche_id = %s AND status = 'VISUAL_READY'",
             (niche_id,),
         )
         rows = cur.fetchall()
         broken = []
+        scheduled_broken = []  # R-79: scheduled posts are sacred — never auto-archive
         total_with_paths = 0
-        for bp_id, _title, vp in rows:
+        for bp_id, _title, vp, scheduled_for in rows:
+            is_broken = False
             if not vp:
+                is_broken = True
+            else:
+                total_with_paths += 1
+                try:
+                    paths = json.loads(vp) if vp.startswith("[") else [vp]
+                except (json.JSONDecodeError, ValueError):
+                    paths = [vp]
+                if not any(p and pathlib.Path(p).exists() for p in paths):
+                    is_broken = True
+            if is_broken:
                 broken.append(bp_id)
-                continue
-            total_with_paths += 1
-            try:
-                paths = json.loads(vp) if vp.startswith("[") else [vp]
-            except (json.JSONDecodeError, ValueError):
-                paths = [vp]
-            if not any(p and pathlib.Path(p).exists() for p in paths):
-                broken.append(bp_id)
+                if scheduled_for:
+                    scheduled_broken.append(bp_id)
 
         # SAFETY GATE 1: bail out on mass-failure patterns that look like a mount
         # issue rather than genuine per-row media loss. Two patterns trigger:
@@ -508,23 +514,41 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             return alerts
 
         if broken:
-            # Auto-fix: archive broken blueprints (only when safety gates passed)
-            cur.execute(
-                "UPDATE blueprints SET status = 'ARCHIVED', "
-                "action_taken = 'auto_archived_missing_media' "
-                "WHERE id = ANY(%s)",
-                (broken,),
-            )
-            conn.commit()
-            alerts.append(
-                Alert(
-                    check="missing_media",
-                    severity="critical",
-                    message=f"{len(broken)} VISUAL_READY blueprints with missing media files",
-                    niche_id=niche_id,
-                    auto_fix=f"Archived {len(broken)} blueprints",
+            # R-79: NEVER auto-archive a scheduled post (cleanup_safety.md).
+            # Archive only unscheduled broken blueprints; surface scheduled-broken
+            # ones as an alert so an operator can fix them without losing the slot.
+            _scheduled = set(scheduled_broken)
+            unscheduled_broken = [b for b in broken if b not in _scheduled]
+            if unscheduled_broken:
+                cur.execute(
+                    "UPDATE blueprints SET status = 'ARCHIVED', "
+                    "action_taken = 'auto_archived_missing_media' "
+                    "WHERE id = ANY(%s)",
+                    (unscheduled_broken,),
                 )
-            )
+                conn.commit()
+                alerts.append(
+                    Alert(
+                        check="missing_media",
+                        severity="critical",
+                        message=f"{len(unscheduled_broken)} VISUAL_READY blueprints with missing media files",
+                        niche_id=niche_id,
+                        auto_fix=f"Archived {len(unscheduled_broken)} blueprints",
+                    )
+                )
+            if scheduled_broken:
+                alerts.append(
+                    Alert(
+                        check="missing_media_scheduled",
+                        severity="critical",
+                        message=(
+                            f"{len(scheduled_broken)} SCHEDULED blueprints have missing media — "
+                            "NOT auto-archiving (scheduled posts are sacred); manual fix needed"
+                        ),
+                        niche_id=niche_id,
+                        details={"blueprint_ids": scheduled_broken},
+                    )
+                )
         conn.close()
     except Exception as e:
         logger.debug("Missing media check failed: %s", e)

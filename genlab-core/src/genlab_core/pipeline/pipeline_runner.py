@@ -274,9 +274,17 @@ class GenericPipelineRunner:
                 "niche_config": ctx.niche_config,
             }
 
+            # R-66: instantiate the metrics collector and thread it into the
+            # factory so per-stage timing is actually recorded (previously the
+            # factory was built with no metrics= arg, so metrics.jsonl was dead).
+            from genlab_core.observability.metrics_writer import PipelineMetrics
+
+            metrics = PipelineMetrics(niche_id=niche_id, run_id=run_id)
+            metrics.mark_pipeline_start()
             runner_factory = StageRunnerFactory(
                 genlab_root=self._genlab_root,
                 stage_log_filter=stage_filter,
+                metrics=metrics,
             )
 
             for batch in self._group_stages(stages, declarations):
@@ -312,6 +320,15 @@ class GenericPipelineRunner:
 
             if self._post_run_hook:
                 self._post_run_hook(ctx)
+
+            # R-66: flush per-stage metrics to <run_dir>/metrics.jsonl. Stage
+            # errors are caught by the runner (never re-raised), so this is
+            # reached on the happy, stage-error, and abort paths alike.
+            metrics.mark_pipeline_end()
+            try:
+                metrics.flush(run_dir)
+            except Exception:
+                logger.debug("[Pipeline] metrics flush failed", exc_info=True)
 
             return ctx
 

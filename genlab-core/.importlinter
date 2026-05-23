@@ -11,5 +11,4 @@ layers =
     genlab_core.media
     genlab_core.ratelimit
     genlab_core.cache
-    genlab_core.models
     genlab_core.interfaces

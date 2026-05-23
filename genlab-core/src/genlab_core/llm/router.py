@@ -69,7 +69,7 @@ TIER_CONFIG: dict[str, dict[str, Any]] = {
     },
     "video": {
         "provider": "google",
-        "model": "gemini-2.5-flash-preview-04-17",
+        "model": "gemini-2.5-flash",
         "env_key": "GOOGLE_API_KEY",
         "input_cost_per_m": 0.15,
         "output_cost_per_m": 0.60,

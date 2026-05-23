@@ -38,7 +38,7 @@ task_routing:
   classify_content_type: "gpt-4.1-nano"
 
   # VIDEO tier — Gemini Flash for video input
-  video_analysis: "gemini-2.5-flash-preview-04-17"
+  video_analysis: "gemini-2.5-flash"
 
 budget_fallbacks:
   expensive_to_mid: "gpt-4o-mini"
