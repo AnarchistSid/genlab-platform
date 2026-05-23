@@ -189,9 +189,16 @@ class VideoGate:
                             clips[story_id]["error"] = visual_reject_reason
 
             if has_valid_clip:
-                # Set master_path for VMAF gate (validate_videos compares rendered vs master)
-                if clip_path:
-                    story.setdefault("media", {})["master_path"] = clip_path
+                # R-25: do NOT set master_path to the raw downloaded clip. VMAF
+                # measures encode quality between two videos of the SAME content
+                # at the SAME dimensions — but the raw clip is the unbranded,
+                # original-aspect-ratio source (e.g. 1920x1080), while the
+                # rendered reel is a branded, cropped/padded 1080x1920 composite.
+                # Diffing those produced a meaningless score that triggered a
+                # wasted CRF-12 re-encode every run. A real VMAF gate needs a
+                # lossless master of the COMPOSITE (not produced today), so we
+                # leave master_path unset and validate_videos skips VMAF rather
+                # than running garbage.
                 passed += 1
             else:
                 story["_skip_llm"] = True
