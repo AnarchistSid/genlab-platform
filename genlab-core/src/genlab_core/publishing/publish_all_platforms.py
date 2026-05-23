@@ -45,7 +45,12 @@ from genlab_core.platforms.models import (
 )
 from genlab_core.platforms.registry import get_client
 from genlab_core.publishing.analytics_recorder import record_publish
-from genlab_core.publishing.error_classifier import classify, retry_delay_seconds, should_retry
+from genlab_core.publishing.error_classifier import (
+    classify,
+    is_ambiguous_failure,
+    retry_delay_seconds,
+    should_retry,
+)
 from genlab_core.publishing.niche_credentials import (
     resolve_fb_credentials,
     resolve_meta_credentials,
@@ -947,6 +952,9 @@ def run_publish(
                     "attempts": prev_attempts + 1,
                     "last_error": result.error[:200],
                     "error_class": error_class,
+                    # R-21: tag failures that may have actually landed so the
+                    # cross-run retry pass won't blindly re-publish them.
+                    "ambiguous": is_ambiguous_failure(result.error),
                 }
                 logger.error("[publish] %s: FAILED error=%s", platform, result.error)
 
@@ -1131,6 +1139,20 @@ def run_publish(
                     error_class = status_data.get("error_class", "TRANSIENT")
                     attempts = status_data.get("attempts", 0)
                     if not should_retry(error_class) or attempts >= 3:
+                        continue
+                    # R-21: never auto-re-publish a failure that may have actually
+                    # landed (timeout / broken pipe / container-expired) — that
+                    # risks a duplicate post on the live channel. Skip; these need
+                    # a "did it land" check or human review, not a blind retry.
+                    if status_data.get("ambiguous") or is_ambiguous_failure(
+                        status_data.get("last_error", "")
+                    ):
+                        logger.warning(
+                            "[publish] Skipping cross-run retry of %s for blueprint %s — "
+                            "ambiguous failure may have landed (needs manual/landing check)",
+                            plat,
+                            bp["id"][:8],
+                        )
                         continue
                     # Check backoff timing
                     next_retry = status_data.get("next_retry_after", "")
