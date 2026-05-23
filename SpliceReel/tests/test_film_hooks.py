@@ -198,12 +198,16 @@ class TestHookLLMSkip:
     """Hooks strategy skips stories that already have LLM-generated hooks."""
 
     def test_skips_llm_hook_stories(self, strategy):
+        # The LLM hook must be a *valid* hook (≥3 words, ≤60 chars) — R-52 now
+        # validates LLM hooks too, so a 2-word placeholder would be rejected and
+        # regenerated rather than skipped.
+        llm_hook = "Film A just broke a wild box office record"
         stories = [
             {
                 "title": "Film A",
                 "film_title": "Film A",
                 "lifecycle_stage": "unknown",
-                "content": {"hook": "LLM hook", "written_by": "llm"},
+                "content": {"hook": llm_hook, "written_by": "llm"},
             },
             {"title": "Film B", "film_title": "Film B", "lifecycle_stage": "opening_weekend"},
         ]
@@ -211,7 +215,7 @@ class TestHookLLMSkip:
         result = strategy.execute(ctx)
         assert result["run_stats"]["hooks"]["skipped_llm"] == 1
         assert result["run_stats"]["hooks"]["hooked_count"] == 1
-        assert stories[0]["content"]["hook"] == "LLM hook"
+        assert stories[0]["content"]["hook"] == llm_hook
 
     def test_does_not_skip_template_hook(self, strategy):
         stories = [
