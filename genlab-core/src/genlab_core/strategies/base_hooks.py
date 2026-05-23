@@ -29,6 +29,7 @@ from typing import Any
 import yaml
 
 from genlab_core.intelligence.hook_validator import HookValidator, clean_hook
+from genlab_core.writing.text_case import to_sentence_case
 
 from .interfaces import HookStrategy
 
@@ -269,6 +270,7 @@ class BaseHookStrategy(HookStrategy):
                     long_enough = len(cleaned) >= 25
                     looks_hooky = (has_question or has_verb) and long_enough
                     if cleaned and looks_hooky and not self._is_banned(cleaned):
+                        cleaned = to_sentence_case(cleaned)
                         story.setdefault("content", {})["hook"] = cleaned
                         story.pop("_skip_llm", None)
                         used_hooks.add(cleaned.lower())
@@ -308,24 +310,64 @@ class BaseHookStrategy(HookStrategy):
                     )
                     continue
 
-            # Skip if the writing stage already produced an LLM hook
+            # The writing stage may already have produced an LLM hook. R-52:
+            # previously such hooks were trusted blindly (`continue`) and never
+            # saw the validator — markdown/Reddit artifacts or >60-char hooks
+            # shipped unchecked. Now we validate (with a hard ≤60 cap), salvage
+            # if possible, and only fall through to template regeneration when
+            # the LLM hook is unrecoverable.
             existing_hook = story.get("content", {}).get("hook", "")
             if existing_hook and story.get("content", {}).get("written_by") == "llm":
-                used_hooks.add(existing_hook.lower())
-                skipped_llm += 1
-                logger.debug(
-                    "[%s] Skipping hook generation — LLM hook exists: %s",
+                llm_vr = validator.validate(existing_hook, platform="instagram", max_chars=60)
+                validated_count += 1
+                if llm_vr.passed:
+                    used_hooks.add(existing_hook.lower())
+                    skipped_llm += 1
+                    logger.debug(
+                        "[%s] Skipping hook generation — valid LLM hook exists: %s",
+                        self._niche_id,
+                        existing_hook[:40],
+                    )
+                    continue
+                # Salvage: strip artifacts, enforce ≤60, sentence-case, re-validate.
+                salvaged = clean_hook(existing_hook)
+                if len(salvaged) > 60:
+                    salvaged = salvaged[:57].rsplit(" ", 1)[0].rstrip(".") + "..."
+                salvaged = to_sentence_case(salvaged)
+                if validator.validate(salvaged, platform="instagram", max_chars=60).passed:
+                    story["content"]["hook"] = salvaged
+                    used_hooks.add(salvaged.lower())
+                    hooked_count += 1
+                    logger.info(
+                        "[%s][HookValidator] Salvaged LLM hook %r -> %r (%s)",
+                        self._niche_id,
+                        existing_hook[:40],
+                        salvaged[:40],
+                        [f.value for f in llm_vr.failures],
+                    )
+                    continue
+                # Unsalvageable — drop the LLM hook and regenerate via the
+                # template/title path below.
+                rejected_count += 1
+                logger.warning(
+                    "[%s][HookValidator] LLM hook unsalvageable, regenerating: %r (%s)",
                     self._niche_id,
-                    existing_hook[:40],
+                    existing_hook[:50],
+                    [f.value for f in llm_vr.failures],
                 )
-                continue
+                content = story.setdefault("content", {})
+                content.pop("hook", None)
+                content["written_by"] = ""
 
             category = self._classify_story(story)
             hook = self._generate_hook(story, used_hooks)
+            # R-50/R-51: template & fallback formulas (templates.yaml) ship
+            # all-lowercase; normalize to sentence case before validate/store.
+            hook = to_sentence_case(hook)
             used_hooks.add(hook.lower())
 
-            # Validate hook against universal quality rules
-            vr = validator.validate(hook, platform="instagram")
+            # Validate hook against universal quality rules (hard ≤60 cap, R-52)
+            vr = validator.validate(hook, platform="instagram", max_chars=60)
             validated_count += 1
             if not vr.passed:
                 rejected_count += 1

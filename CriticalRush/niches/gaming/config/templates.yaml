@@ -3,56 +3,59 @@
 hooks:
   # Hook formulas — {game}, {detail}, {player}, {streamer} filled by _substitute_placeholders
   # Style: emotional, community-insider, never formal news language.
+  # Sentence case (R-50/R-51): degraded-mode formulas previously shipped
+  # all-lowercase, which reads as a shitpost. Leading caps live here; the
+  # runtime to_sentence_case pass in base_hooks is the safety net.
   formulas:
     - "{game} dropped something wild"
-    - "wait... {game} really did this??"
-    - "this {game} play is unreal"
+    - "Wait... {game} really did this??"
+    - "This {game} play is unreal"
     - "{player} went absolutely OFF in {game}"
-    - "the {game} meta shifted hard"
+    - "The {game} meta shifted hard"
     - "{streamer} can't believe what happened"
-    - "they actually added THIS to {game}"
+    - "They actually added THIS to {game}"
     - "{game} devs heard the community for once"
-    - "this {game} clip has me speechless"
-    - "peak {game} content right here"
+    - "This {game} clip has me speechless"
+    - "Peak {game} content right here"
     - "{game} ranked is built different rn"
     - "{game} came out of nowhere with this"
-    - "this {game} update changes ranked forever"
+    - "This {game} update changes ranked forever"
     - "{player} pulled off the impossible in {game}"
     - "{game} feels completely different now"
-    - "the {game} community is eating rn"
-    - "competitive {game} got interesting"
+    - "The {game} community is eating rn"
+    - "Competitive {game} got interesting"
     - "{streamer} broke {game} in the funniest way"
-    - "this {game} moment will be replayed forever"
-    - "honestly {game} cooked with this one"
+    - "This {game} moment will be replayed forever"
+    - "Honestly {game} cooked with this one"
   story_categories:
     clutch_play:
       formulas:
-        - "this {game} play is unreal"
+        - "This {game} play is unreal"
         - "{player} went absolutely OFF in {game}"
         - "{player} pulled off the impossible in {game}"
-        - "this {game} moment will be replayed forever"
+        - "This {game} moment will be replayed forever"
     update_drop:
       formulas:
         - "{game} dropped something wild"
-        - "they actually added THIS to {game}"
+        - "They actually added THIS to {game}"
         - "{game} devs heard the community for once"
-        - "this {game} update changes ranked forever"
+        - "This {game} update changes ranked forever"
     streamer_moment:
       formulas:
         - "{streamer} can't believe what happened"
         - "{streamer} broke {game} in the funniest way"
-        - "peak {game} content right here"
+        - "Peak {game} content right here"
     meta_shift:
       formulas:
-        - "the {game} meta shifted hard"
-        - "competitive {game} got interesting"
+        - "The {game} meta shifted hard"
+        - "Competitive {game} got interesting"
         - "{game} ranked is built different rn"
     default:
       formulas:
-        - "wait... {game} really did this??"
-        - "honestly {game} cooked with this one"
+        - "Wait... {game} really did this??"
+        - "Honestly {game} cooked with this one"
         - "{game} feels completely different now"
-        - "the {game} community is eating rn"
+        - "The {game} community is eating rn"
 
   # Never use these styles — too formal, too news-like
   forbidden_styles:

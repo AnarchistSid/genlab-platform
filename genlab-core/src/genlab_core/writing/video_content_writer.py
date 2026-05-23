@@ -19,6 +19,30 @@ from genlab_core.writing.llm_hook_generator import _BANNED_PHRASES
 
 logger = logging.getLogger(__name__)
 
+# Text fields that ship to platforms and must read as sentence case (R-50).
+# instagram_caption is included: to_sentence_case only touches sentence-initial
+# letters, so the trailing CTA (already capitalized) and "#hashtags" are
+# unaffected.
+_SENTENCE_CASE_FIELDS = (
+    "hook",
+    "instagram_caption",
+    "twitter_content",
+    "youtube_content",
+    "facebook_content",
+    "threads_content",
+)
+
+
+def _apply_sentence_case(content: dict[str, Any]) -> None:
+    """In-place sentence-case the shipped text fields of a content dict (R-50)."""
+    from genlab_core.writing.text_case import to_sentence_case
+
+    for field_name in _SENTENCE_CASE_FIELDS:
+        val = content.get(field_name)
+        if isinstance(val, str) and val:
+            content[field_name] = to_sentence_case(val)
+
+
 # Channel handles — keyed by niche_id. Overridable via niche_config.channel_handle.
 _NICHE_HANDLES: dict[str, str] = {
     "gaming": "@CriticalRush",
@@ -560,6 +584,12 @@ def write_video_content(
         if chosen_style and content.get("hook"):
             content["hook_style"] = chosen_style
 
+        # ── R-50: enforce sentence case on every shipped text field ──────
+        # The prompt asks for sentence case but nothing enforced it, so
+        # all-lowercase "shitpost" output slipped through. to_sentence_case is
+        # additive-only (proper nouns / acronyms preserved) and idempotent.
+        _apply_sentence_case(content)
+
         return content
 
     except Exception as e:
@@ -574,7 +604,7 @@ def write_video_content(
             niche_id,
             platform="instagram",
         )
-        return {
+        fallback = {
             "hook": title[:57] + "..." if len(title) > 60 else title,
             "instagram_caption": (f"{title}\n\nVia {channel}\n\n{' '.join(fallback_tags)}"),
             "twitter_content": title[:280],
@@ -582,3 +612,7 @@ def write_video_content(
             "facebook_content": f"{title} — what do you think?",
             "threads_content": title[:300],
         }
+        # The degraded path ships too — sentence-case it (R-50) so a lowercase
+        # source title doesn't read as a shitpost.
+        _apply_sentence_case(fallback)
+        return fallback
