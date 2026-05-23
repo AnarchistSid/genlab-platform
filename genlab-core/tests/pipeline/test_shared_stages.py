@@ -838,6 +838,30 @@ class TestRunReport:
                     "Zero blueprints produced from 3 stories" in v for v in report["slo_violations"]
                 ), report["slo_violations"]
 
+    def test_total_fetch_wipeout_fails(self):
+        """R-65: 0 stories AND 0 blueprints AND 0 errors must be 'failed', not
+        'success'. The zero-blueprint check previously required stories>0, so a
+        total fetch wipeout (WARP down / quota / relevance gate rejecting all)
+        slipped through as success and the dashboard showed the niche healthy.
+        """
+        stage = self._make()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "genlab_core.pipeline.stages.run_report.RunReport._resolve_run_dir",
+                return_value=Path(tmpdir),
+            ):
+                ctx = {
+                    "stories": [],
+                    "run_stats": {"backlog_push": {"blueprints_pushed": 0}},
+                    "niche_config": {"niche_id": "gaming"},
+                }
+                stage.execute(ctx)
+                report = json.loads((Path(tmpdir) / "run_report.json").read_text())
+                assert report["status"] == "failed"
+                assert any(
+                    "no stories fetched" in v for v in report["slo_violations"]
+                ), report["slo_violations"]
+
     def test_nonzero_blueprints_is_success(self):
         """Guardrail: a run that produced blueprints must NOT trip the SLO."""
         stage = self._make()

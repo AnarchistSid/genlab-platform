@@ -85,23 +85,31 @@ class RunReport:
         if qc_total > 0 and (qc_passed / qc_total) < 0.90:
             slo_violations.append(f"QC pass rate {qc_passed}/{qc_total} below 90% SLO")
 
-        # Zero-blueprint SLO: if we fetched stories but produced no blueprints,
-        # the pipeline is broken in a hidden way (e.g. yt-dlp bot-detection
-        # cascade, writing-stage cascade, over-aggressive dedup). Flag it.
-        zero_blueprint_cascade = len(stories) > 0 and blueprints_pushed == 0
-        if zero_blueprint_cascade:
+        # Zero-blueprint SLO (R-65): a video-first pipeline that produces no
+        # blueprint had a dark day — whether it fetched stories and dropped
+        # them all, OR fetched nothing at all. The check previously required
+        # stories>0, so a TOTAL fetch-wipeout (0 stories, 0 errors) slipped
+        # through as "success" and the dashboard showed the niche "healthy".
+        zero_blueprints = blueprints_pushed == 0
+        if zero_blueprints:
             downloaded = video_val.get("passed", 0)
-            slo_violations.append(
-                f"Zero blueprints produced from {len(stories)} stories "
-                f"(videos_validated={downloaded})"
-            )
+            if len(stories) > 0:
+                slo_violations.append(
+                    f"Zero blueprints produced from {len(stories)} stories "
+                    f"(videos_validated={downloaded})"
+                )
+            else:
+                slo_violations.append(
+                    "Zero blueprints produced — no stories fetched "
+                    "(total fetch wipeout: WARP/quota/relevance gate?)"
+                )
 
-        # Determine status
+        # Determine status. A dark day (0 blueprints) is always a failure,
+        # regardless of story count or errors (R-65) — this is the signal an
+        # operator needs to know a channel produced nothing today.
         has_errors = bool(run_stats.get("errors"))
-        if has_errors and not stories:
+        if zero_blueprints:
             status = "failed"
-        elif zero_blueprint_cascade:
-            status = "failed"  # success on paper but produced nothing
         elif has_errors:
             status = "partial"
         else:
