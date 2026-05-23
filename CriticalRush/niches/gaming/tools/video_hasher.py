@@ -14,10 +14,16 @@ Hamming distance < threshold (default 10) between two 64-bit hashes = duplicate.
 
 import json
 import logging
+import os
 import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+
+try:
+    import fcntl  # POSIX only — present on the macOS/Linux deploy targets
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -125,20 +131,62 @@ class HashStore:
         self.entries: list[dict] = []
 
     def load(self) -> None:
-        """Load existing entries from disk."""
-        if self.store_path.exists():
+        """Load existing entries from disk.
+
+        R-34: a truncated/corrupt store must NOT silently disable dedup. On a
+        read error we recover LOUDLY with an empty set so this run still hashes
+        and re-writes a clean store, rather than letting json.load raise and
+        leave perceptual dedup off (duplicates re-shipping unnoticed).
+        """
+        if not self.store_path.exists():
+            self.entries = []
+            return
+        try:
             with open(self.store_path) as f:
                 self.entries = json.load(f)
-            logger.info("Loaded %d hashes from %s", len(self.entries), self.store_path)
-        else:
+        except (json.JSONDecodeError, ValueError, OSError) as exc:
+            logger.warning(
+                "Hash store %s unreadable (%s) — starting fresh; cross-run "
+                "perceptual dedup is degraded for this run",
+                self.store_path,
+                exc,
+            )
             self.entries = []
+            return
+        logger.info("Loaded %d hashes from %s", len(self.entries), self.store_path)
 
     def save(self) -> None:
-        """Persist entries to disk."""
+        """Persist entries atomically (temp file + flock + os.replace).
+
+        R-34: the previous direct ``open(path, "w") + json.dump`` was
+        non-atomic — a crash mid-dump truncated the file and the next ``load``
+        raised, silently disabling cross-run dedup. We serialize to a temp file
+        in the same directory under an flock and atomically rename it into
+        place, so the store is never observed half-written.
+        """
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.store_path, "w") as f:
-            json.dump(self.entries, f)
-        logger.info("Saved %d hashes to %s", len(self.entries), self.store_path)
+        lock_path = self.store_path.with_name(self.store_path.name + ".lock")
+        tmp_path = self.store_path.with_name(f"{self.store_path.name}.tmp.{os.getpid()}")
+
+        lock_f = open(lock_path, "w") if fcntl is not None else None
+        try:
+            if lock_f is not None:
+                fcntl.flock(lock_f, fcntl.LOCK_EX)
+            with open(tmp_path, "w") as f:
+                json.dump(self.entries, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.store_path)
+            logger.info("Saved %d hashes to %s", len(self.entries), self.store_path)
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+            if lock_f is not None:
+                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                lock_f.close()
 
     def add(self, clip_id: str, hash_hex: str, source_url: str) -> None:
         """Add a new hash entry."""

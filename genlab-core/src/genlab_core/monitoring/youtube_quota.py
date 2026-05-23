@@ -11,12 +11,20 @@ attempting expensive operations.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 import threading
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+try:
+    import fcntl  # POSIX only — present on the macOS/Linux deploy targets
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +96,15 @@ class YouTubeQuotaTracker:
 
         total_cost = cost_per * count
 
-        with self._lock:
-            self._maybe_reset()
+        # R-55: the state file is shared by all 5 niche processes, so the
+        # in-process threading.Lock is not enough — wrap the whole
+        # read-modify-write in a cross-process flock and RE-READ the latest
+        # state from disk before applying this delta, else a stale in-memory
+        # `_used` clobbers another process's increment (lost update → the
+        # quota silently overruns → uploadLimitExceeded).
+        with self._lock, self._file_lock():
+            self._reload_locked()
+            self._maybe_reset(persist=False)
             self._used += total_cost
             if operation == "upload":
                 self._upload_count += count
@@ -107,20 +122,23 @@ class YouTubeQuotaTracker:
 
     def can_upload(self) -> bool:
         """Return True if one more upload would stay within the 90 % budget."""
-        with self._lock:
-            self._maybe_reset()
+        with self._lock, self._file_lock():
+            self._reload_locked()
+            self._maybe_reset(persist=True)
             return (self._used + UPLOAD_COST) <= self._hard_stop
 
     def daily_uploads_used(self) -> int:
         """Return the number of uploads recorded today."""
-        with self._lock:
-            self._maybe_reset()
+        with self._lock, self._file_lock():
+            self._reload_locked()
+            self._maybe_reset(persist=True)
             return self._upload_count
 
     def status(self) -> dict[str, object]:
         """Return a snapshot of today's quota state."""
-        with self._lock:
-            self._maybe_reset()
+        with self._lock, self._file_lock():
+            self._reload_locked()
+            self._maybe_reset(persist=True)
             remaining = max(self._daily_quota - self._used, 0)
             return {
                 "used": self._used,
@@ -132,10 +150,12 @@ class YouTubeQuotaTracker:
 
     # ── internals ──────────────────────────────────────────────────────
 
-    def _maybe_reset(self) -> None:
+    def _maybe_reset(self, persist: bool = True) -> None:
         """Clear counters when the Pacific date rolls over.
 
-        Must be called under ``self._lock``.
+        Must be called under ``self._lock`` (and, for cross-process safety,
+        the file lock).  ``persist=False`` skips the write so a caller that is
+        about to ``_save()`` anyway doesn't write twice.
         """
         today = self._pacific_today()
         if today != self._reset_date:
@@ -148,13 +168,34 @@ class YouTubeQuotaTracker:
             self._used = 0
             self._upload_count = 0
             self._reset_date = today
-            self._save()
+            if persist:
+                self._save()
+
+    @contextlib.contextmanager
+    def _file_lock(self) -> Iterator[None]:
+        """Cross-process exclusive lock around the shared quota file (R-55).
+
+        All 5 niche processes share one state file; ``flock`` serializes their
+        read-modify-write cycles. Best-effort no-op on non-POSIX platforms.
+        """
+        self._state_path.parent.mkdir(parents=True, exist_ok=True)
+        if fcntl is None:  # pragma: no cover - non-POSIX fallback
+            yield
+            return
+        lock_path = self._state_path.with_name(self._state_path.name + ".lock")
+        with open(lock_path, "w") as lock_f:
+            fcntl.flock(lock_f, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_f, fcntl.LOCK_UN)
+
+    def _reload_locked(self) -> None:
+        """Re-read the freshest state from disk; call under the file lock."""
+        self._load()
 
     def _load(self) -> None:
-        """Load persisted state from disk (if present).
-
-        Called once during ``__init__`` — no lock needed at that point.
-        """
+        """Load persisted state from disk (if present)."""
         if not self._state_path.exists():
             return
         try:
@@ -162,13 +203,15 @@ class YouTubeQuotaTracker:
             self._used = int(data.get("used", 0))
             self._upload_count = int(data.get("upload_count", 0))
             self._reset_date = str(data.get("reset_date", self._pacific_today()))
-        except (json.JSONDecodeError, OSError) as exc:
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
             logger.warning("Failed to load quota state from %s: %s", self._state_path, exc)
 
     def _save(self) -> None:
-        """Persist current state to disk.
+        """Persist current state atomically (temp file + os.replace).
 
-        Must be called under ``self._lock``.
+        Must be called under ``self._lock`` and the file lock. The atomic
+        rename means a crash mid-write can never truncate the shared file
+        (which previously made ``_load`` reset the counter to zero — R-55).
         """
         self._state_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
@@ -177,10 +220,18 @@ class YouTubeQuotaTracker:
             "reset_date": self._reset_date,
             "updated_at": datetime.now(tz=PACIFIC).isoformat(),
         }
+        tmp_path = self._state_path.with_name(f"{self._state_path.name}.tmp.{os.getpid()}")
         try:
-            self._state_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(json.dumps(payload, indent=2) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self._state_path)
         except OSError as exc:
             logger.error("Failed to save quota state to %s: %s", self._state_path, exc)
+            with contextlib.suppress(OSError):
+                if tmp_path.exists():
+                    tmp_path.unlink()
 
     @staticmethod
     def _pacific_today() -> str:
