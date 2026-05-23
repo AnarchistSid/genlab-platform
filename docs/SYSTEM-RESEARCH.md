@@ -232,9 +232,12 @@ clutchwire 136, splicereel 134.
 | Stage-handoff integrity | Core loop sound (hook_style/arm_id verified); **seam bugs**: virality_score dropped (R-19), X affiliate name mismatch (R-46), render-validation unenforced (R-47) |
 | Content quality / gates | Strong happy-path prompts; **enforcement gates leaky** — sentence-case/CTA-last/≤60/HTML-strip unenforced, fallback hooks generic (R-50/51/52/53) |
 | Security (deps + surface) | No secrets / no code-exec (verified); but **17 py CVEs incl. lxml XXE + pillow RCE, webhook injection, timing-unsafe auth** (R-59/60/61) |
+| Observability / alerting | **Detect→alert chain broken at every link** — monitor unscheduled (R-01), alerts table unread + units don't alert + no push sink (R-67), dark channel reports "healthy" (R-65), metrics.jsonl dead (R-66) |
+| Test infrastructure | 56% engine coverage; **Postgres path + integration run nowhere in CI**, suite segfaults on the CI Python 3.13, a test enshrines R-45 (R-64); no frontend tests in CI |
+| Architecture governance | 3-layer design sound internally (no cycles), but **import-linter is broken + unenforced (R-69)**; VisualRender/Scoring base classes missing → ~750L dup (R-70); bus-factor 1 (R-71) |
 | Render pipeline | Geometry/codec correct; **quality gate broken, logo guarantee violable** |
 | Publish reliability | Works single-host serial; **double-publish & partial-state risks** (R-21/R-24/R-29) |
-| Cost / quota control | Real YT-quota minimization; **spend entirely unmeasured** (R-27) |
+| Cost / quota control | Real YT-quota minimization; spend unmeasured but **audit-estimated ~$0.29/day, 6–40× under budget** (R-27) |
 | Monetization | Compliant & built, but **unmeasured & Amazon-only** (R-23/R-31/R-32) |
 | Ops: deploy / CI / monitoring | Weakest link |
 | Dependency / version currency | Mostly current, but **3 active deprecations** (X v1.1 media R-42, dead Gemini ID R-43, Meta v21 + ~June-2026 metric retirement R-44) + missed cost features (no prompt caching / Batch — U-01/02). Full sweep → §8 |
@@ -265,7 +268,18 @@ clutchwire 136, splicereel 134.
    are never logged (R-23, links bypass the redirect), so revenue is zero-by-construction in
    the data even if links convert. Combined with truth #1 (no alerting), the business is
    operating blind on its two most important quantities: is it losing money, and is it making
-   any? Both are currently unanswerable from the system itself.
+   any? Both are currently unanswerable from the system itself. **(Refined wave 5: the *cost*
+   half is now answered — measured at ~$0.29/day expected, 6–40× under the $5 budget; the bill is
+   small even though the system can't see it. The *revenue* half remains zero-by-construction.)**
+6. **It's a single-maintainer system whose fragility concentrates on its most important path.**
+   595/601 commits are one author's; fixes outnumber features 1.55:1; and the empirical churn lens
+   (wave 5) independently rediscovered the audit's hotspots — the **publish→persist→monetize→learn
+   spine** (`publish_all_platforms`/`push_to_backlog`/`metric_collector`/`backlog_client`) is at once
+   the most-churned, most-fixed, most-god-sized, least-tested (R-08/R-22 have zero tests; the Postgres
+   path runs nowhere in CI), and highest-risk part of the codebase. The guardrails meant to protect it
+   are themselves inert: the test net doesn't cover it (R-64), the layer-linter is broken (R-69), the
+   monitor is unscheduled (R-01/R-67), and a test actively enshrines a bug (R-45/R-64). New work should
+   harden this spine with a contract-test net before adding features.
 
 ---
 
@@ -329,7 +343,7 @@ effort):
 | R-24 | HIGH | Open | **Cross-process/host double-publish.** Publisher claims its blueprint with a bare `UPDATE status='PUBLISHING'` — **no `WHERE status='VISUAL_READY'` guard, no row lock** (`publish_all_platforms.py:~760–835`); locks live in `/tmp` (host-local). Two publishers (cross-host, or a stray Mac launchd) both select the top blueprint and both publish. Split-brain is detected (`health_monitor.py:~1054`) but never *prevented*. | conditional claim `UPDATE … WHERE status='VISUAL_READY' RETURNING id`; DB advisory lock keyed on niche_id |
 | R-25 | HIGH | Open | **VMAF gate validates against the wrong reference.** `master_path` is set to the raw downloaded clip (`video_gate.py:~194`), so `check_vmaf` diffs a branded 1080×1920 reel against an unbranded 1920×1080 source (`validate_videos.py:~171`) → score is meaningless, triggers a wasted CRF-12 re-encode. Gaming disables VMAF entirely and self-compares (`render_gaming_video.py:~379`). The "VMAF≥85" invariant is unenforced platform-wide. | produce a true 1080×1920 lossless master to diff against, or drop the gate |
 | R-26 | HIGH | Open | **Logo-overlay invariant is violable & unverified.** Portrait (9:16) sources render with **zero branding by design** (`frame_compositor.py:~545`); a missing logo file silently degrades to text-only branding on landscape/square (`:~478`) yet still returns success → VISUAL_READY. No post-render check that a logo pixel exists. | verify logo composited post-render; add logo to portrait path |
-| R-27 | HIGH | Open | **<$5/day cost rule is unobservable.** Three cost trackers exist and are **all dead** (`cost_accumulator`/`cost_tracker` never wired; the writer records no `usage`); dashboard cost fields are never populated; model-router budget downgrades never fire (`budget_ratio` never computed from spend). The system is structurally blind to cost. | record `response.usage` into one tracker; write `estimated_cost_usd` to run_report |
+| R-27 | MEDIUM | Open | **<$5/day cost rule is unobservable — but spend is actually small (refined wave 5).** Estimated **~$0.12–0.85/day (expected ~$0.29), 6–40× under budget** (the live path is ~1 LLM call/story producing hook+captions in one response; scoring/adaptation/affiliate-matching are non-LLM; the "3 calls/hook" loop is short-circuited off the live path; OpenAI/Gemini router tiers are dead config; TTS≈$0 on the free cascade). The blindness is precise: `get_accumulator()` defaults to `None`, `set_accumulator()` is never called, and the 3 direct callers bypass `AnthropicLLMClient` — so usage recording is a permanent no-op. Not urgent (downgraded HIGH→MEDIUM), but still record it before SaaS scales it linearly. Original: three cost trackers exist and are **all dead** (`cost_accumulator`/`cost_tracker` never wired; the writer records no `usage`); dashboard cost fields are never populated; model-router budget downgrades never fire (`budget_ratio` never computed from spend). The system is structurally blind to cost. | record `response.usage` into one tracker; write `estimated_cost_usd` to run_report |
 | R-28 | HIGH | Open | **No global YouTube quota ceiling.** Quota tracking is a per-process, log-only dict reset each run (`trending_video_fetcher.py:~70,1106`); the 5 channels run as 5 processes, so "max 50 searches/day across channels" is unenforced. Today usage is low by construction (RSS-first, search-gated ~700u/day — a real strength), but a config flip or RSS outage forcing keyword-search could silently blow 10k. | shared persistent daily counter |
 | R-29 | HIGH | Open | **Orphaned-thread / partial-publish states.** IG container poll defaults to 480s + a 30s retry → ~990s, exceeding the 600s `future.result(timeout=600)` which does NOT cancel the thread (`instagram.py:~32,370`, `publish_all_platforms.py:~868`) → the orphaned thread can post *after* the publisher recorded FAILED. Crash recovery sets the whole blueprint PUBLISHED if any platform published (masks partial) or resets to VISUAL_READY (re-publishes succeeded ones) (`:~678–730`). | bound IG poll under the executor timeout; per-platform recovery |
 | R-30 | HIGH | Open | **YouTube cross-channel guard is dead code.** `verify_channel()` exists and `expected_channel_id` is resolved + passed to the constructor, but `publish()` never calls it (`youtube.py:~194–233,239`). The one code-level guard against publishing to the wrong YT channel — after the real 2026-05-18 cross-brand incident — is unwired. IG/FB/Threads have none. | call `verify_channel()` before upload |
@@ -366,10 +380,74 @@ effort):
 | R-61 | MEDIUM | Open | **Timing-unsafe Basic-Auth comparison.** `review_server.py:302` uses `==` for user/pass, while the form-login path (`:341-342`) and CSRF (`:494`) correctly use `hmac.compare_digest`. Only the Basic-Auth fallback is inconsistent. | `hmac.compare_digest` |
 | R-62 | LOW | Open | **Bounded SSRF via `is_direct_video_url` catch-all.** The final pattern `https?://[^\s"']+\.(?:mp4\|webm)` (`video_sourcer.py:56`) matches any host; the URL flows from externally-controlled story fields (Reddit `fallback_url`) into yt-dlp (`download_top_videos.py:123,372`). Mitigated only when WARP/`YT_DLP_PROXY` forces external egress. | real host allowlist on the catch-all, or always proxy |
 | R-63 | MEDIUM | Open | **Postgres schema-hygiene bundle.** Zero CHECK constraints anywhere (status free-text `TEXT`, scores unbounded — a typo'd status silently breaks the state machine); `stories.score` column never written + its partial index `WHERE status='NEW'` matches 0 rows (stories are created `INTAKE`) (`postgres.py:185`, `backlog_client.py:557`); standalone `.sql` files run outside Alembic create RLS-less `content_pool`/`affiliate_clicks` + duplicate-index drift (`migrations/*.sql`); `migrate_table.py:59` `ON CONFLICT (arm_id)` is broken after migration i9 dropped that unique key; two exact-duplicate blueprint indexes (`idx_bp_niche_status`/`idx_bp_status_niche`); the universal `ORDER BY created_at DESC` is unindexed on 12/13 tables; `fk_bp_story` validates without `NOT VALID` (locks on large tables). | add CHECK constraints + status enum; fold `.sql` into Alembic with RLS; fix the ON CONFLICT key; drop dup/dead indexes; add `(status, created_at DESC)` |
+| R-64 | MEDIUM | Open | **Test suite segfaults on the CI Python + the primary store is untested in CI (verified 2026-05-23).** `conftest.py:27` guards the Detoxify/libtorch OpenMP segfault only on `>=3.14`, but CI runs **3.13** → `test_reply_dispatch_live` loads the real model and SIGSEGVs the engine job (crash report: `libtorch_cpu`→`libomp` in `layer_norm`). Separately: `tests/storage/` + `tests/integration/` are CI-deselected and all 50 `test_postgres_*` tests **skip** without `POSTGRES_PASSWORD` → the Postgres write-path runs **nowhere** in CI (engine coverage **56%**, `postgres.py` effectively ~20%). Worst: `test_postgres_phase2:80` does `uuid.UUID(record_id)`, **enshrining the R-45 bare-string return** → a correct R-45 fix breaks that test. | extend the skip to `>=3.13` or set `OMP_NUM_THREADS=1` in CI; add a CI Postgres service; add a backend return-contract parity test + fix the enshrining test |
+| R-65 | CRITICAL | Open | **A fully dark channel reports `status="success"` (verified 2026-05-23).** `run_report.py:99-108`: a clean total-fetch-wipeout (0 stories, 0 errors) matches neither `has_errors and not stories` nor `zero_blueprint_cascade` (which requires `len(stories)>0`, `:91`) → falls through to `else → "success"`; the dashboard then shows the niche `health:"healthy"`. With R-11 (zero-download at INFO) + absent alerting (R-01/R-67), a channel can fetch nothing and miss its daily post with **zero signal**. | treat `blueprints_pushed==0` as `failed` regardless of story count — a video-first pipeline producing 0 blueprints is always a failure |
+| R-66 | HIGH | Open | **`PipelineMetrics` / `metrics.jsonl` is dead code (verified 2026-05-23).** `StageRunnerFactory(...)` is built with **no `metrics=` arg** (`pipeline_runner.py:277`) → `_metrics` is always `None`, `.flush()` is never called, and nothing reads `metrics.jsonl`. The CLAUDE.md "auto-records per-stage timing in metrics.jsonl" claim is inert — no per-stage timing observability exists beyond the in-memory `run_report`. | instantiate `PipelineMetrics(niche_id, run_id)`, thread into `StageRunnerFactory`, `.flush()` in `finally` (~15 lines); or strike the claim |
+| R-67 | HIGH | Open | **The detect→alert chain is broken at every link (extends R-01).** `pipeline_alerts` is write-only — the dashboard `/alerts/*` API never queries it; `/alerts/system` (`missed_today`, the one query that detects a dark channel) is **orphaned** in the frontend (`client.ts:392`, no hook/view); **24/25** `alerting.yaml` thresholds have no consumer; all batch units are `Type=oneshot` with **no `Restart=` / `OnFailure=`** (a crashed pipeline waits until tomorrow's tick); and **no push sink (slack/telegram/smtp) exists anywhere**. | wire `/alerts/pipeline`←`pipeline_alerts` + a banner; consume `/alerts/system`; add `Restart=on-failure` + `OnFailure=genlab-alert@%n`; add one `notify()` webhook called from health_monitor + daily-verify |
+| R-68 | MEDIUM | Open | **JSON logging is off in prod + journald not run-id correlated.** `GENLAB_LOG_JSON` is set in zero units/.env → prod runs the console (plain) renderer despite the "JSON in production" docstring (`observability/logging.py:13`); `bind_contextvars(run_id=…)` is never called, so the journald/console stream carries only `current_stage`, not `run_id` (only the per-niche JSONL handler is run-correlated). | set `GENLAB_LOG_JSON=true` in the units (or default-on when not a TTY); `bind_contextvars(run_id=…)` at run start |
+| R-69 | HIGH | Open | **Layer-boundary enforcement is fictional (verified 2026-05-23).** `.importlinter:14` lists a `genlab_core.models` layer that **doesn't exist** (no `src/genlab_core/models/`; models live in `platforms/models.py`/`auth/models.py`) → the single contract **crashes at startup** before checking anything; it's **not in CI/pre-commit**; and it covers <20% of the 33 packages (pipeline/publishing/platforms/learning/engagement/storage… ungoverned). Real upward violations exist: `genlab_core` imports BlackboxBrief's `execution.*` (`render_whisper_captions.py:274`, `rendering/word_animator.py:24`, try/except fallback). The "import-linter enforces boundaries" claim (both CLAUDE.md) is unbacked. | fix the `models` layer name, expand contracts to real packages, add `lint-imports` to CI; finish the `execution.*` extraction |
+| R-70 | MEDIUM | Open | **Missing strategy base classes → ~750L duplication + 826L dead gaming legacy.** No `BaseVisualRenderStrategy`/`BaseScoringStrategy` in `genlab_core/strategies/` (only Writing/Hooks/ContentResearch/PlatformAdaptation) → `visual_render.py` (~258/248/270L in SR/CW/FD) + the per-channel scoring strategies reimplement an identical method set (~750L copy-paste), contradicting the "~50 lines of niche overrides" claim. Gaming's `write_gaming_content_legacy.py` (535L) + `adapt_gaming_content_legacy.py` (291L) remain in-tree, referenced only by `tests/_legacy/` (extends R-20). | extract the two base classes + collapse the copies; delete the gaming `_legacy` files + stale CLAUDE.md flow |
+| R-71 | MEDIUM | Open | **Bus-factor 1 + fragility on the publish→persist→monetize→learn spine.** 595/601 commits by one author (no second reviewer); fix:feat = 245:158 (1.55:1); the most-churned/most-fixed files are exactly the highest-risk ones — `push_to_backlog.py` (36 commits/25 fixes), `publish_all_platforms.py` (25/19), `metric_collector.py` (26, most-active recently) — all god-sized, carrying open CRITICAL/HIGH risks, and the two CRITICAL concurrency/bypass paths (R-08, R-22) have **zero tests**. `affiliate_matcher.py` (17/12 fixes) is the "patched-but-never-converged" signature on the project's KPI. | add a contract-test net + decompose the spine before more feature work; treat these files as change-frozen pending tests |
 
 ---
 
 ## 6. Findings log (append-only, newest first)
+
+### 2026-05-23 — Deep-dive wave 5: measurement (coverage, churn, observability, coupling, cost)
+Five parallel agents that **ran tooling and measured**, rather than reading code — the lenses prior
+waves couldn't apply. Produced **R-64…R-71**, refined R-27, added cross-cutting truth #6. Four
+flagship claims re-verified against the repo (import-linter crash, conftest 3.14-only guard,
+run_report 0-stories→success, StageRunnerFactory no `metrics=`).
+
+**A. Test coverage (ran `pytest --cov`).** Engine **56%** (20,510 stmts, 9,000 missed), 2294 pass /
+0 fail once a **SIGSEGV** was neutralized — the suite crashes on **Python 3.13** (the CI version)
+because `conftest.py:27` guards the Detoxify/libtorch+OpenMP segfault only on `>=3.14` (**R-64**).
+The Postgres write-path runs **nowhere in CI** (storage+integration deselected; 50 `test_postgres_*`
+skip without a DB) and `test_postgres_phase2:80` **enshrines the R-45 bare-string bug** (a correct fix
+breaks the test). Lowest coverage on load-bearing code: `relevance_gate` 0% (R-12), `formula_sql` 0%
+in CI (R-49), `video_validator` 13%, `health_monitor` 35%, `publish_all_platforms` 55%. **Risk×coverage
+verdict:** nearly every high-severity risk (R-08/R-21/R-24/R-45/R-47/R-49/R-54) sits on
+missing/absent-branch lines → *every one of those fixes lands in untested code* (write the test first).
+
+**B. Git churn / fragility (ran `git log`).** 601 commits over ~10 weeks; **bus-factor 1** (595/601 one
+author); **fix:feat = 245:158 (1.55:1)** — heavily remediated. Churn hotspots = the audit's risk
+hotspots: `push_to_backlog.py` (36 commits, 25 fixes/69%), `publish_all_platforms.py` (25/19=76%),
+`metric_collector.py` (26, most-active in the last 30d), `affiliate_matcher.py` (17/12=71% — "patched
+but never converged" on the KPI). God-modules were **born large** in the Sprint 64/65 import (W12=247
+commits), not grown — and are monotonic-accretion (`publish_all_platforms` +1549/−203). Cold-dark
+corners (`express_lane`/`relevance_gate`/cost-trackers/`formula_sql`/`youtube_quota`) are low-churn
+*because they're broken-and-ignored*, not stable — the most dangerous quadrant. → cross-cutting truth #6,
+**R-71**.
+
+**C. Observability (operator's-eye trace).** New: **R-65** (a fully dark channel reports
+`status="success"`/`health:"healthy"` — verified), **R-66** (`metrics.jsonl` dead — `StageRunnerFactory`
+gets no `metrics=`), **R-67** (detect→alert broken at every link: `pipeline_alerts` write-only,
+`/alerts/system` orphaned, 24/25 thresholds unconsumed, oneshot units have no `Restart=`/`OnFailure=`,
+no push sink anywhere), **R-68** (JSON logging off in prod; journald not run-id correlated). **The 3am
+scenario:** a channel fetches 0 clips → cascades INFO logs → run_report `success` → publisher logs one
+INFO and exits 0 → dashboard shows "healthy" → **operator sees nothing**, finds out days later from the
+platform. Single highest-leverage fix: schedule `health_monitor` (a timer) + one `notify()` webhook —
+activates ~14 already-written detectors at once. **Positives:** per-niche JSONL logs are run-id
+correlated; flock is reboot-safe; daemons have `Restart=always`; health_monitor's *logic* is genuinely
+good (it's just unscheduled + unread).
+
+**D. Architecture / coupling.** **R-69** (import-linter contract crashes on a non-existent
+`genlab_core.models` layer, not in CI, covers <20% of 33 packages → boundary enforcement is fictional;
++ real `genlab_core`→`execution.*` upward imports). **R-70** (no `BaseVisualRender`/`BaseScoring` base
+classes → ~750L duplicated across SR/CW/FD, contradicting "~50 lines/strategy"; + 826L dead gaming
+`_legacy` stages). **Positives:** no package-level cycles; clean `interfaces/` direction; the public API
+is what channels actually import; one module-level SCC (`backlog_client↔storage.factory↔sharepoint`)
+is broken by inline imports. Highest fan-in hubs: `strategies` (39), `niche_credentials` (31),
+`backlog_client` (28).
+
+**E. Cost model (estimated $/day from the code + web pricing).** **The headline correction to R-27:**
+spend is **~$0.12–0.85/day, expected ~$0.29 — 6–40× UNDER the $5 budget.** The live write path is **one
+LLM call per story** (hook+6 captions in one JSON response), not the feared 3-calls/hook loop (that's
+short-circuited off the live path). Content writing is ~80% of spend; **BB's single Sonnet-4.6 channel
+≈ the other 4 Haiku channels combined.** The OpenAI BULK/NANO + Gemini router tiers are **dead config**
+($0); TTS≈$0 (free Edge/gTTS cascade unless ElevenLabs key set, and `audio_path` is unused anyway —
+refines R-39). U-01 prompt caching saves ~25–30% of the LLM bill (~$0.06–0.09/day — tiny now, but scales
+linearly with SaaS tenants). So R-27's *blindness* is real but its *urgency* is low → downgraded to MEDIUM.
 
 ### 2026-05-23 — Deep-dive wave 4: handoffs, content quality, performance, schema, SaaS, deep security
 Six parallel agents took the dimensions the subsystem reviews structurally miss. Produced
@@ -702,6 +780,14 @@ Two issues worth remembering surfaced during this:
 - **[verify on host]** Real per-arm `n_obs` in `bandit_arms` + whether the CTA-bandit update has
   *ever* succeeded (R-49 says its query errors on Postgres) — would confirm the monetization learning
   loop is dead, not just starved.
+- **[verify on host]** Does the CI engine job actually pass on 3.13, or is it silently segfaulting /
+  green-because-the-live-test-is-skipped (R-64)? Check a recent Actions run's engine-test step.
+- Is the deploy box's Python 3.13 or 3.14? (3.14 dodges the Detoxify segfault via the conftest guard
+  but the engagement worker loads the model in prod regardless — does it segfault on the host?) (R-64)
+- Given cost is ~$0.29/day (R-27), is wiring usage-recording worth it *now*, or defer until SaaS makes
+  it linear? (Argues for prioritizing R-65/R-67 observability over R-27 cost instrumentation.)
+- Would adding `BaseVisualRenderStrategy`/`BaseScoringStrategy` (R-70) be better done now or folded into
+  the eventual SaaS config-as-data refactor (§9)? The ~750L dup is also where per-niche bugs diverge.
 
 ---
 
