@@ -85,6 +85,14 @@ def _mock_upload_service():
 
 
 class TestPublish:
+    def test_publish_aborts_on_channel_mismatch(self, yt_client, video_payload):
+        """R-30: publish() must refuse to upload when verify_channel() fails,
+        preventing a cross-channel mis-publish (the 2026-05-18 incident)."""
+        with patch.object(yt_client, "verify_channel", return_value=False):
+            result = yt_client.publish(video_payload)
+        assert result.success is False
+        assert "channel verification failed" in result.error.lower()
+
     def test_publish_returns_youtube_platform_id(self, yt_client, video_payload):
         """publish() always returns PublishResult with platform='youtube'."""
         with (
