@@ -399,3 +399,40 @@ class TestCaptionLengthEnforcement:
         # Anchor on the off-caption nav hint to survive future CTA copy changes.
         assert "(1st comment)" in fields["caption"]
         assert "#affiliate" in fields["caption"]
+
+
+class TestTrackedUrl:
+    """R-23/CD-5: published affiliate links route through /links/go for click
+    tracking, attributed by the bp param."""
+
+    def test_routes_through_redirect_when_domain_set(self, monkeypatch):
+        from genlab_core.monetization.cta_engine import _tracked_url
+
+        monkeypatch.setenv("GENLAB_DOMAIN", "https://bb.example.com")
+        out = _tracked_url(
+            "https://amzn.to/raw", "Gaming Mouse Pro", niche_id="gaming", attribution_id="cand-1"
+        )
+        assert out == "https://bb.example.com/links/go/gaming-mouse-pro?bp=cand-1"
+
+    def test_adds_scheme_when_domain_bare(self, monkeypatch):
+        from genlab_core.monetization.cta_engine import _tracked_url
+
+        monkeypatch.setenv("GENLAB_DOMAIN", "bb.example.com")
+        out = _tracked_url("https://amzn.to/raw", "X", niche_id="gaming", attribution_id="c1")
+        assert out.startswith("https://bb.example.com/links/go/")
+
+    def test_falls_back_to_raw_utm_without_domain(self, monkeypatch):
+        from genlab_core.monetization.cta_engine import _tracked_url
+
+        monkeypatch.delenv("GENLAB_DOMAIN", raising=False)
+        out = _tracked_url(
+            "https://amzn.to/raw", "Gaming Mouse", niche_id="gaming", attribution_id="cand-1"
+        )
+        assert "amzn.to/raw" in out  # raw URL preserved (no regression)
+        assert "utm_source" in out
+
+    def test_product_slug(self):
+        from genlab_core.monetization.cta_engine import _product_slug
+
+        assert _product_slug("Gaming Mouse Pro!") == "gaming-mouse-pro"
+        assert _product_slug("PS5 Console") == "ps5-console"

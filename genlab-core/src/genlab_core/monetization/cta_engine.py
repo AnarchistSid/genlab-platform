@@ -15,9 +15,10 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,37 @@ def _enforce_length(content: str, platform: str, cta_len: int, disclosure_len: i
     return truncated_original + cta_tail
 
 
+def _product_slug(name: str) -> str:
+    """Slugify a product name to match the affiliate catalog's slug.
+
+    Mirrors dashboard ``links._product_slug`` — replicated here (not imported)
+    because genlab-core must not depend on the dashboard package.
+    """
+    slug = (name or "").lower().replace(" ", "-")
+    return re.sub(r"[^a-z0-9-]", "", slug)
+
+
+def _tracked_url(raw_url: str, product_name: str, *, niche_id: str, attribution_id: str) -> str:
+    """Route the published affiliate link through the /links/go redirect so
+    clicks are tracked (R-23).
+
+    The dashboard redirect (``/links/go/<slug>``) resolves the slug against the
+    affiliate catalog, logs the click to ``affiliate_clicks`` keyed on the
+    ``?bp`` param (R-23/CD-5), and 302s to the real URL — gracefully falling
+    back to the channel page if the slug is unknown, so a published link never
+    breaks. Falls back to the raw UTM URL when no public domain is configured
+    (``GENLAB_DOMAIN`` unset), preserving prior behavior.
+    """
+    domain = os.environ.get("GENLAB_DOMAIN", "").strip().rstrip("/")
+    slug = _product_slug(product_name)
+    if not domain or not slug:
+        return append_utm_params(raw_url, niche_id=niche_id, blueprint_id=attribution_id)
+    if not domain.startswith(("http://", "https://")):
+        domain = f"https://{domain}"
+    base = f"{domain}/links/go/{slug}"
+    return f"{base}?bp={quote(attribution_id)}" if attribution_id else base
+
+
 def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     """Inject platform-specific CTAs into blueprint fields.
 
@@ -159,10 +191,20 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
             return f"⭐ {name} (₹{price}) 👇"
         return f"🔗 Get {name} 👇"
 
-    # Append UTM tracking parameters to affiliate URL
+    # R-23/CD-5: route the published link through the /links/go redirect so
+    # clicks are tracked. Attribute to candidate_id since the blueprint row
+    # doesn't exist yet at inject time (blueprint_id is empty here), which is
+    # why utm_content was previously always blank. The redirect logs the click
+    # + 302s; falls back to the raw UTM URL when no public domain is configured.
     niche_id: str = story.get("niche_id", "") or fields.get("niche_id", "")
-    blueprint_id: str = story.get("blueprint_id", "") or fields.get("blueprint_id", "")
-    url = append_utm_params(raw_url, niche_id=niche_id, blueprint_id=blueprint_id)
+    attribution_id: str = (
+        story.get("blueprint_id")
+        or fields.get("blueprint_id")
+        or fields.get("candidate_id")
+        or story.get("candidate_id")
+        or ""
+    )
+    url = _tracked_url(raw_url, product_name, niche_id=niche_id, attribution_id=attribution_id)
 
     # Disclosure texts — pulled from the story if the AffiliateMatch stage stored them,
     # otherwise fall back to empty strings.
