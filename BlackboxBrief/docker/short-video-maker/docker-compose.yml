@@ -1,7 +1,9 @@
 version: "3"
 services:
   short-video-maker:
-    image: gyoridavid/short-video-maker:latest-tiny
+    # Pinned (U-19): no floating :latest-tiny — reproducible, supply-chain-safe.
+    # Bump deliberately as a maintenance step. Latest tiny tag as of 2026-05.
+    image: gyoridavid/short-video-maker:1.3.4-tiny
     environment:
       - LOG_LEVEL=info
       - PEXELS_API_KEY=${PEXELS_API_KEY}

@@ -19,8 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv for dependency management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv for dependency management — pinned (U-19, no floating :latest) to
+# the workspace uv version for reproducible builds + lock-resolution parity.
+COPY --from=ghcr.io/astral-sh/uv:0.10.9 /uv /usr/local/bin/uv
 
 # Copy workspace root files needed for resolution
 COPY pyproject.toml uv.lock ./
