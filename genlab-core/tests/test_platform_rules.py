@@ -219,22 +219,31 @@ class TestYouTubeRules:
 
 
 class TestFacebookRules:
-    def test_short_caption_gets_engagement_question(self):
+    def test_caption_gets_engagement_question(self):
         result = enforce_platform_rules(
             platform="facebook",
             title="Test",
             caption="Short post about AI.",
         )
-        assert "What do you think" in result.caption
+        # R-53: ends with a question, and the appended question is NOT a banned
+        # phrase ("what do you think" / "let us know in the comments").
+        assert result.caption.rstrip().endswith("?")
+        assert "what do you think" not in result.caption.lower()
+        assert "let us know in the comments" not in result.caption.lower()
 
-    def test_long_caption_unchanged(self):
-        long_caption = "This is a properly detailed post about artificial intelligence " * 5
+    def test_caption_already_ending_in_question_unchanged(self):
+        # A caption that already ends with a question gets no extra question.
+        long_caption = (
+            "This is a properly detailed post about artificial intelligence. "
+            "What surprised you most about it?"
+        )
         result = enforce_platform_rules(
             platform="facebook",
             title="Test",
             caption=long_caption,
         )
-        assert "What do you think" not in result.caption
+        assert result.caption.count("?") == 1
+        assert "what's your take" not in result.caption.lower()
 
     def test_url_stripped_from_caption(self):
         """D1: Facebook captions must not contain URLs (spam trigger)."""
@@ -301,8 +310,9 @@ class TestFacebookRules:
         )
         assert "https://" not in result.caption
         assert "#tiktok" not in result.caption.lower()
-        # Short caption + engagement question
-        assert "What do you think" in result.caption
+        # Short caption gets an engagement question (R-53: clean, ends with ?)
+        assert result.caption.rstrip().endswith("?")
+        assert "what do you think" not in result.caption.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -379,3 +389,60 @@ class TestAdaptedContent:
         c = AdaptedContent(title="T", caption="C", hashtags=[], first_comment="")
         c.warnings.append("test")
         assert len(c.warnings) == 1
+
+
+# ---------------------------------------------------------------------------
+# R-53: caption-gate fixes
+# ---------------------------------------------------------------------------
+
+
+class TestR53CaptionGates:
+    def test_ig_writer_cta_before_hashtags_not_duplicated(self):
+        # The writer puts the CTA before the trailing hashtag block; the rule
+        # must detect it there and NOT append a second generic CTA after the
+        # hashtags (the old tail-check only saw the hashtags).
+        result = enforce_platform_rules(
+            platform="instagram",
+            title="Test",
+            caption="Wild AI demo dropped today and the whole feed is losing it.\n\n"
+            "Drop your hot take 👇\n\n#AI #Tech #News",
+            hashtags=["#AI", "#Tech", "#News"],
+        )
+        assert "Save this for later!" not in result.caption  # no duplicate CTA
+        assert result.caption.count("👇") == 1
+
+    def test_ig_cta_appended_when_truly_missing(self):
+        result = enforce_platform_rules(
+            platform="instagram",
+            title="Test",
+            caption="A flat statement with no call to action here.\n\n#AI #Tech #News",
+            hashtags=["#AI", "#Tech", "#News"],
+        )
+        assert result.caption.rstrip().endswith("Save this for later!")
+
+    def test_ig_short_body_warns(self):
+        result = enforce_platform_rules(
+            platform="instagram",
+            title="Test",
+            caption="Too short.\n\nDrop a take 👇\n\n#AI #Tech #News",
+            hashtags=["#AI", "#Tech", "#News"],
+        )
+        assert any("target >=150" in w for w in result.warnings)
+
+    def test_fb_never_emits_banned_phrases(self):
+        result = enforce_platform_rules(
+            platform="facebook", title="T", caption="A short factual post about AI."
+        )
+        low = result.caption.lower()
+        assert "what do you think" not in low
+        assert "let us know in the comments" not in low
+        assert result.caption.rstrip().endswith("?")
+
+    def test_fb_long_non_question_gets_question(self):
+        caption = "This is a long, detailed Facebook post about an AI release. " * 4
+        result = enforce_platform_rules(platform="facebook", title="T", caption=caption.strip())
+        assert result.caption.rstrip().endswith("?")
+
+    def test_fb_short_caption_floor_warns(self):
+        result = enforce_platform_rules(platform="facebook", title="T", caption="Short.")
+        assert any("target >=200" in w for w in result.warnings)

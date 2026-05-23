@@ -202,7 +202,12 @@ def _enforce_instagram_rules(
     if cta:
         candidates.append(cta)
     caption_lower = caption.lower()
-    tail = caption.rstrip()[-160:]  # CTAs almost always live at the end
+    # R-53: the writer puts the CTA BEFORE the trailing hashtag block, so
+    # inspecting the raw tail (hashtags) misses it — and we'd then append a
+    # SECOND, generic CTA after the hashtags. Strip trailing hashtags when
+    # locating the CTA tail so the writer's own CTA is detected.
+    body_no_trailing_tags = re.sub(r"(?:\s*#\w+)+\s*$", "", caption.rstrip())
+    tail = body_no_trailing_tags[-160:]
     tail_lower = tail.lower()
     has_known_cta = any(c.lower() in caption_lower for c in candidates)
     # Generic CTA-shape detection: end with question, finger-pointing emoji,
@@ -223,6 +228,13 @@ def _enforce_instagram_rules(
     if not has_cta and caption:
         caption = f"{caption}\n\n{cta_text}"
         adapted.warnings.append("CTA appended to caption")
+
+    # R-53: floor is visibility-only — never pad with filler (that ships the
+    # generic AI-tell content the system bans). Measure the prose body, not the
+    # hashtag block.
+    body_len = len(re.sub(r"(?:\s*#\w+)+\s*$", "", caption.rstrip()).strip())
+    if body_len and body_len < 150:
+        adapted.warnings.append(f"Instagram caption body is {body_len} chars (target >=150)")
 
     adapted.caption = caption
 
@@ -276,10 +288,19 @@ def _enforce_facebook_rules(adapted: AdaptedContent) -> None:
         adapted.hashtags = adapted.hashtags[:_FB_MAX_HASHTAGS]
         adapted.warnings.append(f"Facebook hashtags capped at {_FB_MAX_HASHTAGS}")
 
-    # 4. Short captions get engagement question
+    # 4. Facebook captions must end with an engagement question (R-53). The
+    #    previous default ("What do you think about this? Let us know in the
+    #    comments.") used TWO banned phrases — "what do you think" and "let us
+    #    know in the comments" — so it injected exactly the AI-tell content the
+    #    system bans. Use a clean question, and enforce it for ALL captions, not
+    #    just short ones.
+    if caption and not caption.rstrip().endswith("?"):
+        caption = f"{caption.rstrip()}\n\nWhat's your take on this one?"
+        adapted.warnings.append("Engagement question appended to Facebook caption")
+
+    # 5. Floor is visibility-only — warn, don't pad with filler.
     if caption and len(caption) < 200:
-        caption = f"{caption}\n\nWhat do you think about this? Let us know in the comments."
-        adapted.warnings.append("Engagement question added to short caption")
+        adapted.warnings.append(f"Facebook caption is {len(caption)} chars (target >=200)")
 
     adapted.caption = caption
 

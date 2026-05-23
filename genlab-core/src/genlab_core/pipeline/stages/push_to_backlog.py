@@ -19,11 +19,25 @@ from pathlib import Path
 from typing import Any
 
 from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_id
+from genlab_core.cache.text_sanitizer import strip_html_tags
 from genlab_core.http.backlog_client import BacklogClient
 from genlab_core.settings import settings
 from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
 logger = logging.getLogger(__name__)
+
+# R-53: text fields that ship to platforms / Postgres and must be HTML-stripped.
+# LLM output can carry <cite>/<p>/<strong> tags; the Graph sanitizer runs on the
+# SharePoint path but is bypassed on the Postgres path, so strip here — the one
+# chokepoint every niche and every writer passes through.
+_HTML_STRIP_FIELDS = (
+    "hook",
+    "hook_text",
+    "caption",
+    "youtube_content",
+    "facebook_content",
+    "threads_content",
+)
 
 # Default arm mapping per niche — maps content signals to bandit arm IDs.
 # These must match the arm_id values in the bandit_arms table.
@@ -1099,7 +1113,9 @@ class PushToBacklog:
                         ).strip(),
                         "twitter_content": json.dumps(
                             {
-                                "tweet_text": tw.get("tweet", tw.get("tweet_text", "")),
+                                "tweet_text": strip_html_tags(
+                                    tw.get("tweet", tw.get("tweet_text", ""))
+                                ),
                                 "routing": tw.get("routing", "single"),
                             }
                         ),
@@ -1124,6 +1140,14 @@ class PushToBacklog:
                         "topic": _normalize_topic(story.get("source", niche_id)),
                         "angle": (story.get("summary") or title)[:200],
                     }
+
+                    # R-53: strip HTML tags from every plain-text field before
+                    # persistence (the Graph sanitizer is bypassed on the
+                    # Postgres path). twitter_content is already stripped above.
+                    for _html_field in _HTML_STRIP_FIELDS:
+                        _val = fields.get(_html_field)
+                        if isinstance(_val, str) and _val:
+                            fields[_html_field] = strip_html_tags(_val)
 
                     # Hook style picked by the bandit at writing time
                     # (2026-05-17). Recorded so the eventual multi-arm
