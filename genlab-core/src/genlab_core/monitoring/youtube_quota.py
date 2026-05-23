@@ -46,6 +46,12 @@ OPERATION_COSTS: dict[str, int] = {
     "analytics_query": 1,
     "channel_list": 1,
     "playlist_insert": 50,
+    # Fetch-side ops (R-28): search.list is the 100-unit blow-up vector — a
+    # config flip or RSS outage forcing keyword search across the 5 channels
+    # could silently exhaust the 10k/day budget. Routing it through this
+    # cross-process tracker enforces a global ceiling.
+    "search": 100,
+    "video_list": 1,
 }
 
 _DEFAULT_STATE_PATH = Path.home() / ".genlab" / "youtube_quota.json"
@@ -126,6 +132,20 @@ class YouTubeQuotaTracker:
             self._reload_locked()
             self._maybe_reset(persist=True)
             return (self._used + UPLOAD_COST) <= self._hard_stop
+
+    def can_afford(self, operation: str, count: int = 1) -> bool:
+        """Return True if recording *count* of *operation* stays within budget.
+
+        Used by the fetch path (R-28) to gate ``search.list`` (100 units) against
+        the shared cross-process daily budget before spending it. Unknown
+        operations cost 0 (always affordable) rather than raising, so a gate
+        check never breaks a fetch.
+        """
+        cost = OPERATION_COSTS.get(operation, 0) * count
+        with self._lock, self._file_lock():
+            self._reload_locked()
+            self._maybe_reset(persist=True)
+            return (self._used + cost) <= self._hard_stop
 
     def daily_uploads_used(self) -> int:
         """Return the number of uploads recorded today."""
