@@ -1244,6 +1244,34 @@ def resolve_stale_alerts() -> int:
 # ── CLI ───────────────────────────────────────────────────────────────
 
 
+def notify(alerts: list[Alert]) -> bool:
+    """Deliver CRITICAL alerts to a configured webhook (Slack-compatible).
+
+    R-01: health_monitor previously only wrote to the ``pipeline_alerts`` table
+    (which nothing reads), so a dark channel paged no one. This POSTs a summary
+    of the critical alerts to ``GENLAB_ALERT_WEBHOOK_URL`` (e.g. a Slack incoming
+    webhook — the same URL the dashboard stores as ``slack_webhook_url``). No-op
+    when the URL is unset or there are no critical alerts. Best-effort: a delivery
+    failure is logged, never raised.
+    """
+    url = os.environ.get("GENLAB_ALERT_WEBHOOK_URL", "").strip()
+    critical = [a for a in alerts if a.severity == "critical"]
+    if not url or not critical:
+        return False
+
+    lines = "\n".join(f"• {a}" for a in critical[:25])
+    text = f"\U0001f6a8 Gen Lab health: {len(critical)} CRITICAL alert(s)\n{lines}"
+    try:
+        import requests
+
+        requests.post(url, json={"text": text}, timeout=10)
+        logger.info("Delivered %d critical alert(s) to webhook", len(critical))
+        return True
+    except Exception as e:
+        logger.warning("Alert webhook delivery failed: %s", e)
+        return False
+
+
 def main() -> None:
     import argparse
 
@@ -1267,6 +1295,10 @@ def main() -> None:
 
     # Write to DB
     written = write_alerts_to_db(alerts)
+
+    # Deliver critical alerts to the configured webhook (R-01) — without this,
+    # alerts only land in a table nothing reads and nobody is paged.
+    notify(alerts)
 
     # Output
     if args.json:

@@ -1,0 +1,9 @@
+[Unit]
+Description=GenLab Health Monitor Timer (every 30 min)
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
