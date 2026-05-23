@@ -124,6 +124,32 @@ def test_runner_raises_on_unknown_niche() -> None:
         runner.run("bogus")
 
 
+def test_run_flushes_metrics_jsonl(tmp_path, monkeypatch) -> None:
+    """R-66: a completed run flushes per-stage timing to <run_dir>/metrics.jsonl.
+
+    Previously StageRunnerFactory was built with no metrics= arg, so the
+    metrics writer was dead code and metrics.jsonl was never produced.
+    """
+    from genlab_core.pipeline import pipeline_runner as pr
+
+    config = _make_config(StageA, StageB)
+    monkeypatch.setattr(pr, "load_niche_config", lambda niche_id, niche_root: dict(config))
+    monkeypatch.setattr(pr, "get_feature_flags", lambda niche_id, niche_root: {})
+
+    runner = GenericPipelineRunner(
+        niche_roots={"test": tmp_path / "niche"},
+        genlab_root=tmp_path,
+    )
+    runner.run("test")
+
+    metrics_files = list((tmp_path / ".tmp" / "runs").glob("test_*/metrics.jsonl"))
+    assert metrics_files, "metrics.jsonl was not written"
+    content = metrics_files[0].read_text()
+    assert "StageA" in content
+    assert "StageB" in content
+    assert "pipeline_summary" in content
+
+
 def test_runner_groups_parallel_stages() -> None:
     """Consecutive stages with the same parallel_group are batched together."""
     config = _make_config(

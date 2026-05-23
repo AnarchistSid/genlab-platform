@@ -196,6 +196,23 @@ _FORBIDDEN_SOURCE_PREFIXES: dict[str, frozenset[str]] = {
 }
 
 
+def _is_publishable(media: dict) -> bool:
+    """R-47: a rendered clip is publishable (VISUAL_READY) only if video
+    validation did not FAIL.
+
+    Absent validation = "not checked" -> publishable if a render exists
+    (preserves prior behavior, so the pipeline doesn't stall when the
+    validate stage is disabled). An explicit ``{"valid": False}`` (VMAF /
+    spec / no-audio failure) must stay DRAFTED and never be scheduled —
+    previously the status was gated only on ``rendered_path`` and the
+    validation result was ignored, so failed videos shipped.
+    """
+    media = media or {}
+    if not media.get("rendered_path"):
+        return False
+    return (media.get("video_validation") or {}).get("valid", True) is not False
+
+
 def _is_foreign_source(niche_id: str, source: str) -> str | None:
     """Return the matching forbidden prefix if `source` is foreign for `niche_id`, else None."""
     if not source:
@@ -1021,7 +1038,9 @@ class PushToBacklog:
             tw = content.get("x_twitter", {})
             fb = content.get("facebook", {})
 
-            rendered_path = (story.get("media") or {}).get("rendered_path", "")
+            media = story.get("media") or {}
+            rendered_path = media.get("rendered_path", "")
+            publishable = _is_publishable(media)  # R-47: gate VISUAL_READY on validation
 
             try:
                 existing_bp_raw = client.blueprints.all(
@@ -1098,7 +1117,7 @@ class PushToBacklog:
                             story=story,
                             niche_id=niche_id,
                         ),
-                        "status": "VISUAL_READY" if rendered_path else "DRAFTED",
+                        "status": "VISUAL_READY" if publishable else "DRAFTED",
                         "format": "reel",
                         "niche_id": niche_id,
                         "arm_id": arm_id,
@@ -1145,7 +1164,7 @@ class PushToBacklog:
 
                         fields = inject_cta(fields, story)
 
-                    if rendered_path:
+                    if publishable:
                         fields["visual_paths"] = json.dumps([rendered_path])
                         # Auto-schedule for next available 06:30 UTC = 12:00 IST
                         # publish window.  Use today's slot if it hasn't passed yet,
