@@ -1156,12 +1156,18 @@ class PushToBacklog:
                     if story.get("hook_style"):
                         fields["hook_style"] = story["hook_style"]
 
-                    # LinUCB context fields — store for publish-time context building
+                    # LinUCB context fields — store for publish-time context building.
+                    # R-18: composite_score/score added so the trending-score dim
+                    # (11) is recoverable at publish; without them the rebuilt
+                    # train-time vector falls back to a neutral 0.5 while predict
+                    # saw the real score.
                     for ctx_key in (
                         "duration_seconds",
                         "view_velocity",
                         "source_type",
                         "relevance_score",
+                        "composite_score",
+                        "score",
                     ):
                         if story.get(ctx_key) is not None:
                             fields[ctx_key] = story[ctx_key]

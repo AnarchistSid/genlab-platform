@@ -328,6 +328,72 @@ class TestBuildContentContext:
         assert ctx.dtype == np.float64
 
 
+class TestR18PredictTrainParity:
+    """R-18: the vector the bandit PREDICTS on (built from the nested story at
+    selection time) must equal the vector it TRAINS on (rebuilt from the flat
+    blueprint at publish time). The function previously read hook/caption from
+    nested paths only, so a flat dict zeroed dims 6 & 9 — predict saw the real
+    lengths, train saw 0."""
+
+    _DT = datetime(2026, 3, 16, 14, 0, tzinfo=UTC)  # pin time so dims 0/1 match
+
+    def _nested_story(self):
+        # Shape passed at selection/predict time (push_to_backlog._apply_engagement_boost).
+        return {
+            "source_type": "youtube",
+            "duration_seconds": 42,
+            "view_velocity": 3200,
+            "relevance_score": 0.7,
+            "composite_score": 0.81,
+            "content": {
+                "hook": "This 1v5 clutch broke the entire lobby",  # 38 chars
+                "instagram": {"caption": "x" * 150},
+            },
+        }
+
+    def _flat_blueprint(self):
+        # Shape the publisher rebuilds from at train time. Mirrors exactly what
+        # push_to_backlog now persists: flat hook/caption + the scoring metrics.
+        return {
+            "source_type": "youtube",
+            "duration_seconds": 42,
+            "view_velocity": 3200,
+            "relevance_score": 0.7,
+            "composite_score": 0.81,
+            "hook": "This 1v5 clutch broke the entire lobby",
+            "caption": "x" * 150,
+        }
+
+    def test_predict_and_train_vectors_are_identical(self):
+        predict_vec = build_content_context(self._nested_story(), "gaming", now=self._DT)
+        train_vec = build_content_context(self._flat_blueprint(), "gaming", now=self._DT)
+        np.testing.assert_allclose(predict_vec, train_vec)
+
+    def test_flat_shape_recovers_hook_and_caption_dims(self):
+        """The exact bug: a flat dict must NOT zero hook_length (6)/caption_length (9)."""
+        vec = build_content_context(self._flat_blueprint(), "gaming", now=self._DT)
+        assert vec[6] == pytest.approx(38 / 60.0)  # len("This 1v5 clutch broke the entire lobby")
+        assert vec[9] == pytest.approx(150 / 200.0)
+        assert vec[6] > 0 and vec[9] > 0
+
+    def test_flat_shape_recovers_trending_score_dim(self):
+        """Dim 11 must read the persisted composite_score, not fall back to 0.5."""
+        vec = build_content_context(self._flat_blueprint(), "gaming", now=self._DT)
+        assert vec[11] == pytest.approx(0.81)
+
+    def test_hook_text_alias_is_honored(self):
+        """The blueprint also carries hook under ``hook_text``; either resolves."""
+        vec = build_content_context({"hook_text": "abcdefghij"}, "gaming", now=self._DT)
+        assert vec[6] == pytest.approx(10 / 60.0)
+
+    def test_non_dict_content_does_not_raise(self):
+        """A malformed ``content`` (e.g. a string) must fall back, not crash."""
+        vec = build_content_context(
+            {"content": "oops-not-a-dict", "hook": "abc"}, "gaming", now=self._DT
+        )
+        assert vec[6] == pytest.approx(3 / 60.0)
+
+
 # ---------------------------------------------------------------------------
 # Numerical correctness
 # ---------------------------------------------------------------------------
