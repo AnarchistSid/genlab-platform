@@ -2,8 +2,10 @@
 Description=GenLab Publisher Timer
 
 [Timer]
+# 06:35 UTC — the main fresh-publish run. The 10:30 2nd run moved to
+# genlab-publisher-retry.timer as a RETRY-ONLY run (R-83), so it can recover
+# failed platforms without re-publishing fresh content.
 OnCalendar=*-*-* 06:35:00 UTC
-OnCalendar=*-*-* 10:30:00 UTC
 Persistent=true
 
 [Install]
