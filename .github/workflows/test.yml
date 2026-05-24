@@ -17,6 +17,9 @@ jobs:
         with:
           version: "0.10.x"
       - run: uv tool run ruff@0.15.14 check .
+      # U-18: also enforce formatting here (ci.yml already does) so both
+      # workflows' lint gates are consistent.
+      - run: uv tool run ruff@0.15.14 format --check .
 
   test-core:
     runs-on: ubuntu-latest
@@ -95,3 +98,20 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv sync --frozen
       - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q
+
+  # U-18 / R-04: gate the dashboard frontend build. The Dockerfile builds it at
+  # deploy time, so a broken build previously surfaced only then. `npm ci &&
+  # npm run build` (tsc -b && vite build) catches type/build errors in CI.
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: dashboard/frontend
+      - run: npm run build
+        working-directory: dashboard/frontend

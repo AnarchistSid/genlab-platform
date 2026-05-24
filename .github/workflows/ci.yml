@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.x" # U-18: pin uv consistently across workflows
       - run: uv sync --frozen
       # ruff isn't declared as a workspace dependency, so `uv run ruff`
       # resolves nothing. `uvx` runs the tool in an ephemeral environment
@@ -40,6 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.x" # U-18: pin uv consistently across workflows
+      # U-18: pin Python 3.13 to match test.yml. Without this the runner default
+      # (not 3.13) flipped conftest's _SKIP_DETOXIFY guard, so Detoxify-heavy
+      # tests behaved differently here than in test.yml — config drift.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - uses: actions/cache@v5
         with:
           path: ~/.cache/uv
