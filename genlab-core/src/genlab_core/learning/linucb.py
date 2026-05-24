@@ -194,9 +194,24 @@ def build_content_context(
     if now is None:
         now = datetime.now(UTC)
 
+    # R-18: extract the content features from EITHER the nested story shape
+    # (``content.hook`` / ``content.instagram.caption`` — what selection/predict
+    # time passes) OR the flat blueprint shape (top-level ``hook`` / ``caption`` —
+    # what the publisher carries at train time). Reading only the nested paths
+    # silently zeroed dims 6 & 9 whenever a flat dict was passed, so the bandit
+    # TRAINED on hook_length=0/caption_length=0 while PREDICTING on the real
+    # lengths — a systematic predict/train mismatch on its two most important
+    # content-quality signals.
     content = story.get("content", {})
-    hook = content.get("hook", "") if isinstance(content, dict) else ""
-    caption = content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else ""
+    if not isinstance(content, dict):
+        content = {}
+    instagram = content.get("instagram", {})
+    if not isinstance(instagram, dict):
+        instagram = {}
+    hook = content.get("hook") or story.get("hook") or story.get("hook_text") or ""
+    caption = (
+        instagram.get("caption") or story.get("caption") or story.get("instagram_caption") or ""
+    )
     hashtags = story.get("hashtags", [])
     if isinstance(hashtags, str):
         hashtags = hashtags.split()
