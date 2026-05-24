@@ -104,6 +104,9 @@ class PersonaEngine:
                     )
 
                 resp = ANTHROPIC_CB.call(_llm_call)
+                from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+                record_anthropic_usage("claude-haiku-4-5-20251001", resp)  # U-03
                 reply = resp.content[0].text.strip()
 
                 if self._toxicity_gate and not self._toxicity_gate.is_clean_outbound(reply):

@@ -182,6 +182,9 @@ def _call_anthropic(
         system=system,
         messages=[{"role": "user", "content": user}],
     )
+    from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+    record_anthropic_usage(model, response)  # U-03: cost observability
     return response.content[0].text
 
 
