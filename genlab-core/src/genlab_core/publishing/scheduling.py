@@ -9,13 +9,20 @@ from datetime import UTC, datetime
 
 def is_due(
     scheduled_for: str,
-    timezone_str: str = "Asia/Kolkata",
+    timezone_str: str = "UTC",
 ) -> bool:
     """Check whether a blueprint's scheduled time has arrived.
 
+    R-82: the default for interpreting a *naive* ``scheduled_for`` is UTC — the
+    same single tz authority the publish gatekeeper uses. It previously defaulted
+    to Asia/Kolkata, which disagreed with the gatekeeper (and the UTC daily-cap)
+    by +5:30; a naive timestamp would be judged "due" 5.5h apart by the two
+    helpers. (This function is not on any live path today, but the divergence was
+    a latent trap.)
+
     Args:
         scheduled_for: ISO 8601 datetime string (e.g. from backlog).
-        timezone_str: IANA timezone for interpreting wall-clock "now".
+        timezone_str: IANA timezone for interpreting a naive ``scheduled_for``.
 
     Returns:
         True if the current time >= the scheduled time.

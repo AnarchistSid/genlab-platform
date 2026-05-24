@@ -58,6 +58,27 @@ class TestScheduleGate:
         result = gatekeeper._schedule_gate(bp, "instagram")
         assert result.allowed is False
 
+    def test_stale_past_day_blocks(self, gatekeeper):
+        """R-82: a >18h-stale slot (a prior day's cycle) must NOT stay eligible."""
+        bp = {"scheduled_for": (datetime.now(UTC) - timedelta(hours=30)).isoformat()}
+        result = gatekeeper._schedule_gate(bp, "instagram")
+        assert result.allowed is False
+        assert "Stale" in result.reason
+
+    def test_same_day_late_run_still_passes(self, gatekeeper):
+        """A late/retry run hours after the slot (within the grace) still publishes."""
+        bp = {"scheduled_for": (datetime.now(UTC) - timedelta(hours=4)).isoformat()}
+        result = gatekeeper._schedule_gate(bp, "instagram")
+        assert result.allowed is True
+
+    def test_naive_scheduled_for_is_assumed_utc(self, gatekeeper):
+        """R-82: a naive timestamp is coerced to UTC (single authority), not IST."""
+        naive = (datetime.now(UTC) - timedelta(minutes=5)).replace(tzinfo=None)
+        bp = {"scheduled_for": naive.isoformat()}
+        result = gatekeeper._schedule_gate(bp, "instagram")
+        # Read as UTC → 5 min past → due. (Read as IST it'd be ~5.5h future → blocked.)
+        assert result.allowed is True
+
 
 class TestDailyCapGate:
     def test_under_cap_passes(self, gatekeeper):
