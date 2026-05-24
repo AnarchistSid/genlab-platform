@@ -251,14 +251,65 @@ class TestScheduleGuardedProxy:
         inner = MagicMock()
         inner.get.return_value = {
             "fields": {
-                "status": "SCHEDULED",
+                "status": "VISUAL_READY",
                 "scheduled_for": "2026-03-10T10:00:00Z",
             }
         }
         proxy = ScheduleGuardedProxy(inner)
 
-        with pytest.raises(ScheduledPostProtectionError, match="Cannot demote"):
+        with pytest.raises(ScheduledPostProtectionError, match="discard its queued slot"):
             proxy.update("123", {"status": "DRAFTED"})
+
+    def test_blocks_archive_of_pending_scheduled_post(self):
+        # R-80: VISUAL_READY -> ARCHIVED is "forward" in the old linear
+        # STATUS_ORDER (so the old _is_demotion MISSED it), but it destroys a
+        # scheduled post's queued slot (this was R-79's exact bug).
+        from genlab_core.http.backlog_client import (
+            ScheduledPostProtectionError,
+            ScheduleGuardedProxy,
+        )
+
+        inner = MagicMock()
+        inner.get.return_value = {
+            "fields": {"status": "VISUAL_READY", "scheduled_for": "2026-03-10T10:00:00Z"}
+        }
+        proxy = ScheduleGuardedProxy(inner)
+        with pytest.raises(ScheduledPostProtectionError):
+            proxy.update("123", {"status": "ARCHIVED"})
+
+    def test_allows_publish_and_recovery_transitions_on_scheduled(self):
+        # R-80: publish progress + recovery must NOT be blocked, or the guard
+        # would dark the channel once wired onto the publish path (R-41).
+        from genlab_core.http.backlog_client import ScheduleGuardedProxy
+
+        for old, new in [
+            ("VISUAL_READY", "PUBLISHING"),
+            ("PUBLISHING", "PUBLISHED"),
+            ("PUBLISHING", "VISUAL_READY"),  # crash-recovery
+            ("PUBLISHING", "PUBLISH_FAILED"),
+            ("PUBLISH_FAILED", "VISUAL_READY"),  # 24h auto-recover
+            ("VISUAL_READY", "PUBLISHED"),  # all-already-published finalize
+            ("PUBLISHED", "ARCHIVED"),  # normal post-publish lifecycle
+        ]:
+            inner = MagicMock()
+            inner.get.return_value = {
+                "fields": {"status": old, "scheduled_for": "2026-03-10T10:00:00Z"}
+            }
+            inner.update.return_value = {"id": "123", "fields": {"status": new}}
+            proxy = ScheduleGuardedProxy(inner)
+            proxy.update("123", {"status": new})
+            inner.update.assert_called_once(), f"{old}->{new} should be allowed"
+
+    def test_fails_open_when_record_fetch_fails(self):
+        # A guard that can't read the row must allow the write, not dark the post.
+        from genlab_core.http.backlog_client import ScheduleGuardedProxy
+
+        inner = MagicMock()
+        inner.get.side_effect = RuntimeError("db down")
+        inner.update.return_value = {"id": "123", "fields": {}}
+        proxy = ScheduleGuardedProxy(inner)
+        proxy.update("123", {"status": "DRAFTED"})  # must not raise
+        inner.update.assert_called_once()
 
     def test_allows_promotion_on_scheduled(self):
         from genlab_core.http.backlog_client import ScheduleGuardedProxy
