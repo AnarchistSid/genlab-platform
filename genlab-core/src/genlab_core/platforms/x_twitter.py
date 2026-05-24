@@ -109,6 +109,119 @@ class XTwitterClient:
         return tweepy.API(auth)
 
     # ------------------------------------------------------------------
+    # v2 media upload (R-42 — v1.1 media/upload was retired 2025-06-09)
+    # ------------------------------------------------------------------
+    _V2_MEDIA_UPLOAD_URL = "https://api.x.com/2/media/upload"
+    _APPEND_CHUNK_BYTES = 4 * 1024 * 1024
+
+    def _oauth1(self):
+        from requests_oauthlib import OAuth1
+
+        return OAuth1(self._api_key, self._api_secret, self._access_token, self._access_secret)
+
+    @staticmethod
+    def _extract_media_id(payload: Any) -> str | None:
+        """Pull the media id from a v2 response (data.id), tolerating shapes."""
+        data = payload.get("data", payload) if isinstance(payload, dict) else {}
+        mid = data.get("id") or data.get("media_id_string") or data.get("media_id")
+        return str(mid) if mid else None
+
+    @staticmethod
+    def _processing_info(payload: Any) -> dict:
+        data = payload.get("data", payload) if isinstance(payload, dict) else {}
+        return data.get("processing_info") or {}
+
+    def _upload_media_v2(self, path: Path) -> str | None:
+        """Upload one media file via X's v2 media endpoint, signed OAuth1.0a.
+
+        tweepy 4.16's v2 Client has no media method and v1.1 media/upload is
+        retired, so we sign raw v2 requests. Images use a single POST; video/gif
+        use the chunked INIT → APPEND → FINALIZE → (STATUS poll) flow. Returns
+        the media id, or None on failure (caller treats None as "no media").
+        """
+        import requests
+
+        auth = self._oauth1()
+        suffix = path.suffix.lower()
+        is_video = suffix in (".mp4", ".mov")
+        is_gif = suffix == ".gif"
+
+        if not is_video and not is_gif:
+            with open(path, "rb") as fh:
+                resp = requests.post(
+                    self._V2_MEDIA_UPLOAD_URL,
+                    auth=auth,
+                    files={"media": fh},
+                    data={"media_category": "tweet_image"},
+                    timeout=120,
+                )
+            resp.raise_for_status()
+            return self._extract_media_id(resp.json())
+
+        # Chunked flow for video / animated GIF.
+        media_type = "video/mp4" if is_video else "image/gif"
+        category = "tweet_video" if is_video else "tweet_gif"
+        init = requests.post(
+            self._V2_MEDIA_UPLOAD_URL,
+            auth=auth,
+            data={
+                "command": "INIT",
+                "total_bytes": path.stat().st_size,
+                "media_type": media_type,
+                "media_category": category,
+            },
+            timeout=60,
+        )
+        init.raise_for_status()
+        media_id = self._extract_media_id(init.json())
+        if not media_id:
+            return None
+
+        with open(path, "rb") as fh:
+            seg = 0
+            while True:
+                chunk = fh.read(self._APPEND_CHUNK_BYTES)
+                if not chunk:
+                    break
+                ap = requests.post(
+                    self._V2_MEDIA_UPLOAD_URL,
+                    auth=auth,
+                    data={"command": "APPEND", "media_id": media_id, "segment_index": seg},
+                    files={"media": chunk},
+                    timeout=120,
+                )
+                ap.raise_for_status()
+                seg += 1
+
+        fin = requests.post(
+            self._V2_MEDIA_UPLOAD_URL,
+            auth=auth,
+            data={"command": "FINALIZE", "media_id": media_id},
+            timeout=60,
+        )
+        fin.raise_for_status()
+
+        # Async transcode: poll STATUS until succeeded / failed (bounded).
+        info = self._processing_info(fin.json())
+        waited = 0
+        while info.get("state") in ("pending", "in_progress") and waited < 120:
+            delay = min(15, max(1, int(info.get("check_after_secs", 5))))
+            time.sleep(delay)
+            waited += delay
+            st = requests.get(
+                self._V2_MEDIA_UPLOAD_URL,
+                auth=auth,
+                params={"command": "STATUS", "media_id": media_id},
+                timeout=60,
+            )
+            st.raise_for_status()
+            info = self._processing_info(st.json())
+        if info.get("state") == "failed":
+            logger.error("X/Twitter: v2 media processing failed for %s: %s", path.name, info)
+            return None
+        return media_id
+
+    # ------------------------------------------------------------------
     # Exception classification helpers (needed to distinguish 403 vs 401 vs
     # 429 even when tweepy may be mocked in tests)
     # ------------------------------------------------------------------
@@ -262,7 +375,6 @@ class XTwitterClient:
         if not media_paths:
             return []
 
-        api_v1 = self._get_api_v1()
         media_ids: list[str] = []
 
         for path in media_paths[:4]:
@@ -271,15 +383,13 @@ class XTwitterClient:
                 logger.warning("X/Twitter: media file not found: %s", path)
                 continue
             try:
-                use_chunked = path.suffix.lower() in _VIDEO_EXTS
-                media = api_v1.media_upload(str(path), chunked=use_chunked)
-                media_ids.append(media.media_id_string)
-                logger.debug(
-                    "X/Twitter: uploaded media %s → %s (chunked=%s)",
-                    path.name,
-                    media.media_id_string,
-                    use_chunked,
-                )
+                # R-42: v2 media upload (v1.1 media/upload retired 2025-06-09).
+                media_id = self._upload_media_v2(path)
+                if media_id:
+                    media_ids.append(media_id)
+                    logger.debug("X/Twitter: uploaded media %s → %s (v2)", path.name, media_id)
+                else:
+                    logger.error("X/Twitter: v2 media upload returned no id for %s", path.name)
             except Exception as exc:
                 logger.error("X/Twitter: media upload failed for %s: %s", path.name, exc)
 

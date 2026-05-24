@@ -78,21 +78,16 @@ class TestPublish:
             tweet_text="Watch this clip #ai",
         )
 
-        mock_media = MagicMock()
-        mock_media.media_id_string = "media_111"
-
         mock_tweet_resp = MagicMock()
         mock_tweet_resp.data = {"id": "tweet_999"}
 
         with (
-            patch.object(tw_client, "_get_api_v1") as mock_v1_fn,
+            # R-42: media now uploads via the v2 endpoint (_upload_media_v2),
+            # not the retired v1.1 _get_api_v1().media_upload.
+            patch.object(tw_client, "_upload_media_v2", return_value="media_111") as mock_upload,
             patch.object(tw_client, "_get_client") as mock_client_fn,
             patch("genlab_core.platforms.x_twitter.Path.exists", return_value=True),
         ):
-            mock_v1 = MagicMock()
-            mock_v1.media_upload.return_value = mock_media
-            mock_v1_fn.return_value = mock_v1
-
             mock_client = MagicMock()
             mock_client.create_tweet.return_value = mock_tweet_resp
             mock_client_fn.return_value = mock_client
@@ -102,7 +97,7 @@ class TestPublish:
         assert result.platform == "x_twitter"
         assert result.success is True
         assert result.post_id == "tweet_999"
-        mock_v1.media_upload.assert_called_once()
+        mock_upload.assert_called_once()
         mock_client.create_tweet.assert_called_once()
         call_kwargs = mock_client.create_tweet.call_args[1]
         assert call_kwargs["media_ids"] == ["media_111"]
