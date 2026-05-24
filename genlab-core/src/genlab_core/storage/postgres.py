@@ -479,7 +479,11 @@ class PostgresBackend:
 
         from genlab_core.storage.formula_sql import formula_to_sql
 
-        where_clause, params = formula_to_sql(formula)
+        # R-49: pass the table's promoted columns so non-promoted filter fields
+        # (e.g. analytics_id, candidate_id on publishing_analytics) are queried
+        # via extra->> instead of a non-existent bare column — otherwise the
+        # query errors, callers swallow it, and dedup silently writes duplicates.
+        where_clause, params = formula_to_sql(formula, PROMOTED_COLUMNS.get(table))
 
         # Build column projection
         if columns is not None:

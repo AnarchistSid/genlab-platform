@@ -79,8 +79,20 @@ def _quote_reserved(field: str) -> str:
     return field
 
 
-def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
+def formula_to_sql(
+    formula: str | None, promoted_columns: set[str] | None = None
+) -> tuple[str, list[str]]:
     """Convert an OData-like formula to a SQL WHERE clause + params.
+
+    R-49: tolerates optional whitespace around operators (``{f} = 'v'`` as well
+    as ``{f}='v'`` — a space previously left the literal ``{f}`` braces in the
+    SQL, producing an invalid query that callers swallowed). And when
+    ``promoted_columns`` is given (the table's real columns), a field that is
+    NOT promoted is rendered as ``(extra->>'field')`` — it lives in the JSONB
+    ``extra`` blob, not a real column, so a bare identifier would raise "column
+    does not exist" and silently break the query (e.g. publish-dedup on
+    ``analytics_id`` → duplicate rows). ``None`` keeps the legacy bare-identifier
+    behavior for non-Postgres callers.
 
     Returns:
         A tuple of (sql_clause, params) where sql_clause uses $N positional
@@ -109,12 +121,18 @@ def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
     params: list[str] = []
     param_idx = [0]  # mutable counter for closure
 
+    def _field_sql(field: str) -> str:
+        """Render a field ref: bare column, or extra->> for non-promoted (R-49)."""
+        if promoted_columns is not None and field not in promoted_columns:
+            return f"(extra->>'{field}')"
+        return _quote_reserved(field)
+
     def _replace_expr(match: re.Match) -> str:
         field = match.group(1)
         value = match.group(2)
         param_idx[0] += 1
         params.append(value)
-        quoted_field = _quote_reserved(field)
+        quoted_field = _field_sql(field)
         return f"{quoted_field} = ${param_idx[0]}"
 
     def _replace_comparison(match: re.Match) -> str:
@@ -124,12 +142,12 @@ def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
         value = match.group(3)
         param_idx[0] += 1
         params.append(value)
-        quoted_field = _quote_reserved(field)
+        quoted_field = _field_sql(field)
         return f"{quoted_field} {op} ${param_idx[0]}"
 
     def _replace_blank(match: re.Match) -> str:
         field = match.group(1)
-        quoted_field = _quote_reserved(field)
+        quoted_field = _field_sql(field)
         return f"({quoted_field} IS NULL OR {quoted_field} = '')"
 
     def _replace_search(match: re.Match) -> str:
@@ -138,7 +156,7 @@ def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
         field = match.group(2)
         param_idx[0] += 1
         params.append(f"%{needle}%")
-        quoted_field = _quote_reserved(field)
+        quoted_field = _field_sql(field)
         return f"{quoted_field} LIKE ${param_idx[0]}"
 
     def _replace_datestr(match: re.Match) -> str:
@@ -147,23 +165,23 @@ def formula_to_sql(formula: str | None) -> tuple[str, list[str]]:
         value = match.group(2)
         param_idx[0] += 1
         params.append(value)
-        quoted_field = _quote_reserved(field)
+        quoted_field = _field_sql(field)
         return f"{quoted_field}::date = ${param_idx[0]}::date"
 
     # Handle SEARCH('needle', {field}) — translate to LIKE
     result = re.sub(r"SEARCH\('([^']*)',\s*\{(\w+)\}\)", _replace_search, formula)
 
     # Handle DATESTR({field})='value' before general field='value'
-    result = re.sub(r"DATESTR\(\{(\w+)\}\)='([^']*)'", _replace_datestr, result)
+    result = re.sub(r"DATESTR\(\{(\w+)\}\)\s*=\s*'([^']*)'", _replace_datestr, result)
 
     # Handle {field}=BLANK()
-    result = re.sub(r"\{(\w+)\}=BLANK\(\)", _replace_blank, result)
+    result = re.sub(r"\{(\w+)\}\s*=\s*BLANK\(\)", _replace_blank, result)
 
     # Handle {field}>=, <=, >, < comparisons (before = to avoid partial match)
-    result = re.sub(r"\{(\w+)\}(>=|<=|>|<)'([^']*)'", _replace_comparison, result)
+    result = re.sub(r"\{(\w+)\}\s*(>=|<=|>|<)\s*'([^']*)'", _replace_comparison, result)
 
     # Replace all {field}='value' patterns with parameterized expressions
-    result = re.sub(r"\{(\w+)\}='([^']*)'", _replace_expr, result)
+    result = re.sub(r"\{(\w+)\}\s*=\s*'([^']*)'", _replace_expr, result)
 
     # Recursively unwrap AND/OR wrappers
     result = _unwrap_logic(result.strip())
