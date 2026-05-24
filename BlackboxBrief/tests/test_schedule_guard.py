@@ -106,7 +106,9 @@ class TestUpdateGuard:
         inner = _make_proxy(get_return=_scheduled_record(status="VISUAL_READY"))
         guard = ScheduleGuardedProxy(inner)
 
-        with pytest.raises(ScheduledPostProtectionError, match="Cannot demote"):
+        # R-80: message changed from "Cannot demote" to the explicit-model
+        # wording; the VISUAL_READY→DRAFTED block itself is unchanged.
+        with pytest.raises(ScheduledPostProtectionError, match="would discard its queued slot"):
             guard.update("42", {"status": "DRAFTED"})
 
         inner.update.assert_not_called()
