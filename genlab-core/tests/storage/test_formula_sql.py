@@ -79,3 +79,52 @@ class TestFormulaToSQL:
         assert "$2" in sql
         assert "$3" in sql
         assert len(params) == 3
+
+
+class TestR49WhitespaceAndExtra:
+    """R-49: whitespace tolerance + non-promoted-field -> extra->> mapping."""
+
+    def test_whitespace_around_equals(self):
+        # Spaces around '=' must still parse (previously left literal braces).
+        sql, params = formula_to_sql("{task_id} = 'abc'")
+        assert "{" not in sql and "}" not in sql
+        assert params == ["abc"]
+        assert sql.startswith("task_id =")
+
+    def test_whitespace_in_comparison(self):
+        sql, params = formula_to_sql("{score} >= '5'")
+        assert "{" not in sql
+        assert ">=" in sql
+        assert params == ["5"]
+
+    def test_no_whitespace_still_works(self):
+        sql, params = formula_to_sql("{status}='DRAFTED'")
+        assert sql.startswith("status =")
+        assert params == ["DRAFTED"]
+
+    def test_non_promoted_field_uses_extra(self):
+        # analytics_id is NOT a real column -> must query extra->> (R-49 dup bug).
+        promoted = {"post_id", "platform", "status"}
+        sql, params = formula_to_sql("{analytics_id}='x1'", promoted)
+        assert "extra->>'analytics_id'" in sql
+        assert "{" not in sql
+        assert params == ["x1"]
+
+    def test_promoted_field_stays_bare_column(self):
+        promoted = {"post_id", "platform"}
+        sql, _ = formula_to_sql("{post_id}='p1'", promoted)
+        assert "post_id =" in sql
+        assert "extra" not in sql
+
+    def test_none_promoted_keeps_legacy_bare(self):
+        # Default (no promoted set) keeps bare identifiers for non-PG callers.
+        sql, _ = formula_to_sql("{analytics_id}='x'")
+        assert "analytics_id =" in sql
+        assert "extra" not in sql
+
+    def test_mixed_promoted_and_non_promoted(self):
+        promoted = {"post_id", "platform"}
+        sql, params = formula_to_sql("AND({post_id}='p1', {analytics_id} = 'a1')", promoted)
+        assert "post_id =" in sql
+        assert "extra->>'analytics_id'" in sql
+        assert params == ["p1", "a1"]
