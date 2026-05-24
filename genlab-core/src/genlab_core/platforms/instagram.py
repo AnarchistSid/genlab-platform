@@ -34,6 +34,17 @@ _POLL_INTERVAL_INITIAL = 5
 _POLL_INTERVAL_SLOW = 10
 _POLL_SLOWDOWN_AFTER = 30
 
+# R-29: the whole reel publish (create + poll + one retry) MUST finish before
+# the publisher's per-platform executor timeout (publish_all_platforms.py:
+# `future.result(timeout=600)`). Previously a 480s poll + 30s + 480s retry could
+# run ~990s — past the 600s future, which records the platform FAILED but does
+# NOT cancel the thread (Python can't), so the orphaned thread could post the
+# reel AFTER the publisher gave up → a phantom/duplicate publish. We bound the
+# TOTAL wall-clock budget below the executor timeout and share it across the
+# initial poll + retry, so the call always returns before the future times out.
+_TOTAL_PUBLISH_BUDGET_SECONDS = 540  # < 600 executor timeout, ~60s margin
+_RETRY_MIN_REMAINING_SECONDS = 90  # 30s backoff + ≥60s for a useful second poll
+
 
 class InstagramClient:
     """Meta Graph API client for Instagram publishing and engagement.
@@ -334,12 +345,21 @@ class InstagramClient:
         cover_url: str = "",
         max_poll_seconds: int = _DEFAULT_MAX_POLL_SECONDS,
         _retry_count: int = 0,
+        _deadline: float | None = None,
     ) -> str | None:
         """Three-step reel publish: create container → poll → publish.
 
         Returns the published post ID on success, or ``None`` on failure.
         Retries once if the container hits ERROR quickly (Meta processor lag).
+
+        R-29: ``_deadline`` is a monotonic wall-clock budget shared across the
+        initial attempt and the retry so the TOTAL time stays under the
+        publisher's 600s executor timeout — otherwise an orphaned thread could
+        post the reel after the publisher already recorded it FAILED.
         """
+        if _deadline is None:
+            _deadline = time.monotonic() + _TOTAL_PUBLISH_BUDGET_SECONDS
+
         creation_id = self._create_reel_container(
             video_url=video_url,
             caption=caption,
@@ -349,9 +369,11 @@ class InstagramClient:
         if creation_id is None:
             return None
 
+        # Cap this poll to whatever budget remains before the shared deadline.
+        poll_budget = min(max_poll_seconds, max(1, int(_deadline - time.monotonic())))
         already_published = self._poll_container_status(
             creation_id=creation_id,
-            max_poll_seconds=max_poll_seconds,
+            max_poll_seconds=poll_budget,
         )
         if already_published is None:
             # 2207077 = "media upload failed". Meta keys this off the URL we
@@ -367,10 +389,15 @@ class InstagramClient:
             # Container ERROR or timeout — retry once after 30s
             # Meta's processor sometimes returns ERROR immediately on
             # transient overload, but succeeds on a second attempt.
-            if _retry_count < 1:
+            # R-29: only retry if enough of the shared budget remains for a
+            # meaningful second poll — otherwise the retry would push the total
+            # past the executor timeout (orphaned-thread risk).
+            remaining = _deadline - time.monotonic()
+            if _retry_count < 1 and remaining > _RETRY_MIN_REMAINING_SECONDS:
                 logger.warning(
-                    "Reel container ERROR — retrying in 30s (attempt %d/2)",
+                    "Reel container ERROR — retrying in 30s (attempt %d/2, %.0fs budget left)",
                     _retry_count + 1,
+                    remaining,
                 )
                 time.sleep(30)
                 return self._publish_reel(
@@ -380,6 +407,14 @@ class InstagramClient:
                     cover_url=cover_url,
                     max_poll_seconds=max_poll_seconds,
                     _retry_count=_retry_count + 1,
+                    _deadline=_deadline,
+                )
+            if _retry_count < 1:
+                logger.warning(
+                    "Reel container ERROR — skipping retry (only %.0fs of the publish "
+                    "budget left; staying under the executor timeout to avoid an "
+                    "orphaned thread)",
+                    remaining,
                 )
             return None
 
