@@ -1,0 +1,20 @@
+[Unit]
+# R-83: the 2nd daily publish run is RETRY-ONLY — it recovers stuck blueprints
+# and retries genuinely-failed platforms, but never publishes a fresh blueprint
+# (that would double the day's content past the 1-reel/channel/day cap). The
+# main fresh-publish run is genlab-publisher.service at 06:35.
+Description=GenLab Publisher (retry-only 2nd run)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+Environment=HOME=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_platforms --niche all --retry-only
+TimeoutSec=1800

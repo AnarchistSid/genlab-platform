@@ -1,0 +1,11 @@
+[Unit]
+Description=GenLab Publisher retry-only Timer (2nd daily run)
+
+[Timer]
+# 10:30 UTC — was the 2nd OnCalendar on genlab-publisher.timer; now a dedicated
+# retry-only run so it can recover failures without re-publishing fresh content.
+OnCalendar=*-*-* 10:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

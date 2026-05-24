@@ -699,13 +699,21 @@ def run_publish(
     backlog_client,
     daily_cap,
     enabled_platforms: list[str],
+    retry_only: bool = False,
 ) -> int:
     """Core publish logic. Returns an exit code.
 
     This is the testable entry point — main() handles CLI + lock + client creation.
+
+    ``retry_only`` (R-83): when True, run crash-recovery + the retry pass ONLY —
+    never select or publish a fresh VISUAL_READY blueprint. This is the mode for
+    the 2nd daily publisher run, so it can recover failed platforms without
+    doubling the day's content (1 reel/channel/day).
     """
     niche_id = _validate_niche(niche_id)
-    logger.info("[publish] niche=%s platforms=%s", niche_id, enabled_platforms)
+    logger.info(
+        "[publish] niche=%s platforms=%s retry_only=%s", niche_id, enabled_platforms, retry_only
+    )
 
     # Recover blueprints stuck in PUBLISHING status (crash recovery)
     try:
@@ -778,6 +786,13 @@ def run_publish(
     except Exception as e:
         logger.warning("[publish] PUBLISH_FAILED recovery check failed: %s", e)
 
+    # R-83: retry-only mode (2nd daily run) — recover + retry failed platforms,
+    # but never publish a fresh blueprint (would double the day's content).
+    if retry_only:
+        logger.info("[publish] retry-only mode: skipping fresh publish, retrying failures only")
+        _run_retry_pass(niche_id, backlog_client, daily_cap)
+        return EXIT_SUCCESS
+
     # 1. Query VISUAL_READY blueprints for this niche
     all_blueprints = backlog_client.get_blueprints_by_status(
         "VISUAL_READY",
@@ -785,6 +800,9 @@ def run_publish(
     )
     if not all_blueprints:
         logger.info("[publish] No VISUAL_READY blueprints for niche=%s", niche_id)
+        # R-83: still retry failed platforms on no-fresh-content days (the old
+        # code returned here, skipping the retry pass entirely).
+        _run_retry_pass(niche_id, backlog_client, daily_cap)
         return EXIT_NO_BLUEPRINTS
 
     # 2. Run gatekeeper on each blueprint (filters by approval, schedule, score, media)
@@ -951,7 +969,6 @@ def run_publish(
                     success=False,
                     error=f"Publish error: {exc}",
                 )
-            registry_id = _to_registry_id(platform)
             error_class = ""
             if result.success:
                 any_success = True
@@ -1154,6 +1171,18 @@ def run_publish(
         except Exception as e:
             logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
 
+    _run_retry_pass(niche_id, backlog_client, daily_cap)
+    return EXIT_SUCCESS if any_success else EXIT_ALL_FAILED
+
+
+def _run_retry_pass(niche_id: str, backlog_client, daily_cap) -> None:
+    """Retry recently-PUBLISHED blueprints' failed platforms (R-83).
+
+    Extracted so it can run standalone: on a retry-only 2nd daily run (which must
+    NOT publish fresh content) and on no-fresh-content days (where run_publish
+    used to return before reaching it). The R-29 per-platform skip guarantees a
+    retry never re-posts a platform that already succeeded.
+    """
     # ── Retry pass: check recent PUBLISHED blueprints for failed platforms ──
     # Only check blueprints published in the last 7 days (not the entire history)
     try:
@@ -1343,8 +1372,6 @@ def run_publish(
     except Exception as e:
         logger.debug("[publish] Retry pass failed: %s", e)
 
-    return EXIT_SUCCESS if any_success else EXIT_ALL_FAILED
-
 
 # ---------------------------------------------------------------------------
 # CLI Entry Point
@@ -1365,6 +1392,12 @@ def main() -> int:
         nargs="+",
         default=None,
         help="Override enabled platforms (default: instagram youtube facebook twitter threads)",
+    )
+    parser.add_argument(
+        "--retry-only",
+        action="store_true",
+        help="R-83: recover + retry failed platforms only; never publish a fresh "
+        "blueprint. Use for the 2nd daily run so it can't double the day's content.",
     )
     args = parser.parse_args()
 
@@ -1419,6 +1452,7 @@ def main() -> int:
                 backlog_client=shared_client,
                 daily_cap=enforcer,
                 enabled_platforms=enabled,
+                retry_only=args.retry_only,
             )
             total_exit = max(total_exit, exit_code)
         except Exception as exc:

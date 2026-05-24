@@ -631,3 +631,48 @@ class TestAlreadyPublishedPlatforms:
         assert _already_published_platforms({"platform_publish_status": "{not json"}) == set()
         assert _already_published_platforms({"platform_publish_status": None}) == set()
         assert _already_published_platforms({"platform_publish_status": 123}) == set()
+
+
+class TestRetryOnly:
+    """R-83: retry-only mode (2nd daily run) recovers + retries failed platforms
+    but must NEVER select a fresh VISUAL_READY blueprint (would double the day's
+    content)."""
+
+    @staticmethod
+    def _queried_statuses(client) -> list[str]:
+        out = []
+        for call in client.get_blueprints_by_status.call_args_list:
+            out.append(call.args[0] if call.args else call.kwargs.get("status"))
+        return out
+
+    def test_retry_only_never_selects_fresh_visual_ready(self):
+        client = _make_client_mock([])
+        enforcer = _make_cap_enforcer()
+        exit_code = run_publish(
+            niche_id="gaming",
+            backlog_client=client,
+            daily_cap=enforcer,
+            enabled_platforms=["instagram"],
+            retry_only=True,
+        )
+        queried = self._queried_statuses(client)
+        assert "VISUAL_READY" not in queried  # the core safety property
+        assert "PUBLISHED" in queried  # the retry pass still runs
+        assert exit_code == EXIT_SUCCESS
+
+    def test_normal_mode_selects_visual_ready_and_still_retries(self):
+        # No fresh blueprints: normal mode queries VISUAL_READY AND (R-83 fix)
+        # still runs the retry pass instead of returning early.
+        client = _make_client_mock([])
+        enforcer = _make_cap_enforcer()
+        exit_code = run_publish(
+            niche_id="gaming",
+            backlog_client=client,
+            daily_cap=enforcer,
+            enabled_platforms=["instagram"],
+            retry_only=False,
+        )
+        queried = self._queried_statuses(client)
+        assert "VISUAL_READY" in queried
+        assert "PUBLISHED" in queried  # retry pass runs even with no fresh content
+        assert exit_code == EXIT_NO_BLUEPRINTS
