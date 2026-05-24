@@ -46,6 +46,7 @@ from genlab_core.publishing.publish_all_platforms import (
     EXIT_NO_BLUEPRINTS,
     EXIT_SUCCESS,
     PidLock,
+    _already_published_platforms,
     build_payload,
     run_publish,
 )
@@ -587,3 +588,46 @@ class TestRunPublish:
             enabled_platforms=["instagram"],
         )
         assert exit_code == EXIT_ALL_FAILED
+
+
+class TestAlreadyPublishedPlatforms:
+    """R-29: the per-platform skip primitive — succeeded platforms must be
+    detected from platform_publish_status so re-publishing never double-posts."""
+
+    def test_empty_when_no_status(self):
+        assert _already_published_platforms({}) == set()
+        assert _already_published_platforms({"platform_publish_status": "{}"}) == set()
+
+    def test_bare_string_published(self):
+        fields = {"platform_publish_status": json.dumps({"instagram": "PUBLISHED"})}
+        assert _already_published_platforms(fields) == {"instagram"}
+
+    def test_dict_status_published(self):
+        fields = {
+            "platform_publish_status": json.dumps(
+                {"youtube": {"status": "PUBLISHED", "post_id": "yt1"}}
+            )
+        }
+        assert _already_published_platforms(fields) == {"youtube"}
+
+    def test_mixed_published_and_failed(self):
+        # IG live, YT failed — only IG is "already published" (YT must retry).
+        fields = {
+            "platform_publish_status": json.dumps(
+                {
+                    "instagram": "PUBLISHED",
+                    "youtube": {"status": "FAILED", "attempts": 2},
+                    "facebook": "FAILED",
+                }
+            )
+        }
+        assert _already_published_platforms(fields) == {"instagram"}
+
+    def test_accepts_dict_value_not_just_json_string(self):
+        fields = {"platform_publish_status": {"instagram": "PUBLISHED", "x_twitter": "FAILED"}}
+        assert _already_published_platforms(fields) == {"instagram"}
+
+    def test_malformed_is_safe(self):
+        assert _already_published_platforms({"platform_publish_status": "{not json"}) == set()
+        assert _already_published_platforms({"platform_publish_status": None}) == set()
+        assert _already_published_platforms({"platform_publish_status": 123}) == set()
