@@ -68,6 +68,30 @@ EXIT_ALL_FAILED = 2
 EXIT_DAILY_CAP = 3
 EXIT_LOCK_HELD = 4
 
+
+def _already_published_platforms(fields: dict[str, Any]) -> set[str]:
+    """Platforms already PUBLISHED for this blueprint per its persisted state.
+
+    R-29/R-83: a partial publish (or crash mid-publish) leaves per-platform
+    PUBLISHED markers in ``platform_publish_status``. Re-publishing the blueprint
+    (after a crash-recovery reset, or a retry-only run) MUST skip these so a
+    succeeded platform is never double-posted. Handles both the bare-string
+    (``"PUBLISHED"``) and dict (``{"status": "PUBLISHED"}``) value shapes.
+    """
+    raw = fields.get("platform_publish_status", "{}")
+    try:
+        pps = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except (json.JSONDecodeError, TypeError):
+        return set()
+    if not isinstance(pps, dict):
+        return set()
+    return {
+        p
+        for p, v in pps.items()
+        if v == "PUBLISHED" or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
+    }
+
+
 _VALID_NICHE_IDS = frozenset(
     {
         "ai_creators",
@@ -698,28 +722,16 @@ def run_publish(
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=UTC)
                     if datetime.now(UTC) - dt > timedelta(minutes=30):
-                        # Check if already published on any platform (crash after partial success)
-                        pps_raw = fields.get("platform_publish_status", "{}")
-                        try:
-                            pps = (
-                                json.loads(pps_raw) if isinstance(pps_raw, str) else (pps_raw or {})
-                            )
-                        except (json.JSONDecodeError, TypeError):
-                            pps = {}
-                        has_published = any(
-                            v == "PUBLISHED"
-                            or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
-                            for v in pps.values()
-                        )
-                        if has_published:
-                            # Already published on some platforms — mark as PUBLISHED, don't re-publish
-                            backlog_client.blueprints.update(bp["id"], {"status": "PUBLISHED"})
-                            logger.warning(
-                                "[publish] Recovered stuck PUBLISHING blueprint %s as PUBLISHED (partial success detected)",
-                                bp["id"][:8],
-                            )
-                        elif attempt_count >= 3:
-                            # Too many attempts — give up
+                        # R-29 per-platform recovery: previously "any platform
+                        # published -> mark the whole blueprint PUBLISHED", which
+                        # MASKED the platforms that failed/never ran (they were
+                        # never retried). Now that the publish loop skips
+                        # platforms already PUBLISHED (per-platform), we instead
+                        # reset to VISUAL_READY and let it retry ONLY the failed/
+                        # unattempted platforms — and an all-published blueprint
+                        # self-finalizes to PUBLISHED on the next run. The
+                        # attempt cap still bounds a permanently-stuck laggard.
+                        if attempt_count >= 3:
                             backlog_client.blueprints.update(bp["id"], {"status": "PUBLISH_FAILED"})
                             logger.error(
                                 "[publish] Blueprint %s stuck after %d attempts — marking PUBLISH_FAILED",
@@ -729,7 +741,8 @@ def run_publish(
                         else:
                             backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
                             logger.warning(
-                                "[publish] Recovered stuck PUBLISHING blueprint %s (>30min)",
+                                "[publish] Recovered stuck PUBLISHING blueprint %s -> VISUAL_READY "
+                                "(per-platform retry skips already-published)",
                                 bp["id"][:8],
                             )
                 except (ValueError, TypeError):
@@ -822,15 +835,40 @@ def run_publish(
         (fields.get("hook", "") or "")[:50],
     )
 
-    # 4. Daily cap check (per-platform)
+    # 4. Daily cap check (per-platform) + skip platforms already published in a
+    #    prior (partial / crashed) run so re-publishing never double-posts a
+    #    succeeded platform — only the failed/unattempted ones are retried (R-29,
+    #    and the safety primitive behind a retry-only run, R-83).
+    prior_published = _already_published_platforms(fields)
+    if prior_published:
+        logger.info(
+            "[publish] %s already PUBLISHED for blueprint %s (prior run) — will skip",
+            sorted(prior_published),
+            record_id[:16],
+        )
     platforms_to_publish = []
     for p in enabled_platforms:
+        if p in prior_published:
+            continue  # already live — never re-post
         if daily_cap and not daily_cap.can_publish(p):
             logger.info("[publish] %s: daily cap reached, skipping", p)
         else:
             platforms_to_publish.append(p)
 
     if not platforms_to_publish:
+        # Distinguish "all enabled already published" (finalize) from "capped".
+        if prior_published and set(enabled_platforms) <= prior_published:
+            logger.info(
+                "[publish] All enabled platforms already PUBLISHED for %s — finalizing",
+                record_id[:16],
+            )
+            try:
+                backlog_client.blueprints.update(record_id, {"status": "PUBLISHED"})
+            except Exception as exc:
+                logger.warning(
+                    "[publish] Failed to finalize already-published %s: %s", record_id, exc
+                )
+            return EXIT_SUCCESS
         logger.info("[publish] All platforms capped for niche=%s", niche_id)
         return EXIT_DAILY_CAP
 
@@ -865,8 +903,12 @@ def run_publish(
         except Exception as exc:
             logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
-    # 6. Publish to each platform
-    platform_status: dict[str, str] = {}
+    # 6. Publish to each platform. Pre-seed with platforms already published in a
+    #    prior run so the persisted platform_publish_status keeps the full
+    #    picture (R-29). `any_success` deliberately tracks only THIS run, so a
+    #    still-partial blueprint (a prior success + a fresh failure) returns to
+    #    VISUAL_READY and retries just the failed platform next time.
+    platform_status: dict[str, Any] = {p: "PUBLISHED" for p in prior_published}
     any_success = False
 
     def _publish_one(platform: str) -> tuple[str, PublishResult]:
