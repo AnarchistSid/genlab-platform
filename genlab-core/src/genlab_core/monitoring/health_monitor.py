@@ -1059,7 +1059,19 @@ def check_swap() -> list[Alert]:
                 parts = line.split()
                 total = int(parts[1])
                 used = int(parts[2])
-                if total > 0 and used > 500 * 1024 * 1024:  # >500MB swap
+                # R-67/R-03: a near-full swap on the 4GB box is an imminent-OOM
+                # signal and must reach notify() (which forwards only criticals),
+                # not sit as an unactioned warning.
+                if total > 0 and used > 0.9 * total:
+                    alerts.append(
+                        Alert(
+                            check="swap_pressure",
+                            severity="critical",
+                            message=f"Swap CRITICAL: {used // (1024 * 1024)}MB / "
+                            f"{total // (1024 * 1024)}MB (>90%) — imminent OOM",
+                        )
+                    )
+                elif total > 0 and used > 500 * 1024 * 1024:  # >500MB swap
                     alerts.append(
                         Alert(
                             check="swap_pressure",
