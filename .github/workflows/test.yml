@@ -99,9 +99,10 @@ jobs:
       - run: uv sync --frozen
       - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q
 
-  # U-18 / R-04: gate the dashboard frontend build. The Dockerfile builds it at
-  # deploy time, so a broken build previously surfaced only then. `npm ci &&
-  # npm run build` (tsc -b && vite build) catches type/build errors in CI.
+  # U-18 / R-72 / R-04: gate the dashboard frontend. The build (tsc -b && vite
+  # build) catches type/build errors; the vitest suite (108 tests) was never run
+  # in CI before, so frontend regressions shipped silently. (eslint — 57 known
+  # errors — is a separate triage task, not gated here yet.)
   test-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -114,4 +115,6 @@ jobs:
       - run: npm ci
         working-directory: dashboard/frontend
       - run: npm run build
+        working-directory: dashboard/frontend
+      - run: npm run test
         working-directory: dashboard/frontend
