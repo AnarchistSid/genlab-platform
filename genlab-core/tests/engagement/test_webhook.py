@@ -196,3 +196,57 @@ def test_health_endpoint(client):
     resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+# -- R-60: media_id is validated before it can reach a query formula ----------
+
+
+class TestResolveNicheInjectionGuard:
+    @pytest.fixture(autouse=True)
+    def _clean(self, monkeypatch):
+        from genlab_core.engagement import webhook
+
+        webhook._niche_cache.clear()
+        monkeypatch.delenv("NICHE_ID", raising=False)
+        yield
+        webhook._niche_cache.clear()
+
+    def test_malicious_media_id_never_builds_a_query(self):
+        """A non-numeric media_id must short-circuit to the default niche and
+        NEVER construct a BacklogClient / query formula (the injection vector)."""
+        from genlab_core.engagement.webhook import _resolve_niche
+
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_bc:
+            niche = _resolve_niche("x') OR fields/niche_id eq 'gaming")
+        assert niche == "ai_creators"
+        mock_bc.assert_not_called()
+
+    def test_empty_media_id_defaults_without_query(self):
+        from genlab_core.engagement.webhook import _resolve_niche
+
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_bc:
+            assert _resolve_niche("") == "ai_creators"
+        mock_bc.assert_not_called()
+
+    def test_valid_numeric_media_id_proceeds_to_lookup(self):
+        """A well-formed numeric Meta id is allowed through to the backlog
+        lookup, and the formula carries exactly that id."""
+        from genlab_core.engagement.webhook import _resolve_niche
+
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_bc:
+            instance = mock_bc.return_value
+            instance.publishing_analytics.all.return_value = [{"fields": {"niche_id": "gaming"}}]
+            niche = _resolve_niche("17895695668004550")
+        assert niche == "gaming"
+        instance.publishing_analytics.all.assert_called_once()
+        formula = instance.publishing_analytics.all.call_args.kwargs["formula"]
+        assert "17895695668004550" in formula
+
+    def test_underscore_composite_id_is_allowed(self):
+        """Meta sometimes uses <a>_<b> composite ids — still numeric-safe."""
+        from genlab_core.engagement.webhook import _resolve_niche
+
+        with patch("genlab_core.http.backlog_client.BacklogClient") as mock_bc:
+            mock_bc.return_value.publishing_analytics.all.return_value = []
+            assert _resolve_niche("123_456") == "ai_creators"
+        mock_bc.return_value.publishing_analytics.all.assert_called_once()

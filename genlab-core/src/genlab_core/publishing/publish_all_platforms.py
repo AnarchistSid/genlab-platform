@@ -701,6 +701,47 @@ def _resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
     return {}
 
 
+def _preflight_token_refresh(niche_id: str, enabled_platforms: list[str]) -> None:
+    """R-35: proactively refresh near-expiry tokens before publishing.
+
+    Threads tokens are 60-day and today refresh only *lazily*, inside the
+    Threads client's ``publish()``. A channel dark for >10 days never reaches
+    that code, so its token can silently lapse and surface only as a per-platform
+    SKIP (compounding R-01). ``refresh_token_if_needed()`` is idempotent — it acts
+    only when the token is ≥50 days old — so calling it once per run is safe and
+    shrinks the dark-channel window.
+
+    Strictly non-fatal: any failure logs a WARNING and publishing proceeds (the
+    per-platform publish will surface a real auth failure as a SKIP regardless).
+
+    NOTE: this does not eliminate R-35 — a channel that never runs the publisher
+    still won't refresh. Closing that fully needs a host-level token-health
+    timer, which is an ops concern tracked separately.
+    """
+    for platform in enabled_platforms:
+        registry_id = _to_registry_id(platform)
+        # Only Threads has a proactive, idempotent refresh hook today. The EAA
+        # Meta page token is permanent (never refreshed — security rule), and
+        # YouTube/X refresh on use; revisit if other clients gain the hook.
+        if registry_id != "threads":
+            continue
+        try:
+            kwargs = _resolve_client_kwargs(registry_id, niche_id)
+            if not kwargs:
+                logger.warning(
+                    "[publish] token preflight: no %s credentials for niche '%s'",
+                    registry_id,
+                    niche_id,
+                )
+                continue
+            client = get_client(registry_id, **kwargs)
+            refresh = getattr(client, "refresh_token_if_needed", None)
+            if callable(refresh):
+                refresh()
+        except Exception as exc:
+            logger.warning("[publish] token preflight refresh failed for %s: %s", registry_id, exc)
+
+
 # ---------------------------------------------------------------------------
 # Core Publish Loop
 # ---------------------------------------------------------------------------
@@ -727,6 +768,9 @@ def run_publish(
     logger.info(
         "[publish] niche=%s platforms=%s retry_only=%s", niche_id, enabled_platforms, retry_only
     )
+
+    # R-35: refresh near-expiry tokens before any publish attempt (non-fatal).
+    _preflight_token_refresh(niche_id, enabled_platforms)
 
     # Recover blueprints stuck in PUBLISHING status (crash recovery)
     try:

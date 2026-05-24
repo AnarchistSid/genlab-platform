@@ -5,9 +5,18 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# R-82: a blueprint whose scheduled slot is more than this far in the past has
+# missed its publish window and must NOT stay eligible. The daily cadence has
+# slots between ~02:30 and ~14:30 UTC and a late/retry run as late as ~10:30
+# UTC, so the worst legitimate same-day-or-next-morning lateness is well under
+# 18h, while a full prior-day cycle is ≥24h — 18h cleanly separates the two
+# without a midnight-boundary cliff (a pure date check would wrongly kill a slot
+# scheduled minutes before 00:00 UTC and flake tests that use "now − 5min").
+_SCHEDULE_STALE_AFTER = timedelta(hours=18)
 
 
 @dataclass
@@ -85,11 +94,29 @@ class PublishGatekeeper:
         try:
             dt = datetime.fromisoformat(scheduled)
             if dt.tzinfo is None:
+                # R-82: a naive scheduled_for is ambiguous — the gatekeeper reads
+                # it as UTC, but the (dead) scheduling.is_due read it as IST, a
+                # +5:30 latent trap. The pipeline writes tz-aware UTC today, so
+                # this path shouldn't fire; if it does, coerce to UTC (the single
+                # tz authority) and surface it loudly rather than silently.
+                logger.warning("[gatekeeper] naive scheduled_for %r — assuming UTC", scheduled)
                 dt = dt.replace(tzinfo=UTC)
-            if dt > datetime.now(UTC):
+            now = datetime.now(UTC)
+            if dt > now:
                 return GateResult(
                     allowed=False,
                     reason=f"Scheduled for {dt}",
+                    gate_name="schedule_gate",
+                )
+            # R-82: enforce an UPPER bound, not just "not future". Without it a
+            # stale blueprint stays eligible forever, feeding the double-publish
+            # triad (a prior day's slot getting re-picked). Today's due slot and
+            # a same-day-or-next-morning late/retry run still pass; only a slot
+            # >18h stale is blocked.
+            if dt < now - _SCHEDULE_STALE_AFTER:
+                return GateResult(
+                    allowed=False,
+                    reason=f"Stale schedule: {dt} is >{_SCHEDULE_STALE_AFTER} past",
                     gate_name="schedule_gate",
                 )
         except (ValueError, TypeError):

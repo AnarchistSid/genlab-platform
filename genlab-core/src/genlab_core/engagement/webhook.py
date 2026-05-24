@@ -16,6 +16,7 @@ import hmac
 import json
 import logging
 import os
+import re
 
 from fastapi import FastAPI, HTTPException, Query, Request
 
@@ -26,12 +27,30 @@ app = FastAPI(title="GenLab Engagement Webhook")
 _VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "")
 _APP_SECRET = os.environ.get("META_APP_SECRET", "")
 
+# Meta object IDs (media/comment) are numeric, occasionally with an underscore
+# separator (e.g. ``<page>_<post>``). R-60: anything outside this shape is
+# rejected before it can reach a backlog query formula — see _resolve_niche.
+_META_ID_RE = re.compile(r"^[0-9_]+$")
+
 # Cache post_id → niche_id lookups (populated from Publishing_Analytics)
 _niche_cache: dict[str, str] = {}
 
 
 def _resolve_niche(media_id: str) -> str:
     """Look up niche_id for an Instagram media ID, defaulting to ai_creators."""
+    # R-60: media_id arrives straight off the Meta webhook body and is
+    # interpolated into a backlog query formula below. Validate it's a real
+    # numeric Meta object id BEFORE it touches the formula. A non-numeric value
+    # can inject query fragments — the SharePoint/Graph path is NOT escaped
+    # (and _esc() can't neutralize bare OData operators), and even the
+    # parameterized Postgres path only fails the query rather than rejecting the
+    # input. Anything malformed → default niche, no query built.
+    if not media_id or not _META_ID_RE.match(media_id):
+        if media_id:
+            logger.warning(
+                "Rejecting non-numeric webhook media_id (possible injection): %r", media_id
+            )
+        return "ai_creators"
     if media_id in _niche_cache:
         return _niche_cache[media_id]
     env_niche = os.environ.get("NICHE_ID", "")
