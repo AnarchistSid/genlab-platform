@@ -156,6 +156,44 @@ def _get_agent_root() -> Path:
     return get_agent_root()
 
 
+# Platform post IDs are alphanumeric (+ _ -); validate before interpolating into
+# a lookup formula (R-76 + defends against R-60-style formula injection).
+_POST_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
+
+
+def _resolve_post_context(post_id: str, platform: str) -> str:
+    """Resolve the original post's hook/title as reply context (R-76).
+
+    Engagement replies previously passed ``post_context=""`` so the reply LLM
+    never knew what the clip was about — producing generic/hallucinated replies.
+    Resolve it: post_id → publishing_analytics → blueprint → title + hook.
+    Fail-open (empty string) on any error; the persona handles "" gracefully.
+    """
+    if not post_id or not _POST_ID_RE.match(post_id):
+        return ""
+    try:
+        bl = _get_backlog_client()
+        if bl is None:
+            return ""
+        recs = bl.publishing_analytics.all(
+            formula=f"AND({{platform}}='{platform}', SEARCH('{post_id}', {{post_id}}))",
+            max_records=1,
+        )
+        bp_id = recs[0].get("fields", {}).get("blueprint_id", "") if recs else ""
+        if not bp_id or not _POST_ID_RE.match(str(bp_id)):
+            return ""
+        bps = bl.blueprints.all(formula=f"{{blueprint_id}}='{bp_id}'", max_records=1)
+        if not bps:
+            return ""
+        fields = bps[0].get("fields", {})
+        title = (fields.get("title") or "").strip()
+        hook = (fields.get("hook") or fields.get("hook_text") or "").strip()
+        return " — ".join(p for p in (title, hook) if p)[:300]
+    except Exception as exc:
+        logger.debug("[engagement] post-context resolution failed for %s: %s", post_id, exc)
+        return ""
+
+
 def _replied_set_path() -> Path:
     """Path to the append-only idempotency log."""
     return _get_agent_root() / ".engagement_replied.jsonl"
@@ -391,6 +429,10 @@ def process_reply_event(event: dict) -> None:
     niche_id = event["niche_id"]
     post_id = event["post_id"]
     post_context = event.get("post_context", "")
+    # R-76: dispatchers pass post_context="" — resolve the original post's
+    # hook/title so the reply LLM knows what the clip was about.
+    if not post_context:
+        post_context = _resolve_post_context(post_id, platform)
 
     # Sanitize external comment text against prompt injection
     from genlab_core.cache.text_sanitizer import check_for_injection
