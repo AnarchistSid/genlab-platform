@@ -23,3 +23,19 @@ agents:
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
+  # R-57: the unified pipeline writes ALL niches to the shared <root>/.tmp/runs
+  # (pipeline_runner), and BlackboxBrief was omitted entirely. The per-channel
+  # dirs above are legacy paths the current pipeline no longer fills — the real
+  # disk-pressure target is this shared dir.
+  genlab_shared:
+    runs_dir: .tmp/runs
+    quota_gb: 40
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
+  blackboxbrief:
+    runs_dir: BlackboxBrief/.tmp/runs
+    quota_gb: 30
+    warn_pct: 75
+    evict_pct: 90
+    protect_recent: 3
