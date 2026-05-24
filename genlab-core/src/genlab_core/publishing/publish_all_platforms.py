@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -67,6 +68,15 @@ EXIT_NO_BLUEPRINTS = 1
 EXIT_ALL_FAILED = 2
 EXIT_DAILY_CAP = 3
 EXIT_LOCK_HELD = 4
+
+# R-54/R-03: serialize ffmpeg encodes. The publisher fans out to up to 5
+# platforms in parallel (ThreadPoolExecutor below), and each platform's
+# build_payload() spawns its own ffmpeg subprocess — up to 5 concurrent encodes
+# on a 2-vCPU/4GB box, the realized OOM mechanism (R-03). A process-wide
+# semaphore caps concurrent encodes (default 1 = serial). Tunable via
+# GENLAB_MAX_CONCURRENT_ENCODES on larger hosts.
+_MAX_CONCURRENT_ENCODES = max(1, int(os.environ.get("GENLAB_MAX_CONCURRENT_ENCODES", "1") or "1"))
+_ENCODE_SEMAPHORE = threading.BoundedSemaphore(_MAX_CONCURRENT_ENCODES)
 
 
 def _already_published_platforms(fields: dict[str, Any]) -> set[str]:
@@ -320,7 +330,10 @@ def _transcode_for_platform(source: Path, platform: str) -> Path:
         # into the "using original" fallback that ships uncapped-bitrate
         # uploads — IG/FB/Threads then silently reject them. Once the
         # box gets a faster CPU or HW accel, drop this back.
-        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+        # R-54: hold the encode semaphore so the parallel per-platform fan-out
+        # never runs >_MAX_CONCURRENT_ENCODES ffmpeg processes at once (OOM).
+        with _ENCODE_SEMAPHORE:
+            subprocess.run(cmd, check=True, capture_output=True, timeout=600)
         dur_msg = f", trimmed to {max_duration}s" if max_duration else ""
         logger.info(
             "[publish] Transcoded %s for %s (%s CRF %s%s)",
