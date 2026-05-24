@@ -390,6 +390,9 @@ def generate_hook(
                 messages=[{"role": "user", "content": user}],
                 system=system,
             )
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", response)  # U-03
             hook = response.content[0].text.strip().strip('"').strip("'")
             hook = hook.replace("\u2019", "'").replace("\u2018", "'")
             hook = hook.replace("\u201c", '"').replace("\u201d", '"')
@@ -526,6 +529,9 @@ def generate_platform_hooks(
             messages=[{"role": "user", "content": user}],
             system=system,
         )
+        from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+        record_anthropic_usage("claude-haiku-4-5-20251001", response)  # U-03
 
         text = response.content[0].text.strip()
         result = {}

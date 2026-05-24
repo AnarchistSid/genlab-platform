@@ -6,6 +6,7 @@ import contextvars
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -156,3 +157,32 @@ def set_accumulator(acc: CostAccumulator) -> contextvars.Token:
 
 def reset_accumulator(token: contextvars.Token) -> None:
     _current_accumulator.reset(token)
+
+
+def record_anthropic_usage(model: str, response: Any) -> None:
+    """Record an Anthropic response's token usage to the active accumulator (U-03).
+
+    Until now only ``llm_client.complete()`` recorded usage, so ~5 of 6 Anthropic
+    call sites (router, persona, hook generator) spent budget invisibly — the
+    R-27 "cost unmeasured" gap. Call this right after every
+    ``messages.create()``.
+
+    Safe no-op if no accumulator is active or usage is unavailable: cost
+    tracking is non-critical and must NEVER break an LLM call. (When U-01 prompt
+    caching lands, extend this to also record ``cache_creation_input_tokens`` /
+    ``cache_read_input_tokens``.)
+    """
+    try:
+        acc = get_accumulator()
+        if acc is None:
+            return
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        acc.record_llm(
+            model=model,
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
+        )
+    except Exception:
+        pass
