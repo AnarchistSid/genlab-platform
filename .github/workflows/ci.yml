@@ -23,6 +23,10 @@ jobs:
       # rule additions.
       - run: uvx ruff@0.15.14 check .
       - run: uvx ruff@0.15.14 format --check .
+      # R-69: enforce the import-layer contract in CI (.importlinter). It needs
+      # genlab_core importable, so run it in the package env with import-linter
+      # added ad-hoc (not a runtime dep). Catches upward cross-layer imports.
+      - run: uv run --package genlab-core --with import-linter lint-imports --config genlab-core/.importlinter
 
   test:
     runs-on: ubuntu-latest
