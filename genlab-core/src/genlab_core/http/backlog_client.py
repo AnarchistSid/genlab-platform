@@ -47,6 +47,22 @@ STATUS_ORDER: list[str] = [
     "ARCHIVED",
 ]
 
+# R-80: the schedule guard can't use a linear STATUS_ORDER — operational states
+# (PUBLISHING/PUBLISH_FAILED) aren't rankable, and some "forward" moves are still
+# destructive (VISUAL_READY→ARCHIVED cleanup). An explicit model instead:
+# a scheduled post is "pending" (its slot is live) until it publishes; moving a
+# still-pending scheduled post into a "destructive" status discards its queued
+# work and is blocked. Publish progress (→PUBLISHING/→PUBLISHED) and recovery
+# (PUBLISHING→VISUAL_READY, PUBLISH_FAILED→VISUAL_READY) are NOT destructive, so
+# they're allowed; post-publish lifecycle (PUBLISHED→ANALYZED→ARCHIVED) is
+# allowed because the source is no longer pending.
+_PENDING_STATUSES: frozenset[str] = frozenset(
+    {"DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHING"}
+)
+_DESTRUCTIVE_STATUSES: frozenset[str] = frozenset(
+    {"ARCHIVED", "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED", "DRAFTED"}
+)
+
 # Shared error tuple for backlog operations
 try:
     from kiota_abstractions.api_error import APIError as GraphAPIError
@@ -150,7 +166,17 @@ class ScheduleGuardedProxy:
         if not touched:
             return
 
-        record = self._proxy.get(str(record_id))
+        # Fail-open on a fetch error: a guard that can't read the current row
+        # must not block a legitimate publish write (it would dark the channel).
+        try:
+            record = self._proxy.get(str(record_id))
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "[schedule-guard] could not fetch %s — allowing update: %s", record_id, exc
+            )
+            return
+        if not record:
+            return
         rec_fields = record.get("fields", record)
         scheduled_for = rec_fields.get("scheduled_for")
         if not scheduled_for:
@@ -159,11 +185,11 @@ class ScheduleGuardedProxy:
         new_status = fields.get("status")
         if new_status:
             old_status = rec_fields.get("status", "")
-            if self._is_demotion(old_status, new_status):
+            if self._is_forbidden_for_scheduled(old_status, new_status):
                 raise ScheduledPostProtectionError(
-                    f"Cannot demote scheduled blueprint rec={record_id} "
-                    f"from {old_status} → {new_status} "
-                    f"(scheduled_for={scheduled_for})."
+                    f"Cannot move scheduled blueprint rec={record_id} "
+                    f"from {old_status} → {new_status} — would discard its queued "
+                    f"slot (scheduled_for={scheduled_for})."
                 )
 
         if "visual_paths" in fields and self._is_empty(fields["visual_paths"]):
@@ -190,6 +216,19 @@ class ScheduleGuardedProxy:
             return cls._STATUS_ORDER.index(new_status) < cls._STATUS_ORDER.index(old_status)
         except ValueError:
             return False
+
+    @staticmethod
+    def _is_forbidden_for_scheduled(old_status: str, new_status: str) -> bool:
+        """Whether moving a SCHEDULED post old→new discards its queued slot (R-80).
+
+        Explicit, not a linear rank: a still-pending scheduled post must not be
+        archived or regressed (that loses its slot), but publish progress and
+        recovery transitions are fine. Once published, the source is no longer
+        pending, so normal post-publish lifecycle (→ANALYZED/→ARCHIVED) is allowed.
+        """
+        if old_status == new_status:
+            return False
+        return old_status in _PENDING_STATUSES and new_status in _DESTRUCTIVE_STATUSES
 
     @staticmethod
     def _is_empty(value: Any) -> bool:
@@ -328,6 +367,12 @@ class BacklogClient:
                 attr = attr_map.get(attr, attr)
                 sql_table = _SQL_TABLE_MAP.get(table.lower(), table.lower())
                 setattr(self, attr, PostgresTableProxy(_pg, sql_table))
+
+            # R-41: "scheduled posts are sacred" was enforced only on the legacy
+            # SharePoint path; it went DORMANT when Postgres became primary
+            # (Sprint 65) because this branch returns before the wrap below. Wrap
+            # the Postgres Blueprints proxy so the guard runs in production.
+            self.blueprints = ScheduleGuardedProxy(self.blueprints)
 
             self._sp_proxies = {
                 t: getattr(self, attr_map.get(t.lower(), t.lower()), None) for t in ALL_TABLES
