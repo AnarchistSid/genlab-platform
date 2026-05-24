@@ -5,10 +5,14 @@ root_packages =
 [importlinter:contract:no-upward-imports]
 name = Service modules may depend on interfaces, not vice versa
 type = layers
+# Higher layers may import lower ones, not vice versa. media depends on http
+# (the circuit_breaker resilience primitive) and http never imports media, so
+# media is the higher-level service and must sit ABOVE http (R-69 — the order
+# was backwards). tts stays top; cache/interfaces are the foundational bottom.
 layers =
     genlab_core.tts
-    genlab_core.http
     genlab_core.media
+    genlab_core.http
     genlab_core.ratelimit
     genlab_core.cache
     genlab_core.interfaces
