@@ -23,35 +23,6 @@ _TEST_NICHE = f"test_{uuid.uuid4().hex[:8]}"
 _ALL_TABLES = ("stories", "assets")
 
 
-@pytest.fixture
-def pg_backend():
-    """Create a PostgresBackend connected to local genlab database."""
-    from genlab_core.storage.postgres import PostgresBackend
-
-    backend = PostgresBackend(
-        host="localhost",
-        port=5432,
-        database="genlab",
-        user="genlab",
-        password=os.environ.get("POSTGRES_PASSWORD", ""),
-        min_size=1,
-        max_size=2,
-    )
-    yield backend
-
-    async def cleanup():
-        pool = backend._get_pool()
-        async with pool.acquire() as conn:
-            for tbl in _ALL_TABLES:
-                await conn.execute(f"DELETE FROM {tbl} WHERE niche_id = $1", _TEST_NICHE)
-                await conn.execute(f"DELETE FROM {tbl} WHERE niche_id LIKE 'rls_test_%'")
-        await pool.close()
-
-    backend._ensure_pool()
-    assert backend._loop is not None
-    backend._loop.run_until_complete(cleanup())
-
-
 # ── Stories CRUD ─────────────────────────────────────────────────────
 
 
