@@ -33,7 +33,7 @@ class TestPendingEngagementCRUD:
                 "niche_id": _TEST_NICHE,
                 "post_id": "pe_post_1",
                 "platform": "youtube",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -52,7 +52,7 @@ class TestPendingEngagementCRUD:
                 "niche_id": _TEST_NICHE,
                 "post_id": "pe_upd",
                 "platform": "instagram",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -61,12 +61,12 @@ class TestPendingEngagementCRUD:
             record_id,
             {
                 "attempts": 2,
-                "status": "RETRYING",
+                "status": "retrying",
             },
         )
         record = pg_backend.get("pending_engagement", record_id)
         assert record["fields"]["attempts"] == 2
-        assert record["fields"]["status"] == "RETRYING"
+        assert record["fields"]["status"] == "retrying"
 
     def test_delete(self, pg_backend):
         record_id = pg_backend.create(
@@ -75,7 +75,7 @@ class TestPendingEngagementCRUD:
                 "niche_id": _TEST_NICHE,
                 "post_id": "pe_del",
                 "platform": "x",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -90,7 +90,7 @@ class TestPendingEngagementCRUD:
                 "niche_id": _TEST_NICHE,
                 "post_id": pid,
                 "platform": "facebook",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -117,7 +117,7 @@ class TestPendingFeedbackCRUD:
                 "platform": "youtube",
                 "arm_id": "arm_yt_gaming",
                 "bandit_context": {"day": 1, "hour": 12, "source": "youtube"},
-                "collection_status": "PENDING",
+                "collection_status": "pending",
                 "reward_48h": None,
             },
         )
@@ -126,7 +126,7 @@ class TestPendingFeedbackCRUD:
         record = pg_backend.get("pending_feedback", record_id)
         assert record is not None
         assert record["fields"]["task_id"] == tid
-        assert record["fields"]["collection_status"] == "PENDING"
+        assert record["fields"]["collection_status"] == "pending"
 
     def test_update_reward(self, pg_backend):
         tid = f"task_{uuid.uuid4().hex[:8]}"
@@ -137,19 +137,19 @@ class TestPendingFeedbackCRUD:
                 "task_id": tid,
                 "post_id": "pf_upd",
                 "platform": "instagram",
-                "collection_status": "PENDING",
+                "collection_status": "pending",
             },
         )
         pg_backend.update(
             "pending_feedback",
             record_id,
             {
-                "collection_status": "COLLECTED_48H",
+                "collection_status": "collected_48h",
                 "reward_48h": 0.75,
             },
         )
         record = pg_backend.get("pending_feedback", record_id)
-        assert record["fields"]["collection_status"] == "COLLECTED_48H"
+        assert record["fields"]["collection_status"] == "collected_48h"
         assert record["fields"]["reward_48h"] == 0.75
 
     def test_delete(self, pg_backend):
@@ -161,7 +161,7 @@ class TestPendingFeedbackCRUD:
                 "task_id": tid,
                 "post_id": "pf_del",
                 "platform": "x",
-                "collection_status": "PENDING",
+                "collection_status": "pending",
             },
         )
         pg_backend.delete("pending_feedback", record_id)
@@ -179,7 +179,7 @@ class TestPendingFeedbackCRUD:
                 "post_id": "pf_ctx",
                 "platform": "youtube",
                 "bandit_context": ctx,
-                "collection_status": "PENDING",
+                "collection_status": "pending",
             },
         )
         record = pg_backend.get("pending_feedback", record_id)
@@ -207,7 +207,7 @@ class TestPhase5RLS:
                 "niche_id": niche_a,
                 "post_id": "rls_pe_a",
                 "platform": "instagram",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -217,7 +217,7 @@ class TestPhase5RLS:
                 "niche_id": niche_b,
                 "post_id": "rls_pe_b",
                 "platform": "youtube",
-                "status": "PENDING",
+                "status": "pending",
                 "attempts": 0,
             },
         )
@@ -239,7 +239,7 @@ class TestPhase5RLS:
                 "task_id": f"rls_pf_a_{uuid.uuid4().hex[:8]}",
                 "post_id": "rls_pf_a",
                 "platform": "instagram",
-                "collection_status": "PENDING",
+                "collection_status": "pending",
             },
         )
         pg_backend.create(
@@ -249,7 +249,7 @@ class TestPhase5RLS:
                 "task_id": f"rls_pf_b_{uuid.uuid4().hex[:8]}",
                 "post_id": "rls_pf_b",
                 "platform": "youtube",
-                "collection_status": "PENDING",
+                "collection_status": "pending",
             },
         )
 
