@@ -479,6 +479,11 @@ export function FocusMode() {
   const submitAction = useCallback(
     (action: ReviewAction, issue?: string, notes?: string) => {
       if (!currentItem) return;
+      // R-73: block double-submit on the same blueprint. The on-screen buttons
+      // are disabled while pending, but the keyboard path (a/r/v/s) bypassed
+      // that guard — a fast "a a" could fire two reviews before advance() moved
+      // off the item. Guarding the single chokepoint covers every entry point.
+      if (reviewMutation.isPending) return;
 
       const body: { action: string; issue?: string; notes?: string } = { action };
       if (issue) body.issue = issue;

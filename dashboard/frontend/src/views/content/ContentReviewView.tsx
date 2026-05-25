@@ -308,6 +308,7 @@ export default function ContentReviewView() {
                 onClick={() => handleCardClick(i)}
                 selected={selectedIds.has(bp.id)}
                 onToggleSelect={() => toggleSelect(bp.id)}
+                isReviewing={reviewMutation.isPending}
               />
             ))}
           </div>
@@ -347,6 +348,7 @@ export default function ContentReviewView() {
         onApprove={handleApprove}
         onReject={handleReject}
         onClose={handleOverlayClose}
+        isReviewing={reviewMutation.isPending}
       />
     </div>
   );
