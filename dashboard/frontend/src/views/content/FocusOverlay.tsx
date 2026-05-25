@@ -60,6 +60,9 @@ export interface FocusOverlayProps {
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onClose: () => void;
+  /** R-73: parent's review mutation pending flag — guards the a/r keyboard
+   *  shortcuts + buttons against a double-submit while a review is in flight. */
+  isReviewing?: boolean;
 }
 
 export function FocusOverlay({
@@ -70,6 +73,7 @@ export function FocusOverlay({
   onApprove,
   onReject,
   onClose,
+  isReviewing,
 }: FocusOverlayProps) {
   const bp = isOpen ? blueprints[currentIndex] : undefined;
 
@@ -105,14 +109,16 @@ export function FocusOverlay({
       if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   { e.preventDefault(); goPrev(); return; }
       if (e.key === "ArrowRight" || e.key === "ArrowDown")  { e.preventDefault(); goNext(); return; }
       const bpScheduled = bp?.status === "VISUAL_READY" && bp?.action_taken === "approved" && !!bp?.scheduled_for;
-      if (e.key === "a" && bp && !bpScheduled) { onApprove(bp.id); return; }
-      if (e.key === "s" && bp && !bpScheduled) { approveAndSchedule.mutate(bp.id); return; }
-      if (e.key === "r" && bp && !bpScheduled) { onReject(bp.id); return; }
+      // R-73: the keyboard shortcuts bypassed the isPending guard the Schedule
+      // button has — a fast "a a" / "s s" could double-submit the same blueprint.
+      if (e.key === "a" && bp && !bpScheduled) { if (!isReviewing) onApprove(bp.id); return; }
+      if (e.key === "s" && bp && !bpScheduled) { if (!approveAndSchedule.isPending) approveAndSchedule.mutate(bp.id); return; }
+      if (e.key === "r" && bp && !bpScheduled) { if (!isReviewing) onReject(bp.id); return; }
     }
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [isOpen, goPrev, goNext, onClose, onApprove, onReject, bp, approveAndSchedule]);
+  }, [isOpen, goPrev, goNext, onClose, onApprove, onReject, bp, approveAndSchedule, isReviewing]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -314,6 +320,7 @@ export function FocusOverlay({
                     size="sm"
                     className="border-green-600/30 text-green-400 hover:bg-green-600/15 flex-1"
                     onClick={() => onApprove(bp.id)}
+                    disabled={isReviewing}
                   >
                     <Check className="size-3.5" />
                     Approve
@@ -335,6 +342,7 @@ export function FocusOverlay({
                     size="sm"
                     className="border-red-600/30 text-red-400 hover:bg-red-600/15 flex-1"
                     onClick={() => onReject(bp.id)}
+                    disabled={isReviewing}
                   >
                     <X className="size-3.5" />
                     Reject

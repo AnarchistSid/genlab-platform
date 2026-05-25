@@ -103,6 +103,9 @@ export interface ContentCardProps {
   onClick?: () => void;
   selected?: boolean;
   onToggleSelect?: () => void;
+  /** R-73: parent's review mutation pending flag — disables approve/reject to
+   *  prevent a double-submit while a review is in flight. */
+  isReviewing?: boolean;
 }
 
 export function ContentCard({
@@ -112,6 +115,7 @@ export function ContentCard({
   onClick,
   selected,
   onToggleSelect,
+  isReviewing,
 }: ContentCardProps) {
   const thumbInfo  = getThumbnailInfo(bp);
   const thumb      = thumbInfo?.url ?? null;
@@ -268,6 +272,7 @@ export function ContentCard({
             variant="outline"
             className="border-green-600/30 text-green-400 hover:bg-green-600/15 flex-1"
             onClick={handleApprove}
+            disabled={isReviewing}
           >
             <Check className="size-3" />
             Approve
@@ -277,6 +282,7 @@ export function ContentCard({
             variant="outline"
             className="border-red-600/30 text-red-400 hover:bg-red-600/15 flex-1"
             onClick={handleReject}
+            disabled={isReviewing}
           >
             <X className="size-3" />
             Reject
@@ -286,6 +292,7 @@ export function ContentCard({
             variant="outline"
             className="border-indigo-600/30 text-indigo-400 hover:bg-indigo-600/15 flex-1"
             onClick={handleApproveSchedule}
+            disabled={approveAndSchedule.isPending}
           >
             <Calendar className="size-3" />
             Schedule

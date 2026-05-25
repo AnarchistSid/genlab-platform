@@ -159,6 +159,24 @@ export function ScheduleBoard() {
     [],
   );
 
+  // R-73: shared niche-collision check for BOTH the drag path and the
+  // quick-assign dialog (the dialog previously committed with no warning, so the
+  // same niche could be silently double-booked on a date). Returns true if it's
+  // OK to proceed (no conflict, or the user confirmed the override).
+  const confirmNoNicheCollision = useCallback(
+    (nicheId: string | undefined, targetDate: string, blueprintId: string): boolean => {
+      if (!nicheId) return true;
+      const existingSlots = scheduleByDate.get(targetDate)?.slots ?? [];
+      const conflict = existingSlots.find(
+        (s) => s.niche_id === nicheId && s.status !== "empty" && s.blueprint?.id !== blueprintId,
+      );
+      if (!conflict) return true;
+      const nicheLabel = getNicheInfo(nicheId).label;
+      return window.confirm(`${nicheLabel} already has a post on ${targetDate}. Schedule anyway?`);
+    },
+    [scheduleByDate],
+  );
+
   // Drag handlers
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
@@ -191,20 +209,7 @@ export function ScheduleBoard() {
       if (over.id === sourceSlotId && draggedBp?.scheduled_for?.slice(0, 10) === overData.date) return;
 
       // Conflict detection — warn if same niche already has a post on target date
-      const targetDate = overData.date;
-      const draggedNiche = draggedBp?.niche_id;
-      if (draggedNiche) {
-        const existingSlots = scheduleByDate.get(targetDate)?.slots ?? [];
-        const conflict = existingSlots.find(s =>
-          s.niche_id === draggedNiche && s.status !== "empty" && s.blueprint?.id !== blueprintId
-        );
-        if (conflict) {
-          const nicheLabel = getNicheInfo(draggedNiche).label;
-          if (!window.confirm(`${nicheLabel} already has a post on ${targetDate}. Schedule anyway?`)) {
-            return;
-          }
-        }
-      }
+      if (!confirmNoNicheCollision(draggedBp?.niche_id, overData.date, blueprintId)) return;
 
       reorder.mutate({
         blueprint_id: blueprintId,
@@ -212,7 +217,7 @@ export function ScheduleBoard() {
         to_date: overData.date,
       });
     },
-    [reorder, scheduleByDate],
+    [reorder, confirmNoNicheCollision],
   );
 
   const handleDragCancel = useCallback(() => {
@@ -222,13 +227,21 @@ export function ScheduleBoard() {
   // Quick-assign handler
   const handleQuickAssign = useCallback(
     (blueprintId: string, date: string, slot: string) => {
+      // R-73: apply the same niche-collision warning the drag path has. Resolve
+      // the niche from the unscheduled list (the dialog's source) or any already
+      // scheduled slot, then confirm before booking.
+      const nicheId =
+        unscheduledBlueprints.find((b) => b.id === blueprintId)?.niche_id ??
+        scheduleByDate.get(date)?.slots.find((s) => s.blueprint?.id === blueprintId)?.niche_id;
+      if (!confirmNoNicheCollision(nicheId, date, blueprintId)) return;
+
       reorder.mutate({
         blueprint_id: blueprintId,
         to_slot: slot,
         to_date: date,
       });
     },
-    [reorder],
+    [reorder, confirmNoNicheCollision, unscheduledBlueprints, scheduleByDate],
   );
 
   // -------------------------------------------------------------------------
