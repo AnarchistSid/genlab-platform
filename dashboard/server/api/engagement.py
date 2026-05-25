@@ -30,6 +30,30 @@ _recent_cache: dict = {"data": None, "ts": 0.0}
 _RECENT_CACHE_TTL = 120  # seconds
 
 
+def _recheck_outbound_toxicity(text: str):
+    """R-77: re-screen a dashboard-approved reply before it is posted.
+
+    The queued reply text was only screened when generated; a reviewer can edit
+    it in the UI, so the dispatched text must be re-gated. Returns the
+    ToxicityResult when the model actually ran (caller blocks on ``is_toxic``),
+    or ``None`` when Detoxify isn't installed on this host — in which case the
+    human approval stands (fail-OPEN on infra absence, since a person already
+    vetted it; this is a secondary net, not the primary gate).
+    """
+    try:
+        import importlib.util
+
+        if importlib.util.find_spec("detoxify") is None:
+            logger.warning("Detoxify not installed — skipping approve-time toxicity re-check")
+            return None
+        from genlab_core.engagement.toxicity_gate import ToxicityGate
+
+        return ToxicityGate().check_outbound(text)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Outbound toxicity re-check unavailable: %s", e)
+        return None
+
+
 def _get_client():
     from server.core.graph_sync import get_sync_client
 
@@ -237,6 +261,9 @@ def create_pending_reply():
         "comment_text": data["comment_text"],
         "reply_text": data["reply_text"],
         "author": data.get("author", "unknown"),
+        # R-77: carry the post/media id so the dispatch can pass it as
+        # post_reply(context_id=...) for log traceability.
+        "post_id": data.get("post_id", ""),
         "status": "pending",
         "created_at": datetime.now(UTC).isoformat(),
         "reviewed_at": None,
@@ -254,6 +281,11 @@ def approve_reply(reply_id: str):
     """Approve a queued reply and dispatch it to the platform."""
     replies = _load_pending_replies()
 
+    # R-77: a reviewer may edit the reply in the UI before approving; honor the
+    # edited text from the request body (falls back to the queued text).
+    data = request.get_json(silent=True) or {}
+    edited_text = (data.get("reply_text") or "").strip()
+
     for reply in replies:
         if reply.get("id") == reply_id:
             if reply.get("status") != "pending":
@@ -262,6 +294,28 @@ def approve_reply(reply_id: str):
                     message="Cannot approve a non-pending reply",
                     code=409,
                 )
+            if edited_text:
+                reply["reply_text"] = edited_text
+
+            # R-77: re-gate the (possibly edited) text before it is posted. The
+            # generated text was screened once at creation, but an edit bypasses
+            # that — never dispatch un-rechecked text. Block on a real toxic flag;
+            # if the model is unavailable the human approval stands.
+            tox = _recheck_outbound_toxicity(reply["reply_text"])
+            if tox is not None and tox.is_toxic:
+                reply["status"] = "blocked"
+                reply["block_reason"] = f"toxicity {tox.max_dimension}={tox.max_score:.2f}"
+                reply["reviewed_at"] = datetime.now(UTC).isoformat()
+                _save_pending_replies(replies)
+                return api_error(
+                    error="Reply blocked by toxicity gate",
+                    message=(
+                        f"Edited reply scored toxic "
+                        f"({tox.max_dimension}={tox.max_score:.2f}); not dispatched"
+                    ),
+                    code=422,
+                )
+
             reply["status"] = "approved"
             reply["reviewed_at"] = datetime.now(UTC).isoformat()
 
@@ -274,6 +328,7 @@ def approve_reply(reply_id: str):
                     client.post_reply(
                         parent_id=reply["comment_id"],
                         text=reply["reply_text"],
+                        context_id=reply.get("post_id", ""),
                     )
                     reply["dispatched_at"] = datetime.now(UTC).isoformat()
             except Exception as e:

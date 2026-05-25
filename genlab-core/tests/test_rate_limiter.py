@@ -29,6 +29,22 @@ class TestTokenBucketBurst:
         with pytest.raises(ValueError):
             TokenBucket(rate=-1)
 
+    def test_default_starts_full(self):
+        """R-77: unchanged default — a fresh bucket holds a full burst."""
+        bucket = TokenBucket(rate=10.0, burst=5.0)
+        assert bucket._tokens == 5.0
+
+    def test_initial_tokens_zero_starts_empty(self):
+        """R-77: initial_tokens=0 → no burst available until tokens refill."""
+        bucket = TokenBucket(rate=100.0, burst=5.0, initial_tokens=0.0)
+        assert not bucket.try_acquire()  # empty at construction
+        time.sleep(0.02)  # ~2 tokens at 100/s
+        assert bucket.try_acquire()
+
+    def test_initial_tokens_clamped_to_burst(self):
+        bucket = TokenBucket(rate=10.0, burst=5.0, initial_tokens=999.0)
+        assert bucket._tokens == 5.0
+
 
 class TestTokenBucketRateLimiting:
     def test_refill_after_wait(self):

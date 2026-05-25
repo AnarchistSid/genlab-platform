@@ -1,5 +1,6 @@
 """Tests for engagement status + YouTube quota dashboard endpoints."""
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -23,6 +24,14 @@ def client():
     app.config["TESTING"] = True
     with app.test_client() as c:
         yield c
+
+
+def _csrf(client):
+    """State-changing requests require a CSRF token (review_server._enforce_csrf)."""
+    return {
+        "X-CSRF-Token": client.get("/api/csrf-token").get_json()["csrf_token"],
+        "Content-Type": "application/json",
+    }
 
 
 class TestEngagementStatus:
@@ -127,3 +136,72 @@ class TestYouTubeQuota:
         MockTracker.side_effect = RuntimeError("tracker broken")
         resp = client.get("/api/v1/monitoring/youtube-quota")
         assert resp.status_code == 500
+
+
+class TestApproveReplyReGate:
+    """R-77: a dashboard-approved reply must be re-screened (the text may have
+    been edited) before it is dispatched."""
+
+    @patch("genlab_core.platforms.get_client")
+    @patch("server.api.engagement._recheck_outbound_toxicity")
+    @patch("server.api.engagement._save_pending_replies")
+    @patch("server.api.engagement._load_pending_replies")
+    def test_clean_reply_is_dispatched_with_context_id(
+        self, mock_load, mock_save, mock_tox, mock_get_client, client
+    ):
+        mock_tox.return_value = None  # model unavailable / nothing to flag
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_load.return_value = [
+            {
+                "id": "r1",
+                "status": "pending",
+                "platform": "instagram",
+                "comment_id": "c1",
+                "reply_text": "Great play!",
+                "post_id": "media_42",
+            }
+        ]
+
+        resp = client.post(
+            "/api/v1/engagement/pending-replies/r1/approve",
+            data=json.dumps({}),
+            headers=_csrf(client),
+        )
+        assert resp.status_code == 200
+        mock_client.post_reply.assert_called_once()
+        assert mock_client.post_reply.call_args.kwargs["context_id"] == "media_42"
+
+    @patch("genlab_core.platforms.get_client")
+    @patch("server.api.engagement._recheck_outbound_toxicity")
+    @patch("server.api.engagement._save_pending_replies")
+    @patch("server.api.engagement._load_pending_replies")
+    def test_toxic_edited_reply_is_blocked_not_dispatched(
+        self, mock_load, mock_save, mock_tox, mock_get_client, client
+    ):
+        from genlab_core.engagement.toxicity_gate import ToxicityResult
+
+        mock_tox.return_value = ToxicityResult(
+            is_toxic=True, max_dimension="insult", max_score=0.92, all_scores={}
+        )
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_load.return_value = [
+            {
+                "id": "r1",
+                "status": "pending",
+                "platform": "instagram",
+                "comment_id": "c1",
+                "reply_text": "harmless original",
+            }
+        ]
+
+        resp = client.post(
+            "/api/v1/engagement/pending-replies/r1/approve",
+            data=json.dumps({"reply_text": "you are an idiot"}),
+            headers=_csrf(client),
+        )
+        assert resp.status_code == 422
+        mock_client.post_reply.assert_not_called()
+        # The edited text was re-screened, not the stored one.
+        mock_tox.assert_called_once_with("you are an idiot")

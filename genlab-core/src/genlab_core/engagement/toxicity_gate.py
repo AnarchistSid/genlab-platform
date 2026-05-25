@@ -30,6 +30,11 @@ class ToxicityResult:
 class ToxicityGate:
     INBOUND_THRESHOLD = 0.7
     OUTBOUND_THRESHOLD = 0.3
+    # R-77: inbound harassment can hide in any of these dimensions, not just the
+    # aggregate "toxicity" score. Detoxify "original" also emits "obscene", which
+    # we deliberately exclude — mild profanity is common in comments and isn't
+    # harassment we should refuse to engage with.
+    _INBOUND_TOXIC_DIMS = ("toxicity", "severe_toxicity", "threat", "insult", "identity_attack")
 
     def __init__(self) -> None:
         self._model: Any = None
@@ -52,8 +57,15 @@ class ToxicityGate:
             scores = self._get_model().predict(text)
             max_dim = max(scores, key=scores.get)
             max_val = scores[max_dim]
+            # R-77: gate on ANY harassment-relevant dimension, not just the
+            # aggregate "toxicity" — a threat/insult/identity attack can score
+            # high while "toxicity" stays under the line, and the bot would then
+            # earnestly reply to abuse.
+            is_toxic = any(
+                scores.get(dim, 0.0) > self.INBOUND_THRESHOLD for dim in self._INBOUND_TOXIC_DIMS
+            )
             return ToxicityResult(
-                is_toxic=scores.get("toxicity", 0.0) > self.INBOUND_THRESHOLD,
+                is_toxic=is_toxic,
                 max_dimension=max_dim,
                 max_score=max_val,
                 all_scores=dict(scores),
