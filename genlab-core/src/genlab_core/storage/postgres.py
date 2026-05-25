@@ -192,6 +192,14 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "score",
         "source",
         "summary",
+        # R-63: these are REAL columns on the stories table (migration
+        # a1b2c3d4e5f6) but were absent from this map — so writes landed in the
+        # ``extra`` JSONB while reads preferred the (NULL) real column, silently
+        # dropping the value. The test-storage CI job caught this on video_id.
+        "source_name",
+        "source_type",
+        "video_id",
+        "video_url",
     },
     "assets": {
         "niche_id",
