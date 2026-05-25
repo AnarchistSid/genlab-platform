@@ -304,6 +304,18 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "as_of_date",
         "error_log",
     },
+    # R-63: ab_tests is backend-accessed (BacklogClient.create_ab_test/get_ab_tests
+    # via self.ab_tests → PostgresBackend.create/find) but was absent from this
+    # map, so its real columns (test_name/variant_a/variant_b/status) would write
+    # to `extra` and read back NULL — the same silent data-loss class as the
+    # video_id bug. These match the live table.
+    "ab_tests": {
+        "niche_id",
+        "test_name",
+        "variant_a",
+        "variant_b",
+        "status",
+    },
     "affiliate_clicks": {
         "niche_id",
         "product_id",
