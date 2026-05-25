@@ -168,6 +168,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "platform_publish_status",
         "video_id",
         "video_url",
+        "source_url",
         "priority_score",
         "action_taken",
         "reviewed_at",
@@ -257,6 +258,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "platform",
         "status",
         "attempts",
+        "scheduled_at",
     },
     "pending_feedback": {
         "niche_id",
@@ -286,6 +288,7 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "tier",
         "weight",
         "status",
+        "last_fetched",
     },
     "monetisationprogress": {
         "niche_id",
