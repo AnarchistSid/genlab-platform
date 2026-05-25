@@ -108,12 +108,34 @@ jobs:
       - run: uv run --package genlab-core alembic -c genlab-core/alembic.ini upgrade head
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
-      # Exercise postgres.py CRUD + RLS against the migrated schema.
+      # Create a non-superuser app role so the RLS isolation tests are
+      # meaningful — Postgres superusers (the docker image's POSTGRES_USER) and
+      # table owners-without-FORCE bypass row-level security. The app connects
+      # as a non-superuser in prod, so the tests must too.
+      - name: Create non-superuser app role
+        run: |
+          uv run --package genlab-core python - <<'PY'
+          import os, psycopg
+          su = os.environ["POSTGRES_PASSWORD"]
+          with psycopg.connect(f"postgresql://genlab:{su}@localhost:5432/genlab", autocommit=True) as conn:
+              cur = conn.cursor()
+              cur.execute("DROP ROLE IF EXISTS genlab_app")
+              cur.execute("CREATE ROLE genlab_app LOGIN PASSWORD 'app_test_password'")
+              cur.execute("GRANT USAGE ON SCHEMA public TO genlab_app")
+              cur.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO genlab_app")
+              cur.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO genlab_app")
+          PY
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
+      # Exercise postgres.py CRUD + RLS against the migrated schema, AS the
+      # non-superuser role (so RLS actually filters).
       - run: uv run --package genlab-core pytest genlab-core/tests/storage/ -q
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
+          GENLAB_TEST_PG_USER: genlab_app
+          GENLAB_TEST_PG_PASSWORD: app_test_password
           GENLAB_USE_POSTGRES: "true"
-          DATABASE_URL: postgresql://genlab:${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}@localhost:5432/genlab
+          DATABASE_URL: postgresql://genlab_app:app_test_password@localhost:5432/genlab
 
   secret-scan:
     runs-on: ubuntu-latest

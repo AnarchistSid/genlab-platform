@@ -31,12 +31,18 @@ def pg_backend(request):
     """
     from genlab_core.storage.postgres import PostgresBackend
 
+    # The RLS isolation tests are only meaningful when connecting as a
+    # NON-superuser, non-owner role — Postgres superusers (and table owners
+    # without FORCE) bypass row-level security entirely. CI creates a dedicated
+    # ``genlab_app`` role and points these vars at it; locally they default to
+    # the plain ``genlab`` superuser (CRUD still validates, RLS may not isolate).
     backend = PostgresBackend(
-        host="localhost",
-        port=5432,
-        database="genlab",
-        user="genlab",
-        password=os.environ.get("POSTGRES_PASSWORD", ""),
+        host=os.environ.get("GENLAB_TEST_PG_HOST", "localhost"),
+        port=int(os.environ.get("GENLAB_TEST_PG_PORT", "5432")),
+        database=os.environ.get("GENLAB_TEST_PG_DB", "genlab"),
+        user=os.environ.get("GENLAB_TEST_PG_USER", "genlab"),
+        password=os.environ.get("GENLAB_TEST_PG_PASSWORD")
+        or os.environ.get("POSTGRES_PASSWORD", ""),
         min_size=1,
         max_size=2,
     )
