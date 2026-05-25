@@ -36,14 +36,24 @@ class TokenBucket:
     Args:
         rate: Token refill rate in tokens-per-second.
         burst: Maximum burst capacity (bucket size). Defaults to rate * 2.
+        initial_tokens: Tokens the bucket starts with. Defaults to a full bucket
+            (``burst``) — the behavior every existing caller relies on. R-77: a
+            caller that must NOT permit an initial burst (e.g. the engagement
+            rate limiter, where a freshly-started worker should not be able to
+            fire a whole hour's replies in one tick) passes ``0.0`` to start
+            empty and earn tokens through elapsed time.
     """
 
-    def __init__(self, rate: float, burst: float | None = None) -> None:
+    def __init__(
+        self, rate: float, burst: float | None = None, initial_tokens: float | None = None
+    ) -> None:
         if rate <= 0:
             raise ValueError(f"rate must be positive, got {rate}")
         self._rate = rate
         self._burst = burst if burst is not None else rate * 2.0
-        self._tokens = self._burst
+        self._tokens = (
+            self._burst if initial_tokens is None else max(0.0, min(initial_tokens, self._burst))
+        )
         self._last_refill = time.monotonic()
         self._lock = threading.Lock()
 

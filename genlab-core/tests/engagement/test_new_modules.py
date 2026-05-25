@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 
@@ -97,17 +98,23 @@ class TestTiming:
 
 
 class TestEngagementRateLimiter:
-    def test_acquire_succeeds_when_under_limit(self):
+    def test_starts_empty_then_refills(self):
+        """R-77: a fresh limiter has NO burst — it earns tokens over time, so a
+        restarted worker can't dump a whole hour's replies at once."""
         from genlab_core.engagement.rate_limiter import EngagementRateLimiter
 
-        rl = EngagementRateLimiter({"youtube": 100})
+        rl = EngagementRateLimiter({"youtube": 360_000})  # 100 tokens/sec
+        assert rl.acquire("youtube") is False  # empty at construction
+        time.sleep(0.05)
         assert rl.acquire("youtube") is True
 
-    def test_unknown_platform_allows_through(self):
+    def test_unknown_platform_fails_closed(self):
+        """R-77: an unknown platform has no configured cap → deny (was fail-open,
+        an unbounded unthrottled reply channel)."""
         from genlab_core.engagement.rate_limiter import EngagementRateLimiter
 
         rl = EngagementRateLimiter({"youtube": 10})
-        assert rl.acquire("unknown_platform") is True
+        assert rl.acquire("unknown_platform") is False
 
 
 class TestPersonaSchema:

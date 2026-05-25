@@ -65,13 +65,31 @@ class TestInboundCheck:
         result = gate.check_inbound("slightly over")
         assert result.is_toxic
 
-    def test_inbound_uses_toxicity_key_not_max(self):
-        """Inbound check uses 'toxicity' key specifically, not max across all dimensions."""
+    def test_inbound_flags_high_insult_even_if_toxicity_low(self):
+        """R-77: harassment can score high on insult/threat while the aggregate
+        'toxicity' dim stays low. Gating on 'toxicity' alone let targeted abuse
+        through; check_inbound now flags ANY harassment-relevant dimension."""
         gate = ToxicityGate()
         gate._model = MagicMock()
-        # insult is high but toxicity is low -- should pass inbound
         gate._model.predict.return_value = {"toxicity": 0.3, "insult": 0.9}
-        result = gate.check_inbound("snarky but not toxic")
+        result = gate.check_inbound("low aggregate, high insult")
+        assert result.is_toxic
+
+    def test_inbound_flags_high_threat(self):
+        """A threat scores low on 'toxicity' but must still be refused (R-77)."""
+        gate = ToxicityGate()
+        gate._model = MagicMock()
+        gate._model.predict.return_value = {"toxicity": 0.2, "threat": 0.85}
+        result = gate.check_inbound("veiled threat")
+        assert result.is_toxic
+
+    def test_inbound_ignores_mere_obscenity(self):
+        """R-77: 'obscene' is deliberately NOT a blocking dim — mild profanity is
+        common in comments and isn't harassment we should refuse to engage."""
+        gate = ToxicityGate()
+        gate._model = MagicMock()
+        gate._model.predict.return_value = {"toxicity": 0.2, "obscene": 0.95, "insult": 0.1}
+        result = gate.check_inbound("damn that was a sick play")
         assert not result.is_toxic
 
     def test_result_max_dimension_is_highest_scoring(self):
