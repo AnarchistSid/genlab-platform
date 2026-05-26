@@ -1137,6 +1137,13 @@ class PushToBacklog:
                         "format": "reel",
                         "niche_id": niche_id,
                         "arm_id": arm_id,
+                        # Granular origin (espn_news, youtube_trending, scorebat,
+                        # rss, twitch_trending, ...). Previously only the derived
+                        # `topic` was stored, so blueprints.source was always
+                        # NULL — blinding the bandit's source feature and any
+                        # source->performance analysis. `source` is a promoted
+                        # column, so this lands in the real column.
+                        "source": story.get("source", ""),
                         "topic": _normalize_topic(story.get("source", niche_id)),
                         "angle": (story.get("summary") or title)[:200],
                     }

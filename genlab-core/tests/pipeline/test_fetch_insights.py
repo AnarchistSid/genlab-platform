@@ -3,7 +3,10 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-from genlab_core.pipeline.stages.fetch_insights import FetchInsights
+from genlab_core.pipeline.stages.fetch_insights import (
+    FetchInsights,
+    normalize_publishing_metrics,
+)
 
 
 def _make_pub_record(post_id, platform, niche_id, hours_ago=12, metrics_fetched=""):
@@ -47,6 +50,30 @@ class TestFetchInsightsSharePoint:
         assert stats["skipped"] == 0
         # Should have queried SharePoint
         mock_client.publishing_analytics.all.assert_called_once()
+
+    def test_writes_raw_metrics_back_to_publishing_analytics(self):
+        """Fetched metrics must be persisted to publishing_analytics columns,
+        not just the metrics_fetched timestamp (else views/likes stay 0)."""
+        mock_client = MagicMock()
+        mock_client.publishing_analytics.all.return_value = [
+            _make_pub_record("yt_abc123", "youtube", "gaming", hours_ago=12),
+        ]
+        context = {
+            "niche_id": "gaming",
+            "backlog_client": mock_client,
+            "stories": [],
+            "niche_config": {},
+        }
+        stage = FetchInsights()
+        stage._fetch_platform = MagicMock(return_value={"views": 500, "likes": 40, "comments": 7})
+        stage.execute(context)
+
+        mock_client.publishing_analytics.update.assert_called_once()
+        _rec_id, payload = mock_client.publishing_analytics.update.call_args[0]
+        assert payload["views"] == 500
+        assert payload["likes"] == 40
+        assert payload["comments"] == 7
+        assert payload["metrics_fetched"]  # timestamp still set
 
     def test_skips_already_fetched(self):
         """Posts with metrics_fetched set should be skipped."""
@@ -187,3 +214,40 @@ class TestFetchInsightsSharePoint:
         stage = FetchInsights()
         result = stage.execute(context)
         assert result["run_stats"]["insights"]["skipped"] == 1
+
+
+class TestNormalizePublishingMetrics:
+    """Per-platform metric keys must collapse onto canonical columns."""
+
+    def test_youtube_keys(self):
+        out = normalize_publishing_metrics({"views": 500, "likes": 40, "comments": 7})
+        assert out == {"views": 500, "likes": 40, "comments": 7, "shares": 0, "saves": 0}
+
+    def test_instagram_keys(self):
+        # IG uses reach (->views) and saved (->saves)
+        out = normalize_publishing_metrics(
+            {"reach": 1200, "likes": 90, "comments": 12, "shares": 3, "saved": 25}
+        )
+        assert out["views"] == 1200
+        assert out["saves"] == 25
+        assert out["shares"] == 3
+
+    def test_facebook_keys(self):
+        # FB uses reactions (->likes), has no views
+        out = normalize_publishing_metrics({"reactions": 55, "comments": 4, "shares": 8})
+        assert out["likes"] == 55
+        assert out["views"] == 0
+        assert out["shares"] == 8
+
+    def test_twitter_keys(self):
+        # X uses impressions (->views), retweets (->shares), replies (->comments)
+        out = normalize_publishing_metrics(
+            {"impressions": 3000, "likes": 20, "retweets": 6, "replies": 2}
+        )
+        assert out["views"] == 3000
+        assert out["shares"] == 6
+        assert out["comments"] == 2
+
+    def test_non_numeric_and_missing_safe(self):
+        out = normalize_publishing_metrics({"views": None, "likes": "oops"})
+        assert out == {"views": 0, "likes": 0, "comments": 0, "shares": 0, "saves": 0}

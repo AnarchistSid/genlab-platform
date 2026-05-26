@@ -106,6 +106,33 @@ class TestPushToBacklogShared(unittest.TestCase):
         self.assertEqual(result["run_stats"]["backlog_push"]["blueprints_pushed"], 1)
 
     @patch("genlab_core.pipeline.stages.push_to_backlog.settings")
+    def test_push_to_backlog_persists_source_on_blueprint(self, mock_settings):
+        """The granular source must be written to the blueprint record.
+
+        Regression guard: blueprints.source was previously never written (only
+        the derived `topic` was), so the column was 100% NULL — blinding the
+        bandit's source feature and source->performance analysis.
+        """
+        mock_settings.azure_tenant_id = "t"
+        mock_settings.azure_client_id = "c"
+        mock_settings.azure_client_secret = "s"
+        mock_settings.sharepoint_site_id = "sp"
+
+        stage = self._make_stage()
+        mock_client = MagicMock()
+        mock_client.find_story_by_story_id.return_value = None
+        mock_client.stories.create.return_value = {"id": "rec123"}
+        mock_client.blueprints.all.return_value = []
+        mock_client.blueprints.create.return_value = {"id": "bp456"}
+        stage._client = mock_client
+
+        context = {"niche_id": "sports", "stories": [self._make_story()]}
+        stage.execute(context)
+
+        bp_create_call = mock_client.blueprints.create.call_args[0][0]
+        self.assertEqual(bp_create_call["source"], "test_source")
+
+    @patch("genlab_core.pipeline.stages.push_to_backlog.settings")
     def test_push_to_backlog_creates_story_with_correct_niche_id(self, mock_settings):
         """Story creation includes the niche_id from context for each niche."""
         mock_settings.azure_tenant_id = "t"

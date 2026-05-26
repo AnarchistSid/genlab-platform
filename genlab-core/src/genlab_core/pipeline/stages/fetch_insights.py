@@ -33,6 +33,32 @@ MIN_DELAY_HOURS = 6
 MAX_WARM_DAYS = 7
 
 
+def normalize_publishing_metrics(metrics: dict[str, Any]) -> dict[str, int]:
+    """Collapse per-platform metric keys onto the publishing_analytics columns.
+
+    The platform fetchers return inconsistent keys: IG uses ``reach``/``saved``,
+    Facebook uses ``reactions``, X uses ``impressions``/``retweets``. The
+    ``publishing_analytics`` table has canonical ``views/likes/comments/
+    shares/saves`` columns, so map each platform's vocabulary onto them. Used
+    to persist raw metrics back into publishing_analytics (previously only the
+    composite landed in the ``analytics`` table, leaving these columns at 0).
+    """
+
+    def _int(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    return {
+        "views": _int(metrics.get("views") or metrics.get("reach") or metrics.get("impressions")),
+        "likes": _int(metrics.get("likes") or metrics.get("reactions")),
+        "comments": _int(metrics.get("comments") or metrics.get("replies")),
+        "shares": _int(metrics.get("shares") or metrics.get("retweets")),
+        "saves": _int(metrics.get("saves") or metrics.get("saved")),
+    }
+
+
 class FetchInsights:
     """Fetch post-publish engagement metrics from platform APIs.
 
@@ -131,15 +157,21 @@ class FetchInsights:
                             "[FetchInsights] Analytics upsert failed for %s",
                             post_id,
                         )
-                    # Mark as fetched in publishing_analytics
+                    # Persist raw metrics + fetched timestamp into
+                    # publishing_analytics. Previously only the composite was
+                    # written (to the analytics table) and these columns stayed
+                    # at 0, so no post could be traced to its real engagement.
                     try:
                         client.publishing_analytics.update(
                             record["id"],
-                            {"metrics_fetched": now.isoformat()},
+                            {
+                                "metrics_fetched": now.isoformat(),
+                                **normalize_publishing_metrics(metrics),
+                            },
                         )
                     except Exception:
                         logger.warning(
-                            "[FetchInsights] Failed to mark %s as fetched",
+                            "[FetchInsights] Failed to write metrics for %s",
                             post_id,
                         )
                     stats["fetched"] += 1
