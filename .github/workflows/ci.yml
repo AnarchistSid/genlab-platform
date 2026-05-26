@@ -80,7 +80,10 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector image (superset of postgres:16) so the migration chain's
+        # product_embeddings table (a `vector(1536)` column + ivfflat index) is
+        # actually created and validated here, not skipped.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: genlab
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
