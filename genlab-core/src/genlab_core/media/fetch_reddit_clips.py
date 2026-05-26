@@ -45,6 +45,14 @@ _REDDIT_PROXIES = (
 # selection isn't biased toward midnight-of-yesterday posts.
 _REDDIT_TIMEOUT = 15  # seconds
 
+# Upvote→view equivalence for the cross-source velocity proxy. Reddit upvotes
+# and YouTube views are different scales; the original 100× made a 1000-upvote
+# post hit velocity ~20,000 and systematically dwarf real YouTube clips in the
+# merged ranking. 40× keeps a strong Reddit clip in YouTube's range (so it
+# competes fairly without dominating). A rough calibration, not ground truth —
+# tune here if Reddit over/under-represents in the selected posts.
+_UPVOTE_VIEW_EQUIVALENCE = 40.0
+
 
 def _is_video_post(post: dict) -> tuple[bool, str]:
     """Return (is_video, download_url).
@@ -127,11 +135,10 @@ def _normalise_post(post: dict, niche_id: str, subreddit: str) -> dict[str, Any]
     now = datetime.now(UTC)
     age_hours = max(0.1, (now - published_at).total_seconds() / 3600)
 
-    # Velocity proxy similar to TrendingVideoFetcher's view_velocity:
-    # upvotes per hour scaled to be comparable with YouTube's
-    # view_velocity (which is views/hr in the 100-50000 range).
-    # 1 upvote ~= 100 views as a rough engagement-equivalence.
-    view_velocity = (score * 100.0) / age_hours
+    # Velocity proxy comparable to TrendingVideoFetcher's view_velocity
+    # (views/hr). Calibrated via _UPVOTE_VIEW_EQUIVALENCE so Reddit doesn't
+    # systematically out-rank YouTube clips in the merged candidate pool.
+    view_velocity = (score * _UPVOTE_VIEW_EQUIVALENCE) / age_hours
 
     from genlab_core.cache.stable_ids import generate_story_id
 
@@ -152,7 +159,7 @@ def _normalise_post(post: dict, niche_id: str, subreddit: str) -> dict[str, Any]
         # the summary so downstream attribution still works.
         "summary": permalink,
         "channel_name": f"r/{subreddit}",
-        "view_count": score * 100,  # synth proxy for the velocity field
+        "view_count": int(score * _UPVOTE_VIEW_EQUIVALENCE),  # synth proxy, calibrated
         "view_velocity": round(view_velocity, 1),
         "duration_seconds": int(
             data.get("media", {}).get("reddit_video", {}).get("duration", 0) or 0

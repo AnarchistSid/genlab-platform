@@ -238,6 +238,12 @@ MIN_VIEW_VELOCITY: dict[str, float] = {
     "ai_creators": 150,
 }
 
+# Baseline velocity assigned to UN-ENRICHED RSS-fallback videos (quota-exhaustion
+# path; view_count=0, no verified traction). Kept low on purpose so a real
+# measured-traction candidate always out-ranks them — they're a last resort, not
+# a fast lane for official-account marketing. (Was an effective ~1800.)
+_RSS_FALLBACK_BASE_VELOCITY = 400.0
+
 MAX_DURATION_SECONDS = 600  # 10 minutes — yt-dlp trims to reel length at render
 MIN_DURATION_SECONDS = 15  # 15 seconds
 
@@ -797,8 +803,15 @@ class TrendingVideoFetcher:
                     pub = datetime.now(UTC) - timedelta(hours=12)
                 # Estimate velocity from channel weight: high-weight channels
                 # (NBA, NFL, Premier League) get higher estimated velocity.
+                # These are UN-ENRICHED subscribed-channel videos (view_count=0)
+                # surfaced only when YouTube quota is exhausted — they have NO
+                # verified traction. The previous 2000× fabricated ~1800 velocity,
+                # which sailed past every gate and flooded the queue with official-
+                # account marketing. Use a conservative baseline so they remain
+                # available as a last resort but never out-rank a real-traction
+                # candidate (which carries a measured view_velocity).
                 channel_weight = meta.get("channel_weight", 0.5)
-                estimated_velocity = 2000.0 * channel_weight  # e.g., 1800 for 0.9 weight
+                estimated_velocity = _RSS_FALLBACK_BASE_VELOCITY * channel_weight
                 detailed.append(
                     TrendingVideo(
                         video_id=vid_id,
