@@ -91,13 +91,34 @@ class TestPendingFeedbackTask:
 
         assert fields["Title"] == "instagram__ig_123"
         assert fields["platform"] == "instagram"
-        assert fields["post_id"] == "ig_123"
+        # post_id is stored as platform:native so it joins analytics.post_id
+        assert fields["post_id"] == "instagram:ig_123"
         assert fields["content_type"] == "viral_moment"
         assert fields["hook_type"] == "You won't believe this play"
         assert fields["collection_status"] == "awaiting_6h"
         assert fields["arm_id"] == "viral_moment__instagram"
         assert '"score": 0.8' in fields["bandit_context"]
         assert fields["niche_id"] == "gaming"  # default
+
+    def test_post_id_prefixed_per_platform(self):
+        """post_id is stored as platform:native for analytics joinability."""
+        task = PendingFeedbackTask(
+            content_id="s1",
+            platform="youtube",
+            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
+            platform_post_id="abc123",
+        )
+        assert task.to_sharepoint_fields()["post_id"] == "youtube:abc123"
+
+    def test_post_id_empty_stays_empty(self):
+        """A missing native id must not produce a dangling 'platform:' prefix."""
+        task = PendingFeedbackTask(
+            content_id="s1",
+            platform="youtube",
+            published_at=datetime(2026, 3, 7, 10, 0, tzinfo=UTC),
+            platform_post_id="",
+        )
+        assert task.to_sharepoint_fields()["post_id"] == ""
 
     def test_hook_fields_serialised(self):
         task = PendingFeedbackTask(

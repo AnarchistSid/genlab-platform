@@ -87,7 +87,14 @@ class PendingFeedbackTask(BaseModel):
             # Postgres promoted columns (lowercase)
             "niche_id": self.niche_id,
             "task_id": f"{self.content_id}__{self.platform}",
-            "post_id": self.platform_post_id,
+            # Stored as ``platform:native`` to match analytics.post_id so reward
+            # can be joined to real engagement. The live metric fetch strips the
+            # prefix (metric_collector.fetch_platform_metrics), and the store
+            # round-trips post_id -> platform_post_id consistently, so this is
+            # backward-compatible with the reward pipeline.
+            "post_id": (
+                f"{self.platform}:{self.platform_post_id}" if self.platform_post_id else ""
+            ),
             "platform": self.platform,
             "arm_id": self.bandit_arm or "",
             "bandit_context": (_json.dumps(self.bandit_context) if self.bandit_context else ""),
