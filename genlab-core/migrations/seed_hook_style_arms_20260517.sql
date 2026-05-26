@@ -6,13 +6,12 @@
 -- these and Thompson-samples a style each time a hook is generated;
 -- the chosen style becomes a one-line hint in the LLM system prompt.
 --
--- Naming: arm_id has format "style:{niche}:{name}" because the
--- bandit_arms table has UNIQUE(arm_id), not UNIQUE(niche_id, arm_id).
--- The niche segment in the arm_id is redundant with the niche_id
--- column but required to avoid collisions across niches. Tracked as
--- a follow-up schema migration.
+-- Naming: arm_id has format "style:{niche}:{name}". Migration i9d0e1f2g3h4
+-- replaced the original UNIQUE(arm_id) with UNIQUE(niche_id, arm_id), so the
+-- ON CONFLICT target below is the composite key. (The niche segment in arm_id
+-- predates that migration and is now redundant with niche_id, but harmless.)
 --
--- Idempotent: ON CONFLICT (arm_id) DO NOTHING means re-running is a
+-- Idempotent: ON CONFLICT (niche_id, arm_id) DO NOTHING means re-running is a
 -- no-op. Doesn't reset alpha/beta on existing rows.
 --
 -- Usage on production (Hetzner):
@@ -50,7 +49,7 @@ VALUES
     ('anime',       'style:anime:controversy',       1.0, 1.0, 0, '{}'::jsonb),
     ('anime',       'style:anime:revelation',        1.0, 1.0, 0, '{}'::jsonb),
     ('anime',       'style:anime:comparison',        1.0, 1.0, 0, '{}'::jsonb)
-ON CONFLICT (arm_id) DO NOTHING;
+ON CONFLICT (niche_id, arm_id) DO NOTHING;
 
 \echo === Seeded style arms per niche ===
 SELECT niche_id, COUNT(*) FILTER (WHERE arm_id LIKE 'style:%') AS style_arms

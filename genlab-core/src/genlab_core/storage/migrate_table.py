@@ -48,15 +48,19 @@ SP_LIST_TO_PG_TABLE: dict[str, str] = {
 # Reverse mapping: postgres table → SharePoint list name
 PG_TABLE_TO_SP_LIST: dict[str, str] = {v: k for k, v in SP_LIST_TO_PG_TABLE.items()}
 
-# The unique business key per table used for ON CONFLICT.
-# Tables without a unique business key use the SharePoint record ID stored
-# in extra->'sp_id' — we add a fallback dedup check for those.
-TABLE_UNIQUE_KEY: dict[str, str | None] = {
+# The unique business key per table used for ON CONFLICT. A value may be a
+# single column or a tuple of columns (a composite key). Tables without a unique
+# business key use the SharePoint record ID stored in extra->'sp_id' — we add a
+# fallback dedup check for those.
+TABLE_UNIQUE_KEY: dict[str, str | tuple[str, ...] | None] = {
     "blueprints": "candidate_id",
     "stories": "story_id",
     "assets": "asset_id",
     "content_memory": "content_hash",
-    "bandit_arms": "arm_id",
+    # Composite since migration i9d0e1f2g3h4 dropped the single-column
+    # UNIQUE(arm_id) for UNIQUE(niche_id, arm_id). ON CONFLICT (arm_id) would
+    # raise 42P10 ("no matching unique constraint") against the current schema.
+    "bandit_arms": ("niche_id", "arm_id"),
     "pending_feedback": "task_id",
     "templates": "template_id",
     # These tables have no unique business key column:
@@ -65,6 +69,18 @@ TABLE_UNIQUE_KEY: dict[str, str | None] = {
     "analytics": None,
     "pending_engagement": None,
 }
+
+
+def _unique_key_cols(table: str) -> tuple[str, ...] | None:
+    """Return the unique-business-key columns for ``table`` as a tuple.
+
+    Normalizes the single-column and composite-key forms in TABLE_UNIQUE_KEY so
+    the ON CONFLICT target and the existence check handle both uniformly.
+    """
+    key = TABLE_UNIQUE_KEY.get(table)
+    if key is None:
+        return None
+    return (key,) if isinstance(key, str) else tuple(key)
 
 
 def flatten_sp_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -167,11 +183,12 @@ def _build_insert_sql(
     placeholders = [f"${i + 2}" for i in range(len(col_names))]
     values = [cols[c] for c in col_names]
 
-    unique_key = TABLE_UNIQUE_KEY.get(table)
+    key_cols = _unique_key_cols(table)
 
-    if unique_key and unique_key in cols:
-        # Use ON CONFLICT on the unique business key
-        conflict_clause = f"ON CONFLICT ({_quote_col(unique_key)}) DO NOTHING"
+    if key_cols and all(c in cols for c in key_cols):
+        # ON CONFLICT on the unique business key (single or composite).
+        target = ", ".join(_quote_col(c) for c in key_cols)
+        conflict_clause = f"ON CONFLICT ({target}) DO NOTHING"
     else:
         # No unique key — use the primary key 'id' to avoid outright
         # duplicates, but since we generate a new UUID each time we need
@@ -194,12 +211,13 @@ async def _record_exists(conn, table: str, record: dict[str, Any]) -> bool:
     For tables without a unique key, checks the extra JSONB for sp_id match.
     """
     table = _validate_table(table)
-    unique_key = TABLE_UNIQUE_KEY.get(table)
+    key_cols = _unique_key_cols(table)
 
-    if unique_key and unique_key in record:
+    if key_cols and all(c in record for c in key_cols):
+        where = " AND ".join(f"{_quote_col(c)} = ${i + 1}" for i, c in enumerate(key_cols))
         row = await conn.fetchrow(
-            f"SELECT 1 FROM {table} WHERE {_quote_col(unique_key)} = $1",
-            record[unique_key],
+            f"SELECT 1 FROM {table} WHERE {where}",
+            *[record[c] for c in key_cols],
         )
         return row is not None
 
