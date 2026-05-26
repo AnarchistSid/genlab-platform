@@ -1348,6 +1348,7 @@ class FetchTrendingVideos:
             niche_id,
             velocity_threshold=scoring_cfg.get("velocity_threshold"),
             min_composite=scoring_cfg.get("min_composite_score"),
+            min_view_count=scoring_cfg.get("min_view_count"),
         )
 
         # Build per-video trend multipliers from Google Trends (if available)

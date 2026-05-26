@@ -242,3 +242,70 @@ class TestScoreAndRank:
         assert len(results) == 2  # viral + decent pass
         assert results[0].video_id == "viral"
         assert results[1].video_id == "decent"
+
+
+# ---------------------------------------------------------------------------
+# Engagement-aware ranking + absolute view-count floor (selection quality)
+# ---------------------------------------------------------------------------
+
+
+class TestEngagement:
+    def test_no_engagement_data_is_neutral(self):
+        """Backward-compat: with no view_count/like_count, engagement is 1.0 and
+        the composite matches the old velocity×trend×relevance formula."""
+        scorer = CompositeScorer("gaming")
+        vs = scorer.score(_video(view_velocity=1500.0), trend_multiplier=1.0)
+        assert vs.engagement_score == 1.0
+        assert vs.composite == pytest.approx(1.0)
+
+    def test_high_engagement_outranks_low_at_equal_velocity(self):
+        """A clip people actually liked beats a raw view-spike with few likes."""
+        scorer = CompositeScorer("gaming", min_composite=0.0)
+        engaged = _video(
+            "engaged", view_velocity=1500.0, view_count=100_000, like_count=4_000
+        )  # 4%
+        flat = _video("flat", view_velocity=1500.0, view_count=100_000, like_count=300)  # 0.3%
+        results = scorer.score_and_rank([flat, engaged])
+        assert results[0].video_id == "engaged"
+        assert results[0].composite > results[1].composite
+
+    def test_zero_likes_halves_but_does_not_kill(self):
+        """Engagement floor (0.5): a zero-like clip keeps half its composite."""
+        scorer = CompositeScorer("gaming")
+        vs = scorer.score(_video(view_velocity=1500.0, view_count=100_000, like_count=0))
+        assert vs.engagement_score == pytest.approx(0.5)
+        assert vs.composite == pytest.approx(0.5)  # 1.0 × 0.5
+        assert vs.passed is True  # 0.5 ≥ 0.35
+
+    def test_engagement_saturates_at_target_ratio(self):
+        scorer = CompositeScorer("gaming")
+        # 3% like ratio = target → full engagement; 6% adds nothing more.
+        at_target = scorer.score(_video(view_velocity=1500.0, view_count=100_000, like_count=3_000))
+        above = scorer.score(_video(view_velocity=1500.0, view_count=100_000, like_count=6_000))
+        assert at_target.engagement_score == pytest.approx(1.0)
+        assert above.engagement_score == pytest.approx(1.0)
+
+
+class TestViewCountFloor:
+    def test_known_low_view_count_rejected(self):
+        """A recency-gamed clip (high velocity, trivial reach) is floored out."""
+        scorer = CompositeScorer("gaming")  # min_view_count = 5000
+        vs = scorer.score(_video(view_velocity=5000.0, view_count=200, like_count=10))
+        assert vs.composite > scorer.min_composite  # would pass on score alone
+        assert vs.passed is False  # but floored on absolute reach
+
+    def test_view_count_above_floor_passes(self):
+        scorer = CompositeScorer("gaming")
+        vs = scorer.score(_video(view_velocity=1500.0, view_count=50_000, like_count=1_500))
+        assert vs.passed is True
+
+    def test_zero_view_count_is_unknown_not_floored(self):
+        """view_count=0/absent = unknown → not floored, falls back to velocity."""
+        scorer = CompositeScorer("gaming")
+        vs = scorer.score(_video(view_velocity=1500.0, view_count=0))
+        assert vs.passed is True
+
+    def test_floor_is_per_niche(self):
+        assert CompositeScorer("gaming").min_view_count == 5000
+        assert CompositeScorer("anime").min_view_count == 2000
+        assert CompositeScorer("gaming", min_view_count=99).min_view_count == 99
