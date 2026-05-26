@@ -2,7 +2,12 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector image (superset of postgres:16) — required for the
+    # product_embeddings table (vector(1536) + ivfflat) used by the affiliate
+    # embedding matcher. Migration n4i5j6k7l8m9 skips that table when pgvector
+    # is unavailable, so the engine still runs on a plain postgres, but prod
+    # uses this image to enable it.
+    image: pgvector/pgvector:pg16
     container_name: genlab-postgres
     environment:
       POSTGRES_USER: genlab
