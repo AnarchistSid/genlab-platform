@@ -114,6 +114,10 @@ jobs:
           node-version: "22"
       - run: npm ci
         working-directory: dashboard/frontend
+      # R-72: eslint gate. Errors fail CI; advisory rules are configured as
+      # warnings (see eslint.config.js) so they're surfaced without blocking.
+      - run: npm run lint
+        working-directory: dashboard/frontend
       - run: npm run build
         working-directory: dashboard/frontend
       - run: npm run test
