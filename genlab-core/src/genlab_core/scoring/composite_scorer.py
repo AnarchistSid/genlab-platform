@@ -6,13 +6,25 @@ threshold or they are filtered out before blueprint creation.
 
 Formula::
 
-    velocity_score = min(view_velocity / velocity_threshold, 1.0)
-    composite      = velocity_score × trend_multiplier × niche_relevance
+    velocity_score    = min(view_velocity / velocity_threshold, 1.0)
+    engagement_score  = min(like_count/view_count / target_like_ratio, 1.0)
+    engagement_factor = ENGAGEMENT_FLOOR + (1 - ENGAGEMENT_FLOOR) * engagement_score
+    composite         = velocity_score × trend_multiplier × niche_relevance
+                        × engagement_factor
 
 Where:
-    - velocity_score:   normalised views/hour against niche baseline
-    - trend_multiplier: Google Trends position multiplier (1.0–3.0)
-    - niche_relevance:  binary 1.0 if video matches niche, else 0.0
+    - velocity_score:    normalised views/hour against niche baseline (reach/recency)
+    - engagement_factor: rewards genuine virality (like/view ratio) so a clip that
+      people actually engaged with outranks a raw view-spike or official-account
+      promo (R-?? selection-quality). Neutral (1.0) when engagement data is
+      absent, so un-enriched/RSS candidates aren't penalised for missing metrics.
+    - trend_multiplier:  Google Trends position multiplier (1.0–3.0)
+    - niche_relevance:   binary 1.0 if video matches niche, else 0.0
+
+A video is also rejected outright if it reports a KNOWN view_count below the
+per-niche ``min_view_count`` floor — an absolute-reach gate that catches
+recency-gamed clips (e.g. 200 views in the first hour → high velocity, trivial
+reach). A view_count of 0/absent is treated as "unknown" and not floored.
 
 Usage::
 
@@ -51,6 +63,29 @@ DEFAULT_MIN_COMPOSITE: dict[str, float] = {
     "ai_creators": 0.25,
 }
 
+# Absolute view-count floor per niche. A video reporting a KNOWN view_count below
+# this is rejected regardless of velocity — it catches recency-gamed spikes (a
+# brand-new clip with a few hundred views has a high views/hour ratio but
+# negligible reach). 0/absent view_count = "unknown" and is NOT floored, so
+# un-enriched candidates fall back to velocity-only ranking.
+DEFAULT_MIN_VIEW_COUNT: dict[str, int] = {
+    "gaming": 5000,
+    "sports": 5000,
+    "movies": 5000,
+    "anime": 2000,
+    "ai_creators": 2000,
+}
+
+# like/view ratio at which engagement_score saturates to 1.0. ~3% is a healthy
+# viral clip (YouTube average is ~1–2%); above this adds no further boost.
+_TARGET_LIKE_RATIO = 0.03
+
+# Floor of the engagement multiplier: a zero-engagement clip still keeps this
+# fraction of its composite (velocity remains a real reach signal), while a
+# high-engagement clip keeps the full score. So engagement RE-RANKS toward
+# genuinely-engaging clips without hard-filtering on it.
+_ENGAGEMENT_FLOOR = 0.5
+
 
 @dataclass
 class VideoScore:
@@ -64,6 +99,10 @@ class VideoScore:
     niche_relevance: float
     composite: float
     passed: bool
+    # Engagement multiplier applied to the composite (ENGAGEMENT_FLOOR..1.0).
+    # Defaults to 1.0 (neutral) so callers/tests that don't supply engagement
+    # data are unaffected.
+    engagement_score: float = 1.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +112,7 @@ class VideoScore:
             "velocity_score": round(self.velocity_score, 3),
             "trend_multiplier": round(self.trend_multiplier, 2),
             "niche_relevance": round(self.niche_relevance, 2),
+            "engagement_score": round(self.engagement_score, 3),
             "composite": round(self.composite, 4),
             "passed": self.passed,
         }
@@ -94,6 +134,7 @@ class CompositeScorer:
         niche_id: str,
         velocity_threshold: float | None = None,
         min_composite: float | None = None,
+        min_view_count: int | None = None,
     ):
         self.niche_id = niche_id
         self.velocity_threshold = (
@@ -105,6 +146,11 @@ class CompositeScorer:
             min_composite
             if min_composite is not None
             else DEFAULT_MIN_COMPOSITE.get(niche_id, 0.30)
+        )
+        self.min_view_count = (
+            min_view_count
+            if min_view_count is not None
+            else DEFAULT_MIN_VIEW_COUNT.get(niche_id, 2000)
         )
 
     def score(
@@ -134,8 +180,23 @@ class CompositeScorer:
         trend_mult = max(0.0, min(float(trend_multiplier), 3.0))
         relevance = 1.0 if float(niche_relevance) > 0 else 0.0
 
-        composite = velocity_score * trend_mult * relevance
+        # Engagement: like/view ratio as a virality proxy. Neutral (1.0) when no
+        # engagement data is present, so un-enriched candidates aren't penalised.
+        view_count = int(video.get("view_count", 0) or 0)
+        like_count = int(video.get("like_count", 0) or 0)
+        if view_count > 0:
+            like_ratio = like_count / view_count
+            engagement_score = min(like_ratio / _TARGET_LIKE_RATIO, 1.0)
+            engagement_factor = _ENGAGEMENT_FLOOR + (1.0 - _ENGAGEMENT_FLOOR) * engagement_score
+        else:
+            engagement_factor = 1.0
+
+        composite = velocity_score * trend_mult * relevance * engagement_factor
+
+        # Absolute-reach gate: reject a KNOWN-low view_count regardless of score.
         passed = composite >= self.min_composite
+        if 0 < view_count < self.min_view_count:
+            passed = False
 
         return VideoScore(
             video_id=str(video.get("video_id", "")),
@@ -146,6 +207,7 @@ class CompositeScorer:
             niche_relevance=relevance,
             composite=composite,
             passed=passed,
+            engagement_score=round(engagement_factor, 3),
         )
 
     def score_and_rank(
