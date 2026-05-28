@@ -43,7 +43,11 @@ class RenderWhisperCaptions:
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         stories = context.get("stories", [])
-        config = context.get("config", {})
+        # The runner stores the loaded config under "niche_config"; the older
+        # "config" key is kept as a fallback for direct/test callers. Reading
+        # only "config" meant the whisper block was never found and the stage
+        # no-op'd on every production run.
+        config = context.get("niche_config") or context.get("config", {})
 
         # Load whisper config from channel's visuals.yaml
         ws_config = self._get_whisper_config(config)
@@ -102,6 +106,7 @@ class RenderWhisperCaptions:
                 item_key=f"story_{i}",
                 config=config,
                 force_wpm=force_wpm,
+                audio_path=media.get("audio_path"),
             )
 
             if result is None:
@@ -193,6 +198,7 @@ class RenderWhisperCaptions:
         item_key: str,
         config: dict,
         force_wpm: bool = False,
+        audio_path: str | None = None,
     ) -> str | None:
         """Render captions onto video. Returns new path, original path (WPM), or None."""
         # Import WordByWordAnimator -- canonical location is genlab_core.rendering.word_animator.
@@ -222,6 +228,23 @@ class RenderWhisperCaptions:
         if not filters:
             return None
 
+        # Audio: keep the source track by default. Only when the clip is SILENT
+        # (no meaningful source audio) and a generated TTS voiceover exists do
+        # we mux the voiceover in — so a dead-air reel gets narration, while
+        # clips with real audio (highlights, gameplay, trailers — the content
+        # that actually performs) are never talked over.
+        extra_inputs: list[str] = []
+        audio_args = ["-c:a", "copy"]
+        if audio_path and Path(audio_path).exists():
+            threshold = ws_config.get("silence_threshold_db", -40)
+            if not has_meaningful_audio(video_path, silence_threshold_db=threshold):
+                extra_inputs = ["-i", str(audio_path)]
+                audio_args = ["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"]
+                logger.info(
+                    "[WHISPER_CAPTIONS] %s: silent clip — muxing TTS voiceover",
+                    item_key,
+                )
+
         # Burn filters onto video
         output_path = video_path.parent / (video_path.stem + "_captioned.mp4")
         try:
@@ -231,10 +254,10 @@ class RenderWhisperCaptions:
                 "-y",
                 "-i",
                 str(video_path),
+                *extra_inputs,
                 "-vf",
                 filters,
-                "-c:a",
-                "copy",
+                *audio_args,
                 "-c:v",
                 "libx264",
                 "-preset",

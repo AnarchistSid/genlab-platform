@@ -50,6 +50,24 @@ class TestRenderWhisperCaptions:
         ws = self.stage._get_whisper_config({})
         assert ws["enabled"] is False
 
+    def test_get_whisper_config_reads_from_visuals_block(self):
+        """Config nested under visuals (as merged from visuals.yaml) is found."""
+        config = {"visuals": {"animation": {"word_by_word": {"whisper_sync": {"enabled": True}}}}}
+        assert self.stage._get_whisper_config(config)["enabled"] is True
+
+    def test_reads_config_from_niche_config_key(self):
+        """Runner stores config under 'niche_config' — stage must read it
+        (regression: reading only 'config' made the stage no-op every run)."""
+        context = {
+            "stories": [{"title": "t", "media": {}}],
+            "niche_config": {
+                "visuals": {"animation": {"word_by_word": {"whisper_sync": {"enabled": True}}}}
+            },
+        }
+        result = self.stage.execute(context)
+        # Enabled path taken -> stats produced (story skipped for no rendered_path)
+        assert result["run_stats"]["whisper_captions"]["skipped"] == 1
+
     @patch.object(RenderWhisperCaptions, "_get_animator_class")
     @patch.object(RenderWhisperCaptions, "_get_whisper_words")
     @patch(
@@ -216,3 +234,58 @@ class TestABTestAssignment:
         # Animator should receive whisper_words=None (WPM fallback)
         call_kwargs = mock_animator.build_animated_filters.call_args
         assert call_kwargs.kwargs.get("whisper_words") is None
+
+
+class TestSilentClipAudioMux:
+    """The discarded TTS voiceover should be muxed into silent clips only."""
+
+    def setup_method(self):
+        self.stage = RenderWhisperCaptions()
+
+    def _run(self, has_audio: bool, audio_path: str | None):
+        with (
+            patch.object(RenderWhisperCaptions, "_get_animator_class") as mock_cls,
+            patch.object(RenderWhisperCaptions, "_get_whisper_words", return_value=None),
+            patch(
+                "genlab_core.pipeline.stages.render_whisper_captions.get_ffmpeg_binary",
+                return_value="ffmpeg",
+            ),
+            patch(
+                "genlab_core.pipeline.stages.render_whisper_captions.has_meaningful_audio",
+                return_value=has_audio,
+            ),
+            patch("subprocess.run") as mock_run,
+            patch("pathlib.Path.exists", return_value=True),
+        ):
+            animator = MagicMock()
+            animator.build_animated_filters.return_value = ("drawtext=text='x'", 1.0, 50)
+            mock_cls.return_value = MagicMock(return_value=animator)
+            mock_run.return_value = MagicMock(returncode=0)
+
+            self.stage._render_captions(
+                video_path=Path("/tmp/v.mp4"),
+                caption_text="hello world",
+                ws_config={"enabled": True},
+                item_key="s0",
+                config={},
+                audio_path=audio_path,
+            )
+            return mock_run.call_args[0][0]
+
+    def test_silent_clip_muxes_tts(self):
+        """No meaningful source audio + TTS available -> mux the voiceover."""
+        cmd = self._run(has_audio=False, audio_path="/tmp/tts.mp3")
+        assert "/tmp/tts.mp3" in cmd
+        assert "1:a" in cmd  # second input mapped as audio
+        assert "copy" not in cmd  # source audio NOT copied (it was silent)
+
+    def test_clip_with_audio_keeps_source(self):
+        """Real source audio (e.g. a highlight) must never be talked over."""
+        cmd = self._run(has_audio=True, audio_path="/tmp/tts.mp3")
+        assert "/tmp/tts.mp3" not in cmd
+        assert "copy" in cmd  # source audio preserved
+
+    def test_no_tts_keeps_source(self):
+        """Without a TTS path, behaviour is unchanged (copy source audio)."""
+        cmd = self._run(has_audio=False, audio_path=None)
+        assert "copy" in cmd
