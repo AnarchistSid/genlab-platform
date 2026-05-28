@@ -97,6 +97,22 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
             # Bad YAML in scoring_weights should NOT break niche loading.
             pass
 
+    # Merge visuals.yaml under the ``visuals`` key so render stages can read
+    # the animation / caption config without reaching outside niche_config.
+    # RenderWhisperCaptions reads visuals.animation.word_by_word.whisper_sync —
+    # previously visuals.yaml was never loaded, so word-by-word captions
+    # silently no-op'd on every run despite whisper_sync.enabled: true.
+    vis_path = config_dir / "visuals.yaml"
+    if vis_path.exists():
+        try:
+            with open(vis_path, encoding="utf-8") as f:
+                vis_data = yaml.safe_load(f) or {}
+            if isinstance(vis_data, dict):
+                niche_config.setdefault("visuals", vis_data)
+        except yaml.YAMLError:
+            # Bad YAML in visuals.yaml should NOT break niche loading.
+            pass
+
     return niche_config
 
 

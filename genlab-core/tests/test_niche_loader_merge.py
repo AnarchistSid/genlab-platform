@@ -70,6 +70,25 @@ def test_niche_config_dedup_takes_precedence(tmp_path: Path) -> None:
     assert cfg["dedup"]["jaccard_threshold"] == 0.85
 
 
+def test_merges_visuals_under_key(tmp_path: Path) -> None:
+    """visuals.yaml is merged under the 'visuals' key so render stages (e.g.
+    RenderWhisperCaptions) can read the caption/animation config."""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "niche.yaml").write_text(yaml.safe_dump({"niche_id": "test"}))
+    (config_dir / "visuals.yaml").write_text(
+        yaml.safe_dump({"animation": {"word_by_word": {"whisper_sync": {"enabled": True}}}})
+    )
+    cfg = load_niche_config("test", tmp_path)
+    assert cfg["visuals"]["animation"]["word_by_word"]["whisper_sync"]["enabled"] is True
+
+
+def test_missing_visuals_is_not_an_error(tmp_path: Path) -> None:
+    root = _write_niche(tmp_path, niche_yaml={"niche_id": "test"})
+    cfg = load_niche_config("test", root)
+    assert "visuals" not in cfg
+
+
 def test_missing_scoring_weights_is_not_an_error(tmp_path: Path) -> None:
     root = _write_niche(
         tmp_path,
