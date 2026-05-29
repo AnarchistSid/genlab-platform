@@ -18,7 +18,7 @@
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.100.11",
     "@tanstack/react-query-devtools": "^5.91.3",
-    "@tanstack/react-virtual": "^3.13.25",
+    "@tanstack/react-virtual": "^3.13.26",
     "babel-plugin-react-compiler": "^1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
