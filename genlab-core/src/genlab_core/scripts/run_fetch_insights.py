@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
+from genlab_core.pipeline.stages.fetch_insights import normalize_publishing_metrics
 
 logging.basicConfig(
     level=logging.INFO,
@@ -479,17 +480,29 @@ def _mark_window_completed(
     record_id: str,
     existing_windows: str,
     window: int,
+    metrics: dict[str, Any] | None = None,
 ) -> None:
     """Mark a window as completed on the Publishing_Analytics record.
 
     Uses status field (SUCCESS → INSIGHTS_6H → INSIGHTS_24H) since
     insight_windows_completed column doesn't exist in SharePoint.
+
+    When ``metrics`` is provided, also persists the raw per-platform
+    views/likes/comments/shares/saves into publishing_analytics
+    (normalised across platforms). Without this, the raw columns on
+    publishing_analytics stay at 0 forever — PR #54's Gap-2 fix lived
+    only in the pipeline-stage path; production uses THIS script via
+    the insights-collector systemd timer, so the same write must
+    happen here.
     """
     new_status = f"INSIGHTS_{window}H"
+    update_fields: dict[str, Any] = {"status": new_status}
+    if metrics:
+        update_fields.update(normalize_publishing_metrics(metrics))
     try:
         client.publishing_analytics.update(
             record_id,
-            {"status": new_status},
+            update_fields,
             typecast=True,
         )
     except Exception as exc:
@@ -580,9 +593,10 @@ def fetch_insights_for_window(
             p_stats["fetched"] += 1
             stats["fetched"] += 1
 
-            # Mark window completed
+            # Mark window completed + persist raw metrics (the Gap-2 fix —
+            # PR #54 covered the pipeline-stage path; prod uses this script).
             existing_windows = f.get("insight_windows_completed", "")
-            _mark_window_completed(client, r["id"], existing_windows, window)
+            _mark_window_completed(client, r["id"], existing_windows, window, metrics=insights)
 
             # Write key metrics back to blueprint for dashboard display
             if blueprint_record_id:
