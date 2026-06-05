@@ -10,6 +10,7 @@ Moved from genlab_core.platform.engagement_poller in Sprint 24 (2026-03-10).
 from __future__ import annotations
 
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,20 @@ logger = logging.getLogger(__name__)
 YOUTUBE_POLL_INTERVAL = 1800  # 30 minutes (saves ~2,400 quota units/day)
 TWITTER_POLL_INTERVAL = 900  # 15 minutes
 THREADS_POLL_INTERVAL = 600  # 10 minutes
+
+
+_TOKEN_QUERY_RE = re.compile(r"(access_token|key|api_key|bearer)=[^&\s'\"]+", re.IGNORECASE)
+
+
+def _scrub_token(msg: object) -> str:
+    """Redact ``access_token=...`` (and a few common variants) from a message.
+
+    ``requests.HTTPError.__str__`` includes the failing URL — which carries
+    the access token in the query string — so any ``logger.warning('... %s', e)``
+    in this module would otherwise leak live tokens into journalctl. This
+    helper scrubs them before logging.
+    """
+    return _TOKEN_QUERY_RE.sub(lambda m: f"{m.group(1)}=<REDACTED>", str(msg))
 
 
 async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
@@ -138,7 +153,11 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as e:
-                logger.debug("[POLLER] YouTube: comment fetch failed for %s: %s", video_id, e)
+                logger.debug(
+                    "[POLLER] YouTube: comment fetch failed for %s: %s",
+                    video_id,
+                    _scrub_token(e),
+                )
                 continue
 
             for item in data.get("items", []):
@@ -172,7 +191,7 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
         return comments
 
     except Exception as e:
-        logger.warning("[POLLER] YouTube poll failed for %s: %s", niche_id, e)
+        logger.warning("[POLLER] YouTube poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
 
 
@@ -268,7 +287,7 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
         return mentions
 
     except Exception as e:
-        logger.warning("[POLLER] X/Twitter poll failed for %s: %s", niche_id, e)
+        logger.warning("[POLLER] X/Twitter poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
 
 
@@ -374,7 +393,7 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
         return comments
 
     except Exception as e:
-        logger.warning("[POLLER] Threads poll failed for %s: %s", niche_id, e)
+        logger.warning("[POLLER] Threads poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
 
 
@@ -443,7 +462,11 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
                     continue
                 data = resp.json()
             except Exception as e:
-                logger.debug("[POLLER] Facebook comment fetch failed for %s: %s", fb_post_id, e)
+                logger.debug(
+                    "[POLLER] Facebook comment fetch failed for %s: %s",
+                    fb_post_id,
+                    _scrub_token(e),
+                )
                 continue
 
             for comment in data.get("data", []):
@@ -474,5 +497,5 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
         return comments
 
     except Exception as e:
-        logger.warning("[POLLER] Facebook poll failed for %s: %s", niche_id, e)
+        logger.warning("[POLLER] Facebook poll failed for %s: %s", niche_id, _scrub_token(e))
         return []

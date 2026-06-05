@@ -21,7 +21,9 @@ platforms:
     title_format: question
     max_title_length: 40
   x:
-    enabled: true
+    # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — no creds,
+    # 100% SKIPPED, negligible engagement everywhere.
+    enabled: false
     account_id: null  # TODO: Create X developer app for SpliceReel
     content_types: [video_tweet, image_tweet]
     aspect_ratio: "9:16"
@@ -40,7 +42,10 @@ platforms:
       Pending TikTok developer app approval.
       Set enabled: true and add TIKTOK_ACCESS_TOKEN to .env when approved.
   threads:
-    enabled: true
+    # Disabled 2026-06-05: see ClutchWire/config/publishing.yaml — 100%
+    # container-creation failures since tokens expired; engagement was
+    # single-digit anyway for movies.
+    enabled: false
     account_id: null  # TODO: Generate Threads token for @splicereel
     content_types: [video_post, text_post]
     aspect_ratio: "1:1"

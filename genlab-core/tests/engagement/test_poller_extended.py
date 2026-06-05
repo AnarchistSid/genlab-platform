@@ -359,3 +359,44 @@ class TestTwitterPollerEdgeCases:
 
         call_kwargs = mock_client.get_users_mentions.call_args
         assert "author_id" in call_kwargs.kwargs.get("expansions", [])
+
+
+class TestScrubToken:
+    """Tokens must never leak into log lines (requests.HTTPError stringifies
+    the failing URL — which carries access_token in the query string)."""
+
+    def test_redacts_access_token_in_url(self):
+        from genlab_core.engagement.poller import _scrub_token
+
+        msg = (
+            "400 Client Error: Bad Request for url: "
+            "https://graph.threads.net/v1.0/12345/threads?fields=id&access_token=THAANDTREALLIVE"
+        )
+        out = _scrub_token(msg)
+        assert "THAANDTREALLIVE" not in out
+        assert "access_token=<REDACTED>" in out
+
+    def test_redacts_multiple_credentials_in_message(self):
+        from genlab_core.engagement.poller import _scrub_token
+
+        msg = "url=https://x?api_key=KEY1&bearer=BR1&key=K2&other=safe"
+        out = _scrub_token(msg)
+        assert "KEY1" not in out and "BR1" not in out and "K2" not in out
+        # Unrelated query keys are left alone
+        assert "other=safe" in out
+
+    def test_safe_string_unchanged(self):
+        from genlab_core.engagement.poller import _scrub_token
+
+        msg = "Connection refused"
+        assert _scrub_token(msg) == "Connection refused"
+
+    def test_accepts_exception_objects(self):
+        from genlab_core.engagement.poller import _scrub_token
+
+        try:
+            raise RuntimeError("GET https://api.example.com/x?access_token=SECRET failed")
+        except RuntimeError as e:
+            out = _scrub_token(e)
+            assert "SECRET" not in out
+            assert "<REDACTED>" in out
