@@ -22,7 +22,8 @@ class TestNicheConfig:
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
         # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
         # + FetchRedditClips + AffiliateMatch (Wave 8 — source diversification)
-        assert len(enabled) == 23
+        # + RenderWhisperCaptions (re-enabled 2026-06-05 after PR #55 wired it)
+        assert len(enabled) == 24
 
     def test_enabled_stages_reference_allowed_packages(self):
         cfg = _load("niche.yaml")

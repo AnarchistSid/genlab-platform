@@ -17,10 +17,11 @@ def _gaming_config():
 
 class TestDynamicStageLoading:
     def test_gaming_stages_load_correctly(self):
-        """Gaming niche loads its 26 enabled stages from niche.yaml."""
+        """Gaming niche loads its 27 enabled stages from niche.yaml.
+        (Was 26; RenderWhisperCaptions re-enabled 2026-06-05 after PR #55.)"""
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", _gaming_config())
-        assert len(stages) == 26
+        assert len(stages) == 27
         assert stages[0].__class__.__name__ == "ExpressLane"
         assert stages[-1].__class__.__name__ == "RunReport"
 
@@ -48,6 +49,7 @@ class TestDynamicStageLoading:
             "RenderTextOverlays",
             "GenerateAudio",
             "GenerateGamingAudio",
+            "RenderWhisperCaptions",
             "ValidateVideos",
             "PushToBacklog",
             "FetchInsights",
