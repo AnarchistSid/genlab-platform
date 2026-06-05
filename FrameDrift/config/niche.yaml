@@ -117,7 +117,10 @@ pipeline:
     - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
-      enabled: false
+      # Re-enabled 2026-06-05 after PR #55 wired the engine (the stage was
+      # disabled while the two config-loading bugs blocked it; both fixed
+      # now). Captions render WPM-timed and preserve source audio.
+      enabled: true
     - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
 
     # Phase 5: Publishing

@@ -515,9 +515,10 @@ class TestPipelineOrdering:
         assert overlay_idx > render_idx
 
     def test_pipeline_has_26_stages(self):
-        """Pipeline should have 26 enabled stages (gaming + shared)."""
+        """Pipeline should have 27 enabled stages (gaming + shared).
+        (Was 26; RenderWhisperCaptions re-enabled 2026-06-05 after PR #55.)"""
         from core.pipeline_runner import PipelineRunner
 
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", self._gaming_config())
-        assert len(stages) == 26
+        assert len(stages) == 27
