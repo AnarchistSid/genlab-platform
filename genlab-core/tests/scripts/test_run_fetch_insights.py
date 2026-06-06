@@ -186,3 +186,27 @@ class TestMarkWindowCompleted:
         client.publishing_analytics.update.side_effect = Exception("SP error")
         # Should not raise
         _mark_window_completed(client, "rec1", "", 6)
+
+    def test_with_metrics_writes_normalized_raw_columns(self):
+        """When metrics passed, raw views/likes/etc land in publishing_analytics
+        (Gap-2 fix: PR #54 covered the pipeline stage; prod uses this script)."""
+        client = MagicMock()
+        _mark_window_completed(
+            client,
+            "rec1",
+            "",
+            48,
+            metrics={"reach": 1500, "likes": 80, "comments": 5},
+        )
+        payload = client.publishing_analytics.update.call_args[0][1]
+        assert payload["status"] == "INSIGHTS_48H"
+        assert payload["views"] == 1500  # IG 'reach' → canonical 'views'
+        assert payload["likes"] == 80
+        assert payload["comments"] == 5
+
+    def test_without_metrics_only_writes_status(self):
+        """Default (metrics=None) is unchanged — only status set."""
+        client = MagicMock()
+        _mark_window_completed(client, "rec1", "", 6)
+        payload = client.publishing_analytics.update.call_args[0][1]
+        assert set(payload.keys()) == {"status"}
