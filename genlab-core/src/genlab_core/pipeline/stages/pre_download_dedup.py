@@ -30,9 +30,12 @@ from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
 
-# Narrower than push_to_backlog._BLOCKING_STATUSES: omits DRAFTED + SCORED so
-# stuck/stranded blueprints get a chance to re-download on the next run.
-_PRE_DOWNLOAD_BLOCKING: frozenset[str] = frozenset({"PUBLISHED", "PUBLISHING", "VISUAL_READY"})
+# Narrower than push_to_backlog's LIVE_OR_PENDING set: omits DRAFTED + SCORED
+# so stuck/stranded blueprints get a chance to re-download on the next run.
+# The canonical set lives in :mod:`genlab_core.pipeline.blueprint_status`;
+# the subset relationship `LIVE ⊂ LIVE_OR_PENDING` is what encodes the
+# different semantics of the two stages.
+from genlab_core.pipeline.blueprint_status import LIVE as _PRE_DOWNLOAD_BLOCKING  # noqa: E402
 
 
 def _blocks_pre_download(row: dict) -> bool:

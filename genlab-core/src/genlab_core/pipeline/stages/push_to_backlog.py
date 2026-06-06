@@ -21,6 +21,7 @@ from typing import Any
 from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_id
 from genlab_core.cache.text_sanitizer import strip_html_tags
 from genlab_core.http.backlog_client import BacklogClient
+from genlab_core.pipeline.blueprint_status import LIVE_OR_PENDING as _BLOCKING_STATUSES
 from genlab_core.settings import settings
 from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
@@ -81,25 +82,14 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 }
 
 
-# Statuses that actively block re-creation of a blueprint. Any row in one of
-# these states represents content we've already committed to producing (or
-# published) — emitting a second blueprint for the same source would create
-# a duplicate.
-#
-# Conversely, rows in ARCHIVED (whether rejected by a user or auto-archived
-# because rendered media went missing) or PUBLISH_FAILED must NOT block
-# re-creation: the prior attempt didn't reach an audience, and retrying is
-# the whole point of the pipeline. This set is the single source of truth
-# for dedup decisions in push_to_backlog.
-_BLOCKING_STATUSES: frozenset[str] = frozenset(
-    {
-        "PUBLISHED",
-        "PUBLISHING",
-        "VISUAL_READY",
-        "DRAFTED",
-        "SCORED",
-    }
-)
+# `_BLOCKING_STATUSES` is now imported at the top of the file from
+# :mod:`genlab_core.pipeline.blueprint_status` (the alias keeps existing
+# internal references working). Anything in this set means we've already
+# committed to producing or shipping that content; ARCHIVED / PUBLISH_FAILED
+# stay outside it because retrying those is the whole point of the pipeline.
+# PreDownloadDedup uses the narrower ``LIVE`` subset of the same canonical
+# enum — the subset relationship encodes the policy difference between the
+# two stages.
 
 
 def _is_blocking(row: dict) -> bool:
