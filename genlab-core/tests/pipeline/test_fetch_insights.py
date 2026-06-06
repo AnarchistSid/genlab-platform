@@ -1,7 +1,7 @@
 """Tests for the FetchInsights pipeline stage."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from genlab_core.pipeline.stages.fetch_insights import (
     FetchInsights,
@@ -251,3 +251,86 @@ class TestNormalizePublishingMetrics:
     def test_non_numeric_and_missing_safe(self):
         out = normalize_publishing_metrics({"views": None, "likes": "oops"})
         assert out == {"views": 0, "likes": 0, "comments": 0, "shares": 0, "saves": 0}
+
+
+class TestPipelineStageDelegatesToCanonicalFetchers:
+    """Regression guards: the pipeline-stage YT / IG / X fetchers must route
+    through ``genlab_core.platforms.metrics``. Catches the exact class of
+    drift bug Gap 2 hit, but on the pipeline-stage code path instead of the
+    script code path."""
+
+    def test_youtube_delegates(self):
+        from genlab_core.platforms.metrics import PlatformMetrics
+
+        canonical = PlatformMetrics(views=999, likes=10, comments=2, reach=999, engagement=12)
+        with patch(
+            "genlab_core.platforms.metrics.fetch_youtube",
+            return_value=canonical,
+        ) as mock_canonical:
+            out = FetchInsights._fetch_youtube("yt_abc", {})
+
+        mock_canonical.assert_called_once_with("yt_abc")
+        assert out == dict(canonical)
+
+    def test_instagram_delegates_and_adds_legacy_saved_alias(self):
+        from genlab_core.platforms.metrics import PlatformMetrics
+
+        canonical = PlatformMetrics(
+            views=300,
+            reach=300,
+            impressions=300,
+            likes=20,
+            comments=3,
+            shares=1,
+            saves=11,
+            watch_time_ms=120_000,
+            engagement=35,
+        )
+        with patch(
+            "genlab_core.platforms.metrics.fetch_instagram",
+            return_value=canonical,
+        ) as mock_canonical:
+            out = FetchInsights._fetch_instagram("ig_xyz", {"niche_id": "sports"})
+
+        mock_canonical.assert_called_once_with("ig_xyz", niche_id="sports")
+        # Canonical key preserved AND legacy alias added.
+        assert out["saves"] == 11
+        assert out["saved"] == 11
+
+    def test_twitter_delegates_and_adds_legacy_aliases(self):
+        from genlab_core.platforms.metrics import PlatformMetrics
+
+        canonical = PlatformMetrics(
+            views=5000,
+            impressions=5000,
+            reach=5000,
+            likes=42,
+            comments=7,
+            shares=4,
+            engagement=53,
+        )
+        with patch(
+            "genlab_core.platforms.metrics.fetch_twitter",
+            return_value=canonical,
+        ) as mock_canonical:
+            out = FetchInsights._fetch_twitter("17841", {})
+
+        mock_canonical.assert_called_once_with("17841")
+        # Canonical preserved
+        assert out["shares"] == 4
+        assert out["comments"] == 7
+        # Legacy aliases
+        assert out["retweets"] == 4
+        assert out["replies"] == 7
+
+    def test_facebook_does_NOT_delegate_design_decision(self):
+        """Facebook pipeline-stage fetcher uses /{post_id}?fields=reactions...
+        (general-post surface), not /video_insights (Reels surface), so it
+        does NOT delegate to the Reels-specific canonical. Guard the design
+        decision explicitly: any future drift toward the canonical here would
+        silently change which FB API surface gets hit, and that needs to be a
+        deliberate cross-module change, not a copy-paste convergence."""
+        with patch("genlab_core.platforms.metrics.fetch_facebook") as mock_canonical:
+            FetchInsights._fetch_facebook("fb123", {"niche_id": "sports"})
+
+        mock_canonical.assert_not_called()
