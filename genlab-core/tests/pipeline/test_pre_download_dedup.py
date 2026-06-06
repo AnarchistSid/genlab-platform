@@ -181,3 +181,93 @@ def test_missing_niche_id_bails_out_safely() -> None:
     result = stage.execute(ctx)
     # Should pass through unchanged
     assert len(result["stories"]) == 1
+
+
+def test_drafted_stories_pass_through_for_retry() -> None:
+    """DRAFTED blueprints (render failed) must NOT block re-download.
+
+    Regression: previously the pre-download dedup reused
+    push_to_backlog._BLOCKING_STATUSES which includes DRAFTED, so a stuck
+    DRAFTED blueprint (failed render) permanently blocked every retry of its
+    own video — 96 sports DRAFTED were stranded mid-2026 by this exact bug.
+    """
+    stage, _ = _make_stage_with_bps(
+        [
+            {
+                "fields": {
+                    "video_url": "https://www.youtube.com/watch?v=STUCK",
+                    "video_id": "STUCK",
+                    "status": "DRAFTED",
+                }
+            },
+        ]
+    )
+    ctx = {
+        "niche_id": "sports",
+        "stories": [
+            {
+                "title": "the stuck one wants to retry",
+                "source_url": "https://www.youtube.com/watch?v=STUCK",
+                "video_id": "STUCK",
+            },
+        ],
+    }
+    stage.execute(ctx)
+    assert len(ctx["stories"]) == 1
+    assert ctx["run_stats"]["pre_download_dedup"]["dropped_url"] == 0
+    assert ctx["run_stats"]["pre_download_dedup"]["dropped_video_id"] == 0
+
+
+def test_scored_stories_pass_through_for_retry() -> None:
+    """SCORED is a pre-draft transient state; never block re-download."""
+    stage, _ = _make_stage_with_bps(
+        [
+            {
+                "fields": {
+                    "video_url": "https://www.youtube.com/watch?v=PARTIAL",
+                    "video_id": "PARTIAL",
+                    "status": "SCORED",
+                }
+            },
+        ]
+    )
+    ctx = {
+        "niche_id": "sports",
+        "stories": [
+            {
+                "title": "scored but not drafted",
+                "source_url": "https://www.youtube.com/watch?v=PARTIAL",
+                "video_id": "PARTIAL",
+            },
+        ],
+    }
+    stage.execute(ctx)
+    assert len(ctx["stories"]) == 1
+
+
+def test_live_states_still_block() -> None:
+    """PUBLISHED / PUBLISHING / VISUAL_READY remain blocking (don't republish)."""
+    for status in ("PUBLISHED", "PUBLISHING", "VISUAL_READY"):
+        stage, _ = _make_stage_with_bps(
+            [
+                {
+                    "fields": {
+                        "video_url": "https://www.youtube.com/watch?v=LIVE",
+                        "video_id": "LIVE",
+                        "status": status,
+                    }
+                },
+            ]
+        )
+        ctx = {
+            "niche_id": "sports",
+            "stories": [
+                {
+                    "title": "already live",
+                    "source_url": "https://www.youtube.com/watch?v=LIVE",
+                    "video_id": "LIVE",
+                },
+            ],
+        }
+        stage.execute(ctx)
+        assert len(ctx["stories"]) == 0, f"status={status} should have blocked"
