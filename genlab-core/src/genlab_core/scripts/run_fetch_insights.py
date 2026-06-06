@@ -304,37 +304,17 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
 
 
 def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
-    """Fetch YT metrics via Data API v3."""
-    api_key = os.getenv("YOUTUBE_API_KEY", "")
-    if not api_key:
-        logger.warning(
-            "[fetch_insights] YOUTUBE_API_KEY not set — YouTube analytics data will be missing"
-        )
-        return None
+    """Fetch YT metrics via Data API v3.
 
-    import requests
+    Thin delegate to :func:`genlab_core.platforms.metrics.fetch_youtube` — the
+    canonical implementation shared with the pipeline-stage and metric-collector
+    paths. Kept as a private wrapper so the existing dispatch table in
+    :func:`_fetch_platform_insights` does not have to change in this refactor.
+    """
+    from genlab_core.platforms.metrics import fetch_youtube as _canonical
 
-    resp = requests.get(
-        "https://www.googleapis.com/youtube/v3/videos",
-        params={"part": "statistics", "id": post_id, "key": api_key},
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        return None
-    items = resp.json().get("items", [])
-    if not items:
-        return None
-    stats = items[0].get("statistics", {})
-    views = int(stats.get("viewCount", 0))
-    likes = int(stats.get("likeCount", 0))
-    comments = int(stats.get("commentCount", 0))
-    return {
-        "views": views,
-        "likes": likes,
-        "comments": comments,
-        "reach": views,
-        "engagement": likes + comments,
-    }
+    metrics = _canonical(post_id)
+    return dict(metrics) if metrics is not None else None
 
 
 def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
