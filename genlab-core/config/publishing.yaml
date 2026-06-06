@@ -20,12 +20,18 @@ platforms:
     schedule_slots:
       - "12:00"
   x_twitter:
-    enabled: true
+    # Disabled 2026-06-06: see ClutchWire/config/publishing.yaml — no creds,
+    # 100% SKIPPED, negligible engagement everywhere. (Missed in PR #65 — that
+    # PR's edit to this symlink target was lost during a rebase.)
+    enabled: false
     account_id: null
     schedule_slots:
       - "12:00"
   threads:
-    enabled: true
+    # Disabled 2026-06-06: see ClutchWire/config/publishing.yaml — 100%
+    # container-creation failures since tokens expired; engagement was
+    # near-zero for ai_creators. (Missed in PR #65 — same rebase loss.)
+    enabled: false
     account_id: null
     schedule_slots:
       - "12:00"

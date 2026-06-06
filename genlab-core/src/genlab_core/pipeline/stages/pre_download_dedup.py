@@ -1,14 +1,19 @@
 """Pipeline stage: Pre-download dedup.
 
-Drops stories whose source URL or video_id already has an active blueprint
-in a blocking state (PUBLISHED/PUBLISHING/VISUAL_READY/DRAFTED/SCORED).
-Runs BEFORE DownloadTopVideos so we don't waste 5-10 minutes rendering
-content that will be deduped at push time anyway.
+Drops stories whose source URL or video_id already has an *active live* (or
+about-to-be-live) blueprint — i.e. PUBLISHED / PUBLISHING / VISUAL_READY.
+Runs BEFORE DownloadTopVideos so we don't waste 5-10 minutes downloading
+content that's already shipped.
 
-This stage reuses ``_BLOCKING_STATUSES`` and the same active-blueprint
-query as ``PushToBacklog`` so the two stages agree on which content is
-"already live". Archived/rejected rows don't block — they'll be revived
-by the push stage if they reach it.
+DRAFTED and SCORED are deliberately NOT blocking here: those statuses mean
+"render failed, retry next run" or "scored but not yet drafted". Including
+them in the blocking set (as PushToBacklog does, to protect from overwrite)
+permanently stranded stuck-DRAFTED blueprints — once a render failed, the
+pre-download dedup blocked any retry and the blueprint piled up forever
+(96 sports DRAFTED stuck mid-2026 was the breaking case). PushToBacklog
+still upserts on existing rows for the protect-from-overwrite semantics —
+the retry just gets a fresh download attempt instead of being silently
+deduped out.
 
 Reads:  context["stories"], context["niche_id"]
 Writes: context["stories"] (filtered), context["run_stats"]["pre_download_dedup"]
@@ -24,7 +29,20 @@ from hashlib import sha256
 from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
-from genlab_core.pipeline.stages.push_to_backlog import _is_blocking
+
+# Narrower than push_to_backlog._BLOCKING_STATUSES: omits DRAFTED + SCORED so
+# stuck/stranded blueprints get a chance to re-download on the next run.
+_PRE_DOWNLOAD_BLOCKING: frozenset[str] = frozenset({"PUBLISHED", "PUBLISHING", "VISUAL_READY"})
+
+
+def _blocks_pre_download(row: dict) -> bool:
+    """True if this blueprint should block re-downloading the same content.
+
+    Only live or about-to-be-live rows block; DRAFTED / SCORED can be retried.
+    """
+    fields = row.get("fields", row)
+    return fields.get("status", "") in _PRE_DOWNLOAD_BLOCKING
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +87,7 @@ class PreDownloadDedup:
             )
             return context
 
-        active_bps = [bp for bp in recent_bps if _is_blocking(bp)]
+        active_bps = [bp for bp in recent_bps if _blocks_pre_download(bp)]
         seen_url_hashes: set[str] = set()
         seen_video_ids: set[str] = set()
         for bp in active_bps:
