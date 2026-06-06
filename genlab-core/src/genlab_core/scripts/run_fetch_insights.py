@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -201,106 +200,33 @@ def _fetch_platform_insights(
 
 
 def _resolve_ig_media_id(shortcode_or_id: str, token: str, ig_user_id: str) -> str | None:
-    """Convert an IG shortcode to a numeric media ID via the user's /media endpoint.
+    """Thin shim to the canonical IG media-id resolver.
 
-    The publisher stores shortcodes (e.g. 'DWif8mKEjst') but the Graph API
-    insights endpoints require numeric media IDs (e.g. '18054219725706846').
-    If the input is already numeric, returns it as-is.
+    Kept so any existing in-script reference still works after the canonical
+    implementation moved to :mod:`genlab_core.platforms.metrics.instagram`.
     """
-    if shortcode_or_id.isdigit():
-        return shortcode_or_id
+    from genlab_core.platforms.metrics.instagram import _resolve_media_id
 
-    if not ig_user_id:
-        return None
-
-    import requests as _req
-
-    # Search recent media for the matching shortcode
-    resp = _req.get(
-        f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
-        params={
-            "fields": "id,shortcode",
-            "limit": 50,
-            "access_token": token,
-        },
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        return None
-
-    for item in resp.json().get("data", []):
-        if item.get("shortcode") == shortcode_or_id:
-            return item["id"]
-
-    logger.debug("IG shortcode '%s' not found in recent media", shortcode_or_id)
-    return None
+    return _resolve_media_id(shortcode_or_id, token=token, ig_user_id=ig_user_id)
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
-    """Fetch IG metrics via graph.facebook.com using per-niche credentials."""
-    from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+    """Fetch IG metrics — delegates to the canonical implementation and adds
+    the legacy ``saved`` / ``watch_time_minutes`` aliases for in-script
+    consumers (notably ``_write_back_to_blueprint`` and any external launchd
+    artefacts grepping the older shape)."""
+    from genlab_core.platforms.metrics import fetch_instagram as _canonical
 
-    meta_creds = resolve_meta_credentials(niche_id)
-    token = meta_creds.get("ig_access_token", "")
-    ig_user_id = meta_creds.get("ig_user_id", "")
-    if not token:
-        logger.warning(
-            "[fetch_insights] IG token not set for niche '%s' — "
-            "analytics data for this platform will be missing",
-            niche_id,
-        )
+    metrics = _canonical(post_id, niche_id=niche_id)
+    if metrics is None:
         return None
-
-    # Resolve shortcode to numeric media ID if needed
-    media_id = _resolve_ig_media_id(post_id, token, ig_user_id)
-    if not media_id:
-        logger.debug("Could not resolve IG media ID for '%s'", post_id)
-        return None
-
-    import requests
-
-    api_base = "https://graph.facebook.com/v21.0"
-
-    # Basic metrics
-    r = requests.get(
-        f"{api_base}/{media_id}",
-        params={"fields": "like_count,comments_count,media_type", "access_token": token},
-        timeout=15,
-    )
-    if r.status_code != 200:
-        logger.warning("IG basic %d: %s", r.status_code, r.text[:200])
-        return None
-    data = r.json()
-
-    # Reels insights — v22.0+ deprecated plays; use full metric set
-    insights_resp = requests.get(
-        f"{api_base}/{media_id}/insights",
-        params={
-            "metric": "reach,saved,shares,likes,comments,total_interactions,ig_reels_video_view_total_time",
-            "access_token": token,
-        },
-        timeout=15,
-    )
-    insights = {}
-    if insights_resp.status_code == 200:
-        for item in insights_resp.json().get("data", []):
-            name = item.get("name", "")
-            values = item.get("values", [{}])
-            insights[name] = values[0].get("value", 0) if values else 0
-
-    watch_time_ms = insights.get("ig_reels_video_view_total_time", 0)
-    watch_time_min = round(watch_time_ms / 60000, 1) if watch_time_ms else 0
-
-    return {
-        "likes": insights.get("likes", data.get("like_count", 0)),
-        "comments": insights.get("comments", data.get("comments_count", 0)),
-        "reach": insights.get("reach", 0),
-        "saved": insights.get("saved", 0),
-        "shares": insights.get("shares", 0),
-        "engagement": insights.get("total_interactions", 0),
-        "watch_time_minutes": watch_time_min,
-        "impressions": insights.get("reach", 0),
-    }
+    out: dict[str, Any] = dict(metrics)
+    # Legacy aliases — keep until all callers are migrated to PlatformMetrics.
+    if "saves" in out:
+        out["saved"] = out["saves"]
+    if "watch_time_ms" in out:
+        out["watch_time_minutes"] = round(out["watch_time_ms"] / 60000, 1)
+    return out
 
 
 def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
@@ -318,84 +244,27 @@ def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
 
 
 def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
-    """Fetch FB metrics via Graph API using per-niche credentials."""
-    from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+    """Fetch FB metrics — thin delegate to the canonical implementation."""
+    from genlab_core.platforms.metrics import fetch_facebook as _canonical
 
-    token, _page_id = resolve_fb_credentials(niche_id)
-    if not token:
-        logger.warning(
-            "[fetch_insights] FB token not set for niche '%s' — "
-            "Facebook analytics data for this platform will be missing",
-            niche_id,
-        )
-        return None
-
-    import requests
-
-    # FB Reels use /video_insights instead of /insights (which returns 400)
-    resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{post_id}/video_insights",
-        params={"access_token": token},
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        logger.debug("FB video_insights %d: %s", resp.status_code, resp.text[:100])
-        return None
-
-    metrics: dict[str, Any] = {}
-    likes = 0
-    for item in resp.json().get("data", []):
-        name = item.get("name", "")
-        values = item.get("values", [{}])
-        val = values[0].get("value", 0) if values else 0
-        if name == "post_video_likes_by_reaction_type" and isinstance(val, dict):
-            likes = sum(val.values())
-        elif name == "post_video_views":
-            metrics["views"] = val
-        elif name == "post_video_view_time":
-            metrics["watch_time_ms"] = val
-
-    return {
-        "likes": likes,
-        "views": metrics.get("views", 0),
-        "watch_time_ms": metrics.get("watch_time_ms", 0),
-        "engagement": likes + metrics.get("views", 0),
-        "reach": metrics.get("views", 0),
-    }
+    metrics = _canonical(post_id, niche_id=niche_id)
+    return dict(metrics) if metrics is not None else None
 
 
 def _fetch_twitter(post_id: str) -> dict[str, Any] | None:
-    """Fetch X metrics via API v2."""
-    bearer = os.getenv("X_BEARER_TOKEN", "")
-    if not bearer:
-        logger.warning(
-            "[fetch_insights] X_BEARER_TOKEN not set — X/Twitter analytics data will be missing"
-        )
-        return None
+    """Fetch X metrics — delegates to the canonical implementation and adds
+    the legacy ``retweets`` / ``replies`` aliases for in-script consumers."""
+    from genlab_core.platforms.metrics import fetch_twitter as _canonical
 
-    import requests
-
-    resp = requests.get(
-        f"https://api.twitter.com/2/tweets/{post_id}",
-        params={"tweet.fields": "public_metrics"},
-        headers={"Authorization": f"Bearer {bearer}"},
-        timeout=15,
-    )
-    if resp.status_code != 200:
+    metrics = _canonical(post_id)
+    if metrics is None:
         return None
-    metrics = resp.json().get("data", {}).get("public_metrics", {})
-    likes = metrics.get("like_count", 0)
-    retweets = metrics.get("retweet_count", 0)
-    replies = metrics.get("reply_count", 0)
-    return {
-        "likes": likes,
-        "retweets": retweets,
-        "replies": replies,
-        "shares": retweets,
-        "impressions": metrics.get("impression_count", 0),
-        "engagement": likes + retweets + replies,
-        "reach": metrics.get("impression_count", 0),
-    }
+    out: dict[str, Any] = dict(metrics)
+    if "shares" in out:
+        out["retweets"] = out["shares"]
+    if "comments" in out:
+        out["replies"] = out["comments"]
+    return out
 
 
 def _write_back_to_blueprint(
