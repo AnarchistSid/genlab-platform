@@ -6,6 +6,28 @@ store. At the 48h window, computes a shaped reward via RewardShaper.
 
 Run standalone:
     python -m genlab_core.learning.metric_collector
+
+DESIGN NOTE — per-platform fetchers below intentionally do NOT delegate
+to :mod:`genlab_core.platforms.metrics`. They are reward-shape
+specialisations, not duplicates:
+
+* ``_fetch_youtube`` uses OAuth refresh-token auth (vs the canonical's
+  Data API key), caches the access token, computes ``like_rate`` and
+  ``comment_rate``, and layers Analytics v2 extras
+  (``avg_view_duration``, ``subscriber_gained``, ``minutes_viewed``).
+* ``_fetch_instagram`` cascades three metric sets (Reels-first, then
+  standard, then minimal) and deliberately OMITS unobservable fields so
+  ``RewardShaper.compute_reward`` redistributes their weight rather than
+  pinning to a fake zero.
+* ``_fetch_x`` computes ``reply_chain_rate`` and aligns the return shape
+  to ``RewardShaper.BASE_WEIGHTS["twitter"]``.
+* ``_fetch_facebook_reel_insights`` + ``_fetch_facebook_video_object``
+  pair to handle FB's two surfaces (Reels vs crossposted videos).
+
+Substituting any of these with the canonical basic fetchers would
+silently degrade the bandit reward signal. The pipeline-stage
+``FetchInsights`` (basic snapshot path) DOES delegate to the canonical
+in PR #69 — that's the correct migration target.
 """
 
 from __future__ import annotations

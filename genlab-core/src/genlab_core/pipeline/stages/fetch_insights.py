@@ -16,7 +16,6 @@ Non-fatal: API failures are logged per-platform, never crash pipeline.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -241,91 +240,45 @@ class FetchInsights:
 
     @staticmethod
     def _fetch_instagram(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch IG metrics via graph.facebook.com."""
-        # Try per-niche token first, then global fallback
+        """Fetch IG metrics — delegates to the canonical implementation.
+
+        Adds the legacy ``saved`` alias on top of the canonical ``saves`` so
+        downstream consumers (notably ``normalize_publishing_metrics`` and any
+        analytics composite-score reader expecting the older key) see a
+        byte-stable shape.
+        """
+        from genlab_core.platforms.metrics import fetch_instagram as _canonical
+
         niche_id = config.get("niche_id", "")
-        from genlab_core.publishing.niche_credentials import resolve_meta_credentials
-
-        creds = resolve_meta_credentials(niche_id)
-        token = creds.get("ig_access_token", "")
-        if not token:
+        metrics = _canonical(post_id, niche_id=niche_id)
+        if metrics is None:
             return None
-
-        try:
-            import requests
-
-            # Basic metrics
-            url = f"https://graph.facebook.com/v21.0/{post_id}"
-            params = {
-                "fields": "like_count,comments_count,media_type",
-                "access_token": token,
-            }
-            resp = requests.get(url, params=params, timeout=15)
-            if resp.status_code != 200:
-                logger.warning("[FetchInsights] IG %d: %s", resp.status_code, resp.text[:200])
-                return None
-            data = resp.json()
-
-            # Insights — Reels do NOT support 'impressions' (400 error)
-            insights_url = f"https://graph.facebook.com/v21.0/{post_id}/insights"
-            insights_params = {
-                "metric": "reach,saved,shares,total_interactions",
-                "access_token": token,
-            }
-            insights_resp = requests.get(insights_url, params=insights_params, timeout=15)
-            insights = {}
-            if insights_resp.status_code == 200:
-                for item in insights_resp.json().get("data", []):
-                    name = item.get("name", "")
-                    values = item.get("values", [{}])
-                    insights[name] = values[0].get("value", 0) if values else 0
-
-            return {
-                "likes": data.get("like_count", 0),
-                "comments": data.get("comments_count", 0),
-                "reach": insights.get("reach", 0),
-                "saved": insights.get("saved", 0),
-                "shares": insights.get("shares", 0),
-            }
-        except Exception:
-            logger.exception("[FetchInsights] IG fetch error for %s", post_id)
-            return None
+        out: dict[str, Any] = dict(metrics)
+        if "saves" in out:
+            out["saved"] = out["saves"]
+        return out
 
     @staticmethod
     def _fetch_youtube(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch YT metrics via Data API v3."""
-        api_key = os.getenv("YOUTUBE_API_KEY", "")
-        if not api_key:
-            return None
+        """Fetch YT metrics — thin delegate to the canonical implementation."""
+        from genlab_core.platforms.metrics import fetch_youtube as _canonical
 
-        try:
-            import requests
-
-            url = "https://www.googleapis.com/youtube/v3/videos"
-            params = {
-                "part": "statistics",
-                "id": post_id,
-                "key": api_key,
-            }
-            resp = requests.get(url, params=params, timeout=15)
-            if resp.status_code != 200:
-                return None
-            items = resp.json().get("items", [])
-            if not items:
-                return None
-            stats = items[0].get("statistics", {})
-            return {
-                "views": int(stats.get("viewCount", 0)),
-                "likes": int(stats.get("likeCount", 0)),
-                "comments": int(stats.get("commentCount", 0)),
-            }
-        except Exception:
-            logger.exception("[FetchInsights] YT fetch error for %s", post_id)
-            return None
+        metrics = _canonical(post_id)
+        return dict(metrics) if metrics is not None else None
 
     @staticmethod
     def _fetch_facebook(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch FB metrics via Graph API."""
+        """Fetch FB metrics via Graph API.
+
+        DESIGN NOTE — this fetcher intentionally does NOT delegate to
+        :func:`genlab_core.platforms.metrics.fetch_facebook`. The canonical
+        fetcher uses ``/{post_id}/video_insights`` (Reels-specific); this
+        pipeline-stage call uses the general ``/{post_id}?fields=reactions...``
+        surface that works for any FB post type (not just Reels). The two
+        endpoints return different metric sets and aren't interchangeable.
+        A future canonical companion (``fetch_facebook_post``) would let
+        this delegate cleanly.
+        """
         niche_id = config.get("niche_id", "")
         from genlab_core.publishing.niche_credentials import resolve_fb_credentials
 
@@ -356,27 +309,22 @@ class FetchInsights:
 
     @staticmethod
     def _fetch_twitter(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch X metrics via API v2."""
-        bearer = os.getenv("X_BEARER_TOKEN", "")
-        if not bearer:
-            return None
+        """Fetch X metrics — delegates to the canonical implementation.
 
-        try:
-            import requests
+        Adds the legacy ``retweets`` / ``replies`` aliases on top of the
+        canonical ``shares`` / ``comments`` so downstream consumers (notably
+        ``normalize_publishing_metrics`` which reads either form) and any
+        analytics composite-score reader expecting the older keys see a
+        byte-stable shape.
+        """
+        from genlab_core.platforms.metrics import fetch_twitter as _canonical
 
-            url = f"https://api.twitter.com/2/tweets/{post_id}"
-            params = {"tweet.fields": "public_metrics"}
-            headers = {"Authorization": f"Bearer {bearer}"}
-            resp = requests.get(url, params=params, headers=headers, timeout=15)
-            if resp.status_code != 200:
-                return None
-            metrics = resp.json().get("data", {}).get("public_metrics", {})
-            return {
-                "likes": metrics.get("like_count", 0),
-                "retweets": metrics.get("retweet_count", 0),
-                "replies": metrics.get("reply_count", 0),
-                "impressions": metrics.get("impression_count", 0),
-            }
-        except Exception:
-            logger.exception("[FetchInsights] X fetch error for %s", post_id)
+        metrics = _canonical(post_id)
+        if metrics is None:
             return None
+        out: dict[str, Any] = dict(metrics)
+        if "shares" in out:
+            out["retweets"] = out["shares"]
+        if "comments" in out:
+            out["replies"] = out["comments"]
+        return out
