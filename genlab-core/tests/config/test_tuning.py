@@ -44,6 +44,17 @@ class TestSchemaDefaults:
             "ai_creators": 2000,
         }
 
+    def test_all_migrated_constant_defaults(self):
+        """Every constant migrated into tuning must have its pre-migration
+        value as the field default — the migration is byte-stable."""
+        cfg = TuningConfig()
+        assert cfg.reddit_fetch.upvote_view_equivalence == 40.0
+        assert cfg.trending_video_fetch.rss_fallback_base_velocity == 400.0
+        assert cfg.fetch_insights.min_delay_hours == 6
+        assert cfg.fetch_insights.max_warm_days == 7
+        assert cfg.download.timeout_seconds == 120
+        assert cfg.threads_publish.video_processing_wait_seconds == 30
+
     def test_root_model_constructs_from_partial_dict(self):
         # Partial input — Pydantic fills in defaults for the rest.
         cfg = TuningConfig.model_validate({"composite_scoring": {"target_like_ratio": 0.05}})
@@ -93,6 +104,43 @@ class TestLoaderBehaviour:
         _reset_cache_for_tests()
         with pytest.raises(ValidationError):
             get_tuning_config()
+
+
+class TestMigratedModulesUseTuning:
+    """Regression guards on each newly-migrated call site. Whole point of
+    the migration is editing the yaml recalibrates these — if any of
+    these break, a module is silently bypassing the tuning loader."""
+
+    def test_fetch_reddit_clips_aliases_match_tuning(self):
+        from genlab_core.media import fetch_reddit_clips
+
+        cfg = get_tuning_config().reddit_fetch
+        assert fetch_reddit_clips._UPVOTE_VIEW_EQUIVALENCE == cfg.upvote_view_equivalence
+
+    def test_trending_video_fetcher_aliases_match_tuning(self):
+        from genlab_core.media import trending_video_fetcher
+
+        cfg = get_tuning_config().trending_video_fetch
+        assert trending_video_fetcher._RSS_FALLBACK_BASE_VELOCITY == cfg.rss_fallback_base_velocity
+
+    def test_fetch_insights_aliases_match_tuning(self):
+        from genlab_core.pipeline.stages import fetch_insights
+
+        cfg = get_tuning_config().fetch_insights
+        assert fetch_insights.MIN_DELAY_HOURS == cfg.min_delay_hours
+        assert fetch_insights.MAX_WARM_DAYS == cfg.max_warm_days
+
+    def test_download_top_videos_aliases_match_tuning(self):
+        from genlab_core.media import download_top_videos
+
+        cfg = get_tuning_config().download
+        assert download_top_videos._DOWNLOAD_TIMEOUT == cfg.timeout_seconds
+
+    def test_threads_publish_aliases_match_tuning(self):
+        from genlab_core.platforms import threads
+
+        cfg = get_tuning_config().threads_publish
+        assert threads._VIDEO_PROCESSING_WAIT == cfg.video_processing_wait_seconds
 
 
 class TestCompositeScorerUsesTuning:
