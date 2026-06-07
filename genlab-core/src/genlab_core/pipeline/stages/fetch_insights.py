@@ -19,6 +19,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from genlab_core.config.tuning import get_tuning_config
 from genlab_core.http.circuit_breaker import (
     CircuitOpenError,
     get_circuit_breaker,
@@ -26,10 +27,11 @@ from genlab_core.http.circuit_breaker import (
 
 logger = logging.getLogger(__name__)
 
+_TUNING = get_tuning_config().fetch_insights
 # Minimum hours after publish before fetching (API data delay)
-MIN_DELAY_HOURS = 6
+MIN_DELAY_HOURS: int = _TUNING.min_delay_hours
 # Maximum age for "warm" window
-MAX_WARM_DAYS = 7
+MAX_WARM_DAYS: int = _TUNING.max_warm_days
 
 
 def normalize_publishing_metrics(metrics: dict[str, Any]) -> dict[str, int]:

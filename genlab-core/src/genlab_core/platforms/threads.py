@@ -36,6 +36,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.config.tuning import get_tuning_config
 from genlab_core.platforms.models import PublishPayload, PublishResult, TokenStatus
 from genlab_core.platforms.models import safe_json as _safe_json
 from genlab_core.ratelimit.token_bucket import TokenBucket
@@ -47,7 +48,7 @@ _TOKEN_LIFETIME_DAYS = 60
 _NEEDS_REFRESH_AFTER_DAYS = 50
 
 # Video processing: Meta needs ~30 s before threads_publish will succeed
-_VIDEO_PROCESSING_WAIT = 30
+_VIDEO_PROCESSING_WAIT: int = get_tuning_config().threads_publish.video_processing_wait_seconds
 
 
 # _safe_json imported from genlab_core.platforms.models

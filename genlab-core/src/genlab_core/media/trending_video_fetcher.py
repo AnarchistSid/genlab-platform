@@ -53,6 +53,7 @@ from urllib.parse import parse_qs, urlparse
 
 import requests
 
+from genlab_core.config.tuning import get_tuning_config
 from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
 
 logger = logging.getLogger(__name__)
@@ -242,7 +243,9 @@ MIN_VIEW_VELOCITY: dict[str, float] = {
 # path; view_count=0, no verified traction). Kept low on purpose so a real
 # measured-traction candidate always out-ranks them — they're a last resort, not
 # a fast lane for official-account marketing. (Was an effective ~1800.)
-_RSS_FALLBACK_BASE_VELOCITY = 400.0
+_RSS_FALLBACK_BASE_VELOCITY: float = (
+    get_tuning_config().trending_video_fetch.rss_fallback_base_velocity
+)
 
 MAX_DURATION_SECONDS = 600  # 10 minutes — yt-dlp trims to reel length at render
 MIN_DURATION_SECONDS = 15  # 15 seconds

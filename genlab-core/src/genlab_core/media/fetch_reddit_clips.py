@@ -25,6 +25,8 @@ from typing import Any
 
 import requests
 
+from genlab_core.config.tuning import get_tuning_config
+
 logger = logging.getLogger(__name__)
 
 # Reddit blocks the default requests UA. The Gen Lab UA is benign and
@@ -51,7 +53,7 @@ _REDDIT_TIMEOUT = 15  # seconds
 # merged ranking. 40× keeps a strong Reddit clip in YouTube's range (so it
 # competes fairly without dominating). A rough calibration, not ground truth —
 # tune here if Reddit over/under-represents in the selected posts.
-_UPVOTE_VIEW_EQUIVALENCE = 40.0
+_UPVOTE_VIEW_EQUIVALENCE: float = get_tuning_config().reddit_fetch.upvote_view_equivalence
 
 
 def _is_video_post(post: dict) -> tuple[bool, str]:

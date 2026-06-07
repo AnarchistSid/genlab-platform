@@ -24,6 +24,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from genlab_core.config.tuning import get_tuning_config  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -41,7 +43,7 @@ _NICHE_KEYWORDS: dict[str, list[str]] = {
 _MIN_FILE_SIZE = 100 * 1024  # 100 KB
 
 # yt-dlp download timeout (seconds)
-_DOWNLOAD_TIMEOUT = 120
+_DOWNLOAD_TIMEOUT: int = get_tuning_config().download.timeout_seconds
 
 
 # ---------------------------------------------------------------------------

@@ -32,3 +32,38 @@ composite_scoring:
     movies: 5000
     anime: 2000
     ai_creators: 2000
+
+
+reddit_fetch:
+  # Multiplier that converts a Reddit post's upvote_count to a view-
+  # equivalent figure for cross-source ranking. PR #53 calibrated this
+  # from 100.0 (Reddit over-represented in selected posts) down to 40.0.
+  upvote_view_equivalence: 40.0
+
+
+trending_video_fetch:
+  # Synthesised velocity stamp for RSS-only candidates (no view_count).
+  # PR #53 lowered this from ~1800 to 400 so RSS-fallback items stop
+  # dominating the ranked queue as if they were known-viral.
+  rss_fallback_base_velocity: 400.0
+
+
+fetch_insights:
+  # Hours to wait after a publish before fetching engagement metrics —
+  # platform analytics endpoints lag by ~5–6h.
+  min_delay_hours: 6
+  # Maximum age (days) of posts to keep fetching the 'warm' window for.
+  # Beyond this, engagement curves flatten and follow-ups are noise.
+  max_warm_days: 7
+
+
+download:
+  # yt-dlp per-download timeout. Higher tolerates slow WARP days; lower
+  # fails fast and lets the pipeline move on.
+  timeout_seconds: 120
+
+
+threads_publish:
+  # Sleep between Meta's video container creation and threads_publish.
+  # Meta documents ~30 s minimum; lowering risks 'container not ready'.
+  video_processing_wait_seconds: 30

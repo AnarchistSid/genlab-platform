@@ -98,11 +98,95 @@ class CompositeScoringConfig(BaseModel):
     )
 
 
+class RedditFetchConfig(BaseModel):
+    """Reddit-fetch calibration — see :mod:`genlab_core.media.fetch_reddit_clips`."""
+
+    upvote_view_equivalence: float = Field(
+        default=40.0,
+        description=(
+            "Multiplier that converts Reddit ``upvote_count`` to a "
+            "view-equivalent figure for cross-source ranking. Lower → "
+            "Reddit posts compete less aggressively against YouTube; "
+            "higher → Reddit dominates. PR #53 calibrated this from "
+            "100.0 to 40.0 after observing Reddit was over-represented "
+            "in selected posts."
+        ),
+    )
+
+
+class TrendingVideoFetchConfig(BaseModel):
+    """Trending-video-fetcher calibration — see
+    :mod:`genlab_core.media.trending_video_fetcher`."""
+
+    rss_fallback_base_velocity: float = Field(
+        default=400.0,
+        description=(
+            "Synthesised velocity stamp for RSS-only candidates that have "
+            "no view_count (typical quota-day path). PR #53 lowered this "
+            "from ~1800 to 400 so RSS-fallback items stop dominating the "
+            "ranked queue as if they were known-viral."
+        ),
+    )
+
+
+class FetchInsightsConfig(BaseModel):
+    """Insights-window calibration — see
+    :mod:`genlab_core.pipeline.stages.fetch_insights`."""
+
+    min_delay_hours: int = Field(
+        default=6,
+        description=(
+            "Minimum hours after a publish before fetching engagement "
+            "metrics — platform analytics endpoints lag by ~5–6h."
+        ),
+    )
+    max_warm_days: int = Field(
+        default=7,
+        description=(
+            "Maximum age of posts to keep fetching the 'warm' window for. "
+            "Beyond this, engagement curves flatten and follow-ups become "
+            "expensive noise."
+        ),
+    )
+
+
+class DownloadConfig(BaseModel):
+    """yt-dlp download timeouts — see
+    :mod:`genlab_core.media.download_top_videos`."""
+
+    timeout_seconds: int = Field(
+        default=120,
+        description=(
+            "Per-download timeout passed to yt-dlp as ``--socket-timeout``. "
+            "Higher tolerates slow WARP proxy days; lower fails fast and "
+            "lets the pipeline move on."
+        ),
+    )
+
+
+class ThreadsPublishConfig(BaseModel):
+    """Threads-publish pacing — see :mod:`genlab_core.platforms.threads`."""
+
+    video_processing_wait_seconds: int = Field(
+        default=30,
+        description=(
+            "Sleep between Meta's video container creation and the "
+            "``threads_publish`` call. Meta documents ~30s minimum; "
+            "lowering risks 'container not ready' 4xxs."
+        ),
+    )
+
+
 class TuningConfig(BaseModel):
     """Root model — every nested config gets its own ``Field`` so future
     additions don't churn the load API."""
 
     composite_scoring: CompositeScoringConfig = Field(default_factory=CompositeScoringConfig)
+    reddit_fetch: RedditFetchConfig = Field(default_factory=RedditFetchConfig)
+    trending_video_fetch: TrendingVideoFetchConfig = Field(default_factory=TrendingVideoFetchConfig)
+    fetch_insights: FetchInsightsConfig = Field(default_factory=FetchInsightsConfig)
+    download: DownloadConfig = Field(default_factory=DownloadConfig)
+    threads_publish: ThreadsPublishConfig = Field(default_factory=ThreadsPublishConfig)
 
 
 # ── loader ──────────────────────────────────────────────────────────
