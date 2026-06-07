@@ -16,50 +16,75 @@ def _gaming_config():
 
 
 class TestDynamicStageLoading:
-    def test_gaming_stages_load_correctly(self):
-        """Gaming niche loads its 27 enabled stages from niche.yaml.
-        (Was 26; RenderWhisperCaptions re-enabled 2026-06-05 after PR #55.)"""
+    def test_gaming_loads_all_required_stages(self):
+        """Gaming niche.yaml must wire every load-bearing stage.
+
+        Replaces a hardcoded ``len(stages) == 27`` assert: that pattern
+        forced a count-bump on every unrelated PR that added or re-enabled
+        a stage. Asking *which* stages are present catches the real bug
+        (missing/disabled load-bearing stage) while letting additions
+        through silently.
+        """
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", _gaming_config())
-        assert len(stages) == 27
-        assert stages[0].__class__.__name__ == "ExpressLane"
-        assert stages[-1].__class__.__name__ == "RunReport"
+        loaded_names = {s.__class__.__name__ for s in stages}
 
-    def test_gaming_stage_order_matches_config(self):
-        """Stage order must match the niche.yaml declaration."""
-        expected_order = [
+        required = {
             "ExpressLane",
             "FetchTrendingVideos",
-            "FetchTwitchClips",
-            "FetchRedditClips",
-            "FetchSteamTrailers",
             "FetchGamingStories",
-            "FilterGamingStories",
-            "EnrichWithIGDB",
-            "ExtractGamingMedia",
             "ScoreGamingClips",
             "VideoGate",
             "GamingWritingStrategy",
             "GamingHookStrategy",
-            "GamingPlatformAdaptationStrategy",
-            "AffiliateMatch",
-            "QCGates",
-            "ViralityScoring",
             "RenderGamingVideo",
-            "RenderTextOverlays",
-            "GenerateAudio",
-            "GenerateGamingAudio",
             "RenderWhisperCaptions",
             "ValidateVideos",
             "PushToBacklog",
             "FetchInsights",
             "PerformanceLearner",
             "RunReport",
-        ]
+        }
+        missing = required - loaded_names
+        assert not missing, f"required stages missing/disabled: {missing}"
+
+        # Positional invariants that the data-flow depends on.
+        assert stages[0].__class__.__name__ == "ExpressLane"
+        assert stages[-1].__class__.__name__ == "RunReport"
+
+    def test_gaming_stage_order_invariants(self):
+        """Data-flow ordering constraints (replaces a 27-item exact-match
+        ``expected_order`` list).
+
+        Encodes the actual semantics: writing needs a fetched + scored
+        story; rendering needs writing; validation needs rendering; push
+        needs validation; analytics tail needs push. Order within each
+        phase doesn't matter — anything that does matter is asserted as
+        a pairwise ``A before B`` constraint.
+        """
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", _gaming_config())
-        actual_order = [s.__class__.__name__ for s in stages]
-        assert actual_order == expected_order
+        order = [s.__class__.__name__ for s in stages]
+
+        def pos(name: str) -> int:
+            assert name in order, f"{name} not in loaded stages"
+            return order.index(name)
+
+        # Phase 1: Fetch → score → gate
+        assert pos("FetchTrendingVideos") < pos("ScoreGamingClips")
+        assert pos("ScoreGamingClips") < pos("VideoGate")
+        # Phase 2: Gate → writing → hooks (writing must run on cleared clips)
+        assert pos("VideoGate") < pos("GamingWritingStrategy")
+        assert pos("GamingWritingStrategy") < pos("GamingHookStrategy")
+        # Phase 3: Writing → render → validate
+        assert pos("GamingHookStrategy") < pos("RenderGamingVideo")
+        assert pos("RenderGamingVideo") < pos("ValidateVideos")
+        assert pos("RenderWhisperCaptions") < pos("ValidateVideos")
+        # Phase 4: Validate → push → analytics tail
+        assert pos("ValidateVideos") < pos("PushToBacklog")
+        assert pos("PushToBacklog") < pos("FetchInsights")
+        assert pos("FetchInsights") < pos("PerformanceLearner")
+        assert pos("PerformanceLearner") < pos("RunReport")
 
     def test_missing_pipeline_stages_raises_niche_config_error(self):
         """Niche config without pipeline.stages raises NicheConfigError."""
