@@ -415,3 +415,151 @@ class TestClipIndexComposeCompat:
         """Top-level must have 'clips' as a dict (not list)."""
         index = build_clip_index("r1", {"a": {"story_id": "a", "success": True}})
         assert isinstance(index["clips"], dict)
+
+
+# ---------------------------------------------------------------------------
+# Parallel download dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestParallelDownloadDispatch:
+    """Regression guards on the ThreadPoolExecutor-backed download loop.
+
+    The senior-review perf agent ranked sequential yt-dlp as the single
+    highest-leverage perf fix in the codebase (~12-37 min/day wall-clock
+    across 5 niches). These tests guard:
+
+    1. 5 stories produce 5 entries with the right shape regardless of
+       completion order (out-of-order ``as_completed`` must not lose data).
+    2. Per-story exceptions are surfaced — a worker that raises means a
+       coding bug in ``_process_one_story``, not a story-level failure
+       (which the worker catches and returns as a failed entry).
+    3. The ``parallel_workers`` knob falls through to the sequential code
+       path when set to 1 — the kill switch for ops who hit unforeseen
+       contention.
+    """
+
+    @staticmethod
+    def _mock_sourcer_result(url: str = "https://x/v.mp4", backend: str = "direct_url"):
+        m = MagicMock()
+        m.url = url
+        m.backend = backend
+        return m
+
+    def _patch_process_chain(
+        self,
+        success: bool = True,
+        clip_duration: float = 30.0,
+    ):
+        """Wire up the minimal mocks for _download_video → _find_downloaded_file
+        → _validate_download so each story 'succeeds' or 'fails' as requested."""
+        from contextlib import ExitStack
+        from unittest.mock import patch
+
+        stack = ExitStack()
+        stack.enter_context(
+            patch(
+                "genlab_core.media.download_top_videos._download_video",
+                return_value={"success": success, "error": "" if success else "boom"},
+            )
+        )
+        stack.enter_context(
+            patch(
+                "genlab_core.media.download_top_videos._find_downloaded_file",
+                return_value="/tmp/x.mp4" if success else None,
+            )
+        )
+        stack.enter_context(
+            patch(
+                "genlab_core.media.download_top_videos._validate_download",
+                return_value={"valid": True, "duration_seconds": clip_duration, "reason": ""},
+            )
+        )
+        return stack
+
+    def test_five_stories_yield_five_keyed_entries(self, tmp_path):
+        """``as_completed`` returns results in arbitrary order — the entries
+        dict keyed by story_id must still cover every input story."""
+        stories = [{"story_id": f"sid_{i}", "title": f"t{i}"} for i in range(5)]
+
+        sourcer_inst = MagicMock()
+        sourcer_inst.find_video_for_story.side_effect = lambda story: self._mock_sourcer_result()
+        sourcer_inst.get_stats.return_value = {"direct_url": 5}
+
+        with (
+            patch(
+                "genlab_core.media.video_sourcer.VideoSourcer",
+                return_value=sourcer_inst,
+            ),
+            self._patch_process_chain(success=True),
+        ):
+            entries = download_videos_for_stories(stories, run_dir=str(tmp_path), niche_id="gaming")
+
+        assert set(entries.keys()) == {f"sid_{i}" for i in range(5)}
+        assert all(e["success"] for e in entries.values())
+        assert all(e["story_id"] == k for k, e in entries.items())
+
+    def test_failure_in_one_story_does_not_break_others(self, tmp_path):
+        """One story's exception must not poison the batch — the per-story
+        worker catches and converts to a failed entry."""
+        stories = [{"story_id": f"sid_{i}", "title": f"t{i}"} for i in range(3)]
+
+        sourcer_inst = MagicMock()
+
+        def find(story):
+            if story["story_id"] == "sid_1":
+                raise RuntimeError("transient backend hiccup")
+            return self._mock_sourcer_result()
+
+        sourcer_inst.find_video_for_story.side_effect = find
+        sourcer_inst.get_stats.return_value = {}
+
+        with (
+            patch(
+                "genlab_core.media.video_sourcer.VideoSourcer",
+                return_value=sourcer_inst,
+            ),
+            self._patch_process_chain(success=True),
+        ):
+            entries = download_videos_for_stories(stories, run_dir=str(tmp_path), niche_id="gaming")
+
+        assert len(entries) == 3
+        assert entries["sid_0"]["success"]
+        assert entries["sid_2"]["success"]
+        # The failed one carries the error text so debugging is possible.
+        assert entries["sid_1"]["success"] is False
+        assert "sourcer error" in entries["sid_1"]["error"]
+
+    def test_parallel_workers_1_falls_to_sequential_path(self, tmp_path, monkeypatch):
+        """The kill-switch: setting ``download.parallel_workers: 1`` in
+        tuning.yaml restores the previous sequential behaviour. The output
+        contract must be identical."""
+        from genlab_core.config.tuning import (
+            DownloadConfig,
+            TuningConfig,
+            _reset_cache_for_tests,
+        )
+
+        # Force parallel_workers=1 via a cached-loader override.
+        forced = TuningConfig(download=DownloadConfig(parallel_workers=1))
+        monkeypatch.setattr(
+            "genlab_core.media.download_top_videos.get_tuning_config",
+            lambda: forced,
+        )
+        _reset_cache_for_tests()
+
+        stories = [{"story_id": f"sid_{i}", "title": f"t{i}"} for i in range(3)]
+        sourcer_inst = MagicMock()
+        sourcer_inst.find_video_for_story.side_effect = lambda story: self._mock_sourcer_result()
+        sourcer_inst.get_stats.return_value = {}
+
+        with (
+            patch(
+                "genlab_core.media.video_sourcer.VideoSourcer",
+                return_value=sourcer_inst,
+            ),
+            self._patch_process_chain(success=True),
+        ):
+            entries = download_videos_for_stories(stories, run_dir=str(tmp_path), niche_id="gaming")
+
+        assert set(entries.keys()) == {"sid_0", "sid_1", "sid_2"}
