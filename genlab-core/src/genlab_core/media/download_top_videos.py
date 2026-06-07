@@ -21,6 +21,7 @@ import logging
 import os
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -320,167 +321,41 @@ def download_videos_for_stories(
         youtube_api_key=youtube_api_key,
     )
 
+    # Per-story work is fully self-contained — source URL, download, fallback,
+    # validate — so we fan out across a ThreadPoolExecutor. Each yt-dlp call
+    # is subprocess-bound (no GIL contention) and ~50 MB RSS; 4-way concurrency
+    # cuts the per-run wall-clock by ~3-4x in practice. Configured via
+    # tuning.yaml::download.parallel_workers (capped at 8 by the schema).
+    parallel_workers = get_tuning_config().download.parallel_workers
+    total = len(top_stories)
     entries: dict[str, dict[str, Any]] = {}
 
-    for i, story in enumerate(top_stories, 1):
-        story_id = str(story.get("story_id", "")).strip()
-        title = story.get("title", "untitled")
-        if not story_id:
-            # Generate stable story_id from title hash — niche strategies
-            # don't always set story_id before the download stage.
-            import hashlib
+    if parallel_workers <= 1 or total <= 1:
+        # Sequential path — preserved for ops who want the old behaviour
+        # (set parallel_workers: 1 in tuning.yaml) and for the 1-story case
+        # where pool overhead isn't worth it.
+        for i, story in enumerate(top_stories, 1):
+            story_id, entry = _process_one_story(story, i, total, sourcer, clips_dir)
+            entries[story_id] = entry
+    else:
+        with ThreadPoolExecutor(
+            max_workers=parallel_workers,
+            thread_name_prefix="dl",
+        ) as pool:
+            futures = [
+                pool.submit(_process_one_story, story, i, total, sourcer, clips_dir)
+                for i, story in enumerate(top_stories, 1)
+            ]
+            for fut in as_completed(futures):
+                # Each worker catches its own per-story exceptions and returns
+                # a "failed" entry — fut.result() raising would mean a coding
+                # bug in _process_one_story itself, which we want to surface.
+                story_id, entry = fut.result()
+                entries[story_id] = entry
 
-            story_id = hashlib.sha256(title.encode()).hexdigest()
-            story["story_id"] = story_id
-            logger.debug("Story %d: generated story_id from title hash", i)
-
-        logger.info(
-            "[%d/%d] Sourcing video for: %s (story_id=%s)",
-            i,
-            len(top_stories),
-            title[:60],
-            story_id[:12],
-        )
-
-        # Find a video URL via the fallback chain
-        try:
-            result = sourcer.find_video_for_story(story)
-        except Exception as exc:
-            logger.warning("VideoSourcer error for story %s: %s", story_id[:12], exc)
-            entries[story_id] = {
-                "story_id": story_id,
-                "success": False,
-                "clip_path": "",
-                "source_url": "",
-                "backend": "",
-                "duration_seconds": 0.0,
-                "error": f"sourcer error: {exc}",
-            }
-            continue
-
-        if result is None:
-            logger.info("  No video found for story %s", story_id[:12])
-            entries[story_id] = {
-                "story_id": story_id,
-                "success": False,
-                "clip_path": "",
-                "source_url": "",
-                "backend": "",
-                "duration_seconds": 0.0,
-                "error": "no video found",
-            }
-            continue
-
-        video_url = result.url
-        backend = result.backend
-        logger.info("  Found video via %s: %s", backend, video_url[:80])
-
-        # Download the video
-        # Use story_id prefix for unique filenames
-        safe_id = story_id[:16].replace("/", "_")
-        output_path = str(clips_dir / f"{safe_id}.mp4")
-
-        dl_result = _download_video(video_url, output_path)
-
-        # FALLBACK: if the primary URL failed (usually YouTube bot detection),
-        # ask VideoSourcer for an alternative backend and retry once.
-        if not dl_result["success"]:
-            err = dl_result.get("error", "")
-            is_bot_or_block = (
-                "Sign in to confirm" in err
-                or "not a bot" in err
-                or "Private video" in err
-                or "Video unavailable" in err
-                or "not available in your country" in err
-            )
-            if is_bot_or_block and backend == "direct_url":
-                logger.info(
-                    "  Primary URL failed (%s) — trying alternative source",
-                    err[:50],
-                )
-                # Force sourcer to skip direct URL and try youtube/reddit/tmdb search
-                try:
-                    alt_result = sourcer.source_alternative(story, exclude_url=video_url)
-                except AttributeError:
-                    alt_result = None
-                except Exception as exc:
-                    logger.warning("  Alternative source failed: %s", exc)
-                    alt_result = None
-
-                if alt_result is not None and alt_result.url != video_url:
-                    video_url = alt_result.url
-                    backend = alt_result.backend
-                    logger.info(
-                        "  Retrying with %s: %s",
-                        backend,
-                        video_url[:80],
-                    )
-                    dl_result = _download_video(video_url, output_path)
-
-        if not dl_result["success"]:
-            entries[story_id] = {
-                "story_id": story_id,
-                "success": False,
-                "clip_path": "",
-                "source_url": video_url,
-                "backend": backend,
-                "duration_seconds": 0.0,
-                "error": dl_result["error"],
-            }
-            continue
-
-        # yt-dlp may add format extension — find the actual file
-        actual_path = _find_downloaded_file(output_path)
-        if not actual_path:
-            entries[story_id] = {
-                "story_id": story_id,
-                "success": False,
-                "clip_path": "",
-                "source_url": video_url,
-                "backend": backend,
-                "duration_seconds": 0.0,
-                "error": "downloaded file not found on disk",
-            }
-            continue
-
-        # Validate the download
-        validation = _validate_download(actual_path)
-
-        if not validation["valid"]:
-            logger.warning(
-                "  Validation failed for %s: %s",
-                actual_path,
-                validation["reason"],
-            )
-            entries[story_id] = {
-                "story_id": story_id,
-                "success": False,
-                "clip_path": "",
-                "source_url": video_url,
-                "backend": backend,
-                "duration_seconds": 0.0,
-                "error": f"validation: {validation['reason']}",
-            }
-            continue
-
-        logger.info(
-            "  Downloaded: %s (%.1fs, %s)",
-            Path(actual_path).name,
-            validation["duration_seconds"],
-            backend,
-        )
-
-        entries[story_id] = {
-            "story_id": story_id,
-            "success": True,
-            "clip_path": actual_path,
-            "source_url": video_url,
-            "backend": backend,
-            "duration_seconds": validation["duration_seconds"],
-            "error": "",
-        }
-
-    # Log sourcer stats
+    # Log sourcer stats (counters incremented inside per-story workers;
+    # diagnostic only, so the small under-count risk from un-locked += isn't
+    # worth the lock contention).
     stats = sourcer.get_stats()
     logger.info(
         "VideoSourcer stats: %s",
@@ -488,6 +363,170 @@ def download_videos_for_stories(
     )
 
     return entries
+
+
+def _process_one_story(
+    story: dict[str, Any],
+    story_index: int,
+    total: int,
+    sourcer: Any,  # VideoSourcer — typed as Any to avoid the top-level import cost.
+    clips_dir: Path,
+) -> tuple[str, dict[str, Any]]:
+    """Source + download + validate one story.
+
+    Fully self-contained so it can be safely run inside a ThreadPoolExecutor.
+    Returns ``(story_id, entry_dict)`` — the caller writes the dict into the
+    shared ``entries`` map keyed by ``story_id``.
+    """
+    story_id = str(story.get("story_id", "")).strip()
+    title = story.get("title", "untitled")
+    if not story_id:
+        # Generate stable story_id from title hash — niche strategies
+        # don't always set story_id before the download stage.
+        import hashlib
+
+        story_id = hashlib.sha256(title.encode()).hexdigest()
+        story["story_id"] = story_id
+        logger.debug("Story %d: generated story_id from title hash", story_index)
+
+    logger.info(
+        "[%d/%d] Sourcing video for: %s (story_id=%s)",
+        story_index,
+        total,
+        title[:60],
+        story_id[:12],
+    )
+
+    # Find a video URL via the fallback chain
+    try:
+        result = sourcer.find_video_for_story(story)
+    except Exception as exc:
+        logger.warning("VideoSourcer error for story %s: %s", story_id[:12], exc)
+        return story_id, {
+            "story_id": story_id,
+            "success": False,
+            "clip_path": "",
+            "source_url": "",
+            "backend": "",
+            "duration_seconds": 0.0,
+            "error": f"sourcer error: {exc}",
+        }
+
+    if result is None:
+        logger.info("  No video found for story %s", story_id[:12])
+        return story_id, {
+            "story_id": story_id,
+            "success": False,
+            "clip_path": "",
+            "source_url": "",
+            "backend": "",
+            "duration_seconds": 0.0,
+            "error": "no video found",
+        }
+
+    video_url = result.url
+    backend = result.backend
+    logger.info("  Found video via %s: %s", backend, video_url[:80])
+
+    # Download the video — story_id prefix keeps filenames unique even when
+    # workers race.
+    safe_id = story_id[:16].replace("/", "_")
+    output_path = str(clips_dir / f"{safe_id}.mp4")
+
+    dl_result = _download_video(video_url, output_path)
+
+    # FALLBACK: if the primary URL failed (usually YouTube bot detection),
+    # ask VideoSourcer for an alternative backend and retry once.
+    if not dl_result["success"]:
+        err = dl_result.get("error", "")
+        is_bot_or_block = (
+            "Sign in to confirm" in err
+            or "not a bot" in err
+            or "Private video" in err
+            or "Video unavailable" in err
+            or "not available in your country" in err
+        )
+        if is_bot_or_block and backend == "direct_url":
+            logger.info(
+                "  Primary URL failed (%s) — trying alternative source",
+                err[:50],
+            )
+            try:
+                alt_result = sourcer.source_alternative(story, exclude_url=video_url)
+            except AttributeError:
+                alt_result = None
+            except Exception as exc:
+                logger.warning("  Alternative source failed: %s", exc)
+                alt_result = None
+
+            if alt_result is not None and alt_result.url != video_url:
+                video_url = alt_result.url
+                backend = alt_result.backend
+                logger.info(
+                    "  Retrying with %s: %s",
+                    backend,
+                    video_url[:80],
+                )
+                dl_result = _download_video(video_url, output_path)
+
+    if not dl_result["success"]:
+        return story_id, {
+            "story_id": story_id,
+            "success": False,
+            "clip_path": "",
+            "source_url": video_url,
+            "backend": backend,
+            "duration_seconds": 0.0,
+            "error": dl_result["error"],
+        }
+
+    # yt-dlp may add format extension — find the actual file
+    actual_path = _find_downloaded_file(output_path)
+    if not actual_path:
+        return story_id, {
+            "story_id": story_id,
+            "success": False,
+            "clip_path": "",
+            "source_url": video_url,
+            "backend": backend,
+            "duration_seconds": 0.0,
+            "error": "downloaded file not found on disk",
+        }
+
+    validation = _validate_download(actual_path)
+
+    if not validation["valid"]:
+        logger.warning(
+            "  Validation failed for %s: %s",
+            actual_path,
+            validation["reason"],
+        )
+        return story_id, {
+            "story_id": story_id,
+            "success": False,
+            "clip_path": "",
+            "source_url": video_url,
+            "backend": backend,
+            "duration_seconds": 0.0,
+            "error": f"validation: {validation['reason']}",
+        }
+
+    logger.info(
+        "  Downloaded: %s (%.1fs, %s)",
+        Path(actual_path).name,
+        validation["duration_seconds"],
+        backend,
+    )
+
+    return story_id, {
+        "story_id": story_id,
+        "success": True,
+        "clip_path": actual_path,
+        "source_url": video_url,
+        "backend": backend,
+        "duration_seconds": validation["duration_seconds"],
+        "error": "",
+    }
 
 
 def _find_downloaded_file(expected_path: str) -> str | None:

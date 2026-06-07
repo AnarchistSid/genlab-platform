@@ -62,6 +62,13 @@ download:
   # fails fast and lets the pipeline move on.
   timeout_seconds: 120
 
+  # How many yt-dlp downloads to run concurrently for a single niche's
+  # batch. 4 cuts the per-run download wall-clock by ~3-4x (perf review's
+  # #1 finding — ~12-37 min/day recovered across the 5 niches). 1
+  # restores the previous sequential behaviour. Capped at 8 by the
+  # schema to avoid saturating the WARP proxy.
+  parallel_workers: 4
+
 
 threads_publish:
   # Sleep between Meta's video container creation and threads_publish.

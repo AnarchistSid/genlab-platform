@@ -151,7 +151,7 @@ class FetchInsightsConfig(BaseModel):
 
 
 class DownloadConfig(BaseModel):
-    """yt-dlp download timeouts — see
+    """yt-dlp download tuning — see
     :mod:`genlab_core.media.download_top_videos`."""
 
     timeout_seconds: int = Field(
@@ -160,6 +160,20 @@ class DownloadConfig(BaseModel):
             "Per-download timeout passed to yt-dlp as ``--socket-timeout``. "
             "Higher tolerates slow WARP proxy days; lower fails fast and "
             "lets the pipeline move on."
+        ),
+    )
+    parallel_workers: int = Field(
+        default=4,
+        ge=1,
+        le=8,
+        description=(
+            "How many yt-dlp downloads to run concurrently for a single "
+            "niche's batch. Each worker is subprocess-bound (no GIL "
+            "contention) and ~50 MB RSS, so 4 fits comfortably on the "
+            "4 GB Hetzner box. Lowering to 1 restores the previous "
+            "sequential behaviour (~150-450s/niche/run); 4 cuts that "
+            "by ~3-4x in practice. Capped at 8 to avoid saturating the "
+            "WARP proxy with concurrent connections."
         ),
     )
 
