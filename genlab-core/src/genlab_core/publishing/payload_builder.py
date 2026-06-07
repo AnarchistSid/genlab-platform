@@ -1,0 +1,244 @@
+"""Convert raw SharePoint blueprint fields into a typed PublishPayload.
+
+The publisher orchestrator (:mod:`genlab_core.publishing.publish_all_platforms`)
+holds a dict of SharePoint field values per blueprint; each platform
+client wants a typed :class:`~genlab_core.platforms.models.PublishPayload`.
+:func:`build_payload` is the seam — one function per platform-bound
+publish call. Three small helpers (``parse_visual_paths``,
+``parse_json_field``, ``build_platform_specific``) own the data-shape
+quirks (legacy JSON-string columns, per-platform sub-models).
+
+Lives in its own module so the multi-platform publisher orchestrator
+stays focused on orchestration flow. Extracted in the refactor-#9
+decomposition (PR 3/N). Re-exported from the orchestrator for
+backwards-compatible imports (``build_payload`` is used by
+``test_publish_all_platforms``; the three helpers had zero external
+references and dropped their underscore prefixes here since they are
+public within this module).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from genlab_core.platforms.models import (
+    FacebookSpecific,
+    InstagramSpecific,
+    PublishPayload,
+    ThreadsSpecific,
+    TwitterSpecific,
+    YouTubeSpecific,
+)
+from genlab_core.publishing.niche_validation import validate_niche
+from genlab_core.publishing.transcode import transcode_for_platform
+
+logger = logging.getLogger(__name__)
+
+
+def parse_visual_paths(fields: dict[str, Any]) -> list:
+    """Decode the ``visual_paths`` column into a list.
+
+    Old rows store a JSON string; current rows can also pass a list
+    pre-parsed. Malformed JSON returns ``[]`` — the caller treats
+    missing visuals as a fatal condition further down so silent ``[]``
+    is acceptable here.
+    """
+    raw = fields.get("visual_paths", "[]")
+    try:
+        return json.loads(raw) if isinstance(raw, str) else (raw or [])
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def parse_json_field(raw: Any) -> dict:
+    """Decode a JSON-string column into a dict.
+
+    Used for legacy ``youtube_content`` (``{"title":...,"description":...}``)
+    and the ``twitter_content`` thread spec. Empty or malformed values
+    return ``{}`` so callers can fall through to per-platform defaults
+    without an explicit error.
+    """
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def build_platform_specific(
+    fields: dict[str, Any],
+    platform: str,
+    caption: str,
+    hook: str,
+):
+    """Build the platform-specific sub-model from blueprint fields.
+
+    One branch per platform-client. Returns ``None`` for unknown
+    platforms — the caller treats that as "no platform-specific
+    config", which the strict clients (IG/YT) reject and the loose
+    ones (FB/Threads) accept.
+    """
+    if platform == "instagram":
+        image_paths = [
+            str(p) for p in parse_visual_paths(fields) if not str(p).lower().endswith(".mp4")
+        ]
+        return InstagramSpecific(
+            cover_url=image_paths[0] if image_paths else "",
+            share_to_feed=True,
+        )
+
+    if platform == "youtube":
+        # ``youtube_content`` is the plain-text Shorts description (after
+        # affiliate CTA + disclosure injection by the CTA engine). Shorts
+        # title comes from the ``hook`` column. Older rows may still
+        # carry a legacy ``{"title":...,"description":...}`` JSON dict-
+        # string — parse those defensively so historical blueprints
+        # still publish.
+        raw_yt = fields.get("youtube_content", "") or ""
+        legacy = parse_json_field(raw_yt)
+        if isinstance(legacy, dict) and legacy:
+            description = legacy.get("description", "") or raw_yt
+            legacy_title = legacy.get("title", "")
+        else:
+            description = raw_yt
+            legacy_title = ""
+        shorts_title = hook[:100] or legacy_title or fields.get("topic", "")
+        return YouTubeSpecific(
+            shorts_title=shorts_title[:100],
+            community_post_text=description or caption,
+        )
+
+    if platform == "twitter":
+        tw_content = parse_json_field(fields.get("twitter_content", ""))
+        routing = (
+            str(tw_content.get("routing", tw_content.get("strategy", "single"))).strip().lower()
+        )
+        tweet_text = str(tw_content.get("tweet_text", "") or caption).strip()
+        tweet_text = tweet_text[:280]
+        return TwitterSpecific(
+            routing=routing if routing in ("single", "thread") else "single",
+            tweet_text=tweet_text,
+            thread_tweets=tw_content.get("thread_tweets", []),
+        )
+
+    if platform == "facebook":
+        return FacebookSpecific()
+
+    if platform == "threads":
+        return ThreadsSpecific()
+
+    return None
+
+
+def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
+    """Convert a raw blueprint ``fields`` dict into a typed PublishPayload.
+
+    Args:
+        fields: The ``fields`` dict from a SharePoint blueprint record.
+        platform: Legacy platform name (e.g. ``instagram``, ``twitter``).
+
+    Raises:
+        ValueError: If ``media_type`` is video but no valid media files
+            remain after filtering — publish would silent-fail otherwise.
+    """
+    niche_id = validate_niche(fields.get("niche_id", "") or "")
+
+    # Media paths — decode + filter for existence + min size.
+    visual_paths_raw = fields.get("visual_paths", "[]")
+    try:
+        vp_list = (
+            json.loads(visual_paths_raw)
+            if isinstance(visual_paths_raw, str)
+            else (visual_paths_raw or [])
+        )
+    except (json.JSONDecodeError, TypeError):
+        vp_list = []
+    media_paths = [Path(p) for p in vp_list if p]
+
+    missing = [p for p in media_paths if not p.exists()]
+    if missing:
+        logger.warning("[publish] Missing media files: %s", [str(m) for m in missing])
+        media_paths = [p for p in media_paths if p.exists()]
+
+    # Filter out corrupted/empty files (< 10KB is not a valid video).
+    too_small = [p for p in media_paths if p.exists() and p.stat().st_size < 10240]
+    if too_small:
+        logger.warning(
+            "[publish] Skipping too-small media files (<10KB): %s", [str(p) for p in too_small]
+        )
+        media_paths = [p for p in media_paths if p not in too_small]
+
+    # Per-platform transcode: produce an optimised variant for the target.
+    if media_paths and any(str(p).lower().endswith(".mp4") for p in media_paths):
+        media_paths = [
+            transcode_for_platform(p, platform) if str(p).lower().endswith(".mp4") else p
+            for p in media_paths
+        ]
+
+    fmt = (fields.get("format", "") or "").strip().lower()
+    has_mp4 = any(str(p).lower().endswith(".mp4") for p in media_paths)
+    if has_mp4 or fmt in ("reel", "short", "video"):
+        media_type = "video"
+    else:
+        media_type = "image"
+
+    # Abort early if video format but no valid media files remain — without
+    # this the publisher would post nothing and report success.
+    if media_type == "video" and not media_paths:
+        raise ValueError(
+            f"No valid media files for video publish (niche={niche_id}, "
+            f"format={fmt}, original_paths={vp_list})"
+        )
+
+    # Caption — use platform-specific content when available.
+    if platform == "threads" and fields.get("threads_content"):
+        caption = (fields.get("threads_content", "") or "").strip()
+    elif platform == "facebook" and fields.get("facebook_content"):
+        caption = (fields.get("facebook_content", "") or "").strip()
+    else:
+        caption = (fields.get("caption", "") or "").strip()
+
+    # Hashtags — accept either a list or a space-separated string.
+    hashtags_raw = fields.get("hashtags", "") or ""
+    if isinstance(hashtags_raw, list):
+        hashtags = [
+            t.strip() if t.strip().startswith("#") else f"#{t.strip()}"
+            for t in (str(h) for h in hashtags_raw if h)
+            if t.strip()
+        ]
+    else:
+        hashtags = [
+            t.strip() if t.strip().startswith("#") else f"#{t.strip()}"
+            for t in str(hashtags_raw).split()
+            if t.strip()
+        ]
+    hook = (fields.get("hook", "") or fields.get("hook_text", "") or "").strip()
+
+    platform_specific = build_platform_specific(fields, platform, caption, hook)
+
+    # Per-platform follow-up comment text. Affiliate URLs ship as a
+    # comment/reply after the main post — keeps captions clean and avoids
+    # algorithmic downranking on Facebook and X/Twitter.
+    first_comment_text = ""
+    if platform == "facebook":
+        first_comment_text = (fields.get("facebook_first_comment", "") or "").strip()
+    elif platform in ("twitter", "x_twitter"):
+        # R-46: the default platform list uses the legacy name "twitter"; this
+        # branch previously only matched "x_twitter", silently dropping the X
+        # affiliate self-reply (the entire X monetization payload).
+        first_comment_text = (fields.get("twitter_first_comment", "") or "").strip()
+
+    return PublishPayload(
+        caption=caption,
+        media_paths=media_paths,
+        media_type=media_type,
+        hashtags=hashtags,
+        hook=hook,
+        niche_id=niche_id,
+        platform_specific=platform_specific,
+        first_comment_text=first_comment_text,
+    )
