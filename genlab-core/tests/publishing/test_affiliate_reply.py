@@ -98,7 +98,11 @@ class TestInstagramBranch:
         url = mock_req.post.call_args.args[0]
         # MUST use graph.facebook.com (NEVER graph.instagram.com) — security
         # rule, EAA page tokens are rejected by the IG-specific surface.
-        assert "graph.facebook.com" in url
+        # Use ``startswith`` here, not ``in``: an ``in`` host check would let
+        # ``https://evil/?x=graph.facebook.com`` pass and CodeQL correctly
+        # flags it (py/incomplete-url-substring-sanitization). The assertion
+        # below is what real URL validation would look like.
+        assert url.startswith("https://graph.facebook.com/"), url
         assert "graph.instagram.com" not in url
         assert "/media_999/comments" in url
         # Affiliate text format: "🔗 {product}: {url}".
