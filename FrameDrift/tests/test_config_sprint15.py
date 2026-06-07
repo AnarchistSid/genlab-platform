@@ -24,10 +24,26 @@ class TestNicheConfig:
     def test_pipeline_has_19_enabled_stages(self):
         cfg = _load("niche.yaml")
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
-        # 19 original + FetchAnimePromos (Sprint 64) + ExpressLane (Sprint 68)
-        # + FetchRedditClips + AffiliateMatch (Wave 8 — source diversification)
-        # + RenderWhisperCaptions (re-enabled 2026-06-05 after PR #55 wired it)
-        assert len(enabled) == 24
+        # Asserting *which* stages are present (rather than *how many*) means
+        # adding a new stage doesn't break this test — only removing or
+        # disabling a required one does. See PR #72 for the rationale.
+        required = {
+            "genlab_core.pipeline.stages.express_lane.ExpressLane",
+            "genlab_core.media.trending_video_fetcher.FetchTrendingVideos",
+            "fd_strategies.scoring.AnimeScoringStrategy",
+            "genlab_core.pipeline.stages.video_gate.VideoGate",
+            "fd_strategies.writing.AnimeWritingStrategy",
+            "fd_strategies.hooks.AnimeHookStrategy",
+            "fd_strategies.visual_render.AnimeVisualRenderStrategy",
+            "genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions",
+            "genlab_core.pipeline.stages.validate_videos.ValidateVideos",
+            "genlab_core.pipeline.stages.push_to_backlog.PushToBacklog",
+            "genlab_core.pipeline.stages.fetch_insights.FetchInsights",
+            "genlab_core.pipeline.stages.run_report.RunReport",
+        }
+        enabled_classes = {s["class"] for s in enabled}
+        missing = required - enabled_classes
+        assert not missing, f"required stages missing/disabled in niche.yaml: {missing}"
 
     def test_enabled_stages_reference_allowed_packages(self):
         cfg = _load("niche.yaml")

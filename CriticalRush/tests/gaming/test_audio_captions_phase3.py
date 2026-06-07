@@ -514,11 +514,29 @@ class TestPipelineOrdering:
         assert audio_idx > render_idx
         assert overlay_idx > render_idx
 
-    def test_pipeline_has_26_stages(self):
-        """Pipeline should have 27 enabled stages (gaming + shared).
-        (Was 26; RenderWhisperCaptions re-enabled 2026-06-05 after PR #55.)"""
+    def test_required_render_phase_stages_present(self):
+        """The audio-captions render phase must have every stage enabled.
+
+        Replaces a hardcoded ``len(stages) == 27``. The original intent of
+        this test was "the render phase is wired correctly" — not "the
+        pipeline has exactly 27 things". Phrasing the assert that way lets
+        additions through and still catches the load-bearing-stage-missing
+        bug pattern that PR #63 hit (``RenderWhisperCaptions`` was
+        ``enabled: false`` in niche.yaml for weeks).
+        """
         from core.pipeline_runner import PipelineRunner
 
         runner = PipelineRunner()
         stages, _ = runner._load_stages("gaming", self._gaming_config())
-        assert len(stages) == 27
+        loaded_names = {s.__class__.__name__ for s in stages}
+
+        required_render_phase = {
+            "RenderGamingVideo",
+            "RenderTextOverlays",
+            "GenerateAudio",
+            "GenerateGamingAudio",
+            "RenderWhisperCaptions",  # the PR #63 invariant
+            "ValidateVideos",
+        }
+        missing = required_render_phase - loaded_names
+        assert not missing, f"render-phase stages missing/disabled: {missing}"

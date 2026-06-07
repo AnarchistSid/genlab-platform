@@ -17,13 +17,37 @@ class TestNicheConfig:
         cfg = _load("niche.yaml")
         assert cfg["niche_id"] == "movies"
 
-    def test_pipeline_has_19_enabled_stages(self):
+    def test_required_stages_are_enabled(self):
+        """The movie pipeline must have its load-bearing stages enabled.
+
+        Asserting *which* stages are present (rather than *how many*) means
+        adding a new stage doesn't break this test — only removing or
+        disabling a required one does. The reverse used to bite hard: 4
+        unrelated PRs in one week needed a count-bump just because a stage
+        was added or re-enabled.
+        """
         cfg = _load("niche.yaml")
-        enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
-        # 19 original + FetchTMDBTrailers (Sprint 64) + ExpressLane (Sprint 68)
-        # + FetchRedditClips + AffiliateMatch (Wave 8 — source diversification)
-        # + RenderWhisperCaptions (re-enabled 2026-06-05 after PR #55 wired it)
-        assert len(enabled) == 24
+        enabled_classes = {s["class"] for s in cfg["pipeline"]["stages"] if s.get("enabled", True)}
+        required = {
+            # Fetch + score
+            "genlab_core.pipeline.stages.express_lane.ExpressLane",
+            "genlab_core.media.trending_video_fetcher.FetchTrendingVideos",
+            "sr_strategies.scoring.MovieScoringStrategy",
+            # Video gate + content
+            "genlab_core.pipeline.stages.video_gate.VideoGate",
+            "sr_strategies.writing.MovieWritingStrategy",
+            "sr_strategies.hooks.MovieHookStrategy",
+            # Render → validate → push
+            "sr_strategies.visual_render.MovieVisualRenderStrategy",
+            "genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions",
+            "genlab_core.pipeline.stages.validate_videos.ValidateVideos",
+            "genlab_core.pipeline.stages.push_to_backlog.PushToBacklog",
+            # Analytics tail
+            "genlab_core.pipeline.stages.fetch_insights.FetchInsights",
+            "genlab_core.pipeline.stages.run_report.RunReport",
+        }
+        missing = required - enabled_classes
+        assert not missing, f"required stages missing/disabled in niche.yaml: {missing}"
 
     def test_enabled_stages_reference_allowed_packages(self):
         cfg = _load("niche.yaml")
