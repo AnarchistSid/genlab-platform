@@ -46,6 +46,14 @@ def _isolate_cache():
     clear_cache()
 
 
+# ``lists_config.yaml`` is gitignored — it carries deployment-local SharePoint
+# list IDs and is provisioned per environment, not checked in. The previous
+# symlink also pointed at a gitignored file, so absence-in-CI is the historical
+# baseline, not a regression. Exclude it from on-disk presence assertions; the
+# routing-path assertion below still covers it.
+_DISK_PRESENT_SHARED: frozenset[str] = SHARED_CONFIG_NAMES - {"lists_config.yaml"}
+
+
 class TestSharedConfigRouting:
     """The seven shared names route to genlab-core, not BB."""
 
@@ -56,17 +64,19 @@ class TestSharedConfigRouting:
             f"{name} must resolve under genlab-core/config/, not BB/config/. Got: {resolved}"
         )
 
-    @pytest.mark.parametrize("name", sorted(SHARED_CONFIG_NAMES))
+    @pytest.mark.parametrize("name", sorted(_DISK_PRESENT_SHARED))
     def test_shared_name_file_exists(self, name: str) -> None:
         """The shared yaml must exist where the loader expects it. Catches
         an accidental delete of the genlab-core source — the original BB
-        symlink can no longer paper over it."""
+        symlink can no longer paper over it.
+
+        ``lists_config.yaml`` is excluded (gitignored, env-local)."""
         resolved = _resolve_config_path(name)
         assert resolved.exists(), (
             f"Shared config {name} not found at {resolved}. genlab-core/config/ source must exist for BB to read it."
         )
 
-    @pytest.mark.parametrize("name", sorted(SHARED_CONFIG_NAMES))
+    @pytest.mark.parametrize("name", sorted(_DISK_PRESENT_SHARED))
     def test_load_config_returns_non_empty_for_shared(self, name: str) -> None:
         data = load_config(name, required=False)
         assert isinstance(data, dict)
