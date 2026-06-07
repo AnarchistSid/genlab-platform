@@ -60,6 +60,30 @@ from genlab_core.publishing.niche_credentials import (
     resolve_youtube_credentials,
 )
 
+# Re-exports from sibling modules so existing import paths (notably the
+# test suite + any future direct caller) keep working byte-stable. The
+# actual implementations live in:
+#   - ``platform_status`` — already_published / terminal-failure helpers
+#   - ``niche_validation`` — VALID_NICHE_IDS + normalize/validate
+#   - ``pid_lock``         — PidLock class
+# Refactor-#9 PR 1/N extracted them; see those modules for docstrings + tests.
+from genlab_core.publishing.niche_validation import (
+    normalize_niche as _normalize_niche,
+)
+from genlab_core.publishing.niche_validation import (
+    validate_niche as _validate_niche,
+)
+from genlab_core.publishing.pid_lock import PidLock
+from genlab_core.publishing.platform_status import (
+    already_published_platforms as _already_published_platforms,
+)
+from genlab_core.publishing.platform_status import (
+    terminal_failed_platforms as _terminal_failed_platforms,
+)
+from genlab_core.publishing.platform_status import (
+    to_registry_id as _to_registry_id,
+)
+
 logger = logging.getLogger(__name__)
 
 # Exit codes
@@ -77,142 +101,6 @@ EXIT_LOCK_HELD = 4
 # GENLAB_MAX_CONCURRENT_ENCODES on larger hosts.
 _MAX_CONCURRENT_ENCODES = max(1, int(os.environ.get("GENLAB_MAX_CONCURRENT_ENCODES", "1") or "1"))
 _ENCODE_SEMAPHORE = threading.BoundedSemaphore(_MAX_CONCURRENT_ENCODES)
-
-
-def _already_published_platforms(fields: dict[str, Any]) -> set[str]:
-    """Platforms already PUBLISHED for this blueprint per its persisted state.
-
-    R-29/R-83: a partial publish (or crash mid-publish) leaves per-platform
-    PUBLISHED markers in ``platform_publish_status``. Re-publishing the blueprint
-    (after a crash-recovery reset, or a retry-only run) MUST skip these so a
-    succeeded platform is never double-posted. Handles both the bare-string
-    (``"PUBLISHED"``) and dict (``{"status": "PUBLISHED"}``) value shapes.
-    """
-    raw = fields.get("platform_publish_status", "{}")
-    try:
-        pps = json.loads(raw) if isinstance(raw, str) else (raw or {})
-    except (json.JSONDecodeError, TypeError):
-        return set()
-    if not isinstance(pps, dict):
-        return set()
-    return {
-        p
-        for p, v in pps.items()
-        if v == "PUBLISHED" or (isinstance(v, dict) and v.get("status") == "PUBLISHED")
-    }
-
-
-_VALID_NICHE_IDS = frozenset(
-    {
-        "ai_creators",
-        "gaming",
-        "sports",
-        "movies",
-        "anime",
-    }
-)
-
-# Maps legacy/alternate platform names to canonical registry IDs
-_PLATFORM_ID_MAP: dict[str, str] = {
-    "twitter": "x_twitter",
-    "x": "x_twitter",
-    "ig": "instagram",
-    "yt": "youtube",
-    "fb": "facebook",
-    "tt": "tiktok",
-}
-
-
-def _to_registry_id(platform: str) -> str:
-    return _PLATFORM_ID_MAP.get(platform, platform)
-
-
-# Error classes the retry loop refuses to retry — these mean human attention is needed.
-_TERMINAL_ERROR_CLASSES = frozenset({"CREDENTIAL", "CONTENT", "PERMANENT"})
-# After this many attempts even retryable errors are considered terminal.
-_TERMINAL_ATTEMPT_THRESHOLD = 3
-
-
-def _terminal_failed_platforms(
-    platform_status: dict[str, Any],
-) -> dict[str, dict[str, Any]]:
-    """Return platforms whose failure won't be auto-resolved by the retry loop.
-
-    A failure is terminal when error_class is non-retryable (CREDENTIAL/CONTENT/
-    PERMANENT) or attempts have hit the cap. Used to surface partial-publish
-    events to the dashboard so silent platform failures aren't lost behind the
-    blueprint's overall PUBLISHED status.
-    """
-    out: dict[str, dict[str, Any]] = {}
-    for plat, val in platform_status.items():
-        if not isinstance(val, dict) or val.get("status") != "FAILED":
-            continue
-        error_class = val.get("error_class", "TRANSIENT")
-        attempts = int(val.get("attempts", 0) or 0)
-        if error_class in _TERMINAL_ERROR_CLASSES or attempts >= _TERMINAL_ATTEMPT_THRESHOLD:
-            out[plat] = val
-    return out
-
-
-def _normalize_niche(niche_id: str) -> str:
-    niche_id = niche_id.strip()
-    if niche_id in ("ai_tech", "ai_news"):
-        return "ai_creators"
-    return niche_id
-
-
-def _validate_niche(niche_id: str) -> str:
-    """Validate and normalize niche_id. Raises ValueError on invalid."""
-    niche_id = _normalize_niche(niche_id)
-    if not niche_id:
-        raise ValueError("Empty niche_id — refusing to publish")
-    if niche_id not in _VALID_NICHE_IDS:
-        raise ValueError(f"unknown niche_id '{niche_id}' — valid: {sorted(_VALID_NICHE_IDS)}")
-    return niche_id
-
-
-# ---------------------------------------------------------------------------
-# PID Lock
-# ---------------------------------------------------------------------------
-
-
-class PidLock:
-    """Process-level lock using a PID file with stale detection."""
-
-    def __init__(self, niche_id: str, lock_dir: Path | None = None):
-        base = lock_dir or Path("/tmp")
-        self.path = base / f"publisher-{niche_id}.lock"
-
-    def acquire(self) -> bool:
-        try:
-            fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode())
-            os.close(fd)
-            return True
-        except FileExistsError:
-            # Lock file exists — check if holder is still alive
-            try:
-                pid = int(self.path.read_text().strip())
-                os.kill(pid, 0)  # signal 0 = check if alive
-                return False  # process is alive — lock held
-            except (ValueError, ProcessLookupError, PermissionError):
-                # Stale lock or unreadable — remove and retry once
-                logger.info("Removing stale lock file: %s", self.path)
-                self.path.unlink(missing_ok=True)
-            except OSError:
-                # Other OS errors — treat as stale
-                self.path.unlink(missing_ok=True)
-            # Retry atomic create after removing stale lock
-            try:
-                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, str(os.getpid()).encode())
-                os.close(fd)
-                return True
-            except FileExistsError:
-                return False  # Another process won the race
-
-    def release(self) -> None:
-        self.path.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
