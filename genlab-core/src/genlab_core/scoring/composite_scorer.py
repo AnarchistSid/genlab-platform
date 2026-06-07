@@ -39,6 +39,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from genlab_core.config.tuning import get_tuning_config
+
 logger = logging.getLogger(__name__)
 
 # Per-niche velocity thresholds (views/hour).
@@ -63,28 +65,28 @@ DEFAULT_MIN_COMPOSITE: dict[str, float] = {
     "ai_creators": 0.25,
 }
 
-# Absolute view-count floor per niche. A video reporting a KNOWN view_count below
-# this is rejected regardless of velocity — it catches recency-gamed spikes (a
-# brand-new clip with a few hundred views has a high views/hour ratio but
-# negligible reach). 0/absent view_count = "unknown" and is NOT floored, so
-# un-enriched candidates fall back to velocity-only ranking.
-DEFAULT_MIN_VIEW_COUNT: dict[str, int] = {
-    "gaming": 5000,
-    "sports": 5000,
-    "movies": 5000,
-    "anime": 2000,
-    "ai_creators": 2000,
-}
+# Composite-scoring calibration is loaded once from the platform-wide tuning
+# config (genlab-core/config/tuning.yaml). Module-level aliases below
+# preserve the previous public surface for callers + tests; the values
+# themselves are now ops-editable without a code change. See
+# genlab_core/config/tuning.py for the schema and migration plan.
+_TUNING = get_tuning_config().composite_scoring
+
+# Absolute view-count floor per niche. A video reporting a KNOWN view_count
+# below this is rejected regardless of velocity — it catches recency-gamed
+# spikes. 0/absent view_count = "unknown" and is NOT floored, so un-enriched
+# candidates fall back to velocity-only ranking.
+DEFAULT_MIN_VIEW_COUNT: dict[str, int] = _TUNING.default_min_view_count
 
 # like/view ratio at which engagement_score saturates to 1.0. ~3% is a healthy
 # viral clip (YouTube average is ~1–2%); above this adds no further boost.
-_TARGET_LIKE_RATIO = 0.03
+_TARGET_LIKE_RATIO: float = _TUNING.target_like_ratio
 
 # Floor of the engagement multiplier: a zero-engagement clip still keeps this
 # fraction of its composite (velocity remains a real reach signal), while a
 # high-engagement clip keeps the full score. So engagement RE-RANKS toward
 # genuinely-engaging clips without hard-filtering on it.
-_ENGAGEMENT_FLOOR = 0.5
+_ENGAGEMENT_FLOOR: float = _TUNING.engagement_floor
 
 
 @dataclass

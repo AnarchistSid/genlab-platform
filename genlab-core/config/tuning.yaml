@@ -1,0 +1,34 @@
+# Platform-wide tuning constants.
+#
+# Edit this file to recalibrate ranking, scoring, retry, and timeout
+# behaviour without a code change. The schema is enforced by
+# :class:`genlab_core.config.tuning.TuningConfig`.
+#
+# Defaults below match the values currently hardcoded at module scope
+# (PR #74 — the migration PR — only moves what's already in code).
+# Future PRs migrate additional sites; new top-level keys go here.
+
+composite_scoring:
+  # like/view ratio at which the engagement multiplier saturates to 1.0.
+  # ~3% is a healthy viral clip (YouTube average ~1-2%). Raise this to
+  # demand more engagement to saturate, lower it to be more lenient.
+  target_like_ratio: 0.03
+
+  # Floor of the engagement multiplier: a zero-engagement clip still
+  # keeps this fraction of its composite (velocity remains a real reach
+  # signal). Raise toward 1.0 to weaken engagement re-ranking; lower
+  # toward 0 to strengthen it.
+  engagement_floor: 0.5
+
+  # Absolute view-count floor per niche. A video with KNOWN view_count
+  # below this is rejected regardless of velocity — catches recency-
+  # gamed spikes (a brand-new clip with a few hundred views has a high
+  # views/hour ratio but negligible reach). 0/absent view_count =
+  # "unknown" and is NOT floored, so un-enriched candidates fall back
+  # to velocity-only ranking.
+  default_min_view_count:
+    gaming: 5000
+    sports: 5000
+    movies: 5000
+    anime: 2000
+    ai_creators: 2000
