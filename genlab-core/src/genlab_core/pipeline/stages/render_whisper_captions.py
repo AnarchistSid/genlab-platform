@@ -20,11 +20,11 @@ import random
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_audio
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
 from genlab_core.media.whisper_timing import align_words, transcribe_words
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +41,15 @@ class RenderWhisperCaptions:
       animation.word_by_word.whisper_sync.enabled = true|false
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
-        # The runner stores the loaded config under "niche_config"; the older
-        # "config" key is kept as a fallback for direct/test callers. Reading
-        # only "config" meant the whisper block was never found and the stage
-        # no-op'd on every production run.
-        config = context.get("niche_config") or context.get("config", {})
+        # The runner stores the loaded config under "niche_config" — that is
+        # the canonical key in :class:`StageContext`. The legacy "config" key
+        # is kept as a fallback for direct/test callers that pre-date the
+        # TypedDict migration; new code should never write it. With a real
+        # type checker the original ``context.get("config")`` reading bug
+        # (PR #55) would have been caught here.
+        config = context.get("niche_config") or context.get("config", {})  # type: ignore[typeddict-item]
 
         # Load whisper config from channel's visuals.yaml
         ws_config = self._get_whisper_config(config)

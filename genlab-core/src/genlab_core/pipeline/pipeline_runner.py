@@ -45,6 +45,7 @@ from genlab_core.context import PipelineContext, _current_context, set_current_c
 from genlab_core.exceptions import NicheConfigError
 from genlab_core.niche_loader import get_feature_flags, load_niche_config
 from genlab_core.pipeline.log_streamer import install_log_handler, remove_log_handler
+from genlab_core.pipeline.stage_context import StageContext
 from genlab_core.pipeline.stage_runner import StageRunnerFactory
 
 logger = logging.getLogger(__name__)
@@ -262,7 +263,12 @@ class GenericPipelineRunner:
             run_dir = self._genlab_root / ".tmp" / "runs" / run_id
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            context_dict: dict[str, Any] = {
+            # The dict that flows between stages is typed as ``StageContext``
+            # (a TypedDict in :mod:`genlab_core.pipeline.stage_context`).
+            # Structurally identical to a plain dict at runtime — the
+            # annotation is the documentation contract so any new stage
+            # written against ``StageContext`` gets the schema for free.
+            context_dict: StageContext = {
                 "niche_id": niche_id,
                 "niche_root": str(niche_root),
                 "run_id": run_id,
