@@ -30,6 +30,7 @@ from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary, get_ffprobe_binary
 from genlab_core.media.video_validator import check_vmaf
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,7 @@ class ValidateVideos:
             context['run_stats']['video_validation']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[ValidateVideos] No stories to validate")

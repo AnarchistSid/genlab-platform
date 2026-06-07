@@ -24,6 +24,8 @@ import logging
 import re
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 # ── Feature detectors ─────────────────────────────────────────
@@ -108,7 +110,7 @@ class ViralityScoring:
     Writes: context['stories'][*]['virality_score'], context['stories'][*]['virality_features']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         blueprints = context.get("stories", [])
         if not blueprints:
             logger.info("[ViralityScoring] No stories to score")

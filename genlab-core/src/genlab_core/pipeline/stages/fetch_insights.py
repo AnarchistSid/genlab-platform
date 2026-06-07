@@ -24,6 +24,7 @@ from genlab_core.http.circuit_breaker import (
     CircuitOpenError,
     get_circuit_breaker,
 )
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class FetchInsights:
     Writes: context['run_stats']['insights']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
         client = context.get("backlog_client")
         config = context.get("niche_config", {})

@@ -17,6 +17,8 @@ from typing import Any
 
 import requests
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 # AniList GraphQL query for currently airing anime with trailers
@@ -147,7 +149,7 @@ class FetchAnimePromos:
     Zero YouTube API quota cost (external APIs only).
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
         if niche_id != "anime":
             return context

@@ -21,6 +21,8 @@ import logging
 import re
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 # ── Urgency levels ────────────────────────────────────────────
@@ -103,7 +105,7 @@ class ExpressLane:
             context['run_stats']['express_lane']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[ExpressLane] No stories to classify")

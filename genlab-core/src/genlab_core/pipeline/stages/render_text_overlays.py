@@ -17,10 +17,10 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from genlab_core.media.ffmpeg import get_ffmpeg_binary
 from genlab_core.media.ffmpeg_utils import escape_drawtext
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class RenderTextOverlays:
             context['run_stats']['text_overlays']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
         if not stories:
             logger.info("[RenderTextOverlays] No stories to overlay")
