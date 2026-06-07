@@ -99,12 +99,19 @@ class TestIdempotency:
 
     def test_tiny_variant_triggers_re_encode(self, tmp_path: Path) -> None:
         """A variant smaller than 10KB is treated as suspect (truncated
-        prior write, half-written from a crashed run) and re-encoded."""
+        prior write, half-written from a crashed run) and re-encoded.
+
+        Patches ``get_ffmpeg_binary`` at the call site so the test works
+        without ffmpeg installed on the host (CI runners don't have it).
+        """
         src = tmp_path / "video.mp4"
         src.write_bytes(b"x" * 11000)
         variant = src.parent / f"{src.stem}_{Platform.YOUTUBE.value}{src.suffix}"
         variant.write_bytes(b"y" * 100)  # below threshold
-        with patch("genlab_core.publishing.transcode.subprocess.run") as mock_run:
+        with (
+            patch("genlab_core.publishing.transcode.get_ffmpeg_binary", return_value="ffmpeg"),
+            patch("genlab_core.publishing.transcode.subprocess.run") as mock_run,
+        ):
             mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
             transcode_for_platform(src, "youtube")
         mock_run.assert_called_once()
@@ -157,7 +164,12 @@ class TestFFmpegCommandConstruction:
     def _run_and_capture_cmd(tmp_path: Path, platform: str) -> list[str]:
         src = tmp_path / "video.mp4"
         src.write_bytes(b"x" * 11000)
-        with patch("genlab_core.publishing.transcode.subprocess.run") as mock_run:
+        # Patch ``get_ffmpeg_binary`` at the call site so the test works on
+        # hosts without ffmpeg installed (CI runners don't have it).
+        with (
+            patch("genlab_core.publishing.transcode.get_ffmpeg_binary", return_value="ffmpeg"),
+            patch("genlab_core.publishing.transcode.subprocess.run") as mock_run,
+        ):
             mock_run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
             transcode_for_platform(src, platform)
         # First positional arg is the command list.
