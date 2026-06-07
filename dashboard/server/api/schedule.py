@@ -34,13 +34,16 @@ IST = timezone(timedelta(hours=5, minutes=30))
 def _load_schedule_slots():
     """Read schedule slots from publishing.yaml (falls back to 1 default slot).
 
-    Tries BlackboxBrief/config/ first (canonical config location),
-    then genlab-core/config/ as fallback.
+    ``publishing.yaml`` is one of the seven shared configs owned by
+    ``genlab-core/config/`` — the previous ``BlackboxBrief/config/``
+    candidate was a symlink to the same file and was dropped along with
+    the rest of those symlinks. ``PROJECT_ROOT`` is left as a final
+    fallback for unusual deploy layouts (e.g. a packaged install where
+    publishing.yaml sits next to the dashboard).
     """
     _GENLAB_ROOT = _DASHBOARD_ROOT.parent
     try:
         for candidate in [
-            _GENLAB_ROOT / "BlackboxBrief" / "config" / "publishing.yaml",
             _GENLAB_ROOT / "genlab-core" / "config" / "publishing.yaml",
             PROJECT_ROOT / "config" / "publishing.yaml",
         ]:
