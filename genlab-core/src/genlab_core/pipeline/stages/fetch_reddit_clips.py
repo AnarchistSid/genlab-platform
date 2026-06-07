@@ -21,6 +21,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +33,7 @@ class FetchRedditClips:
     Writes: context['stories'] (append) + run_stats.reddit_stories_found
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
         if not niche_id:
             return context

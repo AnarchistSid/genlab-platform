@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ class QCGates:
     DEFAULT_MAX_DURATION = 90
     SCORE_PENALTY = 0.3
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         blueprints = context.get("stories", [])
         if not blueprints:
             logger.info("[QCGates] No stories to validate")

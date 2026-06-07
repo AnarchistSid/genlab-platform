@@ -19,6 +19,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +32,7 @@ class PerformanceLearner:
     them to run_stats. Never mutates bandit_arms.
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         niche_config = context.get("niche_config", {})
         niche_id = niche_config.get("niche_id", "unknown")
 

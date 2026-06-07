@@ -24,7 +24,8 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class RunReport:
     Writes: context['run_stats']['report_path']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         run_stats = context.get("run_stats", {})
         niche_config = context.get("niche_config", {})
         niche_id = context.get("niche_id") or niche_config.get("niche_id", "unknown")

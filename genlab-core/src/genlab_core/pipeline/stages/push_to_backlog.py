@@ -22,6 +22,7 @@ from genlab_core.cache.stable_ids import generate_candidate_id, generate_story_i
 from genlab_core.cache.text_sanitizer import strip_html_tags
 from genlab_core.http.backlog_client import BacklogClient
 from genlab_core.pipeline.blueprint_status import LIVE_OR_PENDING as _BLOCKING_STATUSES
+from genlab_core.pipeline.stage_context import StageContext
 from genlab_core.settings import settings
 from genlab_core.utils.text_sanitizer import sanitize_for_graph_api
 
@@ -545,7 +546,7 @@ class PushToBacklog:
                 self._client = BacklogClient()
         return self._client
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
+    def execute(self, context: StageContext) -> StageContext:  # noqa: C901
         niche_id = context.get("niche_id")
         if not niche_id:
             raise ValueError(

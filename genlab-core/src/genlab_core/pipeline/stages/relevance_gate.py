@@ -21,9 +21,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 import yaml
+
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 class RelevanceGate:
     """Filter stories by niche-specific keyword relevance."""
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
         if not stories:
             return context

@@ -21,6 +21,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ class GenerateAudio:
             context['run_stats']['audio']
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         blueprints = context.get("stories", [])
         if not blueprints:
             logger.info("[GenerateAudio] No stories for audio generation")

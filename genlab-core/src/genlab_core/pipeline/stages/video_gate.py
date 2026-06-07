@@ -16,7 +16,8 @@ import json
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any
+
+from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ def _probe_video_quality(path: Path) -> dict[str, float]:
 class VideoGate:
     """Mark stories without a downloaded video clip so Writing can skip them."""
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         clip_index = context.get("clip_index", {})
         clips = clip_index.get("clips", {})
         stories = context.get("stories", [])

@@ -19,6 +19,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from genlab_core.pipeline.stage_context import StageContext
+
 logger = logging.getLogger(__name__)
 
 # Shared session with retry + backoff for TMDB API (handles connection resets)
@@ -105,7 +107,7 @@ class FetchTMDBTrailers:
     Requires TMDB_API_KEY in environment.
     """
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
         if niche_id != "movies":
             return context

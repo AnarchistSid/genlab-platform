@@ -36,6 +36,7 @@ from genlab_core.http.backlog_client import BacklogClient
 # the subset relationship `LIVE ⊂ LIVE_OR_PENDING` is what encodes the
 # different semantics of the two stages.
 from genlab_core.pipeline.blueprint_status import LIVE as _PRE_DOWNLOAD_BLOCKING  # noqa: E402
+from genlab_core.pipeline.stage_context import StageContext
 
 
 def _blocks_pre_download(row: dict) -> bool:
@@ -61,7 +62,7 @@ class PreDownloadDedup:
             self._client = BacklogClient()
         return self._client
 
-    def execute(self, context: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, context: StageContext) -> StageContext:
         stories = context.get("stories", [])
         if not stories:
             return context
