@@ -27,13 +27,11 @@ import json
 import logging
 import os
 import sys
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
 from genlab_core.platforms.models import (
     FacebookSpecific,
@@ -66,7 +64,9 @@ from genlab_core.publishing.niche_credentials import (
 #   - ``platform_status`` — already_published / terminal-failure helpers
 #   - ``niche_validation`` — VALID_NICHE_IDS + normalize/validate
 #   - ``pid_lock``         — PidLock class
-# Refactor-#9 PR 1/N extracted them; see those modules for docstrings + tests.
+#   - ``transcode``        — per-platform ffmpeg variant + encode semaphore
+# Refactor-#9 PR 1/N + PR 2/N extracted them; see those modules for
+# docstrings + tests.
 from genlab_core.publishing.niche_validation import (
     normalize_niche as _normalize_niche,
 )
@@ -83,6 +83,18 @@ from genlab_core.publishing.platform_status import (
 from genlab_core.publishing.platform_status import (
     to_registry_id as _to_registry_id,
 )
+from genlab_core.publishing.transcode import (
+    ENCODE_SEMAPHORE as _ENCODE_SEMAPHORE,  # noqa: F401  re-exported for back-compat
+)
+from genlab_core.publishing.transcode import (
+    MAX_CONCURRENT_ENCODES as _MAX_CONCURRENT_ENCODES,  # noqa: F401  back-compat
+)
+from genlab_core.publishing.transcode import (
+    PLATFORM_MAP as _PLATFORM_MAP,  # noqa: F401  back-compat
+)
+from genlab_core.publishing.transcode import (
+    transcode_for_platform as _transcode_for_platform,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,163 +104,6 @@ EXIT_NO_BLUEPRINTS = 1
 EXIT_ALL_FAILED = 2
 EXIT_DAILY_CAP = 3
 EXIT_LOCK_HELD = 4
-
-# R-54/R-03: serialize ffmpeg encodes. The publisher fans out to up to 5
-# platforms in parallel (ThreadPoolExecutor below), and each platform's
-# build_payload() spawns its own ffmpeg subprocess — up to 5 concurrent encodes
-# on a 2-vCPU/4GB box, the realized OOM mechanism (R-03). A process-wide
-# semaphore caps concurrent encodes (default 1 = serial). Tunable via
-# GENLAB_MAX_CONCURRENT_ENCODES on larger hosts.
-_MAX_CONCURRENT_ENCODES = max(1, int(os.environ.get("GENLAB_MAX_CONCURRENT_ENCODES", "1") or "1"))
-_ENCODE_SEMAPHORE = threading.BoundedSemaphore(_MAX_CONCURRENT_ENCODES)
-
-
-# ---------------------------------------------------------------------------
-# Per-Platform Transcode
-# ---------------------------------------------------------------------------
-
-# Map legacy platform names to Platform enum
-_PLATFORM_MAP: dict[str, Platform] = {
-    "youtube": Platform.YOUTUBE,
-    "instagram": Platform.INSTAGRAM,
-    "facebook": Platform.FACEBOOK,
-    "twitter": Platform.X_STD,
-    "threads": Platform.THREADS,
-    "tiktok": Platform.TIKTOK,
-}
-
-
-def _transcode_for_platform(source: Path, platform: str) -> Path:
-    """Transcode video for a specific platform using PLATFORM_SPECS.
-
-    Returns the platform variant path. If transcoding fails or the platform
-    is unknown, returns the original source path (fail-open).
-    """
-    plat_enum = _PLATFORM_MAP.get(platform)
-    if plat_enum is None or plat_enum not in PLATFORM_SPECS:
-        return source
-
-    spec = PLATFORM_SPECS[plat_enum]
-    variant_path = source.parent / f"{source.stem}_{plat_enum.value}{source.suffix}"
-
-    # Skip if variant already exists and is recent
-    if variant_path.exists() and variant_path.stat().st_size > 10240:
-        return variant_path
-
-    try:
-        import subprocess
-
-        import yaml as _yaml
-
-        from genlab_core.media.ffmpeg import get_ffmpeg_binary
-
-        ffmpeg = get_ffmpeg_binary()
-
-        # Load platform duration targets from config
-        max_duration = None
-        try:
-            config_path = (
-                Path(__file__).resolve().parent.parent / "config" / "platform_encode_specs.yaml"
-            )
-            if not config_path.exists():
-                config_path = (
-                    Path(__file__).resolve().parent.parent.parent.parent
-                    / "config"
-                    / "platform_encode_specs.yaml"
-                )
-            if config_path.exists():
-                with open(config_path) as f:
-                    enc_config = _yaml.safe_load(f) or {}
-                durations = enc_config.get("platform_durations", {}).get(platform, {})
-                max_duration = durations.get("max_seconds")
-        except Exception as exc:
-            # Non-critical: we just fall through to the default (no trim).
-            # Logged at debug because transcode_specs is optional.
-            logger.debug(
-                "[publish] Could not load platform_encode_specs for %s: %s",
-                platform,
-                exc,
-            )
-
-        cmd = [ffmpeg, "-y", "-i", str(source)]
-
-        # Apply duration trim if source exceeds platform max (trim from end, keep hook)
-        if max_duration:
-            cmd.extend(["-t", str(max_duration)])
-
-        cmd.extend(["-c:v", spec.codec])
-        if spec.crf is not None:
-            cmd.extend(["-crf", str(spec.crf)])
-        # Use spec preset (was hardcoded to "slow" — overrode per-platform
-        # tuning and made 2-CPU VPS painfully slow on every transcode).
-        cmd.extend(["-preset", spec.preset or "medium"])
-        # Apply bitrate ceiling when configured. Critical for IG/Threads/FB
-        # which reject high-bitrate uploads with container-processing errors.
-        # Without maxrate, CRF=15-22 on motion-heavy source produces 8-15
-        # Mbps files that platforms refuse.
-        if spec.maxrate:
-            cmd.extend(["-maxrate", spec.maxrate, "-bufsize", spec.bufsize or spec.maxrate])
-        if spec.width and spec.height:
-            cmd.extend(["-vf", f"scale={spec.width}:{spec.height}"])
-        cmd.extend(
-            [
-                "-colorspace",
-                "bt709",
-                "-color_primaries",
-                "bt709",
-                "-color_trc",
-                "bt709",
-                "-c:a",
-                "aac",
-                "-b:a",
-                spec.audio_bitrate or "192k",
-                "-ar",
-                "48000",
-                "-pix_fmt",
-                "yuv420p",
-                "-movflags",
-                "+faststart",
-                str(variant_path),
-            ]
-        )
-        # 600s timeout (was 300) gives "fast" preset enough headroom
-        # for the longest 60s reels on the 2 vCPU Hetzner VPS. The
-        # combination of slow CPU + "medium" preset + max_duration=60
-        # was reliably tripping the old 300s ceiling and dropping us
-        # into the "using original" fallback that ships uncapped-bitrate
-        # uploads — IG/FB/Threads then silently reject them. Once the
-        # box gets a faster CPU or HW accel, drop this back.
-        # R-54: hold the encode semaphore so the parallel per-platform fan-out
-        # never runs >_MAX_CONCURRENT_ENCODES ffmpeg processes at once (OOM).
-        with _ENCODE_SEMAPHORE:
-            subprocess.run(cmd, check=True, capture_output=True, timeout=600)
-        dur_msg = f", trimmed to {max_duration}s" if max_duration else ""
-        logger.info(
-            "[publish] Transcoded %s for %s (%s CRF %s%s)",
-            source.name,
-            platform,
-            spec.codec,
-            spec.crf,
-            dur_msg,
-        )
-        return variant_path
-    except subprocess.TimeoutExpired as exc:
-        # Surface timeout distinctly so the dashboard alerting can
-        # treat it differently from a genuine encode error (timeout
-        # usually means upstream is fine but needs more CPU).
-        logger.warning(
-            "[publish] Transcode TIMEOUT for %s/%s after %ds — using original "
-            "(uncapped bitrate may be rejected by platform)",
-            platform,
-            source.name,
-            getattr(exc, "timeout", 600),
-        )
-        return source
-    except Exception as exc:
-        logger.warning(
-            "[publish] Transcode failed for %s/%s: %s — using original", platform, source.name, exc
-        )
-        return source
 
 
 # ---------------------------------------------------------------------------

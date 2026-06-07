@@ -40,9 +40,15 @@ def test_encodes_are_serialized(tmp_path: Path):
         s.write_bytes(b"x" * 20000)
         sources.append(s)
 
+    # Patch at the CALL SITE (transcode module) — refactor-#9 PR 2/N moved
+    # the imports to the top of transcode.py, so the bound names there are
+    # ``transcode.subprocess`` and ``transcode.get_ffmpeg_binary``; patching
+    # the source modules leaves those bound names pointing at the real ones
+    # (classic "where to patch" gotcha that didn't manifest before because
+    # the originals were deferred imports inside the function body).
     with (
-        patch("subprocess.run", side_effect=tracking_run),
-        patch("genlab_core.media.ffmpeg.get_ffmpeg_binary", return_value="ffmpeg"),
+        patch("genlab_core.publishing.transcode.subprocess.run", side_effect=tracking_run),
+        patch("genlab_core.publishing.transcode.get_ffmpeg_binary", return_value="ffmpeg"),
     ):
         threads = [
             threading.Thread(target=_transcode_for_platform, args=(s, "instagram")) for s in sources
