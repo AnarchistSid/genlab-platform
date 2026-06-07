@@ -286,6 +286,13 @@ _CRED_PATCH = "genlab_core.publishing.publish_all_platforms._resolve_client_kwar
 _CLIENT_PATCH = "genlab_core.publishing.publish_all_platforms.get_client"
 _RECORD_PATCH = "genlab_core.publishing.publish_all_platforms.record_publish"
 
+# Preflight has its own module-level bindings since refactor-#9 PR 4/N
+# extracted ``resolve_client_kwargs`` + ``get_client`` into
+# ``publishing.preflight``. The orchestrator-side patches above don't
+# reach those calls; tests of the preflight path use the constants below.
+_PREFLIGHT_CRED_PATCH = "genlab_core.publishing.preflight.resolve_client_kwargs"
+_PREFLIGHT_CLIENT_PATCH = "genlab_core.publishing.preflight.get_client"
+
 
 class TestRunPublish:
     """Test the core run_publish() function with mocked dependencies."""
@@ -685,8 +692,12 @@ class TestRetryOnly:
 
 
 class TestPreflightTokenRefresh:
-    @patch(_CLIENT_PATCH)
-    @patch(_CRED_PATCH)
+    # Preflight tests patch the preflight module's bindings (see comment
+    # on _PREFLIGHT_*_PATCH above) since refactor-#9 PR 4/N moved the
+    # implementation off the orchestrator's namespace.
+
+    @patch(_PREFLIGHT_CLIENT_PATCH)
+    @patch(_PREFLIGHT_CRED_PATCH)
     def test_threads_token_refreshed_proactively(self, mock_creds, mock_get_client):
         """When Threads is enabled, refresh_token_if_needed() is called before
         publishing — the fix for a dark channel's 60-day token lapsing."""
@@ -699,21 +710,21 @@ class TestPreflightTokenRefresh:
         mock_get_client.assert_called_once_with("threads", access_token="t", user_id="u")
         client.refresh_token_if_needed.assert_called_once()
 
-    @patch(_CLIENT_PATCH)
-    @patch(_CRED_PATCH)
+    @patch(_PREFLIGHT_CLIENT_PATCH)
+    @patch(_PREFLIGHT_CRED_PATCH)
     def test_non_threads_platforms_are_skipped(self, mock_creds, mock_get_client):
         _preflight_token_refresh("gaming", ["instagram", "youtube", "facebook", "x"])
         mock_get_client.assert_not_called()
 
-    @patch(_CLIENT_PATCH)
-    @patch(_CRED_PATCH, return_value=None)
+    @patch(_PREFLIGHT_CLIENT_PATCH)
+    @patch(_PREFLIGHT_CRED_PATCH, return_value=None)
     def test_missing_threads_creds_is_non_fatal(self, mock_creds, mock_get_client):
         """No creds → no client built, no crash (logs a warning)."""
         _preflight_token_refresh("gaming", ["threads"])
         mock_get_client.assert_not_called()
 
-    @patch(_CLIENT_PATCH)
-    @patch(_CRED_PATCH)
+    @patch(_PREFLIGHT_CLIENT_PATCH)
+    @patch(_PREFLIGHT_CRED_PATCH)
     def test_refresh_failure_is_swallowed(self, mock_creds, mock_get_client):
         """A refresh that raises must NOT propagate — publishing proceeds."""
         mock_creds.return_value = {"access_token": "t", "user_id": "u"}
@@ -726,9 +737,10 @@ class TestPreflightTokenRefresh:
 
     @patch(_RECORD_PATCH)
     @patch(_CLIENT_PATCH)
-    @patch(_CRED_PATCH, return_value={})
+    @patch(_PREFLIGHT_CRED_PATCH, return_value={})
     def test_run_publish_invokes_preflight(self, mock_creds, mock_get_client, mock_record):
-        """run_publish runs the preflight (here: threads enabled → get_client('threads'))."""
+        """run_publish runs the preflight (here: threads enabled →
+        preflight.resolve_client_kwargs called for 'threads')."""
         client = _make_client_mock([])
         enforcer = _make_cap_enforcer()
         mock_get_client.side_effect = lambda pid, **kw: MagicMock()
@@ -739,5 +751,5 @@ class TestPreflightTokenRefresh:
             daily_cap=enforcer,
             enabled_platforms=["threads"],
         )
-        # creds resolver was asked for threads as part of the preflight.
+        # preflight's creds resolver was asked for threads.
         assert any(call.args and call.args[0] == "threads" for call in mock_creds.call_args_list)

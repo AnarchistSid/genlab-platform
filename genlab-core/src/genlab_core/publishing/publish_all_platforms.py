@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -43,13 +42,6 @@ from genlab_core.publishing.error_classifier import (
     is_ambiguous_failure,
     retry_delay_seconds,
     should_retry,
-)
-from genlab_core.publishing.niche_credentials import (
-    resolve_fb_credentials,
-    resolve_meta_credentials,
-    resolve_threads_credentials,
-    resolve_twitter_credentials,
-    resolve_youtube_credentials,
 )
 
 # Re-exports from sibling modules so existing import paths (notably the
@@ -77,6 +69,12 @@ from genlab_core.publishing.platform_status import (
 )
 from genlab_core.publishing.platform_status import (
     to_registry_id as _to_registry_id,
+)
+from genlab_core.publishing.preflight import (
+    preflight_token_refresh as _preflight_token_refresh,
+)
+from genlab_core.publishing.preflight import (
+    resolve_client_kwargs as _resolve_client_kwargs,
 )
 from genlab_core.publishing.transcode import (
     ENCODE_SEMAPHORE as _ENCODE_SEMAPHORE,  # noqa: F401  re-exported for back-compat
@@ -214,101 +212,13 @@ def _post_affiliate_reply(platform: str, post_id: str | None, fields: dict, nich
 # ---------------------------------------------------------------------------
 
 
-def _resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
-    """Resolve per-niche constructor kwargs for a platform client.
-
-    Returns None if credentials are missing (platform should be skipped).
-    """
-    if registry_id == "instagram":
-        creds = resolve_meta_credentials(niche_id)
-        token = creds.get("ig_access_token", "")
-        user_id = creds.get("ig_user_id", "")
-        if token and user_id:
-            return {"access_token": token, "ig_user_id": user_id}
-        return None
-
-    if registry_id == "facebook":
-        token, page_id = resolve_fb_credentials(niche_id)
-        if token and page_id:
-            return {"access_token": token, "page_id": page_id}
-        return None
-
-    if registry_id == "youtube":
-        creds = resolve_youtube_credentials(niche_id)
-        refresh_token = creds.get("refresh_token", "")
-        client_id = creds.get("client_id", "") or os.environ.get("YOUTUBE_CLIENT_ID", "")
-        client_secret = creds.get("client_secret", "") or os.environ.get(
-            "YOUTUBE_CLIENT_SECRET", ""
-        )
-        # Expected channel ID for cross-channel verification
-        from genlab_core.publishing.niche_credentials import resolve_niche_env
-
-        expected_channel = resolve_niche_env(niche_id, "", "YT_CHANNEL_ID")
-        if refresh_token and client_id and client_secret:
-            kwargs = {
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-            }
-            if expected_channel:
-                kwargs["expected_channel_id"] = expected_channel
-            return kwargs
-        return None
-
-    if registry_id == "x_twitter":
-        creds = resolve_twitter_credentials(niche_id)
-        if all(creds.values()):
-            return creds
-        return None
-
-    if registry_id == "threads":
-        token, user_id = resolve_threads_credentials(niche_id)
-        if token and user_id:
-            return {"access_token": token, "user_id": user_id}
-        return None
-
-    return {}
-
-
-def _preflight_token_refresh(niche_id: str, enabled_platforms: list[str]) -> None:
-    """R-35: proactively refresh near-expiry tokens before publishing.
-
-    Threads tokens are 60-day and today refresh only *lazily*, inside the
-    Threads client's ``publish()``. A channel dark for >10 days never reaches
-    that code, so its token can silently lapse and surface only as a per-platform
-    SKIP (compounding R-01). ``refresh_token_if_needed()`` is idempotent — it acts
-    only when the token is ≥50 days old — so calling it once per run is safe and
-    shrinks the dark-channel window.
-
-    Strictly non-fatal: any failure logs a WARNING and publishing proceeds (the
-    per-platform publish will surface a real auth failure as a SKIP regardless).
-
-    NOTE: this does not eliminate R-35 — a channel that never runs the publisher
-    still won't refresh. Closing that fully needs a host-level token-health
-    timer, which is an ops concern tracked separately.
-    """
-    for platform in enabled_platforms:
-        registry_id = _to_registry_id(platform)
-        # Only Threads has a proactive, idempotent refresh hook today. The EAA
-        # Meta page token is permanent (never refreshed — security rule), and
-        # YouTube/X refresh on use; revisit if other clients gain the hook.
-        if registry_id != "threads":
-            continue
-        try:
-            kwargs = _resolve_client_kwargs(registry_id, niche_id)
-            if not kwargs:
-                logger.warning(
-                    "[publish] token preflight: no %s credentials for niche '%s'",
-                    registry_id,
-                    niche_id,
-                )
-                continue
-            client = get_client(registry_id, **kwargs)
-            refresh = getattr(client, "refresh_token_if_needed", None)
-            if callable(refresh):
-                refresh()
-        except Exception as exc:
-            logger.warning("[publish] token preflight refresh failed for %s: %s", registry_id, exc)
+# _resolve_client_kwargs + _preflight_token_refresh extracted to
+# publishing/preflight.py in refactor-#9 PR 4/N. Re-exported below with
+# underscore-prefixed aliases — the orchestrator continues to call
+# ``_resolve_client_kwargs(...)`` / ``_preflight_token_refresh(...)``
+# locally, AND test_publish_all_platforms.py patches at
+# ``publish_all_platforms._resolve_client_kwargs`` (the local binding),
+# which the re-export pattern keeps byte-stable.
 
 
 # ---------------------------------------------------------------------------
