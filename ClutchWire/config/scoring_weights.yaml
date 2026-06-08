@@ -28,6 +28,17 @@ dedup:
   tfidf_threshold: 0.70
 
 thresholds:
-  min_clip_score: 0.20
-  min_compilation_score: 0.35
-  top_clips_per_run: 20
+  # Tightened 2026-06-08 per content-mix rebalance: sports was producing
+  # 5-26 blueprints/day vs 1-4 for every other niche. With a 1-reel/day
+  # publish cap that was 80-95% funnel waste — blueprints stuck in
+  # DRAFTED forever, repeatedly re-scored each pipeline run.
+  #
+  # New target: 3-5 blueprints/day in line with anime/movies. The bandit
+  # still has 3-5 candidates to pick from, leaving room for exploration.
+  # Old values commented out for one cycle in case we need to roll back:
+  #     min_clip_score: 0.20        # → 0.30
+  #     min_compilation_score: 0.35 # → 0.45 (proportional bump)
+  #     top_clips_per_run: 20       # → 5 (the dominant cap)
+  min_clip_score: 0.30
+  min_compilation_score: 0.45
+  top_clips_per_run: 5
