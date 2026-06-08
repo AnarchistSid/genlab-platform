@@ -28,6 +28,7 @@ from typing import Any
 
 from genlab_core.http.analytics_store import AnalyticsStore
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB
+from genlab_core.http.engagement_store import EngagementStore
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
 
 logger = logging.getLogger(__name__)
@@ -487,6 +488,13 @@ class BacklogClient:
         # thin delegators below; the actual upsert logic + virality math
         # is in :class:`AnalyticsStore`.
         self._analytics = AnalyticsStore(sp_call=self._sp_call, backend=self._backend)
+
+        # PendingEngagement surface (Tier 2, audit S-2 slice 2.2).
+        # Single-proxy store — captures the already-built
+        # ``self.pending_engagement`` reference (may be None if
+        # the underlying SP list isn't configured; the store
+        # early-returns + WARNs in every method on that branch).
+        self._engagement = EngagementStore(self.pending_engagement)
 
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
@@ -1197,35 +1205,8 @@ class BacklogClient:
     # ===== ENGAGEMENT (Sprint 23 — observe-only) =====
 
     def write_pending_engagement(self, event: dict) -> str | None:
-        """Record an incoming comment event for monitoring.
-
-        Event dict should have: comment_id, platform, post_id, text,
-        author_name, created_at (ISO string), niche_id.
-        Status defaults to 'pending'.
-
-        Returns the record ID on success, None on failure.
-        """
-        if not self.pending_engagement:
-            logger.warning("[engagement] PendingEngagement table not configured")
-            return None
-        # Promoted columns (snake_case) go to SQL columns;
-        # non-promoted fields go to extra JSONB.
-        fields = {
-            "platform": event.get("platform", ""),
-            "post_id": event.get("post_id", ""),
-            "niche_id": event.get("niche_id", ""),
-            "status": "pending",
-            # Non-promoted fields → extra JSONB
-            "comment_id": event.get("comment_id", ""),
-            "comment_text": (event.get("text") or "")[:2000],
-            "author_name": event.get("author_name", ""),
-        }
-        try:
-            result = self.pending_engagement.create(fields)
-            return str(result) if result else None
-        except Exception as e:
-            logger.warning("[engagement] write_pending_engagement failed: %s", e)
-            return None
+        """Delegates to :class:`EngagementStore.write_pending_engagement`."""
+        return self._engagement.write_pending_engagement(event)
 
     def list_pending_engagement(
         self,
@@ -1233,21 +1214,10 @@ class BacklogClient:
         status: str = "pending",
         limit: int = 50,
     ) -> list[dict]:
-        """Retrieve pending comment events for monitoring/processing."""
-        if not self.pending_engagement:
-            logger.warning("[engagement] PendingEngagement table not configured")
-            return []
-        formula = f"{{status}}='{_esc(status)}'"
-        if niche_id:
-            formula = f"AND({{status}}='{_esc(status)}', {{niche_id}}='{_esc(niche_id)}')"
-        try:
-            return self.pending_engagement.find(
-                formula=formula,
-                max_records=limit,
-            )
-        except Exception as e:
-            logger.warning("[engagement] list_pending_engagement failed: %s", e)
-            return []
+        """Delegates to :class:`EngagementStore.list_pending_engagement`."""
+        return self._engagement.list_pending_engagement(
+            niche_id=niche_id, status=status, limit=limit
+        )
 
     def update_engagement_status(
         self,
@@ -1256,58 +1226,10 @@ class BacklogClient:
         reply_text: str = "",
         error_msg: str = "",
     ) -> None:
-        """Update the status of a pending engagement item.
-
-        Args:
-            item_id: Record ID (UUID or legacy SharePoint ID)
-            status: New status (replied, liked, skipped, failed, rate_limited)
-            reply_text: The reply that was posted (if status=replied)
-            error_msg: Error message (if status=failed)
-        """
-        if not self.pending_engagement:
-            logger.warning(
-                "BacklogClient: pending_engagement proxy not configured — skipping status update"
-            )
-            return
-
-        # pending_review is set by comment_processor when a reply needs
-        # human approval before posting. Without it in this set, the
-        # status update was rejected silently and the row stayed at
-        # the previous state — meaning the dashboard's review queue
-        # was permanently empty even though 200+ replies/day were
-        # being generated and routed to "review". 2026-05-21 audit
-        # found this combined with the engagement worker re-queueing
-        # the same comments every poller cycle (separate fix in
-        # comment_processor adds _mark_replied for review-routed too).
-        VALID_STATUSES = {
-            "replied",
-            "liked",
-            "skipped",
-            "failed",
-            "rate_limited",
-            "pending",
-            "pending_review",
-        }
-        if status not in VALID_STATUSES:
-            logger.warning("BacklogClient: invalid engagement status '%s'", status)
-            return
-
-        # Promoted columns use snake_case to match SQL schema;
-        # non-promoted fields go to extra JSONB.
-        fields: dict[str, str] = {
-            "status": status,
-            "processed_at": datetime.now(UTC).isoformat(),
-        }
-        if reply_text:
-            fields["reply_text"] = reply_text[:2000]
-        if error_msg:
-            fields["error_message"] = error_msg[:500]
-
-        try:
-            self.pending_engagement.update(item_id, fields)
-            logger.info("BacklogClient: engagement %s → %s", item_id, status)
-        except Exception as e:
-            logger.warning("BacklogClient: failed to update engagement %s: %s", item_id, e)
+        """Delegates to :class:`EngagementStore.update_engagement_status`."""
+        self._engagement.update_engagement_status(
+            item_id=item_id, status=status, reply_text=reply_text, error_msg=error_msg
+        )
 
     # ===== NICHE REGISTRY =====
 

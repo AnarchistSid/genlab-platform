@@ -413,11 +413,24 @@ class TestABTestsBackendDelegation:
 
 
 class TestEngagementBackendDelegation:
+    """BacklogClient → EngagementStore → pending_engagement proxy delegation.
+
+    Tier 2 / audit S-2, slice 2.2 — the engagement methods now delegate
+    to a dedicated :class:`EngagementStore` constructed in __init__ with
+    the proxy reference captured. After we reassign
+    ``client.pending_engagement`` we also have to rewire
+    ``client._engagement`` so the store sees the mock instead of the
+    real proxy (classic "where to patch" mock gotcha).
+    """
+
     def test_write_pending_engagement_goes_through_proxy(self, mock_config):
+        from genlab_core.http.engagement_store import EngagementStore
+
         client = _make_client(mock_config)
         mock_proxy = MagicMock()
         mock_proxy.create.return_value = "pe-1"
         client.pending_engagement = mock_proxy
+        client._engagement = EngagementStore(mock_proxy)
 
         result = client.write_pending_engagement(
             {
@@ -433,10 +446,13 @@ class TestEngagementBackendDelegation:
         assert call_fields["platform"] == "instagram"
 
     def test_list_pending_engagement_goes_through_proxy(self, mock_config):
+        from genlab_core.http.engagement_store import EngagementStore
+
         client = _make_client(mock_config)
         mock_proxy = MagicMock()
         mock_proxy.find.return_value = []
         client.pending_engagement = mock_proxy
+        client._engagement = EngagementStore(mock_proxy)
 
         client.list_pending_engagement(niche_id="gaming")
 
@@ -445,9 +461,12 @@ class TestEngagementBackendDelegation:
         assert "gaming" in kwargs["formula"]
 
     def test_update_engagement_status_goes_through_proxy(self, mock_config):
+        from genlab_core.http.engagement_store import EngagementStore
+
         client = _make_client(mock_config)
         mock_proxy = MagicMock()
         client.pending_engagement = mock_proxy
+        client._engagement = EngagementStore(mock_proxy)
 
         client.update_engagement_status("item-1", "replied", reply_text="Thanks!")
 
