@@ -9,7 +9,14 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "requests>=2.32.0",
-    "yt-dlp>=2025.3",
+    # 2026-06-08: bumped from stable (2026.3.17) to the latest nightly to
+    # pick up SABR-only-streaming workarounds + GVS PO Token handling.
+    # Stable was failing 100% of YouTube downloads with:
+    #     "ios client https formats require a GVS PO Token"
+    #     "Some android client https formats have been skipped... SABR-only"
+    # The dev channel ships SABR fixes before stable. If a future deploy
+    # needs to roll back, the working-but-broken stable was 2026.3.17.
+    "yt-dlp>=2026.6.6.234447.dev0",
     "pyyaml>=6.0",
     "jsonschema>=4.20",
     "tenacity>=8.2",
