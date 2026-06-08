@@ -26,19 +26,11 @@ import argparse
 import json
 import logging
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
-from genlab_core.platforms.models import (
-    PublishResult,
-)
 from genlab_core.platforms.registry import get_client
-from genlab_core.publishing.affiliate_reply import (
-    post_affiliate_reply as _post_affiliate_reply,
-)
 from genlab_core.publishing.analytics_recorder import record_publish
 from genlab_core.publishing.crash_recovery import (
     recover_publish_failed,
@@ -66,6 +58,7 @@ from genlab_core.publishing.niche_validation import (
 from genlab_core.publishing.niche_validation import (
     validate_niche as _validate_niche,
 )
+from genlab_core.publishing.parallel_publish import execute_parallel_publish
 from genlab_core.publishing.payload_builder import build_payload
 from genlab_core.publishing.pid_lock import PidLock
 from genlab_core.publishing.platform_status import (
@@ -314,120 +307,22 @@ def run_publish(
         except Exception as exc:
             logger.warning("[publish] Failed to set PUBLISHING status: %s", exc)
 
-    # 6. Publish to each platform. Pre-seed with platforms already published in a
-    #    prior run so the persisted platform_publish_status keeps the full
-    #    picture (R-29). `any_success` deliberately tracks only THIS run, so a
-    #    still-partial blueprint (a prior success + a fresh failure) returns to
-    #    VISUAL_READY and retries just the failed platform next time.
-    platform_status: dict[str, Any] = {p: "PUBLISHED" for p in prior_published}
-    any_success = False
-
-    def _publish_one(platform: str) -> tuple[str, PublishResult]:
-        registry_id = _to_registry_id(platform)
-        try:
-            kwargs = _resolve_client_kwargs(registry_id, niche_id)
-            if kwargs is None:
-                return platform, PublishResult(
-                    platform=registry_id,
-                    success=False,
-                    error=f"No {registry_id} credentials for niche '{niche_id}'",
-                )
-            payload = build_payload(fields, platform)
-            client = get_client(registry_id, **kwargs)
-            result = client.publish(payload)
-            return platform, result
-        except Exception as exc:
-            return platform, PublishResult(
-                platform=registry_id,
-                success=False,
-                error=str(exc),
-            )
-
-    with ThreadPoolExecutor(max_workers=len(platforms_to_publish)) as pool:
-        futures = {pool.submit(_publish_one, p): p for p in platforms_to_publish}
-        for future in futures:
-            try:
-                platform, result = future.result(timeout=600)  # 10-min max per platform
-            except TimeoutError:
-                platform = futures[future]
-                result = PublishResult(
-                    platform=_to_registry_id(platform),
-                    success=False,
-                    error=f"Publish timed out after 600s for {platform}",
-                )
-            except Exception as exc:
-                platform = futures[future]
-                result = PublishResult(
-                    platform=_to_registry_id(platform),
-                    success=False,
-                    error=f"Publish error: {exc}",
-                )
-            error_class = ""
-            if result.success:
-                any_success = True
-                platform_status[platform] = "PUBLISHED"
-                if daily_cap:
-                    daily_cap.record_publish(platform)
-                logger.info(
-                    "[publish] %s: SUCCESS post_id=%s url=%s",
-                    platform,
-                    result.post_id,
-                    result.post_url,
-                )
-                # Post affiliate link as first reply/comment (non-blocking)
-                _post_affiliate_reply(platform, result.post_id, fields, niche_id)
-                # Immediately persist platform status to prevent double-post on crash
-                try:
-                    backlog_client.blueprints.update(
-                        record_id,
-                        {"platform_publish_status": json.dumps(platform_status)},
-                    )
-                except Exception as exc:
-                    # Best-effort: final update at step 7 will re-try. Log at
-                    # warning so if step 7 also fails and we crash mid-publish,
-                    # the debug trail makes the double-post risk visible.
-                    logger.warning(
-                        "[publish] Mid-publish state persistence failed for %s "
-                        "(will retry at final update): %s",
-                        platform,
-                        exc,
-                    )
-            else:
-                error_class = classify(result.error, platform)
-                attempt_data = platform_status.get(platform, {})
-                if isinstance(attempt_data, dict):
-                    prev_attempts = attempt_data.get("attempts", 0)
-                else:
-                    prev_attempts = 0
-                platform_status[platform] = {
-                    "status": "FAILED",
-                    "attempts": prev_attempts + 1,
-                    "last_error": result.error[:200],
-                    "error_class": error_class,
-                    # R-21: tag failures that may have actually landed so the
-                    # cross-run retry pass won't blindly re-publish them.
-                    "ambiguous": is_ambiguous_failure(result.error),
-                }
-                logger.error("[publish] %s: FAILED error=%s", platform, result.error)
-
-            # Record to Publishing_Analytics
-            # Use SKIPPED for credential failures (not retryable, not a real failure)
-            if result.success:
-                analytics_status = "SUCCESS"
-            elif error_class == "CREDENTIAL":
-                analytics_status = "SKIPPED"
-            else:
-                analytics_status = "FAILED"
-            record_publish(
-                client=backlog_client,
-                niche_id=niche_id,
-                platform=platform,
-                status=analytics_status,
-                post_url=result.post_url,
-                blueprint_id=record_id,
-                candidate_id=candidate_id,
-                error_message=result.error if not result.success else "",
-            )
+    # 6. Per-platform parallel publish. The ParallelPublishOutcome carries the
+    # per-platform status map, this-run success flag, and the post_ids dict
+    # (so step 8 can register PendingFeedback without re-iterating futures).
+    # Extracted in refactor-#9 PR 6b/N — see publishing/parallel_publish.py.
+    outcome = execute_parallel_publish(
+        platforms_to_publish=platforms_to_publish,
+        prior_published=prior_published,
+        niche_id=niche_id,
+        fields=fields,
+        record_id=record_id,
+        candidate_id=candidate_id,
+        backlog_client=backlog_client,
+        daily_cap=daily_cap,
+    )
+    platform_status = outcome.platform_status
+    any_success = outcome.any_success
 
     # 7. Update blueprint final status
     # Track publish attempts
@@ -514,16 +409,13 @@ def run_publish(
                 if pstatus == "PUBLISHED" or (
                     isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"
                 ):
-                    # Find the post_id from the publish results
-                    post_id_for_plat = ""
-                    for future in futures:
-                        try:
-                            fp, fr = future.result()
-                            if fp == plat and fr.success:
-                                post_id_for_plat = fr.post_id or ""
-                                break
-                        except Exception as exc:
-                            logger.debug("Failed to get post_id from future: %s", exc)
+                    # Pull the post_id from the outcome — cleaner than re-iterating
+                    # futures (the futures are already done; this is what the
+                    # ParallelPublishOutcome captures upfront). For platforms in
+                    # ``prior_published`` the post_id was lost across the run boundary
+                    # so we fall back to "" — same behaviour as the original code's
+                    # "no matching future" fall-through.
+                    post_id_for_plat = outcome.successful_post_ids.get(plat, "")
 
                     # Build bandit_context with hook features for LinUCB (Break 11 fix)
                     bandit_ctx = None

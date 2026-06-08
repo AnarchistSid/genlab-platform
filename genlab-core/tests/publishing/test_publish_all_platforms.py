@@ -282,9 +282,13 @@ class TestBuildPayload:
 # ---------------------------------------------------------------------------
 
 
-_CRED_PATCH = "genlab_core.publishing.publish_all_platforms._resolve_client_kwargs"
-_CLIENT_PATCH = "genlab_core.publishing.publish_all_platforms.get_client"
-_RECORD_PATCH = "genlab_core.publishing.publish_all_platforms.record_publish"
+# Refactor-#9 PR 6b/N moved the publish dispatch into parallel_publish.py;
+# the orchestrator's local bindings are no longer reached by the publish
+# code path. The three patches below must target the parallel_publish
+# module-level bindings — that's where the calls actually happen now.
+_CRED_PATCH = "genlab_core.publishing.parallel_publish.resolve_client_kwargs"
+_CLIENT_PATCH = "genlab_core.publishing.parallel_publish.get_client"
+_RECORD_PATCH = "genlab_core.publishing.parallel_publish.record_publish"
 
 # Preflight has its own module-level bindings since refactor-#9 PR 4/N
 # extracted ``resolve_client_kwargs`` + ``get_client`` into
