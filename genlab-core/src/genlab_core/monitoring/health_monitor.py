@@ -763,7 +763,18 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
 
 
 def check_disk() -> list[Alert]:
-    """Check disk usage on root and media volumes."""
+    """Check disk usage on root and media volumes.
+
+    Thresholds are read from ``alerting.yaml`` (audit M-1). The warning
+    threshold maps to ``thresholds.disk_usage_pct``; critical fires +10
+    points above it. Operators can tune without a deploy.
+    """
+    from genlab_core.monitoring.alerting_config import get_alerting_config
+
+    cfg = get_alerting_config().thresholds
+    warn_pct = cfg.disk_usage_pct  # was hardcoded 85
+    crit_pct = min(100, warn_pct + 10)  # was hardcoded 90
+
     alerts = []
     try:
         result = subprocess.run(
@@ -777,11 +788,11 @@ def check_disk() -> list[Alert]:
             if len(parts) >= 2:
                 pct = int(parts[0].replace("%", ""))
                 mount = parts[1]
-                if pct > 85:
+                if pct > warn_pct:
                     alerts.append(
                         Alert(
                             check="disk_pressure",
-                            severity="critical" if pct > 90 else "warning",
+                            severity="critical" if pct > crit_pct else "warning",
                             message=f"{mount} at {pct}% usage",
                         )
                     )
@@ -1050,7 +1061,19 @@ def check_git_drift() -> list[Alert]:
 
 
 def check_swap() -> list[Alert]:
-    """Check if swap usage is high (memory pressure)."""
+    """Check if swap usage is high (memory pressure).
+
+    Thresholds are read from ``alerting.yaml`` (audit M-1):
+    ``thresholds.swap_critical_pct`` (default 0.9 — fraction of total
+    swap for the imminent-OOM warning) and ``thresholds.swap_warning_mb``
+    (default 500 — absolute MB for the soft warning).
+    """
+    from genlab_core.monitoring.alerting_config import get_alerting_config
+
+    cfg = get_alerting_config().thresholds
+    critical_pct = cfg.swap_critical_pct  # was hardcoded 0.9
+    warning_mb = cfg.swap_warning_mb  # was hardcoded 500
+
     alerts = []
     try:
         result = subprocess.run(["free", "-b"], capture_output=True, text=True, timeout=5)
@@ -1062,16 +1085,16 @@ def check_swap() -> list[Alert]:
                 # R-67/R-03: a near-full swap on the 4GB box is an imminent-OOM
                 # signal and must reach notify() (which forwards only criticals),
                 # not sit as an unactioned warning.
-                if total > 0 and used > 0.9 * total:
+                if total > 0 and used > critical_pct * total:
                     alerts.append(
                         Alert(
                             check="swap_pressure",
                             severity="critical",
                             message=f"Swap CRITICAL: {used // (1024 * 1024)}MB / "
-                            f"{total // (1024 * 1024)}MB (>90%) — imminent OOM",
+                            f"{total // (1024 * 1024)}MB (>{int(critical_pct * 100)}%) — imminent OOM",
                         )
                     )
-                elif total > 0 and used > 500 * 1024 * 1024:  # >500MB swap
+                elif total > 0 and used > warning_mb * 1024 * 1024:
                     alerts.append(
                         Alert(
                             check="swap_pressure",
