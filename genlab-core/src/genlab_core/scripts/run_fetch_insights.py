@@ -31,6 +31,7 @@ from typing import Any
 
 from genlab_core.http.backlog_client import BacklogClient
 from genlab_core.pipeline.stages.fetch_insights import normalize_publishing_metrics
+from genlab_core.platforms.metrics.legacy_aliases import add_legacy_aliases
 
 logging.basicConfig(
     level=logging.INFO,
@@ -211,60 +212,38 @@ def _resolve_ig_media_id(shortcode_or_id: str, token: str, ig_user_id: str) -> s
 
 
 def _fetch_instagram(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
-    """Fetch IG metrics — delegates to the canonical implementation and adds
-    the legacy ``saved`` / ``watch_time_minutes`` aliases for in-script
-    consumers (notably ``_write_back_to_blueprint`` and any external launchd
-    artefacts grepping the older shape)."""
+    """Fetch IG metrics — canonical fetch + legacy aliases via the shared
+    :func:`add_legacy_aliases` helper. IG adds ``saved`` and
+    ``watch_time_minutes`` aliases for SharePoint-column compatibility."""
     from genlab_core.platforms.metrics import fetch_instagram as _canonical
 
-    metrics = _canonical(post_id, niche_id=niche_id)
-    if metrics is None:
-        return None
-    out: dict[str, Any] = dict(metrics)
-    # Legacy aliases — keep until all callers are migrated to PlatformMetrics.
-    if "saves" in out:
-        out["saved"] = out["saves"]
-    if "watch_time_ms" in out:
-        out["watch_time_minutes"] = round(out["watch_time_ms"] / 60000, 1)
-    return out
+    return add_legacy_aliases(_canonical(post_id, niche_id=niche_id), "instagram")
 
 
 def _fetch_youtube(post_id: str) -> dict[str, Any] | None:
-    """Fetch YT metrics via Data API v3.
-
-    Thin delegate to :func:`genlab_core.platforms.metrics.fetch_youtube` — the
-    canonical implementation shared with the pipeline-stage and metric-collector
-    paths. Kept as a private wrapper so the existing dispatch table in
-    :func:`_fetch_platform_insights` does not have to change in this refactor.
-    """
+    """Fetch YT metrics — thin delegate to the canonical implementation.
+    YouTube has no legacy aliases; the canonical shape ships unchanged."""
     from genlab_core.platforms.metrics import fetch_youtube as _canonical
 
-    metrics = _canonical(post_id)
-    return dict(metrics) if metrics is not None else None
+    return add_legacy_aliases(_canonical(post_id), "youtube")
 
 
 def _fetch_facebook(post_id: str, niche_id: str = "") -> dict[str, Any] | None:
-    """Fetch FB metrics — thin delegate to the canonical implementation."""
+    """Fetch FB metrics — thin delegate to the canonical (Reels-specific)
+    implementation. Facebook has no legacy aliases on the script path."""
     from genlab_core.platforms.metrics import fetch_facebook as _canonical
 
-    metrics = _canonical(post_id, niche_id=niche_id)
-    return dict(metrics) if metrics is not None else None
+    return add_legacy_aliases(_canonical(post_id, niche_id=niche_id), "facebook")
 
 
 def _fetch_twitter(post_id: str) -> dict[str, Any] | None:
-    """Fetch X metrics — delegates to the canonical implementation and adds
-    the legacy ``retweets`` / ``replies`` aliases for in-script consumers."""
+    """Fetch X metrics — canonical fetch + legacy aliases. X adds
+    ``retweets``/``replies`` (alias of ``shares``/``comments``) for the
+    in-script ``_write_back_to_blueprint`` and any launchd-log readers
+    that grep the older keys."""
     from genlab_core.platforms.metrics import fetch_twitter as _canonical
 
-    metrics = _canonical(post_id)
-    if metrics is None:
-        return None
-    out: dict[str, Any] = dict(metrics)
-    if "shares" in out:
-        out["retweets"] = out["shares"]
-    if "comments" in out:
-        out["replies"] = out["comments"]
-    return out
+    return add_legacy_aliases(_canonical(post_id), "twitter")
 
 
 def _write_back_to_blueprint(
