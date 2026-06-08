@@ -39,3 +39,16 @@ agents:
     warn_pct: 75
     evict_pct: 90
     protect_recent: 3
+
+# Shared scratch directories outside the per-agent runs trees. The per-agent
+# scan_runs() only walks ``runs_dir``, so these were silently accumulating
+# until the disk filled (audit P-9, 2026-06-08 — 408 MB of .tmp/rerender
+# from 2026-03-27 was found leaked). DiskQuotaManager.sweep_extra_dirs()
+# deletes children older than ``max_age_days`` each cycle.
+extra_dirs:
+  - path: .tmp/rerender
+    max_age_days: 7   # re-render workspace; re-renderable from source clips
+  - path: .tmp/cache
+    max_age_days: 3   # HTTP + fetch cache; cheap to re-fetch
+  - path: .tmp/logs
+    max_age_days: 14  # per-run launchd logs; keep 2 weeks for incident review
