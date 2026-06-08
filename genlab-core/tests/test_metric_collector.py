@@ -1775,3 +1775,188 @@ class TestFetchYouTubeAnalyticsExtras:
 
         assert extras == {}
         mock_get.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_channel_metrics — pool + TTL cache (audit P-1)
+# ---------------------------------------------------------------------------
+
+
+class TestGetChannelMetricsPoolingAndCache:
+    """The audit found get_channel_metrics opened a fresh psycopg connection
+    per (niche, platform) call — 150 connects per 48h-window batch on a
+    typical day, 7.5 min worst-case on a slow-Postgres day. These tests guard
+    the pool + TTL cache fix."""
+
+    def _reset(self):
+        from genlab_core.learning import metric_collector as mc
+
+        mc._invalidate_channel_metrics_cache_for_tests()
+        # Reset the pool sentinel so each test starts from a clean state.
+        mc._PG_POOL = None
+
+    def test_no_database_url_returns_empty_and_caches_pool_unavailability(
+        self, monkeypatch
+    ) -> None:
+        self._reset()
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        from genlab_core.learning import metric_collector as mc
+
+        assert mc.get_channel_metrics("gaming", "instagram") == {}
+        # Second call should hit the sentinel — no re-attempt at pool init.
+        assert mc._PG_POOL is False
+        assert mc.get_channel_metrics("gaming", "instagram") == {}
+
+    def test_ttl_cache_returns_same_value_within_window(self, monkeypatch) -> None:
+        """The TTL cache must return the cached dict for the same key
+        without hitting the pool a second time."""
+        self._reset()
+        from genlab_core.learning import metric_collector as mc
+
+        call_count = {"n": 0}
+
+        def fake_pool():
+            class _FakeConn:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+                def cursor(self):
+                    class _Cur:
+                        def __enter__(self_inner):
+                            return self_inner
+
+                        def __exit__(self_inner, *a):
+                            return False
+
+                        def execute(self_inner, *a, **kw):
+                            call_count["n"] += 1
+
+                        def fetchall(self_inner):
+                            return [("subs_count", 1234.0)]
+
+                    return _Cur()
+
+            class _FakePool:
+                def connection(self):
+                    return _FakeConn()
+
+            return _FakePool()
+
+        monkeypatch.setattr(mc, "_get_pg_pool", fake_pool)
+        result_1 = mc.get_channel_metrics("gaming", "instagram")
+        result_2 = mc.get_channel_metrics("gaming", "instagram")
+        assert result_1 == {"subs_count": 1234.0}
+        assert result_2 == {"subs_count": 1234.0}
+        # Only one cursor.execute call across both invocations.
+        assert call_count["n"] == 1
+
+    def test_different_keys_each_query_the_pool(self, monkeypatch) -> None:
+        """Distinct (niche, platform) keys must NOT share a cache entry."""
+        self._reset()
+        from genlab_core.learning import metric_collector as mc
+
+        call_count = {"n": 0}
+
+        def fake_pool():
+            class _FakeConn:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+                def cursor(self):
+                    class _Cur:
+                        def __enter__(self_inner):
+                            return self_inner
+
+                        def __exit__(self_inner, *a):
+                            return False
+
+                        def execute(self_inner, *a, **kw):
+                            call_count["n"] += 1
+
+                        def fetchall(self_inner):
+                            return []
+
+                    return _Cur()
+
+            class _FakePool:
+                def connection(self):
+                    return _FakeConn()
+
+            return _FakePool()
+
+        monkeypatch.setattr(mc, "_get_pg_pool", fake_pool)
+        mc.get_channel_metrics("gaming", "instagram")
+        mc.get_channel_metrics("gaming", "youtube")
+        mc.get_channel_metrics("sports", "instagram")
+        assert call_count["n"] == 3
+
+    def test_pool_query_failure_returns_empty_and_does_not_cache(self, monkeypatch) -> None:
+        """A failed query must NOT poison the cache with empty results —
+        the next call should retry."""
+        self._reset()
+        from genlab_core.learning import metric_collector as mc
+
+        def boom_pool():
+            class _FakePool:
+                def connection(self):
+                    raise RuntimeError("DB down")
+
+            return _FakePool()
+
+        monkeypatch.setattr(mc, "_get_pg_pool", boom_pool)
+        assert mc.get_channel_metrics("gaming", "instagram") == {}
+        # Cache should be empty so the next call retries.
+        assert ("gaming", "instagram") not in mc._CHANNEL_METRICS_CACHE
+
+    def test_ttl_expiry_re_queries(self, monkeypatch) -> None:
+        """Past the TTL window, a fresh call must re-query the pool."""
+        self._reset()
+        from genlab_core.learning import metric_collector as mc
+
+        call_count = {"n": 0}
+
+        def fake_pool():
+            class _FakeConn:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *a):
+                    return False
+
+                def cursor(self):
+                    class _Cur:
+                        def __enter__(self_inner):
+                            return self_inner
+
+                        def __exit__(self_inner, *a):
+                            return False
+
+                        def execute(self_inner, *a, **kw):
+                            call_count["n"] += 1
+
+                        def fetchall(self_inner):
+                            return [("x", 1.0)]
+
+                    return _Cur()
+
+            class _FakePool:
+                def connection(self):
+                    return _FakeConn()
+
+            return _FakePool()
+
+        monkeypatch.setattr(mc, "_get_pg_pool", fake_pool)
+        mc.get_channel_metrics("gaming", "instagram")
+        # Pretend 120 s have passed (> 60s TTL).
+        mc._CHANNEL_METRICS_CACHE[("gaming", "instagram")] = (
+            mc.time.monotonic() - 120.0,
+            {"x": 1.0},
+        )
+        mc.get_channel_metrics("gaming", "instagram")
+        assert call_count["n"] == 2

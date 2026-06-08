@@ -33,6 +33,9 @@ in PR #69 — that's the correct migration target.
 from __future__ import annotations
 
 import logging
+import os
+import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -817,6 +820,55 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 # ---------------------------------------------------------------------------
 
 
+# ── monetisationprogress pool + TTL cache (audit P-1) ───────────────────────
+#
+# Was: ``psycopg.connect(db_url, connect_timeout=3)`` per get_channel_metrics
+# call, which RewardShaper invokes once per (niche, platform) per reward
+# computation. A 48h-window batch of 30 tasks × 5 platforms = 150 fresh
+# connections per run; on a slow-Postgres day each connect can hit the 3s
+# timeout, putting worst-case latency at 7.5 min of pure handshake.
+#
+# Now: module-level psycopg_pool.ConnectionPool (max 4 connections, shared
+# across the whole metric_collector flow + RewardShaper consumers) plus a
+# 60-second TTL cache. monetisationprogress rows don't change inside a
+# reward batch, so a single cron tick of staleness is acceptable.
+_PG_POOL: Any = None  # None = uninit; False = tried + unavailable; else ConnectionPool
+_PG_POOL_LOCK = threading.Lock()
+_CHANNEL_METRICS_CACHE: dict[tuple[str, str], tuple[float, dict[str, float]]] = {}
+_CHANNEL_METRICS_TTL_SEC: float = 60.0
+
+
+def _get_pg_pool() -> Any:
+    """Lazy-init a module-level Postgres ConnectionPool. Returns ``None``
+    when ``DATABASE_URL`` is unset or pool creation failed — the caller
+    falls back to ``{}`` so SharePoint-only legacy mode keeps working."""
+    global _PG_POOL
+    if _PG_POOL is not None:
+        return _PG_POOL if _PG_POOL is not False else None
+    with _PG_POOL_LOCK:
+        if _PG_POOL is not None:
+            return _PG_POOL if _PG_POOL is not False else None
+        db_url = os.environ.get("DATABASE_URL", "").strip()
+        if not db_url:
+            _PG_POOL = False
+            return None
+        try:
+            from psycopg_pool import ConnectionPool
+
+            _PG_POOL = ConnectionPool(db_url, min_size=1, max_size=4, open=True)
+        except Exception as exc:
+            logger.warning("[metric_collector] Postgres pool init failed (P-1): %s", exc)
+            _PG_POOL = False
+            return None
+    return _PG_POOL
+
+
+def _invalidate_channel_metrics_cache_for_tests() -> None:
+    """Test hook: clear the TTL cache between tests so cache hits don't
+    leak between unrelated cases."""
+    _CHANNEL_METRICS_CACHE.clear()
+
+
 def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     """Return channel-level metrics from the monetisationprogress table.
 
@@ -827,16 +879,20 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
 
     Returns ``{}`` on any error — RewardShaper falls back to base
     weights so the bandit keeps learning during outages.
+
+    Pools connections + memoises results for 60 s (audit P-1 follow-up).
     """
+    cache_key = (niche_id, platform)
+    cached = _CHANNEL_METRICS_CACHE.get(cache_key)
+    if cached is not None and (time.monotonic() - cached[0]) < _CHANNEL_METRICS_TTL_SEC:
+        return cached[1]
+
+    pool = _get_pg_pool()
+    if pool is None:
+        return {}
+
     try:
-        import os
-
-        import psycopg
-
-        db_url = os.environ.get("DATABASE_URL", "").strip()
-        if not db_url:
-            return {}
-        with psycopg.connect(db_url, connect_timeout=3) as conn:
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -847,7 +903,7 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
                     """,
                     (niche_id, platform),
                 )
-                return {str(name): float(val) for name, val in cur.fetchall() if val is not None}
+                result = {str(name): float(val) for name, val in cur.fetchall() if val is not None}
     except Exception as exc:
         logger.debug(
             "[reward] get_channel_metrics failed for %s/%s: %s",
@@ -856,6 +912,9 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
             exc,
         )
         return {}
+
+    _CHANNEL_METRICS_CACHE[cache_key] = (time.monotonic(), result)
+    return result
 
 
 @task(name="compute_reward")
