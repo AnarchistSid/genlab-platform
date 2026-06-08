@@ -40,6 +40,10 @@ from genlab_core.publishing.affiliate_reply import (
     post_affiliate_reply as _post_affiliate_reply,
 )
 from genlab_core.publishing.analytics_recorder import record_publish
+from genlab_core.publishing.crash_recovery import (
+    recover_publish_failed,
+    recover_stuck_publishing,
+)
 from genlab_core.publishing.error_classifier import (
     classify,
     is_ambiguous_failure,
@@ -169,76 +173,11 @@ def run_publish(
     # R-35: refresh near-expiry tokens before any publish attempt (non-fatal).
     _preflight_token_refresh(niche_id, enabled_platforms)
 
-    # Recover blueprints stuck in PUBLISHING status (crash recovery)
-    try:
-        stuck = backlog_client.get_blueprints_by_status("PUBLISHING", niche_id=niche_id)
-        for bp in stuck:
-            fields = bp.get("fields", bp)
-            updated_at = fields.get("updated_at", "")
-            attempt_count = int(fields.get("publish_attempts", 0) or 0)
-
-            # If stuck for >30 minutes, reset to VISUAL_READY (or PUBLISH_FAILED if 3+ attempts)
-            if updated_at:
-                try:
-                    dt = datetime.fromisoformat(updated_at)
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=UTC)
-                    if datetime.now(UTC) - dt > timedelta(minutes=30):
-                        # R-29 per-platform recovery: previously "any platform
-                        # published -> mark the whole blueprint PUBLISHED", which
-                        # MASKED the platforms that failed/never ran (they were
-                        # never retried). Now that the publish loop skips
-                        # platforms already PUBLISHED (per-platform), we instead
-                        # reset to VISUAL_READY and let it retry ONLY the failed/
-                        # unattempted platforms — and an all-published blueprint
-                        # self-finalizes to PUBLISHED on the next run. The
-                        # attempt cap still bounds a permanently-stuck laggard.
-                        if attempt_count >= 3:
-                            backlog_client.blueprints.update(bp["id"], {"status": "PUBLISH_FAILED"})
-                            logger.error(
-                                "[publish] Blueprint %s stuck after %d attempts — marking PUBLISH_FAILED",
-                                bp["id"][:8],
-                                attempt_count,
-                            )
-                        else:
-                            backlog_client.blueprints.update(bp["id"], {"status": "VISUAL_READY"})
-                            logger.warning(
-                                "[publish] Recovered stuck PUBLISHING blueprint %s -> VISUAL_READY "
-                                "(per-platform retry skips already-published)",
-                                bp["id"][:8],
-                            )
-                except (ValueError, TypeError):
-                    pass
-    except Exception as e:
-        logger.warning("[publish] PUBLISHING recovery check failed: %s", e)
-
-    # Auto-recover PUBLISH_FAILED blueprints after 24h cooldown
-    try:
-        failed = backlog_client.get_blueprints_by_status("PUBLISH_FAILED", niche_id=niche_id)
-        for bp in failed:
-            fields = bp.get("fields", bp)
-            updated_at = fields.get("updated_at", "")
-            if updated_at:
-                try:
-                    dt = datetime.fromisoformat(updated_at)
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=UTC)
-                    if datetime.now(UTC) - dt > timedelta(hours=24):
-                        backlog_client.blueprints.update(
-                            bp["id"],
-                            {
-                                "status": "VISUAL_READY",
-                                "publish_attempts": 0,
-                            },
-                        )
-                        logger.info(
-                            "[publish] Auto-recovered PUBLISH_FAILED blueprint %s after 24h cooldown",
-                            bp["id"][:8],
-                        )
-                except (ValueError, TypeError):
-                    pass
-    except Exception as e:
-        logger.warning("[publish] PUBLISH_FAILED recovery check failed: %s", e)
+    # Crash-recovery passes (extracted in refactor-#9 PR 6a/N into
+    # publishing/crash_recovery.py — see that module for docstrings + tests).
+    # Both passes are strictly best-effort; failures log + swallow.
+    recover_stuck_publishing(backlog_client, niche_id)
+    recover_publish_failed(backlog_client, niche_id)
 
     # R-83: retry-only mode (2nd daily run) — recover + retry failed platforms,
     # but never publish a fresh blueprint (would double the day's content).
