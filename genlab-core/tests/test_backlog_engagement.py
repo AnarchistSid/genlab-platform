@@ -6,6 +6,7 @@ requiring Azure credentials by mocking the storage backend layer.
 
 from __future__ import annotations
 
+from genlab_core.http.engagement_store import EngagementStore
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -87,6 +88,7 @@ def _make_client_with_backend(mock_config):
     client = _make_client(mock_config)
     mock_proxy = MagicMock()
     client.pending_engagement = mock_proxy
+    client._engagement = EngagementStore(mock_proxy)
     return client, mock_proxy
 
 
@@ -162,6 +164,7 @@ class TestWritePendingEngagement:
     def test_warns_when_table_not_configured(self, mock_config):
         client = _make_client(mock_config)
         client.pending_engagement = None
+        client._engagement = EngagementStore(None)
 
         # Should not raise, returns None
         result = client.write_pending_engagement(SAMPLE_EVENT)
@@ -238,6 +241,7 @@ class TestListPendingEngagement:
     def test_warns_when_table_not_configured(self, mock_config):
         client = _make_client(mock_config)
         client.pending_engagement = None
+        client._engagement = EngagementStore(None)
 
         result = client.list_pending_engagement()
         assert result == []
