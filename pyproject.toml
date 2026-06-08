@@ -1,6 +1,12 @@
 [tool.uv]
 # Override GPL text-unidecode with MIT unidecode for python-slugify
 override-dependencies = ["text-unidecode ; python_version < '0'"]
+# Accept pre-release versions when resolving — required for yt-dlp's nightly
+# (2026.6.6.234447.dev0) which ships SABR + GVS-PO-Token workarounds ahead
+# of the stable channel. Without this, ``uv run`` re-resolves on every call
+# and silently downgrades to the latest stable (2026.3.17) that fails 100%
+# of YouTube downloads as of 2026-06-08.
+prerelease = "allow"
 
 [tool.uv.workspace]
 members = [
