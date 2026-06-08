@@ -44,6 +44,24 @@ hooks:
       - '{film_title} looks UNREAL. Director cooked'
       - '{film_title} looks like it could define the year'
       - Drop everything. The {film_title} trailer is here
+      # Lowered from 1.3 → 1.0 (2026-06-08, content-mix rebalance).
+      # trailer_drop was over-selected vs alternatives because the +30%
+      # weight compounded with our trailer-heavy YouTube source mix.
+      # Baseline 1.0 puts it on equal footing with the default category;
+      # cast_reveal picks up the boosted slot.
+      weight: 1.0
+      lifecycle: pre_release
+    cast_reveal:
+      formulas:
+      - '{actor} just joined {film_title}. Casting is unreal'
+      - The {film_title} cast is fully locked in. This one is dangerous
+      - '{actor} as {role} in {film_title}? Casting absolutely cooked'
+      - The {film_title} cast announcement nobody saw coming
+      # Added 2026-06-08 (content-mix rebalance). The push_to_backlog
+      # classifier already labels cast/role/starring/joins stories as
+      # cast_reveal; this is the matching template entry so the weight
+      # actually applies to those stories. Inherits trailer_drop's old
+      # 1.3 slot per the swap intent of the rebalance.
       weight: 1.3
       lifecycle: pre_release
     box_office_win:
