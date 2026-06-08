@@ -13,9 +13,16 @@ thresholds:
   # Maximum 24-hour error rate (percent of pipeline runs that fail).
   error_rate_24h_pct: 10
 
-  # Disk usage percentage on the pipeline host.
-  # At 80 % the quota manager should already be evicting old runs.
+  # Disk usage percent at which the warning alert fires (health_monitor
+  # check_disk). The critical alert fires +10 points above this — so 80
+  # → warn, 90 → critical with the default. Wired 2026-06-08 (audit M-1).
   disk_usage_pct: 80
+
+  # Swap thresholds for health_monitor.check_swap. The critical (imminent
+  # OOM on the 4 GB box) fires above ``swap_critical_pct`` of total swap;
+  # the soft warning fires above ``swap_warning_mb`` of absolute usage.
+  swap_warning_mb: 500
+  swap_critical_pct: 0.9
 
   # Minimum engagement replies processed in a 1-hour window.
   # Alert if no replies are processed (indicates poller or worker down).
