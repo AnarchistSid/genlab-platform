@@ -1453,30 +1453,6 @@ class BacklogClient:
 
     # ===== NICHE REGISTRY =====
 
-    def list_niches(self) -> list[dict]:
-        """Return all registered niches from YAML registry.
-
-        Falls back to hardcoded registry if file not found.
-        """
-        import yaml
-
-        # Try to find niches_registry.yaml
-        for search_dir in [Path.cwd()] + list(Path.cwd().parents):
-            candidate = search_dir / "configs" / "niches_registry.yaml"
-            if candidate.exists():
-                with open(candidate) as f:
-                    data = yaml.safe_load(f) or {}
-                return data.get("niches", [])
-
-        # Hardcoded fallback
-        return [
-            {"id": "ai_creators", "display_name": "Blackbox Brief", "status": "active"},
-            {"id": "gaming", "display_name": "CriticalRush", "status": "active"},
-            {"id": "sports", "display_name": "ClutchWire", "status": "mvp"},
-            {"id": "movies", "display_name": "SpliceReel", "status": "mvp"},
-            {"id": "anime", "display_name": "FrameDrift", "status": "mvp"},
-        ]
-
     # ===== UTILITY =====
 
     def health_check(self) -> bool:
