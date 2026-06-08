@@ -18,7 +18,6 @@ Config path resolution (in order):
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import threading
@@ -27,7 +26,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from genlab_core.http.circuit_breaker import SHAREPOINT_CB, CircuitOpenError
+from genlab_core.http.analytics_store import AnalyticsStore
+from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
 
 logger = logging.getLogger(__name__)
@@ -481,6 +481,12 @@ class BacklogClient:
         # Per-client backend cache — avoids module-level singleton issues
         # when multiple BacklogClient instances exist (e.g. in tests).
         self._backend_cache: dict[str, Any] = {}
+
+        # Analytics surface lives in its own module (Tier 2, audit S-2).
+        # BacklogClient retains the public method names + signatures as
+        # thin delegators below; the actual upsert logic + virality math
+        # is in :class:`AnalyticsStore`.
+        self._analytics = AnalyticsStore(sp_call=self._sp_call, backend=self._backend)
 
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
@@ -1086,64 +1092,19 @@ class BacklogClient:
         blueprint_record_id: str = "",
         niche_id: str = "",
     ) -> str | None:
-        raw = f"{candidate_id}:{platform}"
-        analytics_id = hashlib.sha256(raw.encode()).hexdigest()
-
-        fields = {
-            "analytics_id": analytics_id,
-            "candidate_id": candidate_id,
-            "platform": platform,
-            "status": status,
-        }
-
-        if post_id:
-            fields["post_id"] = post_id
-        if platform_format:
-            fields["platform_format"] = platform_format
-        if time_to_publish_seconds > 0:
-            fields["time_to_publish_seconds"] = round(time_to_publish_seconds, 1)
-        if error_message:
-            fields["error_message"] = error_message[:2000]
-        if file_size_bytes > 0:
-            fields["file_size_bytes"] = file_size_bytes
-        if status == "SUCCESS":
-            fields["published_at"] = datetime.now(UTC).isoformat()
-        if blueprint_record_id:
-            fields["blueprint_link"] = str(blueprint_record_id)
-        if niche_id:
-            fields["niche_id"] = niche_id
-
-        be = self._backend("Publishing_Analytics")
-        try:
-            existing = self._sp_call(
-                be.find,
-                "Publishing_Analytics",
-                formula=f"{{analytics_id}}='{_esc(analytics_id)}'",
-                max_records=1,
-            )
-            if existing:
-                self._sp_call(
-                    be.update,
-                    "Publishing_Analytics",
-                    existing[0]["id"],
-                    fields,
-                    typecast=True,
-                )
-                return existing[0]["id"]
-            else:
-                record = self._sp_call(
-                    be.create,
-                    "Publishing_Analytics",
-                    fields,
-                    typecast=True,
-                )
-                return record["id"]
-        except CircuitOpenError:
-            logger.warning("Publishing analytics log skipped — SharePoint circuit open")
-            return None
-        except Exception as exc:
-            logger.warning("Publishing analytics log failed: %s", exc)
-            return None
+        """Delegates to :class:`AnalyticsStore.log_publish_result`."""
+        return self._analytics.log_publish_result(
+            candidate_id=candidate_id,
+            platform=platform,
+            status=status,
+            post_id=post_id,
+            platform_format=platform_format,
+            time_to_publish_seconds=time_to_publish_seconds,
+            error_message=error_message,
+            file_size_bytes=file_size_bytes,
+            blueprint_record_id=blueprint_record_id,
+            niche_id=niche_id,
+        )
 
     def get_publishing_analytics(
         self,
@@ -1153,18 +1114,9 @@ class BacklogClient:
         niche_id: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
-        parts = []
-        if platform:
-            parts.append(f"{{platform}}='{_esc(platform)}'")
-        if status:
-            parts.append(f"{{status}}='{_esc(status)}'")
-        formula = f"AND({', '.join(parts)})" if parts else ""
-        return self._sp_call(
-            self._backend("Publishing_Analytics").find,
-            "Publishing_Analytics",
-            formula=formula or None,
-            niche_id=niche_id,
-            max_records=limit,
+        """Delegates to :class:`AnalyticsStore.get_publishing_analytics`."""
+        return self._analytics.get_publishing_analytics(
+            platform=platform, status=status, niche_id=niche_id, limit=limit
         )
 
     # ===== ANALYTICS =====
@@ -1183,114 +1135,20 @@ class BacklogClient:
         viral_score: float | None = None,
         niche_id: str = "",
     ) -> str | None:
-        # Avoid double-prefixing: post_id may already be 'youtube:ABC123'
-        if post_id.startswith(f"{platform}:"):
-            composite_id = post_id
-        else:
-            composite_id = f"{platform}:{post_id}"
-
-        reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
-        engagement = insights.get("engagement", 0) or 0
-        likes = insights.get("likes", 0) or 0
-        comments = insights.get("comments", 0) or 0
-        saves = insights.get("saves", 0) or insights.get("saved", 0) or 0
-        shares = insights.get("shares", 0) or insights.get("retweets", 0) or 0
-        plays = insights.get("plays", 0) or insights.get("views", 0) or 0
-        impressions = insights.get("impressions", 0) or reach
-
-        # Only compute rates when reach > 0 — dividing by 1 when reach=0 inflates rates
-        engagement_rate = round(engagement / reach, 4) if reach > 0 else 0.0
-        save_rate = round(saves / reach, 4) if reach > 0 else 0.0
-        share_rate = round(shares / reach, 4) if reach > 0 else 0.0
-        play_rate = round(plays / reach, 4) if reach > 0 else 0.0
-
-        # Virality score: caller can pass a pre-computed config-driven
-        # score; otherwise fall back to a generic weighted formula.
-        if viral_score is not None:
-            viral_score = round(viral_score, 4)
-        else:
-            viral_score = round(engagement_rate * 0.25 + share_rate * 0.40 + save_rate * 0.35, 4)
-
-        fields = {
-            "post_id": composite_id,
-            "platform": platform,
-            "metric_type": "composite",
-            "value": float(plays or reach or engagement or 0),
-            "collected_at": datetime.now(UTC).isoformat(),
-            "window": fetch_window or "adhoc",
-            "impressions": impressions,
-            "reach": reach,
-            "engagement": engagement,
-            "likes": likes,
-            "comments": comments,
-            "saved": saves,
-            "shares": shares,
-            "plays": plays,
-            "viral_score": viral_score,
-            "engagement_rate": engagement_rate,
-            "save_rate": save_rate,
-            "share_rate": share_rate,
-            "play_rate": play_rate,
-            "fetched_at": datetime.now(UTC).isoformat(),
-        }
-        if blueprint_record_id:
-            fields["blueprint_link"] = str(blueprint_record_id)
-        if candidate_id:
-            fields["candidate_id"] = candidate_id
-        if published_at:
-            fields["published_at"] = published_at
-        if content_format:
-            fields["format"] = content_format
-        if fetch_window:
-            fields["fetch_window"] = fetch_window
-        if story_title:
-            fields["story_title"] = story_title
-        if niche_id:
-            fields["niche_id"] = niche_id
-
-        _OPTIONAL_FIELDS = {
-            "platform",
-            "candidate_id",
-            "published_at",
-            "format",
-            "fetch_window",
-            "story_title",
-            "niche_id",
-        }
-
-        be = self._backend("Analytics")
-        try:
-            existing = be.find(
-                "Analytics",
-                formula=f"{{post_id}}='{_esc(composite_id)}'",
-                max_records=1,
-            )
-            if existing:
-                try:
-                    be.update("Analytics", existing[0]["id"], fields, typecast=True)
-                except Exception as e:
-                    if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
-                        for f_name in _OPTIONAL_FIELDS:
-                            fields.pop(f_name, None)
-                        be.update("Analytics", existing[0]["id"], fields, typecast=True)
-                    else:
-                        raise
-                return existing[0]["id"]
-            else:
-                try:
-                    record = be.create("Analytics", fields, typecast=True)
-                except Exception as e:
-                    if "UNKNOWN_FIELD_NAME" in str(e) or "columnNotFound" in str(e):
-                        for f_name in _OPTIONAL_FIELDS:
-                            fields.pop(f_name, None)
-                        record = be.create("Analytics", fields, typecast=True)
-                    else:
-                        raise
-                # Postgres create() returns a UUID string; SharePoint returns dict
-                return record["id"] if isinstance(record, dict) else str(record)
-        except Exception as exc:
-            logger.warning("Analytics upsert failed for %s: %s", composite_id, exc)
-            return None
+        """Delegates to :class:`AnalyticsStore.upsert_analytics`."""
+        return self._analytics.upsert_analytics(
+            post_id=post_id,
+            platform=platform,
+            insights=insights,
+            blueprint_record_id=blueprint_record_id,
+            candidate_id=candidate_id,
+            published_at=published_at,
+            content_format=content_format,
+            fetch_window=fetch_window,
+            story_title=story_title,
+            viral_score=viral_score,
+            niche_id=niche_id,
+        )
 
     # ===== A/B TESTING =====
 

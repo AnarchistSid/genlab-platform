@@ -22,7 +22,14 @@ def _make_client_with_mock_analytics() -> tuple[BacklogClient, MagicMock]:
     We bypass __init__ entirely and wire up only publishing_analytics.
     The mock_analytics proxy is registered in _sp_proxies so the
     _backend() routing works correctly.
+
+    Tier 2 (audit S-2) moved log_publish_result into AnalyticsStore;
+    BacklogClient delegates via ``self._analytics``. The bypass path
+    above doesn't run ``__init__``, so the store has to be wired here
+    explicitly — otherwise the delegator hits AttributeError.
     """
+    from genlab_core.http.analytics_store import AnalyticsStore
+
     reset_backends()
     client = object.__new__(BacklogClient)
     mock_analytics = MagicMock()
@@ -31,6 +38,8 @@ def _make_client_with_mock_analytics() -> tuple[BacklogClient, MagicMock]:
     mock_analytics.create.return_value = {"id": "rec_new"}
     client.publishing_analytics = mock_analytics
     client._sp_proxies = {"Publishing_Analytics": mock_analytics}
+    client._backend_cache = {}
+    client._analytics = AnalyticsStore(sp_call=BacklogClient._sp_call, backend=client._backend)
     return client, mock_analytics
 
 
