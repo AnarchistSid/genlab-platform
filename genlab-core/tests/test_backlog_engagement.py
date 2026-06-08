@@ -6,10 +6,10 @@ requiring Azure credentials by mocking the storage backend layer.
 
 from __future__ import annotations
 
-from genlab_core.http.engagement_store import EngagementStore
 from unittest.mock import MagicMock, patch
 
 import pytest
+from genlab_core.http.engagement_store import EngagementStore
 
 
 @pytest.fixture(autouse=True)
