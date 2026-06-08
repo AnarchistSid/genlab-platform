@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,8 @@ _DEFAULT_PROTECT_RECENT = 3
 # Subdirectories to evict in pass 1 (before deleting full runs).
 # These are the largest space consumers that can be regenerated.
 _HEAVY_SUBDIRS = ("clips",)
+# Default max-age for ``extra_dirs:`` entries when an entry omits it.
+_DEFAULT_EXTRA_DIR_MAX_AGE_DAYS = 7
 
 
 @dataclass
@@ -472,3 +475,66 @@ class DiskQuotaManager:
             return False
 
         return True
+
+    # ── Extra-dir sweeper ─────────────────────────────────────
+
+    def sweep_extra_dirs(self, *, now: float | None = None) -> dict[str, int]:
+        """Delete entries in ``extra_dirs:`` whose mtime is older than
+        ``max_age_days``. Returns a mapping of path → bytes freed.
+
+        Closes the leak audit-finding P-9: the per-agent ``scan_runs``
+        only walks each agent's ``runs_dir``, so shared scratch trees
+        (``.tmp/rerender``, ``.tmp/cache``, ``.tmp/logs``) accumulated
+        until the disk filled. 408 MB of ``.tmp/rerender`` dating to
+        2026-03-27 was found during the 2026-06-08 audit — those would
+        have stayed forever.
+
+        Strictly best-effort: per-entry errors are logged at WARN and
+        skipped. ``now`` is injected for deterministic tests.
+        """
+        now = now or time.time()
+        freed: dict[str, int] = {}
+        for entry in self._config.get("extra_dirs", []) or []:
+            raw_path = entry.get("path") if isinstance(entry, dict) else None
+            if not raw_path:
+                continue
+            path = Path(raw_path).expanduser()
+            if not path.is_dir():
+                # Not a leak — the directory simply doesn't exist on
+                # this host yet. (Common when a niche hasn't run.)
+                continue
+            max_age_days = int(entry.get("max_age_days", _DEFAULT_EXTRA_DIR_MAX_AGE_DAYS) or 0)
+            if max_age_days <= 0:
+                logger.warning("[disk_quota] skipping %s: max_age_days must be > 0", path)
+                continue
+            cutoff = now - max_age_days * 86400
+
+            bytes_freed = 0
+            for child in path.iterdir():
+                try:
+                    mtime = child.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime > cutoff:
+                    continue
+                try:
+                    if child.is_dir():
+                        size = _dir_size(child)
+                        shutil.rmtree(child, ignore_errors=True)
+                        bytes_freed += size
+                    else:
+                        size = child.stat().st_size
+                        child.unlink(missing_ok=True)
+                        bytes_freed += size
+                except OSError as exc:
+                    logger.warning("[disk_quota] sweep failed for %s: %s", child, exc)
+
+            if bytes_freed:
+                logger.info(
+                    "[disk_quota] swept %s (>%dd old) — freed %.1f MB",
+                    path,
+                    max_age_days,
+                    bytes_freed / (1024 * 1024),
+                )
+            freed[str(path)] = bytes_freed
+        return freed

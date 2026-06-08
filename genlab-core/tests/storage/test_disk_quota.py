@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 
 import pytest
@@ -264,3 +265,92 @@ class TestPreflightCheck:
 
         assert result is True
         assert not (runs / "old").exists()
+
+
+# ---------------------------------------------------------------------------
+# sweep_extra_dirs — audit P-9 (.tmp/rerender + .tmp/cache + .tmp/logs leak)
+# ---------------------------------------------------------------------------
+
+
+class TestSweepExtraDirs:
+    """The audit found 408 MB of ``.tmp/rerender`` from 2026-03-27 leaked
+    because the per-agent ``scan_runs`` only walked ``runs_dir``. These
+    tests guard the new sweep that closes that leak."""
+
+    def _setup(self, tmp_path, mtime_offset_days: float, files: int = 1):
+        """Build an extra-dir with ``files`` children, all mtime'd to
+        ``mtime_offset_days`` ago (negative = past)."""
+        d = tmp_path / "rerender"
+        d.mkdir()
+        now = time.time()
+        for i in range(files):
+            child = d / f"job_{i}"
+            child.mkdir()
+            (child / "data.bin").write_bytes(b"x" * 1024)  # 1 KB each
+            past = now + mtime_offset_days * 86400
+            for entry in [child, child / "data.bin"]:
+                os.utime(entry, (past, past))
+        return d
+
+    def test_old_children_deleted(self, tmp_path):
+        d = self._setup(tmp_path, mtime_offset_days=-10, files=3)
+        mgr = DiskQuotaManager({"extra_dirs": [{"path": str(d), "max_age_days": 7}]})
+        freed = mgr.sweep_extra_dirs()
+        assert freed[str(d)] >= 3 * 1024
+        assert list(d.iterdir()) == []
+
+    def test_recent_children_kept(self, tmp_path):
+        d = self._setup(tmp_path, mtime_offset_days=-2, files=2)
+        mgr = DiskQuotaManager({"extra_dirs": [{"path": str(d), "max_age_days": 7}]})
+        freed = mgr.sweep_extra_dirs()
+        assert freed[str(d)] == 0
+        assert len(list(d.iterdir())) == 2
+
+    def test_mixed_old_and_recent(self, tmp_path):
+        old = self._setup(tmp_path, mtime_offset_days=-10, files=2)
+        fresh = old / "fresh"
+        fresh.mkdir()
+        (fresh / "x.bin").write_bytes(b"y" * 1024)
+        mgr = DiskQuotaManager({"extra_dirs": [{"path": str(old), "max_age_days": 7}]})
+        mgr.sweep_extra_dirs()
+        assert fresh.exists()
+        assert not (old / "job_0").exists()
+        assert not (old / "job_1").exists()
+
+    def test_missing_directory_is_noop(self, tmp_path):
+        """A configured path that doesn't exist on this host (e.g. a niche
+        that has never run) is silently skipped — not a leak."""
+        mgr = DiskQuotaManager(
+            {"extra_dirs": [{"path": str(tmp_path / "ghost"), "max_age_days": 7}]}
+        )
+        freed = mgr.sweep_extra_dirs()
+        assert freed == {}
+
+    def test_zero_max_age_skipped_with_warning(self, tmp_path):
+        """A misconfigured ``max_age_days: 0`` would delete EVERYTHING.
+        Refuse and log instead — never silently mass-delete."""
+        d = self._setup(tmp_path, mtime_offset_days=-100, files=1)
+        mgr = DiskQuotaManager({"extra_dirs": [{"path": str(d), "max_age_days": 0}]})
+        mgr.sweep_extra_dirs()
+        assert (d / "job_0").exists()
+
+    def test_no_extra_dirs_config_is_noop(self):
+        mgr = DiskQuotaManager({"agents": {}})
+        assert mgr.sweep_extra_dirs() == {}
+
+    def test_per_file_delete_failure_doesnt_block_siblings(self, tmp_path, monkeypatch):
+        """One failed rmtree must NOT stop the sweep of sibling entries."""
+        d = self._setup(tmp_path, mtime_offset_days=-10, files=3)
+        original_rmtree = shutil.rmtree
+        call_count = {"n": 0}
+
+        def flaky_rmtree(path, ignore_errors=False):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise OSError("simulated")
+            return original_rmtree(path, ignore_errors=ignore_errors)
+
+        monkeypatch.setattr("genlab_core.storage.disk_quota.shutil.rmtree", flaky_rmtree)
+        mgr = DiskQuotaManager({"extra_dirs": [{"path": str(d), "max_age_days": 7}]})
+        mgr.sweep_extra_dirs()
+        assert call_count["n"] == 3

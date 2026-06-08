@@ -100,6 +100,14 @@ def main() -> None:
             except Exception:
                 logger.exception("[%s] Quota check failed", agent)
 
+        # Sweep the shared extra-dirs (audit P-9) — these are NOT per-agent
+        # and only need one pass per cycle. Best-effort; per-entry errors
+        # are logged inside ``sweep_extra_dirs`` and never raised here.
+        try:
+            manager.sweep_extra_dirs()
+        except Exception:
+            logger.exception("Extra-dir sweep failed")
+
         # Sleep in short intervals so SIGTERM is responsive
         for _ in range(args.interval):
             if not _RUNNING:
