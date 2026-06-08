@@ -26,21 +26,12 @@ import argparse
 import json
 import logging
 import sys
-from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from datetime import UTC, datetime
 
 from genlab_core.platforms.gatekeeper import PublishGatekeeper
-from genlab_core.platforms.registry import get_client
-from genlab_core.publishing.analytics_recorder import record_publish
 from genlab_core.publishing.crash_recovery import (
     recover_publish_failed,
     recover_stuck_publishing,
-)
-from genlab_core.publishing.error_classifier import (
-    classify,
-    is_ambiguous_failure,
-    retry_delay_seconds,
-    should_retry,
 )
 
 # Re-exports from sibling modules so existing import paths (notably the
@@ -59,7 +50,7 @@ from genlab_core.publishing.niche_validation import (
     validate_niche as _validate_niche,
 )
 from genlab_core.publishing.parallel_publish import execute_parallel_publish
-from genlab_core.publishing.payload_builder import build_payload
+from genlab_core.publishing.payload_builder import build_payload  # noqa: F401  back-compat
 from genlab_core.publishing.pid_lock import PidLock
 from genlab_core.publishing.platform_status import (
     already_published_platforms as _already_published_platforms,
@@ -67,14 +58,11 @@ from genlab_core.publishing.platform_status import (
 from genlab_core.publishing.platform_status import (
     terminal_failed_platforms as _terminal_failed_platforms,
 )
-from genlab_core.publishing.platform_status import (
-    to_registry_id as _to_registry_id,
-)
 from genlab_core.publishing.preflight import (
     preflight_token_refresh as _preflight_token_refresh,
 )
-from genlab_core.publishing.preflight import (
-    resolve_client_kwargs as _resolve_client_kwargs,
+from genlab_core.publishing.retry_pass import (
+    run_retry_pass as _run_retry_pass,
 )
 from genlab_core.publishing.transcode import (
     ENCODE_SEMAPHORE as _ENCODE_SEMAPHORE,  # noqa: F401  re-exported for back-compat
@@ -460,202 +448,9 @@ def run_publish(
     return EXIT_SUCCESS if any_success else EXIT_ALL_FAILED
 
 
-def _run_retry_pass(niche_id: str, backlog_client, daily_cap) -> None:
-    """Retry recently-PUBLISHED blueprints' failed platforms (R-83).
-
-    Extracted so it can run standalone: on a retry-only 2nd daily run (which must
-    NOT publish fresh content) and on no-fresh-content days (where run_publish
-    used to return before reaching it). The R-29 per-platform skip guarantees a
-    retry never re-posts a platform that already succeeded.
-    """
-    # ── Retry pass: check recent PUBLISHED blueprints for failed platforms ──
-    # Only check blueprints published in the last 7 days (not the entire history)
-    try:
-        (datetime.now(UTC) - timedelta(days=7)).isoformat()
-        published_bps = backlog_client.get_blueprints_by_status(
-            "PUBLISHED",
-            niche_id=niche_id,
-            max_records=50,
-        )
-        for bp in published_bps:
-            fields = bp.get("fields", bp)
-            pps_raw = fields.get("platform_publish_status", "{}")
-            if isinstance(pps_raw, str):
-                try:
-                    pps = json.loads(pps_raw)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            else:
-                pps = pps_raw or {}
-
-            # Find platforms that failed and are eligible for retry
-            retry_platforms = []
-            for plat, status_data in pps.items():
-                if isinstance(status_data, dict) and status_data.get("status") == "FAILED":
-                    error_class = status_data.get("error_class", "TRANSIENT")
-                    attempts = status_data.get("attempts", 0)
-                    if not should_retry(error_class) or attempts >= 3:
-                        continue
-                    # R-21: never auto-re-publish a failure that may have actually
-                    # landed (timeout / broken pipe / container-expired) — that
-                    # risks a duplicate post on the live channel. Skip; these need
-                    # a "did it land" check or human review, not a blind retry.
-                    if status_data.get("ambiguous") or is_ambiguous_failure(
-                        status_data.get("last_error", "")
-                    ):
-                        logger.warning(
-                            "[publish] Skipping cross-run retry of %s for blueprint %s — "
-                            "ambiguous failure may have landed (needs manual/landing check)",
-                            plat,
-                            bp["id"][:8],
-                        )
-                        continue
-                    # Check backoff timing
-                    next_retry = status_data.get("next_retry_after", "")
-                    if next_retry:
-                        try:
-                            retry_dt = datetime.fromisoformat(next_retry)
-                            if retry_dt.tzinfo is None:
-                                retry_dt = retry_dt.replace(tzinfo=UTC)
-                            if retry_dt > datetime.now(UTC):
-                                continue  # Not yet time to retry
-                        except (ValueError, TypeError):
-                            pass
-                    # Check daily cap before retrying
-                    if daily_cap and not daily_cap.can_publish(plat):
-                        logger.info("[publish] Retry skipped for %s — daily cap reached", plat)
-                        continue
-                    retry_platforms.append(plat)
-
-            if not retry_platforms:
-                continue
-
-            # Skip retry if media files are gone (cleaned up)
-            vp_raw = fields.get("visual_paths", "[]")
-            try:
-                vp_list = json.loads(vp_raw) if isinstance(vp_raw, str) else (vp_raw or [])
-            except (json.JSONDecodeError, TypeError):
-                vp_list = []
-            if vp_list and not any(Path(p).exists() for p in vp_list if p):
-                logger.info("[publish] Skipping retry for %s — media files deleted", bp["id"][:8])
-                continue
-
-            logger.info(
-                "[publish] Retrying %d failed platform(s) for blueprint %s: %s",
-                len(retry_platforms),
-                bp["id"][:8],
-                retry_platforms,
-            )
-
-            # Retry each failed platform with its own payload
-            try:
-                record_id = bp["id"]
-
-                for plat in retry_platforms:
-                    payload = build_payload(fields, plat)
-                    registry_id = _to_registry_id(plat)
-                    kwargs = _resolve_client_kwargs(registry_id, niche_id)
-                    if not kwargs:
-                        continue
-
-                    try:
-                        client_instance = get_client(registry_id, **kwargs)
-                        result = client_instance.publish(payload)
-
-                        if result.success:
-                            pps[plat] = "PUBLISHED"
-                            logger.info(
-                                "[publish] Retry SUCCESS: %s/%s post_id=%s",
-                                niche_id,
-                                plat,
-                                result.post_id,
-                            )
-                        else:
-                            ec = classify(result.error, plat)
-                            prev = pps[plat] if isinstance(pps[plat], dict) else {}
-                            attempts = (
-                                prev.get("attempts", 0) if isinstance(prev, dict) else 0
-                            ) + 1
-                            delay = retry_delay_seconds(ec, attempts)
-                            pps[plat] = {
-                                "status": "FAILED",
-                                "attempts": attempts,
-                                "last_error": result.error[:200],
-                                "error_class": ec,
-                                "next_retry_after": (
-                                    datetime.now(UTC) + timedelta(seconds=delay)
-                                ).isoformat(),
-                            }
-                            logger.warning(
-                                "[publish] Retry FAILED: %s/%s (%s): %s",
-                                niche_id,
-                                plat,
-                                ec,
-                                result.error[:100],
-                            )
-
-                        # Record to analytics
-                        record_publish(
-                            client=backlog_client,
-                            niche_id=niche_id,
-                            platform=plat,
-                            status="SUCCESS" if result.success else "FAILED",
-                            post_url=result.post_url,
-                            blueprint_id=record_id,
-                            error_message=result.error if not result.success else "",
-                        )
-                    except Exception as e:
-                        logger.warning("[publish] Retry exception for %s/%s: %s", niche_id, plat, e)
-
-                # Update platform_publish_status
-                backlog_client.blueprints.update(
-                    record_id,
-                    {
-                        "platform_publish_status": json.dumps(pps),
-                    },
-                )
-
-                # If any platforms remain terminally failed after retries, surface
-                # to the dashboard. Without this, partial-publish failures are
-                # only visible by inspecting platform_publish_status by hand.
-                terminal_failed = _terminal_failed_platforms(pps)
-                if terminal_failed:
-                    try:
-                        from genlab_core.observability.dashboard_events import push_event
-
-                        hook_text = (
-                            fields.get("hook_text")
-                            or fields.get("hook")
-                            or fields.get("title")
-                            or ""
-                        )[:50]
-                        ok_plats = [
-                            p
-                            for p, s in pps.items()
-                            if s == "PUBLISHED"
-                            or (isinstance(s, dict) and s.get("status") == "PUBLISHED")
-                        ]
-                        failed_summary = ", ".join(
-                            f"{p}({d.get('error_class', '?')},{d.get('attempts', '?')}x)"
-                            for p, d in terminal_failed.items()
-                        )
-                        push_event(
-                            "publish_partial",
-                            f"Retries exhausted: {hook_text}",
-                            f"OK: {', '.join(ok_plats) or 'none'}; permanent: {failed_summary}",
-                            entity_id=bp["id"],
-                            entity_type="blueprint",
-                            niche_id=niche_id,
-                        )
-                    except Exception:
-                        pass  # non-fatal
-            except Exception as e:
-                logger.warning(
-                    "[publish] Retry processing failed for blueprint %s: %s", bp["id"][:8], e
-                )
-
-    except Exception as e:
-        logger.debug("[publish] Retry pass failed: %s", e)
+# _run_retry_pass extracted to publishing/retry_pass.py in refactor-#9
+# PR 6c/N. Re-exported with the underscore-prefixed alias the
+# orchestrator's call sites use.
 
 
 # ---------------------------------------------------------------------------
