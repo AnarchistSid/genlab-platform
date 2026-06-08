@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from genlab_core.http.ab_test_store import ABTestStore
 from genlab_core.http.analytics_store import AnalyticsStore
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.engagement_store import EngagementStore
@@ -495,6 +496,15 @@ class BacklogClient:
         # the underlying SP list isn't configured; the store
         # early-returns + WARNs in every method on that branch).
         self._engagement = EngagementStore(self.pending_engagement)
+
+        # AB_Tests surface (Tier 2, audit S-2 slice 2.3).
+        # Multi-table backend pattern (like AnalyticsStore) but
+        # also captures the ``self.ab_tests`` proxy ref for the
+        # "is configured" truthy gate.
+        self._ab_tests = ABTestStore(
+            ab_tests=self.ab_tests,
+            backend=self._backend,
+        )
 
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
@@ -1161,46 +1171,21 @@ class BacklogClient:
     # ===== A/B TESTING =====
 
     def create_ab_test(self, test: dict) -> str | None:
-        if not self.ab_tests:
-            logger.warning("AB_Tests table not configured")
-            return None
-        try:
-            record = self._backend("AB_Tests").create(
-                "AB_Tests",
-                test,
-                typecast=True,
-            )
-            return record["id"]
-        except Exception as exc:
-            logger.warning("Failed to create AB test: %s", exc)
-            return None
+        """Delegates to :class:`ABTestStore.create_ab_test`."""
+        return self._ab_tests.create_ab_test(test)
 
-    def get_ab_tests(self, status: str | None = None, *, niche_id: str | None = None) -> list[dict]:
-        if not self.ab_tests:
-            return []
-        formula = f"{{status}}='{_esc(status)}'" if status else None
-        return self._backend("AB_Tests").find(
-            "AB_Tests",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=50,
-        )
+    def get_ab_tests(
+        self,
+        status: str | None = None,
+        *,
+        niche_id: str | None = None,
+    ) -> list[dict]:
+        """Delegates to :class:`ABTestStore.get_ab_tests`."""
+        return self._ab_tests.get_ab_tests(status=status, niche_id=niche_id)
 
-    def update_ab_test(self, test_id: str, fields: dict):
-        if not self.ab_tests:
-            return
-        records = self._backend("AB_Tests").find(
-            "AB_Tests",
-            formula=f"{{test_id}}='{_esc(test_id)}'",
-            max_records=1,
-        )
-        if records:
-            self._backend("AB_Tests").update(
-                "AB_Tests",
-                records[0]["id"],
-                fields,
-                typecast=True,
-            )
+    def update_ab_test(self, test_id: str, fields: dict) -> None:
+        """Delegates to :class:`ABTestStore.update_ab_test`."""
+        self._ab_tests.update_ab_test(test_id, fields)
 
     # ===== ENGAGEMENT (Sprint 23 — observe-only) =====
 
