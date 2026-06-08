@@ -1,5 +1,13 @@
 # Platform encoding overrides — business-tunable layer on top of PLATFORM_SPECS.
 #
+# ⚠️  CURRENTLY INACTIVE (audit M-2, 2026-06-09). The loader
+# ``video_compositor.load_platform_encode_overrides()`` is called only by
+# tests; production reads PLATFORM_SPECS from ``ffmpeg.py`` directly. To
+# activate this file, wire ``load_platform_encode_overrides()`` into the
+# ``ffmpeg.py`` module load (apply YAML on top of PLATFORM_SPECS) — then
+# ``standards.py`` will pick up the overrides automatically because it
+# derives from PLATFORM_SPECS.
+#
 # Each key maps to a platform name. Only fields listed here override the
 # built-in defaults in genlab_core.media.ffmpeg.PLATFORM_SPECS. Omitted
 # fields inherit from the code defaults.
