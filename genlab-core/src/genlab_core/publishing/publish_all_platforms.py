@@ -26,13 +26,13 @@ import argparse
 import json
 import logging
 import sys
-from datetime import UTC, datetime
 
-from genlab_core.platforms.gatekeeper import PublishGatekeeper
+from genlab_core.publishing.blueprint_selector import select_blueprint
 from genlab_core.publishing.crash_recovery import (
     recover_publish_failed,
     recover_stuck_publishing,
 )
+from genlab_core.publishing.feedback_registration import register_pending_feedback
 
 # Re-exports from sibling modules so existing import paths (notably the
 # test suite + any future direct caller) keep working byte-stable. The
@@ -43,9 +43,6 @@ from genlab_core.publishing.crash_recovery import (
 #   - ``transcode``        — per-platform ffmpeg variant + encode semaphore
 # Refactor-#9 PR 1/N + PR 2/N extracted them; see those modules for
 # docstrings + tests.
-from genlab_core.publishing.niche_validation import (
-    normalize_niche as _normalize_niche,
-)
 from genlab_core.publishing.niche_validation import (
     validate_niche as _validate_niche,
 )
@@ -167,65 +164,17 @@ def run_publish(
         _run_retry_pass(niche_id, backlog_client, daily_cap)
         return EXIT_SUCCESS
 
-    # 1. Query VISUAL_READY blueprints for this niche
-    all_blueprints = backlog_client.get_blueprints_by_status(
-        "VISUAL_READY",
-        niche_id=niche_id,
-    )
-    if not all_blueprints:
-        logger.info("[publish] No VISUAL_READY blueprints for niche=%s", niche_id)
-        # R-83: still retry failed platforms on no-fresh-content days (the old
-        # code returned here, skipping the retry pass entirely).
+    # 1-3. Query + gatekeeper + top-1-by-score, extracted to
+    # publishing/blueprint_selector.py in refactor-#9 PR 6d/N.
+    best = select_blueprint(niche_id, backlog_client)
+    if best is None:
+        # No fresh content — still run the retry pass so failed platforms
+        # don't dark across days. (R-83.)
         _run_retry_pass(niche_id, backlog_client, daily_cap)
         return EXIT_NO_BLUEPRINTS
-
-    # 2. Run gatekeeper on each blueprint (filters by approval, schedule, score, media)
-    #    Daily cap is checked per-platform in step 4, not at gatekeeper level.
-    gatekeeper = PublishGatekeeper()
-    eligible = []
-    for bp in all_blueprints:
-        fields = bp.get("fields", bp)
-        # Cross-niche safety: skip blueprints that don't match our niche
-        bp_niche = _normalize_niche(fields.get("niche_id", "") or "")
-        if bp_niche != niche_id:
-            logger.warning(
-                "[publish] Skipping blueprint %s: niche mismatch (%s != %s)",
-                bp.get("id", "?"),
-                bp_niche,
-                niche_id,
-            )
-            continue
-        gate = gatekeeper.evaluate(fields, "")  # platform-agnostic evaluation
-        if gate.allowed:
-            eligible.append(bp)
-        else:
-            logger.info(
-                "[publish] Blueprint %s blocked by %s: %s (title='%s')",
-                bp.get("id", "?")[:8],
-                gate.gate_name,
-                gate.reason,
-                (fields.get("title") or "")[:50],
-            )
-
-    if not eligible:
-        logger.info("[publish] No blueprints passed gatekeeper for niche=%s", niche_id)
-        return EXIT_NO_BLUEPRINTS
-
-    # 3. Sort by priority_score descending, take top 1
-    eligible.sort(
-        key=lambda b: float(b.get("fields", {}).get("priority_score", 0) or 0),
-        reverse=True,
-    )
-    best = eligible[0]
     fields = best.get("fields", best)
     record_id = best.get("id", "")
     candidate_id = fields.get("candidate_id", "")
-    logger.info(
-        "[publish] Selected blueprint %s (score=%.2f, hook=%s)",
-        record_id[:16],
-        float(fields.get("priority_score", 0) or 0),
-        (fields.get("hook", "") or "")[:50],
-    )
 
     # 4. Daily cap check (per-platform) + skip platforms already published in a
     #    prior (partial / crashed) run so re-publishing never double-posts a
@@ -386,63 +335,17 @@ def run_publish(
     except Exception:
         pass  # non-fatal
 
-    # 8. Register PendingFeedback for the learning loop (bandit updates)
+    # 8. Register PendingFeedback, extracted in refactor-#9 PR 6d/N to
+    # publishing/feedback_registration.py.
     if any_success:
-        try:
-            from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
-            from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
-
-            fb_store = PendingFeedbackStore(backlog_client)
-            for plat, pstatus in platform_status.items():
-                if pstatus == "PUBLISHED" or (
-                    isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"
-                ):
-                    # Pull the post_id from the outcome — cleaner than re-iterating
-                    # futures (the futures are already done; this is what the
-                    # ParallelPublishOutcome captures upfront). For platforms in
-                    # ``prior_published`` the post_id was lost across the run boundary
-                    # so we fall back to "" — same behaviour as the original code's
-                    # "no matching future" fall-through.
-                    post_id_for_plat = outcome.successful_post_ids.get(plat, "")
-
-                    # Build bandit_context with hook features for LinUCB (Break 11 fix)
-                    bandit_ctx = None
-                    try:
-                        from genlab_core.learning.hook_features import build_feature_vector
-                        from genlab_core.learning.linucb import build_content_context
-
-                        hook_txt = fields.get("hook", "")
-                        hook_feats = build_feature_vector(hook_txt) if hook_txt else {}
-                        linucb_ctx = build_content_context(fields, niche_id).tolist()
-                        bandit_ctx = {
-                            "hook_features": hook_feats,
-                            "linucb_context": linucb_ctx,
-                        }
-                        # Carry the bandit-picked hook style so the
-                        # metric_collector update can also credit the
-                        # style arm at 48h (closes the loop opened in
-                        # commit 84b7801).
-                        hook_style = fields.get("hook_style", "")
-                        if hook_style:
-                            bandit_ctx["extra_arms"] = [f"style:{niche_id}:{hook_style}"]
-                    except Exception as ctx_exc:
-                        logger.debug("[publish] bandit_context build failed: %s", ctx_exc)
-
-                    task = PendingFeedbackTask(
-                        content_id=candidate_id or record_id[:16],
-                        platform=plat,
-                        niche_id=niche_id,
-                        published_at=datetime.now(UTC),
-                        platform_post_id=post_id_for_plat,
-                        content_type="video",
-                        hook_text=fields.get("hook", "")[:100],
-                        hook_length=len(fields.get("hook", "")),
-                        bandit_arm=fields.get("arm_id", ""),
-                        bandit_context=bandit_ctx,
-                    )
-                    fb_store.create(task)
-        except Exception as e:
-            logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
+        register_pending_feedback(
+            outcome=outcome,
+            fields=fields,
+            record_id=record_id,
+            candidate_id=candidate_id,
+            niche_id=niche_id,
+            backlog_client=backlog_client,
+        )
 
     _run_retry_pass(niche_id, backlog_client, daily_cap)
     return EXIT_SUCCESS if any_success else EXIT_ALL_FAILED
