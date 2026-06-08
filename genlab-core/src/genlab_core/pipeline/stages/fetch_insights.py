@@ -25,6 +25,7 @@ from genlab_core.http.circuit_breaker import (
     get_circuit_breaker,
 )
 from genlab_core.pipeline.stage_context import StageContext
+from genlab_core.platforms.metrics.legacy_aliases import add_legacy_aliases
 
 logger = logging.getLogger(__name__)
 
@@ -243,31 +244,21 @@ class FetchInsights:
 
     @staticmethod
     def _fetch_instagram(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch IG metrics — delegates to the canonical implementation.
-
-        Adds the legacy ``saved`` alias on top of the canonical ``saves`` so
-        downstream consumers (notably ``normalize_publishing_metrics`` and any
-        analytics composite-score reader expecting the older key) see a
-        byte-stable shape.
-        """
+        """Fetch IG metrics — delegates to the canonical implementation, then
+        adds legacy aliases via :func:`add_legacy_aliases` so downstream
+        SharePoint columns (``saved``) keep working byte-stable."""
         from genlab_core.platforms.metrics import fetch_instagram as _canonical
 
-        niche_id = config.get("niche_id", "")
-        metrics = _canonical(post_id, niche_id=niche_id)
-        if metrics is None:
-            return None
-        out: dict[str, Any] = dict(metrics)
-        if "saves" in out:
-            out["saved"] = out["saves"]
-        return out
+        metrics = _canonical(post_id, niche_id=config.get("niche_id", ""))
+        return add_legacy_aliases(metrics, "instagram")
 
     @staticmethod
     def _fetch_youtube(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch YT metrics — thin delegate to the canonical implementation."""
+        """Fetch YT metrics — thin delegate to the canonical implementation.
+        YouTube has no legacy aliases; the canonical shape ships unchanged."""
         from genlab_core.platforms.metrics import fetch_youtube as _canonical
 
-        metrics = _canonical(post_id)
-        return dict(metrics) if metrics is not None else None
+        return add_legacy_aliases(_canonical(post_id), "youtube")
 
     @staticmethod
     def _fetch_facebook(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
@@ -312,22 +303,10 @@ class FetchInsights:
 
     @staticmethod
     def _fetch_twitter(post_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
-        """Fetch X metrics — delegates to the canonical implementation.
-
-        Adds the legacy ``retweets`` / ``replies`` aliases on top of the
-        canonical ``shares`` / ``comments`` so downstream consumers (notably
-        ``normalize_publishing_metrics`` which reads either form) and any
-        analytics composite-score reader expecting the older keys see a
-        byte-stable shape.
-        """
+        """Fetch X metrics — delegates to the canonical implementation, then
+        adds the legacy ``retweets``/``replies`` aliases via
+        :func:`add_legacy_aliases`."""
         from genlab_core.platforms.metrics import fetch_twitter as _canonical
 
         metrics = _canonical(post_id)
-        if metrics is None:
-            return None
-        out: dict[str, Any] = dict(metrics)
-        if "shares" in out:
-            out["retweets"] = out["shares"]
-        if "comments" in out:
-            out["replies"] = out["comments"]
-        return out
+        return add_legacy_aliases(metrics, "twitter")
