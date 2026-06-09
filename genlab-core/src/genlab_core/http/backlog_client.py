@@ -27,6 +27,7 @@ from typing import Any
 
 from genlab_core.http.ab_test_store import ABTestStore
 from genlab_core.http.analytics_store import AnalyticsStore
+from genlab_core.http.asset_store import AssetStore
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.engagement_store import EngagementStore
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
@@ -525,6 +526,19 @@ class BacklogClient:
             resolve_source=self._resolve_source,
         )
 
+        # Assets surface (Tier 2, audit S-2 slice 2.5b).
+        # Most-callable-rich constructor in the family: needs
+        # find_story (from StoryStore, must be built first),
+        # find_blueprint (still on BacklogClient pending the
+        # Blueprints extraction), and normalize_asset_source_type
+        # (kept on host class because of ASSET_SOURCE_TYPE_ALLOWED).
+        self._assets = AssetStore(
+            backend=self._backend,
+            find_story=self._stories.find_story_by_story_id,
+            find_blueprint=self.find_blueprint_by_candidate_id,
+            normalize_asset_source_type=self._normalize_asset_source_type,
+        )
+
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
         pg = getattr(self, "_pg", None)
@@ -862,120 +876,50 @@ class BacklogClient:
     # ===== ASSETS =====
 
     def create_asset(self, asset: dict) -> str:
-        fields = {
-            "asset_id": asset["asset_id"],
-            "type": asset["type"],
-            "url": asset.get("source_url", asset.get("url", "")),
-            "status": asset.get("status", "GENERATING"),
-            "source_type": self._normalize_asset_source_type(
-                asset.get("source"), asset.get("type", "")
-            ),
-            "alt_text": asset.get("alt_text", ""),
-            "tool_used": asset.get("tool_used"),
-            "generation_params": asset.get("generation_params", ""),
-            "error_log": asset.get("error_log", asset.get("error", "")),
-        }
+        """Delegates to :class:`AssetStore.create_asset`."""
+        return self._assets.create_asset(asset)
 
-        quality_fields = {}
-        if asset.get("quality_tier"):
-            quality_fields["quality_tier"] = asset["quality_tier"]
-        if asset.get("width"):
-            quality_fields["width"] = asset["width"]
-        if asset.get("height"):
-            quality_fields["height"] = asset["height"]
+    def find_asset_by_asset_id(
+        self,
+        asset_id: str,
+        *,
+        niche_id: str | None = None,
+    ) -> dict | None:
+        """Delegates to :class:`AssetStore.find_asset_by_asset_id`."""
+        return self._assets.find_asset_by_asset_id(asset_id, niche_id=niche_id)
 
-        if asset.get("story_id"):
-            story = self.find_story_by_story_id(asset["story_id"])
-            if story:
-                fields["story"] = [story["id"]]
+    def find_asset_by_url(
+        self,
+        url: str,
+        *,
+        niche_id: str | None = None,
+    ) -> dict | None:
+        """Delegates to :class:`AssetStore.find_asset_by_url`."""
+        return self._assets.find_asset_by_url(url, niche_id=niche_id)
 
-        if asset.get("blueprint_id"):
-            blueprint = self.find_blueprint_by_candidate_id(asset["blueprint_id"])
-            if blueprint:
-                fields["blueprint"] = [blueprint["id"]]
-
-        source_url = asset.get("source_url", asset.get("url", ""))
-        if source_url and asset.get("status") == "READY":
-            fields["file"] = [{"url": source_url}]
-
-        be = self._backend("Assets")
-        if quality_fields:
-            try:
-                record = be.create(
-                    "Assets",
-                    {**fields, **quality_fields},
-                    typecast=True,
-                )
-                return record["id"]
-            except Exception as e:
-                if "UNKNOWN_FIELD_NAME" not in str(e) and "columnNotFound" not in str(e):
-                    raise
-
-        record = be.create("Assets", fields, typecast=True)
-        return record["id"]
-
-    def find_asset_by_asset_id(self, asset_id: str, *, niche_id: str | None = None) -> dict | None:
-        formula = f"{{asset_id}}='{_esc(asset_id)}'"
-        records = self._backend("Assets").find(
-            "Assets",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=1,
-        )
-        return records[0] if records else None
-
-    def find_asset_by_url(self, url: str, *, niche_id: str | None = None) -> dict | None:
-        escaped = url.replace("'", "\\'")
-        formula = f"{{url}}='{escaped}'"
-        records = self._backend("Assets").find(
-            "Assets",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=1,
-        )
-        return records[0] if records else None
-
-    def find_assets_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> list[dict]:
-        story = self.find_story_by_story_id(story_id, niche_id=niche_id)
-        if not story:
-            return []
-        formula = f"{{story_link}}='{_esc(story['id'])}'"
-        return self._backend("Assets").find(
-            "Assets",
-            formula=formula,
-            niche_id=niche_id,
-        )
+    def find_assets_by_story_id(
+        self,
+        story_id: str,
+        *,
+        niche_id: str | None = None,
+    ) -> list[dict]:
+        """Delegates to :class:`AssetStore.find_assets_by_story_id`."""
+        return self._assets.find_assets_by_story_id(story_id, niche_id=niche_id)
 
     def update_asset_status(
-        self, asset_id: str, status: str, *, niche_id: str | None = None, **kwargs
-    ):
-        formula = f"{{asset_id}}='{_esc(asset_id)}'"
-        records = self._backend("Assets").find(
-            "Assets",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=1,
-        )
-        if not records:
-            raise ValueError(f"Asset {asset_id} not found")
-        self._backend("Assets").update(
-            "Assets",
-            records[0]["id"],
-            {"status": status, **kwargs},
-        )
+        self,
+        asset_id: str,
+        status: str,
+        *,
+        niche_id: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Delegates to :class:`AssetStore.update_asset_status`."""
+        self._assets.update_asset_status(asset_id, status, niche_id=niche_id, **kwargs)
 
     def batch_create_assets(self, assets: list[dict]) -> list[str]:
-        created_ids = []
-        for asset in assets:
-            existing = self.find_asset_by_asset_id(asset["asset_id"])
-            if existing:
-                continue
-            try:
-                record_id = self.create_asset(asset)
-                created_ids.append(record_id)
-            except Exception as exc:
-                logger.error("Failed to create asset %s: %s", asset["asset_id"], exc)
-        return created_ids
+        """Delegates to :class:`AssetStore.batch_create_assets`."""
+        return self._assets.batch_create_assets(assets)
 
     # ===== SOURCES =====
 
