@@ -1,0 +1,51 @@
+# Affiliate economic assumptions used by both the dashboard revenue
+# estimate (real-time, computed inline from click counts) and the proxy
+# revenue aggregator (daily batch that writes estimates into
+# affiliate_revenue so the dashboard's "actual revenue" column lights up
+# before real revenue ingestion is wired).
+#
+# Audit ref: R-32 — closes the "no working revenue readout" gap with a
+# click-through proxy KPI per the audit's own pointer guidance.
+#
+# These numbers are intentionally rough; the proxy revenue rows carry
+# extra->>'source' = 'click_proxy' so future real ingestion (Amazon
+# report API, manual import, scraper) can co-exist + supersede the
+# proxy values on a per-row basis.
+
+# Average order value per niche, in INR. Derived from the product price
+# spread in affiliate_catalog.yaml. Update when the catalog changes
+# meaningfully (e.g. new high-ticket items in a niche).
+avg_order_inr:
+  gaming: 16900.0
+  sports: 4750.0
+  movies: 13600.0
+  anime: 2800.0
+  ai_creators: 20150.0
+
+# Fallback used when a niche isn't in the table above (e.g. a new
+# tenant niche before its catalog is curated). Weighted average across
+# the 5 channels above.
+default_avg_order_inr: 11640.0
+
+# Commission percentage per affiliate network. Most networks publish a
+# range per merchant; these are conservative blended rates that match
+# what we've observed historically. Tighten per-merchant if the catalog
+# starts targeting specific high-commission products.
+commission_pct:
+  earnkaro: 0.065
+  cuelinks: 0.075
+  vcommission: 0.07
+  amazon: 0.04
+  amazon_us: 0.035
+
+# Fallback commission for unrecognised networks.
+default_commission_pct: 0.05
+
+# Click-to-conversion rate. 2% is the industry baseline for in-feed
+# social referral traffic; bump per-niche if we get real conversion
+# data later.
+conversion_rate: 0.02
+
+# Default currency for proxy revenue rows. Real-revenue ingestion may
+# write USD/EUR rows separately.
+default_currency: INR
