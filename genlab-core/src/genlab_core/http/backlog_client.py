@@ -31,6 +31,7 @@ from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.engagement_store import EngagementStore
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
 from genlab_core.http.source_store import SourceStore
+from genlab_core.http.story_store import StoryStore
 from genlab_core.http.template_store import TemplateStore
 
 logger = logging.getLogger(__name__)
@@ -514,6 +515,16 @@ class BacklogClient:
         self._sources = SourceStore(backend=self._backend)
         self._templates = TemplateStore(backend=self._backend)
 
+        # Stories surface (Tier 2, audit S-2 slice 2.5a).
+        # Takes sp_call (circuit-breaker wrap), backend (live
+        # lookup), and resolve_source (kept centralised on the
+        # host class because it depends on DOMAIN_SOURCE_MAP).
+        self._stories = StoryStore(
+            sp_call=self._sp_call,
+            backend=self._backend,
+            resolve_source=self._resolve_source,
+        )
+
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
         pg = getattr(self, "_pg", None)
@@ -621,77 +632,32 @@ class BacklogClient:
     # ===== STORIES =====
 
     def create_story(self, story: dict) -> str:
-        scores = story.get("scores", {})
-        fields = {
-            "story_id": story["story_id"],
-            "title": story["title"],
-            "url": story["url"],
-            "source": self._resolve_source(story),
-            "published_at": story.get("published_at"),
-            "summary": story.get("summary", ""),
-            "why_it_matters": story.get("why_it_matters", ""),
-            "priority": story.get("priority", scores.get("priority", 0.5)),
-            "status": "INTAKE",
-            "themes": story.get("themes", []),
-            "authority_score": scores.get("authority", 0.0),
-            "recency_score": scores.get("recency", 0.0),
-            "novelty_score": scores.get("novelty", 0.0),
-        }
-        if story.get("niche_id"):
-            fields["niche_id"] = story["niche_id"]
-        record = self._sp_call(
-            self._backend("Stories").create,
-            "Stories",
-            fields,
-        )
-        return record["id"]
+        """Delegates to :class:`StoryStore.create_story`."""
+        return self._stories.create_story(story)
 
-    def find_story_by_story_id(self, story_id: str, *, niche_id: str | None = None) -> dict | None:
-        formula = f"{{story_id}}='{_esc(story_id)}'"
-        records = self._sp_call(
-            self._backend("Stories").find,
-            "Stories",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=1,
-        )
-        return records[0] if records else None
+    def find_story_by_story_id(
+        self,
+        story_id: str,
+        *,
+        niche_id: str | None = None,
+    ) -> dict | None:
+        """Delegates to :class:`StoryStore.find_story_by_story_id`."""
+        return self._stories.find_story_by_story_id(story_id, niche_id=niche_id)
 
     def update_story_status(
-        self, story_id: str, status: str, *, niche_id: str | None = None, **kwargs
-    ):
-        story = self.find_story_by_story_id(story_id, niche_id=niche_id)
-        if not story:
-            raise ValueError(f"Story {story_id} not found")
-        self._sp_call(
-            self._backend("Stories").update,
-            "Stories",
-            story["id"],
-            {"status": status, **kwargs},
-        )
+        self,
+        story_id: str,
+        status: str,
+        *,
+        niche_id: str | None = None,
+        **kwargs,
+    ) -> None:
+        """Delegates to :class:`StoryStore.update_story_status`."""
+        self._stories.update_story_status(story_id, status, niche_id=niche_id, **kwargs)
 
     def batch_create_stories(self, stories: list[dict]) -> list[str]:
-        records = []
-        for story in stories:
-            scores = story.get("scores", {})
-            records.append(
-                {
-                    "story_id": story["story_id"],
-                    "title": story["title"],
-                    "url": story["url"],
-                    "source": self._resolve_source(story),
-                    "published_at": story.get("published_at"),
-                    "summary": story.get("summary", ""),
-                    "priority": story.get("priority", scores.get("priority", 0.5)),
-                    "status": "INTAKE",
-                    "themes": story.get("themes", []),
-                    "authority_score": scores.get("authority", 0.0),
-                    "recency_score": scores.get("recency", 0.0),
-                    "novelty_score": scores.get("novelty", 0.0),
-                }
-            )
-        created = self._backend("Stories").batch_create("Stories", records)
-        return [r["id"] for r in created]
+        """Delegates to :class:`StoryStore.batch_create_stories`."""
+        return self._stories.batch_create_stories(stories)
 
     # ===== BLUEPRINTS =====
 
