@@ -22,7 +22,6 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +30,8 @@ from genlab_core.http.analytics_store import AnalyticsStore
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.engagement_store import EngagementStore
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
+from genlab_core.http.source_store import SourceStore
+from genlab_core.http.template_store import TemplateStore
 
 logger = logging.getLogger(__name__)
 
@@ -506,6 +507,13 @@ class BacklogClient:
             backend=self._backend,
         )
 
+        # Sources + Templates surfaces (Tier 2, audit S-2 slice 2.4).
+        # Simplest pattern in the family: backend-only — both lists
+        # are unconditionally present in ``lists_config.yaml``, so
+        # there's no truthy 'configured' gate to mirror.
+        self._sources = SourceStore(backend=self._backend)
+        self._templates = TemplateStore(backend=self._backend)
+
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
         pg = getattr(self, "_pg", None)
@@ -874,41 +882,16 @@ class BacklogClient:
     # ===== TEMPLATES =====
 
     def create_template(self, template: dict) -> str:
-        constraints = template.get("constraints", {})
-        record = self._backend("Templates").create(
-            "Templates",
-            {
-                "template_id": template["template_id"],
-                "name": template["name"],
-                "format": template["format"],
-                "best_for": template.get("best_for", []),
-                "max_slides": constraints.get("max_slides"),
-                "max_words_per_slide_title": constraints.get("max_words_per_slide_title"),
-                "max_words_per_slide_body": constraints.get("max_words_per_slide_body"),
-                "max_reel_seconds": constraints.get("max_reel_seconds"),
-                "structure": "\n".join(template.get("structure", [])),
-                "default_cta": template.get("default_cta", ""),
-                "pattern_refs": ", ".join(template.get("pattern_refs", [])),
-                "status": "active",
-            },
-            typecast=True,
-        )
-        return record["id"]
+        """Delegates to :class:`TemplateStore.create_template`."""
+        return self._templates.create_template(template)
 
     def find_template_by_template_id(self, template_id: str) -> dict | None:
-        records = self._backend("Templates").find(
-            "Templates",
-            formula=f"{{template_id}}='{_esc(template_id)}'",
-            max_records=1,
-        )
-        return records[0] if records else None
+        """Delegates to :class:`TemplateStore.find_template_by_template_id`."""
+        return self._templates.find_template_by_template_id(template_id)
 
     def get_active_templates(self, *, niche_id: str | None = None) -> list[dict]:
-        return self._backend("Templates").find(
-            "Templates",
-            formula="{status}='active'",
-            niche_id=niche_id,
-        )
+        """Delegates to :class:`TemplateStore.get_active_templates`."""
+        return self._templates.get_active_templates(niche_id=niche_id)
 
     # ===== ASSETS =====
 
@@ -1031,44 +1014,16 @@ class BacklogClient:
     # ===== SOURCES =====
 
     def create_source(self, source: dict) -> str:
-        record = self._backend("Sources").create(
-            "Sources",
-            {
-                "source_id": source["source_id"],
-                "domain": source["domain"],
-                "name": source.get("name", source["domain"]),
-                "url": source["url"],
-                "type": source["type"],
-                "priority": source.get("priority", 1.0),
-                "enabled": source.get("enabled", True),
-                "authority_score": source.get("authority_score", 0.5),
-            },
-        )
-        return record["id"]
+        """Delegates to :class:`SourceStore.create_source`."""
+        return self._sources.create_source(source)
 
-    def update_source_fetch_status(self, source_id: str, status: str):
-        records = self._backend("Sources").find(
-            "Sources",
-            formula=f"{{source_id}}='{_esc(source_id)}'",
-            max_records=1,
-        )
-        if not records:
-            return
-        self._backend("Sources").update(
-            "Sources",
-            records[0]["id"],
-            {
-                "last_fetch_at": datetime.now(UTC).isoformat(),
-                "last_fetch_status": status,
-            },
-        )
+    def update_source_fetch_status(self, source_id: str, status: str) -> None:
+        """Delegates to :class:`SourceStore.update_source_fetch_status`."""
+        self._sources.update_source_fetch_status(source_id, status)
 
     def get_enabled_sources(self, *, niche_id: str | None = None) -> list[dict]:
-        return self._backend("Sources").find(
-            "Sources",
-            formula="{enabled}=TRUE()",
-            niche_id=niche_id,
-        )
+        """Delegates to :class:`SourceStore.get_enabled_sources`."""
+        return self._sources.get_enabled_sources(niche_id=niche_id)
 
     # ===== ATTACHMENTS =====
 
