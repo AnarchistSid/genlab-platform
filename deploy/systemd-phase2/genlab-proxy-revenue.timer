@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab Proxy Revenue Aggregator Timer
+
+[Timer]
+# 04:00 UTC = 09:30 IST. Well after midnight (so a full day of clicks
+# is captured) and well before the 06:30 UTC publish window. Audit
+# ref: R-32 — the click-proxy KPI loop that lights up the dashboard's
+# "actual revenue" column and feeds conversion signal to the bandit.
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

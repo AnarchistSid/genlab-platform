@@ -1,0 +1,20 @@
+[Unit]
+Description=GenLab Proxy Revenue Aggregator
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# Aggregate yesterday's clicks into proxy revenue rows in
+# affiliate_revenue. Idempotent: re-running for the same day
+# DELETEs prior proxy rows then INSERTs fresh ones. Audit R-32.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.monetization.proxy_revenue_aggregator
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
