@@ -9,22 +9,18 @@ import logging
 import os
 
 from flask import Blueprint
+from genlab_core.monetization.affiliate_economics import get_affiliate_economics
 
 from server.core.responses import api_error, api_success
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("revenue_api", __name__, url_prefix="/api/v1/revenue")
 
-# Avg order values (INR) per niche — derived from affiliate_catalog.yaml product prices
-_AVG_ORDER_INR: dict[str, float] = {
-    "gaming": 16900.0,
-    "sports": 4750.0,
-    "movies": 13600.0,
-    "anime": 2800.0,
-    "ai_creators": 20150.0,
-}
-_DEFAULT_AVG_ORDER = 11640.0  # weighted avg across all niches
-_CONVERSION_RATE = 0.02  # 2% rough conversion
+# Economic assumptions (avg order / commission / conversion rate) live in
+# genlab-core/config/affiliate_economics.yaml — shared with the daily
+# proxy_revenue_aggregator so the dashboard's real-time estimate and the
+# persisted proxy rows in affiliate_revenue match to the rupee.
+# Audit ref: R-32.
 
 
 @bp.route("/summary")
@@ -92,23 +88,15 @@ def revenue_summary():
         by_network = {r["network"]: r["cnt"] for r in by_network_rows}
 
         # Commission pct assumptions per network (rough defaults)
-        _NETWORK_COMMISSION: dict[str, float] = {
-            "earnkaro": 0.065,
-            "cuelinks": 0.075,
-            "vcommission": 0.07,
-            "amazon": 0.04,
-            "amazon_us": 0.035,
-        }
-        _DEFAULT_COMMISSION = 0.05
-
+        economics = get_affiliate_economics()
         estimated_revenue_inr = 0.0
         for r in commission_rows:
             niche = r["niche_id"] or "unknown"
             network = r["network"] or "unknown"
             cnt = r["cnt"]
-            avg_order = _AVG_ORDER_INR.get(niche, _DEFAULT_AVG_ORDER)
-            commission = _NETWORK_COMMISSION.get(network, _DEFAULT_COMMISSION)
-            estimated_revenue_inr += cnt * _CONVERSION_RATE * avg_order * commission
+            estimated_revenue_inr += economics.estimate_revenue(
+                niche_id=niche, network=network, clicks=cnt
+            )
 
         # Actual reported revenue from affiliate_revenue table
         actual_revenue_30d = 0.0
