@@ -1,9 +1,14 @@
 """Monetisation progress API endpoint.
 
 Routes:
-    GET  /api/v1/monetisation/progress  -- per-niche threshold progress from SP list
+    GET  /api/v1/monetisation/progress  -- per-niche threshold progress (live Postgres)
     POST /api/v1/monetisation/trigger   -- manually run the tracker (background thread)
     POST /api/v1/monetisation/send-deal -- send deal notification emails to channel subscribers
+
+Audit ref: R-38 — the reader was previously hitting SharePoint
+``GenLab_MonetisationProgress`` whose writer has no phase-2 timer
+(stale); it now reads the live Postgres ``monetisationprogress`` table
+populated daily by ``genlab-audience-collector.service``.
 """
 
 import logging
@@ -12,28 +17,34 @@ import time as _time
 
 from flask import Blueprint, request
 
+from server.core.monetisation_progress_pg import fetch_progress as _pg_fetch_progress
 from server.core.responses import api_error, api_success
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("monetisation_api", __name__, url_prefix="/api/v1/monetisation")
 
+# Legacy SP list ID, kept for the manual /trigger endpoint that still
+# writes to SharePoint via MonetisationTracker. Reads now come from
+# Postgres (see _fetch_progress).
 _MONETISATION_LIST_ID = "1a464f5e-fc95-4597-84ab-3fe6e7f4274a"
 
 _cache: dict = {"data": None, "ts": 0.0}
-_CACHE_TTL = 300.0  # 5 min — SP data only updates daily
+_CACHE_TTL = 300.0  # 5 min — the audience-collector timer runs daily
 
 
 def _fetch_progress() -> list[dict]:
-    """Fetch all MonetisationProgress rows from SharePoint."""
+    """Fetch all monetisation progress rows from the live Postgres table.
+
+    The downstream grouping logic accepts either ``{"fields": {...}}``
+    (legacy SP shape) or a flat dict via ``rec.get("fields", raw_rec)``,
+    so the flat dicts the Postgres reader returns flow through unchanged.
+    """
     entry = _cache.get("data")
     now = _time.time()
     if entry and (now - _cache["ts"]) < _CACHE_TTL:
         return entry
 
-    from server.core.graph_sync import get_sync_client
-
-    client = get_sync_client()
-    records = client.monetisation_progress.all()
+    records = _pg_fetch_progress()
     _cache["data"] = records
     _cache["ts"] = now
     return records
