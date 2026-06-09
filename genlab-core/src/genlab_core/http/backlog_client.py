@@ -28,6 +28,7 @@ from typing import Any
 from genlab_core.http.ab_test_store import ABTestStore
 from genlab_core.http.analytics_store import AnalyticsStore
 from genlab_core.http.asset_store import AssetStore
+from genlab_core.http.blueprint_store import BlueprintStore
 from genlab_core.http.circuit_breaker import SHAREPOINT_CB
 from genlab_core.http.engagement_store import EngagementStore
 from genlab_core.http.graph_proxy import GraphTableProxy, _esc
@@ -539,6 +540,19 @@ class BacklogClient:
             normalize_asset_source_type=self._normalize_asset_source_type,
         )
 
+        # Blueprints surface — the heaviest extracted store.
+        # Five injected callables: sp_call (circuit-breaker),
+        # backend (live lookup), find_story + find_template (from
+        # their respective stores), and assert_not_scheduled
+        # (host-class helper that uses _is_demotion + _STATUS_ORDER).
+        self._blueprints = BlueprintStore(
+            sp_call=self._sp_call,
+            backend=self._backend,
+            find_story=self._stories.find_story_by_story_id,
+            find_template=self._templates.find_template_by_template_id,
+            assert_not_scheduled=self.assert_not_scheduled,
+        )
+
     def close(self) -> None:
         """Close the underlying PostgreSQL connection pool."""
         pg = getattr(self, "_pg", None)
@@ -681,95 +695,19 @@ class BacklogClient:
         story_record: dict | None = None,
         template_record: dict | None = None,
     ) -> str:
-        story = story_record or self.find_story_by_story_id(blueprint["story_id"])
-        if not story:
-            raise ValueError(f"Story {blueprint['story_id']} not found")
-
-        template_record_id = None
-        if blueprint.get("template_id"):
-            template = template_record or self.find_template_by_template_id(
-                blueprint["template_id"]
-            )
-            if template:
-                template_record_id = template["id"]
-
-        validation = blueprint.get("validation_status", {})
-
-        fields = {
-            "candidate_id": blueprint["candidate_id"],
-            "story": [story["id"]],
-            "template": [template_record_id] if template_record_id else [],
-            "template_id": blueprint.get("template_id", ""),
-            "template_name": blueprint.get("template_name", ""),
-            "topic": blueprint.get("topic", ""),
-            "angle": blueprint.get("angle", ""),
-            "format": blueprint.get("format"),
-            "hook": blueprint.get("hook", ""),
-            "structure": blueprint.get("structure_text", "")
-            or "\n".join(blueprint.get("structure", [])),
-            "cta": blueprint.get("cta", ""),
-            "priority_score": blueprint.get("priority_score", 0.5),
-            "status": "INTEL_READY",
-            "why_this_will_work": blueprint.get("why_this_will_work", ""),
-            "validation_constraints_passed": validation.get("constraints_passed", False),
-            "validation_claims_passed": validation.get("claims_passed", False),
-            "validation_risk_acceptable": validation.get("risk_acceptable", False),
-        }
-
-        if blueprint.get("niche_id"):
-            fields["niche_id"] = blueprint["niche_id"]
-
-        # clip_url: persisted by push_to_backlog so renderer can download the clip
-        if blueprint.get("clip_url"):
-            fields["clip_url"] = blueprint["clip_url"]
-
-        # Optional performance fields (caller enriches blueprint dict before
-        # passing it — no cross-project import needed).
-        for key in ("topic_category", "hook_formula", "published_hour", "published_day"):
-            val = blueprint.get(key)
-            if val:
-                fields[key] = val
-
-        try:
-            record = self._backend("Blueprints").create(
-                "Blueprints",
-                fields,
-                typecast=True,
-            )
-        except Exception as e:
-            err_str = str(e)
-            if (
-                "UNKNOWN_FIELD_NAME" in err_str
-                or "columnNotFound" in err_str
-                or "not recognized" in err_str
-            ):
-                for f in (
-                    "template_id",
-                    "template_name",
-                    "topic_category",
-                    "hook_formula",
-                    "published_hour",
-                    "published_day",
-                    "clip_url",
-                ):
-                    fields.pop(f, None)
-                record = self._backend("Blueprints").create("Blueprints", fields)
-            else:
-                raise
-        return record["id"]
+        """Delegates to :class:`BlueprintStore.create_blueprint`."""
+        return self._blueprints.create_blueprint(
+            blueprint, story_record=story_record, template_record=template_record
+        )
 
     def find_blueprint_by_candidate_id(
-        self, candidate_id: str, *, niche_id: str | None = None
+        self,
+        candidate_id: str,
+        *,
+        niche_id: str | None = None,
     ) -> dict | None:
-        formula = f"{{candidate_id}}='{_esc(candidate_id)}'"
-        records = self._sp_call(
-            self._backend("Blueprints").find,
-            "Blueprints",
-            formula=formula,
-            niche_id=niche_id,
-            max_records=1,
-        )
-        return records[0] if records else None
+        """Delegates to :class:`BlueprintStore.find_blueprint_by_candidate_id`."""
+        return self._blueprints.find_blueprint_by_candidate_id(candidate_id, niche_id=niche_id)
 
     def update_blueprint_status(
         self,
@@ -779,85 +717,36 @@ class BacklogClient:
         niche_id: str | None = None,
         force: bool = False,
         **kwargs,
-    ):
-        blueprint = self.find_blueprint_by_candidate_id(candidate_id, niche_id=niche_id)
-        if not blueprint:
-            raise ValueError(f"Blueprint {candidate_id} not found")
-        if not force:
-            self.assert_not_scheduled(blueprint, status)
-        self._backend("Blueprints").update(
-            "Blueprints",
-            blueprint["id"],
-            {"status": status, **kwargs},
-            typecast=True,
+    ) -> None:
+        """Delegates to :class:`BlueprintStore.update_blueprint_status`."""
+        self._blueprints.update_blueprint_status(
+            candidate_id, status, niche_id=niche_id, force=force, **kwargs
         )
 
     def get_blueprints_safe_to_cleanup(
-        self, status: str, *, niche_id: str | None = None, max_priority: float = 1.0
+        self,
+        status: str,
+        *,
+        niche_id: str | None = None,
+        max_priority: float = 1.0,
     ) -> list[dict]:
-        all_bps = self.get_blueprints_by_status(status, niche_id=niche_id)
-        safe = []
-        for bp in all_bps:
-            f = bp.get("fields", bp)
-            if f.get("scheduled_for"):
-                continue
-            score = float(f.get("priority_score", 0) or 0)
-            if score <= max_priority:
-                safe.append(bp)
-        return safe
-
-    def get_blueprints_by_status(self, status: str, *, niche_id: str | None = None) -> list[dict]:
-        formula = f"{{status}}='{_esc(status)}'"
-        return self._sp_call(
-            self._backend("Blueprints").find,
-            "Blueprints",
-            formula=formula,
-            niche_id=niche_id,
+        """Delegates to :class:`BlueprintStore.get_blueprints_safe_to_cleanup`."""
+        return self._blueprints.get_blueprints_safe_to_cleanup(
+            status, niche_id=niche_id, max_priority=max_priority
         )
 
+    def get_blueprints_by_status(
+        self,
+        status: str,
+        *,
+        niche_id: str | None = None,
+    ) -> list[dict]:
+        """Delegates to :class:`BlueprintStore.get_blueprints_by_status`."""
+        return self._blueprints.get_blueprints_by_status(status, niche_id=niche_id)
+
     def batch_create_blueprints(self, blueprints: list[dict]) -> list[str]:
-        story_cache: dict[str, dict | None] = {}
-        template_cache: dict[str, dict | None] = {}
-        for bp in blueprints:
-            sid = bp["story_id"]
-            if sid not in story_cache:
-                story_cache[sid] = self.find_story_by_story_id(sid)
-            tid = bp.get("template_id")
-            if tid and tid not in template_cache:
-                template_cache[tid] = self.find_template_by_template_id(tid)
-
-        records = []
-        for bp in blueprints:
-            story = story_cache.get(bp["story_id"])
-            if not story:
-                logger.warning("Story %s not found, skipping blueprint", bp["story_id"])
-                continue
-
-            template_record_id = None
-            if bp.get("template_id"):
-                template = template_cache.get(bp["template_id"])
-                if template:
-                    template_record_id = template["id"]
-
-            records.append(
-                {
-                    "candidate_id": bp["candidate_id"],
-                    "story": [story["id"]],
-                    "template": [template_record_id] if template_record_id else [],
-                    "topic": bp.get("topic", ""),
-                    "angle": bp.get("angle", ""),
-                    "format": bp.get("format"),
-                    "hook": bp.get("hook", ""),
-                    "structure": "\n".join(bp.get("structure", [])),
-                    "cta": bp.get("cta", ""),
-                    "priority_score": bp.get("priority_score", 0.5),
-                    "status": "INTEL_READY",
-                    "why_this_will_work": bp.get("why_this_will_work", ""),
-                }
-            )
-
-        created = self._backend("Blueprints").batch_create("Blueprints", records)
-        return [r["id"] for r in created]
+        """Delegates to :class:`BlueprintStore.batch_create_blueprints`."""
+        return self._blueprints.batch_create_blueprints(blueprints)
 
     # ===== TEMPLATES =====
 
