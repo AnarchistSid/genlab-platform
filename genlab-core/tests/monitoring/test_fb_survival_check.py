@@ -48,14 +48,20 @@ class TestFindCandidates:
             result = fb_survival_check.find_candidates()
         assert result == rows
 
-    def test_query_filters_to_facebook_success(self) -> None:
+    def test_query_filters_to_facebook_and_live_statuses(self) -> None:
         conn, cursor = _make_mock_conn()
         with patch("psycopg.connect", return_value=conn):
             fb_survival_check.find_candidates()
-        sql = cursor.execute.call_args[0][0]
+        sql, params = cursor.execute.call_args[0]
         assert "platform = 'facebook'" in sql
-        assert "status   = 'SUCCESS'" in sql
+        assert "status   = ANY(%s)" in sql
         assert "post_id IS NOT NULL" in sql
+        # First positional param: the live-post status list. Must cover
+        # the full SUCCESS → INSIGHTS_* progression so a post can still
+        # be survival-checked once metric_collector promotes its status.
+        assert params[0] == list(fb_survival_check.LIVE_POST_STATUSES)
+        for required in ("SUCCESS", "INSIGHTS_6H", "INSIGHTS_48H", "INSIGHTS_168H"):
+            assert required in params[0]
 
     def test_query_uses_provided_age_window(self) -> None:
         conn, cursor = _make_mock_conn()
@@ -75,7 +81,8 @@ class TestFindCandidates:
         # rows it already saw.
         assert "(extra->>%s) IS NULL" in sql
         params = cursor.execute.call_args[0][1]
-        assert params[0] == fb_survival_check.EXTRA_KEY_CHECKED
+        # Params order: (status_list, EXTRA_KEY_CHECKED, limit).
+        assert params[1] == fb_survival_check.EXTRA_KEY_CHECKED
 
 
 # ---------------------------------------------------------------------------
