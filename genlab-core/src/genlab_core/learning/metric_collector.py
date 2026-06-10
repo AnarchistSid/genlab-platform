@@ -393,12 +393,18 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     if not token:
         return {}
 
+    from genlab_core.platforms.meta_metric_deprecation import (
+        record_observation,
+        warn_if_deprecated,
+    )
+
     # Try Reels-compatible metrics first (Break 3 fix)
     for metric_set in [
         "plays,reach,likes,comments,shares,saved",
         "reach,saved,comments,shares,likes",  # without 'plays' (some posts reject it)
         "impressions,reach",  # minimal fallback
     ]:
+        warn_if_deprecated(metric_set, context="ig_basic")
         try:
             resp = requests.get(
                 f"{META_GRAPH_BASE_URL}/{post_id}/insights",
@@ -413,6 +419,10 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
                 name = item.get("name", "")
                 vals = item.get("values", [{}])
                 val = vals[0].get("value", 0) if vals else 0
+                # Observability hook (R-44 part 2): record every parsed
+                # value so a slow zero-out across many posts surfaces
+                # as a loud ERROR after `_ZERO_OUT_THRESHOLD` hits.
+                record_observation(name, val, scope="ig_basic")
                 if name == "plays":
                     metrics["views"] = val
                 elif name == "impressions":
@@ -444,10 +454,17 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
     token = resolve_meta_credentials(niche_id).get("ig_access_token", "")
     if not token:
         return {}
+    from genlab_core.platforms.meta_metric_deprecation import (
+        record_observation,
+        warn_if_deprecated,
+    )
+
+    metric_set = "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays"
+    warn_if_deprecated(metric_set, context="ig_reels_6h")
     resp = requests.get(
         f"{META_GRAPH_BASE_URL}/{post_id}/insights",
         params={
-            "metric": "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays",
+            "metric": metric_set,
             "access_token": token,
         },
         timeout=15,
@@ -458,6 +475,7 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
         name = item.get("name", "")
         vals = item.get("values", [{}])
         val = vals[0].get("value", 0) if vals else 0
+        record_observation(name, val, scope="ig_reels_6h")
         if name == "ig_reels_avg_watch_time":
             metrics["avg_watch_time"] = val
         elif name == "ig_reels_video_view_total_time":
@@ -599,17 +617,24 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     video_views = 0
     avg_watch_time_ms = 0.0
 
+    from genlab_core.platforms.meta_metric_deprecation import (
+        record_observation,
+        warn_if_deprecated,
+    )
+
     # /insights — Meta deprecates metrics aggressively; if the call 400s we
     # still want shares + completion_rate to populate from the post object.
+    fb_feed_metrics = (
+        "post_impressions,post_impressions_unique,"
+        "post_engaged_users,post_video_views,"
+        "post_video_avg_time_watched"
+    )
+    warn_if_deprecated(fb_feed_metrics, context="fb_feed_insights")
     try:
         resp = requests.get(
             f"{META_GRAPH_BASE_URL}/{post_id}/insights",
             params={
-                "metric": (
-                    "post_impressions,post_impressions_unique,"
-                    "post_engaged_users,post_video_views,"
-                    "post_video_avg_time_watched"
-                ),
+                "metric": fb_feed_metrics,
                 "access_token": token,
             },
             timeout=15,
@@ -619,6 +644,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
                 name = item.get("name", "")
                 vals = item.get("values", [{}])
                 val = vals[0].get("value", 0) if vals else 0
+                record_observation(name, val, scope="fb_feed_insights")
                 if name == "post_impressions":
                     impressions = int(val)
                 elif name == "post_impressions_unique":
