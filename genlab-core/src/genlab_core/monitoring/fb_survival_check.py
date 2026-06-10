@@ -47,6 +47,19 @@ REMOVED_STATUS = "REMOVED_BY_META"
 EXTRA_KEY_CHECKED = "fb_survival_checked"
 EXTRA_KEY_REMOVED = "removed_at"
 
+# A published FB row progresses through these statuses as metric_collector
+# walks the engagement windows: SUCCESS → INSIGHTS_6H → INSIGHTS_24H →
+# INSIGHTS_48H → INSIGHTS_168H. Any of them is still a "live post that
+# was successfully published" and is a valid survival-check target — a
+# post can be removed at any age.
+LIVE_POST_STATUSES = (
+    "SUCCESS",
+    "INSIGHTS_6H",
+    "INSIGHTS_24H",
+    "INSIGHTS_48H",
+    "INSIGHTS_168H",
+)
+
 
 def find_candidates(
     *,
@@ -68,7 +81,7 @@ def find_candidates(
                 SELECT id, post_id, niche_id, published_at, extra
                   FROM publishing_analytics
                  WHERE platform = 'facebook'
-                   AND status   = 'SUCCESS'
+                   AND status   = ANY(%s)
                    AND post_id IS NOT NULL
                    AND post_id <> ''
                    AND published_at IS NOT NULL
@@ -78,7 +91,7 @@ def find_candidates(
                  ORDER BY published_at DESC
                  LIMIT %s
                 """,
-                (EXTRA_KEY_CHECKED, limit),
+                (list(LIVE_POST_STATUSES), EXTRA_KEY_CHECKED, limit),
             )
             return list(cur.fetchall())
 
