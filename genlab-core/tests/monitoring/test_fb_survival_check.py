@@ -111,6 +111,27 @@ class TestMarkChecked:
         assert "SET status" not in sql
         assert "REMOVED_BY_META" not in sql
 
+    def test_every_jsonb_build_object_arg_has_text_cast(self) -> None:
+        # psycopg3 raises IndeterminateDatatype if any
+        # jsonb_build_object argument lacks an explicit ::text cast
+        # (the function is variadic so type inference can't help).
+        # Tests run against mocks so this rule has to be enforced
+        # syntactically — a static SQL audit.
+        conn, _ = _make_mock_conn()
+        with patch("psycopg.connect", return_value=conn):
+            fb_survival_check.mark_checked(row_id="uuid_a")
+        sql = conn.execute.call_args[0][0]
+        # Extract the jsonb_build_object(...) call body and verify
+        # every %s placeholder inside it has ::text suffix.
+        import re
+
+        match = re.search(r"jsonb_build_object\(([^)]+)\)", sql, re.DOTALL)
+        assert match, "expected a jsonb_build_object call in the SQL"
+        body = match.group(1)
+        placeholders = re.findall(r"%s(?:::\w+)?", body)
+        for p in placeholders:
+            assert p.endswith("::text"), f"unsafe placeholder {p!r} in {body}"
+
 
 class TestMarkRemoved:
     def test_flips_status_to_removed_by_meta(self) -> None:
@@ -132,6 +153,22 @@ class TestMarkRemoved:
         assert params[3] == fb_survival_check.EXTRA_KEY_REMOVED
         assert params[2] == params[4]  # both stamps in the same UPDATE = same ts
         assert params[5] == "uuid_b"
+
+    def test_every_jsonb_build_object_arg_has_text_cast(self) -> None:
+        # Same guarantee as in TestMarkChecked — psycopg3 needs every
+        # variadic jsonb_build_object arg to carry an explicit cast.
+        conn, _ = _make_mock_conn()
+        with patch("psycopg.connect", return_value=conn):
+            fb_survival_check.mark_removed(row_id="uuid_b")
+        sql = conn.execute.call_args[0][0]
+        import re
+
+        match = re.search(r"jsonb_build_object\(([^)]+)\)", sql, re.DOTALL)
+        assert match
+        body = match.group(1)
+        placeholders = re.findall(r"%s(?:::\w+)?", body)
+        for p in placeholders:
+            assert p.endswith("::text"), f"unsafe placeholder {p!r} in {body}"
 
 
 # ---------------------------------------------------------------------------

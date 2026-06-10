@@ -105,11 +105,14 @@ def mark_checked(
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
     timestamp = datetime.now(UTC).isoformat()
     with psycopg.connect(dsn) as conn:
+        # NOTE: every jsonb_build_object argument needs an explicit
+        # ::text cast — psycopg3 won't infer types through a variadic
+        # function, and a missing cast raises IndeterminateDatatype.
         conn.execute(
             """
             UPDATE publishing_analytics
                SET extra = COALESCE(extra, '{}'::jsonb)
-                         || jsonb_build_object(%s, %s::text),
+                         || jsonb_build_object(%s::text, %s::text),
                    updated_at = now()
              WHERE id = %s
             """,
@@ -130,12 +133,16 @@ def mark_removed(
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
     timestamp = datetime.now(UTC).isoformat()
     with psycopg.connect(dsn) as conn:
+        # Every jsonb_build_object argument needs an explicit ::text cast
+        # (see mark_checked note). All four go through.
         conn.execute(
             """
             UPDATE publishing_analytics
                SET status = %s,
                    extra  = COALESCE(extra, '{}'::jsonb)
-                          || jsonb_build_object(%s, %s::text, %s, %s::text),
+                          || jsonb_build_object(
+                                 %s::text, %s::text,
+                                 %s::text, %s::text),
                    updated_at = now()
              WHERE id = %s
             """,
