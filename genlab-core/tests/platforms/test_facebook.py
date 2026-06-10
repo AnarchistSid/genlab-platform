@@ -471,12 +471,17 @@ class TestInit:
         assert "v22.0" in client._base_url
         assert "graph.facebook.com" in client._base_url
 
-    def test_default_api_version(self):
-        """Default api_version is v21.0."""
+    def test_default_api_version_follows_centralized_constant(self):
+        """Default ``api_version`` is sourced from
+        ``genlab_core.platforms.meta_api.META_GRAPH_API_VERSION`` —
+        the single source of truth that R-44 introduced. Bumping the
+        constant should automatically flow through here without any
+        test edit."""
         from genlab_core.platforms.facebook import FacebookClient
+        from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
 
         client = FacebookClient(access_token="t", page_id="p")
-        assert "v21.0" in client._base_url
+        assert META_GRAPH_API_VERSION in client._base_url
 
 
 # ---------------------------------------------------------------------------

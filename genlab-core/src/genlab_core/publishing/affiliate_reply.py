@@ -35,6 +35,7 @@ import logging
 import requests
 
 from genlab_core.platforms.facebook import FacebookClient
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
 from genlab_core.platforms.threads import ThreadsClient
 from genlab_core.platforms.x_twitter import XTwitterClient
 from genlab_core.publishing.niche_credentials import (
@@ -80,7 +81,7 @@ def post_affiliate_reply(
             if not access_token:
                 return
             resp = requests.post(
-                f"https://graph.facebook.com/v21.0/{post_id}/comments",
+                f"{META_GRAPH_BASE_URL}/{post_id}/comments",
                 data={"message": text, "access_token": access_token},
                 timeout=15,
             )

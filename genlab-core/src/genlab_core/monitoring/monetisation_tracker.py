@@ -33,6 +33,7 @@ _GENLAB_ROOT = Path(__file__).resolve().parents[4]
 NICHES = ["ai_creators", "gaming", "sports", "movies", "anime"]
 
 # Import canonical prefixes and extend with ai_creators (BB uses global META_* vars)
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL  # noqa: E402
 from genlab_core.publishing.niche_credentials import NICHE_CREDENTIAL_PREFIXES  # noqa: E402
 
 _NICHE_ENV_PREFIX: dict[str, str] = {**NICHE_CREDENTIAL_PREFIXES, "ai_creators": "META"}
@@ -327,7 +328,7 @@ class MonetisationTracker:
             )
             return result
 
-        api = "https://graph.facebook.com/v21.0"
+        api = META_GRAPH_BASE_URL
 
         # Followers
         try:
@@ -410,7 +411,7 @@ class MonetisationTracker:
             )
             return result
 
-        api = "https://graph.facebook.com/v21.0"
+        api = META_GRAPH_BASE_URL
 
         # Followers
         try:

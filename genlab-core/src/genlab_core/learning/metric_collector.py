@@ -64,6 +64,7 @@ from genlab_core.learning.pending_feedback_task import (  # noqa: E402
     PendingFeedbackTask,
 )
 from genlab_core.learning.reward_shaper import RewardShaper  # noqa: E402
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
@@ -400,7 +401,7 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     ]:
         try:
             resp = requests.get(
-                f"https://graph.facebook.com/v21.0/{post_id}/insights",
+                f"{META_GRAPH_BASE_URL}/{post_id}/insights",
                 params={"metric": metric_set, "access_token": token},
                 timeout=15,
             )
@@ -444,7 +445,7 @@ def _fetch_instagram_reels_6h(post_id: str, niche_id: str = "") -> dict:
     if not token:
         return {}
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{post_id}/insights",
+        f"{META_GRAPH_BASE_URL}/{post_id}/insights",
         params={
             "metric": "ig_reels_avg_watch_time,ig_reels_video_view_total_time,plays",
             "access_token": token,
@@ -485,7 +486,7 @@ def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
     metrics_param = "post_video_view_time,post_video_avg_time_watched,post_video_social_actions"
     try:
         resp = requests.get(
-            f"https://graph.facebook.com/v21.0/{reel_id}/video_insights",
+            f"{META_GRAPH_BASE_URL}/{reel_id}/video_insights",
             params={"metric": metrics_param, "access_token": token},
             timeout=15,
         )
@@ -544,7 +545,7 @@ def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
 
     try:
         resp = requests.get(
-            f"https://graph.facebook.com/v21.0/{post_id}",
+            f"{META_GRAPH_BASE_URL}/{post_id}",
             params={
                 "fields": "likes.summary(true).limit(0),comments.summary(true).limit(0),views,length",
                 "access_token": token,
@@ -602,7 +603,7 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     # still want shares + completion_rate to populate from the post object.
     try:
         resp = requests.get(
-            f"https://graph.facebook.com/v21.0/{post_id}/insights",
+            f"{META_GRAPH_BASE_URL}/{post_id}/insights",
             params={
                 "metric": (
                     "post_impressions,post_impressions_unique,"

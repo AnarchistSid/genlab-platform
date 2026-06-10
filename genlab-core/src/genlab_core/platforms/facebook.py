@@ -16,6 +16,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
 from genlab_core.platforms.models import (
     PlatformMetrics,
     PublishPayload,
@@ -54,7 +55,10 @@ class FacebookClient:
     Args:
         access_token: Meta EAA Page Token. Defaults to ``META_ACCESS_TOKEN`` env var.
         page_id: Facebook Page ID. Defaults to ``META_FB_PAGE_ID`` env var.
-        api_version: Graph API version string, e.g. ``"v21.0"``.
+        api_version: Graph API version string. Defaults to
+            ``META_GRAPH_API_VERSION`` from
+            :mod:`genlab_core.platforms.meta_api` — the single source
+            of truth bumped centrally (audit R-44).
     """
 
     platform_id = "facebook"
@@ -63,7 +67,7 @@ class FacebookClient:
         self,
         access_token: str | None = None,
         page_id: str | None = None,
-        api_version: str = "v21.0",
+        api_version: str = META_GRAPH_API_VERSION,
     ) -> None:
         self._access_token: str = access_token or os.environ.get("META_ACCESS_TOKEN", "")
         self._page_id: str = page_id or os.environ.get("META_FB_PAGE_ID", "")

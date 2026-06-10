@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+
 # Re-exported as the legacy name for in-module readability; the canonical
 # implementation now lives in :mod:`genlab_core.security` so any other HTTP
 # caller can reach for the same defensive layer.
@@ -410,7 +412,7 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
     try:
         import requests as _requests
 
-        base = "https://graph.facebook.com/v21.0"
+        base = META_GRAPH_BASE_URL
 
         # Step 1: Fetch recent posts
         posts_resp = _requests.get(

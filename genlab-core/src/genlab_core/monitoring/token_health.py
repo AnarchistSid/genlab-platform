@@ -25,6 +25,8 @@ from typing import Any
 
 import requests
 
+from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION, META_GRAPH_BASE_URL
+
 logger = logging.getLogger(__name__)
 
 # Meta tokens with <14 days remaining get flagged
@@ -117,7 +119,7 @@ def check_meta_token() -> dict:
 
     try:
         verify_resp = requests.get(
-            f"https://graph.facebook.com/v21.0/{page_id or 'me'}",
+            f"{META_GRAPH_BASE_URL}/{page_id or 'me'}",
             params={
                 "fields": "id,name,instagram_business_account{username}",
                 "access_token": token,
@@ -148,7 +150,7 @@ def check_meta_token() -> dict:
         ig_username = ig_acct.get("username", "unknown")
 
         debug_resp = requests.get(
-            "https://graph.facebook.com/v21.0/debug_token",
+            f"{META_GRAPH_BASE_URL}/debug_token",
             params={"input_token": token, "access_token": token},
             timeout=15,
         )
@@ -509,7 +511,7 @@ _REQUIRED_PUBLISH_PERMISSIONS = frozenset(
 
 
 def _verify_page_token(
-    page_id: str, access_token: str, api_version: str = "v21.0"
+    page_id: str, access_token: str, api_version: str = META_GRAPH_API_VERSION
 ) -> dict[str, Any]:
     """Verify the Facebook Page access token is valid and has required permissions.
 
