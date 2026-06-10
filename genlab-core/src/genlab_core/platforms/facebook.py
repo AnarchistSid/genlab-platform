@@ -458,21 +458,43 @@ class FacebookClient:
         """Verify a previously-published post is still live on the page.
 
         Used by the daily ``genlab-fb-survival-check`` job to detect
-        Meta-removed reels — when the audit found this missing
-        ("REMOVED_BY_META" not implemented), this is the primitive that
-        plugs the gap.
+        Meta-removed reels (audit R-33).
+
+        **Important asymmetry**: the Graph API's error codes
+        intentionally conflate "object was deleted" with "object never
+        existed / you don't have permission / wrong API surface for
+        this object type" — all return ``code: 100`` (often with
+        ``error_subcode: 33``) and the message "Object with ID X does
+        not exist…". We CANNOT distinguish a real removal from a
+        post-id-format mismatch or a permission slip from the response
+        alone, so this primitive is intentionally conservative:
 
         Returns:
             * ``True``  — the post exists (HTTP 200, ``id`` present).
-            * ``False`` — Meta has removed/deleted it (HTTP 404 OR a
-              200 with an ``Object does not exist`` / similar error
-              payload). Caller should flip the row to
-              ``REMOVED_BY_META``.
-            * ``None``  — transient or auth error (network blip,
-              throttle, expired token). Caller MUST NOT mark removed
-              on ``None`` — try again next run.
+            * ``False`` — only on HTTP 410 (Gone), the one unambiguous
+              "this resource was explicitly retired" signal. Caller
+              may flip the row to ``REMOVED_BY_META``.
+            * ``None``  — everything else: HTTP 4xx with code 100/33
+              (ambiguous), 5xx, OAuth errors (102/190), network
+              exceptions, anything we can't interpret as a CONFIRMED
+              removal. Caller MUST NOT mark removed.
+
+        Originally the False branch fired on any ``code 100`` /
+        "does not exist" payload, but a prod backfill (2026-06-10)
+        showed 352/404 rows misclassified as removed because legacy
+        post_ids carry a ``facebook:`` prefix the Graph API rejects.
+        The conservative contract guarantees a misclassified ID type
+        cannot mass-flip rows; the downstream ``run_check``
+        ``max_removal_rate`` guard adds a second layer.
+
+        Also strips a ``platform:`` prefix (e.g. ``facebook:NNN``)
+        before the request — see the legacy post_id note above.
         """
-        url = f"{self._base_url}/{post_id}"
+        # Defensive: tolerate the legacy ``facebook:NNN`` post_id shape
+        # that survived an earlier publishing-analytics writer bug.
+        clean_id = post_id.split(":", 1)[1] if post_id.startswith(("facebook:", "fb:")) else post_id
+
+        url = f"{self._base_url}/{clean_id}"
         try:
             resp = requests.get(
                 url,
@@ -480,7 +502,7 @@ class FacebookClient:
                 timeout=15,
             )
         except requests.RequestException as exc:
-            logger.debug("Facebook: survival check transient error for %s: %s", post_id, exc)
+            logger.debug("Facebook: survival check transient error for %s: %s", clean_id, exc)
             return None
 
         data = _safe_json(resp)
@@ -488,32 +510,19 @@ class FacebookClient:
         if resp.status_code == 200 and data.get("id"):
             return True
 
-        # 404 / "Object does not exist" / "Unsupported get request" =
-        # removed by Meta or the page. Distinguish auth/permission
-        # errors (token revoked, scope missing) from genuine deletion
-        # so we don't false-positive a row.
+        # Only HTTP 410 Gone is treated as a confirmed removal.
+        # Everything else — including 4xx + code 100 "does not exist"
+        # — is ambiguous (see docstring).
+        if resp.status_code == 410:
+            return False
+
         err_msg = _extract_error_message(data)
         err_code = (
             data.get("error", {}).get("code") if isinstance(data.get("error"), dict) else None
         )
-        # Meta's removal/non-existence error codes (Graph API docs):
-        #   100 — invalid parameter / object does not exist
-        #    33 — does not exist or you don't have permission
-        # We require a 4xx status AND a known "missing" indicator to
-        # flip to False; anything else (5xx, OAuth errors with code
-        # 102/190, ambiguous bodies) is None.
-        missing_indicators = (
-            "does not exist",
-            "object with id",
-            "unsupported get request",
-        )
-        body_says_missing = any(s in err_msg.lower() for s in missing_indicators)
-        if 400 <= resp.status_code < 500 and (err_code in (100, 33) or body_says_missing):
-            return False
-
         logger.debug(
             "Facebook: survival check ambiguous for %s (HTTP %d, code=%s): %s",
-            post_id,
+            clean_id,
             resp.status_code,
             err_code,
             err_msg,
