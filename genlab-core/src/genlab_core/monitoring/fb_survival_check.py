@@ -157,6 +157,17 @@ def mark_removed(
         )
 
 
+class RemovalRateExceeded(RuntimeError):
+    """Raised when the survival check would flip too many rows as removed.
+
+    A second-layer defense against a buggy classifier (or a wrong
+    post_id schema, or a Graph-API behaviour change) silently
+    nuking the analytics table. ``run_check`` short-circuits when
+    the running removal ratio exceeds ``max_removal_rate``; nothing
+    gets written, the caller sees the exception, an alert can fire.
+    """
+
+
 def run_check(
     *,
     client: Any | None = None,
@@ -164,6 +175,8 @@ def run_check(
     min_age_hours: int = 24,
     max_age_hours: int = 168,
     limit: int = 200,
+    max_removal_rate: float = 0.30,
+    min_examined_for_rate_check: int = 10,
 ) -> dict[str, int]:
     """Execute one pass of the survival check.
 
@@ -174,11 +187,24 @@ def run_check(
             freshly-constructed ``FacebookClient`` reading env vars.
         dsn: Postgres connection. Defaults to ``DATABASE_URL``.
         min_age_hours/max_age_hours/limit: see :func:`find_candidates`.
+        max_removal_rate: sanity guard. If the running removal ratio
+            (``removed / examined``) exceeds this AND we've examined
+            at least ``min_examined_for_rate_check`` rows, abort with
+            :class:`RemovalRateExceeded` BEFORE writing the offending
+            row. Default 0.30 — Meta's real removal rate is realistically
+            <1% historically; anything above 30% is almost certainly a
+            classifier or schema bug (see prod incident 2026-06-10
+            where a post_id-prefix mismatch caused 89% false-positives).
+        min_examined_for_rate_check: don't trip the guard on a single
+            confirmed-removed row in a 1-row sample. Default 10.
 
     Returns:
         Dict with ``examined``, ``alive``, ``removed``, ``ambiguous``,
         and ``error`` counts. Sent to the systemd journal so an alert
         can fire on a sudden spike in removals.
+
+    Raises:
+        RemovalRateExceeded: when the rate guard trips.
     """
     if client is None:
         # Lazy import — keeps the module importable without
@@ -222,7 +248,24 @@ def run_check(
             counts["alive"] += 1
             mark_checked(row_id=row["id"], dsn=dsn)
         elif alive is False:
-            counts["removed"] += 1
+            # Sanity guard: tentatively count, check rate, only mark.
+            tentative_removed = counts["removed"] + 1
+            if (
+                counts["examined"] >= min_examined_for_rate_check
+                and (tentative_removed / counts["examined"]) > max_removal_rate
+            ):
+                # Refuse to write. The whole batch is suspect.
+                counts["removed"] = tentative_removed
+                msg = (
+                    f"[fb_survival_check] ABORT: removal rate "
+                    f"{tentative_removed}/{counts['examined']} = "
+                    f"{tentative_removed / counts['examined']:.0%} > "
+                    f"{max_removal_rate:.0%}. Refusing to write. "
+                    f"Investigate the classifier / post_id schema."
+                )
+                logger.error(msg)
+                raise RemovalRateExceeded(msg)
+            counts["removed"] = tentative_removed
             mark_removed(row_id=row["id"], dsn=dsn)
             logger.warning(
                 "[fb_survival_check] REMOVED_BY_META: niche=%s post=%s (published %s)",
@@ -272,17 +315,34 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max rows examined per run (default 200).",
     )
     p.add_argument("--dsn", help="Override DATABASE_URL.")
+    p.add_argument(
+        "--max-removal-rate",
+        type=float,
+        default=0.30,
+        help=(
+            "Abort + emit non-zero exit if removed/examined exceeds "
+            "this ratio (default 0.30). The sanity guard added after "
+            "the 2026-06-10 prod incident where a post_id-prefix "
+            "mismatch caused 89%% false-positives."
+        ),
+    )
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    counts = run_check(
-        dsn=args.dsn,
-        min_age_hours=args.min_age_hours,
-        max_age_hours=args.max_age_hours,
-        limit=args.limit,
-    )
+    try:
+        counts = run_check(
+            dsn=args.dsn,
+            min_age_hours=args.min_age_hours,
+            max_age_hours=args.max_age_hours,
+            limit=args.limit,
+            max_removal_rate=args.max_removal_rate,
+        )
+    except RemovalRateExceeded as exc:
+        # Non-zero exit so systemd surfaces the failure for alerting.
+        print(json.dumps({"error": "removal_rate_exceeded", "message": str(exc)}))
+        return 2
     print(json.dumps(counts, separators=(",", ":")))
     return 0
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
 from genlab_core.monitoring import fb_survival_check
 
 # ---------------------------------------------------------------------------
@@ -265,6 +266,111 @@ class TestRunCheck:
         assert result["error"] == 1
         assert result["alive"] == 1  # second row still processed
         m_ok.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# run_check — sanity rate guard (post-incident 2026-06-10)
+# ---------------------------------------------------------------------------
+
+
+class TestRemovalRateGuard:
+    def _rows(self, n: int) -> list[dict]:
+        return [
+            {
+                "id": f"u{i}",
+                "post_id": f"p{i}",
+                "niche_id": "gaming",
+                "published_at": "x",
+            }
+            for i in range(n)
+        ]
+
+    def test_raises_when_removal_rate_exceeds_threshold(self) -> None:
+        # 12 rows all False → 100% removal rate, well above the
+        # default 0.30 threshold (and above the
+        # min_examined_for_rate_check=10 floor).
+        rows = self._rows(12)
+        client = MagicMock()
+        client.check_post_alive.return_value = False
+        with (
+            patch.object(fb_survival_check, "find_candidates", return_value=rows),
+            patch.object(fb_survival_check, "mark_removed") as m_bad,
+            patch.object(fb_survival_check, "mark_checked"),
+        ):
+            with pytest.raises(fb_survival_check.RemovalRateExceeded) as ei:
+                fb_survival_check.run_check(client=client)
+        # The guard intentionally allows the first `min_examined`
+        # rows through unguarded (small samples aren't statistically
+        # actionable). With the default floor of 10, the first 9
+        # removals are written before the 10th-row check trips.
+        # That's the deliberate trade-off: we accept up to floor-1
+        # false-positives as the cost of not aborting on a single
+        # real removal in a small batch.
+        assert "removal rate" in str(ei.value) or "ABORT" in str(ei.value).upper()
+        # Cap on writes: never more than min_examined_for_rate_check - 1.
+        assert m_bad.call_count <= 9
+        # And we definitely refused to write the rest of the 12 rows.
+        assert m_bad.call_count < 12
+
+    def test_no_abort_below_threshold(self) -> None:
+        # 1 removed out of 10 = 10%; below the 30% guard.
+        rows = self._rows(10)
+        client = MagicMock()
+        # Pattern: 9 alive, 1 removed at the end. Rate = 10%.
+        client.check_post_alive.side_effect = [True] * 9 + [False]
+        with (
+            patch.object(fb_survival_check, "find_candidates", return_value=rows),
+            patch.object(fb_survival_check, "mark_removed") as m_bad,
+            patch.object(fb_survival_check, "mark_checked"),
+        ):
+            result = fb_survival_check.run_check(client=client)
+        assert result["removed"] == 1
+        assert result["alive"] == 9
+        m_bad.assert_called_once()
+
+    def test_no_abort_below_min_examined_floor(self) -> None:
+        # 3 examined, all removed (100%). Above the rate threshold
+        # but BELOW min_examined_for_rate_check (default 10), so the
+        # guard doesn't fire — small samples are not actionable.
+        rows = self._rows(3)
+        client = MagicMock()
+        client.check_post_alive.return_value = False
+        with (
+            patch.object(fb_survival_check, "find_candidates", return_value=rows),
+            patch.object(fb_survival_check, "mark_removed") as m_bad,
+            patch.object(fb_survival_check, "mark_checked"),
+        ):
+            result = fb_survival_check.run_check(client=client)
+        # All 3 removals went through; no abort.
+        assert result["removed"] == 3
+        assert m_bad.call_count == 3
+
+    def test_caller_can_override_rate_threshold(self) -> None:
+        # If the caller is confident (e.g. running a manual cleanup
+        # after a real moderation event), set max_removal_rate=1.0
+        # to disable the guard.
+        rows = self._rows(20)
+        client = MagicMock()
+        client.check_post_alive.return_value = False
+        with (
+            patch.object(fb_survival_check, "find_candidates", return_value=rows),
+            patch.object(fb_survival_check, "mark_removed") as m_bad,
+            patch.object(fb_survival_check, "mark_checked"),
+        ):
+            result = fb_survival_check.run_check(client=client, max_removal_rate=1.0)
+        # All 20 written when the guard is opened wide.
+        assert result["removed"] == 20
+        assert m_bad.call_count == 20
+
+    def test_cli_returns_nonzero_on_guard_trip(self) -> None:
+        # Systemd surfaces a non-zero exit, so the alert loop fires.
+        with patch.object(
+            fb_survival_check,
+            "run_check",
+            side_effect=fb_survival_check.RemovalRateExceeded("test trip"),
+        ):
+            exit_code = fb_survival_check.main([])
+        assert exit_code == 2
 
 
 # ---------------------------------------------------------------------------

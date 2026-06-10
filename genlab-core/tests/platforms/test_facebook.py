@@ -501,8 +501,20 @@ class TestCheckPostAlive:
         ):
             assert fb_client.check_post_alive("1234567890") is True
 
-    def test_returns_false_on_404(self, fb_client):
-        # Genuine deletion: HTTP 404 + Graph "does not exist" payload.
+    def test_returns_false_only_on_http_410_gone(self, fb_client):
+        # The one unambiguous "resource retired" signal Graph emits.
+        body = {"error": {"code": 410, "message": "Gone"}}
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(410, body),
+        ):
+            assert fb_client.check_post_alive("1234") is False
+
+    def test_returns_none_on_404_does_not_exist(self, fb_client):
+        # Post-incident (2026-06-10) conservative behaviour: Graph
+        # conflates "deleted" / "never existed" / "wrong-id-format"
+        # under code 100. We refuse to false-positive on that
+        # ambiguity — must return None.
         body = {
             "error": {
                 "code": 100,
@@ -513,10 +525,9 @@ class TestCheckPostAlive:
             "genlab_core.platforms.facebook.requests.get",
             return_value=_mock_resp(404, body),
         ):
-            assert fb_client.check_post_alive("1234") is False
+            assert fb_client.check_post_alive("1234") is None
 
-    def test_returns_false_on_400_with_does_not_exist_body(self, fb_client):
-        # Some endpoints return 400 + "Object does not exist" instead of 404.
+    def test_returns_none_on_400_with_does_not_exist_body(self, fb_client):
         body = {
             "error": {
                 "code": 100,
@@ -527,9 +538,9 @@ class TestCheckPostAlive:
             "genlab_core.platforms.facebook.requests.get",
             return_value=_mock_resp(400, body),
         ):
-            assert fb_client.check_post_alive("1234") is False
+            assert fb_client.check_post_alive("1234") is None
 
-    def test_returns_false_on_unsupported_get_request(self, fb_client):
+    def test_returns_none_on_unsupported_get_request(self, fb_client):
         body = {
             "error": {
                 "code": 100,
@@ -540,7 +551,23 @@ class TestCheckPostAlive:
             "genlab_core.platforms.facebook.requests.get",
             return_value=_mock_resp(400, body),
         ):
-            assert fb_client.check_post_alive("1234") is False
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_strips_facebook_prefix_before_request(self, fb_client):
+        # Legacy publishing-analytics rows persisted post_ids with a
+        # ``facebook:`` prefix; the Graph API rejects them with
+        # code 100 → was the root cause of the 2026-06-10 prod
+        # false-positive incident. The fix strips the prefix.
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(200, {"id": "1234"}),
+        ) as mock_get:
+            result = fb_client.check_post_alive("facebook:1234")
+        assert result is True
+        # The URL hit should contain the bare ID, NOT the prefix.
+        called_url = mock_get.call_args[0][0]
+        assert called_url.endswith("/1234")
+        assert "facebook:" not in called_url
 
     def test_returns_none_on_500(self, fb_client):
         # Server-side blip — must NOT false-positive removal.
