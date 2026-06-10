@@ -582,7 +582,11 @@ class TestCheckPostAlive:
         ) as mock_get:
             fb_client.check_post_alive("1234")
         args, kwargs = mock_get.call_args
-        assert "/1234" in args[0]
-        assert "graph.facebook.com" in args[0]
+        # Anchored host check — avoids CodeQL py/incomplete-url-substring-sanitization
+        # that a bare ``"graph.facebook.com" in args[0]`` would trip
+        # (substring check is exploitable in real sanitization paths
+        # even though it's harmless in a test assertion).
+        assert args[0].startswith("https://graph.facebook.com/v21.0/")
+        assert args[0].endswith("/1234")
         assert kwargs["params"]["fields"] == "id"
         assert kwargs["params"]["access_token"] == "EAAtest_fb_token"
