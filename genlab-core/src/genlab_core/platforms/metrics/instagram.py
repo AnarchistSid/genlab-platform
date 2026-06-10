@@ -19,11 +19,13 @@ from typing import Final
 
 import requests
 
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+
 from .types import PlatformMetrics
 
 logger = logging.getLogger(__name__)
 
-_API_BASE: Final[str] = "https://graph.facebook.com/v21.0"
+_API_BASE: Final[str] = META_GRAPH_BASE_URL
 _TIMEOUT_S: Final[int] = 15
 
 # v22.0+ deprecated `plays`; this is the full Reels metric set the canonical

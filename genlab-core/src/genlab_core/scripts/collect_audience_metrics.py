@@ -23,6 +23,8 @@ from typing import Any
 
 import requests
 
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
@@ -79,7 +81,7 @@ def fetch_instagram(prefix: str) -> dict[str, Any]:
         return {}
     try:
         r = requests.get(
-            f"https://graph.facebook.com/v21.0/{user_id}",
+            f"{META_GRAPH_BASE_URL}/{user_id}",
             params={"fields": "followers_count,media_count,username", "access_token": token},
             timeout=15,
         )
@@ -130,7 +132,7 @@ def fetch_facebook(prefix: str) -> dict[str, Any]:
         return {}
     try:
         r = requests.get(
-            f"https://graph.facebook.com/v21.0/{page_id}",
+            f"{META_GRAPH_BASE_URL}/{page_id}",
             params={"fields": "followers_count,fan_count,name", "access_token": token},
             timeout=15,
         )

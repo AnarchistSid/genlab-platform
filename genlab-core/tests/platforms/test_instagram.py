@@ -362,6 +362,17 @@ class TestInit:
         )
         assert "v22.0" in client._base_url
 
+    def test_default_api_version_follows_centralized_constant(self):
+        """Default ``api_version`` is sourced from
+        ``genlab_core.platforms.meta_api.META_GRAPH_API_VERSION`` —
+        the single source of truth that R-44 introduced. Bumping
+        the constant should flow through here without any test edit."""
+        from genlab_core.platforms.instagram import InstagramClient
+        from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
+
+        client = InstagramClient(access_token="t", ig_user_id="u")
+        assert META_GRAPH_API_VERSION in client._base_url
+
     def test_max_poll_seconds_default(self):
         """Default poll timeout matches _DEFAULT_MAX_POLL_SECONDS module constant.
 

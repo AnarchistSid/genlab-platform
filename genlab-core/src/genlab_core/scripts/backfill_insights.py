@@ -21,6 +21,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 logger = logging.getLogger("genlab.backfill")
 
@@ -59,7 +61,7 @@ def _resolve_ig_media_id(shortcode: str, token: str, ig_user_id: str) -> str | N
     import requests
 
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{ig_user_id}/media",
+        f"{META_GRAPH_BASE_URL}/{ig_user_id}/media",
         params={"fields": "id,shortcode", "limit": 100, "access_token": token},
         timeout=15,
     )
@@ -88,7 +90,7 @@ def fetch_instagram(post_id: str, niche_id: str) -> dict[str, Any] | None:
 
     import requests
 
-    base = "https://graph.facebook.com/v21.0"
+    base = META_GRAPH_BASE_URL
     r = requests.get(
         f"{base}/{media_id}",
         params={"fields": "like_count,comments_count", "access_token": token},
@@ -159,14 +161,14 @@ def fetch_facebook(post_id: str, niche_id: str) -> dict[str, Any] | None:
     import requests
 
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{raw_id}/video_insights",
+        f"{META_GRAPH_BASE_URL}/{raw_id}/video_insights",
         params={"access_token": token},
         timeout=15,
     )
     if resp.status_code != 200:
         # Try basic metrics
         resp2 = requests.get(
-            f"https://graph.facebook.com/v21.0/{raw_id}",
+            f"{META_GRAPH_BASE_URL}/{raw_id}",
             params={
                 "fields": "shares,reactions.summary(true),comments.summary(true)",
                 "access_token": token,

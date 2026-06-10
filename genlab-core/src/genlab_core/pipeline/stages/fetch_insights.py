@@ -25,6 +25,7 @@ from genlab_core.http.circuit_breaker import (
     get_circuit_breaker,
 )
 from genlab_core.pipeline.stage_context import StageContext
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
 from genlab_core.platforms.metrics.legacy_aliases import add_legacy_aliases
 
 logger = logging.getLogger(__name__)
@@ -283,7 +284,7 @@ class FetchInsights:
         try:
             import requests
 
-            url = f"https://graph.facebook.com/v21.0/{post_id}"
+            url = f"{META_GRAPH_BASE_URL}/{post_id}"
             params = {
                 "fields": "shares,reactions.summary(total_count),comments.summary(total_count)",
                 "access_token": token,

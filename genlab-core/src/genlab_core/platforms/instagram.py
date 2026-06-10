@@ -16,6 +16,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.platforms.meta_api import META_GRAPH_API_VERSION
 from genlab_core.platforms.models import (
     InstagramSpecific,
     PublishPayload,
@@ -56,7 +57,10 @@ class InstagramClient:
         access_token: Meta EAA Page Token. Defaults to ``META_ACCESS_TOKEN`` env var.
         ig_user_id: Instagram Business Account ID (FB-scoped).
                     Defaults to ``META_IG_USER_ID`` env var.
-        api_version: Graph API version string, e.g. ``"v21.0"``.
+        api_version: Graph API version string. Defaults to
+            ``META_GRAPH_API_VERSION`` from
+            :mod:`genlab_core.platforms.meta_api` — the single source
+            of truth bumped centrally (audit R-44).
         max_poll_seconds: Maximum seconds to wait for container processing.
                           BB uses 600; default is 120.
     """
@@ -67,7 +71,7 @@ class InstagramClient:
         self,
         access_token: str | None = None,
         ig_user_id: str | None = None,
-        api_version: str = "v21.0",
+        api_version: str = META_GRAPH_API_VERSION,
         max_poll_seconds: int = _DEFAULT_MAX_POLL_SECONDS,
     ) -> None:
         self._access_token: str = access_token or os.environ.get("META_ACCESS_TOKEN", "")
