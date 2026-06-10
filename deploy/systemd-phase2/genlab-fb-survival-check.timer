@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab FB Post Survival Check Timer
+
+[Timer]
+# 06:00 UTC = 11:30 IST. After the 06:30 UTC publish window settles
+# the prior day's posts are >24h old by now. Audit ref: R-33 — flips
+# publishing_analytics rows to REMOVED_BY_META when Meta has taken
+# them down, so a dark FB channel surfaces immediately instead of
+# masquerading as healthy.
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
