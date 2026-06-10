@@ -450,6 +450,76 @@ class FacebookClient:
     # HealthCheckable protocol
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Post-survival check (audit R-33)
+    # ------------------------------------------------------------------
+
+    def check_post_alive(self, post_id: str) -> bool | None:
+        """Verify a previously-published post is still live on the page.
+
+        Used by the daily ``genlab-fb-survival-check`` job to detect
+        Meta-removed reels — when the audit found this missing
+        ("REMOVED_BY_META" not implemented), this is the primitive that
+        plugs the gap.
+
+        Returns:
+            * ``True``  — the post exists (HTTP 200, ``id`` present).
+            * ``False`` — Meta has removed/deleted it (HTTP 404 OR a
+              200 with an ``Object does not exist`` / similar error
+              payload). Caller should flip the row to
+              ``REMOVED_BY_META``.
+            * ``None``  — transient or auth error (network blip,
+              throttle, expired token). Caller MUST NOT mark removed
+              on ``None`` — try again next run.
+        """
+        url = f"{self._base_url}/{post_id}"
+        try:
+            resp = requests.get(
+                url,
+                params={"fields": "id", "access_token": self._access_token},
+                timeout=15,
+            )
+        except requests.RequestException as exc:
+            logger.debug("Facebook: survival check transient error for %s: %s", post_id, exc)
+            return None
+
+        data = _safe_json(resp)
+
+        if resp.status_code == 200 and data.get("id"):
+            return True
+
+        # 404 / "Object does not exist" / "Unsupported get request" =
+        # removed by Meta or the page. Distinguish auth/permission
+        # errors (token revoked, scope missing) from genuine deletion
+        # so we don't false-positive a row.
+        err_msg = _extract_error_message(data)
+        err_code = (
+            data.get("error", {}).get("code") if isinstance(data.get("error"), dict) else None
+        )
+        # Meta's removal/non-existence error codes (Graph API docs):
+        #   100 — invalid parameter / object does not exist
+        #    33 — does not exist or you don't have permission
+        # We require a 4xx status AND a known "missing" indicator to
+        # flip to False; anything else (5xx, OAuth errors with code
+        # 102/190, ambiguous bodies) is None.
+        missing_indicators = (
+            "does not exist",
+            "object with id",
+            "unsupported get request",
+        )
+        body_says_missing = any(s in err_msg.lower() for s in missing_indicators)
+        if 400 <= resp.status_code < 500 and (err_code in (100, 33) or body_says_missing):
+            return False
+
+        logger.debug(
+            "Facebook: survival check ambiguous for %s (HTTP %d, code=%s): %s",
+            post_id,
+            resp.status_code,
+            err_code,
+            err_msg,
+        )
+        return None
+
     def check_token_health(self) -> TokenStatus:
         """Verify the EAA Page Token by calling ``/me`` on the Graph API.
 

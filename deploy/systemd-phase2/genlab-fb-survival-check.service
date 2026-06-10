@@ -1,0 +1,21 @@
+[Unit]
+Description=GenLab FB Post Survival Check
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# Examine FB SUCCESS rows aged 24h..168h; flip to REMOVED_BY_META when
+# Meta has taken them down. Idempotent: rows are stamped
+# `extra.fb_survival_checked` once examined so a re-fire skips them.
+# Audit ref: R-33.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.monitoring.fb_survival_check
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target

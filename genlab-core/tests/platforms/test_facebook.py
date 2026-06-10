@@ -477,3 +477,116 @@ class TestInit:
 
         client = FacebookClient(access_token="t", page_id="p")
         assert "v21.0" in client._base_url
+
+
+# ---------------------------------------------------------------------------
+# check_post_alive — survival check (audit R-33)
+# ---------------------------------------------------------------------------
+
+
+def _mock_resp(status_code, json_data=None):
+    """Build a fake requests.Response for FB mock tests."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data or {}
+    # _safe_json calls .json() on resp; that's enough for the FB tests.
+    return resp
+
+
+class TestCheckPostAlive:
+    def test_returns_true_on_200_with_id(self, fb_client):
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(200, {"id": "1234567890"}),
+        ):
+            assert fb_client.check_post_alive("1234567890") is True
+
+    def test_returns_false_on_404(self, fb_client):
+        # Genuine deletion: HTTP 404 + Graph "does not exist" payload.
+        body = {
+            "error": {
+                "code": 100,
+                "message": "Object with ID '1234' does not exist",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(404, body),
+        ):
+            assert fb_client.check_post_alive("1234") is False
+
+    def test_returns_false_on_400_with_does_not_exist_body(self, fb_client):
+        # Some endpoints return 400 + "Object does not exist" instead of 404.
+        body = {
+            "error": {
+                "code": 100,
+                "message": "(#100) Object does not exist on this page",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is False
+
+    def test_returns_false_on_unsupported_get_request(self, fb_client):
+        body = {
+            "error": {
+                "code": 100,
+                "message": "Unsupported get request. Object with ID is invalid",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is False
+
+    def test_returns_none_on_500(self, fb_client):
+        # Server-side blip — must NOT false-positive removal.
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(500, {"error": {"message": "Internal"}}),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_returns_none_on_oauth_error(self, fb_client):
+        # Token-revoked / scope-missing: code 102/190 — ambiguous,
+        # we shouldn't flip the row to REMOVED.
+        body = {
+            "error": {
+                "code": 190,
+                "message": "Error validating access token: Session expired",
+            }
+        }
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(400, body),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_returns_none_on_request_exception(self, fb_client):
+        # Network blip — connection reset, DNS failure, etc.
+        import requests
+
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            side_effect=requests.ConnectionError("DNS"),
+        ):
+            assert fb_client.check_post_alive("1234") is None
+
+    def test_calls_correct_url_with_fields_and_token(self, fb_client):
+        with patch(
+            "genlab_core.platforms.facebook.requests.get",
+            return_value=_mock_resp(200, {"id": "1234"}),
+        ) as mock_get:
+            fb_client.check_post_alive("1234")
+        args, kwargs = mock_get.call_args
+        # Anchored host check — avoids CodeQL py/incomplete-url-substring-sanitization
+        # that a bare ``"graph.facebook.com" in args[0]`` would trip
+        # (substring check is exploitable in real sanitization paths
+        # even though it's harmless in a test assertion).
+        assert args[0].startswith("https://graph.facebook.com/v21.0/")
+        assert args[0].endswith("/1234")
+        assert kwargs["params"]["fields"] == "id"
+        assert kwargs["params"]["access_token"] == "EAAtest_fb_token"
