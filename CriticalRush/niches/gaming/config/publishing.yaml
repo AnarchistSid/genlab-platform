@@ -26,7 +26,6 @@ platforms:
     - youtube
     # - twitter          # Disabled Sprint 30
     - facebook
-    - tiktok
     # - threads          # Disabled 2026-06-05: 100% container-creation
     #                    # failures since tokens expired; single-digit
     #                    # engagement (avg 6) for gaming anyway.
