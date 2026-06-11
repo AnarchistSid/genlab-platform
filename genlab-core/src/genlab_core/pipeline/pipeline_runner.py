@@ -207,6 +207,21 @@ class GenericPipelineRunner:
 
         run_id = f"{niche_id}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
+        # R-68: bind run_id + niche_id into structlog contextvars at run
+        # start so every log line (console, journald, JSON sink) carries
+        # the run identifier. The per-niche JSONL handler already gets
+        # run_id via its own filter, but the journald/console stream
+        # previously only carried current_stage — debugging meant
+        # joining stage-level events to a run from outside the log.
+        try:
+            import structlog.contextvars as _ctxvars
+
+            _ctxvars.bind_contextvars(run_id=run_id, niche_id=niche_id)
+        except Exception:
+            # structlog not configured / not installed — log binding
+            # is observability, never block the pipeline on it.
+            pass
+
         ctx = PipelineContext(
             niche_id=niche_id,
             run_id=run_id,
@@ -341,6 +356,16 @@ class GenericPipelineRunner:
         finally:
             remove_log_handler(log_handler)
             _current_context.reset(token)
+            # R-68 — clear the structlog contextvars we bound at run
+            # start so the next niche's run begins with a clean
+            # context (run_id from a prior run leaking into the next
+            # one's log lines would be worse than no run_id at all).
+            try:
+                import structlog.contextvars as _ctxvars
+
+                _ctxvars.unbind_contextvars("run_id", "niche_id")
+            except Exception:
+                pass
             # Release the niche lock. Safe to call even if acquire failed
             # (the __enter__ path raises before reaching here in that case).
             try:
