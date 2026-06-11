@@ -338,7 +338,14 @@ class ValidateVideos:
 
     @staticmethod
     def _can_fix(issues: list[str]) -> bool:
-        """Determine if issues are auto-fixable via re-encoding."""
+        """Determine if issues are auto-fixable via re-encoding.
+
+        R-39: ``too_long`` and ``no_audio_stream`` were previously
+        non-fixable, so a 90-second composite or a silent source got
+        rendered, then validated, then silently dropped at the
+        ``valid: False`` gate. Both are recoverable with a single
+        ffmpeg pass — trim with ``-t SPEC.max_duration`` and/or mux
+        in a silent ``anullsrc`` audio bed."""
         fixable = {
             "wrong_codec",
             "wrong_pix_fmt",
@@ -346,6 +353,9 @@ class ValidateVideos:
             "wrong_audio_codec",
             "wrong_sample_rate",
             "wrong_audio_channels",
+            # R-39 additions:
+            "too_long",  # trim from end via ``-t SPEC.max_duration``
+            "no_audio_stream",  # mux a silent anullsrc bed in
         }
         return all(any(issue.startswith(f) for f in fixable) for issue in issues)
 
@@ -355,15 +365,49 @@ class ValidateVideos:
         probe: dict[str, Any],
         issues: list[str],
     ) -> Path | None:
-        """Re-encode to fix codec/pix_fmt/color_space/audio issues."""
+        """Re-encode to fix codec/pix_fmt/color_space/audio/duration issues.
+
+        R-39 added two new fix paths:
+          * ``too_long`` → ``-t SPEC.max_duration`` trims from end.
+            The hook lives in the first ~3 seconds, so cutting the
+            tail keeps the content that wins the algorithm.
+          * ``no_audio_stream`` → ``-f lavfi -i anullsrc=...`` muxes
+            in a silent stereo bed at 48kHz. Platforms reject videos
+            without an audio stream even if the audio is silent; a
+            real source that ships without audio is still publishable
+            once we add the bed (the publish-then-drop loop was
+            R-39's exact concern).
+        """
         ffmpeg = get_ffmpeg_binary()
         out = path.with_stem(f"{path.stem}_fixed")
 
-        cmd = [
-            ffmpeg,
-            "-y",
-            "-i",
-            str(path),
+        needs_silence = any(i == "no_audio_stream" for i in issues)
+        needs_trim = any(i.startswith("too_long") for i in issues)
+
+        cmd = [ffmpeg, "-y"]
+
+        if needs_silence:
+            # Input 0: silent stereo bed. Input 1: source video.
+            # Map video from input 1, audio from input 0. ``-shortest``
+            # caps the output at the video length so the silence
+            # doesn't extend past the visual.
+            cmd += [
+                "-f",
+                "lavfi",
+                "-i",
+                "anullsrc=channel_layout=stereo:sample_rate=48000",
+                "-i",
+                str(path),
+                "-map",
+                "1:v:0",
+                "-map",
+                "0:a",
+                "-shortest",
+            ]
+        else:
+            cmd += ["-i", str(path)]
+
+        cmd += [
             "-c:v",
             "libx264",
             "-pix_fmt",
@@ -382,8 +426,15 @@ class ValidateVideos:
             "2",
             "-movflags",
             "+faststart",
-            str(out),
         ]
+
+        if needs_trim:
+            # Trim from start; keeps the hook. ``-t`` lands AFTER the
+            # codec args so it applies to the OUTPUT length, not the
+            # decoder seek.
+            cmd += ["-t", str(SPEC["max_duration"])]
+
+        cmd += [str(out)]
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
