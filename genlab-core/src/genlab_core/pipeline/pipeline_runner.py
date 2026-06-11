@@ -43,6 +43,11 @@ from typing import Any
 
 from genlab_core.context import PipelineContext, _current_context, set_current_context
 from genlab_core.exceptions import NicheConfigError
+from genlab_core.intelligence.cost_accumulator import (
+    CostAccumulator,
+    reset_accumulator,
+    set_accumulator,
+)
 from genlab_core.niche_loader import get_feature_flags, load_niche_config
 from genlab_core.pipeline.log_streamer import install_log_handler, remove_log_handler
 from genlab_core.pipeline.stage_context import StageContext
@@ -231,6 +236,18 @@ class GenericPipelineRunner:
 
         token = set_current_context(ctx)
 
+        # R-27: install the cost accumulator for this run. Until now
+        # ``set_accumulator()`` was never called — ``get_accumulator()``
+        # always returned ``None``, so every ``record_anthropic_usage()``
+        # call at the 4 LLM call sites (router, persona, llm_client,
+        # llm_hook_generator) silently short-circuited at the ``if acc is
+        # None: return`` guard. Cost-tracking was a permanent no-op.
+        # Installing here covers every stage, including parallel groups
+        # (contextvars carry through the ThreadPoolExecutor via
+        # ``copy_context()`` in stage_runner.py).
+        cost_acc = CostAccumulator(run_id=run_id)
+        cost_token = set_accumulator(cost_acc)
+
         log_dir = self._genlab_root / ".tmp"
         log_handler, stage_filter, _log_path = install_log_handler(
             niche_id,
@@ -354,6 +371,14 @@ class GenericPipelineRunner:
             return ctx
 
         finally:
+            # R-27: reset the cost-accumulator contextvar so the next
+            # run starts fresh. Reset BEFORE log/context teardown so
+            # any final accumulator-touching log line still sees the
+            # correct value.
+            try:
+                reset_accumulator(cost_token)
+            except Exception:
+                logger.debug("[Pipeline] cost-accumulator reset failed", exc_info=True)
             remove_log_handler(log_handler)
             _current_context.reset(token)
             # R-68 — clear the structlog contextvars we bound at run

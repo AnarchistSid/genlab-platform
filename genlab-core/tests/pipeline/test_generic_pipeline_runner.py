@@ -60,6 +60,31 @@ class StageBadProtocol(_NoExecuteStage):
     pass
 
 
+# R-27 helpers — must be at module scope so ``_load_stages`` can
+# importlib-resolve them via ``cls.__module__``. ``_STAGE_RECORDER_SEEN``
+# is the cross-test sink; each test clears it before populating.
+
+_STAGE_RECORDER_SEEN: list = []
+
+
+class StageRecorder(_PassStage):
+    """Exercises both the read- and write-paths the 4 production LLM
+    callers use: reads ``get_accumulator()`` and records simulated
+    Anthropic usage via ``record_anthropic_usage()``."""
+
+    def execute(self, context):
+        from genlab_core.intelligence.cost_accumulator import (
+            get_accumulator,
+            record_anthropic_usage,
+        )
+
+        _STAGE_RECORDER_SEEN.append(("acc_present_during_run", get_accumulator() is not None))
+        usage = type("U", (), {"input_tokens": 1000, "output_tokens": 250})()
+        resp = type("R", (), {"usage": usage})()
+        record_anthropic_usage("claude-haiku-4-5-20251001", resp)
+        return context
+
+
 def _make_config(*stage_classes: type, parallel_groups: dict | None = None) -> dict[str, Any]:
     """Build a minimal niche config with pipeline.stages declarations."""
     groups = parallel_groups or {}
@@ -176,6 +201,46 @@ def test_run_flushes_metrics_jsonl(tmp_path, monkeypatch) -> None:
     assert "StageA" in content
     assert "StageB" in content
     assert "pipeline_summary" in content
+
+
+def test_r27_runner_installs_cost_accumulator_visible_to_stages(tmp_path, monkeypatch) -> None:
+    """R-27: ``pipeline_runner.run()`` must install a
+    ``CostAccumulator`` via ``set_accumulator()`` so that every stage's
+    ``record_anthropic_usage()`` call lands in a real bucket. Before
+    R-27 the contextvar's default was ``None`` and every record
+    short-circuited at the ``if acc is None: return`` guard — every
+    LLM call site spent budget invisibly.
+    """
+    from genlab_core.intelligence.cost_accumulator import get_accumulator
+    from genlab_core.pipeline import pipeline_runner as pr
+
+    # ``StageRecorder`` is defined at MODULE level (below) because
+    # ``_load_stages`` calls ``importlib.import_module(module_path)``;
+    # a class defined inside this function isn't importable.
+    _STAGE_RECORDER_SEEN.clear()
+
+    config = _make_config(StageRecorder)
+    monkeypatch.setattr(pr, "load_niche_config", lambda niche_id, niche_root: dict(config))
+    monkeypatch.setattr(pr, "get_feature_flags", lambda niche_id, niche_root: {})
+
+    runner = GenericPipelineRunner(
+        niche_roots={"test": tmp_path / "niche"},
+        genlab_root=tmp_path,
+    )
+    runner.run("test")
+
+    # Stage saw an accumulator during execution.
+    assert _STAGE_RECORDER_SEEN == [("acc_present_during_run", True)], (
+        "R-27 regression: ``get_accumulator()`` returned None inside a "
+        "stage. ``pipeline_runner.run()`` is not installing a CostAccumulator."
+    )
+
+    # Accumulator is RESET after the run — leaking it would let a later
+    # niche's costs pile onto the previous run's bucket.
+    assert get_accumulator() is None, (
+        "R-27 regression: the cost-accumulator contextvar leaked out of "
+        "the run. ``reset_accumulator(...)`` must fire in the finally block."
+    )
 
 
 def test_runner_groups_parallel_stages() -> None:
