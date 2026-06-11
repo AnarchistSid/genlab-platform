@@ -415,8 +415,16 @@ class TestMultiKeywordPriority:
         assert result is not None
         assert result["name"] == "PS5 DualSense Controller"
 
-    def test_single_hit_still_matches_if_no_competition(self):
-        """A product with 1 keyword hit still matches when it's the only candidate."""
+    def test_single_hit_no_longer_matches_under_r31_threshold(self):
+        """R-31: a single keyword hit is no longer enough to win a
+        static catalog match. The audit found 1-hit matches were
+        noisy — one accidental overlap routed real revenue to a
+        tenuous CTA. After R-31 the static threshold is >= 2 (same
+        bar as seasonal), and a 1-hit candidate falls through to
+        the evergreen path (which catches the post with a calibrated
+        baseline product instead of a maybe-wrong specific one).
+
+        Replaces the pre-R-31 test that asserted 1-hit still won."""
         catalog = _make_catalog(
             "gaming",
             [
@@ -428,6 +436,63 @@ class TestMultiKeywordPriority:
             ],
         )
         text = "this mouse is incredible for fps games"
+        result = match_product(text, "gaming", catalog, seasonal_config={})
+        # 1-hit no longer matches; no evergreen in this catalog → None.
+        assert result is None
+
+    def test_r31_single_hit_falls_through_to_evergreen(self):
+        """R-31: a 1-hit static candidate falls through to the evergreen
+        fallback when one is configured — so the post still gets a CTA,
+        just a calibrated one instead of a weak specific match."""
+        catalog = _make_catalog(
+            "gaming",
+            [
+                {
+                    "name": "Gaming Mouse",
+                    "keywords": ["mouse", "logitech"],
+                    "networks": {"amazon": {"url": "https://amzn.to/mouse", "commission_pct": 3.0}},
+                },
+                {
+                    "name": "Xbox Game Pass",
+                    "evergreen_default": True,
+                    "keywords": ["xbox", "game pass"],
+                    "networks": {
+                        "amazon": {"url": "https://amzn.to/gamepass", "commission_pct": 5.0}
+                    },
+                },
+            ],
+        )
+        # "mouse" hits Gaming Mouse once; the body has no "xbox"/"game pass"
+        # so the evergreen wins by fallback.
+        text = "this mouse is incredible for fps games"
+        result = match_product(text, "gaming", catalog, seasonal_config={})
+        assert result is not None
+        assert result["name"] == "Xbox Game Pass"
+
+    def test_r31_two_hit_static_match_still_wins(self):
+        """R-31 sanity pin: the threshold is >=2 hits, so a clear
+        2-keyword match wins over the evergreen — the tightening
+        doesn't suppress legitimate matches."""
+        catalog = _make_catalog(
+            "gaming",
+            [
+                {
+                    "name": "Gaming Mouse",
+                    "keywords": ["mouse", "logitech"],
+                    "networks": {"amazon": {"url": "https://amzn.to/mouse", "commission_pct": 3.0}},
+                },
+                {
+                    "name": "Xbox Game Pass",
+                    "evergreen_default": True,
+                    "keywords": ["xbox", "game pass"],
+                    "networks": {
+                        "amazon": {"url": "https://amzn.to/gamepass", "commission_pct": 5.0}
+                    },
+                },
+            ],
+        )
+        # Both "mouse" AND "logitech" hit Gaming Mouse → 2 hits → wins.
+        text = "the logitech mouse is the best for fps games"
         result = match_product(text, "gaming", catalog, seasonal_config={})
         assert result is not None
         assert result["name"] == "Gaming Mouse"

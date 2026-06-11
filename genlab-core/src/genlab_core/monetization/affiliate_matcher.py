@@ -230,7 +230,18 @@ def match_product(
             best_product = product
             best_matched_keywords = matched_kws
 
-    if best_product is not None and best_hits > 0:
+    # R-31: raise the static catalog match threshold from "any single
+    # hit" to ">= 2 hits", mirroring the existing seasonal-match bar
+    # (line ~188). The audit found single-hit matches were noisy enough
+    # to be misleading — one accidental keyword overlap (e.g. a gaming
+    # blueprint mentioning a "trigger" word that's also in a peripheral
+    # product's keyword list) routed real revenue to a tenuous CTA.
+    # Tighter threshold here ⇒ falls through to evergreen (still a
+    # calibrated revenue path) ⇒ overall match quality up, not lost
+    # revenue. Single-hit matches stay logged at INFO for visibility.
+    _STATIC_MIN_HITS = 2
+
+    if best_product is not None and best_hits >= _STATIC_MIN_HITS:
         logger.debug(
             "[AffiliateMatch] Static match: '%s' (%d hits, keywords=%s)",
             best_product.get("name", ""),
@@ -238,6 +249,24 @@ def match_product(
             best_matched_keywords,
         )
         return best_product
+
+    if best_product is not None and best_hits == 1:
+        # Log the rejected weak match so an operator scanning logs can
+        # see whether a niche's catalog is under-tuned (lots of 1-hit
+        # rejects mean keywords are too narrow). Fall through to the
+        # evergreen path below.
+        logger.info(
+            "[AffiliateMatch] Rejected weak 1-hit match for %s: '%s' (kw=%s) — "
+            "needs >= %d hits; falling through to evergreen.",
+            niche_id,
+            best_product.get("name", ""),
+            best_matched_keywords,
+            _STATIC_MIN_HITS,
+        )
+        # Reset so the evergreen branch doesn't think a real match exists.
+        best_product = None
+        best_hits = 0
+        best_matched_keywords = []
 
     # 3. Evergreen fallback: every niche may designate one product as
     # `evergreen_default: true`. When specific keyword matching misses,
