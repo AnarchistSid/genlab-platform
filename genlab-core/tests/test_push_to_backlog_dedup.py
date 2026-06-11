@@ -370,3 +370,143 @@ def test_candidate_id_non_blocking_statuses_do_not_block():
         f"Silent update path fired — rejected match is still blocking "
         f"re-creation. update_calls={update_calls}"
     )
+
+
+def _setup_revive_race_harness(claim_returns: bool):
+    """R-40: shared harness for the revive race tests. Drives
+    PushToBacklog with exactly one non-blocking PUBLISH_FAILED match
+    on the ``candidate_id`` query and a configurable ``claim_status``
+    outcome."""
+    from unittest.mock import MagicMock
+
+    from genlab_core.pipeline.stages.push_to_backlog import PushToBacklog
+
+    stage = PushToBacklog()
+    client = MagicMock()
+    client.blueprints.claim_status.return_value = claim_returns
+    client.stories.all.return_value = []
+    client.content_memory = None
+    client.find_story_by_story_id.return_value = None
+    client.stories.create.return_value = "new-story-uuid"
+
+    non_blocking_match = {
+        "id": "bp-publish-failed-id",
+        "fields": {
+            "candidate_id": "cid-race",
+            "status": "PUBLISH_FAILED",
+            "action_taken": "approved",
+            "hook": "the publish-failed one",
+        },
+    }
+
+    # Route blueprints.all() responses by the ``formula`` it carries.
+    # The stage does N internal calls (hook dedup, video_id dedup,
+    # candidate_id dedup, etc.); ``candidate_id`` only appears in the
+    # candidate_id dedup formula, so substring-match suffices.
+    def _bp_all(*args, **kwargs):
+        formula = kwargs.get("formula", "")
+        if "candidate_id" in formula:
+            return [non_blocking_match]
+        return []
+
+    client.blueprints.all.side_effect = _bp_all
+    client.blueprints.create.return_value = "new-bp-uuid"
+    stage._client = client
+
+    ctx = {
+        "niche_id": "gaming",
+        "stories": [
+            {
+                "story_id": "s_r40",
+                "title": "Gameplay highlight from yesterday",
+                "source_url": "https://www.youtube.com/watch?v=VIDR40",
+                "video_id": "VIDR40",
+                "published_at": _recent_iso(),
+                "content": {
+                    "hook": "race-test hook never used before",
+                    "caption": "body",
+                    "instagram": {"caption": "ig body"},
+                },
+                "media": {"rendered_path": "/tmp/r.mp4"},
+            }
+        ],
+        "niche_config": {},
+    }
+    import os as _os
+
+    _prev = _os.environ.get("GENLAB_USE_POSTGRES")
+    _os.environ["GENLAB_USE_POSTGRES"] = "true"
+    try:
+        stage.execute(ctx)
+    finally:
+        if _prev is None:
+            _os.environ.pop("GENLAB_USE_POSTGRES", None)
+        else:
+            _os.environ["GENLAB_USE_POSTGRES"] = _prev
+
+    return client
+
+
+def test_r40_revive_calls_claim_status_with_expected_old_status():
+    """R-40: before reviving a PUBLISH_FAILED row, PushToBacklog must
+    atomically claim it via ``claim_status(expected='PUBLISH_FAILED',
+    new=<target>)`` — without that, a concurrent
+    ``recover_publish_failed`` could flip the row to VISUAL_READY
+    between our query and our update."""
+    client = _setup_revive_race_harness(claim_returns=True)
+
+    # Find the claim call against the non-blocking match's id.
+    claim_calls = [
+        c
+        for c in client.blueprints.claim_status.call_args_list
+        if c.args and c.args[0] == "bp-publish-failed-id"
+    ]
+    assert claim_calls, (
+        "R-40 regression: PushToBacklog revive path bypassed ``claim_status``. "
+        "The row could be moved out from under us by a racing writer."
+    )
+    kwargs = claim_calls[0].kwargs
+    assert kwargs.get("expected_status") == "PUBLISH_FAILED"
+
+
+def test_r40_revive_skipped_when_claim_lost():
+    """R-40: when the atomic claim returns False (race lost), the
+    revive bulk-update must NOT fire — the row was already moved by
+    another writer and the data we'd write is stale."""
+    client = _setup_revive_race_harness(claim_returns=False)
+
+    # No update on the non-blocking match id when we lost the race.
+    update_calls = [
+        c
+        for c in client.blueprints.update.call_args_list
+        if c.args and c.args[0] == "bp-publish-failed-id"
+    ]
+    assert not update_calls, (
+        f"R-40 regression: lost-race revive still wrote to the row. update_calls={update_calls!r}"
+    )
+    # Belt-and-suspenders: no fresh ``create`` either — the existing
+    # row IS the canonical record; recover_publish_failed will handle
+    # it on the next pass.
+    client.blueprints.create.assert_not_called()
+
+
+def test_r40_revive_strips_status_from_bulk_update_when_claim_wins():
+    """R-40: when the claim succeeds it has already flipped ``status``
+    via the atomic update. The follow-up bulk-update must NOT carry
+    ``status`` in its payload — that would be a redundant second
+    write to a column already correctly set, and on rare backends
+    could trigger trigger-side state-machine guards twice."""
+    client = _setup_revive_race_harness(claim_returns=True)
+
+    update_calls = [
+        c
+        for c in client.blueprints.update.call_args_list
+        if c.args and c.args[0] == "bp-publish-failed-id"
+    ]
+    assert update_calls, "claim won but revive update never fired"
+    payload = update_calls[0].args[1]
+    assert "status" not in payload, (
+        f"R-40 regression: post-claim revive payload still carries "
+        f"``status`` — should have been stripped after the atomic flip. "
+        f"payload keys: {sorted(payload.keys())}"
+    )

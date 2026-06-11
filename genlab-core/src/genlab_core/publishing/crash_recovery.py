@@ -159,15 +159,75 @@ def recover_publish_failed(
             continue
 
         bp_id = bp["id"]
-        try:
-            backlog_client.blueprints.update(
-                bp_id,
-                {"status": "VISUAL_READY", "publish_attempts": 0},
-            )
+
+        # R-40: do an ATOMIC flip of PUBLISH_FAILED → VISUAL_READY via
+        # ``claim_status`` (the same primitive R-24 used to make the
+        # VISUAL_READY → PUBLISHING flip safe). Without this, the
+        # cooldown-recovery write could race a PushToBacklog revive
+        # for the same row — last-write-wins leaves the blueprint in
+        # an inconsistent state and lets two blueprints for the same
+        # event live concurrently. ``claim_status`` returns True only
+        # if the row is STILL in ``PUBLISH_FAILED`` at the moment of
+        # the UPDATE, so a racing writer harmlessly loses the race.
+        claim = getattr(backlog_client.blueprints, "claim_status", None)
+        if claim is not None:
+            try:
+                claimed = claim(
+                    bp_id,
+                    expected_status="PUBLISH_FAILED",
+                    new_status="VISUAL_READY",
+                )
+            except Exception as e:
+                logger.warning(
+                    "[publish] Cooldown claim for blueprint %s failed: %s",
+                    bp_id[:8],
+                    e,
+                )
+                continue
+            if not claimed:
+                # Another writer already moved this row — log + skip.
+                # Do NOT zero ``publish_attempts``; we'd be clobbering
+                # state that doesn't belong to us anymore.
+                logger.info(
+                    "[publish] Blueprint %s no longer PUBLISH_FAILED "
+                    "(claimed elsewhere) — skipping cooldown recovery",
+                    bp_id[:8],
+                )
+                continue
+            # We won the claim — zero the retry counter so the next
+            # publisher run starts fresh.
+            try:
+                backlog_client.blueprints.update(bp_id, {"publish_attempts": 0})
+            except Exception as e:
+                logger.warning(
+                    "[publish] Recovery flipped status but publish_attempts "
+                    "reset failed for %s: %s",
+                    bp_id[:8],
+                    e,
+                )
             logger.info(
                 "[publish] Auto-recovered PUBLISH_FAILED blueprint %s after %s cooldown",
                 bp_id[:8],
                 cooldown,
             )
-        except Exception as e:
-            logger.warning("[publish] Cooldown recovery for blueprint %s failed: %s", bp_id[:8], e)
+        else:
+            # Legacy backend without atomic claim (SharePoint) — best-
+            # effort flip with the old non-atomic update. Race-window
+            # exists; documented so SharePoint-only environments know.
+            try:
+                backlog_client.blueprints.update(
+                    bp_id,
+                    {"status": "VISUAL_READY", "publish_attempts": 0},
+                )
+                logger.info(
+                    "[publish] Auto-recovered PUBLISH_FAILED blueprint %s after %s cooldown "
+                    "(non-atomic backend — race-window exists)",
+                    bp_id[:8],
+                    cooldown,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[publish] Cooldown recovery for blueprint %s failed: %s",
+                    bp_id[:8],
+                    e,
+                )

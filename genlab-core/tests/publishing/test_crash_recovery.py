@@ -165,17 +165,22 @@ class TestRecoverStuckPublishing:
 
 class TestRecoverPublishFailed:
     def test_past_cooldown_resets_to_visual_ready_with_zero_attempts(self) -> None:
+        """R-40: status flip happens atomically via ``claim_status``;
+        ``publish_attempts`` reset is a separate follow-up update."""
         old = (_NOW - timedelta(hours=25)).isoformat()  # 25h > 24h cooldown
         bc = MagicMock()
+        bc.blueprints.claim_status.return_value = True  # won the race
         bc.get_blueprints_by_status.return_value = [_bp("fail0001", updated_at=old, attempts=3)]
 
         recover_publish_failed(bc, "gaming", now=_NOW)
 
         bc.get_blueprints_by_status.assert_called_once_with("PUBLISH_FAILED", niche_id="gaming")
-        bc.blueprints.update.assert_called_once_with(
+        bc.blueprints.claim_status.assert_called_once_with(
             "fail0001",
-            {"status": "VISUAL_READY", "publish_attempts": 0},
+            expected_status="PUBLISH_FAILED",
+            new_status="VISUAL_READY",
         )
+        bc.blueprints.update.assert_called_once_with("fail0001", {"publish_attempts": 0})
 
     def test_within_cooldown_is_left_alone(self) -> None:
         recent = (_NOW - timedelta(hours=3)).isoformat()
@@ -222,6 +227,61 @@ class TestRecoverPublishFailed:
         # Short cooldown — recover after just 10 minutes.
         recover_publish_failed(bc, "gaming", cooldown=timedelta(minutes=10), now=_NOW)
         bc.blueprints.update.assert_called_once()
+
+    def test_r40_race_lost_skips_publish_attempts_reset(self) -> None:
+        """R-40: when ``claim_status`` returns False (another writer
+        already flipped the row out of PUBLISH_FAILED), we must NOT
+        zero ``publish_attempts``. That state belongs to the new
+        writer; clobbering it would let the next publisher run start
+        with a fresh retry budget on a row that already used one up."""
+        old = (_NOW - timedelta(hours=25)).isoformat()
+        bc = MagicMock()
+        bc.blueprints.claim_status.return_value = False  # LOST the race
+        bc.get_blueprints_by_status.return_value = [_bp("raced01", updated_at=old, attempts=2)]
+
+        recover_publish_failed(bc, "gaming", now=_NOW)
+
+        bc.blueprints.claim_status.assert_called_once_with(
+            "raced01",
+            expected_status="PUBLISH_FAILED",
+            new_status="VISUAL_READY",
+        )
+        # No follow-up update fires when we lost the claim.
+        bc.blueprints.update.assert_not_called()
+
+    def test_r40_falls_back_to_bare_update_when_claim_unavailable(self) -> None:
+        """R-40: SharePoint-only environments don't have ``claim_status``.
+        The function falls back to the old non-atomic update so the
+        SharePoint code path keeps working (race-window documented in
+        the source comment)."""
+        old = (_NOW - timedelta(hours=25)).isoformat()
+        bc = MagicMock()
+        # Backend lacks atomic claim — older test infrastructure shape.
+        del bc.blueprints.claim_status
+        bc.get_blueprints_by_status.return_value = [_bp("legacy1", updated_at=old, attempts=4)]
+
+        recover_publish_failed(bc, "gaming", now=_NOW)
+
+        bc.blueprints.update.assert_called_once_with(
+            "legacy1",
+            {"status": "VISUAL_READY", "publish_attempts": 0},
+        )
+
+    def test_r40_claim_status_exception_is_non_fatal(self) -> None:
+        """R-40: a backend exception during the claim path must not
+        crash the recovery loop — other PUBLISH_FAILED rows must
+        still get processed."""
+        old = (_NOW - timedelta(hours=25)).isoformat()
+        bc = MagicMock()
+        bc.blueprints.claim_status.side_effect = RuntimeError("transient pg blip")
+        bc.get_blueprints_by_status.return_value = [
+            _bp("blip001", updated_at=old),
+            _bp("ok001", updated_at=old),
+        ]
+        # Recovery LOG-and-CONTINUEs the bad blueprint.
+        recover_publish_failed(bc, "gaming", now=_NOW)
+        # claim_status was tried for both rows.
+        assert bc.blueprints.claim_status.call_count == 2
 
 
 # ---------------------------------------------------------------------------
