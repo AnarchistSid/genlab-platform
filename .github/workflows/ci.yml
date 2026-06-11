@@ -140,6 +140,42 @@ jobs:
           GENLAB_USE_POSTGRES: "true"
           DATABASE_URL: postgresql://genlab_app:app_test_password@localhost:5432/genlab
 
+  # R-04: surface the 40 integration smoke tests that were silently
+  # deselected by ``addopts = "-m 'not integration'"`` in
+  # ``genlab-core/pyproject.toml``. The suite is hermetic — fixtures live
+  # under ``tests/integration/fixtures/`` (mock_anthropic_response.json,
+  # mock_youtube_trending.json, etc), no real network. 38/40 pass on main
+  # today; the 2 known failures depend on PR #128 (R-19) landing first
+  # (it adds ``virality_score`` to blueprints — the missing field these
+  # tests assert on). Deselected here with a clear pointer; remove the
+  # deselects in a follow-up the moment #128 merges.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - run: uv sync --frozen
+      # ``uv run --package genlab-core`` changes CWD to ``genlab-core/`` —
+      # pytest test IDs must be relative to that, not the workspace root.
+      - run: |
+          uv run --package genlab-core pytest \
+            -m integration \
+            --deselect 'tests/integration/test_pipeline_smoke.py::TestSharedStagesWithMockData::test_qc_gates_validates_blueprints' \
+            --deselect 'tests/integration/test_pipeline_smoke.py::TestSharedStagesWithMockData::test_virality_scoring_scores_blueprints' \
+            genlab-core/tests/integration/ \
+            --tb=short -q
+        env:
+          GENLAB_USE_POSTGRES: "false"
+
   secret-scan:
     runs-on: ubuntu-latest
     steps:

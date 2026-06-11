@@ -6,23 +6,24 @@ on:
   pull_request:
     branches: [main]
 
+# R-04 (2026-06-11): the duplicate ``lint`` job that used to live here
+# was a strict subset of ``ci.yml``'s lint (ruff check + format) and
+# fired on every PR, doubling up the gate. Consolidated into ci.yml,
+# which additionally enforces the .importlinter layer contract (R-69).
+# Keep ``test-core``, ``test-dashboard``, ``test-channels``, and
+# ``test-frontend`` here — those are this workflow's unique gates.
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: false
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.10.x"
-      - run: uv tool run ruff@0.15.14 check .
-      # U-18: also enforce formatting here (ci.yml already does) so both
-      # workflows' lint gates are consistent.
-      - run: uv tool run ruff@0.15.14 format --check .
-
   test-core:
     runs-on: ubuntu-latest
+    # R-04: matrix across the CLAUDE.md-supported Python versions. The
+    # workspace says "Python 3.12+" but CI only ever ran 3.13 — a 3.12
+    # syntax regression (PEP-695 type aliases, ``except*``, etc.) could
+    # ship undetected. Both versions are cheap; failure on either fails
+    # the gate.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
     services:
       postgres:
         image: postgres:16
@@ -46,7 +47,7 @@ jobs:
           version: "0.10.x"
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
       - run: uv sync --frozen
       - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q
 
