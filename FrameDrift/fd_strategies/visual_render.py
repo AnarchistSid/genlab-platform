@@ -14,7 +14,6 @@ from typing import Any
 
 import yaml
 from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_audio
-from genlab_core.media.frame_compositor import FrameCompositor
 from genlab_core.media.whisper_timing import align_words, transcribe_words
 from genlab_core.strategies.base_visual_render import BaseVisualRenderStrategy
 from genlab_core.tts.factory import build_tts_cascade
@@ -69,6 +68,8 @@ class AnimeVisualRenderStrategy(BaseVisualRenderStrategy):
     byte-identical with SR + CW at extraction time).
     """
 
+    _log_prefix = "[anime]"
+
     def __init__(self) -> None:
         # ``super().__init__()`` initializes ``self._visuals_config = None``
         # — the base relies on that attribute existing before any
@@ -76,6 +77,9 @@ class AnimeVisualRenderStrategy(BaseVisualRenderStrategy):
         super().__init__()
         logger.info("[anime] AnimeVisualRenderStrategy initialized")
         self._sources_config: dict | None = None
+        # R-70 part 2 PR 4: the base's ``_compose_frame`` reads this
+        # to instantiate the FrameCompositor.
+        self._visuals_yaml_path = NICHE_ROOT / "config" / "visuals.yaml"
 
     def _ensure_config(self) -> None:
         if self._sources_config is not None:
@@ -83,37 +87,9 @@ class AnimeVisualRenderStrategy(BaseVisualRenderStrategy):
         self._sources_config = _load_yaml(NICHE_ROOT / "config" / "sources.yaml")
         self._visuals_config = _load_yaml(NICHE_ROOT / "config" / "visuals.yaml")
 
-    def _compose_frame(self, clip_path: Path, story: dict, context: dict) -> str:
-        """Compose video through FrameCompositor. Returns empty string on failure."""
-        run_dir = context.get("run_dir", "")
-        if not run_dir:
-            return ""
-
-        hook_text = (story.get("content") or {}).get("hook", story.get("title", ""))
-        sid = story.get("story_id", "unknown")
-        output_dir = Path(run_dir) / "visuals" / sid
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = str(output_dir / f"{sid[:16]}_reel.mp4")
-
-        try:
-            from genlab_core.media.frame_compositor import probe_video
-
-            visuals_yaml = str(NICHE_ROOT / "config" / "visuals.yaml")
-            compositor = FrameCompositor.from_visuals_yaml(visuals_yaml)
-            try:
-                info = probe_video(str(clip_path))
-                dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
-            except Exception:
-                dur = 55
-            return compositor.compose(
-                source_video_path=str(clip_path),
-                hook_text=hook_text,
-                output_path=output_path,
-                duration_seconds=dur,
-            )
-        except Exception as e:
-            logger.error("[anime] FrameCompositor failed: %s", e)
-            return ""
+    # ``_compose_frame`` now inherited from BaseVisualRenderStrategy
+    # (R-70 part 2 PR 4). The base reads ``self._log_prefix`` +
+    # ``self._visuals_yaml_path`` set in ``__init__`` above.
 
     def _build_pexels_queries(self, story: dict) -> list[str]:
         """Generate brand-safe Pexels search queries."""

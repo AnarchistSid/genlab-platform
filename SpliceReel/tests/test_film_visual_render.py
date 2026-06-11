@@ -112,7 +112,7 @@ class TestVisualRenderExecute:
             "run_dir": str(run_dir),
         }
 
-        with patch("sr_strategies.visual_render.FrameCompositor") as MockFC:
+        with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
             MockFC.from_visuals_yaml.return_value = mock_compositor
             result = strategy.execute(context)
 
@@ -162,7 +162,7 @@ class TestFrameCompositorWiring:
             "run_dir": str(run_dir),
         }
 
-        with patch("sr_strategies.visual_render.FrameCompositor") as MockFC:
+        with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
             MockFC.from_visuals_yaml.return_value = mock_compositor
             result = strategy.execute(context)
 
@@ -186,7 +186,7 @@ class TestFrameCompositorWiring:
             "run_dir": str(run_dir),
         }
 
-        with patch("sr_strategies.visual_render.FrameCompositor") as MockFC:
+        with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
             MockFC.from_visuals_yaml.return_value.compose.side_effect = RuntimeError(
                 "ffmpeg crashed"
             )
@@ -213,7 +213,7 @@ class TestFrameCompositorWiring:
             "run_dir": str(run_dir),
         }
 
-        with patch("sr_strategies.visual_render.FrameCompositor") as MockFC:
+        with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
             MockFC.from_visuals_yaml.return_value = mock_compositor
             strategy.execute(context)
 

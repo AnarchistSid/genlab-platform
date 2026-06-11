@@ -1,43 +1,56 @@
-"""R-70 part 2 — PR 1 unit tests for ``BaseVisualRenderStrategy``.
+"""R-70 part 2 — unit tests for ``BaseVisualRenderStrategy``.
 
-The base class is a thin skeleton — one concrete method
-(``_get_whisper_config``) plus abstract hooks for everything else.
-These tests pin:
+PR 1 shipped the thin skeleton with one concrete method
+(``_get_whisper_config``); PR 4 lifted ``_compose_frame`` into the
+base after SR + CW + FD bodies were verified byte-identical except
+for the ``[movies]`` / ``[sports]`` / ``[anime]`` log prefix. These
+tests pin:
 
-  1. A subclass that implements every abstract method instantiates
-     cleanly — the abstract contract is what the design plan says
-     it is.
+  1. A subclass that implements every remaining abstract method
+     instantiates cleanly — the abstract contract is what the
+     design plan says it is.
   2. ``_get_whisper_config`` reads the right path through
      ``_visuals_config`` (``animation.word_by_word.whisper_sync``)
      and returns the documented default when any key is missing.
   3. ``_get_whisper_config`` calls ``_ensure_config`` exactly once
      per invocation — the subclass's own config-loading caching is
      what makes the call idempotent; the base doesn't second-guess.
-
-No channel migration runs against this base yet (per the sequenced
-design); SR/CW/FD continue to use their existing per-channel
-implementations. PR 2 migrates SR as the pilot.
+  4. ``_compose_frame`` honours the subclass-provided
+     ``_log_prefix`` + ``_visuals_yaml_path``, guards an empty
+     ``run_dir``, caps duration at 60s, falls back to 55s on probe
+     failure, and returns an empty string when the compositor
+     raises.
 """
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 from genlab_core.strategies.base_visual_render import BaseVisualRenderStrategy
 
 
 class _StubVisualRender(BaseVisualRenderStrategy):
-    """Concrete subclass with every abstract method stubbed for tests.
+    """Concrete subclass with every remaining abstract method stubbed
+    for tests. PR 4 removed ``_compose_frame`` from the abstract list
+    (it now lives concretely on the base); the stub no longer
+    overrides it."""
 
-    Mirrors the shape a real channel subclass will take in PR 2:
-    each channel's ``_ensure_config`` reads its own niche YAML and
-    populates ``self._visuals_config``."""
-
-    def __init__(self, visuals_config: dict | None = None) -> None:
+    def __init__(
+        self,
+        visuals_config: dict | None = None,
+        *,
+        log_prefix: str = "[stub]",
+        visuals_yaml_path: Path | None = None,
+    ) -> None:
         super().__init__()
         self._injected_config = visuals_config or {}
         self.ensure_call_count = 0
+        self._log_prefix = log_prefix
+        self._visuals_yaml_path = visuals_yaml_path or Path("/tmp/stub_visuals.yaml")
 
     def _ensure_config(self) -> None:
         self.ensure_call_count += 1
@@ -45,9 +58,6 @@ class _StubVisualRender(BaseVisualRenderStrategy):
 
     def prepare_whisper_words(self, clip_path, story):
         return []
-
-    def _compose_frame(self, clip_path, story, context):
-        return "stub.mp4"
 
     def _build_pexels_queries(self, story):
         return []
@@ -142,3 +152,185 @@ def test_r70_pr1_base_subclasses_visual_render_strategy() -> None:
 
     stage: Any = _StubVisualRender()
     assert isinstance(stage, VisualRenderStrategy)
+
+
+# ── R-70 part 2 PR 4: concrete ``_compose_frame`` on the base ──────
+
+
+def _make_clip(tmp_path: Path) -> Path:
+    """Realish source clip path — content irrelevant since the
+    compositor is mocked; only the path needs to exist on disk."""
+    clip = tmp_path / "src.mp4"
+    clip.write_bytes(b"")
+    return clip
+
+
+def test_r70_pr4_compose_frame_returns_empty_string_when_no_run_dir(
+    tmp_path: Path,
+) -> None:
+    """The pre-extraction body's first guard: if ``run_dir`` is
+    missing from context, return ``""`` without touching the
+    compositor. Pin so a future "let's default to cwd" edit
+    can't silently change behavior."""
+    stage = _StubVisualRender()
+    clip = _make_clip(tmp_path)
+    result = stage._compose_frame(clip, story={"story_id": "s1"}, context={})
+    assert result == ""
+
+
+def test_r70_pr4_compose_frame_wires_compositor_with_visuals_yaml_path(
+    tmp_path: Path,
+) -> None:
+    """The base must instantiate FrameCompositor from the subclass-
+    provided ``_visuals_yaml_path`` — not from a hardcoded constant
+    or a re-derived path. Pin so per-channel overrides survive
+    a future refactor."""
+    visuals_yaml = tmp_path / "channel_visuals.yaml"
+    visuals_yaml.write_text("animation: {}")
+    stage = _StubVisualRender(visuals_yaml_path=visuals_yaml)
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+
+    mock_compositor = MagicMock()
+    mock_compositor.compose.return_value = "/tmp/out.mp4"
+
+    with (
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
+    ):
+        MockFC.from_visuals_yaml.return_value = mock_compositor
+        mock_probe.return_value = MagicMock(duration_seconds=22.0)
+
+        result = stage._compose_frame(
+            clip,
+            story={"story_id": "s1", "content": {"hook": "H"}},
+            context={"run_dir": str(run_dir)},
+        )
+
+    MockFC.from_visuals_yaml.assert_called_once_with(str(visuals_yaml))
+    assert result == "/tmp/out.mp4"
+    # Pinned hook + duration plumbing
+    args, kwargs = mock_compositor.compose.call_args
+    assert kwargs["hook_text"] == "H"
+    assert kwargs["duration_seconds"] == 22
+
+
+def test_r70_pr4_compose_frame_caps_duration_at_60s(tmp_path: Path) -> None:
+    """A 90s clip must be capped to 60s when sent to the compositor —
+    matches the 60s short-form publish ceiling. Pin so a future
+    "let's keep long-form" edit can't silently lift the cap."""
+    stage = _StubVisualRender()
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+
+    mock_compositor = MagicMock()
+    mock_compositor.compose.return_value = "/tmp/out.mp4"
+
+    with (
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
+    ):
+        MockFC.from_visuals_yaml.return_value = mock_compositor
+        mock_probe.return_value = MagicMock(duration_seconds=90.0)
+
+        stage._compose_frame(
+            clip,
+            story={"story_id": "s1"},
+            context={"run_dir": str(run_dir)},
+        )
+
+    _, kwargs = mock_compositor.compose.call_args
+    assert kwargs["duration_seconds"] == 60
+
+
+def test_r70_pr4_compose_frame_falls_back_to_55s_when_probe_fails(
+    tmp_path: Path,
+) -> None:
+    """When ``probe_video`` raises, the body uses 55s as the safe
+    fallback duration. Pin so a refactor doesn't silently make a
+    probe failure a hard failure."""
+    stage = _StubVisualRender()
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+
+    mock_compositor = MagicMock()
+    mock_compositor.compose.return_value = "/tmp/out.mp4"
+
+    with (
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch(
+            "genlab_core.media.frame_compositor.probe_video",
+            side_effect=RuntimeError("no ffprobe"),
+        ),
+    ):
+        MockFC.from_visuals_yaml.return_value = mock_compositor
+
+        stage._compose_frame(
+            clip,
+            story={"story_id": "s1"},
+            context={"run_dir": str(run_dir)},
+        )
+
+    _, kwargs = mock_compositor.compose.call_args
+    assert kwargs["duration_seconds"] == 55
+
+
+def test_r70_pr4_compose_frame_falls_back_to_title_when_hook_missing(
+    tmp_path: Path,
+) -> None:
+    """The original per-channel body read
+    ``story.content.hook`` then fell back to ``story.title``. Pin
+    that the lifted body keeps the same precedence — channels rely
+    on it when the hook stage hasn't run yet."""
+    stage = _StubVisualRender()
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+
+    mock_compositor = MagicMock()
+    mock_compositor.compose.return_value = "/tmp/out.mp4"
+
+    with (
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
+    ):
+        MockFC.from_visuals_yaml.return_value = mock_compositor
+        mock_probe.return_value = MagicMock(duration_seconds=20.0)
+
+        stage._compose_frame(
+            clip,
+            story={"story_id": "s1", "title": "From title"},
+            context={"run_dir": str(run_dir)},
+        )
+
+    _, kwargs = mock_compositor.compose.call_args
+    assert kwargs["hook_text"] == "From title"
+
+
+def test_r70_pr4_compose_frame_returns_empty_string_on_compositor_error(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """If FrameCompositor.compose raises, the body must log the
+    channel-tagged error and return ``""`` — never propagate the
+    exception (the pipeline relies on this to keep the render stage
+    moving across stories). Pin the log-prefix routing while we're
+    here: the base must use the subclass's ``_log_prefix`` literally."""
+    stage = _StubVisualRender(log_prefix="[movies]")
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+
+    with (
+        caplog.at_level(logging.ERROR, logger="genlab_core.strategies.base_visual_render"),
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+    ):
+        MockFC.from_visuals_yaml.side_effect = ValueError("bad yaml")
+        result = stage._compose_frame(
+            clip,
+            story={"story_id": "s1"},
+            context={"run_dir": str(run_dir)},
+        )
+
+    assert result == ""
+    # The log must carry the channel-specific prefix the subclass set.
+    assert any("[movies]" in rec.message for rec in caplog.records)
+    assert any("FrameCompositor failed" in rec.message for rec in caplog.records)
