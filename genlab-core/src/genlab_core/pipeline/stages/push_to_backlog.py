@@ -1128,6 +1128,19 @@ class PushToBacklog:
                         "format": "reel",
                         "niche_id": niche_id,
                         "arm_id": arm_id,
+                        # R-19: ``ViralityScoring`` writes a per-story
+                        # ``virality_score`` (0.0–1.0) at
+                        # ``virality_scoring.py:138`` and a sibling
+                        # ``virality_features`` dict (signal breakdown
+                        # used by the dashboard explainer). Both were
+                        # being computed every run and silently dropped
+                        # here — they never reached the blueprint, so
+                        # they couldn't influence ``priority_score``
+                        # downstream and the dashboard's "why was this
+                        # ranked here?" tab showed nothing. Pull them
+                        # into the field set so they persist.
+                        "virality_score": story.get("virality_score", 0.0),
+                        "virality_features": json.dumps(story.get("virality_features", {})),
                         # Granular origin (espn_news, youtube_trending, scorebat,
                         # rss, twitch_trending, ...). Previously only the derived
                         # `topic` was stored, so blueprints.source was always
