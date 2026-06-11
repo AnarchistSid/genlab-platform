@@ -64,9 +64,31 @@ jobs:
       # test-core deselects integration tests via -k).
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv sync --frozen
+      # Cache + pre-warm the HuggingFace hub so the Detoxify toxicity gate's
+      # bert-base-uncased download doesn't hit huggingface.co per run. Without
+      # this, ``transformers.from_pretrained`` does a HEAD-with-etag-check on
+      # every model load — huggingface.co rate-limits the shared GHA runner
+      # IPs and 429s hit 3 times in the session-#2 merge sweep. The
+      # ``HF_HUB_OFFLINE=1`` env on the pytest step makes the cached model
+      # load skip the network entirely (no etag HEAD).
+      - name: Cache HuggingFace hub (Detoxify model weights)
+        id: hf-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-v1-${{ runner.os }}-detoxify-original
+      - name: Pre-warm HF cache on miss
+        if: steps.hf-cache.outputs.cache-hit != 'true'
+        run: |
+          uv run --package genlab-core python -c "
+          from detoxify import Detoxify
+          Detoxify('original')  # downloads bert-base-uncased + detoxify weights
+          "
       - run: uv run --package genlab-core pytest genlab-core/tests/ -x -q --ignore=genlab-core/tests/storage/ --ignore=genlab-core/tests/integration/
         env:
           GENLAB_USE_POSTGRES: "false"
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
 
   # R-48/R-64: the primary store (PostgreSQL via Alembic) had ZERO CI coverage —
   # the `test` job runs with GENLAB_USE_POSTGRES=false and --ignore=tests/storage,

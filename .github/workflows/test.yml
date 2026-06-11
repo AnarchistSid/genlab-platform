@@ -49,7 +49,27 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --frozen
+      # HF cache + offline pytest — see ci.yml's ``test`` job for the
+      # full rationale; this is the same pattern applied to ``test-core``
+      # because the engagement-side test surface here also loads the
+      # Detoxify toxicity gate.
+      - name: Cache HuggingFace hub (Detoxify model weights)
+        id: hf-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-v1-${{ runner.os }}-detoxify-original
+      - name: Pre-warm HF cache on miss
+        if: steps.hf-cache.outputs.cache-hit != 'true'
+        run: |
+          uv run --package genlab-core python -c "
+          from detoxify import Detoxify
+          Detoxify('original')
+          "
       - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
 
   test-dashboard:
     runs-on: ubuntu-latest
@@ -64,7 +84,26 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --frozen
+      # HF cache + offline pytest — see ci.yml's ``test`` job for the
+      # full rationale. Dashboard tests instantiate the toxicity gate
+      # through the engagement reply-approval API.
+      - name: Cache HuggingFace hub (Detoxify model weights)
+        id: hf-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/huggingface
+          key: hf-cache-v1-${{ runner.os }}-detoxify-original
+      - name: Pre-warm HF cache on miss
+        if: steps.hf-cache.outputs.cache-hit != 'true'
+        run: |
+          uv run --package genlab-core python -c "
+          from detoxify import Detoxify
+          Detoxify('original')
+          "
       - run: uv run --package genlab-dashboard pytest dashboard/tests/ --tb=short -q
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
 
   test-channels:
     runs-on: ubuntu-latest
