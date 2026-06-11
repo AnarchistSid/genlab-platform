@@ -66,8 +66,14 @@ class TestScoringDecay:
 
 class TestScheduleSlots:
     def test_publishing_windows(self):
+        """R-10 reconciled the 2-window decoration to a single 06:30
+        UTC entry — the launchd publisher timer is the source of
+        truth. The matching genlab-core invariant test pins this
+        for every niche; we keep a local copy for the channel-test
+        sweep."""
         data = _load("schedule.yaml")
-        assert len(data["publishing_windows"]) == 2
+        assert len(data["publishing_windows"]) == 1
+        assert data["publishing_windows"][0]["time"] == "06:30"
 
     def test_window_labels(self):
         data = _load("schedule.yaml")
