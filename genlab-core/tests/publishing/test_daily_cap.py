@@ -40,8 +40,20 @@ class TestCanPublish:
         assert enforcer.can_publish("youtube") is True
         assert enforcer.can_publish("facebook") is True
 
-    def test_unknown_platform_fails_open(self):
-        assert make_enforcer({}).can_publish("myspace") is True
+    def test_unknown_platform_fails_closed(self):
+        """R-09 — an unconfigured platform must block, not unblock,
+        publishing. A typo or stale ``platform_caps.yaml`` should
+        never silently allow over-publishing."""
+        assert make_enforcer({}).can_publish("myspace") is False
+
+    def test_unknown_platform_logs_warning(self, caplog):
+        """The fail-closed path must surface loudly so an operator
+        adding a new platform notices the missing cap entry."""
+        with caplog.at_level("WARNING"):
+            make_enforcer({}).can_publish("myspace")
+        assert "[daily_cap]" in caplog.text
+        assert "myspace" in caplog.text
+        assert "R-09" in caplog.text
 
     def test_case_insensitive(self):
         enforcer = make_enforcer({"instagram": 1})
@@ -91,3 +103,23 @@ class TestLoadCaps:
         caps = _load_caps(config_path=cfg)
         assert caps["instagram"] == 3
         assert caps["youtube"] == 1
+
+
+class TestBundledConfigInvariant:
+    """Pin R-09: every cap in the bundled ``platform_caps.yaml``
+    must be exactly 1. The "1 reel per channel per day" rule is
+    non-negotiable; a future edit that bumps caps back to >1
+    (e.g. for "retry headroom") fails CI immediately."""
+
+    def test_every_bundled_cap_is_one(self):
+        from pathlib import Path
+
+        repo_caps = _load_caps(
+            config_path=Path(__file__).resolve().parents[3] / "config" / "platform_caps.yaml"
+        )
+        for platform, cap in repo_caps.items():
+            assert cap == 1, (
+                f"platform_caps.yaml: {platform}={cap} violates "
+                f"R-09's 1-per-day invariant. Bumping caps risks "
+                f"re-introducing the over-publish hazard."
+            )

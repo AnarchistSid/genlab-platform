@@ -81,13 +81,23 @@ class DailyCapEnforcer:
     def can_publish(self, platform: str) -> bool:
         """Return True if this platform still has capacity today.
 
-        Fails open (returns True) if the cap is unconfigured.
+        Fails CLOSED (returns False) if the cap is unconfigured for
+        the platform — the audit (R-09) called out the historical
+        fail-open behaviour as the most direct over-publish hazard.
+        A typo or stale ``platform_caps.yaml`` should NEVER unblock
+        publishing; the explicit "1 reel per channel per day" rule
+        means a missing config is a misconfiguration, not a license.
         """
         platform = platform.lower()
         cap = self._caps.get(platform)
         if cap is None:
-            logger.warning("No daily cap configured for '%s', allowing publish.", platform)
-            return True
+            logger.warning(
+                "[daily_cap] No cap configured for '%s' — failing CLOSED "
+                "(audit R-09). Add it to platform_caps.yaml to enable "
+                "publishing on this platform.",
+                platform,
+            )
+            return False
 
         current = self._get_counts().get(platform, 0)
         if current >= cap:
