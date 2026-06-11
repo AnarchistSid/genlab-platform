@@ -30,6 +30,7 @@ NICHE_YAMLS = [
 @pytest.mark.parametrize("yaml_path", NICHE_YAMLS, ids=lambda p: p.parents[1].name)
 def test_tiktok_not_in_platforms_enabled(yaml_path: Path) -> None:
     data = yaml.safe_load(yaml_path.read_text())
+
     # ``platforms_enabled`` can live at the root or nested under
     # ``content_pipeline`` / ``publishing``. Walk the dict and find
     # every occurrence.
@@ -44,9 +45,7 @@ def test_tiktok_not_in_platforms_enabled(yaml_path: Path) -> None:
                 yield from walk(item)
 
     found_lists = list(walk(data))
-    assert found_lists, (
-        f"{yaml_path}: expected at least one `platforms_enabled` list"
-    )
+    assert found_lists, f"{yaml_path}: expected at least one `platforms_enabled` list"
     for plist in found_lists:
         assert "tiktok" not in plist, (
             f"{yaml_path}: `tiktok` found in platforms_enabled "
@@ -57,17 +56,9 @@ def test_tiktok_not_in_platforms_enabled(yaml_path: Path) -> None:
 def test_gaming_publishing_yaml_doesnt_enable_tiktok() -> None:
     """gaming `publishing.yaml` had `tiktok` under `platforms.enabled`
     before R-15. Pin the cleanup."""
-    pub_yaml = (
-        REPO_ROOT
-        / "CriticalRush"
-        / "niches"
-        / "gaming"
-        / "config"
-        / "publishing.yaml"
-    )
+    pub_yaml = REPO_ROOT / "CriticalRush" / "niches" / "gaming" / "config" / "publishing.yaml"
     data = yaml.safe_load(pub_yaml.read_text())
     enabled = (data.get("platforms") or {}).get("enabled") or []
     assert "tiktok" not in enabled, (
-        f"gaming publishing.yaml `platforms.enabled` still contains "
-        f"tiktok: {enabled!r} — see R-15."
+        f"gaming publishing.yaml `platforms.enabled` still contains tiktok: {enabled!r} — see R-15."
     )
