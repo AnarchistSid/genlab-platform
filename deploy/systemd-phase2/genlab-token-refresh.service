@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Token Health Check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/token_health.py
+TimeoutSec=300

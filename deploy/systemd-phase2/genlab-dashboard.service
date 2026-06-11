@@ -1,0 +1,33 @@
+[Unit]
+Description=GenLab Operations Dashboard
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=exec
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+Environment=GENLAB_USE_POSTGRES=true
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+ExecStart=/opt/genlab/.venv/bin/gunicorn \
+    --worker-class eventlet \
+    --workers 1 \
+    --timeout 120 \
+    --max-requests 500 \
+    --max-requests-jitter 50 \
+    --bind 127.0.0.1:5151 \
+    --access-logfile /opt/genlab/.logs/dashboard_access.log \
+    --error-logfile /opt/genlab/.logs/dashboard_error.log \
+    --capture-output \
+    server.review_server:app
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

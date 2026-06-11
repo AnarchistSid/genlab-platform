@@ -146,3 +146,4 @@ CLEANUP_PLAN.sh
 
 # Trained ML model artifacts (regenerable from train_hook_classifier.py)
 genlab-core/models/
+deploy/.deploy.log
