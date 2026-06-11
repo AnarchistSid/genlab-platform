@@ -442,6 +442,70 @@ class TestValidateVideosVMAFGate:
         assert story["media"]["video_validation"]["valid"] is False
 
     @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
+    def test_r07_vmaf_failopen_marks_media_skipped_and_increments_counter(
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """R-07: when ``check_vmaf`` fail-opens with score=0.0 (the
+        infra/log-unreadable sentinel), the stage stamps
+        ``vmaf_skipped=True`` on the media dict AND increments the
+        ``vmaf_skipped`` counter in ``run_stats``, so the
+        observability layer sees the gate's absence."""
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        mock_probe.return_value = _make_probe_data()
+        ctx = self._make_context(tmp_path)
+
+        with patch(
+            "genlab_core.pipeline.stages.validate_videos.check_vmaf",
+            return_value=(True, 0.0),  # fail-open sentinel
+        ):
+            result = ValidateVideos().execute(ctx)
+
+        story = result["stories"][0]
+        validation = story["media"]["video_validation"]
+        # The post still passes (otherwise it would block a spec-valid reel),
+        # but the absence of a real verdict is now visible.
+        assert validation["valid"] is True
+        assert validation.get("vmaf_skipped") is True
+        assert validation.get("vmaf_skip_reason") == "infra_or_log_unreadable"
+
+        run_stats = result.get("run_stats", {}).get("video_validation", {})
+        assert run_stats.get("vmaf_skipped") == 1
+        # ``vmaf_skipped`` is COUNTED in ``passed`` (spec is valid) — but
+        # the separate counter is the observability signal.
+        assert run_stats.get("passed") == 1
+
+    @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
+    def test_r07_vmaf_real_pass_does_not_set_skipped(
+        self,
+        mock_probe: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """R-07 pin: a real ``(True, score>0)`` pass must NOT touch the
+        skip fields — otherwise observability would show every reel as
+        having a skipped gate."""
+        from genlab_core.pipeline.stages.validate_videos import ValidateVideos
+
+        mock_probe.return_value = _make_probe_data()
+        ctx = self._make_context(tmp_path)
+
+        with patch(
+            "genlab_core.pipeline.stages.validate_videos.check_vmaf",
+            return_value=(True, 92.0),
+        ):
+            result = ValidateVideos().execute(ctx)
+
+        validation = result["stories"][0]["media"]["video_validation"]
+        assert validation["valid"] is True
+        assert "vmaf_skipped" not in validation
+        assert "vmaf_skip_reason" not in validation
+
+        run_stats = result.get("run_stats", {}).get("video_validation", {})
+        assert run_stats.get("vmaf_skipped") == 0
+
+    @patch("genlab_core.pipeline.stages.validate_videos.ValidateVideos._probe")
     def test_vmaf_disabled_via_config(
         self,
         mock_probe: MagicMock,

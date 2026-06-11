@@ -46,7 +46,7 @@ from genlab_core.exceptions import NicheConfigError
 from genlab_core.niche_loader import get_feature_flags, load_niche_config
 from genlab_core.pipeline.log_streamer import install_log_handler, remove_log_handler
 from genlab_core.pipeline.stage_context import StageContext
-from genlab_core.pipeline.stage_runner import StageRunnerFactory
+from genlab_core.pipeline.stage_runner import Stage, StageRunnerFactory
 
 logger = logging.getLogger(__name__)
 
@@ -552,7 +552,22 @@ class GenericPipelineRunner:
                     f"(declared in niche.yaml for '{niche_id}')"
                 ) from e
 
-            stages.append(stage_class())
+            instance = stage_class()
+
+            # R-07: fail-fast on duck-typed stage contract. Without this
+            # check, a config typo (or a class that lost ``execute`` after
+            # a refactor) raises AttributeError mid-pipeline — after
+            # credentials, quotas, and sys.path are already mutated. The
+            # ``Stage`` Protocol is ``@runtime_checkable`` precisely so we
+            # can verify it at load time instead.
+            if not isinstance(instance, Stage):
+                raise NicheConfigError(
+                    f"Stage '{class_path}' for niche '{niche_id}' does not "
+                    f"implement the Stage protocol — missing or non-callable "
+                    f"``execute(context)`` method. Check niche.yaml."
+                )
+
+            stages.append(instance)
             declarations.append(declaration)
             logger.debug("[Pipeline] Loaded stage: %s", class_name)
 

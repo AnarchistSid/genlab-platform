@@ -35,7 +35,11 @@ def check_vmaf(master: Path, variant: Path, platform: str) -> tuple[bool, float]
     silently uploading a degraded file.
 
     Returns:
-        Tuple of (passed: bool, score: float).
+        Tuple of (passed: bool, score: float). ``score == 0.0`` is the
+        fail-open sentinel — VMAF could not run (libvmaf missing) or the
+        log was unreadable. R-07: callers should use ``score == 0.0`` as
+        the "skipped" signal and record ``vmaf_skipped=True`` downstream
+        so the absence of a real gate is visible in observability.
     """
     from genlab_core.media.ffmpeg import get_ffmpeg_binary
 
@@ -74,9 +78,16 @@ def check_vmaf(master: Path, variant: Path, platform: str) -> tuple[bool, float]
             timeout=300,
         )
     except Exception as e:
-        logger.warning(
-            "[video_validator] VMAF check skipped (libvmaf unavailable or "
-            "parse error) — quality not verified. error=%s path=%s",
+        # R-07: libvmaf binary is missing or the subprocess timed out.
+        # This is an INFRA condition, not a quality verdict — log at
+        # INFO so legitimate environments without libvmaf don't spam
+        # WARN, but keep the structured field so observability can
+        # count it as a "VMAF gate skipped" event.
+        logger.info(
+            "[video_validator] vmaf_skipped_infra: libvmaf "
+            "subprocess failed (binary missing or timeout). "
+            "platform=%s error=%s path=%s",
+            platform,
             e,
             variant,
         )
@@ -95,10 +106,21 @@ def check_vmaf(master: Path, variant: Path, platform: str) -> tuple[bool, float]
             )
         return passed, score
     except Exception as e:
-        logger.warning(
-            "[video_validator] VMAF check skipped (libvmaf unavailable or "
-            "parse error) — quality not verified. error=%s path=%s",
+        # R-07: subprocess.run succeeded but the VMAF log is unreadable
+        # — this is the silent-failure mode that bit us in May 2026
+        # (pipe-buffer deadlock left the log truncated, every check
+        # fail-opened). Distinct from the infra-skip case above: this
+        # one IS a bug worth tracking, so log at ERROR + structured
+        # field. Still fail-open on shape because the caller depends
+        # on the (bool, float) contract and the rendered reel itself
+        # is otherwise spec-valid.
+        logger.error(
+            "[video_validator] vmaf_log_unreadable: VMAF subprocess "
+            "succeeded but log could not be parsed — quality NOT "
+            "verified. platform=%s error=%s log=%s path=%s",
+            platform,
             e,
+            vmaf_log,
             variant,
         )
         return True, 0.0  # fail-open: don't block upload on VMAF parse failure

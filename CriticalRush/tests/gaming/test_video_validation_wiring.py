@@ -216,7 +216,18 @@ class TestColorSpaceFailClosed:
 
 class TestVmafFailOpen:
     def test_returns_true_on_parse_error_with_warning(self, caplog):
-        """When VMAF output is unparseable, returns True (fail-open) with warning."""
+        """When VMAF output is unparseable, returns True (fail-open).
+
+        R-07 (2026-06-11) split the formerly-unified WARN ``"VMAF check
+        skipped"`` message into two structured fields:
+
+        * ``vmaf_skipped_infra`` — INFO — libvmaf binary missing/timeout
+        * ``vmaf_log_unreadable`` — ERROR — subprocess ran but log was
+          unparseable (the May 2026 silent-failure mode worth alerting on)
+
+        This wiring test hits the JSON-parse path, so the message is
+        ``vmaf_log_unreadable`` at ERROR level.
+        """
         from genlab_core.media.video_validator import check_vmaf
 
         with (
@@ -224,12 +235,12 @@ class TestVmafFailOpen:
             patch("subprocess.run"),
             patch("builtins.open", side_effect=FileNotFoundError("no vmaf log")),
         ):
-            with caplog.at_level(logging.WARNING):
+            with caplog.at_level(logging.ERROR):
                 passed, score = check_vmaf(Path("/master.mp4"), Path("/variant.mp4"), "instagram")
 
         assert passed is True
         assert score == 0.0
-        assert "VMAF check skipped" in caplog.text
+        assert "vmaf_log_unreadable" in caplog.text
 
 
 # ---------------------------------------------------------------------------
