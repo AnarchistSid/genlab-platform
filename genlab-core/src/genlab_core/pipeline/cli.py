@@ -22,6 +22,7 @@ import argparse
 import json
 import logging
 import os
+import sys
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -397,7 +398,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from genlab_core.observability.logging import configure_logging
 
-        is_json = os.environ.get("GENLAB_LOG_JSON", "").lower() == "true"
+        # R-68: default to JSON when not running on a TTY. systemd
+        # journald + the audit-flagged "JSON in production" docstring
+        # both want JSON; the prior contract required ``GENLAB_LOG_JSON
+        # =true`` to be set on every unit (it was set on zero), so
+        # prod silently ran the console renderer. Now: explicit env
+        # override still wins, but the absence of one + a non-TTY
+        # stderr means JSON automatically.
+        env_val = os.environ.get("GENLAB_LOG_JSON", "").lower()
+        if env_val in {"true", "1", "yes"}:
+            is_json = True
+        elif env_val in {"false", "0", "no"}:
+            is_json = False
+        else:
+            is_json = not sys.stderr.isatty()
         configure_logging(json_output=is_json, level=log_level)
     except ImportError:
         logging.basicConfig(
