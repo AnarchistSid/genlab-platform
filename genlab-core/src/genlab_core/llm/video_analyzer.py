@@ -73,7 +73,14 @@ class VideoAnalyzer:
                 logger.warning("[VideoAnalyzer] Video processing timed out")
                 return {}
 
-            model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+            # R-43: was ``gemini-2.5-flash-preview-04-17`` — that preview
+            # model was deprecated 2025-07-15 and 404s on the live
+            # endpoint. ``gemini-2.5-flash`` is the GA name, matching
+            # ``model_routing.yaml``'s ``video_analysis`` tier. PR #12
+            # fixed the routing layer (router.py + the yaml); this
+            # caller bypasses the router entirely and was missed in
+            # the same sweep.
+            model = genai.GenerativeModel("gemini-2.5-flash")
             prompt = (
                 f"Analyze this short video clip for a {niche_id or 'content'} channel. "
                 "Return ONLY valid JSON with these fields:\n"
