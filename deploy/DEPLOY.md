@@ -5,20 +5,33 @@ Phase 2 / SaaS deploy is tracked in `systemd-phase2/`.
 
 ## TL;DR — How code gets to production
 
-**scp, not `git pull`.** The Hetzner `.git/` checkout is a reference
-copy and lags behind `origin/main`. Files are synced individually by
-absolute path. Do not assume `git log` on Hetzner reflects what's
-actually running.
+**rsync via `deploy/scripts/deploy.sh`, not bare `scp`** (R-02).
+The Hetzner `.git/` checkout is a reference copy and lags behind
+`origin/main`. Files are synced individually by absolute path. Do
+not assume `git log` on Hetzner reflects what's actually running.
 
 ```bash
-# Per-niche path (NEVER flat staging — see cluster A incident below)
-scp BlackboxBrief/config/sources.yaml \
-    root@46.224.237.56:/opt/genlab/BlackboxBrief/config/sources.yaml
-
-# For a code file
-scp genlab-core/src/genlab_core/pipeline/stages/video_gate.py \
-    root@46.224.237.56:/opt/genlab/genlab-core/src/genlab_core/pipeline/stages/video_gate.py
+# Canonical deploy — pass each repo-root-relative path explicitly.
+# deploy.sh runs the post-transfer md5 round-trip and aborts before
+# any service restart if a single file mismatches.
+deploy/scripts/deploy.sh \
+  BlackboxBrief/config/sources.yaml \
+  genlab-core/src/genlab_core/pipeline/stages/video_gate.py
 ```
+
+The script enforces three properties bare `scp` cannot:
+
+1. **Explicit src→dst per file** — refuses absolute paths and
+   `..` components. No flat staging dir to collide in (Cluster A's
+   exact failure mode).
+2. **Post-transfer checksum verify** — md5 round-trip on every
+   file; mismatch aborts with exit 2 BEFORE any service restart.
+3. **Audit log** — `deploy/.deploy.log` (gitignored) records what
+   was sent, with checksums, plus the deploying user, host, and
+   `git rev-parse HEAD`.
+
+Bare `scp` is still possible (`deploy.sh` is just a wrapper around
+rsync+ssh), but the wrapper is the on-call playbook.
 
 ## Cluster A lesson (2026-05-18) — flat staging is forbidden
 
@@ -144,10 +157,28 @@ ssh root@46.224.237.56 'set -a && source /opt/genlab/.env && set +a && \
 
 ## Rollback
 
-There's no transactional deploy. Rollback = scp the prior version
-back. Keep the previous commit's file content available locally
-(via `git show <sha>:path > /tmp/prev_file && scp /tmp/prev_file ...`)
-or pull from a recent backup.
+There's no transactional deploy, but `deploy/scripts/rollback.sh`
+handles the file-level case (R-02):
 
-For configs, the `pg-backup.timer` runs daily at 06:30 IST; the dump
-sits under `/opt/backups/` on Hetzner.
+```bash
+# Roll a single config file back to whatever it was 5 commits ago.
+deploy/scripts/rollback.sh HEAD~5 BlackboxBrief/config/sources.yaml
+
+# Roll multiple files back to a specific tagged release.
+deploy/scripts/rollback.sh v2026.05.18 \
+  CriticalRush/niches/gaming/config/sources.yaml \
+  genlab-core/src/genlab_core/pipeline/stages/video_gate.py
+```
+
+How it works:
+1. Validates the git ref exists in this repo.
+2. Extracts each requested path from `<ref>:<path>` into a temp
+   staging dir.
+3. Hands the staged files to `deploy.sh`, so the same
+   md5-checksum-verify round-trip applies. A mismatch aborts before
+   any service restart fires.
+4. Cleans up the staging dir on success; preserves it on failure
+   for forensics.
+
+For Postgres rollback, the `pg-backup.timer` runs daily at 06:30 IST;
+the dump sits under `/opt/backups/` on Hetzner.
