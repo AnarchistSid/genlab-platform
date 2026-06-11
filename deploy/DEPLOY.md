@@ -45,24 +45,35 @@ REMOTE=$(ssh root@46.224.237.56 "md5sum /opt/genlab/path/to/file | awk '{print \
 
 ## Pipeline timer schedule (IST)
 
-| Niche | Timer fires |
-|---|---|
-| gaming | 09:30 |
-| shared-ingestion | 10:30 |
-| anime | 11:30 |
-| publisher | 12:05 |
-| insights-collector | 12:15 |
-| movies | 13:30 |
-| db-maintenance | 14:15 |
-| sports | 15:30 |
-| affiliate-scraper | 17:30 |
-| ai_creators | 18:00 |
-| feedback-collector | 19:00 |
-| audience-collector | 20:00 |
-| token-refresh | 07:30 (next day) |
+R-06 audit found this table contradicted the actual `OnCalendar=`
+values in `deploy/systemd-phase2/*.timer`. Source of truth is the
+unit files; this table is regenerated below from the live UTC values
+(IST = UTC + 5:30).
+
+| Niche / job | UTC | IST |
+|---|---|---|
+| pipeline-ai (ai_creators) | 02:30 | 08:00 (next day if deployed PM) |
+| morning-briefing | 02:45 | 08:15 |
+| pipeline-gaming | 04:00 | 09:30 |
+| pipeline-anime | 06:00 | 11:30 |
+| publisher | 06:35 | 12:05 |
+| insights-collector | 06:45 + 12:30 | 12:15 + 18:00 |
+| pipeline-movies | 08:00 | 13:30 |
+| pipeline-sports | 10:00 | 15:30 |
+| affiliate-scraper | 12:00 | 17:30 |
+| feedback-collector | 13:30 | 19:00 |
+| audience-collector | 14:30 | 20:00 |
+| daily-verify | 16:30 | 22:00 |
+| pg-backup + cleanup | 01:00 | 06:30 (next day) |
 
 Deploy **before** the first scheduled niche timer so the next run uses
 the new code. If you deploy mid-day, only later niches see the change.
+
+To re-verify when the schedule changes:
+
+```bash
+grep '^OnCalendar=' deploy/systemd-phase2/*.timer
+```
 
 ## Code paths on Hetzner
 

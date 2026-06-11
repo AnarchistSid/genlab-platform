@@ -10,7 +10,9 @@ Video-first viral content automation platform for short-form video reels.
 ## Features
 
 - **Video-first pipeline** — Finds trending clips on YouTube, writes platform-native captions via LLM, renders branded reels with FFmpeg
-- **6 platform publishing** — Instagram Reels, YouTube Shorts, Facebook Reels, Threads, X/Twitter, TikTok
+- **5 platform publishing** — Instagram Reels, YouTube Shorts, Facebook Reels, Threads, X/Twitter
+  (TikTok ships a stub gated behind `TIKTOK_AUDIT_APPROVED=true`; not counted as live until the
+  audit lands. R-06: was previously advertised as "6 platforms" — corrected 2026-06-11.)
 - **Learning loop** — LinUCB contextual bandit optimizes content selection based on engagement feedback
 - **Engagement engine** — AI-powered comment replies with toxicity filtering, rate limiting, and bot disclosure
 - **Affiliate monetization** — Multi-network product matching, CTA injection, A/B testing, revenue attribution
