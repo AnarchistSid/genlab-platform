@@ -25,12 +25,18 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from genlab_core.intelligence.cost_accumulator import get_accumulator
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
 # Default P95 pipeline target (seconds)
 DEFAULT_P95_TARGET = 600
+
+# R-27: default daily LLM-cost budget (USD). The cost rule across CLAUDE.md
+# and ``.claude/rules/optimization.md`` is "<$5/day". Treated as a per-run
+# soft ceiling — going over is a SLO violation, not a pipeline failure.
+DEFAULT_BUDGET_USD = 5.0
 
 
 class RunReport:
@@ -105,6 +111,29 @@ class RunReport:
                     "(total fetch wipeout: WARP/quota/relevance gate?)"
                 )
 
+        # R-27: read the per-run cost accumulator if one is installed
+        # (pipeline_runner.run() installs it; tests run RunReport in
+        # isolation may not). The structural blindness the audit called
+        # out was that ``get_accumulator()`` returned ``None`` because
+        # ``set_accumulator()`` was never wired — that's fixed in
+        # pipeline_runner.run(). Treat ``None`` here defensively so
+        # standalone tests / future entry points don't crash.
+        cost_summary: dict = {}
+        try:
+            acc = get_accumulator()
+            if acc is not None:
+                cost_summary = acc.summary()
+                budget_cap = niche_config.get("error_budgets", {}).get(
+                    "daily_cost_usd", DEFAULT_BUDGET_USD
+                )
+                if cost_summary.get("total_usd", 0.0) > budget_cap:
+                    slo_violations.append(
+                        f"LLM cost ${cost_summary['total_usd']:.4f} exceeds "
+                        f"${budget_cap:.2f} per-run budget"
+                    )
+        except Exception:
+            logger.debug("[RunReport] cost-accumulator read failed", exc_info=True)
+
         # Determine status. A dark day (0 blueprints) is always a failure,
         # regardless of story count or errors (R-65) — this is the signal an
         # operator needs to know a channel produced nothing today.
@@ -134,6 +163,12 @@ class RunReport:
                 "publishing": publishing,
                 "express_lane": express,
             },
+            # R-27: ``cost`` carries ``total_usd``, ``by_category``,
+            # ``budget_remaining_pct``, and ``entry_count``. Empty dict
+            # means "no accumulator was active" — distinct from
+            # ``total_usd=0.0`` which means "accumulator active, no
+            # LLM calls were made this run".
+            "cost": cost_summary,
             "stage_timings": stage_timings,
             "slo_violations": slo_violations,
         }
