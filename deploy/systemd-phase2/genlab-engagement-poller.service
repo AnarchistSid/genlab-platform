@@ -1,0 +1,34 @@
+[Unit]
+Description=GenLab Engagement Poller (YT/X/Threads — fills the gap Meta webhooks don't cover)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=exec
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/genlab-core
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+Environment=REDIS_HOST=127.0.0.1
+Environment=REDIS_PORT=6379
+Environment=ENGAGEMENT_DISPATCH=dramatiq
+# R-05: AGENT_ROOT must point at the canonical shared-state agent root
+# (matches genlab-engagement-worker.service). The poller dispatches
+# comments to the Dramatiq engagement queue; the worker's
+# ``comment_processor`` reads/writes ``.engagement_replied.jsonl`` for
+# idempotency under this root. Without it, downstream tasks fail
+# ``RuntimeError: AGENT_ROOT not set`` and pile up in the DLQ — the
+# 2026-05-20 incident left engagement broken for 40 days behind
+# exactly this kind of missing-env-var trap.
+Environment=AGENT_ROOT=/opt/genlab/BlackboxBrief
+ExecStart=/opt/genlab/.venv/bin/python \
+    /opt/genlab/genlab-core/scripts/run_engagement_poller.py \
+    --niche all --platform all
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

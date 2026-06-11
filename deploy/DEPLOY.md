@@ -95,6 +95,31 @@ Active services as of audit 2026-05-18:
 
 Per-niche pipelines are timer-driven oneshots, not daemons.
 
+### Phase-2 install (engagement-poller is in `systemd-phase2/`)
+
+The engagement poller covers YT/X/Threads — the platforms Meta
+webhooks don't reach. Before R-05 it lived only in `deploy/systemd/`
+(phase 1), so a clean phase-2 re-bootstrap would have silently
+shipped FB/IG-only engagement.
+
+Install the phase-2 services (run AFTER the bootstrap step 8 `cp
+deploy/systemd/...` line):
+
+```bash
+ssh root@46.224.237.56 'cp /opt/genlab/deploy/systemd-phase2/*.service \
+                          /opt/genlab/deploy/systemd-phase2/*.timer \
+                          /etc/systemd/system/ \
+                       && systemctl daemon-reload \
+                       && systemctl enable --now genlab-engagement-poller.service'
+```
+
+Verify on host:
+
+```bash
+ssh root@46.224.237.56 'systemctl is-active genlab-engagement-poller.service'
+# → "active" means YT/X/Threads engagement is live.
+```
+
 ## Restarts after code change
 
 The pipeline oneshots reload code each time they fire (no daemon
