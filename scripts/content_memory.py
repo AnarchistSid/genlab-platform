@@ -206,8 +206,48 @@ _posts_cache_ts: float = 0.0
 _POSTS_CACHE_TTL = 60.0  # seconds
 
 
+# R-58: per-check tunables. ``DEFAULT_DEDUP_WINDOW_DAYS`` caps the
+# similarity scan to recent posts (90 days = a quarter; trending
+# content older than a quarter is extremely unlikely to be a
+# near-duplicate of anything today). The "DO NOT PURGE" rule from
+# CLAUDE.md applies to the underlying store, NOT to what we load
+# into RAM for a similarity check — those are different concerns.
+DEFAULT_DEDUP_WINDOW_DAYS = 90
+
+# Hard cap so a pathological window setting can't reintroduce the
+# unbounded scan. Trending-content workloads on the 4GB Hetzner box
+# top out far below this in practice (~few thousand records).
+_MAX_DEDUP_POSTS = 5000
+
+
+def _enrich_with_tokens(posts: list[dict]) -> list[dict]:
+    """R-58: pre-compute the token set for each post ONCE at load time.
+
+    Before R-58 ``check_duplicate``/``find_similar`` re-tokenized both
+    sides of every pairwise call. With N posts and a single check that's
+    N redundant tokenizations of the same N strings on every cache hit.
+    Pre-computing here amortizes tokenization across the whole TTL window
+    (60s by default).
+
+    Stored under ``_token_set`` to avoid clobbering any SharePoint
+    field name. Tokenization is identical to ``_tokenize`` so legacy
+    callers that re-tokenize get the same set.
+    """
+    for post in posts:
+        # Idempotent: ``_load_posts`` may be re-invoked within the cache
+        # TTL; recomputing is wasted work but not wrong.
+        if "_token_set" not in post:
+            post["_token_set"] = _tokenize(post.get("text", ""))
+    return posts
+
+
 def _load_posts(force: bool = False) -> list[dict]:
-    """Load posts: in-process cache → SharePoint → local JSON."""
+    """Load posts: in-process cache → SharePoint → local JSON.
+
+    R-58: each loaded post is enriched with a pre-computed ``_token_set``
+    so subsequent ``check_duplicate``/``find_similar`` calls don't re-
+    tokenize the same strings on every invocation.
+    """
     global _posts_cache, _posts_cache_ts
 
     if (
@@ -220,14 +260,14 @@ def _load_posts(force: bool = False) -> list[dict]:
     sp_posts = _sp_load_all()
     if sp_posts:
         _save_local(sp_posts)
-        _posts_cache = sp_posts
+        _posts_cache = _enrich_with_tokens(sp_posts)
         _posts_cache_ts = _time.monotonic()
-        return sp_posts
+        return _posts_cache
 
     local = _load_local()
-    _posts_cache = local
+    _posts_cache = _enrich_with_tokens(local)
     _posts_cache_ts = _time.monotonic()
-    return local
+    return _posts_cache
 
 
 def _invalidate_cache():
@@ -326,6 +366,46 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
     intersection = tokens_a & tokens_b
     union = tokens_a | tokens_b
     return len(intersection) / len(union)
+
+
+def _jaccard_set_similarity(tokens_a: set[str], tokens_b: set[str]) -> float:
+    """R-58: same semantics as ``_jaccard_similarity`` but takes
+    already-tokenized sets. The hot path through ``check_duplicate``/
+    ``find_similar`` uses this against the pre-computed ``_token_set``
+    on each post so the same N strings aren't re-tokenized on every
+    pairwise call within a TTL window."""
+    if not tokens_a or not tokens_b:
+        return 0.0
+    intersection = tokens_a & tokens_b
+    union = tokens_a | tokens_b
+    return len(intersection) / len(union)
+
+
+def _within_window(post: dict, cutoff_iso: str | None) -> bool:
+    """R-58: include ``post`` in the similarity scan iff its
+    ``posted_at`` (ISO 8601 string) is at-or-after ``cutoff_iso``.
+
+    Empty/malformed timestamps are treated as out-of-window so a
+    half-corrupted historical record can't grow the scan unboundedly.
+    ``cutoff_iso=None`` disables the filter (legacy "scan everything"
+    behaviour) — used by analytics paths that genuinely want all
+    history (e.g. ``ingest_from_analytics``)."""
+    if cutoff_iso is None:
+        return True
+    ts = post.get("posted_at") or post.get("ingested_at") or ""
+    if not ts:
+        return False
+    # Cheap string-prefix compare works because both are ISO 8601
+    # ("2026-06-11T..."). Avoids per-post datetime.fromisoformat() cost
+    # which would re-introduce the per-post overhead we just removed.
+    return ts >= cutoff_iso
+
+
+def _recency_cutoff_iso(window_days: int) -> str:
+    """ISO 8601 timestamp for ``window_days`` ago — the dedup cutoff."""
+    from datetime import timedelta
+
+    return (datetime.now(UTC) - timedelta(days=window_days)).isoformat()
 
 
 # ── Public API ──────────────────────────────────────────────────────
@@ -484,12 +564,53 @@ def ingest_from_analytics(days: int = 30, niche_id: str | None = None) -> dict[s
     }
 
 
-def check_duplicate(text: str, threshold: float = 0.4) -> list[dict]:
-    """Check if similar content has been posted before."""
+def check_duplicate(
+    text: str,
+    threshold: float = 0.4,
+    window_days: int = DEFAULT_DEDUP_WINDOW_DAYS,
+) -> list[dict]:
+    """Check if similar content has been posted before.
+
+    R-58: bounded scan. The "DO NOT PURGE" rule on Content_Memory
+    governs the underlying store, not what we hold in RAM for a
+    similarity check. We use:
+
+      * A recency window (``window_days`` — default 90; relevance
+        horizon for "is this near-duplicate" is naturally bounded).
+      * Pre-computed token sets per post (eliminates per-check
+        re-tokenization of the same N strings).
+      * Exact-hash short-circuit (identical text → similarity 1.0
+        without any Jaccard computation).
+      * Hard cap (``_MAX_DEDUP_POSTS``) so a pathological window
+        setting can't reintroduce the unbounded scan.
+
+    Pass ``window_days=0`` to scan everything (legacy behaviour);
+    intended only for one-off audits, never live checks.
+    """
     posts = _load_posts()
+    cutoff = _recency_cutoff_iso(window_days) if window_days > 0 else None
+
+    query_tokens = _tokenize(text)
+    query_hash = _content_hash(text)
+
     matches = []
+    scanned = 0
     for post in posts:
-        sim = _jaccard_similarity(text, post.get("text", ""))
+        if scanned >= _MAX_DEDUP_POSTS:
+            break
+        if not _within_window(post, cutoff):
+            continue
+        scanned += 1
+
+        # Exact-hash short-circuit avoids the Jaccard pass entirely
+        # for byte-identical content (the common-case re-post detect).
+        if post.get("content_hash") and post["content_hash"] == query_hash:
+            sim = 1.0
+        else:
+            sim = _jaccard_set_similarity(
+                query_tokens, post.get("_token_set") or _tokenize(post.get("text", ""))
+            )
+
         if sim >= threshold:
             matches.append(
                 {
@@ -503,12 +624,32 @@ def check_duplicate(text: str, threshold: float = 0.4) -> list[dict]:
     return sorted(matches, key=lambda x: x["similarity"], reverse=True)
 
 
-def find_similar(text: str, top_n: int = 5) -> list[dict]:
-    """Find the most similar past posts."""
+def find_similar(
+    text: str,
+    top_n: int = 5,
+    window_days: int = DEFAULT_DEDUP_WINDOW_DAYS,
+) -> list[dict]:
+    """Find the most similar past posts.
+
+    Same R-58 bounded-scan semantics as ``check_duplicate``.
+    """
     posts = _load_posts()
+    cutoff = _recency_cutoff_iso(window_days) if window_days > 0 else None
+
+    query_tokens = _tokenize(text)
+
     scored = []
+    scanned = 0
     for post in posts:
-        sim = _jaccard_similarity(text, post.get("text", ""))
+        if scanned >= _MAX_DEDUP_POSTS:
+            break
+        if not _within_window(post, cutoff):
+            continue
+        scanned += 1
+
+        sim = _jaccard_set_similarity(
+            query_tokens, post.get("_token_set") or _tokenize(post.get("text", ""))
+        )
         if sim > 0.05:
             scored.append(
                 {
