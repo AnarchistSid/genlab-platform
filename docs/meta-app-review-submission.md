@@ -1,5 +1,13 @@
 # Meta App Review Submission Guide
 
+> **R-17 audit note:** the Meta App ID `2203397347132949`
+> referenced throughout this document is **not a secret**. Meta App
+> IDs are public-by-design identifiers (visible in webhook URLs, in
+> the developer dashboard, and in any client-side OAuth flow). The
+> sensitive credential is `META_APP_SECRET` — which lives in `.env`
+> and is never committed.
+
+
 **App ID:** 2203397347132949 (Blackbox Brief)
 **Dashboard URL:** https://developers.facebook.com/apps/2203397347132949/
 

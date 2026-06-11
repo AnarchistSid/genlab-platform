@@ -1,5 +1,16 @@
-# SpliceReel SharePoint list configuration
-# All lists are shared with other niches — niche_id='movies' isolates SR data.
+# SharePoint list configuration.
+#
+# R-17 audit note: the list_id GUIDs below are committed intentionally,
+# NOT secrets. SharePoint is legacy (CLAUDE.md "SharePoint Lists" —
+# "LEGACY — kept as fallback, not actively used"); Postgres is the
+# primary store. The GUIDs identify Microsoft Graph list endpoints,
+# which require Azure AD authentication (AZURE_CLIENT_ID +
+# AZURE_CLIENT_SECRET) to access — an attacker reading them gets only
+# the resource handle, not the data.
+#
+# Kept verbatim rather than placeholder-ized so a fresh checkout
+# remains runnable without a separate secrets store. Removing them
+# would break the legacy fallback path with no security gain.
 AB_Tests:
   column_count: 16
   list_id: 0fc495ff-faec-4e0e-8f90-15a42ac246b7
