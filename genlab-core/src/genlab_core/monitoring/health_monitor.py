@@ -672,19 +672,31 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
 
 
 def archive_orphan_drafts(niche_id: str) -> list[Alert]:
-    """Auto-archive DRAFTED blueprints with no video and no schedule, >7d old.
+    """Auto-archive DRAFTED blueprints that can't reach VISUAL_READY.
 
-    These are typically Steam-spike or RSS-source blueprints that never
-    found a downloadable video.  With ``video_gate: require`` they can
-    never reach VISUAL_READY, so they accumulate at DRAFTED indefinitely.
+    Two flavours of orphan accumulate at DRAFTED indefinitely:
 
-    Safety: ``cleanup_safety.md`` forbids touching anything with
-    ``scheduled_for`` set, regardless of value — we explicitly filter
-    that out.  We also require >=7 days age so we don't race a pipeline
-    that is mid-flight on a fresh story.
+      * **No-video drafts** — typically Steam-spike or RSS-source rows
+        that never found a downloadable video. With ``video_gate:
+        require`` they can never progress. 7-day age threshold (the
+        original cleanup).
 
-    Returns a warning Alert if anything was archived so the operator
-    sees the cleanup in the daily health report.
+      * **Failed-video drafts** (R-81) — rows where a render landed
+        but ``video_validation.valid`` came back False (VMAF below
+        threshold, wrong dims, audio spec failure, etc.). R-47 made
+        those rows stay DRAFTED instead of incorrectly going
+        VISUAL_READY, so they began accumulating slowly. 14-day age
+        threshold — twice the no-video case, reflecting that more
+        pipeline effort was invested and giving a wider window for
+        human triage to override.
+
+    Safety (both branches): ``cleanup_safety.md`` forbids touching
+    anything with ``scheduled_for`` set, regardless of value — both
+    UPDATEs explicitly filter that out. Both also use age >= threshold
+    so a pipeline mid-flight on a fresh story can't be raced.
+
+    Returns a warning Alert per branch that actually archived rows so
+    the operator sees the cleanup in the daily health report.
     """
     alerts = []
     try:
@@ -692,6 +704,8 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
 
         conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
         cur = conn.cursor()
+
+        # Branch 1 (original): no-video drafts, 7-day age.
         cur.execute(
             """
             UPDATE blueprints
@@ -708,17 +722,60 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
             """,
             (niche_id,),
         )
-        archived = cur.fetchall()
+        no_video_archived = cur.fetchall()
+
+        # Branch 2 (R-81): failed-video drafts, 14-day age. A DRAFTED row
+        # WITH a video_id past 14d almost certainly hit validation failure
+        # — the publishable gate (push_to_backlog `_is_publishable`)
+        # writes DRAFTED only when ``video_validation.valid is False``
+        # alongside a present ``rendered_path``. 14d is the deliberate
+        # safety buffer over the 7d no-video case.
+        cur.execute(
+            """
+            UPDATE blueprints
+            SET status = 'ARCHIVED',
+                action_taken = 'auto_archived_failed_video',
+                reviewed_at = NOW(),
+                updated_at = NOW()
+            WHERE niche_id = %s
+              AND status = 'DRAFTED'
+              AND video_id IS NOT NULL AND video_id != ''
+              AND scheduled_for IS NULL
+              AND created_at < NOW() - INTERVAL '14 days'
+            RETURNING id
+            """,
+            (niche_id,),
+        )
+        failed_video_archived = cur.fetchall()
+
         conn.commit()
         conn.close()
-        if archived:
+
+        if no_video_archived:
             alerts.append(
                 Alert(
                     check="orphan_drafts_archived",
                     severity="warning",
-                    message=f"auto-archived {len(archived)} stale DRAFTED orphans (>7d, no video, no schedule)",
+                    message=(
+                        f"auto-archived {len(no_video_archived)} stale DRAFTED "
+                        "orphans (>7d, no video, no schedule)"
+                    ),
                     niche_id=niche_id,
-                    details={"count": len(archived)},
+                    details={"count": len(no_video_archived)},
+                    auto_fix="archived",
+                )
+            )
+        if failed_video_archived:
+            alerts.append(
+                Alert(
+                    check="failed_video_drafts_archived",
+                    severity="warning",
+                    message=(
+                        f"auto-archived {len(failed_video_archived)} stale DRAFTED "
+                        "rows with video (>14d, validation-failed, no schedule)"
+                    ),
+                    niche_id=niche_id,
+                    details={"count": len(failed_video_archived)},
                     auto_fix="archived",
                 )
             )
