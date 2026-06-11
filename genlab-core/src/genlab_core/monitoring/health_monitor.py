@@ -784,6 +784,85 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
     return alerts
 
 
+def archive_orphan_intake_stories(niche_id: str) -> list[Alert]:
+    """R-81: archive INTAKE-status stories that are safely done with.
+
+    The audit (R-81 LOW, Partly-corrected) flagged that ``stories``
+    rows sit at ``status="INTAKE"`` for their entire lifecycle —
+    ``update_story_status`` exists in the store API but no live code
+    calls it (grep-verified). So the status field alone can't
+    distinguish "story was never used" from "story finished its
+    rotation"; we have to look at the **blueprint-reference graph**.
+
+    A story is safe to archive iff EITHER:
+
+      * no blueprint references it (true orphan — story was created
+        but the pipeline rejected it before reaching ``PushToBacklog``),
+        OR
+      * every blueprint pointing at it is in a terminal state
+        (``PUBLISHED`` or ``ARCHIVED``) — the rotation is done.
+
+    Non-terminal blueprint states (``DRAFTED``, ``VISUAL_READY``,
+    ``PUBLISHING``, ``PUBLISH_FAILED``) protect the story:
+    DRAFTED/VISUAL_READY/PUBLISHING are in flight, PUBLISH_FAILED
+    can be revived. Notably the ``cleanup_safety.md`` "scheduled
+    posts are sacred" rule applies **transitively**: a scheduled
+    blueprint is ``VISUAL_READY`` (non-terminal), so its parent
+    story is automatically protected by this check — no separate
+    ``scheduled_for`` predicate needed on stories (which don't
+    have that column anyway).
+
+    Age threshold: 30 days — longer than ``archive_orphan_drafts``
+    because stories live longer in the pipeline conceptually
+    (multiple blueprints can be drawn from one story over time).
+    """
+    alerts = []
+    try:
+        import psycopg
+
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE stories
+            SET status = 'ARCHIVED',
+                updated_at = NOW()
+            WHERE niche_id = %s
+              AND status = 'INTAKE'
+              AND created_at < NOW() - INTERVAL '30 days'
+              AND NOT EXISTS (
+                SELECT 1 FROM blueprints
+                WHERE blueprints.story_id = stories.story_id
+                  AND blueprints.niche_id = stories.niche_id
+                  AND blueprints.status NOT IN ('PUBLISHED', 'ARCHIVED')
+              )
+            RETURNING id
+            """,
+            (niche_id,),
+        )
+        archived = cur.fetchall()
+        conn.commit()
+        conn.close()
+
+        if archived:
+            alerts.append(
+                Alert(
+                    check="orphan_intake_stories_archived",
+                    severity="warning",
+                    message=(
+                        f"auto-archived {len(archived)} INTAKE stories "
+                        "(>30d, no non-terminal blueprint refs)"
+                    ),
+                    niche_id=niche_id,
+                    details={"count": len(archived)},
+                    auto_fix="archived",
+                )
+            )
+    except Exception as e:
+        logger.debug("Orphan-INTAKE-story archive failed: %s", e)
+    return alerts
+
+
 def check_publish_failures(niche_id: str) -> list[Alert]:
     """Check for high publish failure rate in last 24h."""
     alerts = []
@@ -1230,6 +1309,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_content_gap(nid))
         all_alerts.extend(check_publish_failures(nid))
         all_alerts.extend(archive_orphan_drafts(nid))
+        all_alerts.extend(archive_orphan_intake_stories(nid))
 
     # System-wide checks (only on full runs)
     if niche_id is None:
