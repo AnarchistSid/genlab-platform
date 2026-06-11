@@ -16,6 +16,16 @@ VMAF gate (enabled by default):
   - Disable via niche_config: video_validation.run_vmaf: false
 
 Auto-fix attempts re-encoding for codec/pixel format/color space mismatches.
+R-39 (PR #138) extended ``_can_fix`` to also handle ``too_long`` (trim
+via ``-t SPEC.max_duration``) and ``no_audio_stream`` (mux a silent
+``anullsrc`` stereo bed at 48 kHz).
+
+The ``no_audio_stream`` autofix is the render-time half of the
+video-first source-audio policy — see ``docs/audio-policy.md`` for why
+we mux silence rather than synthesize TTS narration over silent
+sources. TL;DR: TTS-over-silent would sound AI-generated; silent-mux
+satisfies the platform's "audio stream must exist" requirement at zero
+quality risk.
 
 Non-fatal: invalid videos are flagged but don't crash the pipeline.
 """
