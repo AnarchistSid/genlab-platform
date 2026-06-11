@@ -68,14 +68,53 @@ class TestIsDirectVideoUrl:
     def test_twitch_cdn_mp4(self):
         assert is_direct_video_url("https://clips-media-assets2.twitch.tv/AT-cm%7C12345.mp4")
 
-    def test_direct_mp4_url(self):
-        assert is_direct_video_url("https://cdn.example.com/videos/clip.mp4")
+    def test_direct_mp4_url_on_allowlisted_cdn(self):
+        # R-62: the .mp4 catch-all is gated on a host allowlist.
+        # cloudfront.net is in _KNOWN_VIDEO_CDN_HOST_SUFFIXES.
+        assert is_direct_video_url("https://cdn.cloudfront.net/videos/clip.mp4")
 
-    def test_direct_webm_url(self):
-        assert is_direct_video_url("https://cdn.example.com/videos/clip.webm")
+    def test_direct_webm_url_on_allowlisted_cdn(self):
+        # akamaized.net is allow-listed.
+        assert is_direct_video_url("https://media.akamaized.net/videos/clip.webm")
 
     def test_streamable(self):
         assert is_direct_video_url("https://streamable.com/abc123")
+
+    # ------------------------------------------------------------------
+    # R-62 regression pins — host-allowlist on the .mp4/.webm catch-all
+    # ------------------------------------------------------------------
+
+    def test_r62_rejects_mp4_on_untrusted_host(self):
+        """R-62 — Reddit ``fallback_url`` was the historical SSRF
+        vector. A .mp4 URL on a non-allowlisted host must be
+        REJECTED so it never reaches yt-dlp."""
+        assert not is_direct_video_url("https://cdn.example.com/videos/clip.mp4")
+
+    def test_r62_rejects_mp4_on_private_ip(self):
+        """Internal hostnames / private IPs must never pass — they
+        were the dangerous case the catch-all enabled."""
+        assert not is_direct_video_url("http://10.0.0.1/x.mp4")
+        assert not is_direct_video_url("http://internal-server.local/secret.mp4")
+
+    def test_r62_rejects_userinfo_spoof(self):
+        """``http://evil.com@malicious.com/x.mp4`` — the ``evil.com``
+        is the userinfo, NOT the host. A naive ``str.endswith`` check
+        would miss this; ``urlsplit``'s ``hostname`` reads the real
+        host (``malicious.com``), which is not allow-listed → reject."""
+        assert not is_direct_video_url("http://evil.com@malicious.com/x.mp4")
+
+    def test_r62_userinfo_with_allowed_host_still_works(self):
+        """An auth'd URL whose real host IS allow-listed should
+        still pass — pinning the urlsplit-based host extraction."""
+        assert is_direct_video_url("https://user:pass@media.cloudfront.net/x.mp4")
+
+    def test_r62_known_per_platform_urls_still_pass(self):
+        """The host-allowlist applies ONLY to the catch-all .mp4/.webm
+        pattern. The per-platform patterns above it are inherently
+        host-bound by their regex and keep working unconstrained."""
+        assert is_direct_video_url("https://www.youtube.com/watch?v=abc123")
+        assert is_direct_video_url("https://v.redd.it/abc123")
+        assert is_direct_video_url("https://clips.twitch.tv/FunnyClipName-abc123")
 
 
 # ---------------------------------------------------------------

@@ -52,18 +52,92 @@ _DIRECT_VIDEO_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"(?:https?://)?clips\.twitch\.tv/[\w-]+"),
     re.compile(r"(?:https?://)?(?:www\.)?twitch\.tv/\w+/clip/[\w-]+"),
     re.compile(r"(?:https?://)?clips-media-assets\w*\.twitch\.tv/.+\.mp4"),
-    # Direct MP4/WEBM URLs (Twitch CDN, Steam CDN, etc.)
-    re.compile(r"https?://[^\s\"']+\.(?:mp4|webm)(?:\?[^\s\"']*)?$"),
     # Streamable
     re.compile(r"(?:https?://)?(?:www\.)?streamable\.com/[\w-]+"),
 ]
 
+# Catch-all for direct MP4/WebM file URLs on any host. Used downstream
+# to short-circuit the page-scrape path when the URL already points
+# at a media file (Twitch CDN, Steam CDN, etc).
+_DIRECT_VIDEO_FILE_PATTERN: re.Pattern[str] = re.compile(
+    r"^https?://[^\s\"']+\.(?:mp4|webm)(?:\?[^\s\"']*)?$"
+)
+
+# R-62 — the catch-all above used to grant ``is_direct_video_url``
+# True for ANY host ending in ``.mp4`` / ``.webm``. Reddit's
+# ``fallback_url`` flows into this from an externally-controlled
+# field and then into yt-dlp, opening a bounded SSRF window
+# (mitigated only when WARP / ``YT_DLP_PROXY`` is on). To close that
+# class entirely, gate the catch-all on an explicit allowlist of
+# known public video CDN host suffixes. Anything not in the
+# allowlist falls through to the per-platform patterns above; if
+# none match, ``is_direct_video_url`` returns False and the URL
+# is rejected before reaching yt-dlp.
+#
+# Extending the list: the entry should be a registrable host
+# suffix (e.g. ``"akamaized.net"`` matches both
+# ``vimeo.com.akamaized.net`` and ``a248.e.akamai.net.akamaized.net``).
+# Don't add private/internal hostnames; the whole point is to keep
+# attacker-controlled inputs from reaching yt-dlp inside the LAN.
+_KNOWN_VIDEO_CDN_HOST_SUFFIXES: frozenset[str] = frozenset(
+    {
+        # Twitch CDN
+        "twitch.tv",
+        # Steam / Steam CDN (Akamai)
+        "akamaihd.net",
+        "steampowered.com",
+        "steamstatic.com",
+        # CloudFront (Streamable, many others use it)
+        "cloudfront.net",
+        # Reddit Video CDN
+        "redd.it",
+        # YouTube media CDNs (when present in a direct MP4)
+        "googlevideo.com",
+        "ytimg.com",
+        # Vimeo CDN
+        "vimeocdn.com",
+        # General Akamai
+        "akamaized.net",
+    }
+)
+
+
+def _url_host_is_allowed(url: str) -> bool:
+    """Return True when ``url``'s host ends in any allow-listed suffix.
+
+    Uses ``urlsplit`` so userinfo / port / IPv6 in the URL don't trip
+    a naive string check (e.g. ``http://evil.com@allowed.com/x.mp4``
+    must NOT pass — ``urlsplit`` exposes the real host, not the
+    userinfo).
+    """
+    from urllib.parse import urlsplit
+
+    try:
+        host = (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return False
+    if not host:
+        return False
+    return any(host == s or host.endswith("." + s) for s in _KNOWN_VIDEO_CDN_HOST_SUFFIXES)
+
 
 def is_direct_video_url(url: str) -> bool:
-    """Return True if *url* points to a known video platform."""
+    """Return True if *url* points to a known video platform.
+
+    Per-platform patterns (YouTube, Reddit page, Vimeo, TikTok, X,
+    Twitch clips, Streamable) match on the URL shape. The
+    ``.mp4`` / ``.webm`` catch-all additionally requires the host to
+    be in :data:`_KNOWN_VIDEO_CDN_HOST_SUFFIXES` — R-62: any other
+    host is treated as untrusted (an attacker-controlled
+    ``fallback_url`` is the historical SSRF vector).
+    """
     if not url:
         return False
-    return any(p.search(url) for p in _DIRECT_VIDEO_PATTERNS)
+    if any(p.search(url) for p in _DIRECT_VIDEO_PATTERNS):
+        return True
+    if _DIRECT_VIDEO_FILE_PATTERN.match(url):
+        return _url_host_is_allowed(url)
+    return False
 
 
 # ---------------------------------------------------------------------------
