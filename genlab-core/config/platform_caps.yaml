@@ -1,13 +1,17 @@
 # Maximum posts published per platform per niche per UTC calendar day.
 # DailyCapEnforcer filters by niche_id, so this is per-niche.
-# Rule: 1 reel per channel per day (CLAUDE.md) + 1 retry headroom.
-# Sprint 67: Reduced from 5 to 2 to enforce 1-per-day discipline.
+#
+# Rule: 1 reel per channel per day (CLAUDE.md, non-negotiable).
+# Audit R-09: dropped retry headroom (was 2) — the cap is a
+# guarantee, not a soft target. Operator-initiated retries should
+# go through a dedicated re-run path with explicit acknowledgement,
+# not exploit the cap.
 daily_post_cap:
-  instagram: 2
-  youtube: 2
-  facebook: 2
+  instagram: 1
+  youtube: 1
+  facebook: 1
   tiktok: 1
-  twitter: 2
-  threads: 2
+  twitter: 1
+  threads: 1
 
 cap_timezone: "UTC"
