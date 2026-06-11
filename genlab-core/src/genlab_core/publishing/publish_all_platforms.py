@@ -55,6 +55,9 @@ from genlab_core.publishing.platform_status import (
 from genlab_core.publishing.platform_status import (
     terminal_failed_platforms as _terminal_failed_platforms,
 )
+from genlab_core.publishing.platform_status import (
+    transient_failed_platforms as _transient_failed_platforms,
+)
 from genlab_core.publishing.preflight import (
     preflight_token_refresh as _preflight_token_refresh,
 )
@@ -300,16 +303,32 @@ def run_publish(
         ]
         success_platforms = [p for p, s in platform_status.items() if s == "PUBLISHED"]
         terminal_failed = _terminal_failed_platforms(platform_status)
-        if any_success and terminal_failed:
-            # Some platforms succeeded, but others are PERMANENTLY failed (won't auto-retry).
-            # Surface to the dashboard so the user knows publishing was partial.
-            failed_summary = ", ".join(
-                f"{p}({d.get('error_class', '?')})" for p, d in terminal_failed.items()
+        transient_failed = _transient_failed_platforms(platform_status)
+        # R-36: publish_partial fires whenever NOT all attempted platforms
+        # reached PUBLISHED — including TRANSIENT failures that the retry
+        # loop will pick up later. Previously the event only fired on
+        # TERMINAL failures, so a "1 of 5 succeeded, 4 timed out" outcome
+        # was indistinguishable from a clean 5/5 publish on the dashboard.
+        if any_success and (terminal_failed or transient_failed):
+            term_part = (
+                "permanent: "
+                + ", ".join(f"{p}({d.get('error_class', '?')})" for p, d in terminal_failed.items())
+                if terminal_failed
+                else ""
             )
+            trans_part = (
+                "queued for retry: "
+                + ", ".join(
+                    f"{p}({d.get('error_class', 'TRANSIENT')})" for p, d in transient_failed.items()
+                )
+                if transient_failed
+                else ""
+            )
+            failed_summary = "; ".join(part for part in (term_part, trans_part) if part)
             push_event(
                 "publish_partial",
                 f"Partial publish: {hook_text}",
-                f"OK: {', '.join(success_platforms) or 'none'}; permanent failures: {failed_summary}",
+                f"OK: {', '.join(success_platforms) or 'none'}; {failed_summary}",
                 entity_id=record_id,
                 entity_type="blueprint",
                 niche_id=niche_id,

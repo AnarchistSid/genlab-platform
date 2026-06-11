@@ -135,6 +135,104 @@ class TestTerminalFailedPlatforms:
         assert terminal_failed_platforms(status) == {}
 
 
+class TestTransientFailedPlatforms:
+    """Audit R-36 — partial-publish events also need to know which
+    platforms hit a retryable error this run. Without this layer the
+    dashboard saw transient-only outcomes as ``publish_success`` and a
+    channel could look healthy while 4/5 platforms hadn't actually
+    posted."""
+
+    def test_low_attempt_transient_is_classified_transient(self) -> None:
+        from genlab_core.publishing.platform_status import transient_failed_platforms
+
+        status = {"youtube": {"status": "FAILED", "error_class": "TRANSIENT", "attempts": 1}}
+        assert "youtube" in transient_failed_platforms(status)
+
+    def test_quota_failure_classified_transient(self) -> None:
+        """QUOTA is retryable next day (audit ref: error_classifier.py)."""
+        from genlab_core.publishing.platform_status import transient_failed_platforms
+
+        status = {"youtube": {"status": "FAILED", "error_class": "QUOTA", "attempts": 1}}
+        assert "youtube" in transient_failed_platforms(status)
+
+    def test_credential_failure_not_classified_transient(self) -> None:
+        from genlab_core.publishing.platform_status import transient_failed_platforms
+
+        status = {"youtube": {"status": "FAILED", "error_class": "CREDENTIAL", "attempts": 1}}
+        assert "youtube" not in transient_failed_platforms(status)
+
+    def test_attempt_threshold_demotes_transient(self) -> None:
+        """A TRANSIENT failure that's exhausted retries (>= threshold) is
+        terminal, not transient — the two helpers partition the FAILED
+        set so a row appears in exactly one of them."""
+        from genlab_core.publishing.platform_status import transient_failed_platforms
+
+        status = {
+            "youtube": {
+                "status": "FAILED",
+                "error_class": "TRANSIENT",
+                "attempts": TERMINAL_ATTEMPT_THRESHOLD,
+            }
+        }
+        assert "youtube" not in transient_failed_platforms(status)
+
+    def test_terminal_and_transient_helpers_partition_failed_set(self) -> None:
+        """For any FAILED row, exactly one of the two helpers claims it.
+        Pin this so a future edit doesn't introduce a third category by
+        accident (a row that fires NEITHER helper would silently slip
+        past the dashboard event again)."""
+        from genlab_core.publishing.platform_status import (
+            terminal_failed_platforms,
+            transient_failed_platforms,
+        )
+
+        status = {
+            "a": {"status": "FAILED", "error_class": "TRANSIENT", "attempts": 1},
+            "b": {"status": "FAILED", "error_class": "CREDENTIAL", "attempts": 1},
+            "c": {"status": "FAILED", "error_class": "TRANSIENT", "attempts": 99},
+            "d": {"status": "FAILED", "error_class": "QUOTA", "attempts": 1},
+            "e": {"status": "PUBLISHED"},  # not failed
+        }
+        term = set(terminal_failed_platforms(status))
+        trans = set(transient_failed_platforms(status))
+        # No overlap.
+        assert term.isdisjoint(trans)
+        # Every FAILED platform is covered.
+        failed_platforms = {p for p, v in status.items() if v.get("status") == "FAILED"}
+        assert term | trans == failed_platforms
+
+    def test_published_platform_not_in_transient_set(self) -> None:
+        from genlab_core.publishing.platform_status import transient_failed_platforms
+
+        status = {"youtube": {"status": "PUBLISHED"}}
+        assert transient_failed_platforms(status) == {}
+
+
+class TestPublishedPlatforms:
+    def test_dict_shape_published(self) -> None:
+        from genlab_core.publishing.platform_status import published_platforms
+
+        status = {"youtube": {"status": "PUBLISHED"}}
+        assert published_platforms(status) == ["youtube"]
+
+    def test_legacy_bare_string_shape(self) -> None:
+        from genlab_core.publishing.platform_status import published_platforms
+
+        status = {"youtube": "PUBLISHED"}
+        assert published_platforms(status) == ["youtube"]
+
+    def test_excludes_failed_and_other_states(self) -> None:
+        from genlab_core.publishing.platform_status import published_platforms
+
+        status = {
+            "youtube": {"status": "PUBLISHED"},
+            "instagram": {"status": "FAILED"},
+            "facebook": "SKIPPED",
+            "threads": {"status": "PENDING"},
+        }
+        assert published_platforms(status) == ["youtube"]
+
+
 class TestPlatformIdMap:
     def test_all_aliases_lower_case(self) -> None:
         """The map keys are case-sensitive — blueprints store platform names

@@ -88,3 +88,46 @@ def terminal_failed_platforms(
         if error_class in TERMINAL_ERROR_CLASSES or attempts >= TERMINAL_ATTEMPT_THRESHOLD:
             out[plat] = val
     return out
+
+
+def transient_failed_platforms(
+    platform_status: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Return platforms that failed with a retryable error this run.
+
+    Audit R-36 — the dashboard previously only saw TERMINAL failures via
+    :func:`terminal_failed_platforms`. A run where 1/5 platforms succeeded
+    and 4 hit TRANSIENT errors (rate-limit, timeout, 5xx) showed up as
+    ``publish_success`` because no terminal failure existed. This helper
+    surfaces the "queued for retry" tier so the dashboard can render an
+    honest partial state — the retry pass will pick these up, but the
+    operator needs to know they're not OK *yet*.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for plat, val in platform_status.items():
+        if not isinstance(val, dict) or val.get("status") != "FAILED":
+            continue
+        error_class = val.get("error_class", "TRANSIENT")
+        attempts = int(val.get("attempts", 0) or 0)
+        # Anything failed but NOT terminal is, by definition, transient.
+        if error_class not in TERMINAL_ERROR_CLASSES and attempts < TERMINAL_ATTEMPT_THRESHOLD:
+            out[plat] = val
+    return out
+
+
+def published_platforms(
+    platform_status: dict[str, Any],
+) -> list[str]:
+    """Return the platforms whose status this run is ``PUBLISHED``.
+
+    Matches the shape :data:`success_platforms` is built from in the
+    orchestrator; centralised so the partial-state check can use it
+    too without duplicating the bare-string / dict shape handling.
+    """
+    out = []
+    for plat, val in platform_status.items():
+        if val == "PUBLISHED":
+            out.append(plat)
+        elif isinstance(val, dict) and val.get("status") == "PUBLISHED":
+            out.append(plat)
+    return out
