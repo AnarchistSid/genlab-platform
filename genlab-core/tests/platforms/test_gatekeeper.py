@@ -34,6 +34,39 @@ class TestApprovalGate:
         assert result.allowed is False
         assert result.gate_name == "approval_gate"
 
+    def test_critical_urgency_no_longer_bypasses_approval(self, gatekeeper):
+        """R-08 regression pin — express-lane CRITICAL/HIGH urgency
+        previously bypassed the approval gate, letting a crafted RSS
+        title with the right buzzwords auto-publish to all 5 channels.
+        That bypass is removed; approval is now the sole pass-through."""
+        bp = {
+            "action_taken": "",
+            "urgency_classification": {"urgency": "CRITICAL", "score": 0.95},
+        }
+        result = gatekeeper._approval_gate(bp, "instagram")
+        assert result.allowed is False, "CRITICAL urgency must not bypass approval"
+        assert result.reason == "Not approved"
+
+    def test_high_urgency_no_longer_bypasses_approval(self, gatekeeper):
+        """R-08 regression pin (HIGH variant)."""
+        bp = {
+            "action_taken": "",
+            "urgency_classification": {"urgency": "HIGH", "score": 0.7},
+        }
+        result = gatekeeper._approval_gate(bp, "instagram")
+        assert result.allowed is False
+
+    def test_urgency_as_json_string_no_longer_bypasses(self, gatekeeper):
+        """The legacy bypass parsed ``urgency_classification`` as a
+        JSON string before checking the level. Verify that path is
+        gone too — approval still required."""
+        bp = {
+            "action_taken": "",
+            "urgency_classification": '{"urgency": "CRITICAL", "score": 0.9}',
+        }
+        result = gatekeeper._approval_gate(bp, "instagram")
+        assert result.allowed is False
+
 
 class TestScoreFloorGate:
     def test_above_floor_passes(self, gatekeeper):

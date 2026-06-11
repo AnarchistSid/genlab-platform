@@ -56,24 +56,21 @@ class PublishGatekeeper:
         return GateResult(allowed=True, reason="passed", gate_name="all")
 
     def _approval_gate(self, bp: dict, platform: str) -> GateResult:
+        """Approval is the SOLE pass-through for the approval gate.
+
+        Audit R-08 — the legacy express-lane bypass let a blueprint
+        through whenever ``urgency_classification.urgency`` was
+        ``CRITICAL`` or ``HIGH``. That urgency was derived from a
+        regex over fetched ``title``+``summary`` text (RSS / YouTube
+        / Reddit — all attacker-controllable). A title containing
+        "breaking" or "$1B" would auto-publish to ALL 5 channels with
+        zero human review. The gate is now strict: only dashboard
+        approval passes. ExpressLane still runs upstream to surface
+        urgent stories at the top of the operator's review queue —
+        but it no longer SKIPS the queue.
+        """
         if bp.get("action_taken") == "approved":
             return GateResult(allowed=True, reason="approved", gate_name="approval_gate")
-        # Express lane bypass: CRITICAL/HIGH urgency stories skip approval
-        urgency_raw = bp.get("urgency_classification") or {}
-        if isinstance(urgency_raw, str):
-            try:
-                import json
-
-                urgency_raw = json.loads(urgency_raw)
-            except (json.JSONDecodeError, TypeError):
-                urgency_raw = {}
-        urgency = urgency_raw.get("urgency", "") if isinstance(urgency_raw, dict) else ""
-        if urgency in ("CRITICAL", "HIGH"):
-            return GateResult(
-                allowed=True,
-                reason=f"express bypass ({urgency})",
-                gate_name="approval_gate",
-            )
         return GateResult(allowed=False, reason="Not approved", gate_name="approval_gate")
 
     def _format_gate(self, bp: dict, platform: str) -> GateResult:
