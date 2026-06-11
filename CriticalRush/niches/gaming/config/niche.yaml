@@ -32,7 +32,6 @@ feature_flags:
     - instagram
     - facebook
     - x_twitter
-    - tiktok
     - threads
 
   # TikTok-specific config
