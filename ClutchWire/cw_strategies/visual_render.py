@@ -14,7 +14,6 @@ from typing import Any
 
 import yaml
 from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_audio
-from genlab_core.media.frame_compositor import FrameCompositor
 from genlab_core.media.whisper_timing import align_words, transcribe_words
 from genlab_core.rendering.overlay_compositor import OverlaySpec, composite_overlay
 from genlab_core.strategies.base_visual_render import BaseVisualRenderStrategy
@@ -50,12 +49,17 @@ class SportVisualRenderStrategy(BaseVisualRenderStrategy):
     byte-identical with SR + FD at extraction time).
     """
 
+    _log_prefix = "[sports]"
+
     def __init__(self) -> None:
         # ``super().__init__()`` initializes ``self._visuals_config = None``
         # — the base relies on that attribute existing before any
         # inherited method runs (notably ``_get_whisper_config``).
         super().__init__()
         logger.info("[sports] SportVisualRenderStrategy initialized")
+        # R-70 part 2 PR 4: the base's ``_compose_frame`` reads this
+        # to instantiate the FrameCompositor.
+        self._visuals_yaml_path = NICHE_ROOT / "config" / "visuals.yaml"
 
     def _ensure_config(self) -> None:
         if self._visuals_config is not None:
@@ -101,37 +105,9 @@ class SportVisualRenderStrategy(BaseVisualRenderStrategy):
 
             return align_words(caption_text, whisper_words)
 
-    def _compose_frame(self, clip_path: Path, story: dict, context: dict) -> str:
-        """Compose video through FrameCompositor. Returns empty string on failure."""
-        run_dir = context.get("run_dir", "")
-        if not run_dir:
-            return ""
-
-        hook_text = (story.get("content") or {}).get("hook", story.get("title", ""))
-        sid = story.get("story_id", "unknown")
-        output_dir = Path(run_dir) / "visuals" / sid
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = str(output_dir / f"{sid[:16]}_reel.mp4")
-
-        try:
-            from genlab_core.media.frame_compositor import probe_video
-
-            visuals_yaml = str(NICHE_ROOT / "config" / "visuals.yaml")
-            compositor = FrameCompositor.from_visuals_yaml(visuals_yaml)
-            try:
-                info = probe_video(str(clip_path))
-                dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
-            except Exception:
-                dur = 55
-            return compositor.compose(
-                source_video_path=str(clip_path),
-                hook_text=hook_text,
-                output_path=output_path,
-                duration_seconds=dur,
-            )
-        except Exception as e:
-            logger.error("[sports] FrameCompositor failed: %s", e)
-            return ""
+    # ``_compose_frame`` now inherited from BaseVisualRenderStrategy
+    # (R-70 part 2 PR 4). The base reads ``self._log_prefix`` +
+    # ``self._visuals_yaml_path`` set in ``__init__`` above.
 
     def _build_pexels_queries(self, story: dict) -> list[str]:
         sport = story.get("sport", "").lower()

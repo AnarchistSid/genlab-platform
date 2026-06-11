@@ -33,11 +33,15 @@ and the empirical-divergence baseline that grounded these choices.
 
 from __future__ import annotations
 
+import logging
 from abc import abstractmethod
 from pathlib import Path
 from typing import Any
 
+from genlab_core.media.frame_compositor import FrameCompositor
 from genlab_core.strategies.interfaces import VisualRenderStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class BaseVisualRenderStrategy(VisualRenderStrategy):
@@ -46,10 +50,29 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
     Subclasses MUST set ``self._visuals_config`` (a parsed
     ``visuals.yaml`` dict) inside their ``_ensure_config()``
     implementation before any inherited method runs.
+
+    Subclasses MUST also set ``self._log_prefix`` (a niche tag like
+    ``"[movies]"``, ``"[sports]"``, ``"[anime]"``) in ``__init__`` —
+    the shared methods that log on failure use this so the
+    operator-facing message keeps its per-channel signature.
     """
 
     # Populated by ``_ensure_config`` in subclasses.
     _visuals_config: dict | None
+
+    # Set by subclass ``__init__``. Used by the shared methods
+    # (notably ``_compose_frame``) when they log failures. Default
+    # provided so the base never blows up if a subclass forgets it
+    # — but the default is intentionally generic so a missing set
+    # is visible in logs.
+    _log_prefix: str = "[visual_render]"
+
+    # Path to the channel's ``config/visuals.yaml`` used by the shared
+    # methods (``_compose_frame`` reads it for ``FrameCompositor``).
+    # Subclasses set this in ``__init__``; the absent-attribute
+    # AttributeError is the right surfacing of a misconfigured base
+    # consumer.
+    _visuals_yaml_path: Path
 
     def __init__(self) -> None:
         # Subclasses override and add their own niche-specific state,
@@ -103,12 +126,51 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
         decide whether the shared body is extractable."""
         ...
 
-    @abstractmethod
     def _compose_frame(self, clip_path: Path, story: dict, context: dict) -> str:
-        """Build the composite frame (logo + overlay + clip). 33 lines
-        in each channel today; PR 4 (precondition-gated on body-level
-        diff) decides whether to lift into the base."""
-        ...
+        """Compose video through FrameCompositor. Returns empty string
+        on failure.
+
+        R-70 part 2 PR 4: the precondition for extraction held — the
+        three channels' bodies were byte-identical except for the log
+        prefix string (``[movies]`` / ``[sports]`` / ``[anime]``),
+        which the design plan flagged as the exact extractable
+        difference. Subclasses set ``self._log_prefix`` in
+        ``__init__``; this body uses it verbatim.
+
+        Subclasses MUST also set ``self._visuals_yaml_path`` (an
+        absolute ``Path`` to their ``config/visuals.yaml``) in
+        ``__init__`` — the body reads it to instantiate the
+        compositor.
+        """
+        run_dir = context.get("run_dir", "")
+        if not run_dir:
+            return ""
+
+        hook_text = (story.get("content") or {}).get("hook", story.get("title", ""))
+        sid = story.get("story_id", "unknown")
+        output_dir = Path(run_dir) / "visuals" / sid
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(output_dir / f"{sid[:16]}_reel.mp4")
+
+        try:
+            from genlab_core.media.frame_compositor import probe_video
+
+            visuals_yaml = str(self._visuals_yaml_path)
+            compositor = FrameCompositor.from_visuals_yaml(visuals_yaml)
+            try:
+                info = probe_video(str(clip_path))
+                dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
+            except Exception:
+                dur = 55
+            return compositor.compose(
+                source_video_path=str(clip_path),
+                hook_text=hook_text,
+                output_path=output_path,
+                duration_seconds=dur,
+            )
+        except Exception as e:
+            logger.error("%s FrameCompositor failed: %s", self._log_prefix, e)
+            return ""
 
     @abstractmethod
     def _build_pexels_queries(self, story: dict) -> list[str]:
