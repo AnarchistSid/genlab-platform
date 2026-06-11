@@ -1243,16 +1243,56 @@ class PushToBacklog:
                         revive_fields = {k: v for k, v in fields.items() if k != "candidate_id"}
                         # Clear the old action_taken so reviewers see it fresh
                         revive_fields["action_taken"] = None
+
+                        prior_status = non_blocking_match.get("fields", non_blocking_match).get(
+                            "status", ""
+                        )
+                        new_status = fields.get("status", "")
+
+                        # R-40: atomic claim before the bulk-update so a
+                        # racing ``recover_publish_failed`` (or any other
+                        # writer) can't have moved this row out of the
+                        # non-blocking status we read between our query
+                        # and our write. Without the claim, two concurrent
+                        # processes could both decide to transition the
+                        # same row — one overwrites the other and two
+                        # blueprints for the same event briefly coexist.
+                        claim = getattr(client.blueprints, "claim_status", None)
+                        if claim is not None and prior_status and new_status:
+                            try:
+                                claimed = claim(
+                                    non_blocking_match["id"],
+                                    expected_status=prior_status,
+                                    new_status=new_status,
+                                )
+                            except Exception as exc:
+                                logger.warning(
+                                    "[PUSH] Revive claim failed for '%s': %s",
+                                    title,
+                                    exc,
+                                )
+                                claimed = False
+                            if not claimed:
+                                logger.info(
+                                    "[PUSH] Skipping revive of '%s' — row was "
+                                    "moved out of %s by another writer "
+                                    "(race with PUBLISH_FAILED recovery?)",
+                                    title,
+                                    prior_status,
+                                )
+                                continue
+                            # The atomic claim already flipped ``status`` —
+                            # strip it from the bulk-update so the follow-up
+                            # write doesn't redundantly re-set it.
+                            revive_fields.pop("status", None)
+
                         client.blueprints.update(non_blocking_match["id"], revive_fields)
                         blueprints_pushed += 1
-                        prior_status = non_blocking_match.get("fields", non_blocking_match).get(
-                            "status", "?"
-                        )
                         logger.info(
                             "[PUSH] Revived blueprint '%s' (was %s → %s)",
                             title,
                             prior_status,
-                            fields["status"],
+                            new_status,
                         )
                     else:
                         client.blueprints.create(fields, typecast=True)
@@ -1280,7 +1320,12 @@ class PushToBacklog:
                     except Exception:
                         pass  # non-critical — other dedup layers cover it
             except Exception as e:
-                logger.warning("[PUSH] Blueprint '%s' failed: %s", title, e)
+                logger.warning(
+                    "[PUSH] Blueprint '%s' failed: %s",
+                    title,
+                    e,
+                    exc_info=True,  # R-40: silent failures here masked actual bugs.
+                )
                 errors.append(f"blueprint:{title}: {e}")
 
         context.setdefault("run_stats", {})["backlog_push"] = {
