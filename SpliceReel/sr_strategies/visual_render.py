@@ -15,7 +15,7 @@ from genlab_core.media.audio_probe import extract_audio_track, has_meaningful_au
 from genlab_core.media.frame_compositor import FrameCompositor
 from genlab_core.media.whisper_timing import align_words, transcribe_words
 from genlab_core.rendering.overlay_compositor import OverlaySpec, composite_overlay
-from genlab_core.strategies import VisualRenderStrategy
+from genlab_core.strategies.base_visual_render import BaseVisualRenderStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,24 @@ _CINEMATIC_QUERIES = [
 ]
 
 
-class MovieVisualRenderStrategy(VisualRenderStrategy):
-    """Render visual assets — cinematic B-roll + film rating overlay."""
+class MovieVisualRenderStrategy(BaseVisualRenderStrategy):
+    """Render visual assets — cinematic B-roll + film rating overlay.
+
+    R-70 part 2 pilot: inherits from ``BaseVisualRenderStrategy``.
+    The shared ``_get_whisper_config`` is now inherited (verified
+    byte-identical with CW + FD at extraction time). ``_ensure_config``
+    stays here because SR uniquely reads BOTH ``sources.yaml`` and
+    ``visuals.yaml`` (CW + FD only read ``visuals.yaml``) — that's
+    the channel-specific shape the design phase left to subclasses.
+    """
 
     def __init__(self) -> None:
+        # ``super().__init__()`` initializes ``self._visuals_config = None``
+        # — the base relies on that attribute existing before any
+        # inherited method runs (notably ``_get_whisper_config``).
+        super().__init__()
         logger.info("[movies] MovieVisualRenderStrategy initialized")
         self._sources_config: dict | None = None
-        self._visuals_config: dict | None = None
 
     def _ensure_config(self) -> None:
         if self._sources_config is None:
@@ -51,12 +62,7 @@ class MovieVisualRenderStrategy(VisualRenderStrategy):
         if self._visuals_config is None:
             self._visuals_config = _load_yaml(NICHE_ROOT / "config" / "visuals.yaml")
 
-    def _get_whisper_config(self) -> dict:
-        """Get whisper_sync config from visuals.yaml."""
-        self._ensure_config()
-        animation = self._visuals_config.get("animation", {})
-        wbw = animation.get("word_by_word", {})
-        return wbw.get("whisper_sync", {"enabled": False})
+    # ``_get_whisper_config`` now inherited from BaseVisualRenderStrategy.
 
     def prepare_whisper_words(
         self,
