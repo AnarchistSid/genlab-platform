@@ -47,6 +47,19 @@ class StageFail(_FailStage):
     pass
 
 
+class _NoExecuteStage:
+    """R-07: a class lacking ``execute(context)`` — formerly accepted by
+    ``_load_stages`` and only crashed mid-pipeline. After R-07 it must
+    be rejected at load time with a NicheConfigError."""
+
+    def run(self, context: dict[str, Any]) -> dict[str, Any]:  # wrong name
+        return context
+
+
+class StageBadProtocol(_NoExecuteStage):
+    pass
+
+
 def _make_config(*stage_classes: type, parallel_groups: dict | None = None) -> dict[str, Any]:
     """Build a minimal niche config with pipeline.stages declarations."""
     groups = parallel_groups or {}
@@ -112,6 +125,21 @@ def test_runner_raises_on_missing_pipeline_config() -> None:
     )
     with pytest.raises(NicheConfigError, match="missing pipeline.stages"):
         runner._load_stages("test", {})
+
+
+def test_r07_load_stages_rejects_class_missing_execute() -> None:
+    """R-07: a niche.yaml entry pointing at a class without
+    ``execute(context)`` used to land in the stages list and only crash
+    when the runner reached it. After R-07 the Stage Protocol is
+    runtime-checked at load time and the runner raises NicheConfigError
+    with a helpful message naming the offending class."""
+    config = _make_config(StageA, StageBadProtocol)
+    runner = GenericPipelineRunner(
+        niche_roots={"test": DUMMY_ROOT},
+        genlab_root=DUMMY_GENLAB,
+    )
+    with pytest.raises(NicheConfigError, match="StageBadProtocol.*execute"):
+        runner._load_stages("test", config)
 
 
 def test_runner_raises_on_unknown_niche() -> None:

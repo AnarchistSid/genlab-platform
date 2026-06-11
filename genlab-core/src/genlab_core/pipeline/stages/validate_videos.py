@@ -79,6 +79,9 @@ class ValidateVideos:
         failed = 0
         fixed = 0
         skipped = 0
+        vmaf_skipped = (
+            0  # R-07: separate counter for VMAF-skipped (still passes spec, gate did NOT run)
+        )
 
         for story in stories:
             media = story.get("media", {})
@@ -100,9 +103,18 @@ class ValidateVideos:
                 if not issues:
                     # Spec checks passed — now run VMAF gate if enabled
                     if run_vmaf:
-                        vmaf_result = self._run_vmaf_gate(media, video_path)
+                        vmaf_result, skip_reason = self._run_vmaf_gate(media, video_path)
                         if vmaf_result == "pass":
                             media["video_validation"] = {"valid": True, "issues": []}
+                            if skip_reason:
+                                # R-07: gate fail-opened (no master, infra
+                                # missing, or log unreadable). Stamp the
+                                # reason so downstream (dashboard,
+                                # run_report) can see the absence of a
+                                # real quality verdict.
+                                media["video_validation"]["vmaf_skipped"] = True
+                                media["video_validation"]["vmaf_skip_reason"] = skip_reason
+                                vmaf_skipped += 1
                             passed += 1
                         elif vmaf_result == "reencoded":
                             media["video_validation"] = {
@@ -148,9 +160,10 @@ class ValidateVideos:
                 failed += 1
 
         logger.info(
-            "[ValidateVideos] %d passed (%d auto-fixed), %d failed, %d skipped",
+            "[ValidateVideos] %d passed (%d auto-fixed, %d vmaf-skipped), %d failed, %d skipped",
             passed,
             fixed,
+            vmaf_skipped,
             failed,
             skipped,
         )
@@ -160,14 +173,22 @@ class ValidateVideos:
             "failed": failed,
             "fixed": fixed,
             "skipped": skipped,
+            "vmaf_skipped": vmaf_skipped,
         }
 
         return context
 
-    def _run_vmaf_gate(self, media: dict[str, Any], video_path: str) -> str:
+    def _run_vmaf_gate(self, media: dict[str, Any], video_path: str) -> tuple[str, str | None]:
         """Run VMAF check with one re-encode attempt on failure.
 
-        Returns: "pass", "reencoded", or "fail".
+        Returns:
+            Tuple of ``(state, skip_reason)``.
+
+            * ``state``: "pass", "reencoded", or "fail".
+            * ``skip_reason``: ``None`` when VMAF produced a real verdict;
+              a string identifier when ``state == "pass"`` only because
+              the gate could not actually run (R-07). Distinguishes a
+              real pass from a fail-open pass for observability.
         """
         master_path = media.get("master_path", "")
         if not master_path or not Path(master_path).exists():
@@ -181,7 +202,7 @@ class ValidateVideos:
             logger.info(
                 "[ValidateVideos] No same-framing lossless master available — skipping VMAF gate"
             )
-            return "pass"
+            return "pass", "no_master"
 
         # Defense-in-depth (R-25): even if a master is supplied, VMAF across
         # mismatched dimensions is meaningless and would trigger a wasted
@@ -197,12 +218,22 @@ class ValidateVideos:
                 rendered_dims[0],
                 rendered_dims[1],
             )
-            return "pass"
+            return "pass", "dim_mismatch"
 
         vmaf_ok, score = check_vmaf(Path(master_path), Path(video_path), "rendered")
         if vmaf_ok:
+            if score == 0.0:
+                # R-07: ``check_vmaf`` fail-opens with score 0.0 when libvmaf
+                # is missing or the VMAF log was unparseable. The gate did
+                # NOT produce a real quality verdict — record the skip so
+                # ops sees a non-zero ``vmaf_skipped`` count and the dashboard
+                # shows ``vmaf_skipped: true`` next to the post.
+                logger.warning(
+                    "[ValidateVideos] VMAF fail-opened (score=0.0) — gate did NOT verify quality"
+                )
+                return "pass", "infra_or_log_unreadable"
             logger.info("[ValidateVideos] VMAF passed: %.1f", score)
-            return "pass"
+            return "pass", None
 
         logger.warning(
             "[ValidateVideos] VMAF %.1f < 85 — attempting re-encode at CRF-%d",
@@ -214,20 +245,20 @@ class ValidateVideos:
         reencoded = self._vmaf_reencode(Path(video_path), current_crf=_DEFAULT_CRF)
         if reencoded is None:
             logger.error("[ValidateVideos] VMAF re-encode failed")
-            return "fail"
+            return "fail", None
 
         # Check VMAF again on the re-encoded file
         vmaf_ok_2, score_2 = check_vmaf(Path(master_path), reencoded, "reencoded")
         if vmaf_ok_2:
             logger.info("[ValidateVideos] VMAF passed after re-encode: %.1f", score_2)
             media["rendered_path"] = str(reencoded)
-            return "reencoded"
+            return "reencoded", None
 
         logger.error(
             "[ValidateVideos] VMAF still failing after re-encode: %.1f — rejecting",
             score_2,
         )
-        return "fail"
+        return "fail", None
 
     @staticmethod
     def _probe(path: Path) -> dict[str, Any] | None:

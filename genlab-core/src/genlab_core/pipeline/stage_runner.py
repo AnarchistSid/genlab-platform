@@ -75,6 +75,24 @@ class StageRunner(Protocol):
         ...
 
 
+@runtime_checkable
+class Stage(Protocol):
+    """Protocol every pipeline stage class must implement.
+
+    Used by ``GenericPipelineRunner._load_stages`` to fail-fast at config
+    load time when a niche.yaml entry points at a class that doesn't
+    implement ``execute(context)`` (R-07 — was a mid-run AttributeError
+    after credentials/quotas/sys.path were already mutated).
+
+    The ``context`` parameter is the same ``StageContext`` dict that
+    flows between stages — each stage mutates it in place.
+    """
+
+    def execute(self, context: dict[str, Any]) -> Any:
+        """Run the stage. Return value is ignored by the runner."""
+        ...
+
+
 # ── Local runner ─────────────────────────────────────────────────────────────
 
 
