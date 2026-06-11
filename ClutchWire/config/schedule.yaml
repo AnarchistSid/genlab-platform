@@ -7,11 +7,6 @@ publishing_windows:
     label: "12:00 IST"
     description: "12:00 IST — midday content drop"
     platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
-  - time: "14:00"
-    timezone: "UTC"
-    label: "19:30 IST"
-    description: "19:30 IST — evening content drop"
-    platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
 
 max_publishes_per_day: 1
 
