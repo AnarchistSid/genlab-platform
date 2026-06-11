@@ -195,12 +195,8 @@ def test_r70_pr4_compose_frame_wires_compositor_with_visuals_yaml_path(
     mock_compositor.compose.return_value = "/tmp/out.mp4"
 
     with (
-        patch(
-            "genlab_core.strategies.base_visual_render.FrameCompositor"
-        ) as MockFC,
-        patch(
-            "genlab_core.media.frame_compositor.probe_video"
-        ) as mock_probe,
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
     ):
         MockFC.from_visuals_yaml.return_value = mock_compositor
         mock_probe.return_value = MagicMock(duration_seconds=22.0)
@@ -231,12 +227,8 @@ def test_r70_pr4_compose_frame_caps_duration_at_60s(tmp_path: Path) -> None:
     mock_compositor.compose.return_value = "/tmp/out.mp4"
 
     with (
-        patch(
-            "genlab_core.strategies.base_visual_render.FrameCompositor"
-        ) as MockFC,
-        patch(
-            "genlab_core.media.frame_compositor.probe_video"
-        ) as mock_probe,
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
     ):
         MockFC.from_visuals_yaml.return_value = mock_compositor
         mock_probe.return_value = MagicMock(duration_seconds=90.0)
@@ -265,9 +257,7 @@ def test_r70_pr4_compose_frame_falls_back_to_55s_when_probe_fails(
     mock_compositor.compose.return_value = "/tmp/out.mp4"
 
     with (
-        patch(
-            "genlab_core.strategies.base_visual_render.FrameCompositor"
-        ) as MockFC,
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
         patch(
             "genlab_core.media.frame_compositor.probe_video",
             side_effect=RuntimeError("no ffprobe"),
@@ -300,9 +290,7 @@ def test_r70_pr4_compose_frame_falls_back_to_title_when_hook_missing(
     mock_compositor.compose.return_value = "/tmp/out.mp4"
 
     with (
-        patch(
-            "genlab_core.strategies.base_visual_render.FrameCompositor"
-        ) as MockFC,
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
         patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
     ):
         MockFC.from_visuals_yaml.return_value = mock_compositor
@@ -333,9 +321,7 @@ def test_r70_pr4_compose_frame_returns_empty_string_on_compositor_error(
 
     with (
         caplog.at_level(logging.ERROR, logger="genlab_core.strategies.base_visual_render"),
-        patch(
-            "genlab_core.strategies.base_visual_render.FrameCompositor"
-        ) as MockFC,
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
     ):
         MockFC.from_visuals_yaml.side_effect = ValueError("bad yaml")
         result = stage._compose_frame(
