@@ -6,10 +6,6 @@ publishing_windows:
     timezone: "UTC"
     label: "12:00 IST"
     platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
-  - time: "14:00"
-    timezone: "UTC"
-    label: "19:30 IST"
-    platforms: [instagram, youtube, facebook, x_twitter, tiktok, threads]
 
 max_publishes_per_day: 1
 
