@@ -10,14 +10,12 @@ Scores anime content with:
 from __future__ import annotations
 
 import logging
-import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
 from genlab_core.scoring.composite_scorer import score_visual_potential
-from genlab_core.strategies import ScoringStrategy
+from genlab_core.strategies.base_time_based_scoring import BaseTimeBasedScoringStrategy
 
 from .trend_cycle import TrendCycleStage, get_trend_cycle_multiplier
 
@@ -26,44 +24,29 @@ logger = logging.getLogger(__name__)
 NICHE_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_yaml(path: Path) -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
+class AnimeScoringStrategy(BaseTimeBasedScoringStrategy):
+    """Score and rank anime content with trend cycle multipliers.
 
+    R-70 part 2 PR 5c: inherits from ``BaseTimeBasedScoringStrategy``
+    (SR + FD second-tier base). The byte-identical ``__init__`` /
+    ``_ensure_config`` / ``_score_timeliness`` are now inherited;
+    ``_score_novelty`` is inherited from the narrow ``BaseScoringStrategy``
+    via the second-tier base's parent chain. Kept per-channel:
+    ``_score_magnitude``, ``_score_engagement_potential``, ``score_item``
+    (with trend_cycle multiplier), and ``execute``.
+    """
 
-class AnimeScoringStrategy(ScoringStrategy):
-    """Score and rank anime content with trend cycle multipliers."""
+    _log_prefix = "[anime]"
+    _default_timeliness_half_life_hours = 24.0
 
     def __init__(self) -> None:
+        super().__init__()
         logger.info("[anime] AnimeScoringStrategy initialized")
-        self._config: dict | None = None
-        self._scoring: dict | None = None
-        self._thresholds: dict | None = None
+        self._scoring_yaml_path = NICHE_ROOT / "config" / "scoring_weights.yaml"
 
-    def _ensure_config(self) -> None:
-        if self._config is not None:
-            return
-        self._config = _load_yaml(NICHE_ROOT / "config" / "scoring_weights.yaml")
-        self._scoring = self._config.get("scoring_dimensions", {})
-        self._thresholds = self._config.get("thresholds", {})
-
-    def _score_timeliness(self, item: dict) -> float:
-        """Exponential decay with 24h half-life."""
-        half_life = self._scoring.get("timeliness", {}).get("decay_half_life_hours", 24.0)
-        fetched_at_str = item.get("fetched_at", "")
-        if not fetched_at_str:
-            return 0.0
-        try:
-            fetched_at = datetime.fromisoformat(fetched_at_str)
-            now = datetime.now(UTC)
-            if fetched_at.tzinfo is None:
-                fetched_at = fetched_at.replace(tzinfo=UTC)
-            hours_elapsed = (now - fetched_at).total_seconds() / 3600
-            if hours_elapsed < 0:
-                return 1.0
-            return math.pow(0.5, hours_elapsed / half_life)
-        except (ValueError, TypeError):
-            return 0.0
+    # ``_ensure_config`` and ``_score_timeliness`` now inherited from
+    # ``BaseTimeBasedScoringStrategy``; ``_score_novelty`` inherited from
+    # ``BaseScoringStrategy`` via the parent chain.
 
     def _score_magnitude(self, item: dict) -> float:
         """Score magnitude — creator spotlights, collabs, new releases."""
@@ -101,8 +84,8 @@ class AnimeScoringStrategy(ScoringStrategy):
             return 0.6
         return 0.3
 
-    def _score_novelty(self, item: dict) -> float:
-        return item.get("novelty_score", 0.5)
+    # ``_score_novelty`` inherited from BaseScoringStrategy (PR 5a) —
+    # body is ``return item.get("novelty_score", 0.5)``.
 
     def score_item(self, item: dict) -> dict:
         """Score a single anime content item."""
