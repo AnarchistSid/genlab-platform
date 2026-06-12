@@ -71,9 +71,12 @@ DEPRECATED_METRICS: Final[dict[str, tuple[str, str]]] = {
     # FB post insights — most still work under v22 but flagged by
     # Meta as candidates for removal in upcoming versions.
     "post_video_views": (
-        "semantics shifted in v23.0 (no longer cross-device-deduped); "
-        "true deprecation expected late 2026.",
-        "pair with `post_video_view_time` for a stable engagement proxy.",
+        "RETIRED for FB Reels in v23.0 — replaced by `fb_reels_total_plays` "
+        "(includes replays) and `blue_reels_play_count` (initial plays only). "
+        "Legacy /video_insights still returns the field for non-Reels videos "
+        "but with shifted semantics (no longer cross-device-deduped).",
+        "for Reels: use `fb_reels_total_plays` as the primary views number. "
+        "For non-Reels videos: pair with `post_video_view_time` for stability.",
     ),
     "post_engaged_users": (
         "deprecated for new posts in v22.0; legacy posts still return.",

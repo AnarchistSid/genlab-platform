@@ -20,6 +20,10 @@ from typing import Final
 import requests
 
 from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+from genlab_core.platforms.meta_metric_deprecation import (
+    record_observation,
+    warn_if_deprecated,
+)
 
 from .types import PlatformMetrics
 
@@ -28,10 +32,15 @@ logger = logging.getLogger(__name__)
 _API_BASE: Final[str] = META_GRAPH_BASE_URL
 _TIMEOUT_S: Final[int] = 15
 
-# v22.0+ deprecated `plays`; this is the full Reels metric set the canonical
-# call should request. Order matters for the normalize map below.
+# v22.0+ canonical IG Reels insights metrics. `views` (added Jan 2025)
+# replaces the deprecated `plays` / `impressions` / `ig_reels_aggregated_all_plays_count`.
+# `reach` is unique-accounts (NOT views — that conflation was the v22 fetcher bug
+# this module replaces). `ig_reels_avg_watch_time` complements the existing
+# `ig_reels_video_view_total_time`. Order in the request string is irrelevant
+# but kept stable for log/grep readability.
 _REELS_METRICS: Final[str] = (
-    "reach,saved,shares,likes,comments,total_interactions,ig_reels_video_view_total_time"
+    "views,reach,likes,comments,shares,saved,total_interactions,"
+    "ig_reels_avg_watch_time,ig_reels_video_view_total_time"
 )
 
 
@@ -143,6 +152,8 @@ def fetch_instagram(
 
     # Reels insights — best-effort. If this fails we still return what the
     # basic endpoint gave us.
+    warn_if_deprecated(_REELS_METRICS, context=f"ig_reels:{niche_id}")
+
     insights: dict[str, int] = {}
     try:
         ins_resp = requests.get(
@@ -154,13 +165,27 @@ def fetch_instagram(
             for item in ins_resp.json().get("data", []):
                 name = item.get("name", "")
                 values = item.get("values", [{}])
-                insights[name] = int(values[0].get("value", 0) or 0) if values else 0
+                v = int(values[0].get("value", 0) or 0) if values else 0
+                insights[name] = v
+                record_observation(name, v, scope="ig_reels")
+        else:
+            logger.warning(
+                "[platforms.metrics.instagram] insights %d for %s: %s",
+                ins_resp.status_code,
+                media_id,
+                ins_resp.text[:200],
+            )
     except requests.RequestException as exc:
         logger.debug("[platforms.metrics.instagram] insights non-fatal: %s", exc)
 
+    # v22.0+ canonical: `views` is the real play count; `reach` is unique-accounts
+    # and was wrongly aliased as views in the pre-fix implementation. Fall back to
+    # reach only when views is empty (very new posts) so legacy rows still see
+    # something rather than 0.
+    views = insights.get("views", 0)
     reach = insights.get("reach", 0)
     return PlatformMetrics(
-        views=reach,  # IG Reels: "reach" is the closest analogue to views
+        views=views or reach,
         reach=reach,
         impressions=reach,
         likes=insights.get("likes", int(basic.get("like_count") or 0)),
