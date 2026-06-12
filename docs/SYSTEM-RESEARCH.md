@@ -411,75 +411,141 @@ effort):
 ## 6. Findings log (append-only, newest first)
 
 
-### 2026-06-12 — R-70 part 2 closeout: 5 PRs land the strategy-extraction sequence
+### 2026-06-12 — 11-PR sweep: R-70 part 2 closeout + R-31 (a) PA-API + R-81 phantom-prune
 
-Single-track session closing the R-70 part 2 follow-up that 2026-06-11
-sweep #2 explicitly deferred. The full multi-PR refactor sequence
-shipped + doc-flipped in one go:
+Multi-track session that started as the R-70 part 2 closeout and
+expanded to clean out two more deferred items by the end. **11 PRs
+merged, 82/83 audit rows now Done; the only remaining
+`Partly-corrected` row is R-31 (a) — and only the 4 per-network
+adapters, not the PA-API signing piece — with a documented
+operator-credential blocker.**
 
+**R-70 part 2 sequence (closes the "750L copy-paste" finding):**
 * **PR #161 (`36dd8de`)** — PR 4: `_compose_frame` lifted into
-  `BaseVisualRenderStrategy`. Precondition gate (bodies byte-identical
-  except `[movies]`/`[sports]`/`[anime]` log prefix) verified by
-  empirical body-diff before extraction; subclass-set `_log_prefix`
-  + `_visuals_yaml_path` thread the only two degrees of freedom.
-  6 new base-level pins; 134 SR + 136 CW + 143 FD full suites green.
+  `BaseVisualRenderStrategy`. Precondition gate (bodies byte-
+  identical except `[movies]`/`[sports]`/`[anime]` log prefix)
+  verified by empirical body-diff before extraction; subclass-set
+  `_log_prefix` + `_visuals_yaml_path` thread the only two degrees
+  of freedom. 6 new base-level pins; 134 SR + 136 CW + 143 FD full
+  suites green.
+* **PR #162 (`afa0ad9`)** — PR 4 audit-doc flip.
 * **PR #163 (`9078eb3`)** — PR 5a: `BaseScoringStrategy(ScoringStrategy)`
   skeleton. Empirical body-diff narrowed scope from "magnitude +
   novelty" to "novelty only" — `_score_magnitude` is parallel-
   evolved with the same name but completely divergent bodies/fields/
-  config keys across SR/CW/FD. Scope correction documented inline in
-  `docs/r70-part2-design-phase.md`.
+  config keys across SR/CW/FD. Scope correction documented inline
+  in `docs/r70-part2-design-phase.md`.
 * **PR #164 (`7a7513f`)** — PR 5b: `BaseTimeBasedScoringStrategy
   (BaseScoringStrategy)` second-tier base lifting `__init__` /
-  `_ensure_config` / `_score_timeliness` for **SR + FD only**.
-  SR pilot migrated in same PR. 2-attribute escape hatch
-  (`_log_prefix` + `_scoring_yaml_path` + literal-only-divergent
+  `_ensure_config` / `_score_timeliness` for **SR + FD only**. SR
+  pilot migrated in same PR. 2-attribute escape hatch (`_log_prefix`
+  + `_scoring_yaml_path` + literal-only-divergent
   `_default_timeliness_half_life_hours` for SR 48h vs FD 24h).
   11 new contract pins.
-* **PR #165 (`a0df3a0`)** — PR 5c: final migration. FD scoring
-  → second-tier base; CW scoring → narrow `BaseScoringStrategy`
-  only (CW genuinely uses different YAML shape + axis set).
-  47 FD scoring + 32 CW scoring tests pass; full channel suites
-  green on CI.
-* **PR #162 (`afa0ad9`)** — PR 4 audit-doc flip (in-PR).
+* **PR #165 (`a0df3a0`)** — PR 5c: final migration. FD scoring →
+  second-tier base; CW scoring → narrow `BaseScoringStrategy` only
+  (CW genuinely uses different YAML shape + axis set). 47 FD scoring
+  + 32 CW scoring tests pass; full channel suites green on CI.
 * **PR #166 (`06ae707`)** — R-70 status flip → Done.
+* **PR #167 (`86e9428`)** — Restore 2026-06-11 sweep #2's
+  truly-open list (R-70 removed from it earlier was history-
+  rewriting); add the first cut of this 2026-06-12 summary.
 
-**What this closeout proved (cross-cutting):**
+**R-31 (a) PA-API half (the deepest stub in the affiliate stack):**
+* **PR #168 (`6b2f97b`)** — In-tree AWS Signature Version 4
+  implementation at
+  `genlab-core/src/genlab_core/monetization/paapi_signing.py`
+  (~150 LOC, stdlib only — no boto3). Verified against AWS's
+  official `aws4_testsuite` published test vectors: canonical
+  request SHA-256 = `bb579772317eb040...`, end-to-end signature =
+  `5fa00fa31553b73e...` (bit-for-bit identical to what every AWS
+  SDK produces on the same input). Wired into
+  `PaapiClient._signed_request`. 17 signing pins + 7 wiring pins.
+  After this PR, only setting `PAAPI_ACCESS_KEY` +
+  `PAAPI_SECRET_KEY` stands between the pipeline and live PA-API
+  queries. **The 4 per-network adapters (EarnKaro / Impact /
+  ShareASale / CJ) explicitly stay deferred for operator-side
+  credentials + per-network real-world setup** — named blocker,
+  not scope-of-work.
+* **PR #169 (`633a423`)** — R-31 row sub-split + doc flip.
+
+**R-81 phantom-`SCHEDULED` prune:**
+* **PR #170 (`74d7e90`)** — `SCHEDULED` removed from both
+  `STATUS_ORDER` and `_PENDING_STATUSES` in `backlog_client.py`.
+  Six existing tests rewritten to use the real production shape
+  (`status="VISUAL_READY"` + `scheduled_for IS NOT NULL`) instead
+  of the phantom one. New regression pin
+  (`test_r81_phantom_scheduled_removed_from_status_order`) keeps
+  it out of the vocabulary. Dashboard's virtual-SCHEDULED query
+  filter (`blueprints.py:603`) and Prefect's `SCHEDULED` state
+  enum (`pipeline.py:265`) intentionally preserved — neither is
+  blueprint status.
+* **PR #171 (`97117a2`)** — R-81 status flip → Done.
+
+**What this sweep proved (cross-cutting insights):**
 
 * The [[feedback-measure-before-refactor]] habit fired twice at
   different scales and prevented two different overshoots: PR 4's
   precondition check confirmed `_compose_frame` was extractable;
   PR 5a's check overrode the design doc by surfacing that
   `_score_magnitude` was parallel-evolved. Roughly 3 hours of
-  mis-extraction work avoided.
+  mis-extraction work avoided across the two checks.
+
 * Two-tier base hierarchy (narrow `BaseScoringStrategy` + second-
   tier `BaseTimeBasedScoringStrategy`) was the right pattern for
-  **measured** divergence — CW genuinely didn't share the
-  SR+FD `scoring_weights.yaml` shape. Forcing CW onto the second-
-  tier base would have leaked CW's shape into SR+FD or required
-  CW to implement unused abstracts.
+  **measured** divergence — CW genuinely didn't share the SR+FD
+  `scoring_weights.yaml` shape. Forcing CW onto the second-tier
+  base would have leaked CW's shape into SR+FD or required CW to
+  implement unused abstracts.
+
+* The **in-tree-vs-SDK choice for AWS SigV4** (PR #168) had
+  unusually high leverage: 150 LOC of stdlib delivered what boto3
+  would have, without a 50× install-footprint multiplier, AND the
+  algorithm is now reusable as-is for any future AWS-shaped API
+  (Bedrock for Claude-via-Bedrock, S3, SES). The `service=` kwarg
+  on `sign_request_v4` parameterises it; the PA-API specifics
+  (`_HOSTS`, `X-Amz-Target` templates, region lookup) live in the
+  client, not the signer. Saved as
+  [[reference-aws-sigv4-in-tree]].
+
+* The R-81 closeout was a textbook [[feedback-doc-vs-code-drift]]
+  catch: the deferral reason ("blocked on R-80-style transition
+  redesign") was satisfied by R-80 itself in May (`699cd5d`,
+  PR #32). The audit row never re-evaluated. Discovery cost: one
+  grep for "R-80" inside R-81's row text + one read of R-80's
+  commit. Yield: a clean 50-LOC vocabulary prune. Worth making
+  "did anything we just shipped invalidate a still-open deferral
+  reason?" a session-end ritual.
+
 * CI-side artefact: every PR after PR 4's format-fixup landed
   17/17 green on first try because of the `uvx ruff format --check`
   pre-push habit. Two-step local invariant (`ruff format --check`
   + `ruff check`) caught the only format-drift miss before it hit
-  CI again.
+  CI a second time. Confirmed as a per-session habit worth keeping.
 
-**Truly-open after this closeout:**
-* R-31 (a) — 4 per-network affiliate integrations EarnKaro/Impact/
-  ShareASale/CJ (PA-API signing closeout shipped separately the
-  same day in PR #168 `6b2f97b`; per-network adapters stay deferred
-  for operator credentials + per-network real-world setup)
-* R-39 (c) — TTS cascade wired into the composite render path
-  (closed via OR-alternative doc PR `75207e5` in 2026-06-11 sweep #2)
-* ~~R-81~~ phantom-`SCHEDULED`-status prune closed mid-session in
-  PR #170 `74d7e90` — the deferral reason ("needs R-80-style
-  transition redesign") was satisfied by R-80 itself back in May;
-  R-81 row flipped to Done same session.
+**Audit register state after this sweep:**
 
-R-43, R-45, R-70 are all flipped to Done. The audit register's
-remaining HIGH/CRITICAL/MEDIUM Open list is empty; only LOW
-Partly-corrected R-31 + R-81 remain, both with documented blockers
-and named code-PR-deferred sub-items.
+| Status | Count |
+| --- | --- |
+| Done | **82** |
+| Partly-corrected | 1 (R-31 (a) — 4 per-network adapters only) |
+| Open | 0 |
+
+**Truly-open after this closeout — single item, credential-blocked:**
+
+* **R-31 (a)** — 4 per-network affiliate adapters (EarnKaro,
+  Impact, ShareASale, CJ). Each needs operator-side account
+  setup AND per-network real-world testing (Impact campaign IDs,
+  ShareASale merchant relationships, CJ PID/AID). PA-API signing
+  half closed this sweep at PR #168. Per
+  [[feedback-audit-or-alternative-closure]] the deferral is a
+  named credential blocker, not scope-of-work — when an operator
+  sets up an account for any one network, that adapter becomes a
+  single self-contained PR.
+
+R-43, R-45, R-70, R-81 are all flipped to Done this session or
+prior session sweeps. The audit register's HIGH / CRITICAL /
+MEDIUM **Open** list is empty.
 
 ### 2026-06-11 — Session sweep #2: 13 R-IDs closed via 15-PR squash-merge stack
 
