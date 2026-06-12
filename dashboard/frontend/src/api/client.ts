@@ -390,6 +390,7 @@ export const healthDetailed = {
 export const alerts = {
   publishing: () => get<Record<string, unknown>>("/alerts/publishing"),
   system: () => get<Record<string, unknown>>("/alerts/system"),
+  critical: () => get<Record<string, unknown>>("/alerts/critical"),
 };
 
 export const metrics = {

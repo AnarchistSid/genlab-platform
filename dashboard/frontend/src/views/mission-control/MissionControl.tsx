@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { PublishingAlertBanner } from "./AlertBanner";
+import { CriticalAlertsBanner } from "./CriticalAlertsBanner";
 import { PublishingHealth } from "./PublishingHealth";
 import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
@@ -118,6 +119,13 @@ export default function MissionControl() {
         badge={<span className="text-xs font-medium text-text-muted px-2 py-0.5 rounded-full bg-bg-elevated">Sprint {sprint}</span>}
         subtitle={formatDate()}
       />
+
+      {/* Critical infrastructure alerts banner — reads unresolved
+          CRITICAL rows from pipeline_alerts (warp_down,
+          download_failure, qc_collapse, etc). Rendered ABOVE the
+          publishing banner so infrastructure/operator-action signals
+          land before blueprint-derived signals. */}
+      <CriticalAlertsBanner />
 
       {/* Publishing alert banner — shows unresolved publish failures/warnings */}
       <PublishingAlertBanner />
