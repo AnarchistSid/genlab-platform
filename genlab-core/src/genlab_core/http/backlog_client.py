@@ -40,6 +40,18 @@ logger = logging.getLogger(__name__)
 
 # Canonical blueprint status progression — used by ScheduleGuardedProxy and
 # BacklogClient for demotion detection.  Keep this list in pipeline order.
+#
+# R-81 phantom-`SCHEDULED` prune (2026-06-12): ``SCHEDULED`` removed from
+# this list. No live code writes ``status="SCHEDULED"`` — being "scheduled"
+# is encoded as a non-null ``scheduled_for`` timestamp on a VISUAL_READY
+# blueprint, not as a discrete status. The dashboard's virtual-SCHEDULED
+# query filter (``blueprints.py:603``) translates SCHEDULED → VISUAL_READY
+# + ``scheduled_for IS NOT NULL`` for the read side; the write side has
+# no caller. R-80's explicit-transition model (``_is_forbidden_for_scheduled``)
+# now enforces the schedule guard; STATUS_ORDER + ``_is_demotion`` are
+# the legacy linear-rank approach kept for back-compat on writes that
+# don't involve SCHEDULED. The forward-looking pin in ``tests/test_http.py``
+# asserts SCHEDULED stays out of this list.
 STATUS_ORDER: list[str] = [
     "INTAKE",
     "VALIDATED",
@@ -47,7 +59,6 @@ STATUS_ORDER: list[str] = [
     "RESEARCHED",
     "DRAFTED",
     "VISUAL_READY",
-    "SCHEDULED",
     "PUBLISHED",
     "ANALYZED",
     "ARCHIVED",
@@ -62,9 +73,13 @@ STATUS_ORDER: list[str] = [
 # (PUBLISHING→VISUAL_READY, PUBLISH_FAILED→VISUAL_READY) are NOT destructive, so
 # they're allowed; post-publish lifecycle (PUBLISHED→ANALYZED→ARCHIVED) is
 # allowed because the source is no longer pending.
-_PENDING_STATUSES: frozenset[str] = frozenset(
-    {"DRAFTED", "VISUAL_READY", "SCHEDULED", "PUBLISHING"}
-)
+# R-81 (2026-06-12): ``SCHEDULED`` removed alongside the STATUS_ORDER
+# prune. Production blueprints carry ``status=VISUAL_READY`` +
+# ``scheduled_for IS NOT NULL`` to represent "scheduled" — no row
+# carries ``status=SCHEDULED``. Defensive coverage for the (verified
+# empty) historical SCHEDULED-row population is therefore unnecessary;
+# the prune simplifies the vocabulary the schedule guard reasons over.
+_PENDING_STATUSES: frozenset[str] = frozenset({"DRAFTED", "VISUAL_READY", "PUBLISHING"})
 _DESTRUCTIVE_STATUSES: frozenset[str] = frozenset(
     {"ARCHIVED", "INTAKE", "VALIDATED", "INTEL_READY", "RESEARCHED", "DRAFTED"}
 )

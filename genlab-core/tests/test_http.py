@@ -314,10 +314,13 @@ class TestScheduleGuardedProxy:
     def test_allows_promotion_on_scheduled(self):
         from genlab_core.http.backlog_client import ScheduleGuardedProxy
 
+        # R-81: production "scheduled" rows carry status=VISUAL_READY +
+        # scheduled_for IS NOT NULL — there's no status=SCHEDULED row in
+        # the system. Use the real shape, not the phantom one.
         inner = MagicMock()
         inner.get.return_value = {
             "fields": {
-                "status": "SCHEDULED",
+                "status": "VISUAL_READY",
                 "scheduled_for": "2026-03-10T10:00:00Z",
             }
         }
@@ -359,10 +362,11 @@ class TestScheduleGuardedProxy:
             allow_scheduled_updates,
         )
 
+        # R-81: VISUAL_READY + scheduled_for is the real "scheduled" shape.
         inner = MagicMock()
         inner.get.return_value = {
             "fields": {
-                "status": "SCHEDULED",
+                "status": "VISUAL_READY",
                 "scheduled_for": "2026-03-10",
             }
         }
@@ -407,11 +411,30 @@ class TestScheduleGuardedProxy:
     def test_is_demotion_logic(self):
         from genlab_core.http.backlog_client import ScheduleGuardedProxy
 
-        assert ScheduleGuardedProxy._is_demotion("SCHEDULED", "DRAFTED") is True
-        assert ScheduleGuardedProxy._is_demotion("DRAFTED", "SCHEDULED") is False
+        # VISUAL_READY → DRAFTED is the real "demotion" the schedule guard
+        # protects against (re-runs/cleanup resetting a render-complete row).
+        # R-81 (2026-06-12): the SCHEDULED-as-status assertion shape was
+        # replaced because SCHEDULED is no longer in STATUS_ORDER — phantom
+        # statuses now behave like any other unknown (ValueError → False),
+        # matching the audit's "phantom prune" intent.
+        assert ScheduleGuardedProxy._is_demotion("VISUAL_READY", "DRAFTED") is True
+        assert ScheduleGuardedProxy._is_demotion("DRAFTED", "VISUAL_READY") is False
         assert ScheduleGuardedProxy._is_demotion("PUBLISHED", "PUBLISHED") is False
-        # Unknown status → not a demotion
+        # Unknown / phantom statuses → not a demotion (covers SCHEDULED now)
         assert ScheduleGuardedProxy._is_demotion("UNKNOWN", "DRAFTED") is False
+        assert ScheduleGuardedProxy._is_demotion("SCHEDULED", "DRAFTED") is False
+
+    def test_r81_phantom_scheduled_removed_from_status_order(self):
+        """``SCHEDULED`` must not be a recognised blueprint status.
+
+        Pin so a future "let's re-introduce SCHEDULED" edit surfaces
+        as a test failure rather than silently re-introducing the
+        phantom vocabulary the R-81 prune retired.
+        """
+        from genlab_core.http.backlog_client import _PENDING_STATUSES, STATUS_ORDER
+
+        assert "SCHEDULED" not in STATUS_ORDER
+        assert "SCHEDULED" not in _PENDING_STATUSES
 
 
 # ── GraphTableProxy._prepare_fields tests ───────────────────────────
@@ -510,18 +533,26 @@ class TestBacklogClientHelpers:
     def test_is_demotion(self):
         from genlab_core.http.backlog_client import BacklogClient
 
+        # R-81: VISUAL_READY is the real "scheduled" status carrier
+        # post-prune; SCHEDULED is now a phantom / unknown status.
         bc = object.__new__(BacklogClient)
-        assert bc._is_demotion("SCHEDULED", "DRAFTED") is True
-        assert bc._is_demotion("DRAFTED", "SCHEDULED") is False
+        assert bc._is_demotion("VISUAL_READY", "DRAFTED") is True
+        assert bc._is_demotion("DRAFTED", "VISUAL_READY") is False
         assert bc._is_demotion("UNKNOWN", "DRAFTED") is False
+        # SCHEDULED is unknown to STATUS_ORDER now → False (defensive
+        # coverage moved to ``_is_forbidden_for_scheduled`` via R-80's
+        # explicit-transition model, which keys off scheduled_for not
+        # status).
+        assert bc._is_demotion("SCHEDULED", "DRAFTED") is False
 
     def test_assert_not_scheduled_raises_on_demotion(self):
         from genlab_core.http.backlog_client import BacklogClient
 
+        # R-81: VISUAL_READY + scheduled_for is the real scheduled shape.
         bc = object.__new__(BacklogClient)
         blueprint = {
             "fields": {
-                "status": "SCHEDULED",
+                "status": "VISUAL_READY",
                 "scheduled_for": "2026-03-10",
                 "candidate_id": "cand-1",
             }
@@ -532,10 +563,11 @@ class TestBacklogClientHelpers:
     def test_assert_not_scheduled_allows_promotion(self):
         from genlab_core.http.backlog_client import BacklogClient
 
+        # R-81: VISUAL_READY + scheduled_for is the real scheduled shape.
         bc = object.__new__(BacklogClient)
         blueprint = {
             "fields": {
-                "status": "SCHEDULED",
+                "status": "VISUAL_READY",
                 "scheduled_for": "2026-03-10",
             }
         }
