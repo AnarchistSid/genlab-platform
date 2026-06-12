@@ -17,7 +17,7 @@ from typing import Any
 
 import yaml
 from genlab_core.scoring.composite_scorer import score_visual_potential
-from genlab_core.strategies import ScoringStrategy
+from genlab_core.strategies.base_scoring import BaseScoringStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,18 @@ def _load_yaml(path: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
-class SportScoringStrategy(ScoringStrategy):
-    """Score and rank sports content with magnitude + live + upset/record multipliers."""
+class SportScoringStrategy(BaseScoringStrategy):
+    """Score and rank sports content with magnitude + live + upset/record multipliers.
+
+    R-70 part 2 PR 5c: inherits from the **narrow** ``BaseScoringStrategy``
+    (NOT the SR + FD second-tier base). Sports uses a different scoring
+    axis set (``recency`` + ``community_signal`` instead of
+    ``timeliness`` + ``engagement_potential``) and a different
+    ``scoring_weights.yaml`` shape (``clip_scoring`` sub-key,
+    ``_weights`` + ``_multipliers`` instance attrs instead of
+    ``_scoring`` / ``_thresholds``). The only base body that lifts
+    is ``_score_novelty`` — the byte-identical 1-line method.
+    """
 
     def __init__(self) -> None:
         logger.info("[sports] SportScoringStrategy initialized")
@@ -81,9 +91,8 @@ class SportScoringStrategy(ScoringStrategy):
         multiplier = self._multipliers.get(game_type, 1.0)
         return min(1.0, multiplier / 3.0)
 
-    def _score_novelty(self, item: dict) -> float:
-        """Score novelty — lower if similar content already scored."""
-        return item.get("novelty_score", 0.5)
+    # ``_score_novelty`` inherited from BaseScoringStrategy (PR 5a) —
+    # body is ``return item.get("novelty_score", 0.5)``.
 
     def score_item(self, item: dict) -> dict:
         """Score a single sports content item across 4 dimensions."""
