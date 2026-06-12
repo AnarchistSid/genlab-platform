@@ -81,6 +81,7 @@ class TestPushToBacklogShared(unittest.TestCase):
 
         mock_client = MagicMock()
         mock_client.find_story_by_story_id.return_value = None
+        mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
         mock_client.stories.create.return_value = {"id": "rec123"}
         mock_client.blueprints.all.return_value = []
         mock_client.blueprints.create.return_value = {"id": "bp456"}
@@ -121,6 +122,7 @@ class TestPushToBacklogShared(unittest.TestCase):
         stage = self._make_stage()
         mock_client = MagicMock()
         mock_client.find_story_by_story_id.return_value = None
+        mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
         mock_client.stories.create.return_value = {"id": "rec123"}
         mock_client.blueprints.all.return_value = []
         mock_client.blueprints.create.return_value = {"id": "bp456"}
@@ -144,6 +146,7 @@ class TestPushToBacklogShared(unittest.TestCase):
             stage = self._make_stage()
             mock_client = MagicMock()
             mock_client.find_story_by_story_id.return_value = None
+            mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
             mock_client.stories.create.return_value = {"id": "rec_x"}
             mock_client.blueprints.all.return_value = []
             mock_client.blueprints.create.return_value = {"id": "bp_x"}
@@ -173,6 +176,7 @@ class TestPushToBacklogShared(unittest.TestCase):
             stage = self._make_stage()
             mock_client = MagicMock()
             mock_client.find_story_by_story_id.return_value = None
+            mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
             mock_client.stories.create.return_value = {"id": "rec_y"}
             mock_client.blueprints.all.return_value = []
             mock_client.blueprints.create.return_value = {"id": "bp_y"}
@@ -240,6 +244,7 @@ class TestPushToBacklogShared(unittest.TestCase):
         stage = self._make_stage()
         mock_client = MagicMock()
         mock_client.find_story_by_story_id.return_value = None
+        mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
         mock_client.stories.create.return_value = {"id": "rec_z"}
         mock_client.blueprints.all.return_value = []
         mock_client.blueprints.create.return_value = {"id": "bp_z"}
@@ -264,6 +269,7 @@ class TestPushToBacklogShared(unittest.TestCase):
         stage = self._make_stage()
         mock_client = MagicMock()
         mock_client.find_story_by_story_id.return_value = None
+        mock_client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
         mock_client.stories.create.return_value = {"id": "rec_r"}
         mock_client.blueprints.all.return_value = []
         mock_client.blueprints.create.return_value = {"id": "bp_r"}
