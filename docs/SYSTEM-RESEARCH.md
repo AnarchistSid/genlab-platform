@@ -411,6 +411,72 @@ effort):
 ## 6. Findings log (append-only, newest first)
 
 
+### 2026-06-12 — R-70 part 2 closeout: 5 PRs land the strategy-extraction sequence
+
+Single-track session closing the R-70 part 2 follow-up that 2026-06-11
+sweep #2 explicitly deferred. The full multi-PR refactor sequence
+shipped + doc-flipped in one go:
+
+* **PR #161 (`36dd8de`)** — PR 4: `_compose_frame` lifted into
+  `BaseVisualRenderStrategy`. Precondition gate (bodies byte-identical
+  except `[movies]`/`[sports]`/`[anime]` log prefix) verified by
+  empirical body-diff before extraction; subclass-set `_log_prefix`
+  + `_visuals_yaml_path` thread the only two degrees of freedom.
+  6 new base-level pins; 134 SR + 136 CW + 143 FD full suites green.
+* **PR #163 (`9078eb3`)** — PR 5a: `BaseScoringStrategy(ScoringStrategy)`
+  skeleton. Empirical body-diff narrowed scope from "magnitude +
+  novelty" to "novelty only" — `_score_magnitude` is parallel-
+  evolved with the same name but completely divergent bodies/fields/
+  config keys across SR/CW/FD. Scope correction documented inline in
+  `docs/r70-part2-design-phase.md`.
+* **PR #164 (`7a7513f`)** — PR 5b: `BaseTimeBasedScoringStrategy
+  (BaseScoringStrategy)` second-tier base lifting `__init__` /
+  `_ensure_config` / `_score_timeliness` for **SR + FD only**.
+  SR pilot migrated in same PR. 2-attribute escape hatch
+  (`_log_prefix` + `_scoring_yaml_path` + literal-only-divergent
+  `_default_timeliness_half_life_hours` for SR 48h vs FD 24h).
+  11 new contract pins.
+* **PR #165 (`a0df3a0`)** — PR 5c: final migration. FD scoring
+  → second-tier base; CW scoring → narrow `BaseScoringStrategy`
+  only (CW genuinely uses different YAML shape + axis set).
+  47 FD scoring + 32 CW scoring tests pass; full channel suites
+  green on CI.
+* **PR #162 (`afa0ad9`)** — PR 4 audit-doc flip (in-PR).
+* **PR #166 (`06ae707`)** — R-70 status flip → Done.
+
+**What this closeout proved (cross-cutting):**
+
+* The [[feedback-measure-before-refactor]] habit fired twice at
+  different scales and prevented two different overshoots: PR 4's
+  precondition check confirmed `_compose_frame` was extractable;
+  PR 5a's check overrode the design doc by surfacing that
+  `_score_magnitude` was parallel-evolved. Roughly 3 hours of
+  mis-extraction work avoided.
+* Two-tier base hierarchy (narrow `BaseScoringStrategy` + second-
+  tier `BaseTimeBasedScoringStrategy`) was the right pattern for
+  **measured** divergence — CW genuinely didn't share the
+  SR+FD `scoring_weights.yaml` shape. Forcing CW onto the second-
+  tier base would have leaked CW's shape into SR+FD or required
+  CW to implement unused abstracts.
+* CI-side artefact: every PR after PR 4's format-fixup landed
+  17/17 green on first try because of the `uvx ruff format --check`
+  pre-push habit. Two-step local invariant (`ruff format --check`
+  + `ruff check`) caught the only format-drift miss before it hit
+  CI again.
+
+**Truly-open after this closeout:**
+* R-31 (a) — 4 per-network affiliate integrations + PA-API signing
+  (deferred for operator credentials; multi-day per-network work)
+* R-39 (c) — TTS cascade wired into the composite render path
+  (closed via OR-alternative doc PR `75207e5` in 2026-06-11 sweep #2)
+* R-81 — phantom-`SCHEDULED`-status prune (deferred for R-80-style
+  transition-table redesign)
+
+R-43, R-45, R-70 are all flipped to Done. The audit register's
+remaining HIGH/CRITICAL/MEDIUM Open list is empty; only LOW
+Partly-corrected R-31 + R-81 remain, both with documented blockers
+and named code-PR-deferred sub-items.
+
 ### 2026-06-11 — Session sweep #2: 13 R-IDs closed via 15-PR squash-merge stack
 
 Second focused remediation arc on 2026-06-11 (the morning's monetization /
@@ -497,6 +563,7 @@ no overlap; resolved with a strip-markers + run-both-pin verification.
 * R-39 (c) — TTS cascade wired into the composit render path
 * R-43 — Gemini model bump to GA (preview model deprecated; latent)
 * R-45 — Verified-benign protocol annotation honesty (low-pri)
+* R-70 (part 2 PR 5 a/b/c) — `BaseScoringStrategy` extraction (axis-divergence split)
 * R-81 — DRAFTED-with-video orphan cleanup widening (low-pri)
 
 
