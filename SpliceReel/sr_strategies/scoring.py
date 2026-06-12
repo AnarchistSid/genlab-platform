@@ -11,15 +11,13 @@ Scores film content with:
 from __future__ import annotations
 
 import logging
-import math
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
 from genlab_core.scoring.composite_scorer import score_visual_potential
-from genlab_core.strategies import ScoringStrategy
+from genlab_core.strategies.base_time_based_scoring import BaseTimeBasedScoringStrategy
 
 from .film_lifecycle import (
     FilmLifecycleStage,
@@ -32,44 +30,33 @@ logger = logging.getLogger(__name__)
 NICHE_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _load_yaml(path: Path) -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f) or {}
+class MovieScoringStrategy(BaseTimeBasedScoringStrategy):
+    """Score and rank movie content with lifecycle + franchise multipliers.
 
+    R-70 part 2 PR 5b pilot: inherits from ``BaseTimeBasedScoringStrategy``.
+    The byte-identical ``__init__`` / ``_ensure_config`` / ``_score_timeliness``
+    are now inherited from the second-tier base; ``_score_novelty`` is
+    inherited from the narrow ``BaseScoringStrategy`` shipped in PR 5a.
+    Kept per-channel: ``_score_magnitude``, ``_score_engagement_potential``,
+    ``score_item`` orchestration (with lifecycle + franchise multipliers),
+    and ``execute`` (with the SR-specific cross-niche filter + OMDb
+    enrichment pass).
+    """
 
-class MovieScoringStrategy(ScoringStrategy):
-    """Score and rank movie content with lifecycle + franchise multipliers."""
+    _log_prefix = "[movies]"
+    _default_timeliness_half_life_hours = 48.0
 
     def __init__(self) -> None:
+        # Base __init__ sets ``_config = _scoring = _thresholds = None``;
+        # ``_ensure_config`` reads ``self._scoring_yaml_path`` lazily so
+        # set it before any inherited method runs.
+        super().__init__()
         logger.info("[movies] MovieScoringStrategy initialized")
-        self._config: dict | None = None
-        self._scoring: dict | None = None
-        self._thresholds: dict | None = None
+        self._scoring_yaml_path = NICHE_ROOT / "config" / "scoring_weights.yaml"
 
-    def _ensure_config(self) -> None:
-        if self._config is not None:
-            return
-        self._config = _load_yaml(NICHE_ROOT / "config" / "scoring_weights.yaml")
-        self._scoring = self._config.get("scoring_dimensions", {})
-        self._thresholds = self._config.get("thresholds", {})
-
-    def _score_timeliness(self, item: dict) -> float:
-        """Exponential decay with 48h half-life."""
-        half_life = self._scoring.get("timeliness", {}).get("decay_half_life_hours", 48.0)
-        fetched_at_str = item.get("fetched_at", "")
-        if not fetched_at_str:
-            return 0.0
-        try:
-            fetched_at = datetime.fromisoformat(fetched_at_str)
-            now = datetime.now(UTC)
-            if fetched_at.tzinfo is None:
-                fetched_at = fetched_at.replace(tzinfo=UTC)
-            hours_elapsed = (now - fetched_at).total_seconds() / 3600
-            if hours_elapsed < 0:
-                return 1.0
-            return math.pow(0.5, hours_elapsed / half_life)
-        except (ValueError, TypeError):
-            return 0.0
+    # ``_ensure_config`` and ``_score_timeliness`` now inherited from
+    # ``BaseTimeBasedScoringStrategy``; ``_score_novelty`` inherited from
+    # ``BaseScoringStrategy``.
 
     def _score_magnitude(self, item: dict) -> float:
         """Score magnitude — RT scores, trailer drops, box office news."""
@@ -109,8 +96,8 @@ class MovieScoringStrategy(ScoringStrategy):
             return 0.4
         return 0.2
 
-    def _score_novelty(self, item: dict) -> float:
-        return item.get("novelty_score", 0.5)
+    # ``_score_novelty`` inherited from BaseScoringStrategy (PR 5a) —
+    # body is ``return item.get("novelty_score", 0.5)``.
 
     def score_item(self, item: dict) -> dict:
         """Score a single film content item."""
