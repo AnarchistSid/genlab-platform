@@ -148,7 +148,9 @@ class TestVisualReadyStatus:
 class TestErrorHandling:
     def test_handles_graph_api_error(self, stage, mock_client, sample_context):
         mock_client.find_story_by_story_id.side_effect = Exception("Graph API 429")
-        mock_client.stories.all.side_effect = Exception("Graph API 429")  # PR #175: upsert uses stories.all(formula=)
+        mock_client.stories.all.side_effect = Exception(
+            "Graph API 429"
+        )  # PR #175: upsert uses stories.all(formula=)
         stage._client = mock_client
         with patch(SETTINGS_PATCH) as mock_settings:
             mock_settings.azure_tenant_id = "t"
