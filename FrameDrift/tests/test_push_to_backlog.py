@@ -28,6 +28,7 @@ def stage():
 def mock_client():
     client = MagicMock()
     client.find_story_by_story_id.return_value = None
+    client.stories.all.return_value = []  # PR #175: upsert uses stories.all(formula=)
     client.stories.create.return_value = {"id": "rec_story_1"}
     client.blueprints.all.return_value = []
     client.blueprints.create.return_value = {"id": "rec_bp_1"}
@@ -147,6 +148,7 @@ class TestVisualReadyStatus:
 class TestErrorHandling:
     def test_handles_graph_api_error(self, stage, mock_client, sample_context):
         mock_client.find_story_by_story_id.side_effect = Exception("Graph API 429")
+        mock_client.stories.all.side_effect = Exception("Graph API 429")  # PR #175: upsert uses stories.all(formula=)
         stage._client = mock_client
         with patch(SETTINGS_PATCH) as mock_settings:
             mock_settings.azure_tenant_id = "t"
