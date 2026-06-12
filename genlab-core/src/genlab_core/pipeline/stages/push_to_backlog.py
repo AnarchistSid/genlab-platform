@@ -960,8 +960,31 @@ class PushToBacklog:
                 seen_urls.add(url_hash)
 
             # Upsert story
+            #
+            # Originally: ``client.find_story_by_story_id(story_id)`` — a
+            # delegator that proxied to ``self._stories.find_story_by_story_id``.
+            # The Tier 2 ``_stories`` store is only constructed on the
+            # SharePoint init path of ``BacklogClient.__init__`` (line 539);
+            # the Postgres-primary path (Sprint 65) early-returns at line 404
+            # before reaching those assignments. On prod (Postgres-primary)
+            # every call to this delegator therefore raised
+            # ``AttributeError: 'BacklogClient' object has no attribute
+            # '_stories'`` and silently lost the story (caught + logged by
+            # the surrounding try/except below) — root cause of the 2026-05-21
+            # "0 blueprints created" outage discovered 2026-06-12.
+            #
+            # The fix uses the public ``client.stories`` proxy + a formula
+            # query. Both backends (SharePoint proxy + PostgresTableProxy)
+            # implement ``.all(formula=, niche_id=, max_records=)`` with the
+            # same return shape (list of records, each carrying ``id`` and
+            # ``fields``), so this works regardless of backend.
             try:
-                existing = client.find_story_by_story_id(story_id)
+                existing_rows = client.stories.all(
+                    formula=f"{{story_id}}='{story_id}'",
+                    niche_id=niche_id,
+                    max_records=1,
+                )
+                existing = existing_rows[0] if existing_rows else None
                 if existing:
                     client.stories.update(existing["id"], {"niche_id": niche_id})
                     story_record = existing
