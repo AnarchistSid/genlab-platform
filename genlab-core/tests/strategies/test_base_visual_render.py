@@ -334,3 +334,72 @@ def test_r70_pr4_compose_frame_returns_empty_string_on_compositor_error(
     # The log must carry the channel-specific prefix the subclass set.
     assert any("[movies]" in rec.message for rec in caplog.records)
     assert any("FrameCompositor failed" in rec.message for rec in caplog.records)
+
+
+def test_compose_frame_persists_render_error_on_story_for_diagnostics(
+    tmp_path: Path,
+) -> None:
+    """The silent-failure visibility fix: when ``_compose_frame``
+    catches an exception, it must persist the exception string to
+    ``story["media"]["render_error"]`` so ``push_to_backlog`` can
+    write it to ``blueprint.error_message``. Without this, the
+    stuck DRAFTED rows have NULL error_message and no diagnostic
+    trail — the production failure mode the 2026-05-21 incident
+    surfaced."""
+    stage = _StubVisualRender(log_prefix="[movies]")
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+    story = {"story_id": "s1"}
+
+    with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
+        MockFC.from_visuals_yaml.side_effect = ValueError("bad visuals yaml")
+        result = stage._compose_frame(clip, story=story, context={"run_dir": str(run_dir)})
+
+    assert result == ""
+    # Exception string preserved on the story for the downstream
+    # error_message writer.
+    assert "render_error" in story.get("media", {})
+    assert "bad visuals yaml" in story["media"]["render_error"]
+
+
+def test_compose_frame_render_error_truncated_to_400_chars(
+    tmp_path: Path,
+) -> None:
+    """A pathological exception string must not blow past the
+    column-budget for ``blueprint.error_message`` (~500 chars after
+    the ``render:compositor_failed:`` prefix is added by
+    push_to_backlog's helper). Cap at 400 here so the prefix fits."""
+    stage = _StubVisualRender(log_prefix="[movies]")
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+    story: dict = {"story_id": "s1"}
+    huge = "x" * 5000
+
+    with patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC:
+        MockFC.from_visuals_yaml.side_effect = RuntimeError(huge)
+        stage._compose_frame(clip, story=story, context={"run_dir": str(run_dir)})
+
+    assert len(story["media"]["render_error"]) == 400
+
+
+def test_compose_frame_no_render_error_on_success(tmp_path: Path) -> None:
+    """The happy path must NOT set ``render_error`` — pin so a
+    refactor doesn't accidentally start setting it on every call
+    (which would then look like a render failure in the dashboard
+    explainer)."""
+    stage = _StubVisualRender(log_prefix="[movies]")
+    clip = _make_clip(tmp_path)
+    run_dir = tmp_path / "run"
+    story: dict = {"story_id": "s1"}
+
+    mock_compositor = MagicMock()
+    mock_compositor.compose.return_value = "/tmp/out.mp4"
+    with (
+        patch("genlab_core.strategies.base_visual_render.FrameCompositor") as MockFC,
+        patch("genlab_core.media.frame_compositor.probe_video") as mock_probe,
+    ):
+        MockFC.from_visuals_yaml.return_value = mock_compositor
+        mock_probe.return_value = MagicMock(duration_seconds=20.0)
+        stage._compose_frame(clip, story=story, context={"run_dir": str(run_dir)})
+
+    assert "render_error" not in story.get("media", {})

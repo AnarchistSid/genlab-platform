@@ -170,6 +170,15 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
             )
         except Exception as e:
             logger.error("%s FrameCompositor failed: %s", self._log_prefix, e)
+            # Persist the exception string onto the story so push_to_backlog
+            # can write it to ``blueprint.error_message``. Without this, the
+            # stuck DRAFTED blueprints carry NULL error_message and no
+            # diagnostic trail — the 4-niches-stuck-since-2026-05-21
+            # production incident took weeks to root-cause for exactly
+            # this reason. Truncated to 400 chars so the DB column stays
+            # readable on the dashboard. Caller behaviour unchanged
+            # (still returns ``""``).
+            story.setdefault("media", {})["render_error"] = str(e)[:400]
             return ""
 
     @abstractmethod
