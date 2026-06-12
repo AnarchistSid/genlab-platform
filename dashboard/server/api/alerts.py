@@ -3,6 +3,12 @@
 Routes:
     GET /api/v1/alerts/publishing  -- categorized publishing alerts
     GET /api/v1/alerts/system      -- system-wide health alerts
+    GET /api/v1/alerts/critical    -- unresolved CRITICAL pipeline_alerts
+                                      rows (the visibility surface that
+                                      let the 2026-05-20+ WARP outage go
+                                      unnoticed for 20+ days — the system
+                                      had been screaming, the dashboard
+                                      wasn't relaying)
 """
 
 import logging
@@ -226,4 +232,121 @@ def system_alerts():
 
     except Exception as e:
         logger.error("[Alerts] System query failed: %s", e, exc_info=True)
+        return api_error(error="Internal server error", code=500)
+
+
+@bp.route("/critical")
+def critical_alerts():
+    """Return unresolved CRITICAL ``pipeline_alerts`` for the Mission
+    Control banner.
+
+    Why this exists
+    ---------------
+
+    The ``health_monitor.check_*`` functions (`monitoring/health_monitor.py`)
+    write rich diagnostic rows to ``pipeline_alerts``: ``warp_down``,
+    ``download_failure``, ``qc_collapse``, ``zero_blueprints``,
+    ``missing_media_mass``, ``stuck_publishing`` … with severity,
+    message, details, and (for a few categories) ``auto_fix_applied``
+    outcomes. Several of those carry an exact remediation in the
+    message body — e.g. ``warp_down`` says ``"Run: systemctl restart
+    warp-svc"``.
+
+    Before this route, the dashboard had ``/alerts/publishing`` (a
+    derived-from-blueprints view) and ``/alerts/system`` (just
+    ran-today + DB pool + disk), but NOTHING surfaced the
+    ``pipeline_alerts`` rows. The 2026-05-20 WARP outage shows what
+    that gap costs: 9 separate ``warp_down`` CRITICAL rows fired over
+    20 days, each carrying the exact one-line fix in its ``message``,
+    and the operator never saw any of them because the dashboard
+    wasn't reading the table.
+
+    Dedup model
+    -----------
+
+    The downstream banner deliberately groups by ``(niche_id,
+    check_name)`` to avoid wall-of-alerts noise — daily-firing
+    download_failure rows would otherwise stack to 24+ identical
+    entries. The endpoint returns the rows raw and lets the frontend
+    dedup; that keeps server logic dumb and lets the UI surface
+    "occurrences=N since first_seen=X" naturally.
+
+    Filtering
+    ---------
+
+    Only ``severity='critical'`` and ``resolved_at IS NULL`` rows are
+    returned, capped at 50 most recent. Warning-level rows are
+    intentionally excluded — the banner is for "you MUST act on this"
+    not "FYI". A future ``/alerts/warning`` endpoint can mirror this
+    shape if warnings need their own surface.
+
+    Response shape
+    --------------
+
+    ::
+
+        {
+            "data": {
+                "unresolved_critical": [
+                    {
+                        "id": "uuid-string",
+                        "niche_id": "ai_creators",
+                        "check_name": "warp_down",
+                        "message": "warp-svc not active...",
+                        "details": {...},
+                        "auto_fix_applied": "not attempted (...)",
+                        "created_at": "2026-06-12T07:00:35Z"
+                    },
+                    ...
+                ],
+                "count": 11
+            }
+        }
+    """
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            # Dev environments without a DB connection: degrade
+            # gracefully rather than 500. The banner reads ``count`` and
+            # hides itself when it's 0.
+            return api_success(data={"unresolved_critical": [], "count": 0})
+
+        with psycopg.connect(dsn, row_factory=dict_row, connect_timeout=5) as conn:
+            rows = conn.execute(
+                """
+                SELECT id::text AS id,
+                       niche_id,
+                       check_name,
+                       message,
+                       details,
+                       auto_fix_applied,
+                       created_at
+                FROM pipeline_alerts
+                WHERE severity = 'critical'
+                  AND resolved_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT 50;
+                """
+            ).fetchall()
+
+        # Normalise timestamps to ISO strings so the frontend doesn't
+        # have to reason about Python datetime serialisation specifics
+        # (Flask's default isoformat is fine but explicit is better).
+        for r in rows:
+            ts = r.get("created_at")
+            if ts is not None:
+                r["created_at"] = ts.isoformat()
+
+        return api_success(
+            data={
+                "unresolved_critical": rows,
+                "count": len(rows),
+            }
+        )
+
+    except Exception as e:
+        logger.error("[Alerts] Critical query failed: %s", e, exc_info=True)
         return api_error(error="Internal server error", code=500)

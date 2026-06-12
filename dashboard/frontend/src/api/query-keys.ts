@@ -96,6 +96,7 @@ export const queryKeys = {
   },
   publishingMetrics: () => ["metrics", "publishing"] as const,
   publishingAlerts: () => ["alerts", "publishing"] as const,
+  criticalAlerts: () => ["alerts", "critical"] as const,
   channelHealth: () => ["channel-health"] as const,
   config: {
     sources: (nicheId?: string) => ["config", "sources", nicheId] as const,
