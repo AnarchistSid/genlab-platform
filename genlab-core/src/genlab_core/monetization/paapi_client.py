@@ -20,6 +20,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import requests
+
+from genlab_core.monetization.paapi_signing import (
+    PAAPI_REGION,
+    PAAPI_SERVICE,
+    sign_request_v4,
+)
+
 logger = logging.getLogger(__name__)
 
 _CACHE_DIR = Path(__file__).parent.parent.parent.parent / ".tmp" / "cache" / "paapi"
@@ -155,13 +163,62 @@ class PaapiClient:
     def _signed_request(self, operation: str, payload: dict) -> dict:
         """Make a signed PA-API request.
 
-        TODO: Implement AWS Signature v4 signing when PA-API access is granted.
-        For now, raises NotImplementedError — activate after PAAPI_ACCESS_KEY is set.
+        R-31 (a) PA-API half: wired against the in-tree AWS Sig v4
+        implementation in ``paapi_signing.py``. Pinning tests there
+        verify the signing chain against AWS's published test
+        vectors, so this method only owns the PA-API-specific
+        plumbing (path, headers, host/region lookup, HTTP call,
+        error mapping).
+
+        Raises:
+            ValueError: If the client isn't configured. ``search`` /
+                ``get_by_asin`` already gate on ``is_configured``, so
+                this branch is the defence in depth.
+            requests.HTTPError: On a non-2xx response.
         """
-        raise NotImplementedError(
-            "PA-API signing not yet implemented. "
-            "Set PAAPI_ACCESS_KEY and PAAPI_SECRET_KEY, then implement AWS Sig v4."
+        if not self.is_configured:
+            raise ValueError("PA-API not configured: set PAAPI_ACCESS_KEY + PAAPI_SECRET_KEY")
+
+        # PA-API operation → URL path + X-Amz-Target header
+        op_lower = operation.lower()  # "SearchItems" → "searchitems"
+        path = f"/paapi5/{op_lower}"
+        target = f"com.amazon.paapi5.v1.ProductAdvertisingAPIv1.{operation}"
+
+        body = json.dumps(payload, separators=(",", ":"))
+
+        # Region is host-derived. ``_HOSTS`` and ``PAAPI_REGION`` must
+        # stay in sync — a regression test in test_paapi_signing.py
+        # pins that every _HOSTS key has a region mapping.
+        host_key = next((k for k, h in _HOSTS.items() if h == self._host), "us")
+        region = PAAPI_REGION[host_key]
+
+        extra_headers = {
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Amz-Target": target,
+            "Content-Encoding": "amz-1.0",
+        }
+
+        headers = sign_request_v4(
+            method="POST",
+            host=self._host,
+            path=path,
+            payload=body,
+            access_key=self._access_key,
+            secret_key=self._secret_key,
+            region=region,
+            service=PAAPI_SERVICE,
+            extra_headers=extra_headers,
         )
+
+        url = f"https://{self._host}{path}"
+        response = requests.post(url, data=body, headers=headers, timeout=10)
+
+        # PA-API uses standard HTTP status codes; a non-2xx is a
+        # signing error, a quota issue, or a malformed payload.
+        # Surface as HTTPError so the caller's existing try/except
+        # in ``search`` / ``get_by_asin`` logs + degrades gracefully.
+        response.raise_for_status()
+        return response.json()
 
     def _parse_search_response(self, response: dict) -> list[PaapiProduct]:
         """Parse PA-API SearchItems response."""
