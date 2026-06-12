@@ -218,6 +218,72 @@ def _is_publishable(media: dict) -> bool:
     return (media.get("video_validation") or {}).get("valid", True) is not False
 
 
+def _derive_render_failure_reason(story: dict, clip_index: dict | None, story_id: str) -> str:
+    """Why is this blueprint stuck at DRAFTED instead of VISUAL_READY?
+
+    Returns a short prefixed reason string (≤500 chars) suitable for
+    ``blueprint.error_message``. Empty string when the blueprint is
+    publishable (caller decides by ``_is_publishable``; this helper is
+    only called on the not-publishable branch).
+
+    Prefix vocabulary (forward-looking — the dashboard groups by it):
+        ``render:validation_failed:<reason>``  — VMAF / spec / no-audio gate
+        ``render:compositor_failed:<error>``   — ``_compose_frame`` raised
+        ``render:download_failed:<error>``     — yt-dlp couldn't download
+        ``render:no_video_found``              — VideoSourcer returned no URL
+        ``render:not_publishable``             — last-resort fallback
+
+    The "render:" namespace prefix is a forward-looking choice: if
+    other pipeline stages later need to write their own failure
+    reasons (e.g. ``publish:rate_limited``, ``write:llm_refused``),
+    the prefix keeps them separable for the dashboard explainer.
+
+    Pre-fix: 100% of stuck DRAFTED rows had NULL ``error_message`` —
+    weeks of production silent-failure with no diagnostic trail.
+    This helper closes that gap; root-cause fixes for the underlying
+    yt-dlp / WARP / compositor issues live in separate PRs and read
+    from these reasons.
+    """
+    media = story.get("media") or {}
+
+    # 1. Validation failure — most precise; explicit ``valid: False``
+    validation = media.get("video_validation") or {}
+    if validation.get("valid") is False:
+        reason = validation.get("reason", "unknown")
+        return f"render:validation_failed:{reason}"[:500]
+
+    # 2. Compositor failure — ``_compose_frame`` caught an exception and
+    # stored ``render_error`` on the story (see base_visual_render.py).
+    render_error = media.get("render_error", "")
+    if render_error:
+        return f"render:compositor_failed:{render_error}"[:500]
+
+    # 3. Download failure — clip_index carries the per-story yt-dlp error
+    # string. The strategy sets ``render_status="no_video"`` when the
+    # download failed; cross-reference clip_index for the actual error.
+    render_status = media.get("render_status", "")
+    if render_status == "no_video" or render_status == "":
+        clip_entry = (clip_index or {}).get("clips", {}).get(story_id, {})
+        clip_error = clip_entry.get("error", "")
+        if clip_error:
+            return f"render:download_failed:{clip_error}"[:500]
+        # 4. No download AND no clip_index error → VideoSourcer returned
+        # no candidate at all (the upstream "couldn't find any video"
+        # branch in download_top_videos._process_one_story).
+        return "render:no_video_found"
+
+    # 5. Render-failed status with no captured exception — defensive
+    # fallback (the base ``_compose_frame`` should always populate
+    # ``render_error`` on failure, but a subclass override that
+    # doesn't would land here).
+    if render_status == "render_failed":
+        return "render:compositor_failed:no_exception_captured"
+
+    # 6. Last-resort: rendered_path missing for a reason none of the
+    # above captured.
+    return "render:not_publishable"
+
+
 def _is_foreign_source(niche_id: str, source: str) -> str | None:
     """Return the matching forbidden prefix if `source` is foreign for `niche_id`, else None."""
     if not source:
@@ -1125,6 +1191,20 @@ class PushToBacklog:
                             niche_id=niche_id,
                         ),
                         "status": "VISUAL_READY" if publishable else "DRAFTED",
+                        # Write a structured failure reason so dashboard +
+                        # operators can see why a blueprint is stuck at
+                        # DRAFTED. Empty when publishable; otherwise one
+                        # of render:validation_failed / render:compositor_failed /
+                        # render:download_failed / render:no_video_found / etc.
+                        # Closes the silent-failure visibility gap exposed by
+                        # the 2026-05-21 stuck-DRAFTED incident.
+                        "error_message": (
+                            ""
+                            if publishable
+                            else _derive_render_failure_reason(
+                                story, context.get("clip_index"), story_id
+                            )
+                        ),
                         "format": "reel",
                         "niche_id": niche_id,
                         "arm_id": arm_id,
