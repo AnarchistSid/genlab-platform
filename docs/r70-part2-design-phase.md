@@ -126,6 +126,33 @@ that CW does NOT inherit from.
 magnitude+novelty into base), PR 5b (SR+FD second-tier base),
 PR 5c (migrate CW with the narrower base only).
 
+#### PR 5a empirical correction (added during PR 5a implementation)
+
+Before shipping PR 5a this session ran the body-level diff that
+the [[feedback-measure-before-refactor]] habit calls for. The data
+overrode the design hypothesis:
+
+* `_score_novelty` — **byte-identical 1-line body** across all
+  three channels (`return item.get("novelty_score", 0.5)`).
+  Extracted into the base. ✅
+* `_score_magnitude` — **substantively divergent**. SR scores on
+  `rt_score`/`is_trailer_drop`/`is_box_office_news`; CW scores on
+  `game_type` via a multiplier table; FD scores on
+  `is_creator_spotlight`/`is_collab`/`is_new_release`/
+  `is_event_coverage`. Same method name, completely different
+  bodies, different config keys, different `item` fields read.
+  **NOT extracted.** ❌
+* `__init__` + `_ensure_config` — SR + FD byte-identical
+  (`_scoring`/`_thresholds` shape, `scoring_dimensions` YAML key);
+  CW genuinely divergent (`_weights`/`_multipliers` shape,
+  `clip_scoring` sub-key). Belongs in PR 5b. Not in PR 5a.
+
+PR 5a's actual scope therefore narrowed from "magnitude + novelty"
+to "novelty only" — the only method whose body the data confirmed
+as shared. PR 5b inherits the harder work (the SR+FD second-tier
+base lifts `__init__`, `_ensure_config`, plus the SR+FD-only axes
+`_score_timeliness` + `_score_engagement_potential`).
+
 ## What this design phase deliberately does NOT decide
 
 * **Hook-method API for `_build_pexels_queries`.** The query
