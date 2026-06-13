@@ -192,7 +192,27 @@ export const blueprints = {
     mutate<{ status: string; scheduled_for: string }>("POST", `/blueprints/${id}/approve-and-schedule`, {}),
   batchApproveSchedule: (body: { ids: string[] }) =>
     mutate<{ data: Array<{ id: string; scheduled_for: string }> }>("POST", "/blueprints/batch-approve-schedule", body),
+  // AUTO #1 (2026-06-13): preview the auto-approval gate's decision for a
+  // blueprint. Read-only — does NOT approve or change state. The dashboard
+  // surfaces this as a "would auto-approve" badge so operators can see
+  // what the gate would do before the opt-in switch is flipped.
+  autoApprovalPreview: (id: string) =>
+    get<AutoApprovalPreview>(`/blueprints/${id}/auto-approval-preview`),
 };
+
+// AUTO #1: response shape from /api/v1/blueprints/<id>/auto-approval-preview.
+// `would_publish` is the immutable contract bit — always false from this
+// endpoint. Mirrors AutoApprovalDecision in genlab-core.
+export interface AutoApprovalPreview {
+  record_id: string;
+  approved: boolean;
+  confidence: number;       // 0.0..1.0
+  passed_checks: string[];
+  failed_checks: string[];
+  reasons: string[];
+  would_publish: false;     // pinned literal — preview never publishes
+  preview_only: true;
+}
 
 export const stories = {
   list: (params?: Record<string, string>) =>

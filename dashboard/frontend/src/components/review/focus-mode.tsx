@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tooltip";
 import { CarouselViewer } from "@/components/shared/carousel-viewer";
 import { ProgressBar } from "@/components/review/progress-bar";
+import { AutoApprovalBadge } from "@/components/review/auto-approval-badge";
 import { cn } from "@/lib/utils";
 import { useFocusReviewQueue } from "@/hooks/use-focus-review";
 import { useNicheStore } from "@/stores/niche-store";
@@ -640,6 +641,14 @@ export function FocusMode() {
           <span className="text-sm text-text-muted">
             {state.currentIndex + 1} / {state.items.length}
           </span>
+
+          {/* AUTO #1 (2026-06-13): gate verdict for THIS blueprint.
+              Read-only preview — operator still makes the call. Sits next
+              to the counter so the verdict is visible at the moment the
+              operator forms their own opinion. */}
+          {currentItem?.id && (
+            <AutoApprovalBadge blueprintId={String(currentItem.id)} />
+          )}
 
           {/* Prev/Next mini buttons */}
           <div className="flex items-center gap-1 ml-2">
