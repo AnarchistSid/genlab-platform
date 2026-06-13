@@ -1,0 +1,36 @@
+# Impact.com per-advertiser deep-link template config — task #34c (2026-06-13)
+#
+# Each row defines one Impact-affiliated brand the operator has partnered
+# with. Adding a brand is a YAML edit — no code change required.
+#
+# Required fields per row:
+#   subdomain:      the Impact-issued tracking subdomain
+#                   (e.g. "acme.sjv.io", "brand-b.7eer.net")
+#   advertiser_id:  Impact's numeric advertiser ID for the brand
+#   campaign_id:    the specific campaign / tracking link ID under that advertiser
+#
+# Optional: alias (lookup key the matcher uses; defaults to the YAML key)
+#
+# Lookup keys are operator-chosen slugs (snake_case recommended).
+# The affiliate matcher resolves a product → advertiser_key based on
+# the product's metadata (typically the brand/merchant name).
+#
+# REQUIRED env var (not in this file):
+#   IMPACT_ACCOUNT_SID — the publisher's Impact account SID
+#                        (the {account_sid} field in the tracking URL template)
+#
+# Currently empty: the operator has not partnered with any Impact
+# advertisers yet. Add rows when partnerships are confirmed. The
+# generate_url adapter returns "" gracefully for any advertiser_key not
+# present here, so the affiliate matcher falls back to other networks.
+
+advertisers: {}
+# Example shape (uncomment + edit when partnering with an advertiser):
+#   acme_corp:
+#     subdomain: acme.sjv.io
+#     advertiser_id: "12345"
+#     campaign_id: "67890"
+#   brand_b:
+#     subdomain: brand-b.7eer.net
+#     advertiser_id: "98765"
+#     campaign_id: "54321"

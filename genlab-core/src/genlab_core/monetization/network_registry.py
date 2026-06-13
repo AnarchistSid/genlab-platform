@@ -132,30 +132,45 @@ class EarnKaroAdapter:
 class ImpactAdapter:
     """Impact.com adapter — global affiliate network.
 
-    Impact.com's deep links are advertiser-specific: each campaign has
-    a tracking template like
-    ``https://{publisher}.sjv.io/c/{account_sid}/{advertiser_id}/{campaign_id}?...``.
-    Adding live support requires a per-advertiser config map plus
-    OAuth credential rotation, which is task #34c.
+    Live since task #34c (2026-06-13). Per-advertiser tracking templates
+    are stored in ``genlab-core/config/impact_advertisers.yaml``;
+    ``generate_url`` looks up the operator-chosen advertiser_key kwarg,
+    substitutes the template with the target URL + sub_id, and returns
+    the click-through URL.
+
+    Required kwargs:
+        advertiser_key: lookup key in impact_advertisers.yaml
+        target_url:     merchant landing page
+
+    Optional kwargs:
+        sub_id:         tracking sub-ID (passed as subId1)
+
+    Returns "" when the advertiser_key is missing, when the env
+    IMPACT_ACCOUNT_SID is unset, or when the advertiser isn't in the
+    YAML — letting the matcher fall back to other networks.
     """
 
     network_id: str = "impact"
     display_name: str = "Impact.com"
     account_sid: str = field(default_factory=lambda: os.environ.get("IMPACT_ACCOUNT_SID", ""))
-    api_token: str = field(default_factory=lambda: os.environ.get("IMPACT_API_TOKEN", ""))
 
     def validate_url(self, url: str) -> bool:
-        return "impact.com" in url or "sjv.io" in url
+        return "impact.com" in url or "sjv.io" in url or "7eer.net" in url
 
     def generate_url(self, product_id: str, **kwargs) -> str:
-        if not (self.account_sid and self.api_token):
-            return ""  # graceful skip — let the matcher try the next network
-        raise NotImplementedError(
-            "Impact.com live API integration not yet shipped — see task #34c. "
-            "IMPACT_ACCOUNT_SID + IMPACT_API_TOKEN are both set, but the "
-            "per-advertiser deep-link generation needs a per-campaign "
-            "config map that hasn't been built. Until then, Impact links "
-            "must be pre-generated and supplied to the matcher."
+        if not self.account_sid:
+            return ""
+        advertiser_key = kwargs.get("advertiser_key", "")
+        target_url = kwargs.get("target_url", "")
+        if not (advertiser_key and target_url):
+            return ""
+        from genlab_core.monetization.impact_client import build_deep_link
+
+        return build_deep_link(
+            advertiser_key=advertiser_key,
+            target_url=target_url,
+            account_sid=self.account_sid,
+            sub_id=kwargs.get("sub_id", ""),
         )
 
 

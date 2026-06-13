@@ -181,13 +181,15 @@ class TestImpact:
         with patch.dict("os.environ", {"IMPACT_API_TOKEN": "TOK"}, clear=True):
             assert ImpactAdapter().generate_url("p") == ""
 
-    def test_raises_clear_error_when_both_present_but_integration_pending(self):
-        with patch.dict(
-            "os.environ",
-            {"IMPACT_ACCOUNT_SID": "ACC", "IMPACT_API_TOKEN": "TOK"},
-        ):
-            with pytest.raises(NotImplementedError, match="task #34c"):
-                ImpactAdapter().generate_url("p")
+    def test_integration_live_in_34c(self):
+        """As of #34c (2026-06-13), Impact ships per-advertiser template
+        substitution from impact_advertisers.yaml. With account_sid set
+        but no advertiser_key kwarg, generate_url returns "" gracefully
+        (the matcher tries the next network). Detailed template behavior
+        is covered by test_impact_client.py."""
+        with patch.dict("os.environ", {"IMPACT_ACCOUNT_SID": "ACC"}):
+            # No advertiser_key kwarg → graceful skip (not a crash)
+            assert ImpactAdapter().generate_url("p") == ""
 
     def test_validate_url_recognizes_impact_and_sjv(self):
         adapter = ImpactAdapter()
