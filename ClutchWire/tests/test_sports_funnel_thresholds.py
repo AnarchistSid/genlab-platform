@@ -17,7 +17,6 @@ from pathlib import Path
 
 import yaml
 
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _NICHE_YAML = _REPO_ROOT / "config" / "niche.yaml"
 _SOURCES_YAML = _REPO_ROOT / "config" / "sources.yaml"
