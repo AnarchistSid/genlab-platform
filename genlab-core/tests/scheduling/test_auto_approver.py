@@ -18,15 +18,12 @@ Most important invariants:
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 from genlab_core.scheduling.auto_approver import (
     AUTO_APPROVAL_SOURCE_TAG,
-    AutoApprovalPassResult,
     AutoApprovalPolicy,
     load_policy,
     run_pass,

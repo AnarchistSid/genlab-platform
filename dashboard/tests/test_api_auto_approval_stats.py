@@ -16,9 +16,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import pytest
 import server.review_server as review_server_module
-from server.review_server import app
-
 from genlab_core.scheduling.calibration_logger import CalibrationStats
+from server.review_server import app
 
 
 @pytest.fixture(autouse=True)

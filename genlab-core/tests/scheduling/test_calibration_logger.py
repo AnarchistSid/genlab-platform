@@ -13,15 +13,13 @@ Key invariants:
 
 from __future__ import annotations
 
-import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 from genlab_core.scheduling.calibration_logger import (
-    CalibrationStats,
     VALID_OPERATOR_ACTIONS,
+    CalibrationStats,
     log,
     stats,
 )

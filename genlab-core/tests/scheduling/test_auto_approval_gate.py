@@ -9,9 +9,7 @@ decision as a "would auto-approve" badge.
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.scheduling.auto_approval_gate import (
-    AutoApprovalDecision,
     evaluate,
 )
 

@@ -161,7 +161,7 @@ def evaluate(
     composite = _to_float(extra.get("composite_score"))
     if composite is None:
         # Cold-start tolerance: missing score → unknown not fail.
-        reasons.append(f"composite_score missing (defaulting to unknown)")
+        reasons.append("composite_score missing (defaulting to unknown)")
         confidences.append(0.5)  # Neutral prior
     elif composite >= min_composite_score:
         passed.append("composite_score")

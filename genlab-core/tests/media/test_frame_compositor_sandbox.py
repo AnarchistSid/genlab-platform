@@ -17,7 +17,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.media.frame_compositor import ChannelBranding, FrameCompositor
 
 

@@ -24,7 +24,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.media.frame_compositor import ChannelBranding, FrameCompositor, VideoInfo
 
 
@@ -247,7 +246,7 @@ class TestCombinedFlags:
         ]
         assert all(idx != -1 for idx in order_check)
         # Each subsequent overlay appears after the previous in the graph
-        for prev, curr in zip(order_check, order_check[1:]):
+        for prev, curr in zip(order_check, order_check[1:], strict=False):
             assert prev < curr, f"order broken: {order_check}"
         # Graph still terminates correctly at [out]
         assert "[out]" in graph

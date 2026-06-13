@@ -20,9 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.monetization.impact_client import (
-    ImpactAdvertiser,
     _clear_cache_for_tests,
     build_deep_link,
     get_advertiser,

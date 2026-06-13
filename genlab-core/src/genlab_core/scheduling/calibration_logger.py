@@ -30,7 +30,6 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 
@@ -72,7 +71,7 @@ def log(
     *,
     blueprint_id: str,
     niche_id: str,
-    decision: Optional[AutoApprovalDecision],
+    decision: AutoApprovalDecision | None,
     operator_action: str,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.

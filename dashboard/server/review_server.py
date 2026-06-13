@@ -514,8 +514,8 @@ def get_csrf_token():
 # ── Register API v1 modules ──────────────────────────────
 from server.api.alerts import bp as alerts_bp
 from server.api.analytics import bp as analytics_bp
-from server.api.auto_approval import bp as auto_approval_bp
 from server.api.audience import bp as audience_bp
+from server.api.auto_approval import bp as auto_approval_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.config_routes import bp as config_bp

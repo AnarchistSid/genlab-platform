@@ -56,15 +56,18 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
 
 from genlab_core.scheduling.auto_approval_gate import (
     AutoApprovalDecision,
+)
+from genlab_core.scheduling.auto_approval_gate import (
     evaluate as gate_evaluate_default,
 )
 

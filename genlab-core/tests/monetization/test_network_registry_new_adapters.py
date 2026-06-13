@@ -19,8 +19,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from genlab_core.monetization.network_registry import (
     CJAffiliateAdapter,
     EarnKaroAdapter,
@@ -29,7 +27,6 @@ from genlab_core.monetization.network_registry import (
     get_adapter,
     validate_affiliate_url,
 )
-
 
 # ── ShareASale ─────────────────────────────────────────────────────────────
 
