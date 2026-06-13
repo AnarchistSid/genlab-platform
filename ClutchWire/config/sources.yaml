@@ -168,7 +168,15 @@ reddit:
   enabled: true
   listing: top
   time_window: day
-  per_sub_limit: 15
+  # Fix #5 of the autonomy roadmap (2026-06-13). Pre-fix sports funnel
+  # was 884 stories → 50 published in 60d (5.7% conversion, vs gaming
+  # 43.4%). 19 subs × 15/sub was producing ~285 candidates per run
+  # before dedup/QC. Cutting per_sub_limit from 15 → 6 keeps subreddit
+  # diversity (still ~114 candidates per run from Reddit) while letting
+  # the strong-signal items rise faster. Bandit reward signal post-fix-1
+  # will tell us whether sports' best content is YouTube highlights,
+  # ScoreBat, or Reddit clips — until then, balance across all three.
+  per_sub_limit: 6
   subreddits:
     - name: "nbahighlights"
     - name: "nflstreams"  # short clips, not full games

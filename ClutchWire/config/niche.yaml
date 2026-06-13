@@ -40,14 +40,30 @@ video_sourcing:
   niche_category: sports
   max_age_hours: 48
   top_n_per_run: 15
-  min_view_velocity: 200
+  # Fix #5 of the autonomy roadmap (2026-06-13). Pre-fix sports
+  # conversion was 884 stories → 50 published in 60d (5.7%, vs gaming
+  # 43.4%). Sports has three ingestion stages (YouTube + ScoreBat +
+  # Reddit) plus the shared content_pool, so the upstream supply was
+  # ~4× any other niche. Raising min_view_velocity from 200 → 400
+  # halves the YouTube candidates that pass the upstream filter while
+  # keeping all the real-trending content. Combined with the Reddit
+  # per_sub_limit cut in sources.yaml, this should bring sports'
+  # 60-day story count from ~884 down to ~250 with same published
+  # output (~50) → conversion 20%.
+  min_view_velocity: 400
   use_google_trends: true
   allow_keyword_search: true
   video_gate: require
   fallback_to_text_render: false
   composite_quality_gate:
     velocity_threshold: 400
-    min_composite_score: 0.25
+    # Bumped 0.25 → 0.32 — same rationale as min_view_velocity above.
+    # The strong-signal items still clear (sports YouTube max view count
+    # in 60d = 13,126 plays — way above any reasonable threshold) while
+    # the long-tail wisecrack/edutainment clips that drove the 32-blueprint
+    # reject pile (noted in sources.yaml content_filter comments) get
+    # pre-culled at the composite stage instead of human-review.
+    min_composite_score: 0.32
 
 pipeline:
   stages:
