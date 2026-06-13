@@ -1,0 +1,27 @@
+[Unit]
+Description=GenLab Hook Classifier Training Timer (daily 03:30 UTC / 09:00 IST)
+
+[Timer]
+# Daily at 03:30 UTC — well before the publisher cron (12:05 + 15:30 UTC)
+# so any freshly trained model is loaded by the first publisher run of
+# the day. Also sits after the metric collector's overnight runs have
+# completed (it fires hourly) so the latest 48h/168h reward windows
+# are present in pending_feedback before training pulls labels.
+#
+# Schedule rationale (see also: genlab-core/runbooks/ historical
+# launchd analog):
+#   * Daily (not hourly) — labelled training data grows ~5-15 per
+#     niche per day; XGBoost retraining hourly adds nothing
+#   * Daily (not weekly) — once a niche crosses MIN_EXAMPLES we want
+#     training to start within 24h, not up to a week
+#   * 03:30 UTC = 09:00 IST = off-peak compute on the Hetzner box
+OnCalendar=*-*-* 03:30:00
+# Persistent=true so a missed run (box was down, deployment) catches
+# up at next boot instead of silently skipping the day.
+Persistent=true
+# AccuracySec — start anywhere in a 1-minute window. Lower (default
+# 1min) is fine because this isn't time-sensitive within minutes.
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

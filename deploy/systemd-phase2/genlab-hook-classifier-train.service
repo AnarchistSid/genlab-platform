@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab Hook Classifier Training (XGBoost) — daily retrain across all 5 niches
+Documentation=https://github.com/AnarchistSid/genlab-platform/blob/main/genlab-core/CLAUDE.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
+# XGBoost convergence on a per-niche labelled dataset is bounded but
+# can stretch — 30 min ceiling caps the worst case while still
+# detecting a runaway training loop.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scripts.train_hook_classifier --niche-id all
+TimeoutSec=1800
+# StandardOutput=journal so `journalctl -u genlab-hook-classifier-train -n 100`
+# surfaces the per-niche "Skipping — not enough examples yet" / "Trained
+# and saved successfully" log lines.
+StandardOutput=journal
+StandardError=journal
