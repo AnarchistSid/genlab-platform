@@ -830,7 +830,18 @@ class PushToBacklog:
         # drop today's stories against their own archived copies (symptom:
         # "Title near-dupe: 'X' ≈ 'x'" where X was a rejected row from
         # earlier in the day).
-        _TITLE_DEDUP_DAYS = 7
+        #
+        # Per-niche tunable (added 2026-06-13): niches whose trending
+        # content cycles weekly (anime shows, ongoing series) need a
+        # shorter window so the same show name doesn't stay blocked for
+        # 7 days. Without this, anime stayed dark for 22 days post-
+        # WARP-outage because every fetched candidate matched an existing
+        # title within the window. Default 7 preserves current behaviour
+        # for niches where titles ARE unique per video (gaming clips,
+        # sports moments).
+        _TITLE_DEDUP_DAYS = (
+            context.get("niche_config", {}).get("pipeline", {}).get("title_dedup_days", 7)
+        )
         _title_cutoff = datetime.now(UTC) - timedelta(days=_TITLE_DEDUP_DAYS)
         existing_titles: set[str] = set()
         for bp in active_bps:

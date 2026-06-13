@@ -123,3 +123,11 @@ pipeline:
   max_items_per_run: 10
   min_score_threshold: 0.20
   dedup_window_days: 7  # consistent with other channels — prevent dedup saturation
+  # Movies are theatrically released so the same trailer/clip TENDS to be
+  # unique per movie — but franchise sequels share names ("Avengers 5",
+  # "Dune Part 2", "Mission Impossible 8") and weekly box-office winners
+  # cycle for a few days. 3-day title-similarity window allows different
+  # clips/angles for the same movie without re-blueprinting the same
+  # actual video (URL/video_id dedup handles that). See
+  # [[session-2026-06-12-deep-dive-findings]] § B.9.
+  title_dedup_days: 3

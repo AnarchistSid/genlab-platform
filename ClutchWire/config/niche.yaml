@@ -131,3 +131,8 @@ pipeline:
   max_items_per_run: 10
   min_score_threshold: 0.20
   dedup_window_days: 7  # Sports has 435 stories — tighter window to prevent starvation
+  # Sports has multiple distinct clips per game ("Curry 3-pointer", "LeBron
+  # dunk", "Mahomes TD pass" — all from the same game might use the team
+  # name in the title). 3-day title window allows different moment-clips
+  # from the same game/team without re-blueprinting the same actual video.
+  title_dedup_days: 3
