@@ -959,7 +959,13 @@ class PushToBacklog:
             if url_hash:
                 seen_urls.add(url_hash)
 
-            # Upsert story
+            # Upsert story — the find_story_by_story_id delegator is now
+            # safe on both SharePoint and Postgres paths (fix #2 of the
+            # autonomy roadmap constructs Tier 2 stores on the Postgres
+            # branch too). Pre-fix, this call silent-AttributeError'd on
+            # Postgres and the surrounding try/except below ate the error,
+            # producing the 22-day "0 blueprints / $2 burned" outage of
+            # 2026-05-21 → 2026-06-12 (see [[session-2026-06-12-deep-dive-findings]]).
             try:
                 existing = client.find_story_by_story_id(story_id)
                 if existing:

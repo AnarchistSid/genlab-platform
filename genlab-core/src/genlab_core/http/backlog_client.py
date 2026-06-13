@@ -400,6 +400,14 @@ class BacklogClient:
             }
             self._backend_cache = {"postgres": _pg}
 
+            # CRITICAL: build the Tier 2 stores on this path too. Skipping
+            # this was the root cause of the 22-day "0 published / $2 burned"
+            # outage — push_to_backlog's delegators (find_story_by_story_id,
+            # create_story, etc.) all proxy to self._stories.* which was
+            # AttributeError until this PR. See _construct_tier2_stores
+            # docstring.
+            self._construct_tier2_stores()
+
             logger.info("[BacklogClient] Postgres-only mode — no SharePoint connection")
             return
 
@@ -503,6 +511,35 @@ class BacklogClient:
         # when multiple BacklogClient instances exist (e.g. in tests).
         self._backend_cache: dict[str, Any] = {}
 
+        self._construct_tier2_stores()
+
+    def _construct_tier2_stores(self) -> None:
+        """Build the Tier 2 store objects (StoryStore, BlueprintStore, …).
+
+        Called on BOTH the SharePoint and Postgres init paths so the
+        host-class delegators (``find_story_by_story_id``, ``create_story``,
+        ``batch_create_stories``, ``update_story_status``, etc.) work
+        regardless of backend.
+
+        Historical bug (fix #2 of the autonomy roadmap): the Postgres-
+        primary path (Sprint 65) early-returned BEFORE this block,
+        leaving ``self._stories`` / ``self._blueprints`` etc. unset.
+        Every delegator that hit ``self._stories.*`` raised
+        ``AttributeError`` which a try/except in ``push_to_backlog``
+        swallowed — pipelines ran fine through render, then silently
+        created zero blueprints (the 22-day "0 published / $2 burned"
+        outage of 2026-05-21 → 2026-06-12 traced back through this
+        single gap).
+
+        Order matters: Stories must be built before Assets + Blueprints
+        because both take ``find_story`` as a callback. Templates must
+        be built before Blueprints because it takes ``find_template``.
+
+        Uses ``getattr(self, "pending_engagement", None)`` /
+        ``getattr(self, "ab_tests", None)`` so the Postgres path (which
+        sets them unconditionally) and the SharePoint path (which sets
+        them to None when their lists aren't configured) both work.
+        """
         # Analytics surface lives in its own module (Tier 2, audit S-2).
         # BacklogClient retains the public method names + signatures as
         # thin delegators below; the actual upsert logic + virality math
@@ -514,14 +551,14 @@ class BacklogClient:
         # ``self.pending_engagement`` reference (may be None if
         # the underlying SP list isn't configured; the store
         # early-returns + WARNs in every method on that branch).
-        self._engagement = EngagementStore(self.pending_engagement)
+        self._engagement = EngagementStore(getattr(self, "pending_engagement", None))
 
         # AB_Tests surface (Tier 2, audit S-2 slice 2.3).
         # Multi-table backend pattern (like AnalyticsStore) but
         # also captures the ``self.ab_tests`` proxy ref for the
         # "is configured" truthy gate.
         self._ab_tests = ABTestStore(
-            ab_tests=self.ab_tests,
+            ab_tests=getattr(self, "ab_tests", None),
             backend=self._backend,
         )
 
