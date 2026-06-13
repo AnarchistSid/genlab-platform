@@ -221,9 +221,14 @@ class RenderWhisperCaptions:
         font_path = self._find_font(config)
 
         animator = WordByWordAnimator(font_path=font_path)
+        # RENDER #1 fix (2026-06-13): text_type was "hook" pre-fix, which
+        # gave Whisper captions the 120-160px adaptive HOOK size range —
+        # captions stacked floor-to-ceiling and overflowed the canvas.
+        # Now passes "caption" → 42px fixed, 2-line max, bottom-strip
+        # positioning. See [[session-2026-06-13-render-audit-findings]].
         filters, duration, _ = animator.build_animated_filters(
             caption_text,
-            text_type="hook",
+            text_type="caption",
             whisper_words=whisper_words,
         )
 

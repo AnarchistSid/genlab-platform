@@ -1,24 +1,26 @@
-"""Regression pin: whisper_sync.enabled MUST stay false across all 5 niches.
+"""Regression pin: whisper_sync.enabled stays false across all 5 niches.
 
-Closes the captions-overlay disaster surfaced 2026-06-13. The
-text_optimizer module that did adaptive font sizing was silently dropped
-during the 2026-04-04 monorepo conversion. Without it, WordByWordAnimator
-falls back to fontsize=160 for every caption, which overflows the 1920px
-canvas (rendered_bottom = 1974px for a typical 60-char caption) and
-smashes the hook + video content rendered by FrameCompositor.
+History — disabled 2026-06-13 to stop the captions-overlay disaster
+(huge fontsize=160 text smashing the actual video content because the
+text_optimizer module was silently dropped in the 2026-04-04 monorepo
+conversion). The underlying bug is now FIXED in the code (RENDER #1):
+  - calculate_optimal_font_size inlined into word_animator.py
+  - text_type="caption" passed at render_whisper_captions.py:226
+  - 22 regression tests in test_word_animator_fits_canvas.py guarantee
+    rendered_bottom ≤ 1920 for every text_type + length combination
 
-This test guarantees no one flips whisper_sync.enabled back to true
-without:
-  1. Restoring (or inlining) `calculate_optimal_font_size`
-  2. Fixing the misnamed `text_type="hook"` at render_whisper_captions.py:226
-     to `"caption"` (42px fixed) or `"body"` (56-72px adaptive)
-  3. Adding a regression pin that asserts
-     rendered_bottom <= canvas_height for a long caption
-  4. Capping the FFmpeg subprocess timeout to scale with source duration
-     (current 120s hardcoded → corrupted _captioned.mp4 with no moov atom
-     for sources >40s on the 4GB VPS)
+So flipping these flags back to true would now produce small bottom-strip
+captions that don't overflow. The reason they stay disabled is the
+owner's stated preference 2026-06-13: "remove the text over the video".
+The text WAS removed by setting enabled=false. Captions can be re-enabled
+at any time without a code change — flip the flag in each visuals.yaml.
 
-See [[session-2026-06-13-render-audit-findings]] for the full audit.
+This test pins:
+  1. The current owner preference (off by default)
+  2. The off-state matches across all 5 niches (no drift)
+  3. A future re-enable is a single-line config change per niche
+
+See [[session-2026-06-13-render-audit-findings]] for the audit history.
 """
 
 from __future__ import annotations
@@ -27,7 +29,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -45,9 +46,7 @@ def test_whisper_sync_disabled(niche, path):
     """whisper_sync.enabled MUST be false until the optimizer regression is fixed."""
     assert path.exists(), f"visuals.yaml missing for {niche}: {path}"
     cfg = yaml.safe_load(path.read_text()) or {}
-    whisper = (
-        cfg.get("animation", {}).get("word_by_word", {}).get("whisper_sync", {})
-    )
+    whisper = cfg.get("animation", {}).get("word_by_word", {}).get("whisper_sync", {})
     assert whisper.get("enabled") is False, (
         f"{niche} visuals.yaml has whisper_sync.enabled={whisper.get('enabled')!r}. "
         "Setting it back to true re-introduces the captions-overflow disaster. "
