@@ -520,6 +520,7 @@ from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.config_routes import bp as config_bp
 from server.api.config_routes import settings_bp
+from server.api.costs import bp as costs_bp
 from server.api.engagement import bp as engagement_bp
 from server.api.events import bp as events_bp
 from server.api.health import bp as health_bp
@@ -554,6 +555,7 @@ app.register_blueprint(niches_bp)
 app.register_blueprint(overview_bp)
 app.register_blueprint(queue_bp)
 app.register_blueprint(auto_approval_bp)
+app.register_blueprint(costs_bp)
 app.register_blueprint(focus_health_bp)
 app.register_blueprint(token_health_bp)
 app.register_blueprint(platform_posts_bp)
