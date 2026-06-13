@@ -11,5 +11,10 @@ WorkingDirectory=/opt/genlab/FrameDrift
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
+# Task #35 (2026-06-13): bake the prod hotfixes (yt-dlp wrapper +
+# cookies chown) into the pipeline lifecycle so they survive future
+# deploys. The leading `+` runs as root (drops to User=genlab for the
+# main ExecStart). Idempotent + never blocks the pipeline.
+ExecStartPre=+/opt/genlab/deploy/scripts/ensure_yt_dlp_environment.sh
 ExecStart=/bin/bash /opt/genlab/FrameDrift/runbooks/daily_intel.sh
 TimeoutSec=3600
