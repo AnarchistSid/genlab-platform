@@ -30,7 +30,14 @@ class TestVideoGate:
     """Tests for the VideoGate pipeline stage."""
 
     def test_video_gate_skips_story_without_clip(self):
-        """Stories not present in clip_index should be marked _skip_llm=True."""
+        """Stories not present in clip_index should be filtered from active
+        pipeline and counted in run_stats.skipped.
+
+        RENDER #6 (2026-06-13) changed semantics: previously skipped stories
+        stayed in ``result["stories"]`` with ``_skip_llm=True`` and HookStrategy
+        then generated hooks for them → QCGates failed them for missing
+        caption. Now VideoGate drops them so downstream stages never see them.
+        """
         stories = [
             {"story_id": "story-001", "title": "No clip available"},
             {"story_id": "story-002", "title": "Also missing"},
@@ -40,8 +47,9 @@ class TestVideoGate:
         gate = VideoGate()
         result = gate.execute(_make_context(stories, clip_index))
 
-        assert result["stories"][0]["_skip_llm"] is True
-        assert result["stories"][1]["_skip_llm"] is True
+        # New semantics: skipped stories removed from active list
+        assert result["stories"] == []
+        # Telemetry preserved
         assert result["run_stats"]["video_gate"]["skipped"] == 2
         assert result["run_stats"]["video_gate"]["passed"] == 0
 
@@ -113,7 +121,8 @@ class TestVideoGate:
             gate = VideoGate()
             result = gate.execute(_make_context(stories, clip_index))
 
-        assert result["stories"][0]["_skip_llm"] is True
+        # RENDER #6 (2026-06-13): skipped stories now filtered out, not flagged.
+        assert result["stories"] == []
         assert result["run_stats"]["video_gate"]["skipped"] == 1
         assert result["run_stats"]["video_gate"]["passed"] == 0
 
@@ -166,7 +175,8 @@ class TestVideoGate:
             result = gate.execute(ctx)
 
         # Story is marked for skip
-        assert result["stories"][0]["_skip_llm"] is True
+        # RENDER #6 (2026-06-13): skipped stories now filtered out, not flagged.
+        assert result["stories"] == []
         assert result["run_stats"]["video_gate"]["skipped"] == 1
         assert result["run_stats"]["video_gate"]["passed"] == 0
         # Clip-index entry now reports failure so downstream render strategies
@@ -259,7 +269,8 @@ class TestVideoGate:
             gate = VideoGate()
             result = gate.execute(_make_context(stories, clip_index))
 
-        assert result["stories"][0]["_skip_llm"] is True
+        # RENDER #6 (2026-06-13): low-bitrate stories filtered out, not flagged.
+        assert result["stories"] == []
         rejected = result["clip_index"]["clips"]["story-static"]
         assert rejected["success"] is False
         assert "low_bytes_per_sec" in rejected["error"]
@@ -328,7 +339,8 @@ class TestVideoGate:
         # No clip_index in context at all
         result = gate.execute(_make_context(stories))
 
-        assert result["stories"][0]["_skip_llm"] is True
+        # RENDER #6 (2026-06-13): skipped stories now filtered out, not flagged.
+        assert result["stories"] == []
         assert result["run_stats"]["video_gate"]["skipped"] == 1
         assert result["run_stats"]["video_gate"]["passed"] == 0
 

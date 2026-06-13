@@ -209,6 +209,29 @@ class VideoGate:
                     story.get("title", "")[:50],
                 )
 
+        # RENDER #6 fix (2026-06-13): drop _skip_llm stories from the active
+        # pipeline list. Pre-fix, VideoGate set the flag but kept the story in
+        # context["stories"] — every downstream stage (WritingStrategy, Hook-
+        # Strategy, AffiliateMatch, QCGates, ViralityScoring, VisualRender, ...)
+        # then iterated over them. Writing correctly skipped (the for-loop's
+        # `if story.get("_skip_llm"): continue`), but HookStrategy generated
+        # hooks for them anyway (it doesn't check the flag) and QC then ran on
+        # stories with hook + empty caption → "Missing required field: caption/
+        # body" failures. The 40% sports QC pass rate today (2 of 5 failing)
+        # was entirely VideoGate-skipped stories pretending to be real candidates.
+        #
+        # Side effect: the run_report's `qc.failed` count now reflects only true
+        # quality failures, not "we never had a video for this in the first
+        # place" structural skips. Operators reading the dashboard will see the
+        # real signal.
+        if skipped > 0:
+            context["stories"] = [s for s in stories if not s.get("_skip_llm")]
+            logger.info(
+                "VideoGate: dropped %d clipless stories from active pipeline; remaining=%d",
+                skipped,
+                len(context["stories"]),
+            )
+
         logger.info("VideoGate: %d passed, %d skipped", passed, skipped)
         context.setdefault("run_stats", {})["video_gate"] = {
             "passed": passed,
