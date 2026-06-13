@@ -93,18 +93,30 @@ def resolve_affiliate_link_with_network(
     """Return the best affiliate URL with geo-targeting and tracking params.
 
     Selection order (IN audience):
-    1. amazon (IN) → amazon_us (fallback)
+        amazon (IN) → amazon_in → amazon_us → earnkaro (when key set)
     Selection order (US audience):
-    1. amazon_us → amazon (IN)
+        amazon_us → amazon (IN) → shareasale → cj → impact
 
-    NOTE: Cuelinks linksredirect.com is a click tracker only — it does
-    NOT inject affiliate tags. Server-side wrapping through Cuelinks
-    strips our Amazon Associates tag entirely, earning zero commission.
-    Direct Amazon Associates links earn commission via our tags
-    (aspirehub-21 for IN, aspirehub06-20 for US).
+    NOTE (2026-06-14 cuelinks audit, queue item #12): cuelinks was
+    previously last-fallback in both lists. The 2026-06-14 prod-trace
+    audit confirmed that **every cuelinks redirect in our 73-click
+    historical sample earned zero commission**. Mechanism: cuelinks
+    (linksredirect.com) is a click tracker that faithfully passes
+    through whatever URL is in the inner ``url=`` parameter; our
+    catalog's cuelinks entries had the bare ``amazon.in/dp/B0XYZ``
+    without the ``tag=aspirehub-21`` affiliate tag, so the 302 sent
+    users to Amazon with no attribution. Cuelinks doesn't INJECT
+    affiliate tags — it only relays whatever URL it receives.
 
-    Cuelinks is kept as last-resort fallback only when no Amazon link
-    is available (e.g., for non-Amazon merchants).
+    Two options were considered: (a) fix the catalog's cuelinks
+    entries to embed our Amazon tag, (b) remove cuelinks from the
+    candidate list entirely. Option (b) won — cuelinks adds zero
+    revenue value over a direct Amazon link with the same tag (same
+    Amazon Associates commission either way), so the cuelinks hop is
+    pure latency + a third-party dependency for no gain. The catalog
+    entries can remain; this resolver just won't pick them. To
+    re-enable, add ``"cuelinks"`` back to the candidate list AND
+    verify the catalog's inner URLs carry the Amazon tag.
 
     Skips placeholder URLs and validates link health before selection.
     Falls through to next candidate on broken/placeholder links.
@@ -114,8 +126,8 @@ def resolve_affiliate_link_with_network(
 
     # Build candidate list — Amazon Associates first (real commission),
     # then per-geo affiliate networks (EarnKaro for IN; ShareASale/CJ/
-    # Impact for US — added in #34a, 2026-06-13), Cuelinks last as a
-    # click-only fallback that doesn't inject affiliate tags.
+    # Impact for US — added in #34a, 2026-06-13). Cuelinks removed
+    # 2026-06-14 after the audit (see docstring above).
     #
     # The candidate is silently skipped for any niche whose
     # product["networks"] dict doesn't carry the network's url field
@@ -128,7 +140,6 @@ def resolve_affiliate_link_with_network(
             "amazon_in",
             "amazon_us",
             "earnkaro",  # Indian deal aggregator
-            "cuelinks",
         ]
     else:
         candidates = [
@@ -137,7 +148,6 @@ def resolve_affiliate_link_with_network(
             "shareasale",  # US network — direct tracking links
             "cj",  # CJ Affiliate — global, template-based
             "impact",  # Impact.com — per-advertiser deep links
-            "cuelinks",
         ]
 
     base_url = ""
@@ -177,9 +187,11 @@ def resolve_affiliate_link_with_network(
     # the mapping centralized here means a new network just adds one
     # branch instead of touching every caller.
     sub_id = f"{niche_id}_{blueprint_id[:8]}" if blueprint_id else niche_id
-    if network in ("cuelinks",):
-        utm_params["uid"] = sub_id
-    elif network in ("admitad",):
+    # NOTE: the cuelinks branch (utm_params["uid"]) was removed alongside
+    # the candidate-list removal on 2026-06-14. Kept dead-code-free so a
+    # future readder of cuelinks sees the candidate-list change first
+    # rather than restoring orphan sub_id wiring.
+    if network in ("admitad",):
         utm_params["subid"] = sub_id
     elif network == "shareasale":
         utm_params["afftrack"] = sub_id
