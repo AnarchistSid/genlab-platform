@@ -93,13 +93,18 @@ class CuelinksAdapter:
 class EarnKaroAdapter:
     """EarnKaro adapter — Indian deal aggregator.
 
-    Link generation requires a live POST to ``https://ekaro.in/api/converter/public``
-    with ``EARNKARO_CONVERT_KEY`` as the API token. The shortener returns
-    an ``ekaro.in/...`` URL that retains attribution. Until the HTTP
-    client + caching layer ships (task #34b), ``generate_url`` is
-    intentionally a credential-gated stub: returns empty string when
-    the env var is missing, raises an explicit error when it's set but
-    the live integration hasn't been turned on.
+    Live since task #34b (2026-06-13). Calls ``ekaro.in/api/converter/public``
+    via ``earnkaro_client.convert_url`` to shorten a target merchant URL
+    into an ekaro.in link carrying our publisher's attribution. Responses
+    are disk-cached for 30 days because the shortened URLs are stable.
+
+    Required kwargs:
+        target_url: The merchant URL to shorten (e.g. amazon.in/dp/...).
+                    Without it there's nothing to convert.
+
+    Returns "" gracefully on any failure — env var missing, API down,
+    response shape unrecognized. The affiliate matcher uses this to
+    fall back to other networks in the candidate list.
     """
 
     network_id: str = "earnkaro"
@@ -111,15 +116,16 @@ class EarnKaroAdapter:
 
     def generate_url(self, product_id: str, **kwargs) -> str:
         if not self.convert_key:
-            # Graceful skip — the affiliate matcher can fall back to the
-            # next network in the candidate list rather than crashing.
             return ""
-        raise NotImplementedError(
-            "EarnKaro live API integration not yet shipped — see task #34b. "
-            "EARNKARO_CONVERT_KEY is set, but the HTTP converter call "
-            "hasn't been wired. Until then, EarnKaro links must be "
-            "pre-generated via earnkaro.com and supplied to the matcher."
-        )
+        target_url = kwargs.get("target_url", "")
+        if not target_url:
+            return ""
+        # Lazy import — earnkaro_client touches the disk cache module,
+        # which we don't want to load for adapter introspection paths
+        # (registry walking, validate_url dispatch, etc.).
+        from genlab_core.monetization.earnkaro_client import convert_url
+
+        return convert_url(target_url)
 
 
 @dataclass

@@ -145,13 +145,22 @@ class TestEarnKaro:
         with patch.dict("os.environ", {}, clear=True):
             assert EarnKaroAdapter().generate_url("p") == ""
 
-    def test_raises_clear_error_when_key_set_but_integration_pending(self):
-        """When credentials are present, the operator gets an explicit
-        error pointing to the task that needs to ship — not a silent
-        misleading success. This is the half-wired-pattern guard."""
+    def test_integration_live_in_34b(self):
+        """As of #34b (2026-06-13), EarnKaro is live via the HTTP
+        client. Adapter delegates to convert_url; this test pins the
+        delegation so a future refactor that breaks the wiring fails
+        loudly. The detailed conversion behavior is covered by
+        test_earnkaro_client.py."""
         with patch.dict("os.environ", {"EARNKARO_CONVERT_KEY": "tok"}):
-            with pytest.raises(NotImplementedError, match="task #34b"):
-                EarnKaroAdapter().generate_url("p")
+            with patch(
+                "genlab_core.monetization.earnkaro_client.convert_url",
+                return_value="https://ekaro.in/abc",
+            ) as mock_convert:
+                url = EarnKaroAdapter().generate_url(
+                    "p", target_url="https://merch.example.com/p"
+                )
+                assert url == "https://ekaro.in/abc"
+                mock_convert.assert_called_once()
 
     def test_validate_url_recognizes_both_domains(self):
         adapter = EarnKaroAdapter()
