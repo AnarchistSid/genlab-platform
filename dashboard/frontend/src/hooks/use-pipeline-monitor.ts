@@ -44,6 +44,12 @@ export interface PipelineRunDetail {
   cost_estimate: number;
   status: string;
   stages: PipelineRunStage[];
+  // RENDER #2 (2026-06-13): per-stage silent-failure attribution.
+  // Empty {} or undefined means all tracked stages clean. Non-empty
+  // means status was promoted from "success" to "partial" — surfaces
+  // in the run-history table as a warning badge per entry (e.g.
+  // "whisper_captions: 2") so operators don't trust a lying success.
+  stage_failures?: Record<string, number>;
 }
 
 interface PipelineStatusResponse {

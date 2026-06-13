@@ -139,6 +139,13 @@ def _normalize_run(data: dict, run_id: str) -> dict:
         "stages": stages,
         "blueprints_count": metrics.get("blueprints_count", 0),
         "stories_count": metrics.get("stories_count", 0),
+        # RENDER #2 (2026-06-13): per-stage silent-failure attribution.
+        # Empty {} means every tracked stage was clean. Non-empty means
+        # the run.status was promoted from "success" to "partial" — the
+        # dashboard frontend renders a badge per entry so operators see
+        # what specifically failed (e.g. whisper_captions: 2) instead
+        # of having to grep the journal.
+        "stage_failures": data.get("stage_failures", {}),
     }
 
 
