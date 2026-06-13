@@ -13,6 +13,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { blueprints, type AutoApprovalPreview } from "@/api/client";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Tooltip,
   TooltipContent,
@@ -51,21 +52,19 @@ export function AutoApprovalBadge({ blueprintId }: Props) {
     <TooltipProvider delayDuration={200}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span
-            className={
-              data.approved
-                ? "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium bg-success/15 text-success border border-success/30"
-                : "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium bg-warning/15 text-warning border border-warning/30"
-            }
+          <StatusBadge
+            status={data.approved ? "success" : "warning"}
+            size="xs"
+            icon={<span aria-hidden>{data.approved ? "✓" : "⚠"}</span>}
+            srLabel={headline}
             data-testid="auto-approval-badge"
             data-approved={data.approved}
           >
-            <span aria-hidden>{data.approved ? "✓" : "⚠"}</span>
             <span>{data.approved ? "would auto-approve" : "gate would reject"}</span>
             {data.approved && (
               <span className="opacity-70 ml-0.5 font-mono">{confidencePct}%</span>
             )}
-          </span>
+          </StatusBadge>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-md">
           <div className="space-y-1">
