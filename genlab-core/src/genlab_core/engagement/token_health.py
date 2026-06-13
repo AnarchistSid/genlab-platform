@@ -23,15 +23,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from typing import Final
 
 logger = logging.getLogger(__name__)
-
-# Re-emit the same alert at most once per N seconds per (platform, niche_id)
-# so a poller looping every 10 minutes doesn't carpet-bomb the alerts table.
-_REEMIT_INTERVAL_S: Final[int] = 3600
-_last_emit: dict[tuple[str, str], float] = {}
 
 
 # Maps each (platform, env var token name pattern) so the alert message
@@ -106,21 +100,24 @@ def emit_token_expiry_alert(
 ) -> bool:
     """Write a CRITICAL `token_expired` alert to ``pipeline_alerts``.
 
-    Returns True when a row was written (or would be in dry-run); False
-    when suppressed by the re-emit throttle. Never raises — alert
-    failure must not break poll loops.
+    Returns True when a row was written; False when no DSN, when an
+    unresolved alert already exists for this (check_name, niche_id), or
+    when the DB write raised. Never raises — alert failure must not
+    break poll loops.
 
     The message embeds the literal env var name the operator needs to
     refresh, e.g. ``CRITICALRUSH_THREADS_ACCESS_TOKEN``. Mission Control
     surfaces unresolved CRITICAL alerts on the home page (PR #174).
-    """
-    now = time.monotonic()
-    key = (platform, niche_id)
-    last = _last_emit.get(key, 0.0)
-    if now - last < _REEMIT_INTERVAL_S:
-        return False
-    _last_emit[key] = now
 
+    Deduplication: the SELECT-against-unresolved-rows check below is the
+    only throttle. An earlier version of this function used a
+    process-level in-memory throttle on top of the DB check, which made
+    behaviour order-dependent across pytest modules (state from one
+    test's poller call would suppress emission in a token_health test
+    later in the run). The DB-side check is functionally equivalent at
+    the granularity that matters (one row per unresolved alert) without
+    the cross-test coupling.
+    """
     prefix = _niche_prefix(niche_id)
     env_hint = _TOKEN_ENV_HINT.get(platform, "{NICHE_PREFIX}_<PLATFORM>_TOKEN")
     env_hint = env_hint.replace("{NICHE_PREFIX}", prefix)
@@ -187,5 +184,14 @@ def emit_token_expiry_alert(
 
 
 def reset_throttle() -> None:
-    """Drop the per-key emit cache. Used in tests; not for production."""
-    _last_emit.clear()
+    """Deprecated no-op kept for backward compatibility.
+
+    The in-memory throttle was removed because it created cross-test
+    state coupling (state from one pytest module's poller calls would
+    suppress emission in token_health tests run later in the same
+    session). Deduplication is now handled by the SELECT-against-
+    unresolved-rows check in :func:`emit_token_expiry_alert`. Existing
+    callers and tests that called this function continue to work; new
+    callers should not depend on it.
+    """
+    return
