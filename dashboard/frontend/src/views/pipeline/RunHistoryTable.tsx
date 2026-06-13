@@ -221,6 +221,28 @@ export function RunHistoryTable({ runs, isLoading }: Props) {
                   <span className="inline-flex items-center gap-1">
                     {statusIcon(run.status)}
                     <span className="mono">{run.status ?? "unknown"}</span>
+                    {/* RENDER #2 (2026-06-13): silent stage failures.
+                       Pre-fix the dashboard showed "success" while
+                       individual stages had been corrupting outputs
+                       (whisper_captions timing out → no moov atom, etc.).
+                       Now the badge surfaces which stages failed in the
+                       single status cell so the operator never trusts a
+                       lying "success". Title-tooltip shows the full
+                       breakdown for >2 stages. */}
+                    {run.stage_failures && Object.keys(run.stage_failures).length > 0 && (
+                      <span
+                        className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-warning/15 text-warning border border-warning/30"
+                        title={Object.entries(run.stage_failures)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join("\n")}
+                      >
+                        {Object.entries(run.stage_failures)
+                          .slice(0, 2)
+                          .map(([k, v]) => `${k}:${v}`)
+                          .join(" · ")}
+                        {Object.keys(run.stage_failures).length > 2 && " · …"}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="mono">{formatDate(run.started_at || run.date)}</td>

@@ -4,13 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from genlab_core.media.ffmpeg import (
-    MASTER_SPEC,
     PLATFORM_SPECS,
-    HWAccel,
     Platform,
     RenderSpec,
-    _apply_hw_accel,
-    detect_hw_accel,
     get_ffmpeg_binary,
     get_ffprobe_binary,
     resolve_twitter_spec,
@@ -181,11 +177,8 @@ class TestPlatformSpecs:
         for platform in Platform:
             assert platform in PLATFORM_SPECS
 
-    def test_master_spec_is_ffv1(self):
-        assert MASTER_SPEC.codec == "ffv1"
-        assert MASTER_SPEC.crf is None
-        assert MASTER_SPEC.fps == "source"
-        assert MASTER_SPEC.audio_codec == "pcm_s24le"
+    # test_master_spec_is_ffv1 REMOVED in DEAD #1 (2026-06-13) — MASTER_SPEC
+    # was only consumed by render_master, both deleted together.
 
 
 # ---------------------------------------------------------------------------
@@ -216,91 +209,9 @@ class TestBinaryDiscovery:
         get_ffmpeg_binary.cache_clear()
 
 
-# ---------------------------------------------------------------------------
-# GPU hardware detection
-# ---------------------------------------------------------------------------
-
-
-class TestHWAccel:
-    def test_cpu_fallback_when_no_gpu(self):
-        detect_hw_accel.cache_clear()
-        mock_result = MagicMock()
-        mock_result.stdout = "libx264 libx265"  # no GPU encoders
-        with patch("subprocess.run", return_value=mock_result):
-            with patch.dict("os.environ", {"FFMPEG_BINARY": "/usr/bin/ffmpeg"}):
-                get_ffmpeg_binary.cache_clear()
-                hw = detect_hw_accel()
-                assert hw.h264_encoder == "libx264"
-                assert hw.h265_encoder == "libx265"
-                assert hw.speedup_factor == 1.0
-        detect_hw_accel.cache_clear()
-        get_ffmpeg_binary.cache_clear()
-
-    def test_nvidia_detected(self):
-        detect_hw_accel.cache_clear()
-        mock_result = MagicMock()
-        mock_result.stdout = "h264_nvenc hevc_nvenc libx264"
-        with patch("subprocess.run", return_value=mock_result):
-            with patch.dict("os.environ", {"FFMPEG_BINARY": "/usr/bin/ffmpeg"}):
-                get_ffmpeg_binary.cache_clear()
-                hw = detect_hw_accel()
-                assert hw.h264_encoder == "h264_nvenc"
-                assert hw.h265_encoder == "hevc_nvenc"
-                assert hw.speedup_factor == 6.0
-        detect_hw_accel.cache_clear()
-        get_ffmpeg_binary.cache_clear()
-
-    def test_apple_silicon_detected(self):
-        detect_hw_accel.cache_clear()
-        mock_result = MagicMock()
-        mock_result.stdout = "h264_videotoolbox hevc_videotoolbox libx264"
-        with patch("subprocess.run", return_value=mock_result):
-            with patch.dict("os.environ", {"FFMPEG_BINARY": "/usr/bin/ffmpeg"}):
-                get_ffmpeg_binary.cache_clear()
-                hw = detect_hw_accel()
-                assert hw.h264_encoder == "h264_videotoolbox"
-                assert hw.speedup_factor == 4.0
-        detect_hw_accel.cache_clear()
-        get_ffmpeg_binary.cache_clear()
-
-
-# ---------------------------------------------------------------------------
-# _apply_hw_accel
-# ---------------------------------------------------------------------------
-
-
-class TestApplyHWAccel:
-    def test_cpu_returns_unchanged(self):
-        spec = RenderSpec(codec="libx264", crf=15)
-        hw = HWAccel()  # CPU fallback
-        result = _apply_hw_accel(spec, hw)
-        assert result is spec  # identity — no copy
-
-    def test_gpu_adjusts_h264_crf_plus_2(self):
-        spec = RenderSpec(codec="libx264", crf=15)
-        hw = HWAccel(h264_encoder="h264_nvenc", speedup_factor=6.0)
-        result = _apply_hw_accel(spec, hw)
-        assert result.codec == "h264_nvenc"
-        assert result.crf == 17  # 15 + 2
-
-    def test_gpu_adjusts_h265_crf_plus_2(self):
-        spec = RenderSpec(codec="libx265", crf=18)
-        hw = HWAccel(h265_encoder="hevc_nvenc", speedup_factor=6.0)
-        result = _apply_hw_accel(spec, hw)
-        assert result.codec == "hevc_nvenc"
-        assert result.crf == 20  # 18 + 2
-
-    def test_crf_clamps_at_max(self):
-        spec = RenderSpec(codec="libx264", crf=50)
-        hw = HWAccel(h264_encoder="h264_nvenc", speedup_factor=6.0)
-        result = _apply_hw_accel(spec, hw)
-        assert result.crf == 51  # clamped at 51 for H.264
-
-    def test_none_crf_stays_none(self):
-        spec = RenderSpec(codec="libx264", crf=None)
-        hw = HWAccel(h264_encoder="h264_nvenc", speedup_factor=6.0)
-        result = _apply_hw_accel(spec, hw)
-        assert result.crf is None
+# TestHWAccel + TestApplyHWAccel REMOVED in DEAD #1 (2026-06-13).
+# HWAccel, detect_hw_accel, and _apply_hw_accel were consumed only by
+# the deleted transcode_for_platforms / _encode_h264_tee chain.
 
 
 # ---------------------------------------------------------------------------

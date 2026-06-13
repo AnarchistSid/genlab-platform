@@ -138,9 +138,47 @@ class RunReport:
         # regardless of story count or errors (R-65) — this is the signal an
         # operator needs to know a channel produced nothing today.
         has_errors = bool(run_stats.get("errors"))
+
+        # RENDER #2 fix (2026-06-13): propagate per-stage failures into the
+        # run status. Pre-fix, sub-stage failures (whisper captions timing
+        # out and producing corrupt _captioned.mp4, video_val rejecting
+        # outputs, audio TTS errors) were invisible to the status
+        # determination — the run report said "status: success" even when
+        # half the captioned MP4s had no moov atom. Today's 4-agent audit
+        # showed 6 of 8 VISUAL_READY blueprints failing quality bar while
+        # every run reported success.
+        #
+        # New semantic: any non-zero `failed` or `errors` count in any
+        # tracked sub-stage promotes the status to "partial" (even when
+        # blueprints WERE pushed), so the dashboard QC banner catches it
+        # before publish. Per-stage failure counts are exposed via a new
+        # `stage_failures` field at the top level of the report so the
+        # dashboard can show what specifically went wrong.
+        stage_failures: dict[str, int] = {}
+        for stage_name, stats_dict in (
+            ("video_validation", video_val),
+            ("audio", audio),
+            ("text_overlays", overlays),
+            ("whisper_captions", run_stats.get("whisper_captions", {}) or {}),
+            ("publishing", publishing),
+        ):
+            if not isinstance(stats_dict, dict):
+                continue
+            failed = int(stats_dict.get("failed", 0) or 0)
+            errors = int(stats_dict.get("errors", 0) or 0)
+            total = failed + errors
+            if total > 0:
+                stage_failures[stage_name] = total
+
+        # QC failures: surface so the dashboard knows whether "partial"
+        # was driven by writing-side issues vs render-side issues.
+        qc_failed = int(qc.get("failed", 0) or 0)
+        if qc_failed > 0:
+            stage_failures["qc"] = qc_failed
+
         if zero_blueprints:
             status = "failed"
-        elif has_errors:
+        elif has_errors or stage_failures:
             status = "partial"
         else:
             status = "success"
@@ -171,6 +209,11 @@ class RunReport:
             "cost": cost_summary,
             "stage_timings": stage_timings,
             "slo_violations": slo_violations,
+            # RENDER #2: per-stage failure attribution. Empty dict means
+            # every tracked sub-stage was clean. Non-empty means status was
+            # promoted from "success" to "partial". Dashboard reads this to
+            # render a "this run had silent failures in X, Y, Z" badge.
+            "stage_failures": stage_failures,
         }
 
         # Write to run directory — prefer context's run_dir (set by pipeline_runner)
@@ -184,6 +227,12 @@ class RunReport:
             logger.info("[RunReport] Written: %s", report_path)
         except Exception:
             logger.exception("[RunReport] Failed to write report")
+
+        # Also expose the report dict in run_stats so downstream stages
+        # (and tests) can inspect it without re-reading from disk. The
+        # `report_path` field above stays the source of truth for the
+        # dashboard which reads from disk.
+        run_stats["report"] = report
 
         # Log summary
         logger.info(

@@ -125,9 +125,50 @@ def _next_available_slot(niche_id: str = "") -> str | None:
 
     # Support both flat (BB: instagram.schedule_slots) and nested (CW/SR/FD: platforms.instagram.schedule_slots)
     ig_cfg = cfg.get("instagram", {}) or cfg.get("platforms", {}).get("instagram", {})
-    slots = ig_cfg.get("schedule_slots", ["12:00"])
+    yaml_slots = ig_cfg.get("schedule_slots", ["12:00"])
     tz_str = ig_cfg.get("timezone", cfg.get("timezone", "Asia/Kolkata"))
     tz = ZoneInfo(tz_str)
+
+    # Task #33 (2026-06-13): consult the per-platform optimal-time learner
+    # before falling back to the static yaml slots. The learner mines
+    # analytics.composite for the engagement hour-of-day distribution and
+    # returns the top-3 hours with Bayesian shrinkage to prevent tiny-n
+    # outliers from winning. When the learner returns signal, we use its
+    # slots; when it doesn't (cold start, DB unreachable, < 5 obs per
+    # bucket), we keep the yaml default.
+    #
+    # Why instagram-only here: the scheduler today picks ONE
+    # scheduled_for time and all platforms publish from that. A future
+    # extension can produce per-platform schedules; until then, IG is
+    # the canonical platform whose engagement curve drives the picker.
+    slots: list[str] = list(yaml_slots)
+    if niche_id:
+        try:
+            from genlab_core.scheduling.optimal_time_learner import (
+                optimal_slots_hhmm,
+            )
+
+            learned = optimal_slots_hhmm(niche_id, "instagram", timezone_str=tz_str)
+            if learned:
+                # Union learned + yaml as a safety net so a learner
+                # regression can't strand us with zero slots. Order:
+                # learned first (best signal), yaml after (fallback).
+                seen: set[str] = set()
+                slots = []
+                for s in list(learned) + list(yaml_slots):
+                    if s not in seen:
+                        seen.add(s)
+                        slots.append(s)
+                logger.info(
+                    "[QUEUE] Optimal-time learner picked %s for %s (yaml default was %s)",
+                    learned,
+                    niche_id,
+                    yaml_slots,
+                )
+        except Exception as exc:
+            # Never block scheduling on a learner failure — fall back to yaml.
+            logger.warning("[QUEUE] Optimal-time learner failed: %s", exc)
+            slots = list(yaml_slots)
 
     now_local = datetime.now(tz)
     # Must be at least 1 hour from now to allow finalization

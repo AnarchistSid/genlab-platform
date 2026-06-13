@@ -515,6 +515,7 @@ def get_csrf_token():
 from server.api.alerts import bp as alerts_bp
 from server.api.analytics import bp as analytics_bp
 from server.api.audience import bp as audience_bp
+from server.api.auto_approval import bp as auto_approval_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.config_routes import bp as config_bp
@@ -552,6 +553,7 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(niches_bp)
 app.register_blueprint(overview_bp)
 app.register_blueprint(queue_bp)
+app.register_blueprint(auto_approval_bp)
 app.register_blueprint(focus_health_bp)
 app.register_blueprint(token_health_bp)
 app.register_blueprint(platform_posts_bp)
@@ -910,6 +912,44 @@ def _execute_review_action(
     # skipped: no extra fields
 
     client.blueprints.update(record_id, update_fields, typecast=True)
+
+    # AUTO #1b (2026-06-13): Calibration logging. Capture what the
+    # AutoApprovalGate WOULD have said vs what the operator actually
+    # clicked. Best-effort — must NEVER block the review action. After
+    # ~1 week of data the per-niche confusion matrix tells us whether
+    # AUTO #2 (enforcement) is safe to flip on. See task #48.
+    try:
+        from genlab_core.scheduling import calibration_logger
+        from genlab_core.scheduling.auto_approval_gate import evaluate as _gate_evaluate
+
+        # Re-fetch blueprint to get the shape evaluate() expects. We
+        # already loaded `bp_data` for the niche_id lookup in the
+        # "approved" branch, but it's scoped there. Simpler to reload.
+        _bp = client.blueprints.get(record_id)
+        _fields = _bp.get("fields", {}) if isinstance(_bp, dict) else {}
+        _flat = {"id": _bp.get("id"), **_fields}
+        _niche = (_flat.get("niche_id") or "").strip()
+        if not isinstance(_flat.get("extra"), dict):
+            _flat["extra"] = {
+                "visual_paths": _flat.get("visual_paths"),
+                "composite_score": _flat.get("composite_score"),
+                "virality_score": _flat.get("virality_score"),
+                "validation_status": _flat.get("validation_status"),
+            }
+        try:
+            _decision = _gate_evaluate(_flat)
+        except Exception as _ev_exc:
+            logger.debug("[calibration] gate evaluation failed: %s", _ev_exc)
+            _decision = None
+        calibration_logger.log(
+            blueprint_id=record_id,
+            niche_id=_niche,
+            decision=_decision,
+            operator_action=action,
+        )
+    except Exception as _cal_exc:  # noqa: BLE001 — never block review
+        logger.debug("[calibration] skipped (non-fatal): %s", _cal_exc)
+
     return update_fields
 
 

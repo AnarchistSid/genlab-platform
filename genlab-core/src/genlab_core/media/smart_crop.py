@@ -18,10 +18,13 @@ Usage::
     cropper = SmartCropper()
     cropped = cropper.auto_crop(clip, output_dir / "cropped.mp4")
 
-Integration with VideoCompositor::
-
-    comp = VideoCompositor(cfg)
-    comp.compose_vertical(clips, hook, out, smart_crop=True)
+Integration:
+    The sandwich-render path that previously consumed pre-cropped clips
+    (``VideoCompositor.compose_vertical(smart_crop=True)``) was deleted in
+    DEAD #1 (2026-06-13). The FrameCompositor render path does its own
+    framing, so this module is currently used directly by callers that
+    need pre-cropped clips (none in the prod pipeline today, but the
+    cropper itself is still useful for one-off tooling).
 """
 
 from __future__ import annotations

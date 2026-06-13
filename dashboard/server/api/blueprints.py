@@ -732,6 +732,75 @@ def get_blueprint(record_id):
         return api_not_found(message="Not found")
 
 
+@bp.route("/<record_id>/auto-approval-preview", methods=["GET"])
+def auto_approval_preview(record_id):
+    """AUTO #1 (2026-06-13): Preview the auto-approval gate's decision.
+
+    Foundation for the owner's autonomous-agent vision ("agent publishes
+    without requiring manual approval"). Read-only endpoint — does NOT
+    approve or change blueprint state. Surfaces the gate's verdict so
+    operators can see what would auto-approve before the opt-in switch
+    is flipped.
+
+    Response shape:
+        {
+          "approved": true,
+          "confidence": 0.78,
+          "passed_checks": ["has_video", "has_hook", ...],
+          "failed_checks": [],
+          "reasons": ["Video clip present", ...]
+        }
+    """
+    if not RECORD_RE.match(record_id):
+        return api_error(error="Invalid record ID")
+    try:
+        from genlab_core.scheduling.auto_approval_gate import evaluate
+
+        r = _get_client().blueprints.get(record_id)
+    except Exception as exc:
+        logger.warning("Blueprint %s not found for auto-approval preview: %s", record_id, exc)
+        return api_not_found(message="Not found")
+
+    fields = r.get("fields", {}) if isinstance(r, dict) else {}
+    blueprint_dict = {"id": r.get("id"), **fields}
+
+    # The gate expects an `extra` JSONB dict. In some storage paths the
+    # composite_score / virality_score / validation_status / visual_paths
+    # live as top-level fields rather than under `extra`. Normalize: pass
+    # the whole flat dict and also build an `extra` wrapper for the gate's
+    # lookup chain so neither layout breaks the preview.
+    if not isinstance(blueprint_dict.get("extra"), dict):
+        blueprint_dict["extra"] = {
+            "visual_paths": _safe_json_parse(
+                blueprint_dict.get("visual_paths"), expected_type=list, fallback=[]
+            ),
+            "composite_score": blueprint_dict.get("composite_score"),
+            "virality_score": blueprint_dict.get("virality_score"),
+            "validation_status": blueprint_dict.get("validation_status"),
+        }
+
+    try:
+        decision = evaluate(blueprint_dict)
+    except Exception as exc:
+        logger.exception("Auto-approval evaluation crashed for %s", record_id)
+        return api_error(error=f"Gate evaluation failed: {exc}", code=500)
+
+    return api_success(
+        data={
+            "record_id": record_id,
+            "approved": decision.approved,
+            "confidence": decision.confidence,
+            "passed_checks": decision.passed_checks,
+            "failed_checks": decision.failed_checks,
+            "reasons": decision.reasons,
+            # The preview never enforces — make this contract explicit so
+            # frontend can show "preview only" copy.
+            "would_publish": False,
+            "preview_only": True,
+        }
+    )
+
+
 @bp.route("/<record_id>/review", methods=["POST"])
 def review_blueprint(record_id):
     if not RECORD_RE.match(record_id):

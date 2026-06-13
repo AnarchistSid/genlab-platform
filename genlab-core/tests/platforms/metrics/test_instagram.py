@@ -22,11 +22,15 @@ def _insights_payload(**by_name: int) -> dict:
 
 class TestFetchInstagramHappyPath:
     def test_returns_canonical_shape(self):
+        """v22+ canonical: `views` is its own metric, separate from `reach`.
+        The pre-fix behaviour aliased reach→views, undercounting plays
+        whenever the same account watched a Reel multiple times."""
         basic = _resp(200, {"like_count": 5, "comments_count": 1, "media_type": "VIDEO"})
         insights = _resp(
             200,
             _insights_payload(
-                reach=1500,
+                views=2400,  # NEW canonical metric (Jan 2025+)
+                reach=1500,  # unique accounts — NOT views anymore
                 saved=30,
                 shares=4,
                 likes=42,
@@ -40,7 +44,7 @@ class TestFetchInstagramHappyPath:
             out = fetch_instagram("18054219725706846", token="t", ig_user_id="u")
 
         assert out == PlatformMetrics(
-            views=1500,
+            views=2400,  # from `views`, not reach
             reach=1500,
             impressions=1500,
             likes=42,
@@ -51,10 +55,23 @@ class TestFetchInstagramHappyPath:
             engagement=83,
         )
 
+    def test_falls_back_to_reach_when_views_metric_absent(self):
+        """Legacy posts (pre-v22) and very new posts may not have `views`
+        populated; fall back to `reach` so the row still carries signal."""
+        basic = _resp(200, {"like_count": 5, "comments_count": 1})
+        insights = _resp(200, _insights_payload(reach=900, likes=5, comments=1))
+
+        with patch("requests.get", side_effect=[basic, insights]):
+            out = fetch_instagram("123", token="t", ig_user_id="u")
+
+        assert out is not None
+        assert out["views"] == 900  # fall-back from reach
+        assert out["reach"] == 900
+
     def test_basic_endpoint_falls_back_when_insights_missing_fields(self):
-        # Insights returns 200 with only `reach` — the rest fall back to basic.
+        # Insights returns 200 with only `views` — the rest fall back to basic.
         basic = _resp(200, {"like_count": 11, "comments_count": 3})
-        insights = _resp(200, _insights_payload(reach=200))
+        insights = _resp(200, _insights_payload(views=200))
 
         with patch("requests.get", side_effect=[basic, insights]):
             out = fetch_instagram("123", token="t", ig_user_id="u")
@@ -62,7 +79,9 @@ class TestFetchInstagramHappyPath:
         assert out is not None
         assert out["likes"] == 11
         assert out["comments"] == 3
-        assert out["reach"] == 200
+        assert out["views"] == 200
+        # reach is its own metric; absent in this response → 0
+        assert out["reach"] == 0
         # engagement is derived because total_interactions is absent
         assert out["engagement"] == 0 + 0 + 0 + 0  # all insights fields absent
 
@@ -77,6 +96,35 @@ class TestFetchInstagramHappyPath:
         assert out["likes"] == 9
         assert out["comments"] == 2
         assert out["reach"] == 0
+        assert out["views"] == 0
+
+    def test_request_includes_canonical_views_metric(self):
+        """v22+ requires explicit `views` request. Pin the request shape so
+        a refactor can't silently drop it and regress to reach-as-views."""
+        basic = _resp(200, {"like_count": 0, "comments_count": 0})
+        captured: dict[str, object] = {}
+
+        def fake_get(url, params=None, timeout=None):  # noqa: ARG001
+            if "/insights" in url:
+                captured["insights"] = params
+                return _resp(200, {"data": []})
+            return basic
+
+        with patch("requests.get", side_effect=fake_get):
+            fetch_instagram("123", token="t", ig_user_id="u")
+
+        params = captured["insights"]
+        assert isinstance(params, dict)
+        metric_csv = params["metric"]
+        # `views` MUST be requested — it's the canonical post-v22 plays metric.
+        assert "views" in metric_csv
+        assert "reach" in metric_csv  # still useful as unique-accounts
+        assert "likes" in metric_csv
+        assert "comments" in metric_csv
+        assert "saved" in metric_csv
+        # Deprecated metric names MUST NOT appear (would emit Meta warnings).
+        assert "plays" not in metric_csv
+        assert "impressions" not in metric_csv
 
 
 class TestFetchInstagramFailureModes:

@@ -21,6 +21,24 @@ _DEFAULT_CAPS: dict[str, int] = {
 }
 
 
+def _load_caps_config(config_path: Path | None = None) -> dict:
+    """Load the full platform_caps.yaml. Returns ``{}`` on failure.
+
+    Separated from :func:`_load_caps` (which returns the legacy
+    per-platform dict) so multi_publish_gate can see the full config
+    structure including ``multi_publish`` opt-in + ``max_per_day_ceiling``.
+    """
+    if config_path is None:
+        genlab_root = Path(__file__).resolve().parents[4]
+        config_path = genlab_root / "genlab-core" / "config" / "platform_caps.yaml"
+    try:
+        with open(config_path) as f:
+            return yaml.safe_load(f) or {}
+    except (FileNotFoundError, Exception) as exc:  # noqa: BLE001
+        logger.debug("[daily_cap] platform_caps.yaml unavailable: %s", exc)
+        return {}
+
+
 def _load_caps(config_path: Path | None = None) -> dict[str, int]:
     """Load daily post caps from config/platform_caps.yaml. Falls back to 1/platform."""
     if config_path is None:
@@ -71,6 +89,10 @@ class DailyCapEnforcer:
         self._client = backlog_client
         self._niche_id = niche_id
         self._caps = _load_caps(config_path)
+        # Full yaml config (used to read multi_publish opt-in + ceiling).
+        # Held separately so the legacy dict semantics of `self._caps`
+        # stay byte-stable for any code path that introspects it.
+        self._caps_config: dict = _load_caps_config(config_path)
         self._session_counts: dict[str, int] = {}
         self._counts_loaded_for: date | None = None
 
@@ -99,18 +121,59 @@ class DailyCapEnforcer:
             )
             return False
 
+        # Task #33b (2026-06-13): compose effective cap from yaml +
+        # optimal-time learner recommendation. When the operator opts
+        # in via `multi_publish.enabled: true` in platform_caps.yaml AND
+        # the learner has 2+ high-confidence hours for (niche, platform),
+        # the effective cap rises from the conservative `daily_post_cap`
+        # toward the operator's `max_per_day_ceiling`. Without the
+        # opt-in, behavior is unchanged from R-09's hard 1/day rule.
+        effective = self._effective_cap(platform, cap)
+
         current = self._get_counts().get(platform, 0)
-        if current >= cap:
+        if current >= effective:
             logger.info(
                 "Daily cap reached for %s: %d/%d posts today. Skipping.",
                 platform,
                 current,
-                cap,
+                effective,
             )
             return False
 
-        logger.debug("%s: %d/%d today — OK to publish.", platform, current, cap)
+        logger.debug("%s: %d/%d today — OK to publish.", platform, current, effective)
         return True
+
+    def _effective_cap(self, platform: str, daily_post_cap: int) -> int:
+        """Resolve the effective cap for (niche, platform) today.
+
+        Defensively wrapped — a learner or gate failure must NEVER raise
+        the effective cap above the yaml-declared one. The current rule
+        "1 reel per channel per day" is a guarantee per CLAUDE.md.
+        """
+        try:
+            from genlab_core.scheduling.multi_publish_gate import (
+                effective_cap,
+                is_multi_publish_enabled,
+            )
+
+            enabled = is_multi_publish_enabled(self._caps_config, platform=platform)
+            ceiling = int(
+                (self._caps_config.get("max_per_day_ceiling") or {}).get(platform, daily_post_cap)
+            )
+            return effective_cap(
+                niche_id=self._niche_id,
+                platform=platform,
+                daily_post_cap=daily_post_cap,
+                max_per_day_ceiling=ceiling,
+                multi_publish_enabled=enabled,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[daily_cap] multi_publish_gate failed (falling back to daily_post_cap=%d): %s",
+                daily_post_cap,
+                exc,
+            )
+            return daily_post_cap
 
     def record_publish(self, platform: str) -> None:
         """Increment the in-session counter immediately after a successful publish.

@@ -214,8 +214,21 @@ class QCGates:
             issues.append(f"Too many slides: {len(slides)} > {max_slides}")
             ok = False
 
-        # Word count
-        body = bp.get("body", bp.get("caption", ""))
+        # Word count — RENDER #5 fix (2026-06-13): use the same caption-lookup
+        # chain as `_check_completeness` below (lines 248-256) so the word-count
+        # check sees the same string the completeness check sees. Pre-fix this
+        # block read `bp.get("body")` directly which is empty in every
+        # production blueprint shape since Sprint 64 — so word_count was always
+        # 0 and the "too long" check never fired.
+        content = bp.get("content", {})
+        body = (
+            bp.get("caption", "")
+            or bp.get("body", "")
+            or (content.get("caption", "") if isinstance(content, dict) else "")
+            or (
+                content.get("instagram", {}).get("caption", "") if isinstance(content, dict) else ""
+            )
+        )
         if isinstance(body, str):
             word_count = len(body.split())
             if word_count > max_words:

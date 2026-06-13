@@ -15,3 +15,31 @@ daily_post_cap:
   threads: 1
 
 cap_timezone: "UTC"
+
+# Task #33b (2026-06-13): multi-publish soft cap surface.
+#
+# When `multi_publish.enabled` is true AND
+# `genlab_core.scheduling.optimal_time_learner` has 2+ high-confidence
+# hours for (niche × platform), DailyCapEnforcer raises the effective
+# cap from `daily_post_cap` (above) toward `max_per_day_ceiling` (below),
+# bounded by min(ceiling, max(daily_cap, recommended)).
+#
+# Defaults are deliberately off — flipping `enabled: true` is an explicit
+# operator decision matching the owner's 2026-06-12 "agent can publish
+# more than once if required" directive. Without the opt-in, the R-09
+# "1 reel per channel per day" guarantee holds unchanged.
+multi_publish:
+  enabled: false
+  # Optional allowlist; empty means all platforms when enabled is true.
+  platforms: []
+
+# Per-platform hard ceiling that the multi-publish gate cannot exceed,
+# even when the learner's recommendation is higher. The operator sets
+# these consciously — the gate never raises a cap above them.
+max_per_day_ceiling:
+  instagram: 3
+  youtube: 2
+  facebook: 3
+  tiktok: 3
+  twitter: 5
+  threads: 5

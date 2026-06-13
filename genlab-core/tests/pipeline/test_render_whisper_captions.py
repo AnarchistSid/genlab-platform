@@ -280,12 +280,23 @@ class TestSilentClipAudioMux:
         assert "copy" not in cmd  # source audio NOT copied (it was silent)
 
     def test_clip_with_audio_keeps_source(self):
-        """Real source audio (e.g. a highlight) must never be talked over."""
+        """Real source audio (e.g. a highlight) must never be talked over.
+
+        RENDER #3 fix (2026-06-13) re-encodes audio to AAC 48 kHz stereo
+        instead of `-c:a copy`. The TTS still isn't muxed in for clips
+        with real source audio — the test now asserts source-only via
+        the absence of the TTS path, not via the "copy" arg."""
         cmd = self._run(has_audio=True, audio_path="/tmp/tts.mp3")
         assert "/tmp/tts.mp3" not in cmd
-        assert "copy" in cmd  # source audio preserved
+        # Audio normalization is applied to source-only too
+        assert "aac" in cmd
+        assert "48000" in cmd
 
     def test_no_tts_keeps_source(self):
-        """Without a TTS path, behaviour is unchanged (copy source audio)."""
+        """Without a TTS path, source audio is re-encoded to AAC 48k stereo
+        (RENDER #3 fix) — pre-fix this was `-c:a copy` which deferred any
+        non-spec source (44.1 kHz / mono) to a 3rd-gen ValidateVideos
+        re-encode."""
         cmd = self._run(has_audio=False, audio_path=None)
-        assert "copy" in cmd
+        assert "aac" in cmd
+        assert "48000" in cmd

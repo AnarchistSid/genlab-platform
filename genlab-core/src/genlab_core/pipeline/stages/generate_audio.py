@@ -142,11 +142,40 @@ class GenerateAudio:
 
     @staticmethod
     def _build_script(bp: dict[str, Any]) -> str:
-        """Build TTS script from hook + body text."""
-        hook = bp.get("hook", "")
-        body = bp.get("body", bp.get("caption", ""))
+        """Build TTS script from hook + caption body text.
+
+        Caption storage canonicalisation (RENDER #5 fix, 2026-06-13). The
+        canonical store is ``bp["content"]["caption"]`` (set by
+        :meth:`genlab_core.strategies.base_writing.BaseWritingStrategy._populate_content`
+        at base_writing.py:238). The pre-fix code read ``bp["body"]`` or
+        ``bp["caption"]`` directly, which both default to empty in every
+        production blueprint shape — meaning TTS narrated ONLY the hook
+        (~63 chars) instead of the full caption (150-300 chars) for all
+        5 niches since the strategy unification in Sprint 64. Same shape
+        bug lives at qc_gates.py:218; virality_scoring.py:180 already has
+        the correct lookup pattern.
+
+        Hook similarly canonicalises through ``hook_text`` (Postgres column
+        name) and ``hook`` (legacy dict key) — both are populated by the
+        writer.
+        """
+        hook = bp.get("hook") or bp.get("hook_text") or ""
+
+        content = bp.get("content")
+        if isinstance(content, dict):
+            body = content.get("caption") or ""
+        else:
+            body = ""
+
+        # Backward-compat fallbacks for older blueprint shapes (e.g. legacy
+        # BlackboxBrief pre-strategy-unification dicts). Production blueprints
+        # since Sprint 64 always go through the content[caption] path above.
+        if not body:
+            body = bp.get("body") or bp.get("caption") or ""
+
         if not isinstance(body, str):
             body = ""
+
         script = f"{hook}. {body}".strip() if hook else body.strip()
         return script if len(script) > 10 else ""
 

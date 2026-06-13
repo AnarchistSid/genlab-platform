@@ -135,3 +135,11 @@ pipeline:
   max_items_per_run: 10
   min_score_threshold: 0.20
   dedup_window_days: 7
+  # Anime trending content cycles weekly (same shows trend across days
+  # as new episodes drop). A 7-day title-similarity dedup window blocks
+  # nearly every fetched candidate because the SHOW NAME repeats even
+  # when the clip is genuinely different. 2-day window allows new
+  # episodes/scenes of an ongoing show; URL/video_id dedup still
+  # prevents true duplicates. See [[session-2026-06-12-deep-dive-findings]]
+  # § B.9 — anime 0-blueprint days 2026-06-13 traced back here.
+  title_dedup_days: 2

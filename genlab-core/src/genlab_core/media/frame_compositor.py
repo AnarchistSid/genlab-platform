@@ -43,10 +43,17 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from genlab_core.media.ffmpeg_utils import run_ffmpeg
+
+if TYPE_CHECKING:
+    # ARCH #45 phase 2: sandbox routing is optional; the type-check-only
+    # import avoids a hard runtime dep on the sandbox module for callers
+    # that don't use it.
+    from genlab_core.media.sandbox_runner import SandboxedFFmpegRunner
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +147,23 @@ class ChannelBranding:
     niche_id: str  # e.g. "gaming"
     ffmpeg: FFmpegConfig = None  # type: ignore[assignment]
 
+    # RENDER #4 (2026-06-13): portrait branding richness — opt-in per
+    # niche so the operator can dial in the aesthetic without code changes.
+    # All three default False so existing portrait renders are byte-
+    # identical to pre-RENDER-#4 (logo only, no text). YAML shape:
+    #
+    #     branding:
+    #       portrait_branding:
+    #         show_name: true
+    #         show_handle: true
+    #         show_hook: true
+    #
+    # Each is independent — operator can ship logo+name (handle off) or
+    # logo+hook (name + handle off) as a creative-test variant.
+    portrait_show_name: bool = False
+    portrait_show_handle: bool = False
+    portrait_show_hook: bool = False
+
     def __post_init__(self):
         if self.ffmpeg is None:
             self.ffmpeg = FFmpegConfig()
@@ -178,6 +202,15 @@ class ChannelBranding:
         if raw_logo and not Path(raw_logo).is_absolute():
             raw_logo = str((niche_root / raw_logo).resolve())
 
+        # RENDER #4: read the per-niche portrait branding flags. Block
+        # defaults to {} so a missing visuals.yaml `portrait_branding:` key
+        # produces the safe default (all flags False).
+        portrait_block = (
+            fl_branding.get("portrait_branding") or branding.get("portrait_branding") or {}
+        )
+        if not isinstance(portrait_block, dict):
+            portrait_block = {}
+
         return cls(
             channel_name=(
                 fl_branding.get("channel_name")
@@ -197,6 +230,9 @@ class ChannelBranding:
                 fl_branding.get("niche_id") or branding.get("niche_id") or cfg.get("niche_id", "")
             ),
             ffmpeg=ffmpeg,
+            portrait_show_name=bool(portrait_block.get("show_name", False)),
+            portrait_show_handle=bool(portrait_block.get("show_handle", False)),
+            portrait_show_hook=bool(portrait_block.get("show_hook", False)),
         )
 
 
@@ -296,13 +332,61 @@ class FrameCompositor:
     Call compose() to render.
     """
 
-    def __init__(self, branding: ChannelBranding):
+    def __init__(
+        self,
+        branding: ChannelBranding,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
+    ):
+        """Construct a compositor for one channel.
+
+        Parameters
+        ----------
+        branding:
+            Per-channel visual config (logo, accent, font, etc.)
+        sandbox_runner:
+            ARCH #45 phase 2 (2026-06-13): when provided, every FFmpeg
+            call goes through the sandboxed runner instead of executing
+            locally. Matches the sandbox plumbing already present on
+            ``derive_landscape``. When ``None`` (default), behavior is
+            unchanged — FFmpeg runs locally via ``run_ffmpeg``. Gaming
+            opts in; other niches may follow once the perf/isolation
+            trade-off is settled (see task #51).
+        """
         self.branding = branding
+        self._sandbox_runner = sandbox_runner
 
     @classmethod
-    def from_visuals_yaml(cls, visuals_yaml_path: str) -> FrameCompositor:
+    def from_visuals_yaml(
+        cls,
+        visuals_yaml_path: str,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
+    ) -> FrameCompositor:
         branding = ChannelBranding.from_visuals_yaml(visuals_yaml_path)
-        return cls(branding)
+        return cls(branding, sandbox_runner=sandbox_runner)
+
+    def _run_ffmpeg(
+        self,
+        cmd: list[str],
+        *,
+        timeout: int,
+        fallback_preset: str | None,
+        label: str = "frame_compositor",
+    ) -> None:
+        """Execute an FFmpeg command, optionally inside the sandbox.
+
+        Centralized so both ``compose`` (sandwich render) and
+        ``overlay_branding`` (compilation branding) share the same
+        sandbox-aware path. ARCH #45 phase 2.
+        """
+        if self._sandbox_runner is not None:
+            result = self._sandbox_runner.run_ffmpeg_sync(cmd, timeout=timeout)
+            # The runner's check() raises CalledProcessError on non-zero
+            # exit, matching the contract of ``run_ffmpeg`` so existing
+            # callers' try/except logic doesn't change.
+            result.check(label)
+            return
+        # Local execution — historical default for all 5 niches.
+        run_ffmpeg(cmd, timeout=timeout, fallback_preset=fallback_preset)
 
     def compose(
         self,
@@ -414,10 +498,11 @@ class FrameCompositor:
             f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}..."
         )
         try:
-            run_ffmpeg(
+            self._run_ffmpeg(
                 ffmpeg_cmd,
                 timeout=ff.timeout_seconds,
                 fallback_preset=ff.fallback_preset,
+                label="compose",
             )
         except subprocess.CalledProcessError as exc:
             logger.error(f"FFmpeg failed:\n{(exc.stderr or '')[-2000:]}")
@@ -566,24 +651,99 @@ class FrameCompositor:
         """Portrait clip: full-screen video with the channel logo overlaid.
 
         Portrait sources (9:16) fill the entire 1080x1920 canvas. R-26: the
-        logo is now overlaid in the top-left corner (these reels previously
-        shipped with zero branding, violating the "every reel has the logo"
-        invariant). A subtle dark backing keeps the logo legible over bright
-        footage. The logo file is guaranteed present by compose()'s guard.
+        logo is overlaid top-left (these reels previously shipped with zero
+        branding, violating the "every reel has the logo" invariant). A
+        subtle dark backing keeps the logo legible over bright footage. The
+        logo file is guaranteed present by compose()'s guard.
+
+        RENDER #4 (2026-06-13): name / handle / hook overlays are opt-in
+        per-niche via visuals.yaml `portrait_branding:` flags. Default is
+        logo only (current behavior). When the operator turns a flag on
+        the corresponding drawtext joins the filtergraph after the logo
+        overlay — order: name → handle → hook.
         """
         dur_flags = self._duration_flags(duration)
         trim_flag = ["-ss", str(trim_start)] if trim_start > 0 else []
+        font_bold, font_reg, font_hook = self._resolve_fonts()
 
+        # ── Base: logo over the full-bleed video ──────────────────────────
+        # Final label is overwritten as each opt-in overlay appends. The
+        # last filter in the chain produces [out].
         filtergraph = (
             f"[0:v]scale={CANVAS_W}:{CANVAS_H}:"
             f"force_original_aspect_ratio=increase,"
             f"crop={CANVAS_W}:{CANVAS_H}[vid];"
             f"[1:v]scale={LOGO_SIZE}:{LOGO_SIZE}[logo];"
-            # Subtle dark backing so the logo stays visible on bright footage.
             f"[vid]drawbox=x={P_LOGO_X - 4}:y={P_LOGO_Y - 4}:"
             f"w={LOGO_SIZE + 8}:h={LOGO_SIZE + 8}:color=black@0.30:t=fill[vidbg];"
-            f"[vidbg][logo]overlay={P_LOGO_X}:{P_LOGO_Y}[out]"
+            f"[vidbg][logo]overlay={P_LOGO_X}:{P_LOGO_Y}"
         )
+        # Track which label feeds the next filter so each opt-in overlay
+        # can be inserted independently without re-wiring the others.
+        current_label = "withlogo"
+        filtergraph += f"[{current_label}];"
+
+        # ── Opt-in: channel name (RENDER #4) ──────────────────────────────
+        # Sits to the right of the logo, vertically aligned with its top
+        # edge. Bold font (matches landscape/square treatment). Subtle
+        # shadow keeps it legible on bright frames.
+        if self.branding.portrait_show_name and self.branding.channel_name:
+            safe_name = self._escape_drawtext(self.branding.channel_name)
+            name_x = P_LOGO_X + LOGO_SIZE + 16
+            name_y = P_LOGO_Y + 8
+            next_label = "withname"
+            filtergraph += (
+                f"[{current_label}]drawtext=fontfile='{font_bold}':text='{safe_name}':"
+                f"fontsize={NAME_FONT_SIZE}:fontcolor=white:"
+                f"x={name_x}:y={name_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{next_label}];"
+            )
+            current_label = next_label
+
+        # ── Opt-in: handle (RENDER #4) ────────────────────────────────────
+        # Below the name (or below the logo if name is off). Slightly
+        # transparent — secondary information.
+        if self.branding.portrait_show_handle and self.branding.handle:
+            safe_handle = self._escape_drawtext(self.branding.handle)
+            handle_x = P_LOGO_X + LOGO_SIZE + 16
+            handle_y = (
+                P_LOGO_Y + 8 + (NAME_FONT_SIZE + 6 if self.branding.portrait_show_name else 0)
+            )
+            next_label = "withhandle"
+            filtergraph += (
+                f"[{current_label}]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
+                f"fontsize={HANDLE_FONT_SIZE}:fontcolor=white@{HANDLE_OPACITY}:"
+                f"x={handle_x}:y={handle_y}:"
+                f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                f"[{next_label}];"
+            )
+            current_label = next_label
+
+        # ── Opt-in: hook (RENDER #4) ──────────────────────────────────────
+        # Center-aligned horizontally, sits ~120px below the logo block.
+        # Reuses _wrap_hook + the existing HOOK_FONT_SIZE / shadow values
+        # for visual consistency with landscape/square layouts.
+        if self.branding.portrait_show_hook and hook:
+            hook_y = P_LOGO_Y + LOGO_SIZE + 80
+            hook_lines = self._wrap_hook(hook)
+            for i, line in enumerate(hook_lines):
+                safe_line = self._escape_drawtext(line)
+                line_y = hook_y + i * HOOK_LINE_H
+                next_label = f"hook{i}" if i < len(hook_lines) - 1 else "withhook"
+                filtergraph += (
+                    f"[{current_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
+                    f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"
+                    f"x=(w-text_w)/2:y={line_y}:"
+                    f"shadowcolor=black@{SHADOW_OPACITY}:shadowx={SHADOW_OFFSET}:shadowy={SHADOW_OFFSET}"
+                    f"[{next_label}];"
+                )
+                current_label = next_label
+
+        # Re-label the final node as [out] — the rest of compose() expects
+        # that name. Using copy keeps it filter-graph-valid without
+        # producing a re-encoded extra pass.
+        filtergraph += f"[{current_label}]copy[out]"
 
         return (
             ["ffmpeg", "-y"]
@@ -690,7 +850,12 @@ class FrameCompositor:
             f"[{self.branding.niche_id}] Overlaying branding on compilation: {' '.join(cmd[:8])}..."
         )
         try:
-            run_ffmpeg(cmd, timeout=ff.timeout_seconds, fallback_preset=ff.fallback_preset)
+            self._run_ffmpeg(
+                cmd,
+                timeout=ff.timeout_seconds,
+                fallback_preset=ff.fallback_preset,
+                label="overlay_branding",
+            )
         except subprocess.CalledProcessError as exc:
             logger.error(f"FFmpeg branding overlay failed:\n{(exc.stderr or '')[-2000:]}")
             raise RuntimeError(

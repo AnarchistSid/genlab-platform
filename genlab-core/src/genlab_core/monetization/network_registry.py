@@ -91,51 +91,187 @@ class CuelinksAdapter:
 
 @dataclass
 class EarnKaroAdapter:
+    """EarnKaro adapter — Indian deal aggregator.
+
+    Live since task #34b (2026-06-13). Calls ``ekaro.in/api/converter/public``
+    via ``earnkaro_client.convert_url`` to shorten a target merchant URL
+    into an ekaro.in link carrying our publisher's attribution. Responses
+    are disk-cached for 30 days because the shortened URLs are stable.
+
+    Required kwargs:
+        target_url: The merchant URL to shorten (e.g. amazon.in/dp/...).
+                    Without it there's nothing to convert.
+
+    Returns "" gracefully on any failure — env var missing, API down,
+    response shape unrecognized. The affiliate matcher uses this to
+    fall back to other networks in the candidate list.
+    """
+
     network_id: str = "earnkaro"
     display_name: str = "EarnKaro"
+    convert_key: str = field(default_factory=lambda: os.environ.get("EARNKARO_CONVERT_KEY", ""))
 
     def validate_url(self, url: str) -> bool:
         return "ekaro.in" in url or "earnkaro.com" in url
 
     def generate_url(self, product_id: str, **kwargs) -> str:
-        # EarnKaro links must be generated via their website/API
-        raise NotImplementedError("EarnKaro links must be generated via earnkaro.com")
+        if not self.convert_key:
+            return ""
+        target_url = kwargs.get("target_url", "")
+        if not target_url:
+            return ""
+        # Lazy import — earnkaro_client touches the disk cache module,
+        # which we don't want to load for adapter introspection paths
+        # (registry walking, validate_url dispatch, etc.).
+        from genlab_core.monetization.earnkaro_client import convert_url
+
+        return convert_url(target_url)
 
 
 @dataclass
 class ImpactAdapter:
+    """Impact.com adapter — global affiliate network.
+
+    Live since task #34c (2026-06-13). Per-advertiser tracking templates
+    are stored in ``genlab-core/config/impact_advertisers.yaml``;
+    ``generate_url`` looks up the operator-chosen advertiser_key kwarg,
+    substitutes the template with the target URL + sub_id, and returns
+    the click-through URL.
+
+    Required kwargs:
+        advertiser_key: lookup key in impact_advertisers.yaml
+        target_url:     merchant landing page
+
+    Optional kwargs:
+        sub_id:         tracking sub-ID (passed as subId1)
+
+    Returns "" when the advertiser_key is missing, when the env
+    IMPACT_ACCOUNT_SID is unset, or when the advertiser isn't in the
+    YAML — letting the matcher fall back to other networks.
+    """
+
     network_id: str = "impact"
     display_name: str = "Impact.com"
+    account_sid: str = field(default_factory=lambda: os.environ.get("IMPACT_ACCOUNT_SID", ""))
 
     def validate_url(self, url: str) -> bool:
-        return "impact.com" in url or "sjv.io" in url
+        return "impact.com" in url or "sjv.io" in url or "7eer.net" in url
 
     def generate_url(self, product_id: str, **kwargs) -> str:
-        raise NotImplementedError("Impact.com links require campaign-specific setup")
+        if not self.account_sid:
+            return ""
+        advertiser_key = kwargs.get("advertiser_key", "")
+        target_url = kwargs.get("target_url", "")
+        if not (advertiser_key and target_url):
+            return ""
+        from genlab_core.monetization.impact_client import build_deep_link
+
+        return build_deep_link(
+            advertiser_key=advertiser_key,
+            target_url=target_url,
+            account_sid=self.account_sid,
+            sub_id=kwargs.get("sub_id", ""),
+        )
 
 
 @dataclass
 class ShareASaleAdapter:
+    """ShareASale adapter — US affiliate network.
+
+    Link template:
+        https://shareasale.com/r.cfm?b={banner_id}&u={user_id}&m={merchant_id}&afftrack={sub_id}&urllink={encoded_target}
+
+    Requires no API call — pure template substitution. The publisher's
+    ``user_id`` is constant (one env var); ``banner_id`` and
+    ``merchant_id`` come from the product record (each affiliated product
+    knows which ShareASale merchant + banner it's promoting).
+
+    Falls back to empty string when ``SHAREASALE_USER_ID`` isn't set
+    so the matcher can pick a different network without crashing.
+    """
+
     network_id: str = "shareasale"
     display_name: str = "ShareASale"
+    user_id: str = field(default_factory=lambda: os.environ.get("SHAREASALE_USER_ID", ""))
 
     def validate_url(self, url: str) -> bool:
         return "shareasale.com" in url
 
     def generate_url(self, product_id: str, **kwargs) -> str:
-        raise NotImplementedError("ShareASale credentials not configured")
+        if not self.user_id:
+            return ""  # graceful skip
+        banner_id = kwargs.get("banner_id", "")
+        merchant_id = kwargs.get("merchant_id", "")
+        if not (banner_id and merchant_id):
+            # The product record didn't carry ShareASale-specific keys;
+            # nothing to template against. Skip rather than build an
+            # invalid URL.
+            return ""
+        sub_id = kwargs.get("sub_id", "")
+        target_url = kwargs.get("target_url", "")
+        params = {
+            "b": str(banner_id),
+            "u": self.user_id,
+            "m": str(merchant_id),
+        }
+        if sub_id:
+            params["afftrack"] = str(sub_id)
+        if target_url:
+            params["urllink"] = target_url
+        return "https://shareasale.com/r.cfm?" + urllib.parse.urlencode(params)
 
 
 @dataclass
 class CJAffiliateAdapter:
+    """CJ Affiliate adapter — global affiliate network.
+
+    Link template:
+        https://www.{cj_domain}/click-{publisher_id}-{ad_id}?url={encoded_target}&sid={sub_id}
+
+    CJ rotates traffic across multiple click-tracking domains
+    (anrdoezrs.net, kqzyfj.com, dpbolvw.net, tkqlhce.com, jdoqocy.com).
+    For deterministic output the adapter defaults to anrdoezrs.net; the
+    caller can override via ``cj_domain`` kwarg.
+
+    Requires no API call — pure template substitution. The publisher's
+    ``publisher_id`` is constant (one env var); ``ad_id`` comes from
+    the product record.
+    """
+
     network_id: str = "cj"
     display_name: str = "CJ Affiliate"
+    publisher_id: str = field(default_factory=lambda: os.environ.get("CJ_PUBLISHER_ID", ""))
 
     def validate_url(self, url: str) -> bool:
-        return "cj.com" in url or "anrdoezrs.net" in url or "dpbolvw.net" in url
+        # CJ uses multiple click-tracking subdomains. Validate any of them.
+        cj_domains = (
+            "cj.com",
+            "anrdoezrs.net",
+            "dpbolvw.net",
+            "kqzyfj.com",
+            "tkqlhce.com",
+            "jdoqocy.com",
+        )
+        return any(d in url for d in cj_domains)
 
     def generate_url(self, product_id: str, **kwargs) -> str:
-        raise NotImplementedError("CJ Affiliate credentials not configured")
+        if not self.publisher_id:
+            return ""  # graceful skip
+        ad_id = kwargs.get("ad_id", "")
+        if not ad_id:
+            return ""
+        cj_domain = kwargs.get("cj_domain", "anrdoezrs.net")
+        target_url = kwargs.get("target_url", "")
+        sub_id = kwargs.get("sub_id", "")
+        base = f"https://www.{cj_domain}/click-{self.publisher_id}-{ad_id}"
+        params: dict[str, str] = {}
+        if target_url:
+            params["url"] = target_url
+        if sub_id:
+            params["sid"] = str(sub_id)
+        if not params:
+            return base
+        return f"{base}?{urllib.parse.urlencode(params)}"
 
 
 # Global registry

@@ -1,43 +1,33 @@
 """
 genlab_core.media.ffmpeg — Video rendering with per-platform quality specs.
 
-Architecture:
-  1. render_master() produces one FFV1 lossless intermediate
-  2. transcode_for_platforms() derives all platform variants from master
-     using the two-group transcode tree (H.265 pass + H.264 tee pass)
+What this module owns:
+  * `Platform` enum — canonical platform identifiers used across the
+    publisher (YouTube, Instagram, TikTok, Facebook, X std/premium, Threads)
+  * `RenderSpec` — validated Pydantic model for FFmpeg encoding params
+  * `PLATFORM_SPECS` — per-platform encoding specs (codec, CRF, preset)
+  * `get_ffmpeg_binary()` / `get_ffprobe_binary()` — binary locators
+  * `resolve_twitter_spec()` — runtime tier check (standard 720p vs premium 1080p)
 
-Why FFV1 as the intermediate codec:
-  FFV1 is mathematically lossless. Every platform variant is transcoded
-  from a perfect original. The current approach (H.264 CRF 18 as intermediate)
-  means every platform variant suffers a second lossy encode compounding the
-  first. FFV1 masters are larger (3-5x H.264) but they are temporary and
-  evicted after all variants are confirmed uploaded.
-
-Why H.265 only for YouTube:
-  Instagram and TikTok technically accept H.265, but Android HEVC decoder
-  compatibility gaps cause playback failures or forced software decoding.
-  H.264 CRF 15 at slow preset produces a bitrate roughly equivalent to
-  H.265 CRF 22. The H.265 win is exclusively on YouTube where their
-  AV1/VP9 transcoder specifically benefits from HEVC source quality.
-
-Why preserve FPS in master (especially important for CriticalRush):
-  Gaming footage is commonly captured at 60 FPS. Forcing 30 FPS at the
-  master stage throws away half the temporal information permanently.
-  FPS decisions happen per-platform in the variant stage, not the master.
+What this module no longer owns (DEAD #1, 2026-06-13):
+  The lossless-FFV1-master-then-transcode pipeline (``render_master`` +
+  ``transcode_for_platforms`` + their sync wrappers and GPU detection
+  helpers) was aspirational architecture that never shipped. Production
+  has always been libx264 single-pass with no master stage — see
+  ``publishing/transcode.py`` for the actual encode path. The dead code
+  was removed in commit DEAD #1 along with ``MASTER_SPEC``, ``HWAccel``,
+  ``detect_hw_accel``, and ``_apply_hw_accel`` (none of which had any
+  non-test callers).
 """
 
 from __future__ import annotations
 
-import asyncio
 import functools
 import logging
 import os
 import shutil
-import subprocess
 import sys
-from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -156,15 +146,6 @@ class RenderSpec(BaseModel):
 # -- Per-platform specs --------------------------------------------------------
 # Constants, not YAML, because they encode platform technical requirements.
 # Business rules (tone, hashtags, CTA) live in YAML. Technical constraints here.
-
-MASTER_SPEC = RenderSpec(
-    codec="ffv1",
-    fps="source",
-    audio_codec="pcm_s24le",
-    audio_bitrate="lossless",
-    crf=None,
-    preset=None,
-)
 
 # CRF + maxrate/bufsize tuned per platform's published spec.
 #
@@ -298,85 +279,6 @@ def get_ffprobe_binary() -> str:
     raise RuntimeError("ffprobe not found. Install FFmpeg (includes ffprobe).")
 
 
-# -- GPU hardware detection ----------------------------------------------------
-
-
-@dataclass
-class HWAccel:
-    """Available hardware acceleration for this machine."""
-
-    h264_encoder: str = "libx264"
-    h265_encoder: str = "libx265"
-    speedup_factor: float = 1.0
-
-
-@functools.lru_cache(maxsize=1)
-def detect_hw_accel() -> HWAccel:
-    """
-    Probe FFmpeg for available hardware encoders.
-
-    Falls back gracefully to CPU if no GPU acceleration is found.
-    CRF+2 on GPU hardware encoders produces perceptual quality
-    equivalent to CRF on CPU slow.
-    """
-    try:
-        result = subprocess.run(
-            [get_ffmpeg_binary(), "-encoders", "-v", "quiet"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        encoders = result.stdout
-
-        if "h264_nvenc" in encoders:
-            logger.info("GPU: NVIDIA CUDA (h264_nvenc / hevc_nvenc)")
-            return HWAccel(
-                h264_encoder="h264_nvenc",
-                h265_encoder="hevc_nvenc",
-                speedup_factor=6.0,
-            )
-        if "h264_videotoolbox" in encoders:
-            logger.info("GPU: Apple Silicon (h264_videotoolbox / hevc_videotoolbox)")
-            return HWAccel(
-                h264_encoder="h264_videotoolbox",
-                h265_encoder="hevc_videotoolbox",
-                speedup_factor=4.0,
-            )
-        if "h264_amf" in encoders:
-            logger.info("GPU: AMD AMF (h264_amf / hevc_amf)")
-            return HWAccel(
-                h264_encoder="h264_amf",
-                h265_encoder="hevc_amf",
-                speedup_factor=4.0,
-            )
-    except Exception as e:
-        logger.debug("GPU probe failed: %s -- using CPU", e)
-
-    logger.info("GPU: none detected -- using CPU libx264 / libx265")
-    return HWAccel()
-
-
-def _apply_hw_accel(spec: RenderSpec, hw: HWAccel) -> RenderSpec:
-    """
-    Return a copy of spec with hardware-accelerated encoder substituted.
-
-    Applies the CRF+2 adjustment for perceptual parity on GPU encoders.
-    """
-    if hw.speedup_factor == 1.0:
-        return spec
-
-    adjusted = spec.model_copy(deep=True)
-    if spec.codec == "libx264":
-        adjusted.codec = hw.h264_encoder
-        if adjusted.crf is not None:
-            adjusted.crf = min(51, adjusted.crf + 2)
-    elif spec.codec == "libx265":
-        adjusted.codec = hw.h265_encoder
-        if adjusted.crf is not None:
-            adjusted.crf = min(63, adjusted.crf + 2)
-    return adjusted
-
-
 # -- X/Twitter tier detection --------------------------------------------------
 
 
@@ -400,228 +302,16 @@ def resolve_twitter_spec(niche_id: str, backlog_client) -> RenderSpec:
     return PLATFORM_SPECS[Platform.X_STD]
 
 
-# -- Core rendering functions -------------------------------------------------
-
-
-async def render_master(source: Path, output: Path) -> Path:
-    """
-    Render a lossless FFV1 master from the source video.
-
-    The master preserves the source frame rate and uses lossless audio.
-    It is the common ancestor for all platform variants.
-
-    Raises:
-        RuntimeError: If FFmpeg fails or output fails verification.
-    """
-    ffmpeg = get_ffmpeg_binary()
-    args = [
-        ffmpeg,
-        "-y",
-        "-i",
-        str(source),
-        *MASTER_SPEC.to_output_args(),
-        str(output),
-    ]
-    logger.info("[RENDER] Creating FFV1 master: %s", output.name)
-    await _run_ffmpeg(args, label="master")
-    if not await _verify_output(output):
-        raise RuntimeError(f"Master output failed verification: {output}")
-    logger.info(
-        "[RENDER] Master created: %s (%.1f MB)",
-        output.name,
-        output.stat().st_size / 1e6,
-    )
-    return output
-
-
-async def transcode_for_platforms(
-    master: Path,
-    platforms: list[Platform],
-    output_dir: Path,
-    use_gpu: bool = True,
-) -> dict[Platform, Path]:
-    """
-    Derive all platform variants from a lossless master.
-
-    Uses the two-group transcode tree:
-      - H.265 targets (YouTube): one encode pass per target
-      - H.264 targets (everything else): one tee-muxer pass for all
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-    hw = detect_hw_accel() if use_gpu else HWAccel()
-
-    h265_platforms = [p for p in platforms if PLATFORM_SPECS[p].codec == "libx265"]
-    h264_platforms = [p for p in platforms if PLATFORM_SPECS[p].codec == "libx264"]
-
-    results: dict[Platform, Path] = {}
-
-    for platform in h265_platforms:
-        spec = _apply_hw_accel(PLATFORM_SPECS[platform], hw)
-        out = output_dir / f"{platform.value}.mp4"
-        logger.info("[RENDER] Encoding %s (H.265 pass)", platform.value)
-        await _encode_single(master, spec, out)
-        results[platform] = out
-
-    if h264_platforms:
-        logger.info(
-            "[RENDER] Encoding %d H.264 variants (tee pass)",
-            len(h264_platforms),
-        )
-        outputs = await _encode_h264_tee(master, h264_platforms, output_dir, hw)
-        results.update(outputs)
-
-    for platform, path in results.items():
-        if not await _verify_output(path):
-            raise RuntimeError(f"Platform variant failed verification: {platform} -> {path}")
-
-    return results
-
-
-async def _encode_single(master: Path, spec: RenderSpec, output: Path) -> None:
-    """Encode one variant from the master."""
-    ffmpeg = get_ffmpeg_binary()
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-i",
-        str(master),
-        *spec.to_output_args(),
-        str(output),
-    ]
-    await _run_ffmpeg(cmd, label=output.stem)
-
-
-async def _encode_h264_tee(
-    master: Path,
-    platforms: list[Platform],
-    output_dir: Path,
-    hw: HWAccel,
-) -> dict[Platform, Path]:
-    """
-    Encode multiple H.264 variants in one decode pass using FFmpeg tee muxer.
-
-    One decode of the master simultaneously feeds all H.264 encoders.
-    """
-    if len(platforms) == 1:
-        spec = _apply_hw_accel(PLATFORM_SPECS[platforms[0]], hw)
-        out = output_dir / f"{platforms[0].value}.mp4"
-        await _encode_single(master, spec, out)
-        return {platforms[0]: out}
-
-    outputs: dict[Platform, Path] = {}
-    tee_parts = []
-
-    for platform in platforms:
-        spec = _apply_hw_accel(PLATFORM_SPECS[platform], hw)
-        out = output_dir / f"{platform.value}.mp4"
-        outputs[platform] = out
-        args_str = ":".join(spec.to_output_args())
-        tee_parts.append(f"[{args_str}]{out}")
-
-    ffmpeg = get_ffmpeg_binary()
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-i",
-        str(master),
-        "-f",
-        "tee",
-        "|".join(tee_parts),
-    ]
-    await _run_ffmpeg(cmd, label="h264_tee")
-    return outputs
-
-
-async def _run_ffmpeg(cmd: list[str], label: str = "ffmpeg") -> None:
-    """Run an FFmpeg command asynchronously and raise on non-zero exit."""
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        preexec_fn=os.setpgrp if hasattr(os, "setpgrp") else None,
-    )
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"FFmpeg failed [{label}] (exit {proc.returncode}):\n"
-            + stderr.decode(errors="replace")[-2000:]
-        )
-
-
-async def _verify_output(path: Path) -> bool:
-    """
-    Verify FFmpeg output has non-zero duration via ffprobe.
-
-    FFmpeg can exit with code 0 but produce a corrupt or zero-duration
-    file when the input has issues or disk is full.
-    """
-    if not path.exists() or path.stat().st_size == 0:
-        return False
-    try:
-        ffprobe = get_ffprobe_binary()
-        proc = await asyncio.create_subprocess_exec(
-            ffprobe,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, _ = await proc.communicate()
-        duration = float(stdout.decode().strip() or "0")
-        return proc.returncode == 0 and duration > 0
-    except Exception as e:
-        logger.warning("Output verification failed for %s: %s", path, e)
-        return False
-
-
-# ── Sync wrappers ─────────────────────────────────────────────────────
-# The async functions above use asyncio.create_subprocess_exec for parallel
-# FFmpeg execution. These sync wrappers handle the event loop safely,
-# avoiding conflicts with async_bridge's persistent loop.
-
-
-def render_master_sync(source: Path, output: Path) -> Path:
-    """Sync wrapper for render_master — safe to call from pipeline stages."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None:
-        # Already in an async context — use run_coroutine_threadsafe
-        future = asyncio.run_coroutine_threadsafe(render_master(source, output), loop)
-        return future.result(timeout=600)
-    else:
-        return asyncio.run(render_master(source, output))
-
-
-def transcode_for_platforms_sync(
-    master: Path,
-    output_dir: Path,
-    platforms: list[Platform] | None = None,
-) -> dict[str, Path]:
-    """Sync wrapper for transcode_for_platforms — safe to call from pipeline stages."""
-    # R-56: the async signature is (master, platforms, output_dir) but this
-    # wrapper takes (master, output_dir, platforms) — the previous positional
-    # forwarding bound output_dir->platforms and platforms->output_dir. Forward
-    # by keyword so the binding can't silently swap again.
-    if platforms is None:
-        platforms = list(PLATFORM_SPECS.keys())
-
-    async def _run() -> dict:
-        return await transcode_for_platforms(master, platforms=platforms, output_dir=output_dir)
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is not None:
-        future = asyncio.run_coroutine_threadsafe(_run(), loop)
-        return future.result(timeout=600)
-    return asyncio.run(_run())
+# -- Core rendering functions: REMOVED in DEAD #1 (2026-06-13) ---------------
+#
+# The lossless-master-then-transcode pipeline was aspirational architecture
+# that never shipped — production has always been libx264 single-pass via
+# ``publishing/transcode.py``. Removed: ``render_master`` /
+# ``transcode_for_platforms`` (+ sync wrappers + private helpers
+# ``_encode_single``, ``_encode_h264_tee``, ``_run_ffmpeg``,
+# ``_verify_output``). Their tests (``test_ffmpeg_transcode_sync.py``)
+# went with them.
+#
+# If you find yourself wanting to add a master/transcode pipeline back,
+# read ``publishing/transcode.py`` first and decide whether the new code
+# belongs there or whether the actual production path needs upgrading.

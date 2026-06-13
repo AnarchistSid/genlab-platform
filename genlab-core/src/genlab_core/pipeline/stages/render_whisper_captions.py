@@ -221,27 +221,52 @@ class RenderWhisperCaptions:
         font_path = self._find_font(config)
 
         animator = WordByWordAnimator(font_path=font_path)
+        # RENDER #1 fix (2026-06-13): text_type was "hook" pre-fix, which
+        # gave Whisper captions the 120-160px adaptive HOOK size range —
+        # captions stacked floor-to-ceiling and overflowed the canvas.
+        # Now passes "caption" → 42px fixed, 2-line max, bottom-strip
+        # positioning. See [[session-2026-06-13-render-audit-findings]].
         filters, duration, _ = animator.build_animated_filters(
             caption_text,
-            text_type="hook",
+            text_type="caption",
             whisper_words=whisper_words,
         )
 
         if not filters:
             return None
 
-        # Audio: keep the source track by default. Only when the clip is SILENT
-        # (no meaningful source audio) and a generated TTS voiceover exists do
-        # we mux the voiceover in — so a dead-air reel gets narration, while
-        # clips with real audio (highlights, gameplay, trailers — the content
-        # that actually performs) are never talked over.
+        # Audio: re-encode to AAC 48kHz stereo so the output matches the
+        # CLAUDE.md "AAC 48kHz stereo" spec. The pre-fix path used
+        # `-c:a copy` which preserved the source audio params; a source
+        # clip at 44.1kHz mono then survived unchanged through this
+        # stage, only to trigger an auto-fix re-encode in ValidateVideos
+        # (wrong_sample_rate / wrong_audio_channels) → 3rd-generation
+        # transcode with visible quality loss. RENDER #3 fix
+        # (2026-06-13): always normalize audio here so ValidateVideos
+        # has nothing to fix.
+        #
+        # Silent clip path remains: when the source has no meaningful
+        # audio AND a generated TTS voiceover exists, we mux the
+        # voiceover in. The normalization params are identical.
         extra_inputs: list[str] = []
-        audio_args = ["-c:a", "copy"]
+        audio_args = ["-c:a", "aac", "-ar", "48000", "-ac", "2"]
         if audio_path and Path(audio_path).exists():
             threshold = ws_config.get("silence_threshold_db", -40)
             if not has_meaningful_audio(video_path, silence_threshold_db=threshold):
                 extra_inputs = ["-i", str(audio_path)]
-                audio_args = ["-map", "0:v", "-map", "1:a", "-c:a", "aac", "-shortest"]
+                audio_args = [
+                    "-map",
+                    "0:v",
+                    "-map",
+                    "1:a",
+                    "-c:a",
+                    "aac",
+                    "-ar",
+                    "48000",
+                    "-ac",
+                    "2",
+                    "-shortest",
+                ]
                 logger.info(
                     "[WHISPER_CAPTIONS] %s: silent clip — muxing TTS voiceover",
                     item_key,
@@ -268,6 +293,21 @@ class RenderWhisperCaptions:
                 "18",
                 "-pix_fmt",
                 "yuv420p",
+                # RENDER #3 fix (2026-06-13): preserve the bt709 color
+                # space tagging that FrameCompositor wrote. Pre-fix this
+                # re-encode silently dropped the colorspace tags;
+                # ValidateVideos then flagged "wrong_color_space" and
+                # auto-fixed via another full re-encode → 3rd-generation
+                # transcode = visible quality loss. The CLAUDE.md
+                # "bt709 not bt470bg" requirement is now preserved end-
+                # to-end (FrameCompositor writes it, this stage preserves
+                # it, ValidateVideos passes it through).
+                "-colorspace",
+                "bt709",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
                 str(output_path),
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)

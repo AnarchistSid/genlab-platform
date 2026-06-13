@@ -88,19 +88,24 @@ class TestCompositorRender:
         mock_fc.compose.assert_called_once()
 
     def test_compositor_failure_records_failed(self):
-        """When FrameCompositor raises, story gets rendered_path=None and stats show failed."""
+        """When FrameCompositor raises, story gets rendered_path=None and stats show failed.
+
+        ARCH #45 (2026-06-13): VideoCompositor class was collapsed into a
+        module-level `derive_landscape` function. We patch the function at
+        its call site instead of the deleted `_get_compositor` method.
+        """
         stage = RenderGamingVideo()
         mock_fc = MagicMock()
         mock_fc.compose.side_effect = RuntimeError("FFmpeg failed")
-
-        mock_compositor = MagicMock()
-        mock_compositor.derive_landscape.side_effect = RuntimeError("FFmpeg failed")
 
         story = _make_story()
 
         with (
             patch.object(stage, "_get_frame_compositor", return_value=mock_fc),
-            patch.object(stage, "_get_compositor", return_value=mock_compositor),
+            patch(
+                "niches.gaming.stages.render_gaming_video.derive_landscape",
+                side_effect=RuntimeError("FFmpeg failed"),
+            ),
         ):
             with patch.object(Path, "exists", return_value=True):
                 with patch(

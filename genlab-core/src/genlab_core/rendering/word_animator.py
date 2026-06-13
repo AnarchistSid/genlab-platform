@@ -12,32 +12,210 @@ Functions:
 """
 
 import logging
+import math as _math
 from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# ── Text optimizer import ─────────────────────────────────────
-# Optional: try BlackboxBrief's text_optimizer first (runtime sys.path injection),
-# then fall back to hardcoded safe-zone constants.
-try:
-    from execution.utils.text_optimizer import (
-        SAFE_LEFT,
-        SAFE_RIGHT,
-        SAFE_TOP,
-        calculate_optimal_font_size,
-        calculate_safe_position,
+# ── Text optimizer (inlined from BlackboxBrief, 2026-06-13) ───────────
+#
+# Adaptive font sizing for canvas text overlays. Inlined here because the
+# previous import path (`execution.utils.text_optimizer`) was silently
+# dropped during the 2026-04-04 monorepo conversion — for 2.3 months
+# `_HAS_TEXT_OPTIMIZER = False` was the default and word_animator always
+# used the fallback 160px font, producing captions that overflowed the
+# canvas and smashed the hook label. See
+# [[session-2026-06-13-render-audit-findings]] for the audit.
+#
+# Algorithm recovered from the leftover `.pyc` at
+# BlackboxBrief/execution/utils/__pycache__/text_optimizer.cpython-314.pyc
+# (the source .py was lost during the monorepo conversion). Constants
+# and the FONT_SIZE_CONFIG schema preserved.
+
+# Canvas constants (matches genlab_core/media/frame_compositor.py)
+_CANVAS_WIDTH = 1080
+_CANVAS_HEIGHT = 1920
+
+# Safe-zone margins (matches BlackboxBrief/config/instagram_specs.yaml)
+SAFE_TOP = 250
+SAFE_BOTTOM = 320
+SAFE_LEFT = 60
+SAFE_RIGHT = 120
+SAFE_WIDTH = _CANVAS_WIDTH - SAFE_LEFT - SAFE_RIGHT  # 900
+SAFE_BOTTOM_Y = _CANVAS_HEIGHT - SAFE_BOTTOM  # 1600
+
+# Per-text-type sizing budgets. The optimizer shrinks the font until the
+# computed line count fits within `max_lines`, never going below `min_size`.
+# Pre-restore every text type defaulted to 160px (the upper hook bound)
+# so even a 60-char Whisper caption rendered as a 7-line stack starting
+# at y=350 (overflow at y=1974 > 1920 canvas).
+FONT_SIZE_CONFIG: dict[str, dict[str, float | int]] = {
+    "hook": {
+        "min_size": 120,
+        "max_size": 160,
+        "ideal_chars": 15,
+        "overflow_chars": 40,
+        "max_width_ratio": 0.88,
+        "max_lines": 4,
+        "char_width_factor": 0.55,
+    },
+    "body": {
+        "min_size": 56,
+        "max_size": 72,
+        "ideal_chars": 40,
+        "overflow_chars": 180,
+        "max_width_ratio": 0.85,
+        "max_lines": 6,
+        "char_width_factor": 0.5,
+    },
+    "caption": {
+        # Whisper word-by-word captions: small fixed size, 2 max lines so
+        # a long caption shrinks aggressively rather than stacking 7 deep.
+        # This is the text_type render_whisper_captions was MISSING when
+        # it passed text_type="hook" pre-fix.
+        "min_size": 42,
+        "max_size": 42,
+        "ideal_chars": 40,
+        "overflow_chars": 80,
+        "max_width_ratio": 0.9,
+        "max_lines": 2,
+        "char_width_factor": 0.48,
+    },
+    "credit": {
+        "min_size": 34,
+        "max_size": 34,
+        "ideal_chars": 30,
+        "overflow_chars": 50,
+        "max_width_ratio": 0.4,
+        "max_lines": 1,
+        "char_width_factor": 0.48,
+    },
+}
+
+
+def calculate_optimal_font_size(
+    text: str,
+    text_type: str = "hook",
+    canvas_width: int = _CANVAS_WIDTH,
+    canvas_height: int = _CANVAS_HEIGHT,  # noqa: ARG001 — kept for API parity
+) -> int:
+    """Length-aware adaptive font size with a max_lines shrink-floor.
+
+    Returns the largest font size in [min_size, max_size] for which the
+    estimated line count (text_chars / chars_per_line) is ≤ max_lines.
+    Falls back to min_size when even that doesn't fit.
+
+    Pre-fix (this function missing → fallback always used max_size=160):
+        "Analyze earnings and update your investment thesis with Codex"
+        → 160px × 7 lines × 232px line-height = 1974px > 1920px canvas
+
+    Post-fix with text_type="caption":
+        → 42px × 2 lines × 60px line-height = 120px (bottom caption row)
+    """
+    cfg = FONT_SIZE_CONFIG.get(text_type, FONT_SIZE_CONFIG["body"])
+    min_size = int(cfg["min_size"])
+    max_size = int(cfg["max_size"])
+    ideal = int(cfg["ideal_chars"])
+    overflow = int(cfg["overflow_chars"])
+    max_width_ratio = float(cfg["max_width_ratio"])
+    max_lines = int(cfg["max_lines"])
+    char_width_factor = float(cfg["char_width_factor"])
+
+    char_count = len(text.strip())
+    word_count = len(text.split())
+
+    # Linear length-based scaling between ideal_chars and overflow_chars.
+    if char_count <= ideal:
+        char_factor = 1.0
+    elif char_count >= overflow:
+        char_factor = 0.0
+    else:
+        char_factor = 1 - (char_count - ideal) / max(1, overflow - ideal)
+
+    # Short-text bonus (favors 1-4 word punchy hooks).
+    if word_count <= 2:
+        word_bonus = 0.05
+    elif word_count <= 4:
+        word_bonus = 0.02
+    else:
+        word_bonus = 0.0
+
+    combined = min(1.0, char_factor + word_bonus)
+    base_size = int(min_size + (max_size - min_size) * combined)
+
+    # Shrink-floor: ensure max_lines isn't exceeded even when length
+    # alone wouldn't have triggered the lower-bound.
+    if base_size > 0:
+        chars_per_line = max(
+            1, int((canvas_width * max_width_ratio) / (base_size * char_width_factor))
+        )
+        estimated_lines = _math.ceil(char_count / chars_per_line) if chars_per_line else 0
+        if estimated_lines > max_lines:
+            needed_chars_per_line = _math.ceil(char_count / max_lines)
+            needed_size = int(
+                (canvas_width * max_width_ratio) / max(1, needed_chars_per_line * char_width_factor)
+            )
+            base_size = max(min_size, min(base_size, needed_size))
+
+    # Final clamp with canvas-width scaling (callers may pass non-1080).
+    scale = canvas_width / _CANVAS_WIDTH
+    return max(min_size, min(max_size, int(base_size * scale)))
+
+
+@dataclass
+class TextPosition:
+    """Position of a text region inside the 1080×1920 canvas."""
+
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+def calculate_safe_position(
+    text: str,  # noqa: ARG001 — kept for API parity
+    text_type: str = "hook",
+    canvas_width: int = _CANVAS_WIDTH,
+    canvas_height: int = _CANVAS_HEIGHT,
+    preceding_bottom_y: int = 0,
+) -> TextPosition:
+    """Position a text region per text_type anchor convention."""
+    safe_w = canvas_width - SAFE_LEFT - SAFE_RIGHT
+    safe_bottom_y = canvas_height - SAFE_BOTTOM
+
+    if text_type == "caption":
+        # Whisper word-by-word: bottom strip, ~200px above frame bottom.
+        return TextPosition(
+            x=SAFE_LEFT,
+            y=max(safe_bottom_y - 200, SAFE_TOP + 100),
+            width=safe_w,
+            height=200,
+        )
+    if text_type == "credit":
+        return TextPosition(
+            x=int(canvas_width * 0.6),
+            y=safe_bottom_y - 60,
+            width=int(safe_w * 0.4),
+            height=60,
+        )
+    if text_type == "body":
+        # Stack below the hook's actual rendered bottom when provided.
+        y = max(preceding_bottom_y + 40, SAFE_TOP + 200)
+        return TextPosition(x=SAFE_LEFT, y=y, width=safe_w, height=safe_bottom_y - y)
+    # Default: hook — top-center area.
+    return TextPosition(
+        x=SAFE_LEFT,
+        y=SAFE_TOP + 100,
+        width=safe_w,
+        height=safe_bottom_y - (SAFE_TOP + 100),
     )
 
-    _HAS_TEXT_OPTIMIZER = True
-except ImportError:
-    _HAS_TEXT_OPTIMIZER = False
-    # Fallback safe zone constants (match instagram_specs.yaml)
-    SAFE_TOP = 250
-    SAFE_LEFT = 60
-    SAFE_RIGHT = 120
 
-# Fallback font size ranges (same as render_text_overlays constants)
+_HAS_TEXT_OPTIMIZER = True
+
+# Fallback font size ranges (kept for backward compat with the previous
+# branch; FONT_SIZE_CONFIG is now the source of truth).
 HOOK_SIZE_RANGE = (120, 160)
 BODY_SIZE_RANGE = (56, 72)
 
