@@ -240,6 +240,40 @@ export const autoApproval = {
     }),
 };
 
+// Source-quality dashboard surface (2026-06-13).
+// Operator uses this to prune sources with 0% claim rate over the
+// rolling window — the deep-dive found 22 of 30 top sources produce
+// nothing despite being fetched daily.
+export type SourceHealth = "active" | "weak" | "dead" | "unproven";
+
+export interface SourcePerformanceRow {
+  source_name: string;
+  source_platform: string;
+  fetched: number;
+  claimed: number;
+  claim_pct: number;        // 0..100
+  distinct_niches: number;
+  latest_fetch: string | null;
+  health: SourceHealth;
+}
+
+export interface SourcePerformanceResponse {
+  window_days: number;
+  total_fetched: number;
+  total_claimed: number;
+  claim_rate: number;       // 0..1
+  bucket_counts: Record<SourceHealth, number>;
+  sources: SourcePerformanceRow[];
+}
+
+export const sources = {
+  performance: (days = 14, minFetched = 5) =>
+    get<SourcePerformanceResponse>("/sources/performance", {
+      days: String(days),
+      min_fetched: String(minFetched),
+    }),
+};
+
 export const stories = {
   list: (params?: Record<string, string>) =>
     get<PaginatedResponse<Story>>("/stories", params),
