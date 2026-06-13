@@ -31,10 +31,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
-import tempfile
-import textwrap
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -45,31 +42,22 @@ if TYPE_CHECKING:
     from genlab_core.media.sandbox_runner import SandboxedFFmpegRunner
 
 from genlab_core.media.ffmpeg import PLATFORM_SPECS, Platform, RenderSpec, get_ffmpeg_binary
-from genlab_core.media.ffmpeg_utils import (
-    concat,
-    escape_drawtext,
-    probe_video_metadata,
-    run_ffmpeg,
-)
+from genlab_core.media.ffmpeg_utils import run_ffmpeg
 
 logger = logging.getLogger(__name__)
 
 # ── Canvas constants ──────────────────────────────────────────────────────────
-VERTICAL_WIDTH = 1080
-VERTICAL_HEIGHT = 1920
+# VERTICAL_WIDTH/HEIGHT removed in DEAD #1 — only consumed by the deleted
+# sandwich-render chain. derive_landscape uses LANDSCAPE_* defaults.
 LANDSCAPE_WIDTH_FB = 1920
 LANDSCAPE_HEIGHT_FB = 1080
 LANDSCAPE_WIDTH_X = 1280
 LANDSCAPE_HEIGHT_X = 720
 
-# ── Layout constants ──────────────────────────────────────────────────────────
-LOGO_LEFT_MARGIN = 24
-LOGO_TEXT_GAP = 24
-TEXT_RIGHT_MARGIN = 24
-# Average character width as a fraction of font size (sans-serif approximation).
-_FONT_CHAR_WIDTH_RATIO = 0.55
-# Default logo aspect ratio when probe fails (3:2 — common for horizontal logos).
-_DEFAULT_LOGO_ASPECT = 1.5
+# ── Layout constants REMOVED in DEAD #1 (2026-06-13) ─────────────────────────
+# LOGO_LEFT_MARGIN / LOGO_TEXT_GAP / TEXT_RIGHT_MARGIN /
+# _FONT_CHAR_WIDTH_RATIO / _DEFAULT_LOGO_ASPECT were only consumed by the
+# deleted sandwich-render chain. derive_landscape doesn't need them.
 
 # ── Encoding ─────────────────────────────────────────────────────────────────
 _FFMPEG_TIMEOUT = 300
@@ -243,8 +231,6 @@ class VideoCompositor:
         sandbox_runner: SandboxedFFmpegRunner | None = None,
     ) -> None:
         self._config = config
-        self._canvas_w = VERTICAL_WIDTH
-        self._canvas_h = VERTICAL_HEIGHT
         self._sandbox_runner = sandbox_runner
 
     def _run_ffmpeg_cmd(
@@ -272,74 +258,11 @@ class VideoCompositor:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def compose_vertical(
-        self,
-        source_clips: list[Path],
-        hook_text: str,
-        output_path: Path,
-        smart_crop: bool | None = None,
-        platform: str = "instagram",
-    ) -> Path:
-        """Assemble the 9:16 master video with full sandwich treatment.
-
-        The sandwich pattern is:
-          [TOP BAR: 12 % height, solid black]
-            - Logo: niche PNG, height=60 px, positioned left margin 24 px,
-                    vertically centered in bar
-            - Hook text: right of logo, 24 px margin from logo right edge,
-                         bold, white, 32 px, max 2 lines, vertically centered
-          [CONTENT: source clips assembled with crossfade, fills remaining height]
-          [BOTTOM BAR: 18 % height, solid black]
-            - Reserved for platform UI (Instagram handle, YouTube subscribe prompt)
-            - No Gen Lab text in bottom bar (platform overlays go here)
-
-        Parameters
-        ----------
-        smart_crop : bool | None
-            Pre-crop landscape clips to face/motion centre before sandwich.
-            ``None`` (default) defers to ``VisualConfig.smart_crop``.
-        platform : str
-            Target platform for encoding (e.g. "instagram", "youtube").
-            Defaults to "instagram" for backward compatibility.
-        """
-        if not self._config.logo_path.exists():
-            raise FileNotFoundError(
-                f"Logo not found: {self._config.logo_path}. "
-                f"Each niche must provide a logo PNG at the configured logo_path. "
-                f"Expected file for niche '{self._config.niche_id}'."
-            )
-
-        if not source_clips:
-            raise ValueError("At least one source clip is required")
-
-        for clip in source_clips:
-            if not clip.exists():
-                raise FileNotFoundError(f"Source clip not found: {clip}")
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Step 0: optionally pre-crop landscape clips (face/motion-aware)
-        do_smart_crop = smart_crop if smart_crop is not None else self._config.smart_crop
-        crop_dir: str | None = None
-
-        if do_smart_crop:
-            source_clips, crop_dir = self._smart_crop_clips(source_clips)
-
-        try:
-            # Step 1: concatenate multiple clips (single clip skips this)
-            assembled_clip, temp_dir = self._assemble_clips(source_clips)
-
-            try:
-                # Step 2: build the full filter_complex and run FFmpeg
-                self._render_sandwich(assembled_clip, hook_text, output_path, platform=platform)
-            finally:
-                if temp_dir is not None:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
-        finally:
-            if crop_dir is not None:
-                shutil.rmtree(crop_dir, ignore_errors=True)
-
-        return output_path
+    # compose_vertical() + private helpers REMOVED in DEAD #1 (2026-06-13).
+    # All 5 niches render via FrameCompositor (see [[task #45]]), so the
+    # sandwich-render path in VideoCompositor was dead. Only derive_landscape
+    # remains — gaming uses it to produce 16:9 variants from the vertical
+    # master for Facebook/X.
 
     def derive_landscape(
         self,
@@ -391,195 +314,12 @@ class VideoCompositor:
         self._run_ffmpeg_cmd(cmd, label="landscape")
         return output_path
 
-    # ── Filter builders (the ONLY place these filters are defined) ────────────
-
-    def _build_sandwich_filter(self, config: VisualConfig) -> str:
-        """Generate the FFmpeg filtergraph string for the sandwich overlay.
-
-        This is the ONLY place in the entire codebase where the sandwich
-        filter is defined.  Gaming, sports, anime, movies all call this
-        same method.
-        """
-        cw, ch = self._canvas_w, self._canvas_h
-        # Round bar heights to even — FFmpeg scale rounds to even via
-        # force_original_aspect_ratio, and odd content_h causes
-        # "Padded dimensions cannot be smaller than input dimensions".
-        top_h = int(ch * config.top_bar_height_pct) & ~1
-        bot_h = int(ch * config.bottom_bar_height_pct) & ~1
-        content_h = ch - top_h - bot_h
-
-        # 1. Scale source to fit inside the content area
-        # 2. Pad to content area dimensions (center)
-        # 3. Pad to full canvas (content placed below top bar)
-        # 4. Draw explicit black bars (ensures solid coverage)
-        return (
-            f"[0:v]scale={cw}:{content_h}"
-            f":force_original_aspect_ratio=decrease,"
-            f"pad={cw}:{content_h}:(ow-iw)/2:(oh-ih)/2:black,"
-            f"pad={cw}:{ch}:0:{top_h}:black,"
-            f"drawbox=x=0:y=0:w={cw}:h={top_h}:color=black:t=fill,"
-            f"drawbox=x=0:y={ch - bot_h}:w={cw}:h={bot_h}:color=black:t=fill"
-        )
-
-    def _overlay_logo(self, config: VisualConfig) -> str:
-        """Generate the FFmpeg logo overlay expression.
-
-        Logo path comes from config.logo_path (niche-specific asset).
-        Position: x=24, y=(top_bar_height - logo_height)/2
-        Always within the top black bar.  Never in the content area.
-        """
-        top_h = int(self._canvas_h * config.top_bar_height_pct)
-        logo_y = (top_h - config.logo_height_px) // 2
-        return f"overlay=x={LOGO_LEFT_MARGIN}:y={logo_y}"
-
-    def _overlay_hook_text(self, hook: str, config: VisualConfig) -> str:
-        """Generate the drawtext expression for the hook overlay.
-
-        Font: bold, white (#FFFFFF), size 32 px.
-        Position: x=logo_right_edge + 24, y centered in top bar.
-        Max width: canvas_width - logo_right_edge - 48 (24 px each side).
-        Line wrap: automatic at max_width.
-        Max lines: 2.  Truncate with ellipsis if longer.
-        """
-        top_h = int(self._canvas_h * config.top_bar_height_pct)
-        logo_w = self._get_logo_width_px(config)
-        text_x = LOGO_LEFT_MARGIN + logo_w + LOGO_TEXT_GAP
-        max_text_w = self._canvas_w - text_x - TEXT_RIGHT_MARGIN
-
-        wrapped = self._wrap_hook(
-            hook,
-            config.hook_font_size,
-            max_text_w,
-            config.hook_max_lines,
-        )
-        escaped = escape_drawtext(wrapped)
-
-        line_h = int(config.hook_font_size * 1.3)
-        num_lines = wrapped.count("\n") + 1
-        text_block_h = num_lines * line_h
-        text_y = max(0, (top_h - text_block_h) // 2)
-
-        return (
-            f"drawtext=text='{escaped}'"
-            f":fontsize={config.hook_font_size}"
-            f":fontcolor=white"
-            f":x={text_x}:y={text_y}"
-            f":line_spacing={int(config.hook_font_size * 0.3)}"
-        )
-
-    # ── Internal helpers ──────────────────────────────────────────────────────
-
-    def _smart_crop_clips(
-        self,
-        clips: list[Path],
-    ) -> tuple[list[Path], str | None]:
-        """Pre-crop landscape clips using face/motion detection.
-
-        Returns (possibly-modified clips list, temp_dir_or_None).
-        Portrait/square clips pass through unchanged.
-        """
-        from genlab_core.media.smart_crop import SmartCropper
-
-        cropper = SmartCropper(
-            min_landscape_aspect=self._config.smart_crop_min_aspect,
-            sandbox_runner=self._sandbox_runner,
-        )
-        return cropper.pre_crop_clips(clips)
-
-    def _assemble_clips(
-        self,
-        clips: list[Path],
-    ) -> tuple[Path, str | None]:
-        """Concatenate clips if >1.  Returns (assembled_path, temp_dir_or_None)."""
-        if len(clips) == 1:
-            return clips[0], None
-
-        temp_dir = tempfile.mkdtemp(prefix="genlab_concat_")
-        assembled = str(Path(temp_dir) / "assembled.mp4")
-        success = concat(
-            [str(p) for p in clips],
-            assembled,
-            temp_dir=temp_dir,
-        )
-        if not success:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            raise RuntimeError("Failed to concatenate source clips")
-        return Path(assembled), temp_dir
-
-    def _render_sandwich(
-        self,
-        source: Path,
-        hook_text: str,
-        output: Path,
-        platform: str = "instagram",
-    ) -> None:
-        """Run the full sandwich render: scale → bars → logo → hook text."""
-        cfg = self._config
-
-        sandwich = self._build_sandwich_filter(cfg)
-        logo_overlay = self._overlay_logo(cfg)
-        hook_filter = self._overlay_hook_text(hook_text, cfg)
-
-        filter_complex = (
-            f"{sandwich}[sandwich];"
-            f"[1:v]scale=-1:{cfg.logo_height_px}[logo];"
-            f"[sandwich][logo]{logo_overlay}[branded];"
-            f"[branded]{hook_filter}[out]"
-        )
-
-        ffmpeg = get_ffmpeg_binary()
-        cmd = [
-            ffmpeg,
-            "-y",
-            "-i",
-            str(source),
-            "-i",
-            str(cfg.logo_path),
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "[out]",
-            "-map",
-            "0:a?",
-            *_get_encode_args(platform),
-            str(output),
-        ]
-
-        self._run_ffmpeg_cmd(cmd, label="sandwich")
-
-    def _get_logo_width_px(self, config: VisualConfig) -> int:
-        """Probe logo to get its scaled width at ``logo_height_px``."""
-        try:
-            meta = probe_video_metadata(config.logo_path)
-            if meta and meta.get("width") and meta.get("height"):
-                aspect = meta["width"] / meta["height"]
-                return int(config.logo_height_px * aspect)
-        except Exception:
-            pass
-        return int(config.logo_height_px * _DEFAULT_LOGO_ASPECT)
-
-    @staticmethod
-    def _wrap_hook(
-        text: str,
-        font_size: int,
-        max_width_px: int,
-        max_lines: int,
-    ) -> str:
-        """Word-wrap hook text to fit pixel width, truncate with ellipsis."""
-        char_w = font_size * _FONT_CHAR_WIDTH_RATIO
-        chars_per_line = max(10, int(max_width_px / char_w))
-
-        lines = textwrap.wrap(text, width=chars_per_line)
-        if not lines:
-            return text
-
-        if len(lines) > max_lines:
-            lines = lines[:max_lines]
-            last = lines[-1]
-            if len(last) > chars_per_line - 3:
-                last = last[: chars_per_line - 3].rstrip() + "..."
-            else:
-                last = last.rstrip() + "..."
-            lines[-1] = last
-
-        return "\n".join(lines)
+    # ── Filter builders + internal helpers REMOVED in DEAD #1 (2026-06-13) ───
+    #
+    # _build_sandwich_filter / _overlay_logo / _overlay_hook_text were
+    # called only by _render_sandwich. _smart_crop_clips / _assemble_clips /
+    # _render_sandwich / _get_logo_width_px / _wrap_hook were called only by
+    # compose_vertical. With compose_vertical gone, the whole chain became
+    # unreachable. The FrameCompositor path owns sandwich rendering for all
+    # 5 niches today; see [[task #45]] for the architectural merge between
+    # FrameCompositor and the remaining VideoCompositor surface.

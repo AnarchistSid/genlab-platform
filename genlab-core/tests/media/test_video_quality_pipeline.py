@@ -194,84 +194,12 @@ def tmp_assets(tmp_path: Path) -> dict[str, Path]:
     return {"logo": logo, "clip": clip, "output": output}
 
 
-class TestCompositorPlatformParam:
-    """VideoCompositor.compose_vertical passes platform to _get_encode_args."""
-
-    @patch("genlab_core.media.video_compositor.probe_video_metadata")
-    @patch("genlab_core.media.video_compositor.run_ffmpeg")
-    @patch("genlab_core.media.video_compositor.get_ffmpeg_binary", return_value="ffmpeg")
-    def test_compose_vertical_default_platform_is_instagram(
-        self,
-        _mock_bin: MagicMock,
-        mock_run: MagicMock,
-        mock_probe: MagicMock,
-        tmp_assets: dict[str, Path],
-    ) -> None:
-        from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
-
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="",
-            stderr="",
-        )
-        mock_probe.return_value = {"width": 120, "height": 60}
-
-        cfg = VisualConfig(
-            niche_id="test",
-            logo_path=tmp_assets["logo"],
-            accent_color="#FF0000",
-        )
-        comp = VideoCompositor(cfg)
-        comp.compose_vertical(
-            [tmp_assets["clip"]],
-            "Hook text",
-            tmp_assets["output"],
-        )
-
-        # The ffmpeg command should use instagram's codec (libx264)
-        cmd = mock_run.call_args[0][0]
-        cmd_str = " ".join(cmd)
-        assert "libx264" in cmd_str
-
-    @patch("genlab_core.media.video_compositor.probe_video_metadata")
-    @patch("genlab_core.media.video_compositor.run_ffmpeg")
-    @patch("genlab_core.media.video_compositor.get_ffmpeg_binary", return_value="ffmpeg")
-    def test_compose_vertical_youtube_uses_libx264(
-        self,
-        _mock_bin: MagicMock,
-        mock_run: MagicMock,
-        mock_probe: MagicMock,
-        tmp_assets: dict[str, Path],
-    ) -> None:
-        """YouTube path uses libx264. x265 was tried earlier but OOMed
-        on the 4GB Hetzner VPS, and YouTube re-encodes everything anyway."""
-        from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
-
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="",
-            stderr="",
-        )
-        mock_probe.return_value = {"width": 120, "height": 60}
-
-        cfg = VisualConfig(
-            niche_id="test",
-            logo_path=tmp_assets["logo"],
-            accent_color="#FF0000",
-        )
-        comp = VideoCompositor(cfg)
-        comp.compose_vertical(
-            [tmp_assets["clip"]],
-            "Hook text",
-            tmp_assets["output"],
-            platform="youtube",
-        )
-
-        cmd = mock_run.call_args[0][0]
-        cmd_str = " ".join(cmd)
-        assert "libx264" in cmd_str
+# TestCompositorPlatformParam REMOVED in DEAD #1 (2026-06-13).
+# Pinned compose_vertical(platform=...) routing to libx264 — but
+# compose_vertical itself was deleted along with its private helpers.
+# Equivalent libx264 enforcement happens in publishing/transcode.py
+# tests today; see the FrameCompositor merge (#45) for the
+# architectural follow-up.
 
 
 # ══════════════════════════════════════════════════════════════════════════════
