@@ -43,6 +43,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from datetime import UTC
 from typing import Final
 
 logger = logging.getLogger(__name__)
