@@ -223,7 +223,7 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                 tweet_fields=["author_id", "created_at", "in_reply_to_user_id"],
                 expansions=["author_id"],
             )
-        except tweepy.Unauthorized:
+        except tweepy.Unauthorized as unauth:
             # Track consecutive 401s — suppress logging after 5 to avoid log spam
             _twitter_401_key = f"_twitter_401_{niche_id}"
             _count = getattr(poll_twitter_mentions, _twitter_401_key, 0) + 1
@@ -237,6 +237,15 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                     niche_id,
                     _count,
                 )
+            # Emit a CRITICAL pipeline_alert on the first 401 so Mission
+            # Control surfaces it instead of operators tailing logs.
+            # Throttled inside token_health (re-emits at most hourly).
+            try:
+                from genlab_core.engagement.token_health import emit_token_expiry_alert
+
+                emit_token_expiry_alert("x_twitter", niche_id, str(unauth))
+            except Exception:
+                pass
             return []
         except tweepy.Forbidden:
             logger.warning(
@@ -385,6 +394,24 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
         return comments
 
     except Exception as e:
+        # Detect token-expiry vs transient failures so an expired token
+        # surfaces as a CRITICAL pipeline_alert (operator-actionable)
+        # rather than a perpetual WARN that operators learn to ignore.
+        # See [[session-2026-06-12-deep-dive-findings]] § B.3 — Threads
+        # tokens expired 2026-05-26 and the silence cost the engagement
+        # engine 22 days of uptime.
+        try:
+            from genlab_core.engagement.token_health import (
+                emit_token_expiry_alert,
+                is_oauth_expiry,
+            )
+
+            error_body = getattr(getattr(e, "response", None), "text", "") or str(e)
+            if is_oauth_expiry(error_body):
+                emit_token_expiry_alert("threads", niche_id, error_body)
+        except Exception:
+            pass  # alert emission must never crash the poll loop
+
         logger.warning("[POLLER] Threads poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
 
@@ -426,6 +453,19 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
         )
         if posts_resp.status_code == 400:
             logger.warning("[POLLER] Facebook 400 for %s — token may be invalid", niche_id)
+            # If it's a token-expiry shape, emit CRITICAL alert. Same
+            # rationale as the Threads poll above — the silent-WARN
+            # pattern is what caused the 22-day engagement outage.
+            try:
+                from genlab_core.engagement.token_health import (
+                    emit_token_expiry_alert,
+                    is_oauth_expiry,
+                )
+
+                if is_oauth_expiry(posts_resp.text):
+                    emit_token_expiry_alert("facebook", niche_id, posts_resp.text)
+            except Exception:
+                pass
             return []
         posts_resp.raise_for_status()
         post_ids = [item["id"] for item in posts_resp.json().get("data", [])]
