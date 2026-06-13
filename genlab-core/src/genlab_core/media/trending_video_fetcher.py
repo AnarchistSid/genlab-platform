@@ -1303,6 +1303,44 @@ class FetchTrendingVideos:
                 stories.extend(pool_stories)
                 context["stories"] = stories
 
+        # Fix #4 of the autonomy roadmap: gap-fill mode for the direct
+        # YouTube fetch. Pre-fix, the direct fetch fired every run in
+        # parallel with content_pool consumption — producing duplicates,
+        # cross-niche leakage (the ai_creators/CGI/movies incident of
+        # 2026-06-12), and 77% of blueprints bypassing the routed pool.
+        # Now: if content_pool already filled the top_n quota AND the
+        # operator hasn't asked for multi-publish, skip the direct fetch.
+        # ``trending_videos_force_direct_fetch=true`` in vs_config preserves
+        # the old behaviour as an escape hatch.
+        #
+        # The dedup happens at story level (by video_id) further down in
+        # the merge — see the video_dedup logic that compares video IDs
+        # against existing context["stories"] before adding new ones.
+        force_direct = vs_config.get("trending_videos_force_direct_fetch", False)
+        pool_satisfies_quota = bool(pool_stories) and len(pool_stories) >= top_n
+        if pool_satisfies_quota and not force_direct:
+            logger.info(
+                "[FetchTrending:%s] content_pool returned %d≥%d stories; "
+                "skipping direct YouTube fetch (set "
+                "video_sourcing.trending_videos_force_direct_fetch=true to override)",
+                niche_id,
+                len(pool_stories),
+                top_n,
+            )
+            run_stats = context.setdefault("run_stats", {})
+            run_stats["trending_videos_found"] = 0
+            run_stats["trending_videos_source"] = "content_pool_only"
+            return context
+
+        if pool_stories:
+            logger.info(
+                "[FetchTrending:%s] content_pool returned %d stories (need %d); "
+                "running direct YouTube fetch to gap-fill",
+                niche_id,
+                len(pool_stories),
+                top_n,
+            )
+
         # Optionally enrich keywords with Google Trends
         extra_keywords: list[str] = []
         if vs_config.get("use_google_trends", False):
@@ -1404,7 +1442,32 @@ class FetchTrendingVideos:
             story["composite_score"] = round(composite_map.get(v.video_id, 0.0), 4)
             video_stories.append(story)
         existing_stories = context.get("stories", [])
-        context["stories"] = video_stories + existing_stories
+
+        # Cross-source video_id dedup — fix #4. Without this, the same
+        # YouTube video can land in both pool_stories AND video_stories
+        # (pool ingested it from a different source path; direct fetch
+        # found it in trending). Pre-fix this multiplied the dedup work
+        # downstream and accounted for the 90.9% expired-pool-rate
+        # (everything got expired because direct fetch ate it first).
+        existing_video_ids = {
+            s.get("video_id") or s.get("source_url") or ""
+            for s in existing_stories
+            if (s.get("video_id") or s.get("source_url"))
+        }
+        deduped_video_stories = [
+            s
+            for s in video_stories
+            if (s.get("video_id") or s.get("source_url") or "") not in existing_video_ids
+        ]
+        cross_source_dupes = len(video_stories) - len(deduped_video_stories)
+        if cross_source_dupes:
+            logger.info(
+                "[FetchTrending:%s] %d direct-fetch videos were already in "
+                "content_pool stories — dedup'd at source-merge step",
+                niche_id,
+                cross_source_dupes,
+            )
+        context["stories"] = deduped_video_stories + existing_stories
         context["trending_videos"] = [v.to_dict() for v in videos]
         run_stats = context.setdefault("run_stats", {})
         run_stats["trending_videos_found"] = len(videos)
