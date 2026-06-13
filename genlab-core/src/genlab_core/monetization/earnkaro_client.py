@@ -189,8 +189,7 @@ def _parse_response(raw: str, *, target_url: str) -> str:
             return candidate
 
     logger.warning(
-        "[earnkaro] earnkaro_conversion_failed unknown_response_shape "
-        "keys=%s url=%s",
+        "[earnkaro] earnkaro_conversion_failed unknown_response_shape keys=%s url=%s",
         list(body.keys()),
         target_url[:80],
     )

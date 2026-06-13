@@ -46,42 +46,54 @@ class TestLogNoDb:
     """When DATABASE_URL isn't set, log() is a no-op returning False."""
 
     def test_returns_false_silently(self, clean_env):
-        assert log(
-            blueprint_id="bp1",
-            niche_id="gaming",
-            decision=_decision(),
-            operator_action="approved",
-        ) is False
+        assert (
+            log(
+                blueprint_id="bp1",
+                niche_id="gaming",
+                decision=_decision(),
+                operator_action="approved",
+            )
+            is False
+        )
 
 
 class TestLogValidation:
     """Bad input rejected before any DB attempt."""
 
     def test_empty_blueprint_id(self, clean_env):
-        assert log(
-            blueprint_id="",
-            niche_id="gaming",
-            decision=_decision(),
-            operator_action="approved",
-        ) is False
+        assert (
+            log(
+                blueprint_id="",
+                niche_id="gaming",
+                decision=_decision(),
+                operator_action="approved",
+            )
+            is False
+        )
 
     def test_empty_niche_id(self, clean_env):
-        assert log(
-            blueprint_id="bp1",
-            niche_id="",
-            decision=_decision(),
-            operator_action="approved",
-        ) is False
+        assert (
+            log(
+                blueprint_id="bp1",
+                niche_id="",
+                decision=_decision(),
+                operator_action="approved",
+            )
+            is False
+        )
 
     def test_invalid_operator_action(self, clean_env, monkeypatch):
         # Even with DB set, invalid action is rejected.
         monkeypatch.setenv("DATABASE_URL", "postgresql://x")
-        assert log(
-            blueprint_id="bp1",
-            niche_id="gaming",
-            decision=_decision(),
-            operator_action="published",  # not in VALID_OPERATOR_ACTIONS
-        ) is False
+        assert (
+            log(
+                blueprint_id="bp1",
+                niche_id="gaming",
+                decision=_decision(),
+                operator_action="published",  # not in VALID_OPERATOR_ACTIONS
+            )
+            is False
+        )
 
     def test_valid_actions_are_canonical_past_tense(self):
         # Pin the contract — these must match review_server's

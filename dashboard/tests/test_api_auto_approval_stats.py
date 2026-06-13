@@ -38,9 +38,7 @@ class TestValidation:
         assert resp.status_code == 400
 
     def test_invalid_niche_id_400(self, client):
-        resp = client.get(
-            "/api/v1/auto-approval/calibration-stats?niche_id=hacker'; DROP TABLE--"
-        )
+        resp = client.get("/api/v1/auto-approval/calibration-stats?niche_id=hacker'; DROP TABLE--")
         assert resp.status_code == 400
 
     def test_unknown_niche_id_400(self, client):
@@ -49,15 +47,11 @@ class TestValidation:
         assert resp.status_code == 400
 
     def test_window_days_out_of_range(self, client):
-        resp = client.get(
-            "/api/v1/auto-approval/calibration-stats?niche_id=gaming&window_days=200"
-        )
+        resp = client.get("/api/v1/auto-approval/calibration-stats?niche_id=gaming&window_days=200")
         assert resp.status_code == 400
 
     def test_window_days_non_integer(self, client):
-        resp = client.get(
-            "/api/v1/auto-approval/calibration-stats?niche_id=gaming&window_days=abc"
-        )
+        resp = client.get("/api/v1/auto-approval/calibration-stats?niche_id=gaming&window_days=abc")
         assert resp.status_code == 400
 
 
@@ -72,12 +66,8 @@ class TestShape:
             false_positives=0,
             false_negatives=0,
         )
-        with patch(
-            "genlab_core.scheduling.calibration_logger.stats", return_value=stub
-        ):
-            resp = client.get(
-                "/api/v1/auto-approval/calibration-stats?niche_id=gaming"
-            )
+        with patch("genlab_core.scheduling.calibration_logger.stats", return_value=stub):
+            resp = client.get("/api/v1/auto-approval/calibration-stats?niche_id=gaming")
             assert resp.status_code == 200
             data = resp.get_json()["data"]
             assert data["niche_id"] == "gaming"
@@ -96,9 +86,7 @@ class TestShape:
             false_positives=3,
             false_negatives=1,
         )
-        with patch(
-            "genlab_core.scheduling.calibration_logger.stats", return_value=stub
-        ):
+        with patch("genlab_core.scheduling.calibration_logger.stats", return_value=stub):
             resp = client.get(
                 "/api/v1/auto-approval/calibration-stats?niche_id=movies&window_days=14"
             )
@@ -117,9 +105,7 @@ class TestAllFiveNichesAllowed:
     """Pin the whitelist — adding a 6th niche must require an explicit
     code change here (defense-in-depth against typo-rooms)."""
 
-    @pytest.mark.parametrize(
-        "niche", ["ai_creators", "gaming", "sports", "movies", "anime"]
-    )
+    @pytest.mark.parametrize("niche", ["ai_creators", "gaming", "sports", "movies", "anime"])
     def test_each_niche_accepted(self, client, niche):
         stub = CalibrationStats(
             niche_id=niche,
@@ -130,10 +116,6 @@ class TestAllFiveNichesAllowed:
             false_positives=0,
             false_negatives=0,
         )
-        with patch(
-            "genlab_core.scheduling.calibration_logger.stats", return_value=stub
-        ):
-            resp = client.get(
-                f"/api/v1/auto-approval/calibration-stats?niche_id={niche}"
-            )
+        with patch("genlab_core.scheduling.calibration_logger.stats", return_value=stub):
+            resp = client.get(f"/api/v1/auto-approval/calibration-stats?niche_id={niche}")
             assert resp.status_code == 200

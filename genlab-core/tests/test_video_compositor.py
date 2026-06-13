@@ -122,13 +122,23 @@ class TestDeriveLandscape:
         with pytest.raises(FileNotFoundError, match="Vertical master not found"):
             derive_landscape(missing, tmp_path / "out.mp4")
 
+    @patch(
+        "genlab_core.media.video_compositor.get_ffmpeg_binary",
+        return_value="ffmpeg",
+    )
     def test_sandbox_runner_routes_through_sandbox(
         self,
+        _mock_ffmpeg_bin: MagicMock,
         tmp_assets: dict[str, Path],
     ) -> None:
         """ARCH #45 pin: when sandbox_runner is passed, the FFmpeg
         command is routed through the runner's run_ffmpeg_sync() instead
         of executing locally. Defense-in-depth invariant from gaming.
+
+        Note: must mock get_ffmpeg_binary because CI containers don't
+        ship with ffmpeg, and derive_landscape calls it to construct the
+        command (the binary path goes through the cmd list to the
+        sandbox runner — never executed locally).
         """
         mock_runner = MagicMock()
         mock_result = MagicMock()

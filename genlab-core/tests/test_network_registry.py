@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 # Set test affiliate tags before importing adapters (they read env at instantiation)
 os.environ["AMAZON_US_AFFILIATE_TAG"] = "test-tag-20"
 os.environ["AMAZON_IN_AFFILIATE_TAG"] = "test-tag-21"
@@ -82,7 +80,22 @@ def test_validate_url_unknown():
     assert network is None
 
 
-def test_earnkaro_generate_raises():
-    adapter = get_adapter("earnkaro")
-    with pytest.raises(NotImplementedError):
-        adapter.generate_url("B0CY5QW186")
+def test_earnkaro_generate_returns_empty_without_key():
+    """As of #34b (2026-06-13), EarnKaro is wired to a live HTTP client.
+    Without EARNKARO_CONVERT_KEY set, it returns "" gracefully (graceful
+    skip — matcher tries next network) instead of raising.
+
+    Previously asserted NotImplementedError on the stub; replaced with the
+    actual graceful-skip contract that the new earnkaro_client.convert_url
+    enforces. Full live-call behavior is covered by test_earnkaro_client.py."""
+    import os
+
+    # Make sure no key is set (some CI envs may have a stale one)
+    prior = os.environ.pop("EARNKARO_CONVERT_KEY", None)
+    try:
+        adapter = get_adapter("earnkaro")
+        # Without env var → empty string, never raises
+        assert adapter.generate_url("B0CY5QW186") == ""
+    finally:
+        if prior is not None:
+            os.environ["EARNKARO_CONVERT_KEY"] = prior

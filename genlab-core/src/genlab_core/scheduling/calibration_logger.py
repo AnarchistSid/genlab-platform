@@ -48,8 +48,8 @@ class CalibrationStats:
     sample_count: int
     agreement_count: int
     # Confusion-matrix cells. "gate said X, operator said Y"
-    true_positives: int   # gate=approve, op=approved
-    true_negatives: int   # gate=reject,  op in {rejected, revised, skipped}
+    true_positives: int  # gate=approve, op=approved
+    true_negatives: int  # gate=reject,  op in {rejected, revised, skipped}
     false_positives: int  # gate=approve, op in {rejected, revised, skipped}
     false_negatives: int  # gate=reject,  op=approved
 
@@ -81,16 +81,14 @@ def log(
     """
     if not blueprint_id or not niche_id:
         logger.warning(
-            "[calibration] skipping log — empty blueprint_id or niche_id "
-            "(bp=%r niche=%r)",
+            "[calibration] skipping log — empty blueprint_id or niche_id (bp=%r niche=%r)",
             blueprint_id,
             niche_id,
         )
         return False
     if operator_action not in VALID_OPERATOR_ACTIONS:
         logger.warning(
-            "[calibration] skipping log — invalid operator_action %r "
-            "(expected one of %s)",
+            "[calibration] skipping log — invalid operator_action %r (expected one of %s)",
             operator_action,
             sorted(VALID_OPERATOR_ACTIONS),
         )

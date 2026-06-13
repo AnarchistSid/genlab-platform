@@ -63,10 +63,12 @@ def _mock_urlopen(json_body: dict | str | None = None, *, status: int = 200):
 class TestGracefulFailures:
     def test_empty_target_url_returns_empty(self):
         from genlab_core.monetization.earnkaro_client import convert_url
+
         assert convert_url("") == ""
 
     def test_non_http_target_url_returns_empty(self):
         from genlab_core.monetization.earnkaro_client import convert_url
+
         # Defensive: only http/https targets are valid for affiliate routing
         assert convert_url("ftp://example.com/file") == ""
         assert convert_url("javascript:alert(1)") == ""
@@ -76,9 +78,7 @@ class TestGracefulFailures:
         monkeypatch.delenv("EARNKARO_CONVERT_KEY", raising=False)
         from genlab_core.monetization.earnkaro_client import convert_url
 
-        with patch(
-            "genlab_core.monetization.earnkaro_client.urllib.request.urlopen"
-        ) as mock_open:
+        with patch("genlab_core.monetization.earnkaro_client.urllib.request.urlopen") as mock_open:
             assert convert_url("https://merchant.example.com/p/42") == ""
             mock_open.assert_not_called()
 
@@ -86,9 +86,7 @@ class TestGracefulFailures:
         """5xx / 401 / 429 from EarnKaro → return "" (graceful skip)."""
         from genlab_core.monetization.earnkaro_client import convert_url
 
-        err = urllib.error.HTTPError(
-            url="x", code=500, msg="err", hdrs=None, fp=io.BytesIO(b"")
-        )
+        err = urllib.error.HTTPError(url="x", code=500, msg="err", hdrs=None, fp=io.BytesIO(b""))
         with patch(
             "genlab_core.monetization.earnkaro_client.urllib.request.urlopen",
             side_effect=err,
@@ -264,8 +262,6 @@ class TestAdapterIntegration:
         from genlab_core.monetization.network_registry import EarnKaroAdapter
 
         adapter = EarnKaroAdapter()
-        with patch(
-            "genlab_core.monetization.earnkaro_client.convert_url"
-        ) as mock_convert:
+        with patch("genlab_core.monetization.earnkaro_client.convert_url") as mock_convert:
             assert adapter.generate_url("p") == ""
             mock_convert.assert_not_called()

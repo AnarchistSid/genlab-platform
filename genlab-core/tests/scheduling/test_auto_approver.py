@@ -79,9 +79,7 @@ class TestSafetyDefaults:
             "genlab_core.scheduling.auto_approver.load_policy",
             return_value=AutoApprovalPolicy(enabled=True, min_confidence=0.0),
         ):
-            client = _stub_client(
-                [{"id": "bp1", "fields": {"hook_text": "x", "extra": {}}}]
-            )
+            client = _stub_client([{"id": "bp1", "fields": {"hook_text": "x", "extra": {}}}])
             result = run_pass(
                 "gaming",
                 backlog_client=client,
@@ -121,9 +119,7 @@ class TestApprovalGating:
             "genlab_core.scheduling.auto_approver.load_policy",
             return_value=self._enabled_policy(),
         ):
-            client = _stub_client(
-                [{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}]
-            )
+            client = _stub_client([{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}])
             result = run_pass(
                 "gaming",
                 backlog_client=client,
@@ -147,9 +143,7 @@ class TestApprovalGating:
             "genlab_core.scheduling.auto_approver.load_policy",
             return_value=self._enabled_policy(),
         ):
-            client = _stub_client(
-                [{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}]
-            )
+            client = _stub_client([{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}])
             result = run_pass(
                 "gaming",
                 backlog_client=client,
@@ -167,9 +161,7 @@ class TestApprovalGating:
             "genlab_core.scheduling.auto_approver.load_policy",
             return_value=self._enabled_policy(min_confidence=0.95),
         ):
-            client = _stub_client(
-                [{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}]
-            )
+            client = _stub_client([{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}])
             result = run_pass(
                 "gaming",
                 backlog_client=client,
@@ -220,10 +212,7 @@ class TestApprovalGating:
             return_value=self._enabled_policy(max_approvals_per_pass=2),
         ):
             client = _stub_client(
-                [
-                    {"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}}
-                    for i in range(5)
-                ]
+                [{"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}} for i in range(5)]
             )
             result = run_pass(
                 "gaming",
@@ -250,9 +239,7 @@ class TestDryRun:
                 enabled=True, min_confidence=0.0, max_approvals_per_pass=10
             ),
         ):
-            client = _stub_client(
-                [{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}]
-            )
+            client = _stub_client([{"id": "bp1", "fields": {"hook_text": "h", "extra": {}}}])
             result = run_pass(
                 "gaming",
                 backlog_client=client,
@@ -362,10 +349,7 @@ class TestPolicyLoading:
         cfg_dir = fake_root / "ClutchWire" / "config"
         cfg_dir.mkdir(parents=True)
         (cfg_dir / "publishing.yaml").write_text(
-            "auto_publish:\n"
-            "  enabled: true\n"
-            "  min_confidence: 0.92\n"
-            "  max_approvals_per_pass: 5\n"
+            "auto_publish:\n  enabled: true\n  min_confidence: 0.92\n  max_approvals_per_pass: 5\n"
         )
         policy = load_policy("sports", genlab_root=fake_root)
         assert policy.enabled is True

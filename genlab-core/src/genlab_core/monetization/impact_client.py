@@ -149,9 +149,7 @@ def load_advertisers(*, force_reload: bool = False) -> dict[str, ImpactAdvertise
     parsed: dict[str, ImpactAdvertiser] = {}
     for key, row in advertisers_block.items():
         if not isinstance(row, dict):
-            logger.warning(
-                "[impact] advertisers.%s is not a mapping — skipping", key
-            )
+            logger.warning("[impact] advertisers.%s is not a mapping — skipping", key)
             continue
         if any(not row.get(f) for f in _REQUIRED_FIELDS):
             logger.warning(

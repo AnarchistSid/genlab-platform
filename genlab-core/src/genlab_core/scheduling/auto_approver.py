@@ -307,8 +307,7 @@ def run_pass(
         # ── Decide → act ──────────────────────────────────────────────────
         if dry_run:
             logger.info(
-                "[auto_approver] DRY_RUN: would approve bp=%s niche=%s "
-                "confidence=%.3f reasons=%s",
+                "[auto_approver] DRY_RUN: would approve bp=%s niche=%s confidence=%.3f reasons=%s",
                 record_id,
                 niche_id,
                 decision.confidence,
@@ -410,11 +409,7 @@ def _cli() -> int:
     )
     args = parser.parse_args()
 
-    niches = (
-        list(NICHE_DIR_NAMES.keys())
-        if args.niche == "all"
-        else [args.niche]
-    )
+    niches = list(NICHE_DIR_NAMES.keys()) if args.niche == "all" else [args.niche]
 
     exit_code = 0
     for niche_id in niches:

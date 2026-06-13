@@ -30,6 +30,7 @@ from genlab_core.monetization.network_registry import (
 
 # ── ShareASale ─────────────────────────────────────────────────────────────
 
+
 class TestShareASale:
     def test_skip_when_user_id_missing(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -69,21 +70,18 @@ class TestShareASale:
 
     def test_optional_params_omitted_when_unset(self):
         with patch.dict("os.environ", {"SHAREASALE_USER_ID": "ABC"}):
-            url = ShareASaleAdapter().generate_url(
-                "p", banner_id="1", merchant_id="2"
-            )
+            url = ShareASaleAdapter().generate_url("p", banner_id="1", merchant_id="2")
             # No sub_id / target_url → those keys MUST NOT be in the URL
             assert "afftrack" not in url
             assert "urllink" not in url
 
     def test_validate_url_recognizes_shareasale_links(self):
-        assert ShareASaleAdapter().validate_url(
-            "https://shareasale.com/r.cfm?b=1&u=2&m=3"
-        )
+        assert ShareASaleAdapter().validate_url("https://shareasale.com/r.cfm?b=1&u=2&m=3")
         assert not ShareASaleAdapter().validate_url("https://amazon.com/dp/B0XYZ")
 
 
 # ── CJ Affiliate ───────────────────────────────────────────────────────────
+
 
 class TestCJAffiliate:
     def test_skip_when_publisher_id_missing(self):
@@ -102,9 +100,7 @@ class TestCJAffiliate:
 
     def test_caller_can_override_domain_for_load_balancing(self):
         with patch.dict("os.environ", {"CJ_PUBLISHER_ID": "100"}):
-            url = CJAffiliateAdapter().generate_url(
-                "p", ad_id="999", cj_domain="kqzyfj.com"
-            )
+            url = CJAffiliateAdapter().generate_url("p", ad_id="999", cj_domain="kqzyfj.com")
             assert "https://www.kqzyfj.com/" in url
 
     def test_url_with_target_and_sid(self):
@@ -137,6 +133,7 @@ class TestCJAffiliate:
 
 # ── EarnKaro ───────────────────────────────────────────────────────────────
 
+
 class TestEarnKaro:
     def test_skip_when_convert_key_missing(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -153,9 +150,7 @@ class TestEarnKaro:
                 "genlab_core.monetization.earnkaro_client.convert_url",
                 return_value="https://ekaro.in/abc",
             ) as mock_convert:
-                url = EarnKaroAdapter().generate_url(
-                    "p", target_url="https://merch.example.com/p"
-                )
+                url = EarnKaroAdapter().generate_url("p", target_url="https://merch.example.com/p")
                 assert url == "https://ekaro.in/abc"
                 mock_convert.assert_called_once()
 
@@ -166,6 +161,7 @@ class TestEarnKaro:
 
 
 # ── Impact.com ─────────────────────────────────────────────────────────────
+
 
 class TestImpact:
     def test_skip_when_either_credential_missing(self):
@@ -195,6 +191,7 @@ class TestImpact:
 
 
 # ── Cross-cutting: registry wiring ─────────────────────────────────────────
+
 
 class TestRegistryWiring:
     def test_all_4_adapters_resolvable_by_id(self):

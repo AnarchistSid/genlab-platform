@@ -206,9 +206,7 @@ class ChannelBranding:
         # defaults to {} so a missing visuals.yaml `portrait_branding:` key
         # produces the safe default (all flags False).
         portrait_block = (
-            fl_branding.get("portrait_branding")
-            or branding.get("portrait_branding")
-            or {}
+            fl_branding.get("portrait_branding") or branding.get("portrait_branding") or {}
         )
         if not isinstance(portrait_block, dict):
             portrait_block = {}
@@ -709,7 +707,9 @@ class FrameCompositor:
         if self.branding.portrait_show_handle and self.branding.handle:
             safe_handle = self._escape_drawtext(self.branding.handle)
             handle_x = P_LOGO_X + LOGO_SIZE + 16
-            handle_y = P_LOGO_Y + 8 + (NAME_FONT_SIZE + 6 if self.branding.portrait_show_name else 0)
+            handle_y = (
+                P_LOGO_Y + 8 + (NAME_FONT_SIZE + 6 if self.branding.portrait_show_name else 0)
+            )
             next_label = "withhandle"
             filtergraph += (
                 f"[{current_label}]drawtext=fontfile='{font_reg}':text='{safe_handle}':"
@@ -730,9 +730,7 @@ class FrameCompositor:
             for i, line in enumerate(hook_lines):
                 safe_line = self._escape_drawtext(line)
                 line_y = hook_y + i * HOOK_LINE_H
-                next_label = (
-                    f"hook{i}" if i < len(hook_lines) - 1 else "withhook"
-                )
+                next_label = f"hook{i}" if i < len(hook_lines) - 1 else "withhook"
                 filtergraph += (
                     f"[{current_label}]drawtext=fontfile='{font_hook}':text='{safe_line}':"
                     f"fontsize={HOOK_FONT_SIZE}:fontcolor=white:"

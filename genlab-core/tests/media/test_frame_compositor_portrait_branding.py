@@ -72,14 +72,19 @@ class TestDefaultsPreserveExistingBehavior:
     """The headline RENDER #4 safety invariant: with no YAML changes,
     portrait renders are exactly what they were before."""
 
-    def test_no_flags_no_drawtext_in_filtergraph(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_no_flags_no_drawtext_in_filtergraph(self, logo: Path, portrait_info: VideoInfo):
         branding = _make_branding(logo)  # all defaults False
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "Some hook", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "Some hook",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         # Only the logo path — NO drawtext anywhere in the filtergraph.
@@ -95,14 +100,19 @@ class TestDefaultsPreserveExistingBehavior:
 
 
 class TestShowName:
-    def test_name_overlay_appears_when_flag_set(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_name_overlay_appears_when_flag_set(self, logo: Path, portrait_info: VideoInfo):
         branding = _make_branding(logo, show_name=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "h", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "h",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         # Channel name text in a drawtext filter
@@ -118,29 +128,39 @@ class TestShowName:
         branding.channel_name = ""
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "h", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "h",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         assert "drawtext" not in graph
 
 
 class TestShowHandle:
-    def test_handle_overlay_appears_when_flag_set(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_handle_overlay_appears_when_flag_set(self, logo: Path, portrait_info: VideoInfo):
         branding = _make_branding(logo, show_handle=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "h", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "h",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         assert "@testchannel" in graph
 
-    def test_handle_y_moves_down_when_name_also_on(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_handle_y_moves_down_when_name_also_on(self, logo: Path, portrait_info: VideoInfo):
         """When name AND handle are both on, handle stacks below name —
         same pattern as landscape/square layouts."""
         branding_name_only = _make_branding(logo, show_handle=True)
@@ -151,14 +171,28 @@ class TestShowHandle:
 
         graph_solo = _get_filtergraph(
             comp_solo._build_cmd_portrait(
-                "s.mp4", "h", "o.mp4", portrait_info,
-                duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+                "s.mp4",
+                "h",
+                "o.mp4",
+                portrait_info,
+                duration=15.0,
+                trim_start=0.0,
+                crf=20,
+                preset="fast",
+                fps=30,
             )
         )
         graph_stacked = _get_filtergraph(
             comp_stacked._build_cmd_portrait(
-                "s.mp4", "h", "o.mp4", portrait_info,
-                duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+                "s.mp4",
+                "h",
+                "o.mp4",
+                portrait_info,
+                duration=15.0,
+                trim_start=0.0,
+                crf=20,
+                preset="fast",
+                fps=30,
             )
         )
         # When alone, handle Y = P_LOGO_Y(70) + 8 = 78
@@ -170,9 +204,7 @@ class TestShowHandle:
 
 
 class TestShowHook:
-    def test_hook_lines_appear_when_flag_set(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_hook_lines_appear_when_flag_set(self, logo: Path, portrait_info: VideoInfo):
         branding = _make_branding(logo, show_hook=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
@@ -193,17 +225,22 @@ class TestShowHook:
         # Center-aligned x expression
         assert "x=(w-text_w)/2" in graph
 
-    def test_long_hook_wraps_to_multiple_drawtext_lines(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_long_hook_wraps_to_multiple_drawtext_lines(self, logo: Path, portrait_info: VideoInfo):
         """Hook wrapping reuses _wrap_hook (≤2 lines, ≤35 chars each).
         Long hook → 2 drawtext filters, each with its own y= offset."""
         branding = _make_branding(logo, show_hook=True)
         comp = FrameCompositor(branding)
         long_hook = "This is a deliberately long hook text intended to wrap to two lines"
         cmd = comp._build_cmd_portrait(
-            "src.mp4", long_hook, "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            long_hook,
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         # Two drawtext filters → at least two `text=` occurrences in the graph
@@ -215,26 +252,36 @@ class TestShowHook:
         branding = _make_branding(logo, show_hook=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         assert "drawtext" not in graph
 
 
 class TestCombinedFlags:
-    def test_all_three_flags_layer_in_order(
-        self, logo: Path, portrait_info: VideoInfo
-    ):
+    def test_all_three_flags_layer_in_order(self, logo: Path, portrait_info: VideoInfo):
         """name → handle → hook ordering produces a clean filtergraph
         chain with no orphaned labels."""
-        branding = _make_branding(
-            logo, show_name=True, show_handle=True, show_hook=True
-        )
+        branding = _make_branding(logo, show_name=True, show_handle=True, show_hook=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
-            "src.mp4", "Short hook", "out.mp4", portrait_info,
-            duration=15.0, trim_start=0.0, crf=20, preset="fast", fps=30,
+            "src.mp4",
+            "Short hook",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
         graph = _get_filtergraph(cmd)
         # Logo overlay first, then name, then handle, then hook
@@ -276,9 +323,7 @@ class TestYAMLLoading:
         assert branding.portrait_show_handle is False
         assert branding.portrait_show_hook is True
 
-    def test_visuals_yaml_without_portrait_branding_defaults_to_false(
-        self, tmp_path: Path
-    ):
+    def test_visuals_yaml_without_portrait_branding_defaults_to_false(self, tmp_path: Path):
         """Critical: existing visuals.yaml files (no portrait_branding
         block) load with all flags False → unchanged portrait renders.
         This is the migration-safety pin."""
@@ -297,9 +342,7 @@ class TestYAMLLoading:
         assert branding.portrait_show_handle is False
         assert branding.portrait_show_hook is False
 
-    def test_visuals_yaml_with_non_dict_portrait_block_defaults(
-        self, tmp_path: Path
-    ):
+    def test_visuals_yaml_with_non_dict_portrait_block_defaults(self, tmp_path: Path):
         """Defensive: a YAML typo like `portrait_branding: true` shouldn't
         crash from_visuals_yaml — fall back to safe defaults."""
         logo = tmp_path / "logo.png"

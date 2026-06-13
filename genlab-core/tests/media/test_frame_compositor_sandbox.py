@@ -52,9 +52,7 @@ class TestSandboxOptIn:
         """
         comp = FrameCompositor(fake_branding)
         cmd = ["ffmpeg", "-y", "-i", "in.mp4", "out.mp4"]
-        with patch(
-            "genlab_core.media.frame_compositor.run_ffmpeg"
-        ) as mock_run:
+        with patch("genlab_core.media.frame_compositor.run_ffmpeg") as mock_run:
             comp._run_ffmpeg(cmd, timeout=300, fallback_preset="fast", label="x")
 
         mock_run.assert_called_once()
@@ -77,9 +75,7 @@ class TestSandboxOptIn:
         comp = FrameCompositor(fake_branding, sandbox_runner=mock_runner)
         cmd = ["ffmpeg", "-y", "-i", "in.mp4", "out.mp4"]
 
-        with patch(
-            "genlab_core.media.frame_compositor.run_ffmpeg"
-        ) as mock_local_run:
+        with patch("genlab_core.media.frame_compositor.run_ffmpeg") as mock_local_run:
             comp._run_ffmpeg(cmd, timeout=300, fallback_preset="fast", label="x")
 
         # Sandbox path: local run_ffmpeg must NOT be called

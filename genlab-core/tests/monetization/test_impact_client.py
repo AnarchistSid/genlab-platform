@@ -71,9 +71,7 @@ class TestLoadAdvertisers:
 
     def test_missing_config_file_returns_empty_dict(self, monkeypatch, tmp_path):
         """Operator hasn't created the file yet — that's fine, default state."""
-        monkeypatch.setenv(
-            "IMPACT_ADVERTISERS_CONFIG", str(tmp_path / "does_not_exist.yaml")
-        )
+        monkeypatch.setenv("IMPACT_ADVERTISERS_CONFIG", str(tmp_path / "does_not_exist.yaml"))
         assert load_advertisers() == {}
 
     def test_populated_config_loads_all_rows(self, populated_config):
@@ -105,9 +103,7 @@ class TestLoadAdvertisers:
         assert "bad_missing_campaign" not in adv
         assert "bad_not_a_mapping" not in adv
 
-    def test_malformed_yaml_returns_empty_no_raise(
-        self, tmp_path: Path, monkeypatch
-    ):
+    def test_malformed_yaml_returns_empty_no_raise(self, tmp_path: Path, monkeypatch):
         cfg = tmp_path / "impact_advertisers.yaml"
         cfg.write_text(":::: not valid yaml at all\n  - [\n")
         monkeypatch.setenv("IMPACT_ADVERTISERS_CONFIG", str(cfg))
@@ -129,9 +125,7 @@ class TestGetAdvertiser:
 
 
 class TestBuildDeepLink:
-    def test_builds_full_url_with_known_advertiser(
-        self, populated_config, monkeypatch
-    ):
+    def test_builds_full_url_with_known_advertiser(self, populated_config, monkeypatch):
         monkeypatch.setenv("IMPACT_ACCOUNT_SID", "ACC999")
         url = build_deep_link(
             advertiser_key="acme_corp",
@@ -147,24 +141,33 @@ class TestBuildDeepLink:
 
     def test_skips_when_account_sid_missing(self, populated_config, monkeypatch):
         monkeypatch.delenv("IMPACT_ACCOUNT_SID", raising=False)
-        assert build_deep_link(
-            advertiser_key="acme_corp",
-            target_url="https://acme.example.com/widget",
-        ) == ""
+        assert (
+            build_deep_link(
+                advertiser_key="acme_corp",
+                target_url="https://acme.example.com/widget",
+            )
+            == ""
+        )
 
     def test_skips_when_target_url_missing(self, populated_config, monkeypatch):
         monkeypatch.setenv("IMPACT_ACCOUNT_SID", "ACC999")
-        assert build_deep_link(
-            advertiser_key="acme_corp",
-            target_url="",
-        ) == ""
+        assert (
+            build_deep_link(
+                advertiser_key="acme_corp",
+                target_url="",
+            )
+            == ""
+        )
 
     def test_skips_for_unknown_advertiser(self, populated_config, monkeypatch):
         monkeypatch.setenv("IMPACT_ACCOUNT_SID", "ACC999")
-        assert build_deep_link(
-            advertiser_key="never_onboarded",
-            target_url="https://merch.example.com/w",
-        ) == ""
+        assert (
+            build_deep_link(
+                advertiser_key="never_onboarded",
+                target_url="https://merch.example.com/w",
+            )
+            == ""
+        )
 
     def test_account_sid_kwarg_overrides_env(self, populated_config, monkeypatch):
         """For tests / per-niche SID overrides — kwarg wins over env."""
@@ -190,9 +193,7 @@ class TestBuildDeepLink:
 
 
 class TestAdapterIntegration:
-    def test_adapter_returns_url_with_full_kwargs(
-        self, populated_config, monkeypatch
-    ):
+    def test_adapter_returns_url_with_full_kwargs(self, populated_config, monkeypatch):
         from genlab_core.monetization.network_registry import ImpactAdapter
 
         monkeypatch.setenv("IMPACT_ACCOUNT_SID", "ACC999")
@@ -205,16 +206,12 @@ class TestAdapterIntegration:
         )
         assert url.startswith("https://acme.sjv.io/c/ACC999/12345/67890?")
 
-    def test_adapter_skips_when_advertiser_key_missing(
-        self, populated_config, monkeypatch
-    ):
+    def test_adapter_skips_when_advertiser_key_missing(self, populated_config, monkeypatch):
         """Even with account_sid set, no advertiser_key → ""."""
         from genlab_core.monetization.network_registry import ImpactAdapter
 
         monkeypatch.setenv("IMPACT_ACCOUNT_SID", "ACC999")
-        assert ImpactAdapter().generate_url(
-            "p", target_url="https://merch.example.com/w"
-        ) == ""
+        assert ImpactAdapter().generate_url("p", target_url="https://merch.example.com/w") == ""
 
     def test_adapter_validate_url_recognizes_7eer_subdomain(self):
         """7eer.net is one of Impact's other tracking subdomains;

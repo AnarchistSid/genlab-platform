@@ -49,7 +49,8 @@ def _stub_blueprint(extras=None, **fields):
         "hook_text": "A real hook about a real video",
         "niche_id": "gaming",
         "status": "VISUAL_READY",
-        "extra": extras or {
+        "extra": extras
+        or {
             "visual_paths": ["/tmp/v.mp4"],
             "composite_score": 0.7,
             "virality_score": 0.2,

@@ -120,25 +120,19 @@ class TestQCCheck:
 
 class TestCompositeScore:
     def test_high_composite_passes(self):
-        decision = evaluate(
-            _bp(composite_score=0.9, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(composite_score=0.9, validation_status={"all_passed": True}))
         assert "composite_score" in decision.passed_checks
         # High score → high confidence contribution
         assert decision.confidence > 0.7
 
     def test_below_threshold_rejects(self):
-        decision = evaluate(
-            _bp(composite_score=0.1, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(composite_score=0.1, validation_status={"all_passed": True}))
         assert decision.approved is False
         assert "composite_score" in decision.failed_checks
 
     def test_missing_composite_does_not_reject(self):
         """Cold start: composite_score not yet computed → unknown not reject."""
-        decision = evaluate(
-            _bp(composite_score=None, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(composite_score=None, validation_status={"all_passed": True}))
         # Other checks still drive approval
         assert "composite_score" not in decision.failed_checks
         assert decision.approved is True
@@ -154,22 +148,16 @@ class TestCompositeScore:
 
 class TestViralityScore:
     def test_high_virality_passes(self):
-        decision = evaluate(
-            _bp(virality_score=0.8, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(virality_score=0.8, validation_status={"all_passed": True}))
         assert "virality_score" in decision.passed_checks
 
     def test_zero_virality_rejects_at_default_threshold(self):
-        decision = evaluate(
-            _bp(virality_score=0.0, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(virality_score=0.0, validation_status={"all_passed": True}))
         assert decision.approved is False
         assert "virality_score" in decision.failed_checks
 
     def test_missing_virality_does_not_reject(self):
-        decision = evaluate(
-            _bp(virality_score=None, validation_status={"all_passed": True})
-        )
+        decision = evaluate(_bp(virality_score=None, validation_status={"all_passed": True}))
         assert "virality_score" not in decision.failed_checks
         assert decision.approved is True
 
