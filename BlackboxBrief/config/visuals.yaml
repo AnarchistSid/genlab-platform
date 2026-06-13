@@ -30,10 +30,21 @@ ffmpeg:
 
 
 # Word-by-word caption animation
+# Disabled 2026-06-13 across all 5 channels until the text_optimizer regression
+# is properly fixed. The module that did adaptive font sizing (`execution/utils/
+# text_optimizer.py`) was silently dropped during the 2026-04-04 monorepo
+# conversion, so word_animator.py's fallback fontsize=160 has been overlaying
+# huge text on top of the actual video clip for 2.3 months. See
+# [[session-2026-06-13-render-audit-findings]] for the full audit.
+#
+# To re-enable: restore text_optimizer (or inline the algorithm into word_animator),
+# fix render_whisper_captions.py:226 to pass text_type="caption" instead of "hook",
+# add a regression pin that asserts rendered_bottom <= canvas_height, then flip
+# this flag back to true.
 animation:
   word_by_word:
     whisper_sync:
-      enabled: true
+      enabled: false
       model_size: "base"
       fallback: "wpm"
       silence_threshold_db: -40
