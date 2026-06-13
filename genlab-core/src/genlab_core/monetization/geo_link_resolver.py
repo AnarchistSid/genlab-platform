@@ -113,11 +113,32 @@ def resolve_affiliate_link_with_network(
     geo = NICHE_PRIMARY_GEO.get(niche_id, "US")
 
     # Build candidate list — Amazon Associates first (real commission),
-    # Cuelinks only as last resort (works as click tracker, not monetizer).
+    # then per-geo affiliate networks (EarnKaro for IN; ShareASale/CJ/
+    # Impact for US — added in #34a, 2026-06-13), Cuelinks last as a
+    # click-only fallback that doesn't inject affiliate tags.
+    #
+    # The candidate is silently skipped for any niche whose
+    # product["networks"] dict doesn't carry the network's url field
+    # (the loop below filters via `info.get("url")`), so adding networks
+    # here is additive — niches that haven't onboarded a network see
+    # zero behavior change.
     if geo == "IN":
-        candidates = ["amazon", "amazon_in", "amazon_us", "cuelinks"]
+        candidates = [
+            "amazon",
+            "amazon_in",
+            "amazon_us",
+            "earnkaro",  # Indian deal aggregator
+            "cuelinks",
+        ]
     else:
-        candidates = ["amazon_us", "amazon", "cuelinks"]
+        candidates = [
+            "amazon_us",
+            "amazon",
+            "shareasale",  # US network — direct tracking links
+            "cj",  # CJ Affiliate — global, template-based
+            "impact",  # Impact.com — per-advertiser deep links
+            "cuelinks",
+        ]
 
     base_url = ""
     network = ""
@@ -151,12 +172,27 @@ def resolve_affiliate_link_with_network(
         "utm_campaign": niche_id,
     }
 
-    # Add network-specific subID for attribution
+    # Add network-specific subID for attribution. Each network has its
+    # own param convention for publisher-supplied tracking IDs — keeping
+    # the mapping centralized here means a new network just adds one
+    # branch instead of touching every caller.
     sub_id = f"{niche_id}_{blueprint_id[:8]}" if blueprint_id else niche_id
     if network in ("cuelinks",):
         utm_params["uid"] = sub_id
     elif network in ("admitad",):
         utm_params["subid"] = sub_id
+    elif network == "shareasale":
+        utm_params["afftrack"] = sub_id
+    elif network == "cj":
+        utm_params["sid"] = sub_id
+    elif network == "impact":
+        # Impact.com uses subId1 / subId2 / subId3 for tracking layers;
+        # the niche_id+blueprint_id slug goes into subId1.
+        utm_params["subId1"] = sub_id
+    elif network == "earnkaro":
+        # EarnKaro shortened URLs encode attribution server-side; the
+        # sub_id is appended as `ref` for first-party click breakdown.
+        utm_params["ref"] = sub_id
 
     # Append params to URL
     sep = "&" if "?" in base_url else "?"
