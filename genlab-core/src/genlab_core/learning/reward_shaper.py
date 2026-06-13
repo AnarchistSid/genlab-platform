@@ -183,15 +183,32 @@ class RewardShaper:
         channel_metrics_fn: Callable that takes a platform name and returns
             a dict of channel-level metrics (subscriber_count, watch_hours, etc.).
             If None, no threshold boosting is applied (base weights only).
+        percentile_targets_fn: Callable that takes (niche_id, platform, metric)
+            and returns the 70th-percentile value of the most-recent N posts
+            for that pair, or None to skip percentile-relative normalisation.
+            Enables fix #6 of the autonomy roadmap: instead of hardcoded
+            absolute targets (e.g. YT views=200), the target self-calibrates
+            so the top 30% of recent posts always yield reward ≥ 0.7. This
+            unblocks the bandit on channels where most posts get
+            <hardcoded-target views and the static normaliser was producing
+            avg_reward ≈ 0.06 even on signal-rich data. Falls back to
+            the hardcoded _METRIC_TARGETS when the fn returns None or
+            during cold start.
+        niche_id: Niche identifier used by percentile_targets_fn lookups.
     """
 
     THRESHOLD_PROXIMITY = 0.20  # Within 20% triggers boost
+    PERCENTILE_FOR_TARGET = 0.70  # 70th percentile = reward ~0.7 floor on top 30%
 
     def __init__(
         self,
         channel_metrics_fn: Callable[[str], dict[str, float]] | None = None,
+        percentile_targets_fn: Callable[[str, str, str], float | None] | None = None,
+        niche_id: str = "",
     ) -> None:
         self._channel_metrics_fn = channel_metrics_fn
+        self._percentile_targets_fn = percentile_targets_fn
+        self._niche_id = niche_id
 
     def get_adjusted_weights(
         self,
@@ -287,7 +304,10 @@ class RewardShaper:
         raw_reward = 0.0
         for metric, weight in weights.items():
             value = metrics.get(metric, 0.0)
-            normalised = _normalise_metric(metric, value, platform)
+            # Fix #6 of the autonomy roadmap: try percentile-relative target
+            # first; fall back to the hardcoded _METRIC_TARGETS during cold
+            # start (n < 20 observations) or when no fn was injected.
+            normalised = self._normalise_with_percentile(metric, value, platform)
             raw_reward += weight * normalised
 
         # Monetization bonus: affiliate clicks boost reward (Break 13 fix)
@@ -303,6 +323,40 @@ class RewardShaper:
             )
 
         return max(0.0, min(1.0, raw_reward))
+
+    def _normalise_with_percentile(self, metric: str, value: float, platform: str) -> float:
+        """Normalise ``value`` to [0, 1] using percentile-relative target
+        when available, otherwise the hardcoded fallback.
+
+        The percentile target is the 70th-percentile of recent observations
+        for (niche_id × platform × metric). When the bandit feedback chain
+        is healthy, this self-calibrates: a niche where YT posts cluster
+        around 50 views still gets meaningful reward gradient (above-50
+        = reward > 0.7, below-50 = reward < 0.7). Without this, the
+        hardcoded YT views=200 target produces reward<0.3 for everything
+        in a niche where the actual distribution centres at 50.
+
+        Falls back to _normalise_metric when:
+          - No fn was injected (caller didn't opt in)
+          - Fn returns None (cold start, insufficient observations)
+          - Fn raises (defensively wrapped — never block reward compute)
+        """
+        if self._percentile_targets_fn is None or not self._niche_id:
+            return _normalise_metric(metric, value, platform)
+        try:
+            target = self._percentile_targets_fn(self._niche_id, platform, metric)
+        except Exception as exc:
+            logger.debug(
+                "[REWARD] percentile_targets_fn raised for %s/%s/%s: %s; using hardcoded",
+                self._niche_id,
+                platform,
+                metric,
+                exc,
+            )
+            return _normalise_metric(metric, value, platform)
+        if target is None or target <= 0:
+            return _normalise_metric(metric, value, platform)
+        return min(1.0, value / target)
 
 
 def _normalise_weights(weights: dict[str, float]) -> dict[str, float]:
