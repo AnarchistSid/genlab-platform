@@ -43,10 +43,17 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from genlab_core.media.ffmpeg_utils import run_ffmpeg
+
+if TYPE_CHECKING:
+    # ARCH #45 phase 2: sandbox routing is optional; the type-check-only
+    # import avoids a hard runtime dep on the sandbox module for callers
+    # that don't use it.
+    from genlab_core.media.sandbox_runner import SandboxedFFmpegRunner
 
 logger = logging.getLogger(__name__)
 
@@ -296,13 +303,61 @@ class FrameCompositor:
     Call compose() to render.
     """
 
-    def __init__(self, branding: ChannelBranding):
+    def __init__(
+        self,
+        branding: ChannelBranding,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
+    ):
+        """Construct a compositor for one channel.
+
+        Parameters
+        ----------
+        branding:
+            Per-channel visual config (logo, accent, font, etc.)
+        sandbox_runner:
+            ARCH #45 phase 2 (2026-06-13): when provided, every FFmpeg
+            call goes through the sandboxed runner instead of executing
+            locally. Matches the sandbox plumbing already present on
+            ``derive_landscape``. When ``None`` (default), behavior is
+            unchanged — FFmpeg runs locally via ``run_ffmpeg``. Gaming
+            opts in; other niches may follow once the perf/isolation
+            trade-off is settled (see task #51).
+        """
         self.branding = branding
+        self._sandbox_runner = sandbox_runner
 
     @classmethod
-    def from_visuals_yaml(cls, visuals_yaml_path: str) -> FrameCompositor:
+    def from_visuals_yaml(
+        cls,
+        visuals_yaml_path: str,
+        sandbox_runner: SandboxedFFmpegRunner | None = None,
+    ) -> FrameCompositor:
         branding = ChannelBranding.from_visuals_yaml(visuals_yaml_path)
-        return cls(branding)
+        return cls(branding, sandbox_runner=sandbox_runner)
+
+    def _run_ffmpeg(
+        self,
+        cmd: list[str],
+        *,
+        timeout: int,
+        fallback_preset: str | None,
+        label: str = "frame_compositor",
+    ) -> None:
+        """Execute an FFmpeg command, optionally inside the sandbox.
+
+        Centralized so both ``compose`` (sandwich render) and
+        ``overlay_branding`` (compilation branding) share the same
+        sandbox-aware path. ARCH #45 phase 2.
+        """
+        if self._sandbox_runner is not None:
+            result = self._sandbox_runner.run_ffmpeg_sync(cmd, timeout=timeout)
+            # The runner's check() raises CalledProcessError on non-zero
+            # exit, matching the contract of ``run_ffmpeg`` so existing
+            # callers' try/except logic doesn't change.
+            result.check(label)
+            return
+        # Local execution — historical default for all 5 niches.
+        run_ffmpeg(cmd, timeout=timeout, fallback_preset=fallback_preset)
 
     def compose(
         self,
@@ -414,10 +469,11 @@ class FrameCompositor:
             f"[{self.branding.niche_id}] Running FFmpeg ({preset}): {' '.join(ffmpeg_cmd[:8])}..."
         )
         try:
-            run_ffmpeg(
+            self._run_ffmpeg(
                 ffmpeg_cmd,
                 timeout=ff.timeout_seconds,
                 fallback_preset=ff.fallback_preset,
+                label="compose",
             )
         except subprocess.CalledProcessError as exc:
             logger.error(f"FFmpeg failed:\n{(exc.stderr or '')[-2000:]}")
@@ -690,7 +746,12 @@ class FrameCompositor:
             f"[{self.branding.niche_id}] Overlaying branding on compilation: {' '.join(cmd[:8])}..."
         )
         try:
-            run_ffmpeg(cmd, timeout=ff.timeout_seconds, fallback_preset=ff.fallback_preset)
+            self._run_ffmpeg(
+                cmd,
+                timeout=ff.timeout_seconds,
+                fallback_preset=ff.fallback_preset,
+                label="overlay_branding",
+            )
         except subprocess.CalledProcessError as exc:
             logger.error(f"FFmpeg branding overlay failed:\n{(exc.stderr or '')[-2000:]}")
             raise RuntimeError(

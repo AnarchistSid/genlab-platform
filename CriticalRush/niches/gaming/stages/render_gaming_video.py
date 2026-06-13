@@ -178,10 +178,20 @@ class RenderGamingVideo(VisualRenderStrategy):
         return self._sandbox_runner
 
     def _get_frame_compositor(self) -> FrameCompositor:
-        """Lazy-create FrameCompositor from visuals.yaml."""
+        """Lazy-create FrameCompositor from visuals.yaml.
+
+        ARCH #45 phase 2 (2026-06-13): pass the sandbox runner through so
+        FrameCompositor's FFmpeg calls run under the same isolation as
+        derive_landscape. When sandbox_rendering_enabled() returns False
+        (test environments, dev), this passes None and behavior is
+        unchanged from before phase 2.
+        """
         if self._frame_compositor is None:
             visuals_yaml = NICHE_ROOT / "config" / "visuals.yaml"
-            self._frame_compositor = FrameCompositor.from_visuals_yaml(str(visuals_yaml))
+            self._frame_compositor = FrameCompositor.from_visuals_yaml(
+                str(visuals_yaml),
+                sandbox_runner=self._get_sandbox_runner(),
+            )
         return self._frame_compositor
 
     # ARCH #45 (2026-06-13): _get_compositor() removed — derive_landscape is
