@@ -11,6 +11,7 @@ import { PublishingHealth } from "./PublishingHealth";
 import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
+import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
 import { AiInsightCard } from "./AiInsightCard";
 import { PublishTimeline } from "./PublishTimeline";
 import { UpcomingQueue } from "./UpcomingQueue";
@@ -191,6 +192,12 @@ export default function MissionControl() {
           </div>
           <div className="area-monetisation flex flex-col gap-3">
             <PublishingHealth />
+            {/* AUTO #1c (2026-06-13): per-niche calibration progress
+                toward AUTO #2 enforcement. Updates every 60s; surfaces
+                when each niche crosses the ≥30-samples + ≥90%-agreement
+                threshold so operator can flip enforcement on with
+                evidence rather than gut. */}
+            <AutoApprovalCalibrationCard />
             <MonetisationCompact />
           </div>
         </div>

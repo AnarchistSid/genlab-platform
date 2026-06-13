@@ -214,6 +214,32 @@ export interface AutoApprovalPreview {
   preview_only: true;
 }
 
+// AUTO #1b: stats response from /api/v1/auto-approval/calibration-stats.
+// Surfaces per-niche agreement rate + confusion matrix so the dashboard
+// can show when each niche crosses the AUTO #2 readiness threshold.
+export interface CalibrationStats {
+  niche_id: string;
+  window_days: number;
+  sample_count: number;
+  agreement_count: number;
+  agreement_rate: number;        // 0.0..1.0
+  confusion_matrix: {
+    true_positives: number;
+    true_negatives: number;
+    false_positives: number;
+    false_negatives: number;
+  };
+  ready_for_enforcement: boolean; // ≥30 samples AND ≥90% agreement
+}
+
+export const autoApproval = {
+  calibrationStats: (nicheId: string, windowDays = 7) =>
+    get<CalibrationStats>("/auto-approval/calibration-stats", {
+      niche_id: nicheId,
+      window_days: String(windowDays),
+    }),
+};
+
 export const stories = {
   list: (params?: Record<string, string>) =>
     get<PaginatedResponse<Story>>("/stories", params),
