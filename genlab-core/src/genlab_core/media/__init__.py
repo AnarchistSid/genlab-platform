@@ -6,14 +6,14 @@ from genlab_core.media.sandbox_runner import (
     sandbox_rendering_enabled,
 )
 from genlab_core.media.video_compositor import (
-    VideoCompositor,
     VisualConfig,
+    derive_landscape,
     load_visual_config,
 )
 from genlab_core.media.whisper_timing import align_words, get_model, transcribe_words
 
 __all__ = [
-    "VideoCompositor",
+    "derive_landscape",
     "VisualConfig",
     "load_visual_config",
     "SandboxedFFmpegRunner",

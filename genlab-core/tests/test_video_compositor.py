@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from genlab_core.media.video_compositor import (
-    VideoCompositor,
     VisualConfig,
+    derive_landscape,
 )
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -40,11 +40,6 @@ def config(tmp_assets: dict[str, Path]) -> VisualConfig:
     )
 
 
-@pytest.fixture()
-def compositor(config: VisualConfig) -> VideoCompositor:
-    return VideoCompositor(config)
-
-
 # ── Sandwich filter / logo overlay / hook overlay / hook wrap tests ──────────
 # REMOVED in DEAD #1 (2026-06-13). These pinned private methods
 # (_build_sandwich_filter, _overlay_logo, _overlay_hook_text, _wrap_hook)
@@ -52,11 +47,16 @@ def compositor(config: VisualConfig) -> VideoCompositor:
 # because all 5 niches now render through FrameCompositor.
 
 
-# ── derive_landscape ──────────────────────────────────────────────────────────
+# ── derive_landscape (now a module-level function — ARCH #45) ────────────────
 
 
 class TestDeriveLandscape:
-    """derive_landscape must use blurred pillarbox (scale+blur bg, centered fg)."""
+    """derive_landscape() must use blurred pillarbox (scale+blur bg, centered fg).
+
+    ARCH #45 (2026-06-13): collapsed from a VideoCompositor instance method
+    into a stateless function. Tests call the function directly; the
+    sandbox_runner=None default exercises the local-FFmpeg path.
+    """
 
     @patch("genlab_core.media.video_compositor.subprocess.run")
     @patch("genlab_core.media.video_compositor.get_ffmpeg_binary", return_value="ffmpeg")
@@ -64,7 +64,6 @@ class TestDeriveLandscape:
         self,
         _mock_ffmpeg_bin: MagicMock,
         mock_run: MagicMock,
-        compositor: VideoCompositor,
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
@@ -76,7 +75,7 @@ class TestDeriveLandscape:
         vertical = tmp_assets["clip"]
         output = tmp_assets["output"]
 
-        compositor.derive_landscape(vertical, output)
+        derive_landscape(vertical, output)
 
         mock_run.assert_called_once()
         cmd = mock_run.call_args[0][0]
@@ -97,7 +96,6 @@ class TestDeriveLandscape:
         self,
         _mock_ffmpeg_bin: MagicMock,
         mock_run: MagicMock,
-        compositor: VideoCompositor,
         tmp_assets: dict[str, Path],
     ) -> None:
         mock_run.return_value = subprocess.CompletedProcess(
@@ -106,7 +104,7 @@ class TestDeriveLandscape:
             stdout="",
             stderr="",
         )
-        compositor.derive_landscape(
+        derive_landscape(
             tmp_assets["clip"],
             tmp_assets["output"],
             width=1280,
@@ -118,12 +116,35 @@ class TestDeriveLandscape:
 
     def test_missing_vertical_master_raises(
         self,
-        compositor: VideoCompositor,
         tmp_path: Path,
     ) -> None:
         missing = tmp_path / "nonexistent.mp4"
         with pytest.raises(FileNotFoundError, match="Vertical master not found"):
-            compositor.derive_landscape(missing, tmp_path / "out.mp4")
+            derive_landscape(missing, tmp_path / "out.mp4")
+
+    def test_sandbox_runner_routes_through_sandbox(
+        self,
+        tmp_assets: dict[str, Path],
+    ) -> None:
+        """ARCH #45 pin: when sandbox_runner is passed, the FFmpeg
+        command is routed through the runner's run_ffmpeg_sync() instead
+        of executing locally. Defense-in-depth invariant from gaming.
+        """
+        mock_runner = MagicMock()
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+        mock_result.check = MagicMock()
+        mock_runner.run_ffmpeg_sync.return_value = mock_result
+
+        derive_landscape(
+            tmp_assets["clip"],
+            tmp_assets["output"],
+            sandbox_runner=mock_runner,
+        )
+
+        mock_runner.run_ffmpeg_sync.assert_called_once()
+        mock_result.check.assert_called_once_with("landscape")
 
 
 # ── compose_vertical tests REMOVED in DEAD #1 (2026-06-13) ────────────────────

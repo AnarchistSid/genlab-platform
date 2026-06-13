@@ -1,31 +1,45 @@
-"""Gen Lab universal video compositor — single source of truth for visual standards.
+"""Landscape variant derivation + visual config loading.
 
-All niches (gaming, ai_creators, sports, anime, ...) call this module for rendered
-video output.  Niche identity comes from the VisualConfig passed at instantiation;
-no niche-specific code should exist here.
+Module-history note (post-DEAD #1 + ARCH #45, 2026-06-13):
 
-Visual standard enforced:
-    ┌──────────────────────────────────────────┐
-    │  TOP BAR (12 %)  │ logo │  hook text     │  ← solid black
-    ├──────────────────────────────────────────┤
-    │                                          │
-    │          CONTENT  (source clips)         │  ← fills remaining
-    │                                          │
-    ├──────────────────────────────────────────┤
-    │           BOTTOM BAR (18 %)              │  ← solid black, reserved for platform UI
-    └──────────────────────────────────────────┘
+This module used to contain the ``VideoCompositor`` class — a parallel
+sandwich-render path that competed with the live ``FrameCompositor``.
+DEAD #1 removed the dead ``compose_vertical`` chain; ARCH #45 then
+collapsed the residual class into a single stateless function
+``derive_landscape()``. The 5 niches now have ONE compositor system,
+not two:
+
+  * ``frame_compositor.FrameCompositor.compose()`` —
+    canonical 9:16 vertical render with sandwich-pattern branding.
+    Owns: layout-case dispatch, hook drawtext, logo overlay, branding
+    text, source-clip trimming. Used by all 5 niches.
+
+  * ``video_compositor.derive_landscape()`` —
+    one-shot 9:16 → 16:9 derivation for Facebook/X delivery.
+    Method: blurred pillarbox (never crop the subject). Optional
+    sandbox routing via ``sandbox_runner`` kwarg.
+
+What still lives here besides ``derive_landscape``:
+
+  * ``VisualConfig`` + ``load_visual_config`` — Pydantic config model
+    for visuals.yaml. Used by tools that need to read the niche's
+    visual settings without instantiating the full ``ChannelBranding``
+    (FrameCompositor's heavier-weight equivalent).
+  * ``load_platform_encode_overrides`` — YAML reader for
+    ``platform_encode_specs.yaml`` overrides. Currently INACTIVE in
+    production (per CLAUDE.md M-2); kept for the eventual revival.
+  * ``_get_encode_args`` / ``_get_landscape_encode_args`` — per-platform
+    FFmpeg encode-arg builders. Consumed by ``derive_landscape``.
 
 Usage:
-    from genlab_core.media.video_compositor import VideoCompositor, VisualConfig
+    from genlab_core.media.video_compositor import derive_landscape
 
-    cfg = VisualConfig(
-        niche_id="gaming",
-        logo_path=Path("assets/CriticalRush-Logo.png"),
-        accent_color="#FF4500",
+    derive_landscape(
+        vertical_master=Path("/tmp/run/reel.mp4"),
+        output_path=Path("/tmp/run/reel_landscape.mp4"),
+        platform="facebook",
+        sandbox_runner=runner,  # optional, defense-in-depth
     )
-    comp = VideoCompositor(cfg)
-    vertical = comp.compose_vertical(clips, "This changes everything", out / "reel.mp4")
-    landscape = comp.derive_landscape(vertical, out / "landscape.mp4")
 """
 
 from __future__ import annotations
@@ -210,116 +224,129 @@ def load_visual_config(visuals_yaml: Path, niche_root: Path | None = None) -> Vi
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-class VideoCompositor:
-    """Gen Lab universal video compositor.
+def _run_ffmpeg_with_optional_sandbox(
+    cmd: list[str],
+    *,
+    sandbox_runner: SandboxedFFmpegRunner | None,
+    timeout: int = _FFMPEG_TIMEOUT,
+    label: str = "ffmpeg",
+) -> subprocess.CompletedProcess:
+    """Execute an FFmpeg command, optionally routed through a sandbox.
 
-    Enforces visual standards across all niches:
-    - Sandwich pattern: black bar (top 12%) + content + black bar (bottom 18%)
-    - Logo: niche logo PNG at top-left inside top black bar, vertically centered
-    - Hook: bold white text in top black bar, right of logo, max 2 lines
-    - Platform aspect ratio: 9:16 for IG/YT/TikTok/Threads, 16:9 for FB/X
-    - Landscape conversion: blurred pillarbox for 9:16→16:9 (never crop)
-    - Vertical conversion: blurred letterbox for 16:9→9:16 with centered overlay
-
-    Niche identity comes from the VisualConfig passed at instantiation.
-    No niche-specific code should exist in this class.
+    Centralizes the sandbox-routing logic that the ARCH #45 merge
+    extracted from ``VideoCompositor._run_ffmpeg_cmd``. Callers that
+    need sandbox isolation pass a ``sandbox_runner``; callers that
+    don't pass ``None`` and the command runs locally via ``run_ffmpeg``.
     """
-
-    def __init__(
-        self,
-        config: VisualConfig,
-        sandbox_runner: SandboxedFFmpegRunner | None = None,
-    ) -> None:
-        self._config = config
-        self._sandbox_runner = sandbox_runner
-
-    def _run_ffmpeg_cmd(
-        self, cmd: list[str], *, timeout: int = _FFMPEG_TIMEOUT, label: str = "ffmpeg"
-    ) -> subprocess.CompletedProcess:
-        """Execute an FFmpeg command locally or inside a sandbox.
-
-        If a sandbox_runner was provided at init, routes the command through
-        the sandbox.  Otherwise, falls back to local subprocess.run().
-        """
-        if self._sandbox_runner is not None:
-            result = self._sandbox_runner.run_ffmpeg_sync(cmd, timeout=timeout)
-            result.check(label)
-            # Return a CompletedProcess-like for backward compat with callers
-            return subprocess.CompletedProcess(
-                args=cmd, returncode=0, stdout=result.stdout, stderr=result.stderr
-            )
-
-        try:
-            return run_ffmpeg(cmd, timeout=timeout, fallback_preset="fast")
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(
-                f"FFmpeg failed [{label}] (exit {exc.returncode}):\n" + (exc.stderr or "")[-2000:]
-            ) from exc
-
-    # ── Public API ────────────────────────────────────────────────────────────
-
-    # compose_vertical() + private helpers REMOVED in DEAD #1 (2026-06-13).
-    # All 5 niches render via FrameCompositor (see [[task #45]]), so the
-    # sandwich-render path in VideoCompositor was dead. Only derive_landscape
-    # remains — gaming uses it to produce 16:9 variants from the vertical
-    # master for Facebook/X.
-
-    def derive_landscape(
-        self,
-        vertical_master: Path,
-        output_path: Path,
-        width: int = LANDSCAPE_WIDTH_FB,
-        height: int = LANDSCAPE_HEIGHT_FB,
-        platform: str = "facebook",
-    ) -> Path:
-        """Derive 16:9 variant from the 9:16 master for Facebook and X.
-
-        Method: blurred pillarbox (NEVER crop).
-        - Background: scale vertical_master to fill *width*×*height*, apply
-                      Gaussian blur sigma=20
-        - Foreground: scale vertical_master to fit height=*height*,
-                      center horizontally over blurred background
-        - The sandwich bars are preserved in the foreground layer
-        """
-        if not vertical_master.exists():
-            raise FileNotFoundError(f"Vertical master not found: {vertical_master}")
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        filter_complex = (
-            f"[0:v]split[bg][fg];"
-            f"[bg]scale={width}:{height}"
-            f":force_original_aspect_ratio=increase,"
-            f"crop={width}:{height},gblur=sigma=20[blurred];"
-            f"[fg]scale=-2:{height}[sharp];"
-            f"[blurred][sharp]overlay=(W-w)/2:(H-h)/2[out]"
+    if sandbox_runner is not None:
+        result = sandbox_runner.run_ffmpeg_sync(cmd, timeout=timeout)
+        result.check(label)
+        # Return a CompletedProcess-like for backward compat with callers.
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=0, stdout=result.stdout, stderr=result.stderr
         )
 
-        ffmpeg = get_ffmpeg_binary()
-        cmd = [
-            ffmpeg,
-            "-y",
-            "-i",
-            str(vertical_master),
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "[out]",
-            "-map",
-            "0:a?",
-            *_get_landscape_encode_args(platform),
-            str(output_path),
-        ]
+    try:
+        return run_ffmpeg(cmd, timeout=timeout, fallback_preset="fast")
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"FFmpeg failed [{label}] (exit {exc.returncode}):\n" + (exc.stderr or "")[-2000:]
+        ) from exc
 
-        self._run_ffmpeg_cmd(cmd, label="landscape")
-        return output_path
 
-    # ── Filter builders + internal helpers REMOVED in DEAD #1 (2026-06-13) ───
-    #
-    # _build_sandwich_filter / _overlay_logo / _overlay_hook_text were
-    # called only by _render_sandwich. _smart_crop_clips / _assemble_clips /
-    # _render_sandwich / _get_logo_width_px / _wrap_hook were called only by
-    # compose_vertical. With compose_vertical gone, the whole chain became
-    # unreachable. The FrameCompositor path owns sandwich rendering for all
-    # 5 niches today; see [[task #45]] for the architectural merge between
-    # FrameCompositor and the remaining VideoCompositor surface.
+def derive_landscape(
+    vertical_master: Path,
+    output_path: Path,
+    *,
+    width: int = LANDSCAPE_WIDTH_FB,
+    height: int = LANDSCAPE_HEIGHT_FB,
+    platform: str = "facebook",
+    sandbox_runner: SandboxedFFmpegRunner | None = None,
+) -> Path:
+    """Derive a 16:9 variant from a 9:16 vertical master.
+
+    Used for Facebook/X delivery where landscape aspect is preferred.
+    The 5 niches render vertical via ``FrameCompositor.compose`` (the
+    sandwich-pattern owner); this function consumes that output and
+    produces the wide variant via blurred pillarbox — NEVER cropping
+    the subject.
+
+    Visual recipe:
+        - Background: scale vertical_master to fill width×height with
+          ``force_original_aspect_ratio=increase``, then ``gblur=sigma=20``
+        - Foreground: scale vertical_master to ``height=height`` keeping
+          its 9:16 aspect, then center horizontally over the blurred bg
+        - The FrameCompositor sandwich bars and overlays survive in the fg
+
+    Parameters
+    ----------
+    vertical_master:
+        Path to the 9:16 master produced by ``FrameCompositor.compose()``.
+    output_path:
+        Where to write the 16:9 variant. Parent dir is created if missing.
+    width, height:
+        Output dimensions. Defaults match Facebook's 1920×1080 spec.
+        Pass ``LANDSCAPE_WIDTH_X``/``LANDSCAPE_HEIGHT_X`` for X/Twitter's
+        1280×720.
+    platform:
+        Used by ``_get_landscape_encode_args`` to pick CRF/preset/maxrate.
+    sandbox_runner:
+        Optional ``SandboxedFFmpegRunner``. When provided, the FFmpeg
+        command runs inside the sandbox (the gaming pipeline does this
+        for defense-in-depth). When ``None``, runs locally.
+
+    ARCH #45 history: this was ``VideoCompositor.derive_landscape``,
+    the only live method on the otherwise-empty post-DEAD-#1 class.
+    Collapsing the class into a stateless function matches the actual
+    usage (one-shot transformation, no state worth carrying across calls).
+    """
+    if not vertical_master.exists():
+        raise FileNotFoundError(f"Vertical master not found: {vertical_master}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    filter_complex = (
+        f"[0:v]split[bg][fg];"
+        f"[bg]scale={width}:{height}"
+        f":force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},gblur=sigma=20[blurred];"
+        f"[fg]scale=-2:{height}[sharp];"
+        f"[blurred][sharp]overlay=(W-w)/2:(H-h)/2[out]"
+    )
+
+    ffmpeg = get_ffmpeg_binary()
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(vertical_master),
+        "-filter_complex",
+        filter_complex,
+        "-map",
+        "[out]",
+        "-map",
+        "0:a?",
+        *_get_landscape_encode_args(platform),
+        str(output_path),
+    ]
+
+    _run_ffmpeg_with_optional_sandbox(cmd, sandbox_runner=sandbox_runner, label="landscape")
+    return output_path
+
+
+# ── VideoCompositor class REMOVED in ARCH #45 (2026-06-13) ────────────────────
+#
+# After DEAD #1 collapsed the compose_vertical chain, the class held only
+# derive_landscape() and a private FFmpeg-runner helper. Two methods don't
+# justify a class — and FrameCompositor (the live sandwich-render owner
+# for all 5 niches) had its own parallel surface. Collapsing to module-level
+# functions removes the false impression of "parallel compositor systems"
+# while keeping the sandbox-routing semantics intact via the
+# ``sandbox_runner`` parameter on derive_landscape().
+#
+# Migration: callers that did
+#     comp = VideoCompositor(cfg, sandbox_runner=runner)
+#     comp.derive_landscape(vert, land)
+# now do
+#     from genlab_core.media.video_compositor import derive_landscape
+#     derive_landscape(vert, land, sandbox_runner=runner)

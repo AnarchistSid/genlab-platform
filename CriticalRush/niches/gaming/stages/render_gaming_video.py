@@ -42,10 +42,7 @@ from genlab_core.media.sandbox_runner import (
     SandboxedFFmpegRunner,
     sandbox_rendering_enabled,
 )
-from genlab_core.media.video_compositor import (
-    VideoCompositor,
-    load_visual_config,
-)
+from genlab_core.media.video_compositor import derive_landscape
 from genlab_core.media.video_validator import validate_platform_variant
 from genlab_core.settings import settings
 from genlab_core.strategies import VisualRenderStrategy
@@ -149,7 +146,8 @@ class RenderGamingVideo(VisualRenderStrategy):
         self._compilation_rules: dict | None = None
         self._overlay_styles: dict | None = None
         self._scoring_config: dict | None = None
-        self._compositor: VideoCompositor | None = None
+        # ARCH #45 (2026-06-13): VideoCompositor was collapsed into a
+        # module-level derive_landscape() function — no instance to cache.
         self._frame_compositor: FrameCompositor | None = None
         self._sandbox_runner: SandboxedFFmpegRunner | None = None
         self._owns_sandbox: bool = False
@@ -186,13 +184,9 @@ class RenderGamingVideo(VisualRenderStrategy):
             self._frame_compositor = FrameCompositor.from_visuals_yaml(str(visuals_yaml))
         return self._frame_compositor
 
-    def _get_compositor(self) -> VideoCompositor:
-        """Lazy-create compositor from visuals.yaml."""
-        if self._compositor is None:
-            visuals_yaml = NICHE_ROOT / "config" / "visuals.yaml"
-            cfg = load_visual_config(visuals_yaml, niche_root=NICHE_ROOT)
-            self._compositor = VideoCompositor(cfg, sandbox_runner=self._get_sandbox_runner())
-        return self._compositor
+    # ARCH #45 (2026-06-13): _get_compositor() removed — derive_landscape is
+    # now a stateless function called directly with the sandbox_runner kwarg.
+    # See call site below.
 
     def execute(self, context: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -355,13 +349,18 @@ class RenderGamingVideo(VisualRenderStrategy):
                 except Exception as e:
                     logger.warning("[RENDER] FrameCompositor vertical failed: %s", e)
 
-            # VideoCompositor: derive landscape variant (16:9) from vertical master
+            # ARCH #45 (2026-06-13): derive_landscape is now a module-level
+            # function — no compositor instance to cache. Sandbox routing
+            # via the optional kwarg.
             if need_landscape:
                 land_path = output_dir / f"{slug}_landscape.mp4"
                 try:
-                    compositor = self._get_compositor()
                     vert_master = Path(rendered_variants.get("vertical", clip_path))
-                    compositor.derive_landscape(vert_master, land_path)
+                    derive_landscape(
+                        vert_master,
+                        land_path,
+                        sandbox_runner=self._get_sandbox_runner(),
+                    )
                     land_rendered = str(land_path)
                     rendered_variants["landscape"] = land_rendered
                     if not rendered_path:
