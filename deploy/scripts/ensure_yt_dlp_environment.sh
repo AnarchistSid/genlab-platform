@@ -88,6 +88,44 @@ fix_ownership() {
 fix_ownership "$COOKIES_FILE"
 fix_ownership "$SESSION_FILE"
 
+# ── 3. uv binary visibility under HOME=/opt/genlab ────────────────────────
+# scripts/daily_intel.sh now resolves uv via `command -v` first
+# (PR-fixed 2026-06-14), but historical callers + the operator's
+# scripts may still hardcode `${HOME}/.local/bin/uv`. Under systemd's
+# Environment=HOME=/opt/genlab, that path resolves to
+# /opt/genlab/.local/bin/uv — which is empty on a fresh box (uv
+# installs to /usr/local/bin or /root/.local/bin). Symlink it so the
+# legacy path also works.
+#
+# Self-healing — the 2026-06-14 deploy-pipeline-gap recovery
+# discovered prod was missing this symlink. We patched manually then;
+# this bakes it into the pre-pipeline lifecycle so future fresh
+# boxes never hit the same regression.
+ensure_uv_legacy_symlink() {
+  local target src
+  src="$(command -v uv 2>/dev/null || true)"
+  if [[ -z "$src" ]]; then
+    for candidate in /usr/local/bin/uv /root/.local/bin/uv; do
+      if [[ -x "$candidate" ]]; then src="$candidate"; break; fi
+    done
+  fi
+  if [[ -z "$src" ]]; then
+    log "WARN: uv binary not found anywhere; skipping legacy symlink"
+    return
+  fi
+  target="${GENLAB_ROOT}/.local/bin/uv"
+  if [[ -L "$target" ]] && [[ "$(readlink "$target")" == "$src" ]]; then
+    return  # already correct, no-op
+  fi
+  if mkdir -p "$(dirname "$target")" 2>/dev/null && ln -sfn "$src" "$target" 2>/dev/null; then
+    chown -h genlab:genlab "$target" 2>/dev/null || true
+    log "uv legacy symlink: $target → $src"
+  else
+    log "WARN: could not create uv legacy symlink at $target"
+  fi
+}
+ensure_uv_legacy_symlink
+
 # Always exit 0 — never block the pipeline on a setup-script hiccup. The
 # real-failure detection lives in the alerts pipeline (CriticalAlertsBanner,
 # pipeline_alerts.download_failure, etc.) which catches anything we missed.

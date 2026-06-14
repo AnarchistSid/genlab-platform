@@ -7,7 +7,26 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHANNEL_ROOT="$(dirname "$SCRIPT_DIR")"
 CHANNEL_NAME="$(basename "$CHANNEL_ROOT")"
 GENLAB_ROOT="$(dirname "$CHANNEL_ROOT")"
-UV="${HOME}/.local/bin/uv"
+
+# Resolve the uv binary. Prefer PATH; fall back to canonical install
+# locations. The original `UV="${HOME}/.local/bin/uv"` was a single
+# hardcoded path that broke when systemd ran the script with
+# Environment=HOME=/opt/genlab (the genlab user's home, which has no
+# .local/bin). 2026-06-14 deploy-pipeline-gap recovery surfaced this
+# when prod's systemd unit modification flipped the latent bug from
+# "works" to "broken" — see session-2026-06-14-deploy-pipeline-gap.
+UV="$(command -v uv 2>/dev/null || true)"
+if [[ -z "$UV" ]]; then
+    for candidate in "${HOME}/.local/bin/uv" /usr/local/bin/uv /root/.local/bin/uv "${GENLAB_ROOT}/.local/bin/uv"; do
+        if [[ -x "$candidate" ]]; then UV="$candidate"; break; fi
+    done
+fi
+if [[ -z "$UV" ]]; then
+    echo "FATAL: uv binary not found on PATH or canonical install locations" >&2
+    echo "  PATH=$PATH" >&2
+    echo "  Tried: \${HOME}/.local/bin/uv, /usr/local/bin/uv, /root/.local/bin/uv, \${GENLAB_ROOT}/.local/bin/uv" >&2
+    exit 127
+fi
 
 # Derive package name from channel directory
 PACKAGE_MAP="BlackboxBrief:blackbox-brief CriticalRush:criticalrush ClutchWire:clutchwire SpliceReel:splicereel FrameDrift:framedrift"
