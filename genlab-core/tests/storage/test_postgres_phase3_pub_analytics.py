@@ -39,7 +39,11 @@ class TestPublishingAnalyticsCRUD:
                 "comments": 30,
                 "shares": 10,
                 "saves": 5,
-                "metrics_fetched": True,
+                # After migration q7l8m9n0o1p2, metrics_fetched is a
+                # TIMESTAMP WITH TIME ZONE. Production writers send an
+                # ISO string via ``now.isoformat()``; pin that shape
+                # here so the test reflects the actual write path.
+                "metrics_fetched": "2026-06-14T18:30:00+00:00",
             },
         )
         uuid.UUID(record_id)
@@ -48,7 +52,10 @@ class TestPublishingAnalyticsCRUD:
         assert record is not None
         assert record["fields"]["platform"] == "instagram"
         assert record["fields"]["views"] == 1500
-        assert record["fields"]["metrics_fetched"] is True
+        # Round-trips as either ISO string or datetime depending on
+        # backend type adaption — both are truthy and that's all the
+        # read path (``if metrics_fetched:``) cares about.
+        assert record["fields"]["metrics_fetched"] is not None
 
     def test_update(self, pg_backend):
         record_id = pg_backend.create(
@@ -66,12 +73,12 @@ class TestPublishingAnalyticsCRUD:
             {
                 "views": 5000,
                 "likes": 400,
-                "metrics_fetched": True,
+                "metrics_fetched": "2026-06-14T18:30:00+00:00",
             },
         )
         record = pg_backend.get("publishing_analytics", record_id)
         assert record["fields"]["views"] == 5000
-        assert record["fields"]["metrics_fetched"] is True
+        assert record["fields"]["metrics_fetched"] is not None
 
     def test_delete(self, pg_backend):
         record_id = pg_backend.create(
