@@ -1,9 +1,16 @@
 [Unit]
-Description=GenLab Hook Trainer Timer (Weekly Sunday)
+Description=GenLab Hook Trainer Timer (Daily)
 
 [Timer]
-OnCalendar=Sun *-*-* 05:00:00 UTC
+# 2026-06-14 (PR #200): bumped from weekly Sunday to daily 05:00 UTC.
+# Justified by the audit finding that training-data accumulates at
+# ~70-90 examples per niche per WEEK; daily retraining gets every
+# ~10 new examples into the model instead of waiting for 70+.
+# Compute cost is trivial (XGBoost on ~100 rows = sub-second per
+# niche × 5 niches = <5s total).
+OnCalendar=*-*-* 05:00:00 UTC
 Persistent=true
+RandomizedDelaySec=600
 
 [Install]
 WantedBy=timers.target
