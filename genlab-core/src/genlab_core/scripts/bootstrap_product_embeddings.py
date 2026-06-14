@@ -213,11 +213,17 @@ def main() -> int:
         )
         return 2
 
-    if not args.dry_run and not matcher.available():
+    # `available` is an EmbeddingMatcher @property — call without parens.
+    # The pre-fix `matcher.available()` raised TypeError ("'bool' object is
+    # not callable"), which was masked by tests that MagicMock the matcher
+    # (mock.available() returns a Mock, not a bool — never errors).
+    # Also: the EmbeddingMatcher uses OpenAI text-embedding-3-small, NOT
+    # sentence-transformers; the old error message pointed at the wrong dep.
+    if not args.dry_run and not matcher.available:
         logger.error(
-            "[bootstrap] EmbeddingMatcher not available — install sentence-"
-            "transformers and verify DATABASE_URL points at a Postgres with "
-            "the product_embeddings table"
+            "[bootstrap] EmbeddingMatcher not available — set OPENAI_API_KEY "
+            "and verify DATABASE_URL points at a Postgres with the "
+            "product_embeddings table (pgvector extension required)"
         )
         return 3
 
