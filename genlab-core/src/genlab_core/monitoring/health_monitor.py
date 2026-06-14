@@ -1611,6 +1611,36 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
     return all_alerts
 
 
+def _alert_details_json_default(obj: object) -> str:
+    """JSON-serialize objects that ``json.dumps`` doesn't handle natively.
+
+    Some checks include UUIDs (e.g. blueprint record ids in archive
+    counts) or datetimes (timestamp fields on the alert payload) in
+    ``alert.details``. Default ``json.dumps`` raises ``TypeError:
+    Object of type UUID is not JSON serializable`` on those, which
+    caused ``write_alerts_to_db`` to fail the WHOLE INSERT (and the
+    rest of the loop) on every hourly health_monitor run. Per the
+    2026-06-14 prod log probe: 16+ occurrences in the visible
+    window, one per fire.
+
+    Coerce these to their canonical string form. Same shape the
+    backlog_client's PostgresBackend serializer uses for the
+    Postgres JSONB column path.
+    """
+    from datetime import date, datetime
+    from uuid import UUID
+
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    # Last-resort stringification — better to land a row with a
+    # slightly-mangled detail than to drop the whole alert. The
+    # check_name + message + severity carry the actionable signal;
+    # details is the "nice to have" enrichment.
+    return repr(obj)
+
+
 def write_alerts_to_db(alerts: list[Alert]) -> int:
     """Write alerts to pipeline_alerts table. Returns count written."""
     if not alerts:
@@ -1668,7 +1698,9 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
                     alert.check,
                     alert.severity,
                     alert.message,
-                    json.dumps(alert.details) if alert.details else None,
+                    json.dumps(alert.details, default=_alert_details_json_default)
+                    if alert.details
+                    else None,
                     alert.auto_fix or None,
                 ),
             )
