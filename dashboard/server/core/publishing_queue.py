@@ -91,7 +91,7 @@ def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
         yield
 
 
-def _next_available_slot(niche_id: str = "") -> str | None:
+def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str | None:
     """Return the next available publish slot as an ISO 8601 string.
 
     Reads schedule_slots from publishing.yaml. Checks existing blueprints
@@ -99,6 +99,14 @@ def _next_available_slot(niche_id: str = "") -> str | None:
 
     Args:
         niche_id: If set, checks for per-niche collisions (1 post per niche per day).
+        exclude_record_id: When re-scheduling an existing blueprint, pass its
+            record id so its OWN ``scheduled_for`` is not treated as a
+            collision. Without this, the scheduler would see the blueprint
+            blocking its own slot and push it 1 day later — the 2026-06-14
+            "+1 day offset" bug. Niches whose pipeline runs after the
+            06:30 UTC publish window get a tomorrow-slot pre-set by
+            ``push_to_backlog``, and the operator's later approval would
+            then re-schedule to day-after-tomorrow instead of tomorrow.
     """
     try:
         from zoneinfo import ZoneInfo
@@ -188,6 +196,14 @@ def _next_available_slot(niche_id: str = "") -> str | None:
                 r_niche = (f.get("niche_id") or "").strip()
                 if r_niche != niche_id:
                     continue
+                # Don't treat the blueprint being scheduled as a self-collision.
+                # See ``exclude_record_id`` docstring for the +1 day bug this
+                # prevents. Record id may live at the top of the row OR inside
+                # fields depending on the backing store; check both.
+                if exclude_record_id:
+                    r_id = str(r.get("id", "") or f.get("id", "") or "")
+                    if r_id == str(exclude_record_id):
+                        continue
                 sched_raw = f.get("scheduled_for", "")
                 if not sched_raw:
                     continue
@@ -423,7 +439,9 @@ class PublishingQueueManager:
             with _advisory_lock(niche_id):
                 existing_sched = self._get_scheduled_for(record_id)
                 if not existing_sched:
-                    next_slot = _next_available_slot(niche_id=niche_id)
+                    # exclude self defensively even though existing_sched is
+                    # empty here — keeps callers consistent.
+                    next_slot = _next_available_slot(niche_id=niche_id, exclude_record_id=record_id)
                     if next_slot:
                         update["scheduled_for"] = next_slot
                         logger.info(
