@@ -280,6 +280,22 @@ class PendingFeedbackStore:
 
         post_id = _f(fields, "PostID", "post_id", default="")
 
+        # 2026-06-14: hydrate reward_48h. Without this, every consumer of
+        # _from_sharepoint_item (config_updater, backfill scripts, the
+        # store's own list_pending caller chain) silently saw
+        # ``reward_48h = None`` on every task — even when the DB row had
+        # the value. The weekly config_updater filter
+        # ``r.reward_48h is not None`` then dropped every row, which is
+        # why config_updates has been empty since the table existed.
+        raw_reward = _f(fields, "Reward48h", "reward_48h", default=None)
+        if raw_reward in (None, ""):
+            reward_48h: float | None = None
+        else:
+            try:
+                reward_48h = float(raw_reward)
+            except (TypeError, ValueError):
+                reward_48h = None
+
         return PendingFeedbackTask(
             content_id=post_id,
             platform=_f(fields, "Platform", "platform", default=""),
@@ -296,4 +312,5 @@ class PendingFeedbackStore:
             collection_status=status,
             completed_windows=list(completed),
             early_stop=bool(_f(fields, "EarlyStop", "early_stop", default=False)),
+            reward_48h=reward_48h,
         )
