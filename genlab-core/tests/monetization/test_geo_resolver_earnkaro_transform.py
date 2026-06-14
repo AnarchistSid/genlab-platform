@@ -102,24 +102,47 @@ class TestNoOpWhenUnconfigured:
             # → empty URL is fine; the safety pin is "no transform call"
 
     def test_non_amazon_network_not_transformed(self, monkeypatch, _no_url_health_check):
-        """A product where the matcher picks cuelinks (not amazon)
-        should NOT trigger EarnKaro transform — EarnKaro converts
-        Amazon URLs specifically."""
+        """A product whose only network is one the matcher no longer
+        picks (cuelinks was removed from candidates in PR #184) must
+        NOT trigger EarnKaro transform.
+
+        Before #184 this pinned "matcher picks cuelinks → don't call
+        EarnKaro." Post-#184, cuelinks isn't a candidate at all, so
+        the matcher returns ``("", "")`` and the EarnKaro gate
+        (``network in ("amazon", "amazon_in")``) is never reached.
+
+        The test still has value: it pins the defense-in-depth
+        invariant that EarnKaro is NEVER speculatively called when no
+        candidate matches. If someone someday changes the resolver to
+        try EarnKaro on any non-empty product URL regardless of
+        matcher outcome, this test catches it."""
         monkeypatch.setenv("EARNKARO_CONVERT_KEY", "test-key")
-        cuelinks_product = {
+        cuelinks_only_product = {
             "name": "Niche Product",
             "networks": {
+                # cuelinks removed from candidates in PR #184; this
+                # product has no matchable network from the resolver's
+                # perspective. Kept here as the canonical "non-Amazon
+                # legacy entry" shape that real product catalogs still
+                # have lying around.
                 "cuelinks": {"url": "https://linksredirect.com/?cid=000000&url=X"},
             },
         }
         with patch("genlab_core.monetization.earnkaro_client.convert_url") as mock_convert:
             url, network = resolve_affiliate_link_with_network(
-                cuelinks_product, "gaming", "instagram"
+                cuelinks_only_product, "gaming", "instagram"
             )
-            # No transform attempted
+            # The headline invariant: transform NOT called. Gated on
+            # ``network in ("amazon", "amazon_in")``; with no candidate
+            # matched, network is "" so the gate is never reached.
             mock_convert.assert_not_called()
-            # Cuelinks URL preserved
-            assert network == "cuelinks"
+            # Post-#184 expected behavior: no candidate matched →
+            # empty network + URL. Operators see the product surfaced
+            # by the picker but no published affiliate URL, which is
+            # the correct signal that the catalog entry needs an
+            # Amazon URL added.
+            assert network == ""
+            assert url == ""
 
 
 # ── Success path: when the key IS set ──────────────────────────────────────
