@@ -234,6 +234,26 @@ class RunReport:
         # dashboard which reads from disk.
         run_stats["report"] = report
 
+        # 2026-06-14: persist the cost summary to Postgres so the
+        # operator can answer "what did niche X cost this week" without
+        # grepping run_report.json files. Best-effort — failure here
+        # NEVER blocks the run (the on-disk report stays the source of
+        # truth). See cost_persist module + p6k7l8m9n0o1 migration.
+        if cost_summary:
+            try:
+                from genlab_core.intelligence.cost_persist import persist_run_cost
+
+                persist_run_cost(
+                    run_id=run_id,
+                    niche_id=niche_id,
+                    summary=cost_summary,
+                    budget_usd=niche_config.get("error_budgets", {}).get(
+                        "daily_cost_usd", DEFAULT_BUDGET_USD
+                    ),
+                )
+            except Exception:
+                logger.debug("[RunReport] cost persist call failed", exc_info=True)
+
         # Log summary
         logger.info(
             "[RunReport] %s | %s | %.0fs | stories=%d blueprints=%d | QC: %s | violations=%d",

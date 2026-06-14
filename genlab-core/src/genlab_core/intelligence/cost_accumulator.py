@@ -126,6 +126,20 @@ class CostAccumulator:
         return cats
 
     @property
+    def by_model(self) -> dict[str, float]:
+        """Spend grouped by model name. Lets dashboard answer
+        "which model is the most expensive across all runs" without
+        re-parsing run_report.json. Mirrors `by_category` but keyed by
+        the model id (e.g. ``claude-haiku-4-5``) rather than the
+        coarse category (``llm``)."""
+        models: dict[str, float] = {}
+        for e in self.entries:
+            if not e.model:
+                continue
+            models[e.model] = models.get(e.model, 0) + e.cost_usd
+        return models
+
+    @property
     def budget_remaining_pct(self) -> float:
         if self._budget_usd <= 0:
             return 0.0
@@ -136,6 +150,10 @@ class CostAccumulator:
             "run_id": self.run_id,
             "total_usd": round(self.total_usd, 4),
             "by_category": {k: round(v, 4) for k, v in self.by_category.items()},
+            # Per-model split surfaced in the same summary dict so
+            # run_report.json + the new pipeline_run_costs DB row carry
+            # consistent shape. Added 2026-06-14 alongside cost_persist.
+            "by_model": {k: round(v, 4) for k, v in self.by_model.items()},
             "budget_remaining_pct": round(self.budget_remaining_pct, 1),
             "entry_count": len(self.entries),
         }
