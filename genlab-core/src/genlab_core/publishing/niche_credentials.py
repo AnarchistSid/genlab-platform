@@ -91,10 +91,70 @@ def resolve_fb_credentials(niche_id: str) -> tuple:
     )
 
 
+# 2026-06-14: per-niche Threads tokens can also live in a JSON cache
+# file populated by the auto-refresh script. The cache takes priority
+# over .env so operator-provisioned tokens stay valid even after the
+# 60-day Threads LLUT expiry — see ``scripts/refresh_threads_tokens.py``.
+_THREADS_TOKEN_CACHE_PATH = "/opt/genlab/.threads_tokens.json"
+
+
+def _read_threads_token_cache(niche_id: str) -> str:
+    """Look up a refresh-cached Threads access token for the niche.
+
+    Returns empty string if the cache file doesn't exist, isn't valid
+    JSON, doesn't have an entry for the niche, or is past expiry. The
+    caller falls back to ``resolve_niche_env``.
+
+    Safe to call with no cache file — returns "" silently. Never raises.
+    """
+    try:
+        import json
+        from pathlib import Path
+
+        cache_path = Path(_THREADS_TOKEN_CACHE_PATH)
+        if not cache_path.is_file():
+            return ""
+        data = json.loads(cache_path.read_text())
+        entry = data.get(niche_id, {})
+        token = entry.get("access_token", "")
+        if not token:
+            return ""
+        # Optional expires_at field — if present + past, treat as stale.
+        # Operators may store tokens manually without expires_at; in that
+        # case we still trust the value (no expiry to compare against).
+        expires_at_iso = entry.get("expires_at", "")
+        if expires_at_iso:
+            from datetime import UTC, datetime
+
+            try:
+                expires_at = datetime.fromisoformat(expires_at_iso.replace("Z", "+00:00"))
+                if datetime.now(UTC) >= expires_at:
+                    return ""  # expired — fall through to .env
+            except (ValueError, TypeError):
+                pass  # malformed timestamp — keep the token, log nothing
+        return token
+    except Exception:
+        return ""
+
+
 def resolve_threads_credentials(niche_id: str) -> tuple:
-    """Return (access_token, user_id) for a niche's Threads account."""
+    """Return (access_token, user_id) for a niche's Threads account.
+
+    Token resolution order (2026-06-14):
+      1. ``/opt/genlab/.threads_tokens.json`` cache (populated by the
+         refresh script when a non-expired entry exists)
+      2. Per-niche env var (e.g., ``CRITICALRUSH_THREADS_ACCESS_TOKEN``)
+      3. Global ``THREADS_ACCESS_TOKEN`` env var fallback
+
+    The user_id never auto-refreshes; only env-var resolution.
+    """
+    cached_token = _read_threads_token_cache(niche_id)
+    if cached_token:
+        token = cached_token
+    else:
+        token = resolve_niche_env(niche_id, "THREADS_ACCESS_TOKEN", "THREADS_ACCESS_TOKEN")
     return (
-        resolve_niche_env(niche_id, "THREADS_ACCESS_TOKEN", "THREADS_ACCESS_TOKEN"),
+        token,
         resolve_niche_env(niche_id, "THREADS_USER_ID", "THREADS_USER_ID"),
     )
 

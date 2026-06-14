@@ -195,3 +195,108 @@ def reset_throttle() -> None:
     callers should not depend on it.
     """
     return
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Threads Long-Lived Token (LLUT) auto-refresh — 2026-06-14
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Threads tokens are 60-day LLUTs that can be refreshed BEFORE expiry via
+# GET https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=...
+# The 2026-06-14 engagement-loop audit found all 5 niche tokens expired
+# around 2026-05-21 (i.e., the previous refresh cycle never happened),
+# producing a 24-day silent outage with 720 warning logs/day and zero
+# replies posted.
+#
+# This module's refresh function is called by
+# ``scripts/refresh_threads_tokens.py`` on a daily systemd timer. The
+# script handles per-niche dispatch, persistence to the JSON cache file,
+# and operator alerting on failure.
+
+_THREADS_REFRESH_URL = "https://graph.threads.net/refresh_access_token"
+
+
+class ThreadsRefreshResult:
+    """Outcome of a single refresh attempt.
+
+    Holds the new token + expiry, or an error description. The token
+    value lives ONLY on this in-memory object — callers must persist it
+    intentionally; never logged.
+    """
+
+    __slots__ = ("ok", "access_token", "expires_in", "error")
+
+    def __init__(
+        self,
+        *,
+        ok: bool,
+        access_token: str = "",
+        expires_in: int = 0,
+        error: str = "",
+    ):
+        self.ok = ok
+        self.access_token = access_token
+        self.expires_in = expires_in  # seconds; typically 60-day = 5,184,000
+        self.error = error
+
+    def __repr__(self) -> str:
+        if self.ok:
+            return f"<ThreadsRefreshResult ok expires_in={self.expires_in}s>"
+        return f"<ThreadsRefreshResult FAILED: {self.error[:60]}>"
+
+
+def refresh_threads_token(current_token: str, *, timeout: float = 10.0) -> ThreadsRefreshResult:
+    """Refresh a Threads long-lived access token via the graph.threads.net
+    refresh endpoint.
+
+    Per Threads API docs, a long-lived token can be refreshed if it's
+    at least 24 hours old. The response shape is:
+
+        {"access_token": "...", "token_type": "bearer", "expires_in": 5184000}
+
+    Never logs ``access_token`` (the value or any prefix of it). Callers
+    must persist the result themselves; this function is pure-effect-free
+    apart from the outbound HTTP call.
+
+    Returns ``ThreadsRefreshResult(ok=True, ...)`` on success, or
+    ``ThreadsRefreshResult(ok=False, error="...")`` on any failure
+    (HTTP error, network timeout, malformed JSON, missing field).
+    """
+    if not current_token:
+        return ThreadsRefreshResult(ok=False, error="empty current_token")
+    try:
+        import requests
+
+        resp = requests.get(
+            _THREADS_REFRESH_URL,
+            params={
+                "grant_type": "th_refresh_token",
+                "access_token": current_token,
+            },
+            timeout=timeout,
+        )
+        if not resp.ok:
+            # Don't include the response body verbatim — it may echo the
+            # token. Use status + short reason instead.
+            return ThreadsRefreshResult(
+                ok=False,
+                error=f"HTTP {resp.status_code} {resp.reason}",
+            )
+        body = resp.json()
+        new_token = body.get("access_token", "")
+        expires_in = int(body.get("expires_in", 0))
+        if not new_token or expires_in <= 0:
+            return ThreadsRefreshResult(
+                ok=False,
+                error=f"malformed response (keys={sorted(body.keys())})",
+            )
+        return ThreadsRefreshResult(
+            ok=True,
+            access_token=new_token,
+            expires_in=expires_in,
+        )
+    except Exception as exc:
+        # Catch broad — network errors, JSON decode, ImportError if
+        # requests not installed, etc. Surface as a structured failure
+        # so the caller's alert path can fire uniformly.
+        return ThreadsRefreshResult(ok=False, error=f"{type(exc).__name__}: {exc}")

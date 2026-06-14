@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily Threads LLUT auto-refresh — prevents 60-day silent expiry
+
+[Timer]
+# Daily at 03:30 UTC = 09:00 IST. Sits BEFORE the daily 04:00 UTC
+# pipeline runs so a refreshed token is in the JSON cache by the time
+# the engagement poller reads it on its first poll of the day.
+#
+# Persistent=true: if the host was down at 03:30 UTC, run the refresh
+# on next boot. Threads LLUT refresh requires the token be < 60d old;
+# missing a daily check is fine, missing 10 days might not be.
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+# Stagger within a 5-min window so concurrent timers don't all hit
+# /etc/passwd at once on shared hosts.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
