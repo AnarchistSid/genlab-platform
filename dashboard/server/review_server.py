@@ -954,6 +954,49 @@ def _execute_review_action(
     except Exception as _cal_exc:  # noqa: BLE001 — never block review
         logger.debug("[calibration] skipped (non-fatal): %s", _cal_exc)
 
+    # Operator-action visibility (autonomy gap doc, Week 2). Emit the
+    # action to ``dashboard_events`` so Mission Control shows an
+    # operator timeline alongside the existing system-event stream.
+    # Currently the table only records system events (pipeline runs,
+    # ingestion cycles) — operator activity is invisible. After this
+    # ships, the dashboard can surface approvals/day, ingest→approve
+    # latency, and "last action by operator" as a freshness signal.
+    #
+    # Best-effort + fail-open via ``push_event``'s own try/except —
+    # the calibration writer above follows the same pattern. A failed
+    # event write MUST NEVER undo the backlog/calibration writes that
+    # already succeeded.
+    try:
+        from genlab_core.observability.dashboard_events import push_event
+
+        # Granular event_type per action so dashboard filters can show
+        # e.g. "show only rejections" without server-side parsing.
+        _event_type = f"review_{action}"
+        _title_map = {
+            "approved": "Blueprint approved",
+            "rejected": "Blueprint rejected",
+            "revised": "Blueprint sent for revision",
+            "skipped": "Blueprint skipped",
+        }
+        _title = _title_map.get(action, f"Blueprint {action}")
+        # Keep body short — Mission Control surfaces it as a one-liner.
+        _body_parts: list[str] = []
+        if notes:
+            _body_parts.append(notes[:120])
+        if feedback_issue:
+            _body_parts.append(f"issue: {feedback_issue}")
+        _body = " · ".join(_body_parts)
+        push_event(
+            event_type=_event_type,
+            title=_title,
+            body=_body,
+            entity_id=record_id,
+            entity_type="blueprint",
+            niche_id=_niche if "_niche" in locals() else "",
+        )
+    except Exception as _ev_exc:  # noqa: BLE001 — never block review
+        logger.debug("[dashboard-events] skipped (non-fatal): %s", _ev_exc)
+
     return update_fields
 
 
