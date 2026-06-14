@@ -45,14 +45,17 @@ def test_force_explore_returns_unobserved_arm_when_niche_starved():
 
 
 def test_force_explore_returns_none_when_niche_has_enough_converged():
-    """Gaming has 3 converged style arms (n_obs >= 5). Force-explore
-    must short-circuit even when rand triggers — gaming already has
-    per-style signal, more exploration is wasted."""
+    """Gaming has 3 converged style arms (n_obs >= MIN_OBS_FOR_CONVERGED).
+    Force-explore must short-circuit even when rand triggers — gaming
+    already has per-style signal, more exploration is wasted.
+
+    Threshold is 3 obs (escapes α=β=1 prior; simulation-validated as the
+    reachable convergence bar at ε=0.25 + 1 publish/day)."""
     arm_n_obs = {
         "gameplay_clip": 108,
         "style:gaming:question": 11,  # converged
         "style:gaming:controversy": 6,  # converged
-        "style:gaming:revelation": 5,  # converged (threshold = 5)
+        "style:gaming:revelation": 5,  # converged
         "style:gaming:bold_claim": 0,
         "style:gaming:comparison": 0,
     }
@@ -74,17 +77,46 @@ def test_force_explore_returns_none_when_random_above_epsilon():
     assert picked is None
 
 
-def test_force_explore_returns_none_when_no_unexplored_arms_remain():
-    """If every style arm has at least one observation, there's nothing
-    to force-explore TOWARD. Must fall through to the normal classifier."""
+def test_force_explore_picks_under_explored_not_just_unobserved():
+    """REGRESSION pin for the 2026-06-14 v2 design fix:
+
+    Earlier (broken) draft used n_obs == 0 as the eligibility filter —
+    once an arm had its first observation, force-explore could never
+    pick it again, so arms got stuck at n_obs=1 and the niche never
+    reached convergence (simulation showed >120 days at every ε).
+
+    Fixed: eligibility is n_obs < MIN_OBS_FOR_CONVERGED. Arms keep
+    receiving picks until they cross the threshold. Pins by setting all
+    arms to n_obs=1 (not 0!) and asserting one is still picked."""
     arm_n_obs = {
         "trailer_drop": 40,
-        # All style arms have obs (just 1-2 each — not converged but not 0).
         "style:movies:question": 1,
-        "style:movies:comparison": 2,
+        "style:movies:comparison": 1,
         "style:movies:bold_claim": 1,
         "style:movies:controversy": 1,
         "style:movies:revelation": 1,
+    }
+    picked = _maybe_force_explore_style_arm("movies", arm_n_obs, _rng=lambda: 0.0)
+    assert picked is not None and picked.startswith("style:movies:"), (
+        f"under-explored arms (n_obs=1, below threshold=3) must remain "
+        f"eligible. Got {picked}. If you see None here, the eligibility "
+        f"check has regressed to the broken n_obs == 0 version."
+    )
+
+
+def test_force_explore_returns_none_when_all_arms_converged():
+    """If every style arm has reached the convergence threshold, the
+    exploration-need gate (converged_count >= CONVERGED_STYLE_THRESHOLD)
+    will already have short-circuited. This pin double-asserts via
+    direct test of the no-under-explored-arms branch."""
+    arm_n_obs = {
+        "trailer_drop": 40,
+        # All arms at n_obs=3 — at the converged threshold
+        "style:movies:question": 3,
+        "style:movies:comparison": 3,
+        "style:movies:bold_claim": 3,
+        "style:movies:controversy": 3,
+        "style:movies:revelation": 3,
     }
     picked = _maybe_force_explore_style_arm("movies", arm_n_obs, _rng=lambda: 0.0)
     assert picked is None

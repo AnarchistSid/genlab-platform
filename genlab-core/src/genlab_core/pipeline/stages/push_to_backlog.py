@@ -548,19 +548,35 @@ def _apply_engagement_boost(
     return round(base_score * multiplier, 4)
 
 
-# Force-explore parameters for unobserved style:* arms.
+# Force-explore parameters for under-explored style:* arms.
 # 2026-06-14 prod audit found movies and sports had 0/5 converged style
 # arms — the bandit's exploitation policy never picked an unobserved arm
 # when the dominant arm had 100+ obs of mediocre reward. ε-greedy here
-# breaks that lock-in: with probability EPSILON, if the niche has fewer
-# than CONVERGED_THRESHOLD converged style arms, pick a random
-# unobserved style arm instead of the keyword-matched arm.
+# breaks that lock-in: with probability EPSILON, when the niche has
+# fewer than CONVERGED_STYLE_THRESHOLD converged style arms, pick a
+# random under-explored style arm instead of the keyword-matched arm.
 #
-# CONVERGED = arm has n_obs >= 5 (the same threshold the LinUCB picker
-# uses to switch on contextual scoring). At α=β=1 prior, n_obs = α+β-2.
-_FORCE_EXPLORE_EPSILON = 0.15  # 1 in ~7 publishes picks an unobserved style arm
+# CONVERGED = arm has n_obs >= 3 (escapes the α=β=1 prior into a
+# meaningful posterior, while keeping convergence time reachable at
+# typical pipeline cadence).
+#
+# Parameters validated by simulation against 2026-06-14 prod bandit
+# state (/tmp/simulate_v3.py). At ε=0.25 + 1 publish/day:
+#
+#   sports:      46 days to 3-converged
+#   movies:      46 days
+#   anime:       36 days
+#   ai_creators: 22 days
+#   gaming:      already converged (no-op)
+#
+# An earlier draft used n_obs == 0 (unobserved only) which only seeded
+# the FIRST observation per arm and could never drive any arm to
+# convergence — the simulation showed >120 days at every parameter
+# choice. The fix: pick from under-explored (n_obs < MIN_OBS_CONVERGED),
+# so a chosen arm grows from 1 → 2 → 3 across repeated force-explores.
+_FORCE_EXPLORE_EPSILON = 0.25  # 1 in 4 publishes picks an under-explored style arm
 _CONVERGED_STYLE_THRESHOLD = 3  # niches with fewer converged style arms get force-explored
-_MIN_OBS_FOR_CONVERGED = 5
+_MIN_OBS_FOR_CONVERGED = 3  # n_obs needed for an arm to count as "converged"
 
 
 def _classify_arm(
@@ -654,9 +670,13 @@ def _maybe_force_explore_style_arm(
     Both gates must be open. Returns None otherwise.
 
     When triggered, picks UNIFORMLY at random from the niche's
-    ``style:*`` arms that have n_obs == 0. If none exist (every style
-    arm has at least one observation), returns None and lets the
-    classifier proceed.
+    UNDER-EXPLORED ``style:*`` arms (n_obs < _MIN_OBS_FOR_CONVERGED).
+    An arm stays eligible until it converges, so repeated force-explores
+    can drive a single arm from 1 → 2 → 3 obs over time. (An earlier
+    draft used n_obs == 0 — simulation showed that only seeded the
+    first observation per arm and never drove convergence.) If every
+    style arm has already converged, returns None and lets the classifier
+    proceed.
 
     Pure function — no DB calls. Caller passes ``arm_n_obs`` from
     the bandit-loader's posterior data.
@@ -679,7 +699,7 @@ def _maybe_force_explore_style_arm(
     if rand() >= _FORCE_EXPLORE_EPSILON:
         return None
 
-    unobserved = [a for a in style_arms if arm_n_obs.get(a, 0) == 0]
+    unobserved = [a for a in style_arms if arm_n_obs.get(a, 0) < _MIN_OBS_FOR_CONVERGED]
     if not unobserved:
         return None  # everything explored at least once
 
