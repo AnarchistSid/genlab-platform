@@ -177,7 +177,21 @@ elif [[ -z "$NEW_MIGRATIONS" ]]; then
 else
     log "Pre-migration DB backup via scripts/backup_db.sh..."
     if [[ -x "$GENLAB/scripts/backup_db.sh" ]]; then
-        "$GENLAB/scripts/backup_db.sh" 2>&1 | tee -a "$LOG"
+        # IMPORTANT: backup is best-effort — a failed backup must NOT
+        # abort the deploy. The previous version piped the script into
+        # `tee`, and with `set -o pipefail` (line 36) a non-zero backup
+        # exit (e.g. pg_dump can't auth as the OS user) propagated up
+        # and killed the deploy before alembic ran. We explicitly capture
+        # the exit code instead and log a WARN on failure. The operator
+        # can investigate the backup separately; the migration must
+        # still proceed because the code on disk is already on the new
+        # HEAD and rolling forward beats leaving prod in a split state.
+        if "$GENLAB/scripts/backup_db.sh" >>"$LOG" 2>&1; then
+            log "Backup ✓"
+        else
+            BACKUP_RC=$?
+            log "WARN: backup_db.sh exited $BACKUP_RC — proceeding with migration (backup is best-effort; check $LOG for details)"
+        fi
     else
         log "WARN: backup_db.sh not found/executable — skipping backup (risky)"
     fi
