@@ -637,6 +637,28 @@ class TestAffiliateMatchExecute:
             lambda _niche_id: 0,
         )
 
+    @pytest.fixture(autouse=True)
+    def _stub_url_health_check(self, monkeypatch):
+        """Bypass the network-based URL-health check.
+
+        ``geo_link_resolver._is_url_healthy`` runs a 5s HEAD/GET probe
+        against each affiliate URL. The test catalog uses placeholder
+        URLs like ``https://amzn.to/ps5`` that 404 on CI's network
+        (and on any machine that doesn't have those particular short
+        links resolving). When the health check fails, the resolver
+        silently skips the candidate — the test's matched-story dict
+        comes back without the affiliate fields and the assertion
+        fails with KeyError.
+
+        Pinned-true here so the matcher's algorithmic logic is tested
+        in isolation from network reachability. The same pattern
+        as ``_isolate_daily_cap_count`` above — strip out the
+        environment-dependent gate so the unit test stays hermetic."""
+        monkeypatch.setattr(
+            "genlab_core.monetization.geo_link_resolver._is_url_healthy",
+            lambda _url: True,
+        )
+
     def _mock_catalog(self) -> dict:
         return {
             "niches": {
