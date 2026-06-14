@@ -444,6 +444,27 @@ def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
 _get_arm_boost = _get_bandit_arm_boost
 
 
+def _get_bandit_arm_n_obs(client, niche_id: str) -> dict[str, int]:
+    """Per-arm observation count derived from the Thompson posteriors.
+
+    With α=β=1 priors, n_obs = (α-1) + (β-1) = α+β-2. Used by the
+    ε-greedy force-explore in _classify_arm to detect under-explored
+    style:* arms.
+
+    Returns {} on any error so callers can degrade gracefully (the
+    force-explore short-circuits when arm_n_obs is empty/None).
+    """
+    try:
+        from genlab_core.learning.arm_loader import load_all_arms
+    except ImportError:
+        return {}
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return {}
+    arms = load_all_arms(proxy, niche_id)
+    return {arm_id: max(0, int(alpha + beta - 2)) for arm_id, (alpha, beta) in arms.items()}
+
+
 def _load_linucb_arms(client, niche_id: str) -> dict:
     """Load persisted LinUCBArm state for each arm in the niche.
 
@@ -527,11 +548,28 @@ def _apply_engagement_boost(
     return round(base_score * multiplier, 4)
 
 
+# Force-explore parameters for unobserved style:* arms.
+# 2026-06-14 prod audit found movies and sports had 0/5 converged style
+# arms — the bandit's exploitation policy never picked an unobserved arm
+# when the dominant arm had 100+ obs of mediocre reward. ε-greedy here
+# breaks that lock-in: with probability EPSILON, if the niche has fewer
+# than CONVERGED_THRESHOLD converged style arms, pick a random
+# unobserved style arm instead of the keyword-matched arm.
+#
+# CONVERGED = arm has n_obs >= 5 (the same threshold the LinUCB picker
+# uses to switch on contextual scoring). At α=β=1 prior, n_obs = α+β-2.
+_FORCE_EXPLORE_EPSILON = 0.15  # 1 in ~7 publishes picks an unobserved style arm
+_CONVERGED_STYLE_THRESHOLD = 3  # niches with fewer converged style arms get force-explored
+_MIN_OBS_FOR_CONVERGED = 5
+
+
 def _classify_arm(
     niche_id: str,
     story: dict,
     content: dict,
     arm_boosts: dict[str, float] | None = None,
+    arm_n_obs: dict[str, int] | None = None,
+    _rng=None,
 ) -> str:
     """Classify content into a bandit arm_id.
 
@@ -550,8 +588,29 @@ def _classify_arm(
     With ``arm_boosts=None``, behaviour matches the legacy first-
     matching-arm-wins order so callers that don't pass boosts (tests,
     pre-bandit code paths) keep their existing semantics.
+
+    2026-06-14 ε-greedy force-explore (optional)
+    --------------------------------------------
+    When ``arm_n_obs`` is provided AND the niche has fewer than
+    ``_CONVERGED_STYLE_THRESHOLD`` converged ``style:*`` arms, with
+    probability ``_FORCE_EXPLORE_EPSILON`` pick a random UNOBSERVED
+    ``style:*`` arm instead of the keyword-classified arm. Seeds the
+    bandit with exploration signal in niches that would otherwise
+    lock in on their default arm forever.
+
+    ``_rng`` is the random-number source (defaults to ``random.random``);
+    tests inject a deterministic value to pin the ε-greedy decision.
     """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
+
+    # ε-greedy force-explore — runs BEFORE keyword matching so it
+    # actually escapes the keyword set (the bug we're fixing: keyword
+    # matching always routes back to the niche default, blocking
+    # exploration of alternate hook styles).
+    if arm_n_obs is not None:
+        forced = _maybe_force_explore_style_arm(niche_id, arm_n_obs, _rng=_rng)
+        if forced is not None:
+            return forced
 
     matches: list[str] = []
     for arm_id, keywords in _ARM_KEYWORDS.get(niche_id, []):
@@ -571,6 +630,63 @@ def _classify_arm(
         key=lambda a: arm_boosts.get(a, 1.0),
     )
     return best
+
+
+def _maybe_force_explore_style_arm(
+    niche_id: str,
+    arm_n_obs: dict[str, int],
+    _rng=None,
+) -> str | None:
+    """Return an unobserved ``style:*`` arm with probability ε when the
+    niche is exploration-starved; else None.
+
+    Two gates:
+
+    1. **Exploration-need gate** — count the niche's ``style:*`` arms
+       with n_obs >= _MIN_OBS_FOR_CONVERGED. If that count is already
+       at or above _CONVERGED_STYLE_THRESHOLD, the bandit has enough
+       per-style signal to make good decisions — don't force-explore.
+
+    2. **ε-greedy gate** — with probability _FORCE_EXPLORE_EPSILON,
+       trigger the exploration. Otherwise let the normal classifier
+       take over.
+
+    Both gates must be open. Returns None otherwise.
+
+    When triggered, picks UNIFORMLY at random from the niche's
+    ``style:*`` arms that have n_obs == 0. If none exist (every style
+    arm has at least one observation), returns None and lets the
+    classifier proceed.
+
+    Pure function — no DB calls. Caller passes ``arm_n_obs`` from
+    the bandit-loader's posterior data.
+    """
+    import random
+
+    rand = _rng if _rng is not None else random.random
+
+    # Identify the niche's style:* arms and partition by exploration state.
+    style_prefix = f"style:{niche_id}:"
+    style_arms = [arm for arm in arm_n_obs if arm.startswith(style_prefix)]
+    if not style_arms:
+        return None
+
+    converged = [a for a in style_arms if arm_n_obs.get(a, 0) >= _MIN_OBS_FOR_CONVERGED]
+    if len(converged) >= _CONVERGED_STYLE_THRESHOLD:
+        return None  # niche has enough per-style signal already
+
+    # ε-greedy gate
+    if rand() >= _FORCE_EXPLORE_EPSILON:
+        return None
+
+    unobserved = [a for a in style_arms if arm_n_obs.get(a, 0) == 0]
+    if not unobserved:
+        return None  # everything explored at least once
+
+    # Pick uniformly. Using ``random.choice`` (not the injected _rng)
+    # so the test injects ε-decision determinism while leaving the
+    # pick uniform across unobserved arms.
+    return random.choice(unobserved)
 
 
 class PushToBacklog:
@@ -721,6 +837,11 @@ class PushToBacklog:
                 len(arm_boosts),
                 {k: f"{v:.2f}" for k, v in arm_boosts.items()},
             )
+
+        # 2026-06-14: per-arm observation counts feed _classify_arm's
+        # ε-greedy force-explore. Empty dict → force-explore short-circuits
+        # gracefully (legacy behavior).
+        arm_n_obs = _get_bandit_arm_n_obs(client, niche_id)
 
         # Load LinUCB matrices for context-aware boost adjustment per
         # story. Falls back gracefully when bandit_arms have no
@@ -1088,8 +1209,17 @@ class PushToBacklog:
             story["candidate_id"] = candidate_id
             hook = content.get("hook", "")
 
-            # Classify content into a bandit arm_id for the learning loop
-            arm_id = _classify_arm(niche_id, story, content, arm_boosts=arm_boosts)
+            # Classify content into a bandit arm_id for the learning loop.
+            # arm_n_obs feeds the 2026-06-14 ε-greedy force-explore branch
+            # so niches with under-explored style:* arms (sports/movies/anime)
+            # occasionally pick an unobserved style instead of the default.
+            arm_id = _classify_arm(
+                niche_id,
+                story,
+                content,
+                arm_boosts=arm_boosts,
+                arm_n_obs=arm_n_obs,
+            )
 
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
             if hook:
