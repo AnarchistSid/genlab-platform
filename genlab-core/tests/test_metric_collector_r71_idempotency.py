@@ -91,8 +91,17 @@ class _FakeStore:
             completed.append(window)
         task.completed_windows = completed
 
+    def mark_bandit_processed(self, task: PendingFeedbackTask) -> None:
+        """Stub for the live store method (added 2026-06-14). The R-71
+        idempotency test doesn't care about the stamp contract; it
+        just needs the method to exist so
+        ``process_pending_task``'s ``store.mark_bandit_processed(...)``
+        call doesn't raise AttributeError. The stamp contract is
+        pinned separately in test_mark_bandit_processed.py."""
+        pass
+
     # Live store has more methods but ``process_pending_task`` only
-    # touches these two, so we keep the fake minimal. Anything else
+    # touches these three, so we keep the fake minimal. Anything else
     # would never be called by code under test.
 
 
