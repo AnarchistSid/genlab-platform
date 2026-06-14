@@ -812,9 +812,12 @@ class BacklogClient:
         status: str,
         *,
         niche_id: str | None = None,
+        max_records: int | None = None,
     ) -> list[dict]:
         """Delegates to :class:`BlueprintStore.get_blueprints_by_status`."""
-        return self._blueprints.get_blueprints_by_status(status, niche_id=niche_id)
+        return self._blueprints.get_blueprints_by_status(
+            status, niche_id=niche_id, max_records=max_records
+        )
 
     def batch_create_blueprints(self, blueprints: list[dict]) -> list[str]:
         """Delegates to :class:`BlueprintStore.batch_create_blueprints`."""

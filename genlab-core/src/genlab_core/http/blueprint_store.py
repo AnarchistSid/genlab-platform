@@ -184,6 +184,7 @@ class BlueprintStore:
         status: str,
         *,
         niche_id: str | None = None,
+        max_records: int | None = None,
     ) -> list[dict]:
         formula = f"{{status}}='{_esc(status)}'"
         return self._sp_call(
@@ -191,6 +192,7 @@ class BlueprintStore:
             "Blueprints",
             formula=formula,
             niche_id=niche_id,
+            max_records=max_records,
         )
 
     def get_blueprints_safe_to_cleanup(

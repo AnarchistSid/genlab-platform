@@ -79,7 +79,16 @@ def run_retry_pass(niche_id: str, backlog_client: Any, daily_cap: Any | None) ->
         for bp in published_bps:
             _process_blueprint(bp, niche_id, backlog_client, daily_cap)
     except Exception as e:
-        logger.debug("[publish] Retry pass failed: %s", e)
+        # 2026-06-14: bumped from DEBUG to WARNING. The DEBUG level
+        # swallowed a TypeError on the get_blueprints_by_status call
+        # (the method's signature didn't accept ``max_records`` until
+        # today's signature fix) — so the retry pass had been
+        # silently failing on every invocation, leaving every FAILED
+        # platform un-retried forever. The whole point of the retry
+        # pass is recovery; a recovery loop that fails silently
+        # defeats its own purpose. WARNING surfaces future
+        # regressions in operator-visible logs immediately.
+        logger.warning("[publish] Retry pass failed: %s", e)
 
 
 def _process_blueprint(bp: dict, niche_id: str, backlog_client: Any, daily_cap: Any | None) -> None:
