@@ -674,25 +674,33 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
 def archive_orphan_drafts(niche_id: str) -> list[Alert]:
     """Auto-archive DRAFTED blueprints that can't reach VISUAL_READY.
 
-    Two flavours of orphan accumulate at DRAFTED indefinitely:
+    Three flavours of orphan accumulate at DRAFTED indefinitely:
 
-      * **No-video drafts** — typically Steam-spike or RSS-source rows
-        that never found a downloadable video. With ``video_gate:
-        require`` they can never progress. 7-day age threshold (the
-        original cleanup).
+      * **No-video drafts** (Branch 1) — typically Steam-spike or
+        RSS-source rows that never found a downloadable video. With
+        ``video_gate: require`` they can never progress. 7-day age
+        threshold (the original cleanup).
 
-      * **Failed-video drafts** (R-81) — rows where a render landed
-        but ``video_validation.valid`` came back False (VMAF below
+      * **Render-never-completed drafts** (Branch 2a, added 2026-06-14)
+        — rows with a ``video_id`` (a YouTube/Twitch/etc. video was
+        identified) but NO ``visual_paths`` entry in ``extra`` (the
+        render binary never produced an output file: yt-dlp download
+        failure, ffmpeg crash, OOM, etc). 7-day age threshold — same
+        as no-video because YouTube trending churn means the same
+        video won't be re-fetched on later runs anyway.
+
+      * **Failed-video drafts** (Branch 2, R-81) — rows where a render
+        landed AND a ``visual_paths`` entry exists, but
+        ``video_validation.valid`` came back False (VMAF below
         threshold, wrong dims, audio spec failure, etc.). R-47 made
         those rows stay DRAFTED instead of incorrectly going
         VISUAL_READY, so they began accumulating slowly. 14-day age
-        threshold — twice the no-video case, reflecting that more
-        pipeline effort was invested and giving a wider window for
-        human triage to override.
+        threshold — twice the others, reflecting that more pipeline
+        effort was invested and human triage might want to override.
 
-    Safety (both branches): ``cleanup_safety.md`` forbids touching
-    anything with ``scheduled_for`` set, regardless of value — both
-    UPDATEs explicitly filter that out. Both also use age >= threshold
+    Safety (all branches): ``cleanup_safety.md`` forbids touching
+    anything with ``scheduled_for`` set, regardless of value — every
+    UPDATE explicitly filters that out. All also use age >= threshold
     so a pipeline mid-flight on a fresh story can't be raced.
 
     Returns a warning Alert per branch that actually archived rows so
@@ -724,12 +732,55 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
         )
         no_video_archived = cur.fetchall()
 
+        # Branch 2a (2026-06-14): render-never-completed drafts, 7-day age.
+        # A DRAFTED row with a ``video_id`` but NO entry in
+        # ``extra->'visual_paths'`` means the render binary never produced
+        # an output file (yt-dlp download failed, ffmpeg crash, transcode
+        # OOM, etc). Distinct from Branch 2 (where rendered_path landed
+        # but validation rejected it). YouTube trending churn means the
+        # same video won't be re-fetched on later runs, so 7d is the
+        # right cutoff — patience past that point yields nothing.
+        #
+        # Discovered when a 2026-06-14 audit found 94 stuck youtube_trending
+        # DRAFTED accumulated during the WARP outage + deploy-gap window
+        # (2026-06-01 to 2026-06-09). Branch 2's 14d cutoff was too
+        # patient: most rows were 7-13d old at audit time.
+        # See [[session-2026-06-14-deploy-pipeline-gap]] for the wider
+        # incident context.
+        cur.execute(
+            """
+            UPDATE blueprints
+            SET status = 'ARCHIVED',
+                action_taken = 'auto_archived_render_never_completed',
+                reviewed_at = NOW(),
+                updated_at = NOW()
+            WHERE niche_id = %s
+              AND status = 'DRAFTED'
+              AND video_id IS NOT NULL AND video_id != ''
+              AND scheduled_for IS NULL
+              AND created_at < NOW() - INTERVAL '7 days'
+              AND (
+                  extra->>'visual_paths' IS NULL
+                  OR extra->>'visual_paths' = ''
+                  OR extra->>'visual_paths' = '[]'
+              )
+            RETURNING id
+            """,
+            (niche_id,),
+        )
+        render_never_completed_archived = cur.fetchall()
+
         # Branch 2 (R-81): failed-video drafts, 14-day age. A DRAFTED row
-        # WITH a video_id past 14d almost certainly hit validation failure
-        # — the publishable gate (push_to_backlog `_is_publishable`)
-        # writes DRAFTED only when ``video_validation.valid is False``
-        # alongside a present ``rendered_path``. 14d is the deliberate
-        # safety buffer over the 7d no-video case.
+        # WITH a video_id past 14d that ALSO has a ``visual_paths`` entry
+        # almost certainly hit validation failure — the publishable gate
+        # (push_to_backlog ``_is_publishable``) writes DRAFTED only when
+        # ``video_validation.valid is False`` alongside a present
+        # ``rendered_path``. 14d is the deliberate safety buffer giving
+        # human triage a wider window to override.
+        #
+        # Branch 2a above catches the render-never-completed subset at
+        # 7d; this branch is the backstop for the residual rows where
+        # render DID produce output but validation rejected it.
         cur.execute(
             """
             UPDATE blueprints
@@ -762,6 +813,21 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
                     ),
                     niche_id=niche_id,
                     details={"count": len(no_video_archived)},
+                    auto_fix="archived",
+                )
+            )
+        if render_never_completed_archived:
+            alerts.append(
+                Alert(
+                    check="render_never_completed_drafts_archived",
+                    severity="warning",
+                    message=(
+                        f"auto-archived {len(render_never_completed_archived)} "
+                        "stale DRAFTED rows (>7d, video identified but render "
+                        "never produced an output file)"
+                    ),
+                    niche_id=niche_id,
+                    details={"count": len(render_never_completed_archived)},
                     auto_fix="archived",
                 )
             )
