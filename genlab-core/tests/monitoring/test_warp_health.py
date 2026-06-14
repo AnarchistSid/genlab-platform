@@ -42,11 +42,54 @@ def _ss_result(listening: bool):
     return r
 
 
-def _run_router(show, ss):
-    """subprocess.run side_effect that routes by command."""
+def _restart_result(returncode: int = 1, stderr: str = "sudo: a password is required\n"):
+    """Build a fake ``sudo -n systemctl restart warp-svc`` result.
+
+    Defaults to the "sudoers not configured" shape because that's the
+    state on a freshly-deployed prod box — the operator-action
+    prerequisite for the auto-fix to actually work. Override for the
+    specific auto-fix-path tests.
+    """
+    r = MagicMock()
+    r.returncode = returncode
+    r.stderr = stderr
+    return r
+
+
+def _is_active_result(active: bool = False):
+    """Build a fake ``systemctl is-active warp-svc`` result.
+
+    Used by ``_attempt_warp_restart`` to verify post-restart state.
+    """
+    r = MagicMock()
+    r.returncode = 0 if active else 3  # systemd uses rc=3 for inactive
+    r.stdout = "active\n" if active else "inactive\n"
+    return r
+
+
+def _run_router(show, ss, *, restart=None, is_active=None):
+    """subprocess.run side_effect that routes by command.
+
+    ``restart`` and ``is_active`` are optional — when None they default
+    to the "sudoers not configured" + "inactive" shape which is what
+    happens on a fresh prod box before the operator adds the sudoers
+    entry. Tests that exercise the happy-path or other failure modes
+    of ``_attempt_warp_restart`` override them.
+    """
+    restart_mock = restart if restart is not None else _restart_result()
+    is_active_mock = is_active if is_active is not None else _is_active_result(active=False)
 
     def _side_effect(cmd, *_a, **_k):
+        # Order matters — ``sudo -n systemctl restart`` would otherwise
+        # match the ``cmd[0] == "systemctl"`` branch on the WRONG arg
+        # since cmd[0] is "sudo" but downstream parsing inspects more
+        # of the argv. Keep ``sudo`` branch first to be explicit.
+        if cmd[0] == "sudo":
+            return restart_mock
         if cmd[0] == "systemctl":
+            # is-active vs show — both go through systemctl.
+            if len(cmd) >= 2 and cmd[1] == "is-active":
+                return is_active_mock
             return show
         if cmd[0] == "ss":
             return ss
@@ -183,6 +226,110 @@ class TestWarpHealthCheck:
         d = alerts[0].details
         assert d["active_state"] == "failed"
         assert d["sub_state"] == "dead"
-        # Auto-fix is noted as "not attempted" — restoring WARP needs
-        # warp-cli mode + port + connect which we don't want to script.
-        assert "not attempted" in alerts[0].auto_fix
+        # Auto-fix now reports the attempted-restart outcome. The
+        # default _run_router shape ("sudoers not configured") is the
+        # day-one prod state, so we pin that this PR documents the
+        # exact sudoers entry needed to unblock the auto-fix.
+        assert "sudoers not configured" in alerts[0].auto_fix
+        assert "NOPASSWD" in alerts[0].auto_fix
+        assert "systemctl restart warp-svc" in alerts[0].auto_fix
+
+
+class TestWarpAutoFix:
+    """Pins for ``_attempt_warp_restart`` — the daemon-restart auto-fix
+    introduced to close the autonomy-doc Week 1 item ("warp_down 12
+    events, 0 auto-fix successes")."""
+
+    def test_happy_path_reports_success(self):
+        """Restart returns 0, post-restart is-active confirms 'active'
+        → auto_fix carries the single canonical success string."""
+        with (
+            patch("subprocess.run") as mock_run,
+            patch("time.sleep"),
+        ):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(returncode=0, stderr=""),
+                is_active=_is_active_result(active=True),
+            )
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        assert alerts[0].auto_fix == "restarted warp-svc, daemon now active"
+
+    def test_restart_succeeds_but_daemon_still_inactive(self):
+        """The pessimistic case: sudo worked, restart returned 0, but
+        warp-svc didn't come back up (startup config error). Auto-fix
+        must say so explicitly — claiming success here would mislead
+        the operator into ignoring the alert."""
+        with patch("subprocess.run") as mock_run, patch("time.sleep"):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(returncode=0, stderr=""),
+                is_active=_is_active_result(active=False),
+            )
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        assert "restart applied but warp-svc still inactive" in alerts[0].auto_fix
+
+    def test_sudoers_blocked_message_includes_exact_entry(self):
+        """The day-one prod state. The auto_fix MUST include the
+        exact sudoers line so the operator can copy-paste the fix in
+        seconds. Pinning both the prefix marker and the canonical
+        entry shape so a refactor that drops either trips this test."""
+        with patch("subprocess.run") as mock_run, patch("time.sleep"):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(
+                    returncode=1,
+                    stderr="sudo: a password is required\n",
+                ),
+            )
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        fix = alerts[0].auto_fix
+        assert "sudoers not configured" in fix
+        assert "genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc" in fix
+
+    def test_other_failure_includes_stderr_snippet(self):
+        """A non-sudoers non-zero exit (e.g. unit-not-found, masked).
+        Must surface the truncated stderr so the operator has a
+        starting point without journalctl spelunking."""
+        with patch("subprocess.run") as mock_run, patch("time.sleep"):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(
+                    returncode=5,
+                    stderr="Failed to restart warp-svc.service: Unit warp-svc.service not loaded.\n",
+                ),
+            )
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        fix = alerts[0].auto_fix
+        assert "restart failed (rc=5)" in fix
+        assert "Unit warp-svc.service not loaded" in fix
+
+    def test_subprocess_exception_does_not_crash_check(self):
+        """subprocess.run itself raising must not break the health check
+        — we still want the warp_down alert to be emitted, just with
+        an honest 'raised' auto_fix message."""
+
+        # First call (the systemctl show) returns the inactive show
+        # mock; second call (the sudo restart) raises.
+        call_count = {"n": 0}
+        show_mock = _show_result(active_state="inactive", sub_state="dead")
+
+        def _flaky_subprocess(cmd, *_a, **_k):
+            call_count["n"] += 1
+            if cmd[0] == "systemctl" and call_count["n"] == 1:
+                return show_mock
+            raise OSError("PATH borked: sudo binary missing")
+
+        with patch("subprocess.run", side_effect=_flaky_subprocess), patch("time.sleep"):
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        assert "restart raised: OSError" in alerts[0].auto_fix
+        assert "PATH borked" in alerts[0].auto_fix
