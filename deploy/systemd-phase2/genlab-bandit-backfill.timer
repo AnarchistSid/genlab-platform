@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab Bandit Backfill Timer (Daily)
+
+[Timer]
+# 2026-06-14: closes the "75 positive rewards, 4 in bandit_arms"
+# gap surfaced during the autonomy-doc Week-3 work. The backfill
+# script existed (one-shot historical replay for the 2026-03-17
+# → 2026-05-19 outage window) but had no continuous trigger, so
+# any reward that the live metric_collector path missed sat in
+# pending_feedback indefinitely. Daily 06:00 UTC chosen so this
+# runs AFTER the daily insights-collector and BEFORE the hourly
+# metric_collector tick — keeps the bandit state monotonically
+# fresh.
+OnCalendar=*-*-* 06:00:00 UTC
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

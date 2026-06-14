@@ -1167,6 +1167,7 @@ def process_pending_task(
         # if bandit_arm is missing so legacy rows still flow.
         arm_for_update = task_record.bandit_arm or task_record.content_type
         if bandit_updater is not None and arm_for_update:
+            bandit_update_succeeded = False
             try:
                 bandit_updater(
                     task_record.niche_id,
@@ -1182,6 +1183,7 @@ def process_pending_task(
                     task_record.platform,
                     reward_48h,
                 )
+                bandit_update_succeeded = True
             except Exception as exc:
                 logger.warning(
                     "[metric_collector] bandit update failed for %s/%s: %s",
@@ -1189,6 +1191,15 @@ def process_pending_task(
                     task_record.platform_post_id,
                     exc,
                 )
+            # Stamp the row so the daily backfill timer's
+            # ``(extra->>'bandit_backfilled_at') IS NULL`` filter
+            # correctly excludes it. Without this, the live updater
+            # and the backfill script were independent — the backfill
+            # would double-update bandit_arms when it next ran with
+            # --include-post-fix. See PendingFeedbackStore.
+            # mark_bandit_processed for the contract details.
+            if bandit_update_succeeded:
+                store.mark_bandit_processed(task_record)
 
         # Update CTA bandit using click attribution (NOT engagement reward).
         # Engagement reward was the wrong signal: same shape of bug as Bug F
