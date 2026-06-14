@@ -240,22 +240,6 @@ class TestWarpAutoFix:
     introduced to close the autonomy-doc Week 1 item ("warp_down 12
     events, 0 auto-fix successes")."""
 
-    def _patched(self, restart, is_active=None):
-        """Convenience: patch subprocess.run + time.sleep so each test
-        is a one-liner without timing-related slowness."""
-        from genlab_core.monitoring import health_monitor
-
-        side_effect = _run_router(
-            _show_result(active_state="inactive", sub_state="dead"),
-            _ss_result(listening=False),
-            restart=restart,
-            is_active=is_active,
-        )
-        return patch.multiple(
-            "subprocess",
-            run=MagicMock(side_effect=side_effect),
-        ), patch("time.sleep")  # noqa: E501
-
     def test_happy_path_reports_success(self):
         """Restart returns 0, post-restart is-active confirms 'active'
         → auto_fix carries the single canonical success string."""
