@@ -170,6 +170,64 @@ class PendingFeedbackStore:
         except Exception as e:
             logger.warning("[feedback] update_window failed: %s", e)
 
+    def mark_bandit_processed(self, task: PendingFeedbackTask) -> None:
+        """Stamp the row with ``extra.bandit_backfilled_at = now`` after a
+        successful live bandit update.
+
+        Reuses the same JSONB flag the one-shot backfill script
+        (``backfill_bandit_from_pending_feedback.py``) writes — so the
+        backfill's existing ``(extra->>'bandit_backfilled_at') IS NULL``
+        filter correctly skips rows that the live path already handled.
+
+        Without this stamp, the live updater and the backfill script
+        were independent and unaware of each other. Any row the live
+        updater processed silently looked like a "zombie" (reward_48h
+        set, never replayed to bandit_arms) to the backfill script's
+        ``--include-post-fix`` mode, causing a double-update on
+        bandit_arms when the timer eventually ran. With this stamp,
+        the daily backfill timer is safe to enable — same idempotency
+        contract as the historical-replay invocation.
+
+        Best-effort: a failure to set the flag does NOT roll back the
+        live bandit_arms update (which has already happened by the
+        time we get here). The worst case is a duplicate update when
+        the backfill timer next fires — annoying but not destructive
+        (bandit alpha/beta accumulate +1 each instead of +0.5 each).
+        """
+        try:
+            record_id = task.sharepoint_id
+            if not record_id:
+                matches = self._proxy.all(
+                    formula=f"{{post_id}}='{task.platform_post_id}'",
+                    max_records=1,
+                )
+                if matches:
+                    record_id = matches[0].get("id")
+            if not record_id:
+                logger.debug(
+                    "[feedback] mark_bandit_processed: no record_id for %s",
+                    task.platform_post_id,
+                )
+                return
+            # Sending a key that isn't in PROMOTED_COLUMNS lands in the
+            # extra JSONB via Postgres's ``extra = extra || %s::jsonb``
+            # merge — which is exactly the storage shape the backfill
+            # script reads via ``extra->>'bandit_backfilled_at'``.
+            self._proxy.update(
+                record_id,
+                {"bandit_backfilled_at": datetime.now(UTC).isoformat()},
+            )
+            logger.debug(
+                "[feedback] marked %s as bandit_processed",
+                task.platform_post_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "[feedback] mark_bandit_processed failed for %s: %s",
+                task.platform_post_id,
+                exc,
+            )
+
     @staticmethod
     def _f(fields: dict, *keys: str, default: Any = "") -> Any:
         """Get a field by trying CamelCase then snake_case key variants."""

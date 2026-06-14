@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab Bandit Backfill (replay unprocessed pending_feedback rewards)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# Runs with --apply (commits) + --include-post-fix (covers rows after
+# the historical outage window). Safe to run repeatedly because each
+# processed row is stamped with extra.bandit_backfilled_at via either
+# the live path in metric_collector (added 2026-06-14) or this script
+# itself. The script's WHERE clause skips already-stamped rows, so
+# the worst case is "nothing to do" on a quiet day.
+ExecStart=/opt/genlab/.venv/bin/python \
+    -m genlab_core.scripts.backfill_bandit_from_pending_feedback \
+    --apply --include-post-fix
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
