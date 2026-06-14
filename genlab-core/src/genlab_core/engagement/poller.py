@@ -531,3 +531,51 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
     except Exception as e:
         logger.warning("[POLLER] Facebook poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 2026-06-14 PR #199 — pre-flight visibility for silently-skipped pollers
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def niche_env_prefix(niche_id: str) -> str:
+    """Map niche_id → env-var prefix (mirrors niche_credentials)."""
+    return {
+        "ai_creators": "BLACKBOXBRIEF",
+        "gaming": "CRITICALRUSH",
+        "sports": "CLUTCHWIRE",
+        "movies": "SPLICEREEL",
+        "anime": "FRAMEDRIFT",
+    }.get(niche_id, niche_id.upper())
+
+
+def assert_expected_task_count(skipped: list[tuple[str, str, str]]) -> None:
+    """Pre-flight visibility for silently-skipped pollers.
+
+    2026-06-14 engagement-loop audit found YouTube + Twitter pollers
+    silently skipping 5 of 5 niches each because the configured env
+    vars (``*_YOUTUBE_CHANNEL_ID``, ``*_X_USER_ID``) were never set. The
+    startup log said "Starting 5 poller tasks concurrently" when the
+    expected count was 15 — operator had no way to spot the 10-task gap.
+
+    This logs ONE warning per (niche × platform) pair that got
+    configured in engagement_pollers.yaml but couldn't be queued,
+    naming the specific env var to set. The poller still proceeds
+    with whatever tasks DID queue (graceful degradation).
+
+    ``skipped`` items are ``(niche_id, platform, env_var_hint)``.
+    """
+    if not skipped:
+        return
+    logger.warning(
+        "Pre-flight: %d (niche × platform) pollers SKIPPED due to missing env vars. "
+        "The startup count above will be lower than expected from the config.",
+        len(skipped),
+    )
+    for niche_id, plat, env_hint in skipped:
+        logger.warning(
+            "  SKIPPED: niche=%s platform=%s — set %s in /opt/genlab/.env to enable",
+            niche_id,
+            plat,
+            env_hint,
+        )

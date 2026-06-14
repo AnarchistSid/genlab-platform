@@ -1291,6 +1291,126 @@ def check_foreign_host_writes() -> list[Alert]:
     return alerts
 
 
+def archive_stranded_engagement_reviews(niche_id: str) -> list[Alert]:
+    """2026-06-14: Auto-archive ``pending_engagement`` rows stuck in
+    ``pending_review`` for >7 days.
+
+    The engagement-loop audit found 10 stranded ``pending_review`` items
+    in ``pending_engagement`` since 2026-05-21 (24 days). No SLA, no
+    operator alert — they just sat there. After 7 days a review item is
+    effectively stale (the original comment is old, the engagement
+    moment passed). Auto-archive + emit one Alert per archive batch so
+    the operator sees the cleanup activity in the daily health report.
+
+    Safety: only touches ``pending_engagement`` rows (which have no
+    ``scheduled_for`` field, so the cleanup_safety.md rule doesn't
+    apply). The 7-day window is conservative — same threshold the
+    Branch 1 / Branch 2a of ``archive_orphan_drafts`` use.
+    """
+    alerts: list[Alert] = []
+    try:
+        import psycopg
+
+        with psycopg.connect(os.environ.get("DATABASE_URL", "")) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE pending_engagement
+                    SET status = 'auto_archived_stranded',
+                        updated_at = NOW()
+                    WHERE niche_id = %s
+                      AND status = 'pending_review'
+                      AND created_at < NOW() - INTERVAL '7 days'
+                    RETURNING id
+                    """,
+                    (niche_id,),
+                )
+                archived = cur.fetchall()
+                conn.commit()
+        if archived:
+            alerts.append(
+                Alert(
+                    check="stranded_engagement_reviews_archived",
+                    severity="warning",
+                    message=(
+                        f"auto-archived {len(archived)} stranded pending_review "
+                        f"engagement items (>7d, no operator action)"
+                    ),
+                    niche_id=niche_id,
+                    details={"count": len(archived)},
+                    auto_fix="archived",
+                )
+            )
+    except Exception as e:
+        logger.debug("Stranded-engagement archive failed: %s", e)
+    return alerts
+
+
+def detect_dead_pollers(niche_id: str) -> list[Alert]:
+    """2026-06-14: surface pollers that have been emitting expired-token
+    alerts for >7 days.
+
+    The engagement-loop audit found Threads tokens expired around
+    2026-05-21 and the same CRITICAL token_expired alert fired ~720
+    times/day for 24 days. The poller wasn't dead per se — it kept
+    trying — but the platform was effectively unreachable. After 7 days
+    of continuous unresolved expired-token alerts for the same niche ×
+    platform, this check raises a SEPARATE escalation alert so the
+    operator sees a distinct "this has been broken for a week" signal
+    on top of the repeating "token expired" one.
+
+    Pure detection — does NOT auto-disable the poller (that would mask
+    the root cause and the operator can never see when the situation
+    recovers). The PR #198 auto-refresh is the real fix; this check is
+    the visibility layer for the days BEFORE auto-refresh has had time
+    to kick in (or for cases where the refresh itself fails).
+    """
+    alerts: list[Alert] = []
+    try:
+        import psycopg
+
+        with psycopg.connect(os.environ.get("DATABASE_URL", "")) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT details->>'platform' AS platform,
+                           MIN(created_at) AS first_seen,
+                           COUNT(*) AS occurrences
+                    FROM pipeline_alerts
+                    WHERE check_name = 'token_expired'
+                      AND niche_id = %s
+                      AND resolved_at IS NULL
+                      AND created_at < NOW() - INTERVAL '7 days'
+                    GROUP BY details->>'platform'
+                    """,
+                    (niche_id,),
+                )
+                rows = cur.fetchall()
+        for platform, first_seen, count in rows:
+            days_stuck = (datetime.now(UTC) - first_seen).days
+            alerts.append(
+                Alert(
+                    check="dead_poller",
+                    severity="critical",
+                    message=(
+                        f"{platform} poller for {niche_id} has been emitting "
+                        f"token_expired for {days_stuck} days ({count} unresolved "
+                        f"alerts). Auto-refresh (PR #198) should be checking daily; "
+                        f"if it's enabled and still failing, refresh manually."
+                    ),
+                    niche_id=niche_id,
+                    details={
+                        "platform": platform,
+                        "days_stuck": days_stuck,
+                        "unresolved_token_alerts": count,
+                    },
+                )
+            )
+    except Exception as e:
+        logger.debug("Dead-poller check failed: %s", e)
+    return alerts
+
+
 def run_all_checks(niche_id: str | None = None) -> list[Alert]:
     """Run all health checks. If niche_id is None, checks all niches."""
     all_alerts: list[Alert] = []
@@ -1310,6 +1430,9 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_publish_failures(nid))
         all_alerts.extend(archive_orphan_drafts(nid))
         all_alerts.extend(archive_orphan_intake_stories(nid))
+        # 2026-06-14 engagement-loop audit follow-ups (PR #199):
+        all_alerts.extend(archive_stranded_engagement_reviews(nid))
+        all_alerts.extend(detect_dead_pollers(nid))
 
     # System-wide checks (only on full runs)
     if niche_id is None:
