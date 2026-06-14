@@ -608,6 +608,35 @@ class TestSelectBestNetwork:
 class TestAffiliateMatchExecute:
     """Test the full pipeline stage execute() method."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_daily_cap_count(self, monkeypatch):
+        """Pin the daily-cap pre-count to 0 so each test starts with a
+        full ``max_affiliate_posts_per_day`` budget.
+
+        Without this, ``AffiliateMatch.execute`` calls
+        ``_count_today_affiliate_blueprints`` which reads
+        ``DATABASE_URL`` from os.environ and runs a real SQL query.
+        The genlab-core conftest pops DATABASE_URL but
+        ``genlab_core.settings`` can re-populate it via ``load_dotenv``
+        when re-imported during test discovery — and anything in the
+        suite that triggers a fresh settings import between conftest
+        and this test will restore the prod-pointed DSN from the
+        dev's ``.env``. The result was that on local machines with
+        a populated ``.env``, this test queried prod's ``blueprints``
+        table mid-test, got back the day's real affiliate count
+        (e.g. 3 for gaming), hit the catalog's max_per_day=2 cap,
+        and silently dropped the test story. The failure was
+        order-dependent — passed in isolation, failed in the full
+        suite once collection order shifted.
+
+        Mocking the function explicitly removes the env-state
+        dependency. Applies via autouse to every test in this class
+        that calls ``stage.execute(...)``."""
+        monkeypatch.setattr(
+            "genlab_core.monetization.affiliate_matcher._count_today_affiliate_blueprints",
+            lambda _niche_id: 0,
+        )
+
     def _mock_catalog(self) -> dict:
         return {
             "niches": {
