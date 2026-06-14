@@ -144,11 +144,26 @@ PYEOF
 
 echo "Verification complete. Log: $LOG"
 
-# ── LaunchAgent schedule verification ──────────────────────
+# ── LaunchAgent schedule verification (macOS only) ─────────
+# ``verify_launchd_schedules.sh`` checks for macOS launchd plists by
+# expected hh:mm in IST. Prod runs Linux/systemd — every plist is
+# "MISSING" there, every run prints "14 schedule(s) need fixing!"
+# and exits non-zero, which marks the systemd ``genlab-daily-verify
+# .service`` as failed and fires a daily ``service_down`` critical
+# alert.
+#
+# Skip the check entirely on non-Darwin hosts. The systemd timer
+# inventory + the universal ``test_systemd_module_drift.py`` already
+# enforce the prod-side scheduling contract; the launchd check is
+# for dev-machine sanity only.
 echo ""
-echo "=== LaunchAgent Schedule Check ==="
-if bash "$GENLAB/scripts/verify_launchd_schedules.sh" 2>/dev/null; then
-    echo "  ✓ All schedules correct"
+echo "=== Schedule Check ==="
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    if bash "$GENLAB/scripts/verify_launchd_schedules.sh" 2>/dev/null; then
+        echo "  ✓ All launchd schedules correct"
+    else
+        echo "  ⚠ Schedule mismatch detected — check verify_launchd_schedules.sh output"
+    fi
 else
-    echo "  ⚠ Schedule mismatch detected — check verify_launchd_schedules.sh output"
+    echo "  ✓ skipped — non-Darwin host uses systemd (launchd check is macOS-only)"
 fi
