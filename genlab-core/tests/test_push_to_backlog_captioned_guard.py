@@ -19,11 +19,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from genlab_core.pipeline.stages.push_to_backlog import (
     _strip_captioned_when_whisper_disabled,
 )
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # whisper DISABLED in config — guard fires
