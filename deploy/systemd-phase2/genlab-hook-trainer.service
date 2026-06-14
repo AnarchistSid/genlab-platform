@@ -10,5 +10,13 @@ WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
+# 2026-06-14 (PR #200): the models dir was root-owned (seeded as root
+# during initial deploy). Every weekly training since 2026-05-21 failed
+# with "Permission denied" when xgboost tried to write the .json model
+# file as User=genlab. Leading `+` in ExecStartPre runs as root with
+# full privileges; the main ExecStart still runs as User=genlab.
+# Idempotent — chown is a no-op when ownership already matches.
+ExecStartPre=+/bin/mkdir -p /opt/genlab/genlab-core/models
+ExecStartPre=+/bin/chown -R genlab:genlab /opt/genlab/genlab-core/models
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scripts.train_hook_classifier
 TimeoutSec=300

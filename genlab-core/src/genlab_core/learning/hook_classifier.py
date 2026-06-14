@@ -258,4 +258,56 @@ def train_and_save(
 
     except Exception as exc:
         logger.error("[hook_clf] Training failed: %s", exc)
+        # 2026-06-14 (PR #200): emit a pipeline_alerts row so the
+        # operator sees the failure on Mission Control instead of
+        # having to grep journalctl. The 2026-05-21 → 2026-06-14
+        # outage stayed silent for 24 days at ERROR log level alone.
+        _emit_training_failure_alert(niche_id, str(exc))
         return False
+
+
+def _emit_training_failure_alert(niche_id: str, error: str) -> None:
+    """Best-effort pipeline_alerts insert. Never raises. Mirrors the
+    fail-open shape of engagement.token_health.emit_token_expiry_alert."""
+    try:
+        import json
+        import os
+
+        import psycopg
+
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            return
+        message = (
+            f"Hook classifier training failed for {niche_id}: {error[:200]}. "
+            "Inspect /opt/genlab/.logs/hook_trainer.log for the full trace; "
+            "if Permission denied, run `chown -R genlab:genlab "
+            "/opt/genlab/genlab-core/models` (PR #200's ExecStartPre handles "
+            "this automatically going forward)."
+        )
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                # Dedup against any open alert for the same niche.
+                cur.execute(
+                    "SELECT id FROM pipeline_alerts "
+                    "WHERE check_name = %s AND niche_id = %s AND resolved_at IS NULL",
+                    ("hook_training_failed", niche_id),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    "INSERT INTO pipeline_alerts "
+                    "(niche_id, check_name, severity, message, details) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (
+                        niche_id,
+                        "hook_training_failed",
+                        "warning",
+                        message,
+                        json.dumps({"error": error[:500]}),
+                    ),
+                )
+                conn.commit()
+    except Exception:
+        # Alert emission must never re-raise into the training caller.
+        pass
