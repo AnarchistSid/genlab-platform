@@ -71,6 +71,51 @@ def _is_placeholder(url: str) -> bool:
     return not url or "example.com" in url or "${" in url
 
 
+def _try_earnkaro_transform(base_url: str, *, product_name: str = "") -> tuple[str, str]:
+    """Try transforming an Amazon URL → EarnKaro short link.
+
+    Returns (ekaro_url, "earnkaro") on success, ("", "") on any failure.
+    The earnkaro_client.convert_url helper already encapsulates
+    credential check + HTTP + cache + graceful fallback — this wrapper
+    just adds the matcher-side logging + the (url, network) return shape
+    geo_link_resolver expects.
+
+    Separated as a module-level function so tests can patch it cleanly
+    without touching the earnkaro_client module directly.
+    """
+    import os
+
+    # Cheap pre-check: skip the call entirely when the key isn't set.
+    # earnkaro_client.convert_url would also return "" but we avoid the
+    # import + cache-key hash overhead in the (current) common case
+    # where no operator has configured EarnKaro yet.
+    if not os.environ.get("EARNKARO_CONVERT_KEY", "").strip():
+        return ("", "")
+
+    try:
+        from genlab_core.monetization.earnkaro_client import convert_url
+
+        ekaro_url = convert_url(base_url)
+    except Exception as exc:
+        # Be paranoid here: never let a transformer error block the
+        # original Amazon URL from publishing. Log + skip.
+        logger.warning(
+            "[GeoResolver] EarnKaro transform raised for %s: %s",
+            product_name,
+            exc,
+        )
+        return ("", "")
+
+    if ekaro_url:
+        logger.info(
+            "[GeoResolver] EarnKaro-transformed Amazon URL for %s -> %s",
+            product_name,
+            ekaro_url[:80],
+        )
+        return (ekaro_url, "earnkaro")
+    return ("", "")
+
+
 def resolve_affiliate_link(
     product: dict,
     niche_id: str,
@@ -164,6 +209,30 @@ def resolve_affiliate_link_with_network(
             product.get("name", "?"),
         )
         return ("", "")
+
+    # ── EarnKaro auto-transformation (2026-06-13) ─────────────────────────
+    # When the base URL is an Amazon link AND we're targeting an IN-geo
+    # niche AND EARNKARO_CONVERT_KEY is set, route the click through
+    # EarnKaro to capture their (higher) commission tier instead of /
+    # in addition to the direct Amazon Associates tag.
+    #
+    # EarnKaro acts as a pure URL transformer for Amazon: POST the
+    # Amazon URL to ekaro.in/api/converter/public, get back an ekaro.in
+    # short link, use that as the published URL. Transform failure
+    # (key missing, API error, unrecognized response) is silent — we
+    # fall back to the original Amazon URL with the amazon network tag.
+    #
+    # This closes the half-wired-stub gap from #34a/b: EarnKaro's
+    # adapter shipped working code, but the matcher never had a code
+    # path that CALLED it. Now it does, for every Indian-audience
+    # affiliate URL the matcher picks.
+    if geo == "IN" and network in ("amazon", "amazon_in") and base_url:
+        transformed_url, transformed_network = _try_earnkaro_transform(
+            base_url, product_name=product.get("name", "?")
+        )
+        if transformed_url:
+            base_url = transformed_url
+            network = transformed_network
 
     # Add UTM tracking parameters
     utm_params = {
