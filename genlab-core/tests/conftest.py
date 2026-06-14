@@ -20,6 +20,23 @@ os.environ.pop("GENLAB_USE_POSTGRES", None)
 # is re-loaded during test discovery.
 os.environ["GENLAB_USE_POSTGRES"] = ""
 
+# ── Affiliate-network test tags ─────────────────────────────────────
+# ``genlab_core.monetization.network_registry`` builds a singleton
+# ``ADAPTERS`` dict at module import — each adapter captures its
+# tag/publisher-id env var via ``field(default_factory=...)`` AT
+# INSTANTIATION. So the env vars MUST be set before any test imports
+# the module, not just before ``test_network_registry.py`` itself
+# runs. The previous arrangement (env vars set at the top of
+# ``test_network_registry.py``) raced with other test files that
+# imported the registry first during collection (e.g.
+# ``test_affiliate_matcher.py``, ``test_geo_resolver_*.py``), leaving
+# the singletons with empty tags and breaking the assertions. Setting
+# them here in conftest — which Python imports before any test file —
+# closes the race deterministically.
+os.environ.setdefault("AMAZON_US_AFFILIATE_TAG", "test-tag-20")
+os.environ.setdefault("AMAZON_IN_AFFILIATE_TAG", "test-tag-21")
+os.environ.setdefault("CUELINKS_PUBLISHER_ID", "000000")
+
 
 # ── Detoxify/PyTorch segfault workaround (R-64) ──────────────────────
 # PyTorch + Detoxify model loading in a threaded pytest context segfaults

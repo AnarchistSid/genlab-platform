@@ -1,11 +1,11 @@
-"""Tests for the affiliate network adapter registry."""
+"""Tests for the affiliate network adapter registry.
 
-import os
-
-# Set test affiliate tags before importing adapters (they read env at instantiation)
-os.environ["AMAZON_US_AFFILIATE_TAG"] = "test-tag-20"
-os.environ["AMAZON_IN_AFFILIATE_TAG"] = "test-tag-21"
-os.environ["CUELINKS_PUBLISHER_ID"] = "000000"
+The test affiliate-tag env vars (``AMAZON_US_AFFILIATE_TAG``,
+``AMAZON_IN_AFFILIATE_TAG``, ``CUELINKS_PUBLISHER_ID``) are set in
+``genlab-core/tests/conftest.py`` so they're populated before any
+test file imports the registry — see the conftest comment for why
+per-file setup races during collection.
+"""
 
 from genlab_core.monetization.network_registry import (
     ADAPTERS,
