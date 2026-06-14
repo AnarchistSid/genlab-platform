@@ -713,6 +713,17 @@ def list_blueprints():
     page_data, meta = _paginate(records, page, per_page)
     # Batch-prefetch story thumbnails for only the current page (not all records)
     _prefetch_story_thumbnails(page_data)
+    # 2026-06-15: tag historically-overscheduled blueprints. The
+    # scheduler fix prevents new packing-beyond-cap, but existing
+    # ``scheduled_for`` values (e.g. FrameDrift's 4-posts-on-Jun-15
+    # from before the fix) still need visible warnings so the operator
+    # knows which posts the publisher will silently skip at run-time.
+    try:
+        from server.core.publishing_queue import mark_cap_violations
+
+        mark_cap_violations(page_data)
+    except Exception as exc:  # never break the listing on a tagging failure
+        logger.warning("mark_cap_violations failed: %s", exc)
     return api_success(
         data={
             "data": [_transform_media({"id": r["id"], **r.get("fields", {})}) for r in page_data],

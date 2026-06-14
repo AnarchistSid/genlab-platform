@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Check, X, Calendar, Heart, MessageCircle, Play } from "lucide-react";
+import { Check, X, Calendar, Heart, MessageCircle, Play, AlertTriangle } from "lucide-react";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { PlatformIcon } from "@/components/shared/PlatformIcon";
 import { Button } from "@/components/ui/button";
@@ -302,21 +302,42 @@ export function ContentCard({
 
       {/* ── Scheduled indicator ── */}
       {isScheduled && bp.scheduled_for && (
-        <div className="flex items-center gap-2 border-t border-border-subtle pt-2 text-xs text-text-muted">
-          <Calendar className="size-3 text-indigo-400" />
-          <span>
-            Scheduled for{" "}
-            <span className="font-medium text-text-primary">
-              {new Date(bp.scheduled_for).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              })}
+        <div className="flex flex-col gap-1 border-t border-border-subtle pt-2 text-xs">
+          <div className="flex items-center gap-2 text-text-muted">
+            <Calendar className="size-3 text-indigo-400" />
+            <span>
+              Scheduled for{" "}
+              <span className="font-medium text-text-primary">
+                {new Date(bp.scheduled_for).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
             </span>
-          </span>
-          <Check className="size-3 text-green-400 ml-auto" />
-          <span className="text-green-400">Approved</span>
+            <Check className="size-3 text-green-400 ml-auto" />
+            <span className="text-green-400">Approved</span>
+          </div>
+          {/* 2026-06-15: cap_violation flag set server-side when this
+              post shares its (niche, date) bucket with an earlier
+              scheduled one. The publisher's DailyCapEnforcer will
+              silently skip THIS post with `daily cap reached`. Without
+              the warning the operator only finds out when tomorrow's
+              analytics show 1 publish instead of 4. */}
+          {bp.cap_violation && (
+            <div
+              className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-amber-200"
+              role="alert"
+              title="Daily cap reached for this niche — will be skipped at publish-time"
+            >
+              <AlertTriangle className="size-3 mt-0.5 shrink-0" />
+              <span className="text-[11px] leading-tight">
+                Daily cap reached — publisher will skip this post.
+                Re-schedule to a different day or enable multi_publish.
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

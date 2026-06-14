@@ -27,6 +27,17 @@ export interface Blueprint {
   story_id?: string;
   niche_id?: string;
   scheduled_for?: string | null;
+  /**
+   * Set true by `mark_cap_violations` (server-side, dashboard/server/core/
+   * publishing_queue.py) when this blueprint shares a (niche, date)
+   * bucket with another scheduled post that the publisher's
+   * `DailyCapEnforcer` will pick first. The 2nd, 3rd, ... post in such
+   * a bucket will silently skip at publish-time with
+   * `[daily_cap] daily cap reached`. The earliest in the bucket has
+   * this field absent/false. UI renders a warning badge so the
+   * operator can re-schedule or accept the silent skip.
+   */
+  cap_violation?: boolean;
   visual_paths?: string | null;
   landscape_video_url?: string | null;
   video_duration?: number | null;
