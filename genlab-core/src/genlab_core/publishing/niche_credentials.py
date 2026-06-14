@@ -94,7 +94,7 @@ def resolve_fb_credentials(niche_id: str) -> tuple:
 # 2026-06-14: per-niche Threads tokens can also live in a JSON cache
 # file populated by the auto-refresh script. The cache takes priority
 # over .env so operator-provisioned tokens stay valid even after the
-# 60-day Threads LLUT expiry — see ``scripts/refresh_threads_tokens.py``.
+# 60-day Threads LLUT expiry — see ``genlab_core.scripts.refresh_threads_tokens``.
 _THREADS_TOKEN_CACHE_PATH = "/opt/genlab/.threads_tokens.json"
 
 

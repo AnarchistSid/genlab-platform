@@ -209,9 +209,9 @@ def reset_throttle() -> None:
 # replies posted.
 #
 # This module's refresh function is called by
-# ``scripts/refresh_threads_tokens.py`` on a daily systemd timer. The
-# script handles per-niche dispatch, persistence to the JSON cache file,
-# and operator alerting on failure.
+# ``genlab_core.scripts.refresh_threads_tokens`` on a daily systemd
+# timer. The script handles per-niche dispatch, persistence to the
+# JSON cache file, and operator alerting on failure.
 
 _THREADS_REFRESH_URL = "https://graph.threads.net/refresh_access_token"
 
