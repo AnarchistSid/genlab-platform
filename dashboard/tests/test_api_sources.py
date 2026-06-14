@@ -72,8 +72,20 @@ class TestHealthClassifier:
 
 
 class TestInputValidation:
-    def test_default_days(self, client):
-        """No params → default 14 days, queries DB."""
+    def test_default_days(self, client, monkeypatch):
+        """No params → default 14 days, queries DB.
+
+        Must set DATABASE_URL explicitly via monkeypatch — the
+        endpoint short-circuits to 503 when the env var is empty,
+        BEFORE psycopg.connect is invoked, so mocking psycopg alone
+        is insufficient. Matches the setup used by other tests in
+        this class (test_returns_zero_when_no_data,
+        test_rejects_invalid_niche_id). Locally this test passes
+        accidentally because settings.py load_dotenv populates
+        DATABASE_URL from .env; CI doesn't have a .env so the test
+        sees the env-var pop from dashboard/tests/conftest.py and
+        the endpoint returns 503."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake")
         with patch("psycopg.connect") as mock_connect:
             mock_conn = MagicMock()
             mock_cur = MagicMock()
