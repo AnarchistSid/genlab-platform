@@ -203,6 +203,25 @@ class ScheduleGuardedProxy:
         if not scheduled_for:
             return
 
+        # 2026-06-14: operator-intent reject (status→ARCHIVED + clearing
+        # scheduled_for in the SAME update) is an explicit atomic
+        # "unschedule and archive" action. Distinct from partial-write
+        # cases (only one of the two) which remain blocked. Without this
+        # bypass, every reject from the dashboard fails because the
+        # pipeline pre-sets ``scheduled_for`` at PushToBacklog time on
+        # EVERY new VISUAL_READY blueprint (PR #191 pre-set hint
+        # pattern) — so VISUAL_READY blueprints all look "scheduled"
+        # to the guard even before the operator commits to a slot.
+        archiving = fields.get("status") == "ARCHIVED"
+        clearing_schedule = "scheduled_for" in fields and self._is_empty(fields["scheduled_for"])
+        if archiving and clearing_schedule:
+            logger.info(
+                "[schedule-guard] operator-intent reject (status→ARCHIVED + "
+                "scheduled_for cleared in same update) for rec=%s; allowing",
+                record_id,
+            )
+            return
+
         new_status = fields.get("status")
         if new_status:
             old_status = rec_fields.get("status", "")
@@ -210,7 +229,8 @@ class ScheduleGuardedProxy:
                 raise ScheduledPostProtectionError(
                     f"Cannot move scheduled blueprint rec={record_id} "
                     f"from {old_status} → {new_status} — would discard its queued "
-                    f"slot (scheduled_for={scheduled_for})."
+                    f"slot (scheduled_for={scheduled_for}). To reject + unschedule "
+                    f"atomically, set scheduled_for=None in the same update."
                 )
 
         if "visual_paths" in fields and self._is_empty(fields["visual_paths"]):

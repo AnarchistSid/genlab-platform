@@ -906,6 +906,14 @@ def _execute_review_action(
         update_fields["status"] = "ARCHIVED"
         update_fields["feedback_issue"] = feedback_issue or "rejected_in_review"
         update_fields["feedback_notes"] = feedback_notes or notes
+        # 2026-06-14: clear scheduled_for in the SAME atomic write. This is
+        # the operator-intent reject signal the schedule guard recognizes
+        # — without both writes together, the guard refused the archive
+        # because PushToBacklog pre-sets scheduled_for on EVERY new
+        # VISUAL_READY blueprint (PR #191 pre-set hint), so the guard
+        # treated unapproved blueprints as "scheduled" and blocked every
+        # rejection. See backlog_client._guard_update for the bypass.
+        update_fields["scheduled_for"] = None
     elif action == "revised":
         update_fields["feedback_issue"] = feedback_issue or "needs_revision"
         update_fields["feedback_notes"] = feedback_notes or notes
