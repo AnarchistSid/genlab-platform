@@ -47,6 +47,41 @@ def test_min_ratio_unchanged_at_1_5():
     assert preference_collector.MIN_RATIO == 1.5
 
 
+def test_default_window_widened_to_21_days():
+    """The 2026-06-14 probe found that the original 7-day default
+    produced zero eligible groups across the entire prod data set
+    (only gaming-IG ever clears the ≥4-row pair threshold, and even
+    it needs ~24-30 days at current 1-reel-per-day cadence).
+
+    21 days is the smallest window that finds at least one eligible
+    group. Lower values re-block every niche; higher values are
+    fine but pull in older + less-relevant data without delivering
+    more signal (duplicate pairs are filtered via the dedup SELECT
+    inside the loop).
+
+    If a future PR raises channel reach 5× and wants to drop this
+    back to 14 or 7, the test fails so the decision surfaces in
+    review."""
+    assert preference_collector.DEFAULT_WINDOW_DAYS == 21
+
+
+def test_default_window_used_when_no_arg_passed():
+    """Default arg of ``collect_weekly_pairs`` must reference the
+    module-level constant — not a hardcoded 7 — so the constant is
+    the single source of truth. A future PR that tweaks the constant
+    must take effect on the no-arg call site (which is how the
+    systemd unit invokes it)."""
+    import inspect
+
+    sig = inspect.signature(preference_collector.collect_weekly_pairs)
+    default = sig.parameters["window_days"].default
+    assert default == preference_collector.DEFAULT_WINDOW_DAYS, (
+        "collect_weekly_pairs's window_days default drifted from the "
+        "module constant. Either bump DEFAULT_WINDOW_DAYS or align "
+        "the signature default — they MUST move together."
+    )
+
+
 @pytest.fixture
 def mock_db(monkeypatch):
     """Patch psycopg.connect with a configurable mock so we can drive
