@@ -131,3 +131,99 @@ class TestBootstrapNiche:
 
         assert stats == {"queried": 0, "indexed": 0, "skipped": 0}
         paapi.search.assert_not_called()
+
+
+class TestMainAvailabilityCheck:
+    """Regression pins for the 2026-06-14 ``available()`` bug.
+
+    EmbeddingMatcher exposes ``available`` as a ``@property``; the
+    bootstrap script's ``main()`` previously called it as
+    ``matcher.available()`` which would raise ``TypeError: 'bool' object
+    is not callable`` on any non-dry-run invocation. The bug escaped
+    because the only pre-existing tests mocked the matcher with
+    ``MagicMock()`` — and a MagicMock's ``.available()`` returns another
+    Mock (truthy) rather than tripping the type error.
+
+    These pins call ``main()`` directly with a stubbed
+    ``EmbeddingMatcher`` whose ``available`` is a real bool, so a
+    regression to ``matcher.available()`` would crash deterministically.
+    """
+
+    def _stubs(self, available: bool):
+        """Build matcher/paapi class stubs matching the lazy-imported
+        types. ``available`` is a real bool attribute (NOT a method) so
+        a regression to ``matcher.available()`` would TypeError."""
+
+        class StubPaapi:
+            is_configured = True
+
+            def search(self, **_kw):
+                return []  # no products → no index calls → fast test
+
+        class StubMatcher:
+            def __init__(self):
+                self.available = available  # property-equivalent — real bool
+
+            def index_product(self, **_kw):
+                return True
+
+        return StubMatcher, StubPaapi
+
+    def test_main_with_unavailable_matcher_exits_3_without_type_error(self, monkeypatch):
+        """The unavailable path must return exit 3 cleanly. Pre-fix, this
+        raised TypeError on the `matcher.available()` call before getting
+        a chance to return 3."""
+        from genlab_core.scripts import bootstrap_product_embeddings as boot
+
+        StubMatcher, StubPaapi = self._stubs(available=False)
+        # ``main()`` does ``from genlab_core.monetization.{embedding_matcher,
+        # paapi_client} import {EmbeddingMatcher, PaapiClient}`` lazily.
+        # Patch the source modules' classes so the lazy import resolves
+        # to our stub.
+        monkeypatch.setattr(
+            "genlab_core.monetization.embedding_matcher.EmbeddingMatcher",
+            StubMatcher,
+        )
+        monkeypatch.setattr(
+            "genlab_core.monetization.paapi_client.PaapiClient",
+            StubPaapi,
+        )
+        # Argparse pulls from sys.argv; isolate from the test runner.
+        monkeypatch.setattr("sys.argv", ["bootstrap_product_embeddings"])
+
+        rc = boot.main()
+
+        assert rc == 3, (
+            "unavailable matcher must return exit 3; if this asserts "
+            "with a TypeError trace, the `matcher.available()` regression "
+            "is back"
+        )
+
+    def test_main_with_available_matcher_proceeds_past_the_gate(self, monkeypatch):
+        """The available path must NOT short-circuit at the availability
+        check. Pre-fix, even an available matcher tripped TypeError
+        because the parens were the problem, not the bool value."""
+        from genlab_core.scripts import bootstrap_product_embeddings as boot
+
+        StubMatcher, StubPaapi = self._stubs(available=True)
+        monkeypatch.setattr(
+            "genlab_core.monetization.embedding_matcher.EmbeddingMatcher",
+            StubMatcher,
+        )
+        monkeypatch.setattr(
+            "genlab_core.monetization.paapi_client.PaapiClient",
+            StubPaapi,
+        )
+        monkeypatch.setattr(
+            "sys.argv",
+            ["bootstrap_product_embeddings", "--niche", "gaming"],
+        )
+        # The script sleeps 1.1s between PA-API calls to be polite;
+        # skip the sleep in tests.
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+
+        rc = boot.main()
+
+        # Exit 0: search returned no products so nothing was indexed,
+        # but the run completed cleanly without TypeError.
+        assert rc == 0
