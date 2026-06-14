@@ -1040,6 +1040,88 @@ def check_services() -> list[Alert]:
     return alerts
 
 
+def _attempt_warp_restart() -> str:
+    """Try ``sudo -n systemctl restart warp-svc`` and report the truthful
+    outcome as a short string suitable for the Alert.auto_fix field.
+
+    Returns one of:
+
+      * ``"restarted warp-svc, daemon now active"`` — restart succeeded
+        AND the post-restart ``systemctl is-active`` check confirms the
+        unit is running. This is the only "happy path" string.
+
+      * ``"restart applied but warp-svc still inactive after 3s"`` —
+        the restart command succeeded (rc=0) but the unit didn't come
+        back up. Suggests a startup misconfiguration; operator should
+        check ``journalctl -u warp-svc``.
+
+      * ``"sudoers not configured — add: genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc"`` —
+        ``sudo -n`` returned the canonical "a password is required"
+        marker. This is the single most likely failure on day one and
+        gives the operator the exact line to add to ``/etc/sudoers.d/``.
+
+      * ``"restart failed (rc=N): <stderr-snippet>"`` — fallback for
+        any other non-zero exit (e.g. unit-not-found, daemon-reload
+        needed). Includes a trimmed stderr so the operator has a
+        starting point without digging into the journal.
+
+      * ``"restart raised: <exception>"`` — subprocess itself failed
+        (PATH issue, permission denied at the OS level, etc.). Bubbles
+        the exception class + message instead of swallowing.
+
+    Always returns a non-empty string — the Alert.auto_fix field must
+    be informative even when nothing improved.
+    """
+    import time
+
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", "systemctl", "restart", "warp-svc"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception as exc:
+        return f"restart raised: {type(exc).__name__}: {exc}"
+
+    if result.returncode != 0:
+        stderr_lc = (result.stderr or "").lower()
+        # sudo -n emits one of these markers when NOPASSWD isn't set;
+        # both shapes are documented in sudo(8) and appear depending
+        # on distro / sudo version.
+        if "password is required" in stderr_lc or "a terminal is required" in stderr_lc:
+            return (
+                "sudoers not configured — add: "
+                "genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc"
+            )
+        # Trim stderr to one line + cap at 120 chars so the alert
+        # row stays scannable.
+        stderr_snippet = (result.stderr or "").strip().splitlines()[:1]
+        snippet = stderr_snippet[0][:120] if stderr_snippet else "no stderr"
+        return f"restart failed (rc={result.returncode}): {snippet}"
+
+    # Restart command succeeded — give warp-svc a moment to come up,
+    # then verify. 3s is empirically enough for the daemon's normal
+    # init sequence on prod (Cloudflare's startup is sub-second
+    # typically; the buffer protects against systemd's own latency).
+    time.sleep(3)
+    try:
+        verify = subprocess.run(
+            ["systemctl", "is-active", "warp-svc"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception as exc:
+        # Restart said it worked; verification raised. Report that
+        # honestly rather than claim victory.
+        return f"restart applied, verification raised: {type(exc).__name__}: {exc}"
+
+    if verify.returncode == 0 and verify.stdout.strip() == "active":
+        return "restarted warp-svc, daemon now active"
+    return "restart applied but warp-svc still inactive after 3s"
+
+
 def check_warp_health() -> list[Alert]:
     """Detect WARP SOCKS proxy outages within minutes, not days.
 
@@ -1092,6 +1174,23 @@ def check_warp_health() -> list[Alert]:
 
         active = kv.get("ActiveState") == "active"
         if not active:
+            # Attempt auto-restart via ``sudo -n systemctl restart``.
+            # ``-n`` (non-interactive) ensures we fail fast if NOPASSWD
+            # isn't configured — we don't want to hang waiting for a
+            # password prompt that has nowhere to go.
+            #
+            # health_monitor.service runs as ``User=genlab``, so the
+            # restart needs a sudoers entry. The auto_fix message
+            # documents the exact entry to add so the first-time
+            # operator action takes seconds:
+            #
+            #   genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc
+            #
+            # Until that lands, the message is still strictly better
+            # than the prior "not attempted" string — we tried, this
+            # is what blocked us, here's the exact fix.
+            fix_msg = _attempt_warp_restart()
+
             alerts.append(
                 Alert(
                     check="warp_down",
@@ -1107,7 +1206,7 @@ def check_warp_health() -> list[Alert]:
                         "active_state": kv.get("ActiveState"),
                         "sub_state": kv.get("SubState"),
                     },
-                    auto_fix="not attempted (would need warp-cli mode/port reconfig)",
+                    auto_fix=fix_msg,
                 )
             )
             # Don't bother checking port if daemon is down.
