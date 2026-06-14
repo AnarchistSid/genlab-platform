@@ -879,7 +879,7 @@ def batch_review():
                 except Exception:
                     existing_sched, niche_id = "", ""
                 if not existing_sched:
-                    slot = _next_available_slot(niche_id=niche_id)
+                    slot = _next_available_slot(niche_id=niche_id, exclude_record_id=str(rid))
                     if slot:
                         fields["scheduled_for"] = slot
             client.blueprints.update(str(rid), fields, typecast=True)
@@ -907,7 +907,7 @@ def approve_and_schedule(blueprint_id):
         # Find next available slot (reuse existing scheduling logic)
         from server.core.publishing_queue import _next_available_slot
 
-        scheduled_for = _next_available_slot(niche_id=niche_id)
+        scheduled_for = _next_available_slot(niche_id=niche_id, exclude_record_id=blueprint_id)
 
         update_fields = {
             "action_taken": "approved",
@@ -953,7 +953,7 @@ def batch_approve_schedule():
                 continue
             fields = record.get("fields", {})
             niche_id = (fields.get("niche_id") or "").strip()
-            scheduled_for = _next_available_slot(niche_id=niche_id)
+            scheduled_for = _next_available_slot(niche_id=niche_id, exclude_record_id=str(bp_id))
 
             update_fields = {
                 "action_taken": "approved",

@@ -884,7 +884,7 @@ def _execute_review_action(
             niche_id = (bp_data.get("fields", {}).get("niche_id") or "").strip()
         except Exception:
             pass
-        next_slot = _next_available_slot(niche_id=niche_id)
+        next_slot = _next_available_slot(niche_id=niche_id, exclude_record_id=record_id)
         if next_slot:
             update_fields["scheduled_for"] = next_slot
             logger.info(
@@ -1072,7 +1072,7 @@ def batch_review():
                         niche_id = (bp_data.get("fields", {}).get("niche_id") or "").strip()
                     except Exception:
                         pass
-                    next_slot = _next_available_slot(niche_id=niche_id)
+                    next_slot = _next_available_slot(niche_id=niche_id, exclude_record_id=record_id)
                     if next_slot:
                         update_fields["scheduled_for"] = next_slot
                         logger.info(
