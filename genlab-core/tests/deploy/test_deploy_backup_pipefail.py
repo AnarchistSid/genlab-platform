@@ -196,7 +196,9 @@ echo "-- stub dump"
     env = {
         # Deliberately strip DATABASE_URL — the script must find it
         # in the .env file.
-        k: v for k, v in os.environ.items() if k != "DATABASE_URL"
+        k: v
+        for k, v in os.environ.items()
+        if k != "DATABASE_URL"
     }
     env["PATH"] = f"{stub_dir}:{env['PATH']}"
 
