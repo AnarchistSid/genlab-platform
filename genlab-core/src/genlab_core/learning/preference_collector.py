@@ -50,8 +50,23 @@ MIN_VIEWS = 10
 # below 1.5× the comparison is dominated by chance.
 MIN_RATIO = 1.5
 
+# Default lookback window. The original 7d matched the Sunday weekly
+# timer cadence — "look at the last week each run." But at current
+# channel reach + 1-reel-per-day publish rate, no single (niche ×
+# platform) group accumulates the ≥4 rows needed for pair formation
+# in 7 days; per the 2026-06-14 probe, only gaming-IG ever clears
+# the bar and even it needs 24-30 days at current pace.
+#
+# 21 days (= 3 weeks) is the smallest window that finds at least one
+# eligible group in current prod data. Duplicate pairs are filtered
+# via the ``preference_data`` existence check inside the loop, so
+# widening the window doesn't re-insert work the prior run did.
+# Once channels grow past ~5x current reach, this can drop back to
+# 7 or 14 without losing signal.
+DEFAULT_WINDOW_DAYS = 21
 
-def collect_weekly_pairs(window_days: int = 7) -> int:
+
+def collect_weekly_pairs(window_days: int = DEFAULT_WINDOW_DAYS) -> int:
     """Generate chosen/rejected pairs from recent engagement data.
 
     Returns the number of pairs created. Emits a structured diagnostic
