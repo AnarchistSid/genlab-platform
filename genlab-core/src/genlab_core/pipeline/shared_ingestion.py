@@ -129,7 +129,26 @@ class _DomainRateLimiter:
 
 
 class _FeedHealthTracker:
-    """Track consecutive failures per feed. Auto-disable after 5 failures (24h cooldown)."""
+    """Track per-feed health: consecutive failures (URL-keyed, 5-strike disable)
+    and sustained 0%-claim-rate (name-keyed, 14-day rolling check).
+
+    Two failure modes, two disable criteria:
+
+    1. **Fetch failures** — the feed itself errors (HTTP 500, parse error,
+       timeout). Tracked by URL. After 5 consecutive failures, disable for
+       24h. Original mechanism — see ``record_failure``.
+
+    2. **Zero-claim-rate** (2026-06-14) — the feed fetches successfully
+       but its entries are never claimed by downstream pipelines. The
+       2026-06-14 audit found 119 sources with 0% claim rate over 14
+       days (5,769 wasted fetches; ~574/day). Pattern: text-only RSS +
+       Reddit listings are incompatible with the video-first principle.
+       Tracked by source_name (matches the ``content_pool.source_name``
+       column populated by the rss/reddit fetchers). Refreshed once per
+       pipeline run from a SQL query, not per-feed. Self-managing: a
+       source comes back if it later produces claimed content (re-check
+       on next refresh).
+    """
 
     _HEALTH_PATH = (
         Path(__file__).resolve().parent.parent.parent.parent / ".tmp" / "cache" / "feed_health.json"
@@ -137,6 +156,10 @@ class _FeedHealthTracker:
 
     def __init__(self) -> None:
         self._health: dict[str, dict] = {}
+        # Per-source-name claim-rate disable set. Populated at pipeline
+        # startup via refresh_zero_claim_disables(); read per fetch via
+        # is_disabled_by_claim_rate(). Empty set = no claim-rate gate.
+        self._zero_claim_names: set[str] = set()
         self._load()
 
     def _load(self) -> None:
@@ -184,6 +207,74 @@ class _FeedHealthTracker:
                 entry["consecutive_failures"],
             )
         self._health[url] = entry
+
+    def refresh_zero_claim_disables(
+        self,
+        db_url: str,
+        *,
+        days: int = 14,
+        min_fetched: int = 10,
+    ) -> int:
+        """Query content_pool for sources with 0%-claim rate over N days.
+        Populate the per-source-name disable set. Returns the count of
+        sources currently flagged (NOT just newly-flagged).
+
+        Safe to call on every pipeline run — the set is fully rebuilt,
+        so a source that starts producing claimed entries comes back
+        automatically on the next refresh.
+
+        ``min_fetched`` guards against false positives from low-sample
+        sources (a 0/3 ratio could just be unlucky; 0/10+ is signal).
+
+        Fail-open: any DB error logs a debug message and leaves the
+        previous disable set in place — we never block ingestion on
+        a claim-rate-cache lookup.
+        """
+        if not db_url:
+            return len(self._zero_claim_names)
+        try:
+            import psycopg
+
+            with psycopg.connect(db_url) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT source_name
+                        FROM content_pool
+                        WHERE fetched_at > now() - make_interval(days => %s)
+                          AND source_name IS NOT NULL
+                          AND source_name != ''
+                        GROUP BY source_name
+                        HAVING COUNT(*) >= %s
+                           AND COUNT(*) FILTER (WHERE claimed_at IS NOT NULL) = 0
+                        """,
+                        (days, min_fetched),
+                    )
+                    rows = cur.fetchall()
+                    self._zero_claim_names = {r[0] for r in rows if r and r[0]}
+            if self._zero_claim_names:
+                logger.warning(
+                    "[FeedHealth] %d sources flagged by zero-claim-rate "
+                    "(no claimed content in %dd, ≥%d fetches). Skipping "
+                    "until a refresh shows them producing again.",
+                    len(self._zero_claim_names),
+                    days,
+                    min_fetched,
+                )
+            return len(self._zero_claim_names)
+        except Exception as exc:
+            logger.debug(
+                "[FeedHealth] zero-claim-rate refresh failed (fail-open): %s",
+                exc,
+            )
+            return len(self._zero_claim_names)
+
+    def is_disabled_by_claim_rate(self, source_name: str) -> bool:
+        """Check whether a source_name is in the current zero-claim-rate
+        disable set. Compatible with the existing ``is_disabled(url)``
+        check — both are queried at fetch time; either is sufficient
+        to skip the feed."""
+        return source_name in self._zero_claim_names
 
 
 class SharedIngestionPipeline:
@@ -288,6 +379,12 @@ class SharedIngestionPipeline:
         name = cfg.get("name", "unknown")
         if self._feed_health.is_disabled(url):
             logger.debug("[SharedIngestion] Feed %s is auto-disabled, skipping", name)
+            return {}
+        if self._feed_health.is_disabled_by_claim_rate(name):
+            logger.debug(
+                "[SharedIngestion] Feed %s skipped — 0%% claim-rate over 14d",
+                name,
+            )
             return {}
         affinity = cfg.get("affinity", [])
         counts: dict[str, int] = {}
@@ -883,6 +980,13 @@ class SharedIngestionPipeline:
 
         # 1. Load config
         self._load_config()
+
+        # 1b. Refresh the zero-claim-rate disable set from content_pool
+        # (2026-06-14). Sources that produced no claimed content in the
+        # last 14 days get skipped by _fetch_single_feed. Self-managing —
+        # a source comes back if it later produces. Fail-open: any DB
+        # error logs debug and leaves the previous set in place.
+        self._feed_health.refresh_zero_claim_disables(self._db_url)
 
         # 2. Fetch from all sources
         self._fetch_youtube_trending()
