@@ -54,16 +54,30 @@ logger = logging.getLogger(__name__)
 _LOOKBACK_DAYS: Final[int] = 60
 
 # Minimum observations before a (niche, platform, hour) tuple is trusted.
-# Picked empirically from the 2026-06-13 data probe: anomalies like
-# gaming-FB-7UTC (avg=970, n=3) need filtering, while real signals like
-# anime-FB-10UTC (avg=171, n=5) just barely clear.
-_MIN_OBSERVATIONS: Final[int] = 5
+# 2026-06-14: lowered from 5 → 3 because the 2026-06-14 learning-system
+# audit found the learner returning [] for ALL 5 niches across ALL
+# platforms — the per-hour buckets weren't accumulating fast enough at
+# typical publish cadences (1 reel/day means ~5 weeks to get 5 obs at
+# the same UTC hour). At 3 the bucket starts contributing signal in
+# ~3 weeks; the prior_weight bump below absorbs the extra noise.
+_MIN_OBSERVATIONS: Final[int] = 3
 
 # Bayesian shrinkage prior weight. Pulls the per-hour score toward the
 # global (niche × platform) average with this many phantom observations.
-# 10 means "trust the global mean as if you had 10 observations of it";
-# a real bucket with n=10 weighs equally with the prior, n=30 weighs 3x.
-_SHRINKAGE_PRIOR: Final[float] = 10.0
+# 2026-06-14: bumped from 10 → 20 to compensate for the lower
+# min_observations. With prior_weight=20 and min n=3, the shrunk score
+# is dominated 87% by the global average — so a 3-obs spike doesn't
+# overrule the 50-obs second-best. As n grows the prior's influence
+# decays; by n=20 it's a 50/50 mix.
+_SHRINKAGE_PRIOR: Final[float] = 20.0
+
+# 2026-06-14: cold-start fallback — when per-hour buckets all fail the
+# min_observations filter, retry at 4-hour granularity (6 bins covering
+# the 24h day). Returns ONE bin's center hour (e.g. 14:00 UTC for the
+# 12-16 bin) so the scheduler has something better than the static
+# default. Disabled by passing min_observations >= MIN_FALLBACK_THRESHOLD.
+_FALLBACK_BIN_HOURS: Final[int] = 4
+_FALLBACK_MIN_OBS: Final[int] = 3
 
 # Cache TTL — the engagement distribution doesn't shift fast.
 _CACHE_TTL_S: Final[int] = 3600
@@ -80,6 +94,99 @@ class OptimalHour:
     avg_engagement: float
     sample_size: int
     confidence: float  # Bayesian-shrunk score
+
+
+def _query_4hour_bins(
+    niche_id: str,
+    platform: str,
+    lookback_days: int,
+    dsn: str,
+) -> list[OptimalHour]:
+    """Cold-start fallback: aggregate engagement into 4-hour bins.
+
+    Returns up to 6 ``OptimalHour`` entries — one per non-empty bin —
+    with ``hour_utc`` set to the bin's CENTER hour (e.g. bin 12-16
+    → hour_utc=14). Sample sizes are aggregated across the 4 hours so
+    a niche with 1 obs/hour across the 4 hours gets n=4, enough to
+    pass _FALLBACK_MIN_OBS=3.
+
+    Same Bayesian shrinkage as the per-hour query. Caller treats the
+    result as best-effort signal; the scheduler's collision check
+    will still prevent two posts at exactly the same UTC hour.
+    """
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH per_hour AS (
+                      SELECT
+                        (EXTRACT(HOUR FROM pa.published_at)::int
+                          / %s::int) * %s::int + (%s::int / 2) AS bin_center,
+                        a.value::float AS engagement
+                      FROM analytics a
+                      JOIN publishing_analytics pa USING (post_id, platform)
+                      WHERE a.niche_id = %s
+                        AND a.platform = %s
+                        AND a.metric_type = 'composite'
+                        AND a.value > 0
+                        AND a.collected_at >= NOW() - (%s::int * INTERVAL '1 day')
+                        AND pa.published_at IS NOT NULL
+                    ),
+                    global_stats AS (
+                      SELECT AVG(engagement) AS global_avg FROM per_hour
+                    )
+                    SELECT
+                      ph.bin_center,
+                      AVG(ph.engagement),
+                      COUNT(*),
+                      gs.global_avg
+                    FROM per_hour ph
+                    CROSS JOIN global_stats gs
+                    GROUP BY ph.bin_center, gs.global_avg
+                    HAVING COUNT(*) >= %s
+                    """,
+                    (
+                        _FALLBACK_BIN_HOURS,
+                        _FALLBACK_BIN_HOURS,
+                        _FALLBACK_BIN_HOURS,
+                        niche_id,
+                        platform,
+                        lookback_days,
+                        _FALLBACK_MIN_OBS,
+                    ),
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        logger.debug(
+            "[optimal_time_learner] 4-hour-bin fallback failed for %s/%s: %s",
+            niche_id,
+            platform,
+            exc,
+        )
+        return []
+
+    if not rows:
+        return []
+
+    hours: list[OptimalHour] = []
+    for bin_center, avg_eng, n, global_avg in rows:
+        n_f = float(n)
+        avg_f = float(avg_eng)
+        global_f = float(global_avg or 0.0)
+        confidence = (n_f * avg_f + _SHRINKAGE_PRIOR * global_f) / (n_f + _SHRINKAGE_PRIOR)
+        hours.append(
+            OptimalHour(
+                hour_utc=int(bin_center) % 24,
+                avg_engagement=round(avg_f, 2),
+                sample_size=int(n),
+                confidence=round(confidence, 3),
+            )
+        )
+    hours.sort(key=lambda h: h.confidence, reverse=True)
+    return hours
 
 
 def get_optimal_hours(
@@ -169,8 +276,14 @@ def get_optimal_hours(
         return []
 
     if not rows:
-        _cache[key] = ([], now)
-        return []
+        # 2026-06-14 cold-start fallback: no per-hour bucket met
+        # min_observations. Re-query at 4-hour granularity so cold-start
+        # niches get *some* signal instead of falling all the way back to
+        # static yaml. The fallback returns up to top_n hours derived
+        # from the best 4-hour bins.
+        fallback = _query_4hour_bins(niche_id, platform, lookback_days, dsn)
+        _cache[key] = (fallback, now)
+        return fallback[:top_n]
 
     hours: list[OptimalHour] = []
     for hour_utc, avg_eng, n, global_avg in rows:

@@ -198,10 +198,18 @@ class TestOptimalSlotsHHMM:
 
 
 class TestConstants:
-    def test_min_observations_floor(self):
-        """Pin the min_observations floor. Lowering it would re-introduce
-        noise that the 2026-06-13 audit flagged (e.g. n=3 outliers)."""
-        assert _MIN_OBSERVATIONS >= 5
+    def test_min_observations_floor_with_shrinkage_compensation(self):
+        """2026-06-14 (PR #201): lowered from ≥5 to ≥3 paired with
+        prior_weight ≥ 20 (was 10). The shrinkage absorbs the noise the
+        original ≥5 floor was protecting against — a 3-obs outlier with
+        avg=300 gets pulled hard toward the global mean by the prior, so
+        a 50-obs second-best still wins. Pin enforces the pair stays in
+        sync: lowering observations again must come with another bump
+        in prior_weight."""
+        assert _MIN_OBSERVATIONS >= 3
+        # If min_observations is low, the prior must compensate.
+        # The product (min_obs × prior_weight) should stay ≥ 60.
+        assert _MIN_OBSERVATIONS * _SHRINKAGE_PRIOR >= 60
 
     def test_shrinkage_prior_is_meaningful(self):
         """Prior weight must be ≥1 to actually shrink anything. Zero
