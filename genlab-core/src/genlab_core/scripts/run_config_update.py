@@ -103,12 +103,20 @@ def main() -> int:
         total_changes += len(changes)
 
         for change in changes:
+            # ConfigUpdater.run produces dicts with canonical keys
+            # ``key`` / ``old_value`` / ``new_value`` (see
+            # ConfigUpdater._update_posting_schedule + _update_hook_
+            # type_ratios). This script previously used
+            # ``field``/``old``/``new`` which never matched, so this
+            # logger.info raised KeyError on the first real change
+            # ever produced (verified on prod 2026-06-14, immediately
+            # after PR #210 unblocked hydration).
             logger.info(
                 "  %s: %s → %s (was %s)",
                 change["file"],
-                change["field"],
-                change["new"],
-                change["old"],
+                change["key"],
+                change["new_value"],
+                change["old_value"],
             )
 
         if changes and not args.dry_run:
@@ -153,9 +161,14 @@ def _persist_changes(niche_id: str, changes: list[dict], dry_run: bool) -> None:
                         (
                             niche_id,
                             change.get("file", ""),
-                            change.get("field", ""),
-                            str(change.get("old", "")),
-                            str(change.get("new", "")),
+                            # Producer keys are ``key`` / ``old_value`` /
+                            # ``new_value`` (see ConfigUpdater). The DB
+                            # column NAMES (``field``, ``old_value``,
+                            # ``new_value``) are unchanged — only the
+                            # dict-side lookups needed correcting.
+                            change.get("key", ""),
+                            str(change.get("old_value", "")),
+                            str(change.get("new_value", "")),
                             change.get("reason", ""),
                             int(change.get("n", 0) or 0),
                             dry_run,
