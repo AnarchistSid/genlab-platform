@@ -1,0 +1,21 @@
+[Unit]
+Description=GenLab Threads LLUT auto-refresh (prevents 60-day silent expiry)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab/genlab-core
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# Same AGENT_ROOT trap as the engagement poller — emit_token_expiry_alert
+# writes to pipeline_alerts via the shared client which honors this var.
+Environment=AGENT_ROOT=/opt/genlab/BlackboxBrief
+ExecStart=/opt/genlab/.venv/bin/python \
+    -m genlab_core.scripts.refresh_threads_tokens
+TimeoutSec=60
+
+[Install]
+WantedBy=multi-user.target
