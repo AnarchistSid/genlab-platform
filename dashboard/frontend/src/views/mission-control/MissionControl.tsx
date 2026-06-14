@@ -12,6 +12,7 @@ import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
+import { SourceQualityCard } from "./SourceQualityCard";
 import { AiInsightCard } from "./AiInsightCard";
 import { PublishTimeline } from "./PublishTimeline";
 import { UpcomingQueue } from "./UpcomingQueue";
@@ -182,8 +183,13 @@ export default function MissionControl() {
           <div className="area-trends">
             <TrendRadar />
           </div>
-          <div className="area-quality">
+          <div className="area-quality flex flex-col gap-3">
             <ContentQuality />
+            {/* Source-quality card (2026-06-13): surfaces per-source claim
+                rate so operator can prune sources with 0% claim rate.
+                The 2026-06-13 deep dive found 22 of 30 top sources fetch
+                hundreds of items per 14d that NEVER convert to blueprints. */}
+            <SourceQualityCard />
           </div>
 
           {/* Row 6: Pipeline Countdowns + Publishing Health + Monetisation */}
