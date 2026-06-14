@@ -212,6 +212,18 @@ async def _idle_forever(reason: str) -> None:
         await asyncio.sleep(3600)
 
 
+# 2026-06-14 PR #199: pre-flight assertions moved to
+# genlab_core.engagement.poller so they're test-importable. The script
+# is a runnable, not a package, so its module-level helpers can't be
+# imported into tests directly.
+from genlab_core.engagement.poller import (  # noqa: E402
+    assert_expected_task_count as _assert_expected_task_count,
+)
+from genlab_core.engagement.poller import (  # noqa: E402, F811 — re-split by ruff
+    niche_env_prefix as _niche_env_prefix,
+)
+
+
 async def _run_all_pollers(platform: str) -> None:
     """Run pollers for all niches concurrently."""
     config = _load_poller_config()
@@ -220,7 +232,10 @@ async def _run_all_pollers(platform: str) -> None:
         return
 
     tasks = []
+    skipped: list[tuple[str, str, str]] = []  # (niche, platform, env_var_hint)
     for niche_id, platforms in config.items():
+        prefix = _niche_env_prefix(niche_id)
+
         if platform in ("all", "youtube") and "youtube" in platforms:
             channel_id = _resolve_id(
                 platforms["youtube"].get("channel_id", ""),
@@ -230,6 +245,8 @@ async def _run_all_pollers(platform: str) -> None:
             if channel_id:
                 tasks.append(_poll_loop_youtube(niche_id, channel_id))
                 logger.info("Queued YouTube poller for %s (channel=%s)", niche_id, channel_id)
+            else:
+                skipped.append((niche_id, "youtube", f"{prefix}_YOUTUBE_CHANNEL_ID"))
 
         if platform in ("all", "twitter") and "twitter" in platforms:
             user_id = _resolve_id(
@@ -240,6 +257,8 @@ async def _run_all_pollers(platform: str) -> None:
             if user_id:
                 tasks.append(_poll_loop_twitter(niche_id, user_id))
                 logger.info("Queued Twitter poller for %s (user=%s)", niche_id, user_id)
+            else:
+                skipped.append((niche_id, "twitter", f"{prefix}_X_USER_ID"))
 
         if platform in ("all", "threads") and "threads" in platforms:
             threads_user_id = _resolve_id(
@@ -250,6 +269,14 @@ async def _run_all_pollers(platform: str) -> None:
             if threads_user_id:
                 tasks.append(_poll_loop_threads(niche_id, threads_user_id))
                 logger.info("Queued Threads poller for %s (user=%s)", niche_id, threads_user_id)
+            else:
+                skipped.append((niche_id, "threads", f"{prefix}_THREADS_ACCESS_TOKEN"))
+
+    # 2026-06-14: surface silently-skipped pollers BEFORE the gather, so
+    # the operator sees the warning in journalctl even if some platform's
+    # poll loop produces no output (the audit caught a 5-vs-15 mismatch
+    # that had been silent for weeks).
+    _assert_expected_task_count(skipped)
 
     if not tasks:
         # Idle instead of exit(1) so systemd doesn't restart-loop when only
