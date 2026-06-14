@@ -74,13 +74,29 @@ class GenerateAudio:
                 continue
 
             try:
-                voice = audio_cfg.get("voice", "default")
                 out_path = run_dir / f"{bp.get('candidate_id', 'unknown')}_audio.mp3"
 
+                # 2026-06-14: dropped the ``voice=voice`` kwarg.
+                # TTSCascade.synthesize(text, output_path, clean=True) has no
+                # ``voice`` parameter — neither does TTSProvider.synthesize on
+                # any of the cascade's providers (ElevenLabs / OpenAI / Edge /
+                # gTTS). Voices are configured per-provider at construction
+                # time (e.g. ELEVENLABS_VOICE_ID env var), not per-call.
+                #
+                # Until this fix, every TTS attempt raised
+                # ``TypeError: TTSCascade.synthesize() got an unexpected
+                # keyword argument 'voice'`` — surfaced live in prod logs
+                # as 31 occurrences in 24h, one per pipeline run × niche.
+                # The downstream silence-trim / ffmpeg branches never ran;
+                # the pipeline degraded to no-audio renders.
+                #
+                # Per-call voice routing is a separate feature (would need
+                # to extend both TTSCascade.synthesize and every
+                # TTSProvider.synthesize) — out of scope here; we just
+                # unblock the existing per-provider voice config.
                 result = cascade.synthesize(
                     text=script,
                     output_path=str(out_path),
-                    voice=voice,
                 )
 
                 if result and out_path.exists():
