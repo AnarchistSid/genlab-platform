@@ -10,5 +10,11 @@ WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
-ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.learning.preference_collector import collect_weekly_pairs; print(f'Pairs: {collect_weekly_pairs(window_days=7)}')"
+# 2026-06-14: call without window_days= to use the module's
+# DEFAULT_WINDOW_DAYS constant (21d, bumped from 7d to match current
+# channel reach — see preference_collector.py docstring). Previously
+# hardcoded window_days=7 which silently shadowed the constant on
+# every fire; the no-arg call lets future tuning to the constant
+# take effect without a systemd edit.
+ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.learning.preference_collector import collect_weekly_pairs; print(f'Pairs: {collect_weekly_pairs()}')"
 TimeoutSec=600
