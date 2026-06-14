@@ -218,6 +218,60 @@ def _is_publishable(media: dict) -> bool:
     return (media.get("video_validation") or {}).get("valid", True) is not False
 
 
+def _strip_captioned_when_whisper_disabled(
+    rendered_path: str,
+    niche_config: dict,
+) -> str:
+    """Defensive guard: if whisper_sync is disabled but ``rendered_path``
+    ends in ``_captioned.mp4``, swap to the non-captioned sibling.
+
+    Why this exists (2026-06-14): for ~10 days the dashboard served stale
+    ``_captioned.mp4`` variants for blueprints rendered while whisper was
+    enabled. The captioned variants have a regressed text-renderer bug
+    (giant overlays — see ``[[session-2026-06-13-render-audit-findings]]``)
+    that PR #177's ``text_optimizer`` revival fixes for NEW renders only.
+    Once the operator disabled whisper, NEW captioned files stopped being
+    produced, but the existing ones lingered in 7 blueprints' visual_paths.
+
+    This guard catches the same class of bug going forward: even if a
+    rendered_path arrives carrying ``_captioned``, we drop it when the
+    current niche config says whisper is off. The non-captioned sibling
+    must exist on disk (always true — RenderWhisperCaptions writes
+    captioned alongside the base, never replaces).
+
+    Returns the corrected path. Returns the original path if:
+      - whisper IS enabled (operator explicitly wants captioned outputs)
+      - path doesn't end in ``_captioned.mp4`` (no-op for the common case)
+      - the non-captioned sibling doesn't exist (don't break a publish
+        just because the rename guess is wrong — fall through to old path,
+        which is no worse than current behavior)
+    """
+    if not rendered_path or not rendered_path.endswith("_captioned.mp4"):
+        return rendered_path
+
+    # Walk niche_config to find whisper_sync.enabled flag. Mirror the
+    # lookup chain RenderWhisperCaptions.``_get_whisper_config`` uses so
+    # this guard stays in sync with the producer.
+    animation = (niche_config or {}).get("animation", {}) or {}
+    if not animation:
+        animation = (niche_config or {}).get("visuals", {}).get("animation", {}) or {}
+    wbw = animation.get("word_by_word", {}) or {}
+    ws_enabled = wbw.get("whisper_sync", {}).get("enabled", False)
+    if ws_enabled:
+        return rendered_path  # operator wants captions; honor it
+
+    # whisper disabled — try the non-captioned sibling
+    candidate = rendered_path[: -len("_captioned.mp4")] + ".mp4"
+    if Path(candidate).is_file():
+        logger.warning(
+            "[PUSH] Captioned-MP4 guard: swapped %s → %s (whisper_sync disabled)",
+            Path(rendered_path).name,
+            Path(candidate).name,
+        )
+        return candidate
+    return rendered_path
+
+
 def _derive_render_failure_reason(story: dict, clip_index: dict | None, story_id: str) -> str:
     """Why is this blueprint stuck at DRAFTED instead of VISUAL_READY?
 
@@ -1128,6 +1182,13 @@ class PushToBacklog:
 
             media = story.get("media") or {}
             rendered_path = media.get("rendered_path", "")
+            # 2026-06-14: defensive guard against orphan ``_captioned.mp4``
+            # paths surviving from runs when whisper was enabled, after
+            # the operator has since disabled it. See _strip_captioned_when_
+            # whisper_disabled() docstring for the full incident background.
+            rendered_path = _strip_captioned_when_whisper_disabled(
+                rendered_path, context.get("niche_config", {}) or {}
+            )
             publishable = _is_publishable(media)  # R-47: gate VISUAL_READY on validation
 
             try:
