@@ -21,6 +21,7 @@ const StoriesView = lazy(() => import("@/views/stories"));
 const RunsView = lazy(() => import("@/views/runs"));
 const SettingsView = lazy(() => import("@/views/settings"));
 const FocusReviewView = lazy(() => import("@/views/focus-review"));
+const BulkReviewView = lazy(() => import("@/views/bulk-review"));
 const PublishingQueueView = lazy(() => import("@/views/publishing-queue/PublishingQueue"));
 const ChannelHealthView = lazy(() => import("@/views/channel-health/ChannelHealth"));
 const MonetisationView = lazy(() => import("@/views/monetisation/MonetisationProgress"));
@@ -123,6 +124,21 @@ const router = createBrowserRouter([
         <ErrorBoundary>
           <Suspense fallback={<LoadingFallback />}>
             <FocusReviewView />
+          </Suspense>
+        </ErrorBoundary>
+      </NuqsAdapter>
+    ),
+  },
+  {
+    // 2026-06-14: 5-at-a-time grid review for accelerating the
+    // operator-review-marathon bottleneck. See components/review/bulk-review.tsx.
+    path: "/bulk-review",
+    element: (
+      <NuqsAdapter>
+        <GlobalShortcuts />
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingFallback />}>
+            <BulkReviewView />
           </Suspense>
         </ErrorBoundary>
       </NuqsAdapter>
