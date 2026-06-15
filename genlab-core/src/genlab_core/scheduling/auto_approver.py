@@ -530,8 +530,7 @@ def run_pass(
         # base ``decision`` is the input; the adjusted decision is what we
         # gate the rest of the pass on.
         if policy.strategies is not None and (
-            policy.strategies.bandit_boost_enabled
-            or policy.strategies.agreement_floor_enabled
+            policy.strategies.bandit_boost_enabled or policy.strategies.agreement_floor_enabled
         ):
             try:
                 from genlab_core.scheduling.gate_strategies import apply_strategies

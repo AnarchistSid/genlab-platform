@@ -711,9 +711,7 @@ class TestStrategyLayerIntegration:
 
         # Patch the module-level helpers so even if the wiring fires
         # they record + return None.
-        monkeypatch.setattr(
-            "genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom_lookup
-        )
+        monkeypatch.setattr("genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom_lookup)
         monkeypatch.setattr(
             "genlab_core.scheduling.auto_approver._lookup_calibration_stats",
             boom_lookup,
@@ -772,9 +770,7 @@ class TestStrategyLayerIntegration:
         def boom(*args, **kwargs):
             raise RuntimeError("DB down")
 
-        monkeypatch.setattr(
-            "genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom
-        )
+        monkeypatch.setattr("genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom)
         with patch(
             "genlab_core.scheduling.auto_approver.load_policy",
             return_value=self._enabled_policy_with_strategies(
