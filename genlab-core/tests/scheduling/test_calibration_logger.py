@@ -401,7 +401,6 @@ class TestNonOperatorSourceFilter:
     def test_auto_approver_source_skips_log(self, monkeypatch):
         """The headline pin. action_taken_source='auto_approver_v1'
         must skip the log — no DB call, no row written."""
-        import os
         from unittest.mock import MagicMock
 
         from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
