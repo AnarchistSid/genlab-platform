@@ -12,6 +12,7 @@ import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
+import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
 import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
 import { AiInsightCard } from "./AiInsightCard";
@@ -116,12 +117,17 @@ export default function MissionControl() {
 
   return (
     <div>
-      {/* Greeting Header */}
-      <PageHeader
-        title={`${getGreeting()}.`}
-        badge={<span className="text-xs font-medium text-text-muted px-2 py-0.5 rounded-full bg-bg-elevated">Sprint {sprint}</span>}
-        subtitle={formatDate()}
-      />
+      {/* Greeting Header + global kill switch (D3.10) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <PageHeader
+          title={`${getGreeting()}.`}
+          badge={<span className="text-xs font-medium text-text-muted px-2 py-0.5 rounded-full bg-bg-elevated">Sprint {sprint}</span>}
+          subtitle={formatDate()}
+        />
+        <div className="flex items-center gap-3">
+          <AutoApprovalKillSwitch />
+        </div>
+      </div>
 
       {/* Critical infrastructure alerts banner — reads unresolved
           CRITICAL rows from pipeline_alerts (warp_down,

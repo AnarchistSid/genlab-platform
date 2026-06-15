@@ -263,6 +263,48 @@ def _safe_json_list(raw: Any) -> list:
 # (e.g., during an incident) without editing 5 YAML files.
 _KILL_SWITCH_ENV = "GENLAB_AUTO_APPROVE_DISABLED"
 
+# File-backed kill switch (D3.10, AUTO #2 runbook). Persists across
+# worker restarts, set/cleared by the dashboard's
+# /api/v1/auto-approval/kill-switch endpoint without operator SSH.
+# The env var is still honoured (incident response from the shell);
+# the file flag wins if EITHER is set. The default path is under
+# .runtime so it survives clones but stays out of git via the
+# project's .gitignore.
+_KILL_SWITCH_FILE_ENV = "GENLAB_AUTO_APPROVE_KILL_FILE"
+_KILL_SWITCH_DEFAULT_FILE = "/opt/genlab/.runtime/auto_approve_kill_switch"
+
+
+def _kill_switch_file_path() -> str:
+    """Resolve where the file-backed kill switch lives.
+
+    Tests can override via the env var; production uses the default.
+    """
+    return os.environ.get(_KILL_SWITCH_FILE_ENV, "").strip() or _KILL_SWITCH_DEFAULT_FILE
+
+
+def _kill_switch_active() -> tuple[bool, str]:
+    """Return (active, source) — checks env var AND file flag.
+
+    Source is one of "env", "file", "both", "none" — used by the
+    dashboard endpoint to tell the operator WHY it's off so they
+    know what to flip to re-enable.
+    """
+    env_set = os.environ.get(_KILL_SWITCH_ENV, "").strip() not in (
+        "",
+        "0",
+        "false",
+        "False",
+    )
+    file_set = os.path.isfile(_kill_switch_file_path())
+    if env_set and file_set:
+        return True, "both"
+    if env_set:
+        return True, "env"
+    if file_set:
+        return True, "file"
+    return False, "none"
+
+
 # Marker written to blueprint.action_taken_source on auto-approval so
 # operator-driven and worker-driven approvals are distinguishable in
 # the backlog. Calibration logger reads this to exclude auto-approvals
@@ -419,13 +461,14 @@ def run_pass(
     policy = load_policy(niche_id, genlab_root=genlab_root)
     result = AutoApprovalPassResult(niche_id=niche_id, policy=policy, dry_run=dry_run)
 
-    # ── Guard 1: env kill switch ──────────────────────────────────────────
-    if os.environ.get(_KILL_SWITCH_ENV, "").strip() not in ("", "0", "false", "False"):
+    # ── Guard 1: global kill switch (env var OR file flag) ───────────────
+    active, source = _kill_switch_active()
+    if active:
         result.kill_switch_active = True
         logger.info(
-            "[auto_approver] niche=%s — %s set, no approvals performed",
+            "[auto_approver] niche=%s — kill switch active (source=%s), no approvals performed",
             niche_id,
-            _KILL_SWITCH_ENV,
+            source,
         )
         return result
 
