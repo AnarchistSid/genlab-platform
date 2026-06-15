@@ -1515,31 +1515,38 @@ class PushToBacklog:
 
                     if publishable:
                         fields["visual_paths"] = json.dumps([rendered_path])
-                        # Auto-schedule for next available 06:30 UTC = 12:00 IST
-                        # publish window.  Use today's slot if it hasn't passed yet,
-                        # otherwise fall back to tomorrow.
-                        now_utc = datetime.now(UTC)
-                        today_slot = datetime(
-                            now_utc.year,
-                            now_utc.month,
-                            now_utc.day,
-                            6,
-                            30,
-                            tzinfo=UTC,
-                        )
-                        if today_slot > now_utc:
-                            publish_time = today_slot
-                        else:
-                            next_day = now_utc.date() + timedelta(days=1)
-                            publish_time = datetime(
-                                next_day.year,
-                                next_day.month,
-                                next_day.day,
-                                6,
-                                30,
-                                tzinfo=UTC,
-                            )
-                        fields["scheduled_for"] = publish_time.isoformat()
+                        # 2026-06-15 audit fix: DO NOT pre-set scheduled_for here.
+                        #
+                        # The previous block hardcoded 06:30 UTC (today if not
+                        # past, else tomorrow) for EVERY blueprint a pipeline
+                        # run produced. With N new blueprints per pipeline run,
+                        # all N got the same slot — the producer of the
+                        # over-scheduling pattern PR #220 was trying to catch
+                        # at the consumer side. Worse, this pre-set has no
+                        # per-day cap awareness and no optimal-time-learner
+                        # consultation; it shadows both.
+                        #
+                        # On the OPERATOR path: the dashboard's
+                        # `_execute_review_action` always calls
+                        # `_next_available_slot(niche_id, exclude_record_id)`
+                        # which IS cap-aware (PR #220), so removing the pre-set
+                        # has zero functional impact — the dashboard picks a
+                        # fresh slot at approval time anyway, ignoring whatever
+                        # value `scheduled_for` already held (PR #191's
+                        # exclude_record_id).
+                        #
+                        # On the AUTO #2 worker path: the worker (today) does
+                        # NOT set scheduled_for. Audit finding H2 will wire
+                        # the worker to call _next_available_slot equivalent;
+                        # until then, auto-approved blueprints will have
+                        # scheduled_for=None and the publisher's _schedule_gate
+                        # will block them — a SAFE failure mode (better than
+                        # publishing at an uncontrolled time).
+                        #
+                        # If anything regresses, the symptom is "blueprints
+                        # show up in the review queue with scheduled_for=None"
+                        # — which is exactly the correct intent.
+                        pass
                     # Store thumbnail_url for dashboard previews when local
                     # renders are unavailable (e.g. on cloud dashboard server).
                     thumb = story.get("thumbnail_url", "")
