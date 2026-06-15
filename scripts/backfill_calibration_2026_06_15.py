@@ -219,9 +219,7 @@ def _process_one_event(cur, event: dict, *, dry_run: bool) -> str:
     try:
         decision = gate_evaluate(blueprint)
     except Exception as exc:
-        logger.warning(
-            "[backfill] gate evaluation failed for bp=%s: %s", blueprint_id, exc
-        )
+        logger.warning("[backfill] gate evaluation failed for bp=%s: %s", blueprint_id, exc)
         return "skip_gate_error"
 
     if dry_run:
