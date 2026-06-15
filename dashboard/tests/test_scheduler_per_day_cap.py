@@ -60,29 +60,101 @@ def _record(record_id: str, scheduled_iso: str, niche_id: str = "anime"):
     }
 
 
+def _today_ist_slot_iso(hour: int = 23, minute: int = 0) -> str:
+    """Return an ISO timestamp for an IST slot on the FROZEN test
+    today (see ``frozen_ist_now`` fixture).
+
+    Builds the slot off the fixed test "now" so tests are deterministic
+    across CI run times — the original date-relative test failed when
+    CI ran during a time-of-day where today_UTC still had free slots
+    relative to "now+1h"."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ist = ZoneInfo("Asia/Kolkata")
+    # _FROZEN_TEST_NOW_IST is set by the ``frozen_ist_now`` fixture
+    # before each test runs; it's the test's view of "now in IST".
+    frozen_now = _FROZEN_TEST_NOW_IST or datetime.now(ist)
+    today_ist = frozen_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return today_ist.isoformat()
+
+
+def _today_ist_date_str() -> str:
+    """The IST date string for the scheduler's ``posts_per_day`` key,
+    relative to the frozen test "now"."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    frozen_now = _FROZEN_TEST_NOW_IST or datetime.now(ZoneInfo("Asia/Kolkata"))
+    return frozen_now.strftime("%Y-%m-%d")
+
+
+# Module-level holder so the helpers see what the fixture set. Avoids
+# threading the value through every test signature.
+_FROZEN_TEST_NOW_IST = None
+
+
+@pytest.fixture(autouse=True)
+def frozen_ist_now(monkeypatch):
+    """Freeze the scheduler's clock at 10:00 IST on a fixed date so
+    every test sees the same "now" — no flakiness from CI run time.
+
+    Why 10:00 IST: it's well before all our test yaml's slots
+    (11:30, 12:00, 12:30, 15:30) AND before the 23:00 IST mark we
+    use for "existing post LATE TODAY" — earliest=11:00 IST so any
+    of those slots is in the future, scheduler will try today first
+    unless the per-day cap blocks it."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ist = ZoneInfo("Asia/Kolkata")
+    fixed = datetime(2026, 6, 15, 10, 0, 0, tzinfo=ist)
+
+    # Make helpers see the fixed time
+    global _FROZEN_TEST_NOW_IST
+    _FROZEN_TEST_NOW_IST = fixed
+
+    # Patch the scheduler's `datetime.now()` so its base_date + earliest
+    # computations align with our fixed "now". The scheduler imports
+    # `from datetime import ... datetime`, so we replace the class on
+    # the module attribute.
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed
+
+    from server.core import publishing_queue
+
+    monkeypatch.setattr(publishing_queue, "datetime", _FixedDatetime)
+
+    yield
+    _FROZEN_TEST_NOW_IST = None
+
+
 class TestPerDayCap:
     """The 4-of-5-FrameDrift-on-one-day bug + its fix."""
 
     def test_second_approval_same_day_pushes_to_next_day(self, isolated_env):
         """The headline pin. With cap=1 (default, multi_publish off) and
-        one post already scheduled for tomorrow 11:30 IST, a new
-        approval must NOT pick tomorrow's 12:00/12:30/15:30 slots —
-        the whole day is at cap and the scheduler must roll to the
-        day after."""
-        from datetime import UTC, datetime, timedelta
+        one post already scheduled for TODAY at any IST slot, a new
+        approval must NOT pick today's remaining slots — today is at
+        cap so the scheduler must roll to tomorrow.
+
+        Uses IST date (not UTC) because the scheduler buckets
+        ``posts_per_day`` by IST date — matching the existing-post's
+        IST date to the scheduler's base_date is what makes this test
+        deterministic across CI run times."""
+        from datetime import datetime
 
         from server.core import publishing_queue
 
-        # Pre-existing post on tomorrow 11:30 IST.
-        tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6,
-            minute=0,
-            second=0,
-            microsecond=0,  # 06:00 UTC = 11:30 IST
-        )
+        # Pre-existing post LATE TODAY IST — guaranteed to occupy
+        # today's bucket regardless of when CI fires.
+        existing_iso = _today_ist_slot_iso(hour=23, minute=0)
+        today_ist_date = _today_ist_date_str()
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            _record("BP-A", tomorrow_1130_ist.isoformat()),
+            _record("BP-A", existing_iso),
         ]
 
         with (
@@ -97,10 +169,16 @@ class TestPerDayCap:
             slot = publishing_queue._next_available_slot(niche_id="anime")
 
         assert slot is not None
-        picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
-        # Must NOT be tomorrow (already at cap).
-        assert picked.date() > tomorrow_1130_ist.date(), (
-            f"picked {picked.date()} but tomorrow {tomorrow_1130_ist.date()} was already at cap=1"
+        from zoneinfo import ZoneInfo
+
+        picked_ist_date = (
+            datetime.fromisoformat(slot.replace("Z", "+00:00"))
+            .astimezone(ZoneInfo("Asia/Kolkata"))
+            .strftime("%Y-%m-%d")
+        )
+        # Must NOT be today_IST (already at cap=1).
+        assert picked_ist_date > today_ist_date, (
+            f"picked {picked_ist_date} (IST) but today {today_ist_date} was already at cap=1"
         )
 
     def test_multi_publish_raises_cap_allows_packing(self, isolated_env):
@@ -109,16 +187,15 @@ class TestPerDayCap:
         that already has 1 — up to the ceiling. This is the explicit
         owner-directive path from 2026-06-12 (agent can publish more
         than once when justified)."""
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime
 
         from server.core import publishing_queue
 
-        tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6, minute=0, second=0, microsecond=0
-        )
+        existing_iso = _today_ist_slot_iso(hour=23, minute=0)
+        today_ist_date = _today_ist_date_str()
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            _record("BP-A", tomorrow_1130_ist.isoformat()),
+            _record("BP-A", existing_iso),
         ]
 
         with (
@@ -132,10 +209,16 @@ class TestPerDayCap:
             slot = publishing_queue._next_available_slot(niche_id="anime")
 
         assert slot is not None
-        picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
-        # Should land on the SAME day as the existing post (cap=3 > 1 existing).
-        assert picked.date() == tomorrow_1130_ist.date(), (
-            f"picked {picked.date()} but cap=3 should have allowed same-day packing"
+        from zoneinfo import ZoneInfo
+
+        picked_ist_date = (
+            datetime.fromisoformat(slot.replace("Z", "+00:00"))
+            .astimezone(ZoneInfo("Asia/Kolkata"))
+            .strftime("%Y-%m-%d")
+        )
+        # With cap=3, today still has headroom — scheduler picks today.
+        assert picked_ist_date == today_ist_date, (
+            f"picked {picked_ist_date} (IST) but cap=3 should have allowed same-day packing on {today_ist_date}"
         )
 
     def test_cap_lookup_failure_fails_closed_at_one(self, isolated_env):
@@ -143,16 +226,15 @@ class TestPerDayCap:
         platform_caps.yaml unreadable, etc.), the scheduler must
         fail-CLOSED at cap=1. Failing OPEN here would silently
         reintroduce the bug we just fixed."""
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime
 
         from server.core import publishing_queue
 
-        tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6, minute=0, second=0, microsecond=0
-        )
+        existing_iso = _today_ist_slot_iso(hour=23, minute=0)
+        today_ist_date = _today_ist_date_str()
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            _record("BP-A", tomorrow_1130_ist.isoformat()),
+            _record("BP-A", existing_iso),
         ]
 
         with (
@@ -167,25 +249,23 @@ class TestPerDayCap:
                 side_effect=RuntimeError("simulated import failure"),
             ),
         ):
-            # The slot picker should still return something — just not today.
-            # The helper itself returns 1 on failure; here we simulate the
-            # caller path that wraps the helper. With cap=1 (the safe default),
-            # tomorrow is already at cap, so the next slot must be day+2.
             slot = publishing_queue._next_available_slot(niche_id="anime")
 
-        # On RuntimeError from _effective_per_day_cap, the caller path
-        # in _next_available_slot would currently propagate the exception
-        # because the helper is called directly. The pin here documents
-        # what the SAFE behavior is — if this test fails after a refactor,
-        # the refactor introduced over-scheduling regression.
-        # Acceptable outcomes: slot is None (refusal to schedule) OR slot
-        # lands day+2 (cap=1 forced tomorrow over-cap). Either way, NEVER
-        # tomorrow.
+        # The slot-picker's call-site wrapper catches the exception
+        # and falls back to cap=1, so today (at cap) is blocked and
+        # tomorrow (IST) is picked. NEVER same-day as the existing
+        # post — that would be over-scheduling.
         if slot is not None:
-            picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
-            assert picked.date() > tomorrow_1130_ist.date(), (
-                "On cap-lookup failure, scheduler must not over-schedule the "
-                "day with an existing post"
+            from zoneinfo import ZoneInfo
+
+            picked_ist_date = (
+                datetime.fromisoformat(slot.replace("Z", "+00:00"))
+                .astimezone(ZoneInfo("Asia/Kolkata"))
+                .strftime("%Y-%m-%d")
+            )
+            assert picked_ist_date > today_ist_date, (
+                f"On cap-lookup failure, scheduler picked {picked_ist_date} (IST) "
+                f"— same day as existing post at {today_ist_date}. Over-scheduling regression."
             )
 
     def test_self_record_still_excluded_from_per_day_count(self, isolated_env):
@@ -195,20 +275,19 @@ class TestPerDayCap:
         blueprint that's already scheduled for today would count itself
         and look like the day is at cap, pushing it +1 day all over
         again."""
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime
 
         from server.core import publishing_queue
 
         # The blueprint being re-scheduled has a pre-set scheduled_for
-        # for tomorrow at 11:30 IST (pre-set by push_to_backlog at
-        # pipeline time). Operator now re-approves it.
-        tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6, minute=0, second=0, microsecond=0
-        )
+        # for TODAY IST (mirrors push_to_backlog's pre-set behavior).
+        # Operator now re-approves it.
+        existing_iso = _today_ist_slot_iso(hour=23, minute=0)
+        today_ist_date = _today_ist_date_str()
         record_id = "BP-SELF"
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            _record(record_id, tomorrow_1130_ist.isoformat()),
+            _record(record_id, existing_iso),
         ]
 
         with (
@@ -225,29 +304,35 @@ class TestPerDayCap:
             )
 
         assert slot is not None
-        picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
-        # Must land tomorrow — self should not count toward the day's cap.
-        assert picked.date() == tomorrow_1130_ist.date(), (
-            f"Self-record should be excluded from per-day count. Got {picked.date()}, "
-            f"expected tomorrow {tomorrow_1130_ist.date()}"
+        from zoneinfo import ZoneInfo
+
+        picked_ist_date = (
+            datetime.fromisoformat(slot.replace("Z", "+00:00"))
+            .astimezone(ZoneInfo("Asia/Kolkata"))
+            .strftime("%Y-%m-%d")
+        )
+        # Self-record excluded → posts_per_day[today] = 0 → today open
+        # → scheduler picks today (first valid slot).
+        assert picked_ist_date == today_ist_date, (
+            f"Self-record should be excluded from per-day count. "
+            f"Got {picked_ist_date} (IST), expected {today_ist_date} (today)"
         )
 
     def test_other_niches_dont_count_against_this_niche_cap(self, isolated_env):
-        """Per-day cap is per-(niche, day). Gaming having a post on Jun
-        15 must not prevent FrameDrift from scheduling one on Jun 15.
+        """Per-day cap is per-(niche, day). Gaming having a post on
+        today must not prevent FrameDrift from scheduling one today.
         Without the niche-scoped count, all 5 niches would silently
         share a global daily quota."""
-        from datetime import UTC, datetime, timedelta
+        from datetime import datetime
 
         from server.core import publishing_queue
 
-        tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6, minute=0, second=0, microsecond=0
-        )
+        existing_iso = _today_ist_slot_iso(hour=23, minute=0)
+        today_ist_date = _today_ist_date_str()
         mock_client = MagicMock()
-        # Gaming already scheduled for tomorrow.
+        # Gaming already scheduled for today IST.
         mock_client.blueprints.all.return_value = [
-            _record("BP-GAMING", tomorrow_1130_ist.isoformat(), niche_id="gaming"),
+            _record("BP-GAMING", existing_iso, niche_id="gaming"),
         ]
 
         with (
@@ -258,13 +343,20 @@ class TestPerDayCap:
             ),
             patch.object(publishing_queue, "_effective_per_day_cap", return_value=1),
         ):
-            # FrameDrift should still get tomorrow.
+            # FrameDrift should still get today (gaming's post doesn't count for anime).
             slot = publishing_queue._next_available_slot(niche_id="anime")
 
         assert slot is not None
-        picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
-        assert picked.date() == tomorrow_1130_ist.date(), (
-            "Per-day cap leaked across niches — anime got pushed by gaming"
+        from zoneinfo import ZoneInfo
+
+        picked_ist_date = (
+            datetime.fromisoformat(slot.replace("Z", "+00:00"))
+            .astimezone(ZoneInfo("Asia/Kolkata"))
+            .strftime("%Y-%m-%d")
+        )
+        assert picked_ist_date == today_ist_date, (
+            f"Per-day cap leaked across niches — anime got pushed "
+            f"to {picked_ist_date} by gaming's existing {today_ist_date} post"
         )
 
 
