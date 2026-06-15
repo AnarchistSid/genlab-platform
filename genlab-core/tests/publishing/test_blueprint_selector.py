@@ -109,3 +109,76 @@ class TestSelectBlueprint:
             MockGK.return_value.evaluate.return_value = MagicMock(allowed=True)
             result = select_blueprint("gaming", bc)
         assert result["id"] == "scored"  # 0.3 > 0 (implicit)
+
+
+class TestScheduledForOrdering:
+    """Pin the 2026-06-15 publisher-sort fix.
+
+    Bug: when multiple eligible blueprints existed for a niche (e.g.
+    the over-schedule backlog from before PR #220's per-day cap fix),
+    the publisher sorted by priority_score alone. Result: the later-
+    scheduled but higher-scoring sibling won, leaving the earlier-
+    scheduled one stranded VISUAL_READY (verified prod: anime + sports
+    on 2026-06-15 — 11:30 IST lost to 12:00 IST, cap then blocked
+    11:30 from publishing).
+
+    Fix: sort key = (scheduled_for ASC, priority_score DESC). Earliest
+    wins; priority_score is only the tiebreaker.
+    """
+
+    def _make_bp(self, bp_id: str, scheduled_for: str | None, score: float = 0.5):
+
+        return {
+            "id": bp_id,
+            "fields": {
+                "niche_id": "gaming",
+                "priority_score": score,
+                "scheduled_for": scheduled_for,
+                "hook": f"hook-{bp_id}",
+                "title": f"title-{bp_id}",
+            },
+        }
+
+    def _run(self, blueprints):
+        from unittest.mock import MagicMock, patch
+
+        from genlab_core.publishing.blueprint_selector import select_blueprint
+
+        bc = MagicMock()
+        bc.get_blueprints_by_status.return_value = blueprints
+        with patch("genlab_core.publishing.blueprint_selector.PublishGatekeeper") as MockGK:
+            MockGK.return_value.evaluate.return_value = MagicMock(allowed=True)
+            return select_blueprint("gaming", bc)
+
+    def test_earlier_scheduled_wins_even_with_lower_score(self):
+        """THE headline pin: 11:30 IST score=0.4 must beat 12:00 IST
+        score=0.5. Without this, the 2026-06-15 anime+sports cap-
+        misfire pattern recurs."""
+        early = self._make_bp("11_30_low_score", "2026-06-15T06:00:00+00:00", score=0.4)
+        late = self._make_bp("12_00_high_score", "2026-06-15T06:30:00+00:00", score=0.5)
+        result = self._run([late, early])  # query order shouldn't matter
+        assert result["id"] == "11_30_low_score", (
+            "earlier scheduled_for must win — without this the publisher's "
+            "cap fires on the wrong sibling and the early one is stranded"
+        )
+
+    def test_priority_score_tiebreaks_within_same_scheduled_for(self):
+        """When two blueprints have identical scheduled_for (rare but
+        possible — operator drag-and-drops onto same slot), the higher
+        score wins."""
+        bp_low = self._make_bp("same_time_low", "2026-06-15T06:00:00+00:00", score=0.3)
+        bp_high = self._make_bp("same_time_high", "2026-06-15T06:00:00+00:00", score=0.8)
+        result = self._run([bp_low, bp_high])
+        assert result["id"] == "same_time_high"
+
+    def test_missing_scheduled_for_sorts_last(self):
+        """A blueprint with no scheduled_for must not jump ahead of one
+        with a real future timestamp. Defensive: an in-flight pre-set
+        gap shouldn't promote an unscheduled blueprint to first place."""
+        scheduled = self._make_bp("has_sched", "2026-06-15T06:00:00+00:00", score=0.5)
+        unscheduled = self._make_bp("no_sched", None, score=0.9)  # higher score!
+        result = self._run([unscheduled, scheduled])
+        assert result["id"] == "has_sched", (
+            "missing scheduled_for must sort LAST (sentinel 9999) — "
+            "otherwise a pre-set gap promotes the wrong blueprint"
+        )
