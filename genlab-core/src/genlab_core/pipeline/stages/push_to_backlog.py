@@ -1210,18 +1210,40 @@ class PushToBacklog:
                 errors.append(f"story:{title}: {e}")
                 continue
 
-            # Freshness gate: skip stories older than 7 days
+            # Freshness gate: skip stories older than the niche's
+            # ``freshness.max_story_age_hours`` config (default 168h = 7d).
+            #
+            # 2026-06-15 audit T#63 fix: read the orphaned config that's
+            # been declared in niche.yaml for months but never wired.
+            # Movies pipeline produced 0 blueprints today because every
+            # TMDB trailer it surfaced was 19-54 days old; the previous
+            # hardcoded 7d threshold rejected them all. SpliceReel's
+            # niche.yaml has `freshness.max_story_age_hours: 96` declared
+            # but zero callers — it now drives this gate, AND we bump
+            # the SpliceReel value to 1440 (60d, matching the
+            # `long_tail_days: 21` + `pre_release_days: 30` intent for
+            # film content). FrameDrift bumped from 72 → 720 (30d) for
+            # the same reason — viral anime moments resurface for weeks.
+            niche_cfg = context.get("niche_config", {}) if isinstance(context, dict) else {}
+            freshness_cfg = niche_cfg.get("freshness", {}) if isinstance(niche_cfg, dict) else {}
+            max_age_hours = freshness_cfg.get("max_story_age_hours", 168)
+            try:
+                max_age_hours = float(max_age_hours)
+            except (TypeError, ValueError):
+                max_age_hours = 168.0
+
             story_published = story.get("published_at", "")
             if story_published:
                 try:
                     pub_dt = datetime.fromisoformat(story_published)
                     if pub_dt.tzinfo is None:
                         pub_dt = pub_dt.replace(tzinfo=UTC)
-                    age_days = (datetime.now(UTC) - pub_dt).days
-                    if age_days > 7:
+                    age_hours = (datetime.now(UTC) - pub_dt).total_seconds() / 3600.0
+                    if age_hours > max_age_hours:
                         logger.info(
-                            "[PUSH] Story too old (%d days), skipping blueprint: %s",
-                            age_days,
+                            "[PUSH] Story too old (%.1fh > %.0fh cap), skipping blueprint: %s",
+                            age_hours,
+                            max_age_hours,
                             title[:40],
                         )
                         continue

@@ -320,20 +320,30 @@ class YouTubeClient:
         if "Shorts" not in tags:
             tags.append("Shorts")
 
-        # Quota gate — refuse upload if near daily limit
+        # Quota gate — refuse upload if near daily limit.
+        # 2026-06-15 audit T#65: log + return the HARD-STOP ceiling (9800u
+        # by default, configurable via HARD_STOP_PCT), not the raw 10K
+        # Google ceiling. The previous "8600/10000" message displayed 86%
+        # when the gate was actually at 88% of the 9800u hard-stop —
+        # operator misread it as "headroom remaining" and tried to retry.
         if self._quota_tracker is not None:
             if not self._quota_tracker.can_upload():
                 qs = self._quota_tracker.status()
+                hard_stop = qs.get("hard_stop", 9800)
                 logger.error(
-                    "YouTube quota gate blocked upload: %d/%d units (%d uploads today)",
+                    "YouTube quota gate blocked upload: %d/%d units used (hard-stop, %d uploads today)",
                     qs["used"],
-                    10_000,
+                    hard_stop,
                     qs["upload_count"],
                 )
                 return PublishResult(
                     platform=self.platform_id,
                     success=False,
-                    error=f"YouTube quota near limit ({qs['used']}/10000 units)",
+                    error=(
+                        f"YouTube quota at hard-stop ({qs['used']}/{hard_stop} units, "
+                        f"{qs.get('pct_of_hard_stop', '?')}%). "
+                        f"Next upload would exceed budget — wait for Pacific midnight reset."
+                    ),
                 )
 
         try:

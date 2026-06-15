@@ -49,7 +49,13 @@ feature_flags:
 
 freshness:
   decay_half_life_hours: 24.0
-  max_story_age_hours: 72
+  # 2026-06-15 audit T#63: bumped from 72h (3d) to 720h (30d). Viral
+  # anime moments — fight scenes, voice-actor reveals, studio drops —
+  # resurface for weeks via TikTok/IG/YT compilation channels; the 3d
+  # gate was rejecting them at push_to_backlog. The declining_threshold
+  # below (96h) still controls scoring decay separately, so older
+  # stories will land lower in the queue without being hard-blocked.
+  max_story_age_hours: 720  # 30 days
   trend_cycle_modes:
     emerging_window_hours: 24
     peak_window_hours: 72
