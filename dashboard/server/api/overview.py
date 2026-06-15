@@ -263,11 +263,29 @@ def _build_overview() -> dict:
         else None
     )
 
-    # Supplement published_today from publishing_analytics (more accurate)
+    # Supplement published_today from publishing_analytics (more accurate).
+    #
+    # 2026-06-15 audit fix: match ALL post-publish lifecycle states,
+    # not just SUCCESS. The metric collector flips publishing_analytics.
+    # status from SUCCESS → INSIGHTS_6H ~5h after publish. The previous
+    # ``{status}='SUCCESS'`` filter under-counted any post past its 6h
+    # mark — by mid-day the overview reported 0 published-today for
+    # any niche whose only post fired in the morning, and Mission
+    # Control's DailySloBadge (PR #226) would spuriously read 0/5
+    # instead of 5/5. Same bug pattern as PR #220's daily_cap fix
+    # and PR #230's insights cascade fix.
     if client:
         try:
             pub_analytics = client.publishing_analytics.all(
-                formula="AND({status}='SUCCESS')",
+                formula=(
+                    "OR("
+                    "{status}='SUCCESS',"
+                    "{status}='INSIGHTS_6H',"
+                    "{status}='INSIGHTS_24H',"
+                    "{status}='INSIGHTS_48H',"
+                    "{status}='INSIGHTS_168H'"
+                    ")"
+                ),
                 max_records=200,
             )
             for pa in pub_analytics:
