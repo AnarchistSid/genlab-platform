@@ -901,9 +901,7 @@ def batch_review():
             # breaks the batch loop.
             from server.core.calibration_helper import log_calibration_for_action
 
-            log_calibration_for_action(
-                client=client, record_id=str(rid), action=action_taken
-            )
+            log_calibration_for_action(client=client, record_id=str(rid), action=action_taken)
             results.append({"id": rid, "action": action_taken, "status": "ok"})
         except Exception as exc:
             logger.error("Batch review failed for %s: %s", rid, exc)
@@ -944,9 +942,7 @@ def approve_and_schedule(blueprint_id):
         # operator throughput would suggest.
         from server.core.calibration_helper import log_calibration_for_action
 
-        log_calibration_for_action(
-            client=client, record_id=blueprint_id, action="approved"
-        )
+        log_calibration_for_action(client=client, record_id=blueprint_id, action="approved")
 
         return api_success(
             data={
@@ -999,9 +995,7 @@ def batch_approve_schedule():
             # calibration source.
             from server.core.calibration_helper import log_calibration_for_action
 
-            log_calibration_for_action(
-                client=client, record_id=str(bp_id), action="approved"
-            )
+            log_calibration_for_action(client=client, record_id=str(bp_id), action="approved")
             results.append({"id": bp_id, "status": "ok", "scheduled_for": scheduled_for})
         except Exception as e:
             logger.warning("batch approve-schedule failed for %s: %s", bp_id, e)

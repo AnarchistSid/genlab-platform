@@ -243,9 +243,7 @@ def archive_item(record_id):
         # with gate's reject" appear less common than reality.
         from server.core.calibration_helper import log_calibration_for_action
 
-        log_calibration_for_action(
-            client=client, record_id=record_id, action="archived"
-        )
+        log_calibration_for_action(client=client, record_id=record_id, action="archived")
 
         try:
             from server.review_server import socketio

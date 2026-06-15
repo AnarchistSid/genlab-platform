@@ -59,9 +59,7 @@ class TestLogCalibrationForAction:
         with patch(
             "genlab_core.scheduling.calibration_logger.log",
         ) as mock_log:
-            log_calibration_for_action(
-                client=client, record_id="bp1", action="approved"
-            )
+            log_calibration_for_action(client=client, record_id="bp1", action="approved")
         mock_log.assert_called_once()
         kwargs = mock_log.call_args.kwargs
         assert kwargs["blueprint_id"] == "bp1"
@@ -79,9 +77,7 @@ class TestLogCalibrationForAction:
         with patch(
             "genlab_core.scheduling.calibration_logger.log",
         ) as mock_log:
-            log_calibration_for_action(
-                client=client, record_id="bp1", action="archived"
-            )
+            log_calibration_for_action(client=client, record_id="bp1", action="archived")
         kwargs = mock_log.call_args.kwargs
         assert kwargs["operator_action"] == "rejected", (
             "archived must map to rejected — otherwise it gets filtered "
@@ -100,9 +96,7 @@ class TestLogCalibrationForAction:
             side_effect=RuntimeError("simulated DB failure"),
         ):
             # MUST NOT raise
-            log_calibration_for_action(
-                client=client, record_id="bp1", action="approved"
-            )
+            log_calibration_for_action(client=client, record_id="bp1", action="approved")
 
     def test_swallows_blueprint_fetch_exception(self):
         """If client.blueprints.get raises (e.g. record archived
@@ -113,9 +107,7 @@ class TestLogCalibrationForAction:
         client = MagicMock()
         client.blueprints.get.side_effect = RuntimeError("not found")
         # MUST NOT raise
-        log_calibration_for_action(
-            client=client, record_id="bp1", action="approved"
-        )
+        log_calibration_for_action(client=client, record_id="bp1", action="approved")
 
     def test_builds_extra_wrapper_when_missing(self):
         """When blueprint fields don't include an `extra` dict, the
@@ -126,16 +118,12 @@ class TestLogCalibrationForAction:
 
         # No `extra` key in the blueprint — scores live at top level
         client = _mock_client_with_blueprint(extra=None)
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             # Use real calibration_logger.log mock so the helper runs
             # to completion; we're only checking what was passed to
             # evaluate.
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
         mock_eval.assert_called_once()
         # The blueprint dict passed to evaluate must have an `extra`
         # dict carrying the score fields.
@@ -156,13 +144,9 @@ class TestLogCalibrationForAction:
             "custom_field": "do not delete me",
         }
         client = _mock_client_with_blueprint(extra=existing_extra)
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
         passed_bp = mock_eval.call_args.args[0]
         assert passed_bp["extra"] is existing_extra
         assert passed_bp["extra"]["custom_field"] == "do not delete me"
