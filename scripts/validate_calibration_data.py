@@ -190,9 +190,9 @@ def _print_per_niche(
     is set; default exit is 0 unless a hard check fails)."""
     warnings = False
     n = stats["niche_id"]
-    print(f"\n──────────────────────────────────────────────────────────────────────")
+    print("\n──────────────────────────────────────────────────────────────────────")
     print(f" {n.upper()}")
-    print(f"──────────────────────────────────────────────────────────────────────")
+    print("──────────────────────────────────────────────────────────────────────")
     print(f"  Samples            : {stats['sample_count']}")
     print(
         f"  TP / TN / FP / FN  : {stats['true_positives']} / "
@@ -231,8 +231,8 @@ def _print_per_niche(
         # historical timestamp.
         if stats["sample_count"] > 5 and decided["distinct_days"] <= 1:
             print(
-                f"  ⚠️  decided_at all in 1 day — backfill may have used "
-                f"NOW() instead of dashboard_events.created_at"
+                "  ⚠️  decided_at all in 1 day — backfill may have used "
+                "NOW() instead of dashboard_events.created_at"
             )
             warnings = True
     return warnings
