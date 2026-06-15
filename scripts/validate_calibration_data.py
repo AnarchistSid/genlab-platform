@@ -179,8 +179,12 @@ def _query_orphans(cur) -> int:
     return cur.fetchone()[0] or 0
 
 
-def _print_per_niche(stats: dict[str, Any], actions: dict[str, int],
-                     confidence: dict[str, Any], decided: dict[str, Any]) -> bool:
+def _print_per_niche(
+    stats: dict[str, Any],
+    actions: dict[str, int],
+    confidence: dict[str, Any],
+    decided: dict[str, Any],
+) -> bool:
     """Print one niche's report. Returns True if any soft-warning
     surfaced (caller uses to inform exit code only when STRICT mode
     is set; default exit is 0 unless a hard check fails)."""
@@ -190,35 +194,46 @@ def _print_per_niche(stats: dict[str, Any], actions: dict[str, int],
     print(f" {n.upper()}")
     print(f"──────────────────────────────────────────────────────────────────────")
     print(f"  Samples            : {stats['sample_count']}")
-    print(f"  TP / TN / FP / FN  : {stats['true_positives']} / "
-          f"{stats['true_negatives']} / {stats['false_positives']} / "
-          f"{stats['false_negatives']}")
+    print(
+        f"  TP / TN / FP / FN  : {stats['true_positives']} / "
+        f"{stats['true_negatives']} / {stats['false_positives']} / "
+        f"{stats['false_negatives']}"
+    )
     print(f"  Agreement rate     : {stats['agreement_rate']:.1%}")
-    print(f"  Ready for enforce  : {'YES ✓' if stats['ready_for_enforcement'] else 'NO'} "
-          f"(needs ≥{MIN_SAMPLES_FOR_ENFORCEMENT} samples + ≥{MIN_AGREEMENT_FOR_ENFORCEMENT:.0%})")
+    print(
+        f"  Ready for enforce  : {'YES ✓' if stats['ready_for_enforcement'] else 'NO'} "
+        f"(needs ≥{MIN_SAMPLES_FOR_ENFORCEMENT} samples + ≥{MIN_AGREEMENT_FOR_ENFORCEMENT:.0%})"
+    )
     print(f"  Operator actions   : {actions or '{}'}")
     if confidence["total"]:
-        print(f"  Confidence P50/P90 : {confidence['p50']} / {confidence['p90']} "
-              f"(min {confidence['min']}, max {confidence['max']})")
+        print(
+            f"  Confidence P50/P90 : {confidence['p50']} / {confidence['p90']} "
+            f"(min {confidence['min']}, max {confidence['max']})"
+        )
         # Showstopper #1 detector: if 100% of rows are at exactly 0.5,
         # the auto_approver gate wrapper is still broken.
         pct_half = (
-            confidence["exactly_half_count"] / confidence["total"]
-            if confidence["total"] else 0.0
+            confidence["exactly_half_count"] / confidence["total"] if confidence["total"] else 0.0
         )
         if pct_half >= 0.95:
-            print(f"  ⚠️  {pct_half:.0%} of rows have confidence=0.5 — "
-                  f"check auto_approver `extra` wrapper (Showstopper #1)")
+            print(
+                f"  ⚠️  {pct_half:.0%} of rows have confidence=0.5 — "
+                f"check auto_approver `extra` wrapper (Showstopper #1)"
+            )
             warnings = True
     if decided["min"]:
-        print(f"  decided_at range   : {decided['min'].date()} → "
-              f"{decided['max'].date()} ({decided['distinct_days']} distinct days)")
+        print(
+            f"  decided_at range   : {decided['min'].date()} → "
+            f"{decided['max'].date()} ({decided['distinct_days']} distinct days)"
+        )
         # Backfill sanity: if decided_at span is < 1 day for a niche
         # with >5 samples, the backfill likely stamped NOW() not the
         # historical timestamp.
         if stats["sample_count"] > 5 and decided["distinct_days"] <= 1:
-            print(f"  ⚠️  decided_at all in 1 day — backfill may have used "
-                  f"NOW() instead of dashboard_events.created_at")
+            print(
+                f"  ⚠️  decided_at all in 1 day — backfill may have used "
+                f"NOW() instead of dashboard_events.created_at"
+            )
             warnings = True
     return warnings
 
@@ -268,8 +283,7 @@ def main() -> int:
     print("═" * 70)
     print(f"  Total samples across all niches : {total_samples}")
     print(f"  Niches ready for enforcement    : {ready_count} / {len(NICHES)}")
-    print(f"  Orphan rows (no matching bp)    : {orphan_count}"
-          f"{' ⚠️' if orphan_count else ''}")
+    print(f"  Orphan rows (no matching bp)    : {orphan_count}{' ⚠️' if orphan_count else ''}")
     print(f"  Soft warnings                   : {soft_warnings}")
     print()
     any_ready = ready_count > 0
@@ -282,17 +296,21 @@ def main() -> int:
     # archived blueprints in significant volume — operator should
     # investigate before relying on the data.
     if total_samples and orphan_count / total_samples > 0.10:
-        print(f"✗ FAIL: {orphan_count}/{total_samples} ({orphan_count/total_samples:.0%}) "
-              f"calibration rows are orphans. D1.2 may have hit a backfill window "
-              f"where blueprints were being archived in parallel.")
+        print(
+            f"✗ FAIL: {orphan_count}/{total_samples} ({orphan_count / total_samples:.0%}) "
+            f"calibration rows are orphans. D1.2 may have hit a backfill window "
+            f"where blueprints were being archived in parallel."
+        )
         return 1
 
     if any_ready:
         print("✓ At least one niche has met the ready-for-enforcement threshold.")
     else:
-        print(f"ℹ Data is healthy but no niche has hit {MIN_SAMPLES_FOR_ENFORCEMENT}+ "
-              f"samples × {MIN_AGREEMENT_FOR_ENFORCEMENT:.0%}+ agreement yet. "
-              f"Keep operator-reviewing.")
+        print(
+            f"ℹ Data is healthy but no niche has hit {MIN_SAMPLES_FOR_ENFORCEMENT}+ "
+            f"samples × {MIN_AGREEMENT_FOR_ENFORCEMENT:.0%}+ agreement yet. "
+            f"Keep operator-reviewing."
+        )
     return 0
 
 
