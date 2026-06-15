@@ -674,3 +674,117 @@ class TestPickNextAvailableSlot:
             "all 7 forward days at cap → must return None, NOT silently "
             "pick a slot beyond the safe window"
         )
+
+
+# ── D2.7a: strategies wired into the worker (integration) ─────────────
+
+
+class TestStrategyLayerIntegration:
+    """Pins for D2.7a — the worker invokes apply_strategies AFTER the
+    base gate when policy.strategies opts in.
+
+    These tests use the strategy_b / strategy_e lookups in their fake
+    form (no DB) and verify the worker reaches the strategy code path
+    only when the per-niche policy enables it.
+    """
+
+    def _enabled_policy_with_strategies(self, strategies=None):
+        """Build a policy that the worker would normally use to run."""
+        from genlab_core.scheduling.gate_strategies import StrategyConfig
+
+        return AutoApprovalPolicy(
+            enabled=True,
+            min_confidence=0.0,  # gate any approved
+            max_approvals_per_pass=10,
+            strategies=strategies or StrategyConfig(),
+        )
+
+    def test_strategies_off_by_default_means_no_lookup(self, monkeypatch):
+        """Default StrategyConfig should never trigger the lookup callbacks."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        # If a lookup fires, this MagicMock would record the call.
+        called = []
+
+        def boom_lookup(*args, **kwargs):
+            called.append(args)
+            return None
+
+        # Patch the module-level helpers so even if the wiring fires
+        # they record + return None.
+        monkeypatch.setattr("genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom_lookup)
+        monkeypatch.setattr(
+            "genlab_core.scheduling.auto_approver._lookup_calibration_stats",
+            boom_lookup,
+        )
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy_with_strategies(),
+        ):
+            client = _stub_client(
+                [{"id": "bp1", "niche_id": "gaming", "arm_id": "x", "action_taken": ""}]
+            )
+            run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+        assert called == [], "strategies disabled but lookups still fired"
+
+    def test_strategy_e_blocks_when_calibration_thin(self, monkeypatch):
+        """Worker honours Strategy E: thin calibration → blueprint blocked."""
+        from genlab_core.scheduling.gate_strategies import StrategyConfig
+
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        # Force calibration lookup to return "thin"
+        monkeypatch.setattr(
+            "genlab_core.scheduling.auto_approver._lookup_calibration_stats",
+            lambda n, w: {"sample_count": 1, "agreement_rate": 0.0},
+        )
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy_with_strategies(
+                StrategyConfig(agreement_floor_enabled=True)
+            ),
+        ):
+            client = _stub_client(
+                [{"id": "bp1", "niche_id": "gaming", "arm_id": "x", "action_taken": ""}]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+        # E flipped the gate's approval to False → bucketed as rejected
+        assert result.auto_approved == []
+        assert "bp1" in result.skipped_gate_rejected
+
+    def test_strategy_b_lookup_failure_preserves_base_decision(self, monkeypatch):
+        """If the strategy layer crashes, the worker logs and proceeds
+        with the BASE decision — never silently drops blueprints."""
+        from genlab_core.scheduling.gate_strategies import StrategyConfig
+
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("DB down")
+
+        monkeypatch.setattr("genlab_core.scheduling.auto_approver._lookup_bandit_arm", boom)
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy_with_strategies(
+                StrategyConfig(bandit_boost_enabled=True)
+            ),
+        ):
+            client = _stub_client(
+                [{"id": "bp1", "niche_id": "gaming", "arm_id": "x", "action_taken": ""}]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+        # B failure is fail-open per design — base gate's approval stands
+        assert "bp1" in result.auto_approved

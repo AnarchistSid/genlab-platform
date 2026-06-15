@@ -174,6 +174,68 @@ def _pick_next_available_slot(
     return None
 
 
+# ── D2.7a strategy lookups (read-only data sources) ──────────────────
+# Module-level wrappers so the worker passes them as callbacks into
+# ``gate_strategies.apply_strategies``. Each returns ``None`` on any
+# failure (missing DSN, missing psycopg, DB error) — the strategies'
+# fail-mode logic handles None correctly.
+
+
+def _lookup_bandit_arm(niche_id: str, arm_id: str) -> dict | None:
+    """Read one (niche, arm) row from bandit_arms.
+
+    Returns ``{alpha, beta, n_plays}`` or None on miss / error.
+    """
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        return None
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SET app.niche_id = ''")  # bypass RLS — arms are global
+                cur.execute(
+                    "SELECT alpha, beta, n_plays FROM bandit_arms "
+                    "WHERE niche_id = %s AND arm_id = %s",
+                    (niche_id, arm_id),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return None
+                alpha, beta, n_plays = row
+                return {
+                    "alpha": float(alpha or 1.0),
+                    "beta": float(beta or 1.0),
+                    "n_plays": int(n_plays or 0),
+                }
+    except Exception:  # noqa: BLE001
+        logger.warning("[auto_approver] bandit lookup failed", exc_info=True)
+        return None
+
+
+def _lookup_calibration_stats(niche_id: str, window_days: int) -> dict | None:
+    """Reach into calibration_logger.stats() for the empirical agreement floor.
+
+    Returns ``{sample_count, agreement_rate, agreement_count}`` or
+    None on error.
+    """
+    try:
+        from genlab_core.scheduling.calibration_logger import stats as cal_stats
+
+        s = cal_stats(niche_id=niche_id, window_days=window_days)
+        return {
+            "sample_count": s.sample_count,
+            "agreement_count": s.agreement_count,
+            "agreement_rate": s.agreement_rate,
+        }
+    except Exception:  # noqa: BLE001
+        logger.warning("[auto_approver] calibration lookup failed", exc_info=True)
+        return None
+
+
 def _safe_json_list(raw: Any) -> list:
     """Best-effort decode of a JSON list field. Returns [] on any
     failure (None, malformed JSON, wrong type) — never raises.
@@ -216,11 +278,21 @@ class AutoApprovalPolicy:
     """Per-niche auto-approval policy. Loaded from publishing.yaml's
     ``auto_publish`` block. Defaults preserve current behavior — every
     niche is OFF until the operator flips ``enabled``.
+
+    The ``strategies`` field carries D2.7a's opt-in layered strategies
+    (B = bandit confidence boost, E = empirical agreement floor). Both
+    default to off; the worker applies them via
+    ``gate_strategies.apply_strategies`` after the base gate evaluate.
     """
 
     enabled: bool = False
     min_confidence: float = 0.85
     max_approvals_per_pass: int = 3
+    # D2.7a: opt-in layered strategies. Default StrategyConfig() is
+    # all-off → no behaviour change for niches that haven't opted in.
+    # Imported lazily inside load_policy to avoid the cross-module
+    # import cycle at module load time.
+    strategies: Any = None  # actually StrategyConfig — typed Any to avoid forward-ref
 
 
 def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprovalPolicy:
@@ -280,10 +352,17 @@ def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprov
         return AutoApprovalPolicy()
 
     try:
+        # D2.7a: parse the optional ``strategies`` sub-block. Lazy
+        # import keeps the gate_strategies module out of the import
+        # graph for callers that never touch the policy loader.
+        from genlab_core.scheduling.gate_strategies import StrategyConfig
+
+        strategies = StrategyConfig.from_yaml_dict(block.get("strategies"))
         return AutoApprovalPolicy(
             enabled=bool(block.get("enabled", False)),
             min_confidence=float(block.get("min_confidence", 0.85)),
             max_approvals_per_pass=int(block.get("max_approvals_per_pass", 3)),
+            strategies=strategies,
         )
     except (TypeError, ValueError) as exc:
         logger.warning(
@@ -442,6 +521,35 @@ def run_pass(
                 exc,
             )
             continue
+
+        # ── D2.7a: layer opt-in strategies on top of the base gate ────────
+        # Strategies are no-ops unless the niche opts in via publishing.yaml
+        # ``auto_publish.strategies: {...}``. Even when on, B only nudges
+        # confidence on borderline approvals and E only flips approved→False
+        # when calibration data says the gate is empirically wrong. The
+        # base ``decision`` is the input; the adjusted decision is what we
+        # gate the rest of the pass on.
+        if policy.strategies is not None and (
+            policy.strategies.bandit_boost_enabled or policy.strategies.agreement_floor_enabled
+        ):
+            try:
+                from genlab_core.scheduling.gate_strategies import apply_strategies
+
+                decision = apply_strategies(
+                    decision,
+                    blueprint=blueprint,
+                    niche_id=niche_id,
+                    config=policy.strategies,
+                    bandit_lookup=_lookup_bandit_arm,
+                    calibration_lookup=_lookup_calibration_stats,
+                )
+            except Exception as exc:  # noqa: BLE001 — strategies are advisory
+                logger.warning(
+                    "[auto_approver] niche=%s bp=%s strategy layer error (preserving base decision): %s",
+                    niche_id,
+                    record_id,
+                    exc,
+                )
 
         if not decision.approved:
             result.skipped_gate_rejected.append(record_id)
