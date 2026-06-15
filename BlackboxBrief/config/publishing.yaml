@@ -1,0 +1,35 @@
+# BlackboxBrief (ai_creators) publishing config.
+#
+# BlackboxBrief uses individual per-platform yamls (instagram_specs.yaml,
+# media.yaml, etc.) rather than the consolidated platforms.* block the
+# other 4 niches use. This file exists only to provide the
+# `auto_publish` block that `genlab_core.scheduling.auto_approver.
+# load_policy("ai_creators")` walks to find — without it, the function
+# returns a disabled-default policy regardless of operator intent.
+#
+# AUTO #2 step S7 (2026-06-15) per the rollout runbook: the previous
+# Round-3 audit found this file missing → flipping enforcement for
+# ai_creators would no-op silently because load_policy couldn't find a
+# place to read enabled=true. Creating the file now (with enabled:
+# false matching current behavior) gives the operator a single concrete
+# yaml line to edit when calibration data justifies the flip.
+#
+# To enable auto-approval for ai_creators (the AUTO #2 Day-8 flip step
+# per the rollout runbook):
+#
+#   auto_publish:
+#     enabled: true
+#     min_confidence: 0.85
+#     max_approvals_per_pass: 3
+#
+# Do NOT flip without:
+#   1. calibration_logger data showing ≥30 samples × ≥90% agreement
+#      for ai_creators (read via /api/v1/auto-approval/calibration-stats)
+#   2. operator-runbook § 6 pre-flight checks
+#   3. PR-based change (NOT a hand-edit on prod) per the 2026-06-14
+#      deploy-pipeline-gap lesson
+
+auto_publish:
+  enabled: false
+  min_confidence: 0.85
+  max_approvals_per_pass: 3

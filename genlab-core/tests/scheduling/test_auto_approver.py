@@ -371,6 +371,34 @@ class TestPolicyLoading:
         policy = load_policy("nonexistent_niche")
         assert policy.enabled is False
 
+    def test_ai_creators_loads_policy_from_blackboxbrief_yaml(self):
+        """AUTO #2 S7 (2026-06-15): BlackboxBrief/config/publishing.yaml
+        must exist + must expose the auto_publish block, so a future
+        operator who wants to flip enabled=true has a concrete file to
+        edit. Without this file, load_policy falls through every
+        candidate path and returns the default disabled policy with
+        no way to override.
+
+        Pin checks the file exists in the real repo (NOT a fixture)
+        and that load_policy reads it correctly."""
+        # Use the real repo root, not a fixture — we're asserting on
+        # the shipped state of BlackboxBrief/config/publishing.yaml.
+        policy = load_policy("ai_creators")
+        # The file ships with enabled=false (safe default); changing
+        # to true is the AUTO #2 Day-8 flip step.
+        assert policy.enabled is False, (
+            "BlackboxBrief publishing.yaml must ship with enabled=false. "
+            "Operator flips to true via PR — never hand-edit on prod."
+        )
+        # The other two fields must be loaded from the yaml — if they're
+        # at AutoApprovalPolicy() defaults, the yaml wasn't found.
+        # 0.85 + 3 are also the dataclass defaults so this isn't a
+        # bulletproof check, but a future operator who tunes the yaml
+        # to non-default values would break this pin if the load path
+        # regressed.
+        assert policy.min_confidence == 0.85
+        assert policy.max_approvals_per_pass == 3
+
 
 # ── P1 (Showstopper #1, 2026-06-15): the gate's `extra` wrapper ───────────
 
