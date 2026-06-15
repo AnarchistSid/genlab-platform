@@ -173,6 +173,11 @@ def log(
                 # operator-review fast path (NOW() is cheaper than a
                 # round-trip to Python's datetime serializer).
                 if decided_at is None:
+                    # 2026-06-15 audit T#57: ON CONFLICT DO NOTHING
+                    # against the new unique index
+                    # uq_calibration_no_dupe_within_second. Defense in
+                    # depth: a frontend retry / dual-route fire / React
+                    # Query 500-retry can't produce duplicate rows.
                     cur.execute(
                         """
                         INSERT INTO auto_approval_calibration
@@ -181,6 +186,7 @@ def log(
                              gate_passed_checks, gate_failed_checks,
                              operator_action)
                         VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+                        ON CONFLICT DO NOTHING
                         """,
                         (
                             str(blueprint_id),
@@ -193,6 +199,7 @@ def log(
                         ),
                     )
                 else:
+                    # Backfill path — same ON CONFLICT guard.
                     cur.execute(
                         """
                         INSERT INTO auto_approval_calibration
@@ -201,6 +208,7 @@ def log(
                              gate_passed_checks, gate_failed_checks,
                              operator_action, decided_at)
                         VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                        ON CONFLICT DO NOTHING
                         """,
                         (
                             str(blueprint_id),
