@@ -57,9 +57,19 @@ MIN_AGREEMENT_FOR_ENFORCEMENT = 0.90
 NICHES = ("ai_creators", "anime", "gaming", "movies", "sports")
 
 
-def _query_per_niche_stats(cur, niche_id: str) -> dict[str, Any]:
+def _query_per_niche_stats(cur, niche_id: str, window_days: int = 7) -> dict[str, Any]:
     """Mirror calibration_logger.stats SQL — same denominator, same
-    TP/TN/FP/FN cells. Returns counts + agreement rate."""
+    TP/TN/FP/FN cells, SAME window.
+
+    2026-06-15 audit fix: the previous query ran all-time. The
+    dashboard endpoint (``calibration_logger.stats(window_days=7)``)
+    uses a 7-day rolling window. After D1.2 backfill loaded months
+    of historical events, the validator could report
+    ``ready_for_enforcement: YES`` based on all-time totals while
+    the dashboard's 7-day window still said NO — operator could
+    have prematurely flipped enforcement based on stale data.
+
+    Returns counts + agreement rate over the window."""
     cur.execute(
         """
         SELECT
@@ -82,8 +92,9 @@ def _query_per_niche_stats(cur, niche_id: str) -> dict[str, Any]:
             ) AS false_negatives
         FROM auto_approval_calibration
         WHERE niche_id = %s
+          AND decided_at >= NOW() - (%s || ' days')::interval
         """,
-        (niche_id,),
+        (niche_id, str(window_days)),
     )
     row = cur.fetchone()
     sample = row[0] or 0
@@ -243,6 +254,16 @@ def main() -> int:
         description="Validate auto_approval_calibration data quality (read-only)"
     )
     parser.add_argument("--log-level", default="WARNING")
+    # 2026-06-15 audit fix: matches calibration_logger.stats's default
+    # 7-day rolling window. Operator can pass --window-days=30 to
+    # spot-check longer history, but ready_for_enforcement should be
+    # computed against the same window the dashboard surfaces (7).
+    parser.add_argument(
+        "--window-days",
+        type=int,
+        default=7,
+        help="Rolling window for stats (default 7, matches dashboard endpoint)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -265,7 +286,7 @@ def main() -> int:
     with psycopg.connect(dsn, connect_timeout=10) as conn:
         with conn.cursor() as cur:
             for niche in NICHES:
-                stats = _query_per_niche_stats(cur, niche)
+                stats = _query_per_niche_stats(cur, niche, window_days=args.window_days)
                 actions = _query_action_distribution(cur, niche)
                 confidence = _query_confidence_distribution(cur, niche)
                 decided = _query_decided_at_range(cur, niche)
