@@ -40,6 +40,22 @@ logger = logging.getLogger(__name__)
 # emitted by review_server._execute_review_action.
 VALID_OPERATOR_ACTIONS = frozenset({"approved", "rejected", "revised", "skipped"})
 
+# Source-tag values that indicate the action was NOT a fresh operator
+# decision. When an operator clicks reject on a blueprint that an
+# earlier auto_approver run already set to approved, the calibration
+# row would be gate-vs-gate (the gate evaluated, the worker acted on
+# the gate's verdict, then the gate re-evaluates here) — circular and
+# misleading. Filter at the writer so the confusion matrix stays
+# clean. (S1 fix, 2026-06-15.)
+#
+# Mirrors ``auto_approver.AUTO_APPROVAL_SOURCE_TAG``. Adding a new
+# auto-source (e.g. ``auto_approver_v2``) means adding it here too —
+# kept as a literal frozenset rather than an import to avoid the
+# circular dependency calibration_logger → auto_approver.
+_NON_OPERATOR_SOURCE_TAGS: frozenset[str] = frozenset({
+    "auto_approver_v1",
+})
+
 
 @dataclass(frozen=True)
 class CalibrationStats:
@@ -75,6 +91,7 @@ def log(
     decision: AutoApprovalDecision | None,
     operator_action: str,
     decided_at: datetime | None = None,
+    action_taken_source: str | None = None,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 
@@ -88,6 +105,15 @@ def log(
             (e.g. AUTO #2 D1.2 backfill from ``dashboard_events``).
             Passing ``None`` keeps the long-standing fail-open default
             so live operator clicks don't need to compute a timestamp.
+        action_taken_source: The blueprint's ``action_taken_source``
+            BEFORE the current operator click. When this matches an
+            entry in ``_NON_OPERATOR_SOURCE_TAGS`` (e.g.
+            ``auto_approver_v1``), the row is NOT written — the
+            action isn't a fresh operator decision but a correction
+            to an earlier auto-approval, which would contaminate the
+            confusion matrix as gate-vs-gate. Pass ``None`` (default)
+            when the caller doesn't know the source — preserves the
+            pre-S1 behavior for callers that haven't been wired yet.
     """
     if not blueprint_id or not niche_id:
         logger.warning(
@@ -101,6 +127,18 @@ def log(
             "[calibration] skipping log — invalid operator_action %r (expected one of %s)",
             operator_action,
             sorted(VALID_OPERATOR_ACTIONS),
+        )
+        return False
+    # S1 (2026-06-15): drop gate-vs-gate rows. When the blueprint was
+    # previously auto-approved by the worker, the operator's later
+    # action isn't a fresh decision — it's a correction. Mixing
+    # those into the confusion matrix inflates apparent disagreement
+    # and under-counts true operator-vs-gate signal.
+    if action_taken_source and action_taken_source in _NON_OPERATOR_SOURCE_TAGS:
+        logger.info(
+            "[calibration] skipping log — action_taken_source=%r is a non-operator "
+            "source (gate-vs-gate guard)",
+            action_taken_source,
         )
         return False
 
