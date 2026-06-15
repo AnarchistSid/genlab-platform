@@ -212,6 +212,16 @@ export interface AutoApprovalPreview {
   reasons: string[];
   would_publish: false;     // pinned literal — preview never publishes
   preview_only: true;
+  // D2.6 (2026-06-15, AUTO #2 runbook): raw scores the gate consulted.
+  // Optional because older cached responses may not carry them;
+  // ScoringExplainer handles the absent-field case gracefully.
+  raw_metrics?: {
+    composite_score: number | null;
+    virality_score: number | null;
+    validation_status: string | null;
+    has_video: boolean;
+    has_hook: boolean;
+  };
 }
 
 // AUTO #1b: stats response from /api/v1/auto-approval/calibration-stats.

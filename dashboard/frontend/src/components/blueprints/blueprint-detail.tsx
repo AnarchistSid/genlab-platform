@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { CarouselViewer } from "@/components/shared/carousel-viewer";
 import { ReviewActions } from "@/components/blueprints/review-actions";
 import { PlatformPreview } from "@/components/blueprints/platform-preview";
+import { ScoringExplainer } from "@/components/review/scoring-explainer";
 import { cn } from "@/lib/utils";
 import { isVideoUrl } from "@/lib/media";
 import { formatRelativeTime } from "@/lib/format";
@@ -274,6 +275,19 @@ export function BlueprintDetail({ blueprintId, onClose }: BlueprintDetailProps) 
                   blueprintId={blueprint.id}
                   onComplete={onClose}
                 />
+              </div>
+
+              <Separator className="bg-bg-hover" />
+
+              {/* Auto-approval gate breakdown (D2.6, AUTO #2 runbook).
+                  Collapsed by default so it doesn't compete with the
+                  primary metadata grid; expand to see why the gate
+                  would approve / reject this specific blueprint. */}
+              <div>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-ghost">
+                  Gate Verdict
+                </h3>
+                <ScoringExplainer blueprintId={blueprint.id} />
               </div>
 
               <Separator className="bg-bg-hover" />
