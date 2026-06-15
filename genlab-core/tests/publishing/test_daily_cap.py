@@ -123,3 +123,106 @@ class TestBundledConfigInvariant:
                 f"R-09's 1-per-day invariant. Bumping caps risks "
                 f"re-introducing the over-publish hazard."
             )
+
+
+class TestLoadCountsLifecycleStatuses:
+    """Pin the 2026-06-15 metric-collector-flipped-status bug.
+
+    Bug: ``_load_today_counts`` filtered ``status != 'SUCCESS' -> skip``.
+    The metric collector flips ``publishing_analytics.status`` from
+    SUCCESS to INSIGHTS_6H ~5h after publish (then INSIGHTS_24H, _48H,
+    _168H later). A 2nd publisher invocation after the flip saw count=0
+    and bypassed the cap entirely. Verified prod cases (2026-06-14):
+    gaming/instagram 2×, gaming/youtube 2×, sports/IG+YT+FB 2× each.
+    """
+
+    @staticmethod
+    def _enforcer_with_items(items: list[dict]) -> DailyCapEnforcer:
+        """Create an enforcer whose backlog client returns the given
+        publishing_analytics items. Resets counts cache so the next
+        ``_get_counts()`` triggers a fresh load."""
+        client = MagicMock()
+        client.publishing_analytics.all.return_value = items
+        enforcer = DailyCapEnforcer(client, niche_id="gaming")
+        enforcer._caps = {
+            p: 1 for p in ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
+        }
+        # Force a fresh load on next can_publish()
+        enforcer._counts_loaded_for = None  # type: ignore[assignment]
+        return enforcer
+
+    def _item(self, *, platform: str, status: str, niche: str = "gaming") -> dict:
+        today_iso = datetime.now(UTC).strftime("%Y-%m-%dT06:00:00+00:00")
+        return {
+            "fields": {
+                "platform": platform,
+                "status": status,
+                "niche_id": niche,
+                "published_at": today_iso,
+            }
+        }
+
+    def test_success_status_counts(self):
+        """Baseline regression: SUCCESS still counts."""
+        enf = self._enforcer_with_items([self._item(platform="instagram", status="SUCCESS")])
+        assert enf.can_publish("instagram") is False, "SUCCESS row must consume cap"
+
+    def test_insights_6h_status_counts(self):
+        """THE HEADLINE PIN. After the metric collector flips SUCCESS ->
+        INSIGHTS_6H, the cap loader must STILL count the row. Without
+        this, a 2nd publish 5+h later silently bypasses the cap."""
+        enf = self._enforcer_with_items([self._item(platform="instagram", status="INSIGHTS_6H")])
+        assert enf.can_publish("instagram") is False, (
+            "INSIGHTS_6H means publish already happened — must count toward cap"
+        )
+
+    def test_insights_24h_48h_168h_all_count(self):
+        """All post-publish lifecycle states must count as 'this fired'."""
+        for status in ("INSIGHTS_24H", "INSIGHTS_48H", "INSIGHTS_168H"):
+            enf = self._enforcer_with_items([self._item(platform="youtube", status=status)])
+            assert enf.can_publish("youtube") is False, (
+                f"{status} must consume cap — it's a SUCCESS row past N-hour metric collection"
+            )
+
+    def test_failed_skipped_do_not_count(self):
+        """Non-publish outcomes must NOT consume cap (they didn't fire)."""
+        for status in ("FAILED", "SKIPPED"):
+            enf = self._enforcer_with_items([self._item(platform="facebook", status=status)])
+            assert enf.can_publish("facebook") is True, (
+                f"{status} did not actually publish — must not count toward cap"
+            )
+
+    def test_unknown_future_status_does_not_count(self):
+        """Allowlist (not denylist) means a new unknown status is
+        under-counted, not over-counted. Under-counting risks over-publish
+        which the test setup catches; this pin documents the deliberate
+        trade-off so a future refactor doesn't flip to denylist without
+        thinking."""
+        enf = self._enforcer_with_items(
+            [self._item(platform="threads", status="SOMETHING_NEW_2027")]
+        )
+        # Will allow publish because unknown status isn't in allowlist —
+        # documents the trade-off, NOT a "correct" behavior.
+        assert enf.can_publish("threads") is True
+
+    def test_mixed_statuses_count_only_publish_outcomes(self):
+        """Multiple rows of mixed states — only publish-outcome rows count."""
+        enf = self._enforcer_with_items(
+            [
+                self._item(platform="instagram", status="INSIGHTS_24H"),  # counts
+                self._item(platform="instagram", status="FAILED"),  # doesn't count
+                self._item(platform="instagram", status="SKIPPED"),  # doesn't count
+            ]
+        )
+        # 1 published row → cap=1 → blocked
+        assert enf.can_publish("instagram") is False
+
+    def test_other_niche_doesnt_consume_this_niches_cap(self):
+        """Niche isolation: anime's published post must not block gaming."""
+        enf = self._enforcer_with_items(
+            [
+                self._item(platform="instagram", status="INSIGHTS_6H", niche="anime"),
+            ]
+        )
+        # enforcer is niche='gaming' — anime row filtered out
+        assert enf.can_publish("instagram") is True

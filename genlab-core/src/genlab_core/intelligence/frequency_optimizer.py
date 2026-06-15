@@ -36,14 +36,22 @@ def analyze_frequency(niche_id: str) -> dict[str, Any]:
         from psycopg.rows import dict_row
 
         with psycopg.connect(dsn, row_factory=dict_row) as conn:
-            # Get publishing history
+            # Get publishing history.
+            # 2026-06-15: count SUCCESS *and* INSIGHTS_* — the metric
+            # collector flips status to INSIGHTS_6H/24H/48H/168H over a
+            # post's lifecycle. status='SUCCESS' alone misses every post
+            # past its 6h mark, severely under-reporting publish rate
+            # for any niche that's been live more than a day.
             row = conn.execute(
                 "SELECT COUNT(*) as total, "
                 "COUNT(DISTINCT published_at::date) as days_active, "
                 "MIN(published_at)::date as first_day, "
                 "MAX(published_at)::date as last_day "
                 "FROM publishing_analytics "
-                "WHERE niche_id = %s AND status = 'SUCCESS' AND platform = 'instagram'",
+                "WHERE niche_id = %s "
+                "  AND status IN ('SUCCESS','INSIGHTS_6H','INSIGHTS_24H',"
+                "                 'INSIGHTS_48H','INSIGHTS_168H') "
+                "  AND platform = 'instagram'",
                 (niche_id,),
             ).fetchone()
 

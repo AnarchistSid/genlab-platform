@@ -91,14 +91,129 @@ def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
         yield
 
 
+def _effective_per_day_cap(niche_id: str, platform: str = "instagram") -> int:
+    """Resolve the per-day cap for (niche, platform) — the SAME number
+    ``DailyCapEnforcer.can_publish`` will enforce at publish-time.
+
+    Defaults to 1 under R-09's "1 reel/channel/day" rule; rises only
+    when the operator opts in via ``multi_publish.enabled: true`` AND
+    the platform is allowlisted. Defensively falls back to cap=1 on
+    ANY failure — over-scheduling beyond the publisher's actual cap is
+    the bug this helper exists to prevent, so a cap-lookup failure must
+    NEVER raise the effective cap. (Mirrors the same defensive posture
+    as ``DailyCapEnforcer._effective_cap``.)
+
+    Why ``instagram`` is the default: the scheduler currently picks ONE
+    ``scheduled_for`` time and all platforms publish from it; IG is the
+    canonical platform whose cap drives scheduling. A future per-platform
+    schedule extension would pass the actual target platform.
+    """
+    try:
+        from genlab_core.publishing.daily_cap import _load_caps, _load_caps_config
+        from genlab_core.scheduling.multi_publish_gate import (
+            effective_cap,
+            is_multi_publish_enabled,
+        )
+
+        caps_config = _load_caps_config()
+        caps = _load_caps()
+        daily_post_cap = int(caps.get(platform, 1))
+        ceiling = int((caps_config.get("max_per_day_ceiling") or {}).get(platform, daily_post_cap))
+        enabled = is_multi_publish_enabled(caps_config, platform=platform)
+        return effective_cap(
+            niche_id=niche_id,
+            platform=platform,
+            daily_post_cap=daily_post_cap,
+            max_per_day_ceiling=ceiling,
+            multi_publish_enabled=enabled,
+        )
+    except Exception as exc:
+        logger.warning(
+            "[QUEUE] effective-cap lookup failed for %s/%s — falling back to 1/day: %s",
+            niche_id,
+            platform,
+            exc,
+        )
+        return 1
+
+
+def mark_cap_violations(records: list[dict[str, Any]]) -> None:
+    """Tag historically-overscheduled blueprints with ``cap_violation: True``.
+
+    The 2026-06-15 scheduler fix prevents NEW packing-beyond-cap, but
+    historical records (FrameDrift on Jun 15, etc.) carry stranded
+    ``scheduled_for`` values pointing at slots the publisher will skip.
+    This helper groups records by (niche_id, local-date) and tags the
+    2nd, 3rd, ... post in each bucket — preserving the earliest one as
+    the only post that will actually publish that day.
+
+    Mutates records in place. Skips records without ``scheduled_for`` or
+    ``niche_id``. Best-effort: any parse/lookup failure on one record
+    leaves it unmarked rather than failing the batch.
+
+    Frontend reads ``cap_violation`` and renders a warning badge so the
+    operator knows which posts will silently skip at publish-time.
+    """
+    if not records:
+        return
+
+    # Group eligible records by (niche, local-date) → list of (scheduled_dt, record).
+    # IST is the canonical local zone (matches the scheduler's tz default).
+    buckets: dict[tuple[str, str], list[tuple[datetime, dict[str, Any]]]] = {}
+    for r in records:
+        fields = r.get("fields", r)
+        niche_id = (fields.get("niche_id") or "").strip()
+        sched_raw = fields.get("scheduled_for", "")
+        if not niche_id or not sched_raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(sched_raw).replace("Z", "+00:00"))
+            dt_local = dt.astimezone(IST)
+        except (ValueError, TypeError):
+            continue
+        key = (niche_id, dt_local.strftime("%Y-%m-%d"))
+        buckets.setdefault(key, []).append((dt_local, r))
+
+    # For each bucket, sort by scheduled time and tag everything past
+    # the cap as a violation. Earliest-first keeps the post the
+    # publisher will actually fire as the clean one.
+    cap_cache: dict[str, int] = {}
+    for (niche_id, _day), entries in buckets.items():
+        if niche_id not in cap_cache:
+            cap_cache[niche_id] = _effective_per_day_cap(niche_id)
+        cap = cap_cache[niche_id]
+        if len(entries) <= cap:
+            continue
+        entries.sort(key=lambda x: x[0])
+        for _dt, record in entries[cap:]:
+            # Mark at the top level so the existing flat-serialization
+            # at ``_transform_media({"id": ..., **fields})`` carries it
+            # through to the frontend without a schema change.
+            target = record.get("fields", record)
+            target["cap_violation"] = True
+
+
 def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str | None:
     """Return the next available publish slot as an ISO 8601 string.
 
-    Reads schedule_slots from publishing.yaml. Checks existing blueprints
-    to avoid scheduling two posts from the same niche at the same slot.
+    Reads schedule_slots from publishing.yaml. Enforces TWO collision
+    invariants:
+
+    1. **Per-(date, time, niche)**: no two posts from the same niche at
+       the same exact slot.
+    2. **Per-(date, niche) effective cap** (2026-06-15 fix): no more
+       posts in one day than ``DailyCapEnforcer`` will actually publish.
+       Without this, ``optimal_time_learner.top_n=3`` × yaml union could
+       pack 4 candidates into one day. The publisher then silently
+       skipped 3 of 4 at publish-time with ``[daily_cap] daily cap
+       reached`` logs, leaving stranded ``scheduled_for`` values
+       pointing at slots that never fired. Honors ``multi_publish``
+       opt-in: when ``multi_publish.enabled: true`` for (niche,
+       platform), the cap rises from 1 toward ``max_per_day_ceiling``
+       (IG=3, YT=2) and packing is allowed up to that ceiling.
 
     Args:
-        niche_id: If set, checks for per-niche collisions (1 post per niche per day).
+        niche_id: If set, checks for per-niche collisions AND per-day cap.
         exclude_record_id: When re-scheduling an existing blueprint, pass its
             record id so its OWN ``scheduled_for`` is not treated as a
             collision. Without this, the scheduler would see the blueprint
@@ -183,8 +298,12 @@ def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str
     earliest = now_local + timedelta(hours=1)
     base_date = earliest.date()
 
-    # Load existing scheduled blueprints for collision check
+    # Load existing scheduled blueprints for collision check.
+    # ``occupied_slots`` keys per-(date,time,niche); ``posts_per_day``
+    # counts per-(date,niche) so the per-day cap (2026-06-15) can
+    # short-circuit BEFORE we walk every slot in the day.
     occupied_slots: set[str] = set()  # "YYYY-MM-DD HH:MM niche_id"
+    posts_per_day: dict[str, int] = {}  # "YYYY-MM-DD" → count
     if niche_id:
         try:
             client = _get_client()
@@ -212,13 +331,45 @@ def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str
                     dt_local = dt.astimezone(tz)
                     key = f"{dt_local.strftime('%Y-%m-%d %H:%M')} {r_niche}"
                     occupied_slots.add(key)
+                    day_key = dt_local.strftime("%Y-%m-%d")
+                    posts_per_day[day_key] = posts_per_day.get(day_key, 0) + 1
                 except (ValueError, TypeError):
                     pass
         except Exception as e:
             logger.warning("[QUEUE] Could not check slot collisions: %s", e)
 
+    # Belt-and-suspenders: _effective_per_day_cap is itself defensive
+    # (returns 1 on any failure), but wrap the call too so a regression
+    # in the helper can never propagate up and crash slot picking.
+    # Fail-closed at cap=1 keeps the R-09 "1/day" guarantee.
+    if niche_id:
+        try:
+            effective_per_day_cap = _effective_per_day_cap(niche_id)
+        except Exception as exc:
+            logger.warning(
+                "[QUEUE] _effective_per_day_cap raised unexpectedly for %s — using 1: %s",
+                niche_id,
+                exc,
+            )
+            effective_per_day_cap = 1
+    else:
+        effective_per_day_cap = 1
+
     for day_offset in range(0, 8):
         candidate_date = base_date + timedelta(days=day_offset)
+        # Per-day cap short-circuit: skip the whole day if it would
+        # over-schedule beyond what the publisher will accept.
+        if niche_id:
+            day_key = candidate_date.strftime("%Y-%m-%d")
+            if posts_per_day.get(day_key, 0) >= effective_per_day_cap:
+                logger.info(
+                    "[QUEUE] Day %s at cap (%d/%d) for %s, trying next day",
+                    day_key,
+                    posts_per_day.get(day_key, 0),
+                    effective_per_day_cap,
+                    niche_id,
+                )
+                continue
         for slot_str in slots:
             hour, minute = map(int, slot_str.split(":"))
             candidate = datetime(

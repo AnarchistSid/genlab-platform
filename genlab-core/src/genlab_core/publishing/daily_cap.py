@@ -20,6 +20,23 @@ _DEFAULT_CAPS: dict[str, int] = {
     p: 1 for p in ["instagram", "youtube", "facebook", "tiktok", "twitter", "threads"]
 }
 
+# Statuses on ``publishing_analytics`` that represent a confirmed
+# publish event — used by ``_load_today_counts`` to count toward the
+# daily cap. Lifecycle: ``SUCCESS`` is set at publish time; the metric
+# collector then progressively flips it through INSIGHTS_6H/24H/48H/168H
+# as each metric-collection window fires. ALL of these represent rows
+# whose publish DID succeed. (See 2026-06-15 root-cause analysis in
+# ``session_2026_06_15_scheduler_over_schedule_bug.md`` / commit msg.)
+_PUBLISHED_STATUSES: frozenset[str] = frozenset(
+    {
+        "SUCCESS",
+        "INSIGHTS_6H",
+        "INSIGHTS_24H",
+        "INSIGHTS_48H",
+        "INSIGHTS_168H",
+    }
+)
+
 
 def _load_caps_config(config_path: Path | None = None) -> dict:
     """Load the full platform_caps.yaml. Returns ``{}`` on failure.
@@ -235,7 +252,28 @@ class DailyCapEnforcer:
             for item in items:
                 fields = item.get("fields", item)
                 status = str(fields.get("status") or "").strip()
-                if status != "SUCCESS":
+                # A published post counts toward the cap for the WHOLE
+                # day, regardless of how far through its metric-collection
+                # lifecycle it is. Post-publish lifecycle states
+                # (INSIGHTS_6H/24H/48H/168H) are SUCCESS rows with
+                # metric-collection metadata layered on — the row was
+                # always a confirmed publish.
+                #
+                # The 2026-06-15 root cause: the previous
+                # ``status != "SUCCESS"`` filter dropped any row whose
+                # status had already flipped to INSIGHTS_*. The metric
+                # collector flips status ~5h after publish; a 2nd
+                # publisher invocation later in the day then saw count=0
+                # and bypassed the cap. Verified prod cases:
+                # gaming Jun 14 (2× instagram + 2× youtube), sports
+                # Jun 14 (2× IG + 2× YT + 2× FB).
+                #
+                # Allowlist over denylist: a new unknown post-publish
+                # state would NOT be silently over-counted; it would
+                # NOT be counted (under-count) until added here. Safer
+                # direction for cap enforcement (a missed count means
+                # over-publish, not silent skip).
+                if status not in _PUBLISHED_STATUSES:
                     continue
                 # Filter by niche_id when set — each channel's cap is independent
                 if self._niche_id:
