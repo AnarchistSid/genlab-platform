@@ -78,6 +78,33 @@ def queue_stats():
         return api_error(error="Failed to fetch queue stats", code=502)
 
 
+def _log_queue_calibration(action: str, record_id: str) -> None:
+    """Best-effort calibration log for the 3 Publishing Queue endpoints
+    (approve/hold/release). Each opens its own BacklogClient because
+    the QueueManager doesn't expose one; the helper handles all
+    fail-open semantics. Exists at module level so each endpoint stays
+    a 3-line wire-up.
+
+    Found by 2026-06-15 post-shipping audit of PR #231: these 3
+    endpoints update action_taken via PublishingQueueManager but
+    bypassed calibration_logger — exactly the S2 bug PR #231 was
+    meant to close, except for the queue surface instead of the
+    review surface. Once Mission Control's Publishing Queue view is
+    the operator's primary surface, calibration data would quietly
+    stop accumulating again."""
+    try:
+        from server.core.calibration_helper import log_calibration_for_action
+        from server.core.graph_sync import get_sync_client
+
+        log_calibration_for_action(
+            client=get_sync_client(),
+            record_id=record_id,
+            action=action,
+        )
+    except Exception as cal_exc:  # noqa: BLE001 — never block the caller
+        logger.debug("[calibration] queue endpoint log skipped: %s", cal_exc)
+
+
 @bp.route("/queue/<record_id>/approve", methods=["POST"])
 def approve_item(record_id):
     """Approve a blueprint for publishing."""
@@ -91,6 +118,7 @@ def approve_item(record_id):
             notes=data.get("notes", ""),
             niche_id=data.get("niche_id", ""),
         )
+        _log_queue_calibration("approved", record_id)
 
         # Emit socket event
         try:
@@ -124,6 +152,10 @@ def hold_item(record_id):
     try:
         mgr = _get_queue_manager()
         mgr.hold(record_id, reason=reason)
+        # "held" maps to "rejected" in the calibration vocabulary
+        # via _ACTION_ALIAS in calibration_helper — see the docstring
+        # there for why hold ≡ "operator says don't publish (yet)".
+        _log_queue_calibration("held", record_id)
 
         try:
             from server.review_server import socketio
@@ -154,6 +186,9 @@ def release_item(record_id):
     try:
         mgr = _get_queue_manager()
         mgr.release(record_id)
+        # "released" maps to "skipped" — operator's signal is "not
+        # acting on this right now", not a verdict on the content.
+        _log_queue_calibration("released", record_id)
 
         try:
             from server.review_server import socketio
