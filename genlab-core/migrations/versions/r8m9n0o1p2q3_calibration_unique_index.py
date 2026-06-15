@@ -9,7 +9,7 @@ for one click) would silently produce duplicate rows that pollute the
 confusion matrix.
 
 This migration adds a UNIQUE index on
-``(blueprint_id, operator_action, floor(extract(epoch from decided_at))::bigint)``.
+``(blueprint_id, operator_action, calibration_epoch_second(decided_at))``.
 Combined with ``INSERT ... ON CONFLICT DO NOTHING`` at the writer
 (shipped in the same PR), this means:
 
@@ -18,15 +18,18 @@ Combined with ``INSERT ... ON CONFLICT DO NOTHING`` at the writer
   - Two writes >=1 second apart → both succeed (intentional
     re-review case)
 
-Why ``floor(extract(epoch from ...))::bigint`` instead of
-``date_trunc('second', ...)``: Postgres flags ``date_trunc`` on a
-``timestamptz`` as STABLE, not IMMUTABLE — because the truncation
-depends on the session timezone — so it can't be used in a
-functional UNIQUE index expression (CI test-storage fail surfaced
-this). ``extract(epoch from timestamptz)`` IS IMMUTABLE (the
-epoch second of an absolute time instant doesn't depend on viewer
-clock); ``floor(::bigint)`` gives the same per-second bucketing
-behaviour we want.
+Why a wrapper SQL function instead of inlining the expression:
+Postgres flags both ``date_trunc('second', timestamptz)`` AND
+``extract(epoch from timestamptz)`` as STABLE (not IMMUTABLE) — the
+extract-epoch is conservatively marked STABLE despite the epoch of an
+absolute time instant being viewer-independent. STABLE expressions
+can't be used in functional UNIQUE indexes (CI test-storage fail
+surfaced this on two consecutive attempts). The cleanest portable
+workaround is to wrap our expression in a tiny SQL function declared
+``IMMUTABLE PARALLEL SAFE`` — Postgres accepts our claim and uses it
+in the index. The function evaluates to
+``floor(extract(epoch from ts))::bigint`` which gives the per-second
+bucketing we want.
 
 Why second-bucket instead of strict unique on decided_at: live
 writes use NOW() at INSERT time, two retries within 100ms would
@@ -52,10 +55,25 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Wrapper SQL function declared IMMUTABLE so we can use it in a
+    # functional UNIQUE index. The underlying ``extract(epoch from
+    # timestamptz)`` is marked STABLE in pg_proc even though epoch-of-
+    # absolute-instant is mathematically tz-independent; the wrapper
+    # promises immutability to the planner so the index can be built.
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION calibration_epoch_second(ts timestamptz)
+        RETURNS bigint
+        LANGUAGE sql
+        IMMUTABLE
+        PARALLEL SAFE
+        AS $$ SELECT floor(extract(epoch from ts))::bigint $$;
+        """
+    )
+
     # Drop pre-existing duplicates before the index creation can succeed.
-    # The dedupe SQL keeps the EARLIEST row per (blueprint, action) — same
-    # logic as tonight's manual dedupe (which already ran on prod). Uses
-    # the same epoch-second bucketing as the index for consistency.
+    # Keeps the EARLIEST row per (blueprint, action) within each 1-second
+    # bucket — same logic as tonight's manual dedupe on prod.
     op.execute(
         """
         DELETE FROM auto_approval_calibration a
@@ -63,20 +81,19 @@ def upgrade() -> None:
         WHERE a.ctid < b.ctid
           AND a.blueprint_id = b.blueprint_id
           AND a.operator_action = b.operator_action
-          AND floor(extract(epoch from a.decided_at))::bigint
-            = floor(extract(epoch from b.decided_at))::bigint;
+          AND calibration_epoch_second(a.decided_at)
+            = calibration_epoch_second(b.decided_at);
         """
     )
-    # Functional UNIQUE index on the epoch-second bucket. We must use an
-    # IMMUTABLE expression — date_trunc on timestamptz is STABLE, but
-    # extract(epoch from ...) is IMMUTABLE.
+
+    # Functional UNIQUE index using the IMMUTABLE wrapper.
     op.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS uq_calibration_no_dupe_within_second
         ON auto_approval_calibration (
             blueprint_id,
             operator_action,
-            (floor(extract(epoch from decided_at))::bigint)
+            calibration_epoch_second(decided_at)
         );
         """
     )
@@ -84,3 +101,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP INDEX IF EXISTS uq_calibration_no_dupe_within_second;")
+    op.execute("DROP FUNCTION IF EXISTS calibration_epoch_second(timestamptz);")
