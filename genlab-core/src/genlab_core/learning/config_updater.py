@@ -25,7 +25,19 @@ import yaml
 logger = logging.getLogger(__name__)
 
 CHANGE_THRESHOLD = 0.10  # 10% — minimum difference to justify a config update
-MIN_DATA_POINTS = 20  # Minimum 48h-complete records before updating any dimension
+# 2026-06-15 audit T#59: lowered from 20 → 5. At current channel reach
+# (1-2 reels/niche/day across 5 niches), gathering 20 records per
+# (niche, platform) takes 30+ days. The 20-threshold made the
+# config_updater appear "dead" (0 changes/week across all 5 niches) when
+# the infrastructure is actually alive — just gated behind an
+# unreachable n. Same pattern as PR #201's optimal_time_learner threshold
+# rebalance (20 → 5 + cold-start fallback).
+#
+# Why 5 still meaningful: 5 records at 90% confidence gives the threshold
+# room to move only when the signal is real, not noise. Below 5 the
+# config_updater wisely no-ops — over-fitting on tiny samples produces
+# config-thrash that defeats the learning loop.
+MIN_DATA_POINTS = 5
 _IST_OFFSET = timedelta(hours=5, minutes=30)  # schedule.yaml uses IST
 
 
