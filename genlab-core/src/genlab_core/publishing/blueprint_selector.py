@@ -47,16 +47,37 @@ def select_blueprint(niche_id: str, backlog_client: Any) -> dict | None:
         logger.info("[publish] No blueprints passed gatekeeper for niche=%s", niche_id)
         return None
 
-    # Sort by priority_score descending and pick the top.
-    eligible.sort(
-        key=lambda b: float(b.get("fields", {}).get("priority_score", 0) or 0),
-        reverse=True,
-    )
+    # 2026-06-15: sort by (scheduled_for ASC, priority_score DESC).
+    # Earliest-scheduled wins; priority_score is the tiebreaker among
+    # same-time siblings only.
+    #
+    # Why this matters: on a day with multiple eligible blueprints (the
+    # backlog from before PR #220's per-day cap fix landed), the
+    # publisher used to pick by priority_score alone. That meant the
+    # 11:30 IST blueprint with score=0.4 lost to its 12:00 IST sibling
+    # with score=0.5 — the cap fired on the wrong one, leaving 11:30
+    # stranded VISUAL_READY (verified prod: anime + sports on
+    # 2026-06-15). The scheduler had embedded "11:30 first, then 12:00"
+    # in scheduled_for; the publisher's score-only sort threw that
+    # signal away. Same producer/consumer drift shape as PR #220's
+    # cap-loader bug.
+    def _sort_key(b):
+        f = b.get("fields", b)
+        # Sentinel for missing scheduled_for: sort to the end (least
+        # urgent). Both date and -score are ascending so a missing
+        # scheduled_for can't jump ahead of a real one.
+        sched = f.get("scheduled_for") or "9999-12-31T23:59:59+00:00"
+        # Negate score for ascending sort (higher score → smaller key).
+        score = -float(f.get("priority_score", 0) or 0)
+        return (sched, score)
+
+    eligible.sort(key=_sort_key)
     best = eligible[0]
     fields = best.get("fields", best)
     logger.info(
-        "[publish] Selected blueprint %s (score=%.2f, hook=%s)",
+        "[publish] Selected blueprint %s (sched=%s, score=%.2f, hook=%s)",
         best.get("id", "")[:16],
+        (fields.get("scheduled_for") or "none")[:19],
         float(fields.get("priority_score", 0) or 0),
         (fields.get("hook", "") or "")[:50],
     )
