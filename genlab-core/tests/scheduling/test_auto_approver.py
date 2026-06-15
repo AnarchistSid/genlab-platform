@@ -544,3 +544,133 @@ class TestGateExtraWrapper:
 
         # Must not have raised — and visual_paths is [] in the wrapper
         assert seen_blueprints[0]["extra"]["visual_paths"] == []
+
+
+class TestPickNextAvailableSlot:
+    """Pin the 2026-06-15 audit T#56 fix: worker writes scheduled_for
+    via cap-aware slot picker. Without this, auto-approved blueprints
+    have no scheduled_for, and either:
+    - publish immediately at uncontrolled time (worst case), OR
+    - hit publisher's _schedule_gate and stay stranded approved-but-
+      unpublished
+    """
+
+    def _stub_with_existing(self, scheduled_isos: list[str]):
+        """Mock backlog client whose get_blueprints_by_status returns
+        rows with the given scheduled_for values (all niche=gaming
+        VISUAL_READY approved)."""
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        rows = [
+            {
+                "id": f"bp{i}",
+                "fields": {
+                    "niche_id": "gaming",
+                    "scheduled_for": iso,
+                    "action_taken": "approved",
+                    "status": "VISUAL_READY",
+                },
+            }
+            for i, iso in enumerate(scheduled_isos)
+        ]
+
+        def _get_by_status(status, **kwargs):
+            if status == "VISUAL_READY":
+                return rows
+            return []
+
+        client.get_blueprints_by_status.side_effect = _get_by_status
+        return client
+
+    def test_picks_today_when_no_existing_posts(self):
+        from genlab_core.scheduling.auto_approver import _pick_next_available_slot
+
+        client = self._stub_with_existing([])
+        slot = _pick_next_available_slot(backlog_client=client, niche_id="gaming")
+        assert slot is not None
+        # Returns ISO Z format
+        assert slot.endswith("Z") or "+00:00" in slot
+
+    def test_skips_day_at_cap_picks_next(self):
+        """With cap=1 (default) and today already at cap, must roll to
+        tomorrow."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from genlab_core.scheduling.auto_approver import _pick_next_available_slot
+
+        ist = ZoneInfo("Asia/Kolkata")
+        # Existing post at today 23:00 IST (always future relative to typical CI)
+        today_late_ist = datetime.now(ist).replace(hour=23, minute=0, second=0, microsecond=0)
+        client = self._stub_with_existing([today_late_ist.isoformat()])
+
+        slot = _pick_next_available_slot(backlog_client=client, niche_id="gaming")
+        assert slot is not None
+        picked_dt = datetime.fromisoformat(slot.replace("Z", "+00:00"))
+        picked_ist_date = picked_dt.astimezone(ist).strftime("%Y-%m-%d")
+        today_ist_date = today_late_ist.strftime("%Y-%m-%d")
+        assert picked_ist_date > today_ist_date, (
+            f"day at cap=1 — must roll forward, got {picked_ist_date} vs today {today_ist_date}"
+        )
+
+    def test_self_record_excluded_from_count(self):
+        """The blueprint being approved must not count itself toward
+        the cap (mirrors dashboard's exclude_record_id semantics)."""
+        from datetime import datetime
+        from unittest.mock import MagicMock
+        from zoneinfo import ZoneInfo
+
+        from genlab_core.scheduling.auto_approver import _pick_next_available_slot
+
+        ist = ZoneInfo("Asia/Kolkata")
+        # Existing post = the same record we're approving
+        today_late_ist = datetime.now(ist).replace(hour=23, minute=0, second=0, microsecond=0)
+        client = MagicMock()
+        client.get_blueprints_by_status.side_effect = lambda status, **kw: (
+            [
+                {
+                    "id": "self_bp",
+                    "fields": {
+                        "niche_id": "gaming",
+                        "scheduled_for": today_late_ist.isoformat(),
+                        "status": "VISUAL_READY",
+                    },
+                }
+            ]
+            if status == "VISUAL_READY"
+            else []
+        )
+
+        slot = _pick_next_available_slot(
+            backlog_client=client,
+            niche_id="gaming",
+            exclude_record_id="self_bp",
+        )
+        # With self excluded, day count = 0, today should be available
+        assert slot is not None
+
+    def test_no_capacity_in_window_returns_none(self):
+        """If all 8 days ahead are at cap, return None — caller skips
+        the approval rather than over-schedule."""
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+
+        from genlab_core.scheduling.auto_approver import _pick_next_available_slot
+
+        ist = ZoneInfo("Asia/Kolkata")
+        now_ist = datetime.now(ist)
+        # 9 posts, one per day starting today
+        iso_list = [
+            (now_ist + timedelta(days=d))
+            .replace(hour=12, minute=0, second=0, microsecond=0)
+            .isoformat()
+            for d in range(9)
+        ]
+        client = self._stub_with_existing(iso_list)
+
+        slot = _pick_next_available_slot(backlog_client=client, niche_id="gaming")
+        assert slot is None, (
+            "all 7 forward days at cap → must return None, NOT silently "
+            "pick a slot beyond the safe window"
+        )
