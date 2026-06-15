@@ -66,6 +66,7 @@ def _rt_dump(path: Path, data: Any) -> None:
         _RT_YAML.dump(data, f)
     tmp_path.replace(path)
 
+
 CHANGE_THRESHOLD = 0.10  # 10% — minimum difference to justify a config update
 # 2026-06-15 audit T#59: lowered from 20 → 5. At current channel reach
 # (1-2 reels/niche/day across 5 niches), gathering 20 records per
