@@ -21,7 +21,16 @@ After=genlab-postgres-ready.target
 #   wrong, there's no one to notice for hours
 # - holding the worker quiescent during sleep hours bounds the
 #   blast radius of any regression
-OnCalendar=*-*-* 06,06:30,07,07:30,08,08:30,09,09:30,10,10:30,11,11:30,12,12:30,13,13:30,14,14:30,15,15:30,16,16:30,17,17:30,18,18:30,19,19:30,20,20:30,21,21:30,22:00:00 UTC
+# systemd OnCalendar grammar is HOUR:MINUTE:SECOND where each
+# position can be a comma-list or range. Range form `06..22` for the
+# hour + `00,30` for the minute gives every 30-min fire in the
+# inclusive hour window. Mirrors genlab-health-monitor.timer's
+# `*:00,30:00 UTC` pattern (verified to parse on prod). The previous
+# verbose form mixed bare hour-only tokens (`06`) with HH:MM tokens
+# (`06:30`) in the same comma list — `systemd-analyze calendar`
+# rejects that as a parse error, so the timer would NEVER fire and
+# the entire AUTO #2 worker would sit idle.
+OnCalendar=*-*-* 06..22:00,30:00 UTC
 # Catch up on missed fires after reboot — important because
 # auto_approver is idempotent and a missed cycle just means slower
 # review-queue drain.
