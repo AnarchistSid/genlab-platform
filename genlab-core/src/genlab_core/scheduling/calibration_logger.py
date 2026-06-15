@@ -52,9 +52,11 @@ VALID_OPERATOR_ACTIONS = frozenset({"approved", "rejected", "revised", "skipped"
 # auto-source (e.g. ``auto_approver_v2``) means adding it here too —
 # kept as a literal frozenset rather than an import to avoid the
 # circular dependency calibration_logger → auto_approver.
-_NON_OPERATOR_SOURCE_TAGS: frozenset[str] = frozenset({
-    "auto_approver_v1",
-})
+_NON_OPERATOR_SOURCE_TAGS: frozenset[str] = frozenset(
+    {
+        "auto_approver_v1",
+    }
+)
 
 
 @dataclass(frozen=True)

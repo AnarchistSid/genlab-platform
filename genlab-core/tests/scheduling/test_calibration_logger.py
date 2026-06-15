@@ -412,8 +412,11 @@ class TestNonOperatorSourceFilter:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         result = log(
             blueprint_id="bp1",
@@ -450,8 +453,11 @@ class TestNonOperatorSourceFilter:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         # No action_taken_source kwarg — pre-S1 default behavior
         result = log(
@@ -486,8 +492,11 @@ class TestNonOperatorSourceFilter:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         result = log(
             blueprint_id="bp1",
@@ -522,8 +531,11 @@ class TestNonOperatorSourceFilter:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         result = log(
             blueprint_id="bp1",
