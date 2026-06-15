@@ -110,18 +110,30 @@ log "Snapshot complete: $ROW_COUNT rows, $SIZE_BYTES bytes"
 # ── Rotation ──────────────────────────────────────────────────────
 # Delete snapshots older than RETENTION_DAYS. Match only the canonical
 # filename pattern so we never delete unrelated files in the dir.
+#
+# Previous version piped to `grep -c "bandit_arms_"` to count pruned
+# files. That returned exit 1 when there were 0 matches (the common
+# case on day 1 and every day before retention fills) which made the
+# script return exit 3 (rotation soft-fail) on every healthy run.
+# Switched to a direct find capture so the exit-3 path now fires
+# only when `find` itself fails (permissions / filesystem error).
 PRUNED=0
 ROTATION_EXIT=0
 
-# Use find with -mtime; if find fails, log but don't fail the whole script
-if find "$SNAPSHOT_DIR" -maxdepth 1 -type f -name "bandit_arms_*.csv" \
-        -mtime +"$RETENTION_DAYS" -print -delete 2>>"$LOG" | tee -a "$LOG" | \
-        grep -c "bandit_arms_" > /tmp/_pruned_count 2>/dev/null; then
-    PRUNED=$(cat /tmp/_pruned_count || echo 0)
-    rm -f /tmp/_pruned_count
-else
+PRUNED_LIST=$(
+    find "$SNAPSHOT_DIR" -maxdepth 1 -type f -name "bandit_arms_*.csv" \
+        -mtime +"$RETENTION_DAYS" -print -delete 2>>"$LOG"
+) || ROTATION_EXIT=$?
+
+if [[ "$ROTATION_EXIT" -ne 0 ]]; then
     ROTATION_EXIT=3
-    log "WARN: rotation failed; old snapshots NOT pruned (non-fatal)"
+    log "WARN: rotation failed (find exit non-zero); old snapshots NOT pruned (non-fatal)"
+else
+    if [[ -n "$PRUNED_LIST" ]]; then
+        # Append the deleted paths to the log for audit trail
+        echo "$PRUNED_LIST" >> "$LOG"
+        PRUNED=$(echo "$PRUNED_LIST" | wc -l | tr -d ' ')
+    fi
 fi
 
 if [[ "$PRUNED" -gt 0 ]]; then
