@@ -242,6 +242,7 @@ def _kill_switch_active() -> tuple[bool, str]:
         return True, "file"
     return False, "none"
 
+
 # Marker written to blueprint.action_taken_source on auto-approval so
 # operator-driven and worker-driven approvals are distinguishable in
 # the backlog. Calibration logger reads this to exclude auto-approvals
