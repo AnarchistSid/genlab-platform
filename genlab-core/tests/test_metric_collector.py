@@ -1960,3 +1960,51 @@ class TestGetChannelMetricsPoolingAndCache:
         )
         mc.get_channel_metrics("gaming", "instagram")
         assert call_count["n"] == 2
+
+
+class TestLinUCBStateDictPsycopgFix:
+    """Pin the 2026-06-15 audit fix.
+
+    Bug: psycopg auto-decodes JSONB columns to Python dict. The
+    metric_collector's LinUCB update site did
+    ``LinUCBArm.from_dict(_json.loads(raw_state))`` unconditionally,
+    which raised "JSON object must be str, bytes or bytearray, not
+    dict" on every populated arm. The exception was caught and
+    silenced as "falling back to Thompson", so EVERY LinUCB
+    contextual update was lost across 18 arms in 5 niches — the
+    LinUCB layer of the bandit (6-dim features per CLAUDE.md) was
+    effectively dead on prod.
+    """
+
+    def test_dict_linucb_state_does_not_raise(self):
+        """The headline pin: passing a dict (as psycopg would for
+        JSONB) must not raise. Without the fix, _json.loads(dict)
+        raises TypeError → exception → silenced fallback."""
+        import json
+
+        from genlab_core.learning.linucb import LinUCBArm
+
+        # Simulate what psycopg returns from a JSONB linucb_state column
+        state_as_dict = LinUCBArm(d=6).to_dict()
+
+        # The fix's logic:
+        raw_state = state_as_dict
+        parsed = raw_state if isinstance(raw_state, dict) else json.loads(raw_state)
+        arm = LinUCBArm.from_dict(parsed)
+        # Must not raise + must produce a valid arm
+        assert arm.n_obs == 0
+        assert arm.A.shape == (6, 6)
+
+    def test_string_linucb_state_still_works(self):
+        """Back-compat: passing a JSON string (as SharePoint or legacy
+        path would) must still work."""
+        import json
+
+        from genlab_core.learning.linucb import LinUCBArm
+
+        state_as_str = json.dumps(LinUCBArm(d=6).to_dict())
+
+        raw_state = state_as_str
+        parsed = raw_state if isinstance(raw_state, dict) else json.loads(raw_state)
+        arm = LinUCBArm.from_dict(parsed)
+        assert arm.A.shape == (6, 6)

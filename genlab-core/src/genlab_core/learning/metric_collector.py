@@ -1422,7 +1422,19 @@ def _default_bandit_updater(
                 try:
                     raw_state = fields.get("linucb_state") or fields.get("LinUCB_State") or ""
                     if raw_state:
-                        arm = LinUCBArm.from_dict(_json.loads(raw_state))
+                        # 2026-06-15 audit fix: psycopg auto-decodes JSONB
+                        # columns to Python dict. The previous unconditional
+                        # _json.loads() raised "JSON object must be str,
+                        # bytes or bytearray, not dict" on every populated
+                        # arm — the exception was caught and silenced as
+                        # "falling back to Thompson", so every LinUCB
+                        # contextual update was lost across 18 arms in
+                        # 5 niches. Tolerate both shapes: dict (Postgres
+                        # path) or JSON string (SharePoint / legacy path).
+                        state_dict = (
+                            raw_state if isinstance(raw_state, dict) else _json.loads(raw_state)
+                        )
+                        arm = LinUCBArm.from_dict(state_dict)
                     else:
                         arm = LinUCBArm(d=CONTEXT_DIM)
                     arm.update(linucb_ctx_array, reward_clipped)
