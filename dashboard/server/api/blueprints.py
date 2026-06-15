@@ -850,6 +850,30 @@ def auto_approval_preview(record_id):
         logger.exception("Auto-approval evaluation crashed for %s", record_id)
         return api_error(error=f"Gate evaluation failed: {exc}", code=500)
 
+    # D2.6 (2026-06-15, AUTO #2 runbook): surface the raw component
+    # scores the gate actually consulted. The gate-checks output is
+    # necessary but not sufficient for operator interpretability —
+    # "composite_score failed" doesn't reveal whether it was 0.00
+    # (clearly bad), 0.29 (just under threshold), or unknown (cold-
+    # start). The ScoringExplainer panel uses these to render a
+    # component-by-component breakdown next to the verdict.
+    extra_for_scores = blueprint_dict.get("extra", {})
+    raw_metrics = {
+        "composite_score": extra_for_scores.get("composite_score"),
+        "virality_score": extra_for_scores.get("virality_score"),
+        "validation_status": extra_for_scores.get("validation_status"),
+        "has_video": bool(extra_for_scores.get("visual_paths")),
+        # Mirror the gate's exact has_hook logic (auto_approval_gate.py):
+        # the canonical field is ``hook_text``; ``title`` is a legacy
+        # fallback some pipeline stages still populate. Checking both
+        # avoids the panel showing FAIL when the gate would PASS.
+        "has_hook": bool(
+            (blueprint_dict.get("hook_text") or "").strip()
+            or (blueprint_dict.get("hook") or "").strip()
+            or (blueprint_dict.get("title") or "").strip()
+        ),
+    }
+
     return api_success(
         data={
             "record_id": record_id,
@@ -858,6 +882,7 @@ def auto_approval_preview(record_id):
             "passed_checks": decision.passed_checks,
             "failed_checks": decision.failed_checks,
             "reasons": decision.reasons,
+            "raw_metrics": raw_metrics,
             # The preview never enforces — make this contract explicit so
             # frontend can show "preview only" copy.
             "would_publish": False,

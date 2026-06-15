@@ -167,3 +167,67 @@ class TestExtraNormalization:
             assert data["approved"] is True
             assert "has_video" in data["passed_checks"]
             assert "composite_score" in data["passed_checks"]
+
+
+class TestRawMetricsExposure:
+    """D2.6 (2026-06-15): preview now returns raw_metrics so the
+    ScoringExplainer panel can show operators the values that drove
+    the verdict, not just PASS/FAIL.
+    """
+
+    def test_raw_metrics_present_on_clean_blueprint(self, client):
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = _stub_blueprint()
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            assert "raw_metrics" in data
+            m = data["raw_metrics"]
+            assert m["composite_score"] == 0.7
+            assert m["virality_score"] == 0.2
+            assert m["has_video"] is True
+            assert m["has_hook"] is True
+
+    def test_raw_metrics_handle_unknown_scores(self, client):
+        """Cold-start blueprints have None for composite/virality — must
+        round-trip as null, not omit the field."""
+        bp = _stub_blueprint(
+            extras={
+                "visual_paths": ["/tmp/v.mp4"],
+                "composite_score": None,
+                "virality_score": None,
+                "validation_status": None,
+            }
+        )
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = bp
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            data = resp.get_json()["data"]
+            m = data["raw_metrics"]
+            assert m["composite_score"] is None
+            assert m["virality_score"] is None
+            assert m["has_video"] is True  # visual_paths still present
+
+    def test_raw_metrics_has_hook_falls_back_to_title(self, client):
+        """has_hook treats blueprint.title as a hook surrogate."""
+        bp = _stub_blueprint(hook_text="", title="A fallback title that counts")
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = bp
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            data = resp.get_json()["data"]
+            assert data["raw_metrics"]["has_hook"] is True
+
+    def test_raw_metrics_has_video_reflects_visual_paths(self, client):
+        bp = _stub_blueprint(
+            extras={
+                "visual_paths": [],
+                "composite_score": 0.7,
+                "virality_score": 0.2,
+                "validation_status": {"all_passed": True},
+            }
+        )
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = bp
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            data = resp.get_json()["data"]
+            assert data["raw_metrics"]["has_video"] is False
