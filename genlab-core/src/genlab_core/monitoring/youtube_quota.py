@@ -164,6 +164,14 @@ class YouTubeQuotaTracker:
                 "used": self._used,
                 "remaining": remaining,
                 "pct_used": round(self._used / self._daily_quota * 100, 1),
+                # 2026-06-15 audit T#65: expose hard_stop so the publisher's
+                # quota-gate error message can show the actual cap (9800 by
+                # default), not the raw 10K Google ceiling. Previous message
+                # "8600/10000 units" displayed 86% when the gate was actually
+                # at 88% of the 9800u hard-stop — operator read it as
+                # "headroom remaining" when there wasn't any.
+                "hard_stop": self._hard_stop,
+                "pct_of_hard_stop": round(self._used / self._hard_stop * 100, 1),
                 "upload_count": self._upload_count,
                 "reset_date": self._reset_date,
             }

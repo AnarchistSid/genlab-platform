@@ -37,7 +37,14 @@ feature_flags:
 
 freshness:
   decay_half_life_hours: 48.0
-  max_story_age_hours: 96
+  # 2026-06-15 audit T#63: bumped from 96h (4d) to 1440h (60d).
+  # Movies pipeline produced 0 blueprints/day for an unknown duration
+  # because trailers from TMDB are routinely 30-60 days old (a film's
+  # marketing cycle is longer than the news cycle). Per the existing
+  # film_lifecycle_modes here: pre_release_days=30 means trailers can
+  # surface ~30 days before release; long_tail_days=21 means viral
+  # post-release clips resurface 21+ days after.
+  max_story_age_hours: 1440  # 60 days
   film_lifecycle_modes:
     pre_release_days: 30
     opening_weekend_hours: 72

@@ -68,6 +68,23 @@ def post_affiliate_reply(
     affiliate_url = fields.get("affiliate_url", "")
     affiliate_product = fields.get("affiliate_product", "")
     if not affiliate_url or not affiliate_product:
+        # 2026-06-15 audit T#66: log silent skips so the gap is
+        # countable. Previously the early-return produced no log line
+        # at all → the audit (incorrectly) concluded the poster was
+        # dead because some publishes had zero ``[affiliate] Posted``
+        # lines. The real cause: AffiliateMatch's evergreen fallback
+        # isn't always reaching fields["affiliate_url"] before the
+        # publisher runs, so some blueprints have empty affiliate
+        # fields and the poster correctly no-ops.
+        logger.info(
+            "[affiliate] Skipped %s comment on %s — empty affiliate_url=%r "
+            "or affiliate_product=%r. Check AffiliateMatch stage + field "
+            "propagation in _handle_publish_success.",
+            platform,
+            post_id,
+            affiliate_url,
+            affiliate_product,
+        )
         return
 
     text = f"🔗 {affiliate_product}: {affiliate_url}"
