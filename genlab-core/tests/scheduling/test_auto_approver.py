@@ -391,9 +391,7 @@ class TestGateExtraWrapper:
     """
 
     def _enabled_policy(self):
-        return AutoApprovalPolicy(
-            enabled=True, min_confidence=0.7, max_approvals_per_pass=10
-        )
+        return AutoApprovalPolicy(enabled=True, min_confidence=0.7, max_approvals_per_pass=10)
 
     def test_top_level_scores_wrapped_into_extra(self, monkeypatch):
         """The bug case: flat blueprint with top-level composite_score +

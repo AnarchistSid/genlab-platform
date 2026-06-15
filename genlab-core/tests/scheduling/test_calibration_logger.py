@@ -279,8 +279,11 @@ class TestDecidedAtOverride:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         # No decided_at param — live path
         log(
@@ -318,8 +321,11 @@ class TestDecidedAtOverride:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         historical = datetime(2026, 6, 1, 12, 30, tzinfo=UTC)
         log(
@@ -359,8 +365,11 @@ class TestDecidedAtOverride:
         monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
 
         decision = AutoApprovalDecision(
-            approved=True, confidence=0.9,
-            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
         )
         log(
             blueprint_id="bp1",
