@@ -9,7 +9,7 @@ for one click) would silently produce duplicate rows that pollute the
 confusion matrix.
 
 This migration adds a UNIQUE index on
-``(blueprint_id, operator_action, date_trunc('second', decided_at))``.
+``(blueprint_id, operator_action, floor(extract(epoch from decided_at))::bigint)``.
 Combined with ``INSERT ... ON CONFLICT DO NOTHING`` at the writer
 (shipped in the same PR), this means:
 
@@ -18,12 +18,22 @@ Combined with ``INSERT ... ON CONFLICT DO NOTHING`` at the writer
   - Two writes >=1 second apart → both succeed (intentional
     re-review case)
 
-Why second-truncation instead of strict unique on decided_at: live
+Why ``floor(extract(epoch from ...))::bigint`` instead of
+``date_trunc('second', ...)``: Postgres flags ``date_trunc`` on a
+``timestamptz`` as STABLE, not IMMUTABLE — because the truncation
+depends on the session timezone — so it can't be used in a
+functional UNIQUE index expression (CI test-storage fail surfaced
+this). ``extract(epoch from timestamptz)`` IS IMMUTABLE (the
+epoch second of an absolute time instant doesn't depend on viewer
+clock); ``floor(::bigint)`` gives the same per-second bucketing
+behaviour we want.
+
+Why second-bucket instead of strict unique on decided_at: live
 writes use NOW() at INSERT time, two retries within 100ms would
 otherwise both succeed because their NOW() differs by microseconds.
-Truncating to the second window matches the "duplicate write"
-semantic we want to suppress without blocking legitimate re-reviews
-of the same blueprint hours later.
+The 1-second bucket catches the "duplicate write" semantic we want
+to suppress without blocking legitimate re-reviews of the same
+blueprint hours later.
 
 Revision ID: r8m9n0o1p2q3
 Revises: q7l8m9n0o1p2
@@ -44,7 +54,8 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # Drop pre-existing duplicates before the index creation can succeed.
     # The dedupe SQL keeps the EARLIEST row per (blueprint, action) — same
-    # logic as tonight's manual dedupe (which already ran on prod).
+    # logic as tonight's manual dedupe (which already ran on prod). Uses
+    # the same epoch-second bucketing as the index for consistency.
     op.execute(
         """
         DELETE FROM auto_approval_calibration a
@@ -52,17 +63,20 @@ def upgrade() -> None:
         WHERE a.ctid < b.ctid
           AND a.blueprint_id = b.blueprint_id
           AND a.operator_action = b.operator_action
-          AND date_trunc('second', a.decided_at) = date_trunc('second', b.decided_at);
+          AND floor(extract(epoch from a.decided_at))::bigint
+            = floor(extract(epoch from b.decided_at))::bigint;
         """
     )
-    # Functional UNIQUE index on the second-truncated tuple.
+    # Functional UNIQUE index on the epoch-second bucket. We must use an
+    # IMMUTABLE expression — date_trunc on timestamptz is STABLE, but
+    # extract(epoch from ...) is IMMUTABLE.
     op.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS uq_calibration_no_dupe_within_second
         ON auto_approval_calibration (
             blueprint_id,
             operator_action,
-            (date_trunc('second', decided_at))
+            (floor(extract(epoch from decided_at))::bigint)
         );
         """
     )
