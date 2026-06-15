@@ -75,7 +75,10 @@ class TestPerDayCap:
 
         # Pre-existing post on tomorrow 11:30 IST.
         tomorrow_1130_ist = (datetime.now(UTC) + timedelta(days=1)).replace(
-            hour=6, minute=0, second=0, microsecond=0  # 06:00 UTC = 11:30 IST
+            hour=6,
+            minute=0,
+            second=0,
+            microsecond=0,  # 06:00 UTC = 11:30 IST
         )
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
@@ -97,8 +100,7 @@ class TestPerDayCap:
         picked = datetime.fromisoformat(slot.replace("Z", "+00:00"))
         # Must NOT be tomorrow (already at cap).
         assert picked.date() > tomorrow_1130_ist.date(), (
-            f"picked {picked.date()} but tomorrow {tomorrow_1130_ist.date()} "
-            "was already at cap=1"
+            f"picked {picked.date()} but tomorrow {tomorrow_1130_ist.date()} was already at cap=1"
         )
 
     def test_multi_publish_raises_cap_allows_packing(self, isolated_env):

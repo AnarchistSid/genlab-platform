@@ -118,9 +118,7 @@ def _effective_per_day_cap(niche_id: str, platform: str = "instagram") -> int:
         caps_config = _load_caps_config()
         caps = _load_caps()
         daily_post_cap = int(caps.get(platform, 1))
-        ceiling = int(
-            (caps_config.get("max_per_day_ceiling") or {}).get(platform, daily_post_cap)
-        )
+        ceiling = int((caps_config.get("max_per_day_ceiling") or {}).get(platform, daily_post_cap))
         enabled = is_multi_publish_enabled(caps_config, platform=platform)
         return effective_cap(
             niche_id=niche_id,

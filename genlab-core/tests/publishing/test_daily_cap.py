@@ -207,18 +207,22 @@ class TestLoadCountsLifecycleStatuses:
 
     def test_mixed_statuses_count_only_publish_outcomes(self):
         """Multiple rows of mixed states — only publish-outcome rows count."""
-        enf = self._enforcer_with_items([
-            self._item(platform="instagram", status="INSIGHTS_24H"),  # counts
-            self._item(platform="instagram", status="FAILED"),         # doesn't count
-            self._item(platform="instagram", status="SKIPPED"),        # doesn't count
-        ])
+        enf = self._enforcer_with_items(
+            [
+                self._item(platform="instagram", status="INSIGHTS_24H"),  # counts
+                self._item(platform="instagram", status="FAILED"),  # doesn't count
+                self._item(platform="instagram", status="SKIPPED"),  # doesn't count
+            ]
+        )
         # 1 published row → cap=1 → blocked
         assert enf.can_publish("instagram") is False
 
     def test_other_niche_doesnt_consume_this_niches_cap(self):
         """Niche isolation: anime's published post must not block gaming."""
-        enf = self._enforcer_with_items([
-            self._item(platform="instagram", status="INSIGHTS_6H", niche="anime"),
-        ])
+        enf = self._enforcer_with_items(
+            [
+                self._item(platform="instagram", status="INSIGHTS_6H", niche="anime"),
+            ]
+        )
         # enforcer is niche='gaming' — anime row filtered out
         assert enf.can_publish("instagram") is True

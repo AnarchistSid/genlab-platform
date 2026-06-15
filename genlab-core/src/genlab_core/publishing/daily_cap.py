@@ -27,13 +27,15 @@ _DEFAULT_CAPS: dict[str, int] = {
 # as each metric-collection window fires. ALL of these represent rows
 # whose publish DID succeed. (See 2026-06-15 root-cause analysis in
 # ``session_2026_06_15_scheduler_over_schedule_bug.md`` / commit msg.)
-_PUBLISHED_STATUSES: frozenset[str] = frozenset({
-    "SUCCESS",
-    "INSIGHTS_6H",
-    "INSIGHTS_24H",
-    "INSIGHTS_48H",
-    "INSIGHTS_168H",
-})
+_PUBLISHED_STATUSES: frozenset[str] = frozenset(
+    {
+        "SUCCESS",
+        "INSIGHTS_6H",
+        "INSIGHTS_24H",
+        "INSIGHTS_48H",
+        "INSIGHTS_168H",
+    }
+)
 
 
 def _load_caps_config(config_path: Path | None = None) -> dict:
