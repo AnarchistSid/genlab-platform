@@ -483,10 +483,36 @@ def _trigger_performance_learner(niche_id: str) -> None:
 
         client = BacklogClient()
 
-        # Get recently published stories with engagement data
-        formula = "{status}='SUCCESS'"
+        # Get recently published stories with engagement data.
+        #
+        # 2026-06-15: match ALL post-publish lifecycle states, not just
+        # SUCCESS. The metric collector progressively flips
+        # publishing_analytics.status from SUCCESS → INSIGHTS_6H →
+        # INSIGHTS_24H → INSIGHTS_48H → INSIGHTS_168H as each metric
+        # collection window fires (verified prod: a row published 06:48
+        # UTC has status=INSIGHTS_6H by ~11:49 UTC, ~5h later — well
+        # within the 0-48h age window this function targets).
+        #
+        # The previous ``{status}='SUCCESS'`` filter only matched posts
+        # in their first ~5 hours after publish, missing the bulk of
+        # the 5-48h engagement-data window the learner is supposed to
+        # mine. PerformanceLearner therefore saw a fraction of available
+        # signal on every fire — the learning loop was effectively dark
+        # for most posts. Same bug pattern as PR #220's daily_cap
+        # cap-loader fix.
+        _status_or = (
+            "OR("
+            "{status}='SUCCESS',"
+            "{status}='INSIGHTS_6H',"
+            "{status}='INSIGHTS_24H',"
+            "{status}='INSIGHTS_48H',"
+            "{status}='INSIGHTS_168H'"
+            ")"
+        )
         if niche_id != "all":
-            formula = f"AND({{status}}='SUCCESS',{{niche_id}}='{niche_id}')"
+            formula = f"AND({_status_or},{{niche_id}}='{niche_id}')"
+        else:
+            formula = _status_or
 
         records = client.publishing_analytics.all(
             formula=formula,

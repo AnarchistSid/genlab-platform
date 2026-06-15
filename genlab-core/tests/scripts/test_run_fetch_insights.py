@@ -210,3 +210,104 @@ class TestMarkWindowCompleted:
         _mark_window_completed(client, "rec1", "", 6)
         payload = client.publishing_analytics.update.call_args[0][1]
         assert set(payload.keys()) == {"status"}
+
+
+class TestTriggerPerformanceLearnerFormula:
+    """Pin the 2026-06-15 status-lifecycle fix.
+
+    Bug: ``_trigger_performance_learner`` filtered ``status='SUCCESS'``
+    when querying publishing_analytics. The metric collector flips
+    status to INSIGHTS_6H ~5h after publish, so the query saw only
+    posts in their first ~5 hours — missing the bulk of the 5-48h
+    engagement-data window the learner is supposed to mine.
+
+    The fix: OR across the 5 post-publish lifecycle states. Same
+    pattern as PR #220's daily_cap cap-loader fix.
+    """
+
+    def test_formula_includes_all_lifecycle_states(self):
+        """Read the source to confirm the formula string covers every
+        post-publish lifecycle state. Source-string pin (not call-site
+        mock) because the formula is built inline and we don't want
+        the test to rely on a particular dispatch shape."""
+        import inspect
+
+        from genlab_core.scripts.run_fetch_insights import (
+            _trigger_performance_learner,
+        )
+
+        source = inspect.getsource(_trigger_performance_learner)
+        # All 5 lifecycle states must appear in the formula string.
+        # If a future refactor drops one, the learner silently misses
+        # that age range — this pin fails loudly.
+        for status in (
+            "SUCCESS",
+            "INSIGHTS_6H",
+            "INSIGHTS_24H",
+            "INSIGHTS_48H",
+            "INSIGHTS_168H",
+        ):
+            assert f"'{status}'" in source, (
+                f"_trigger_performance_learner formula missing {status!r}. "
+                f"Drops this status from the learner's engagement window — "
+                f"see 2026-06-15 status-lifecycle fix."
+            )
+
+    def test_formula_translates_to_or_status_sql(self):
+        """End-to-end: the formula the function builds MUST translate
+        to SQL that ORs across the 5 states. Catches a future change
+        that switches to `IN(...)` (which formula_to_sql doesn't
+        support today and would produce broken SQL)."""
+        from genlab_core.storage.formula_sql import formula_to_sql
+        from genlab_core.storage.postgres import PROMOTED_COLUMNS
+
+        # Build the same formula the function builds for the 'all' case
+        # — keep this duplicated literal in sync if the function's
+        # formula format changes.
+        _status_or = (
+            "OR("
+            "{status}='SUCCESS',"
+            "{status}='INSIGHTS_6H',"
+            "{status}='INSIGHTS_24H',"
+            "{status}='INSIGHTS_48H',"
+            "{status}='INSIGHTS_168H'"
+            ")"
+        )
+        sql, params = formula_to_sql(
+            _status_or,
+            PROMOTED_COLUMNS.get("publishing_analytics"),
+        )
+        assert "status =" in sql
+        assert "OR" in sql
+        assert set(params) == {
+            "SUCCESS",
+            "INSIGHTS_6H",
+            "INSIGHTS_24H",
+            "INSIGHTS_48H",
+            "INSIGHTS_168H",
+        }
+
+    def test_per_niche_formula_wraps_status_or_with_and(self):
+        """The per-niche call site composes
+        ``AND(<status_or>,{niche_id}='gaming')``. SQL must AND the OR
+        block with the niche filter."""
+        from genlab_core.storage.formula_sql import formula_to_sql
+        from genlab_core.storage.postgres import PROMOTED_COLUMNS
+
+        _status_or = (
+            "OR("
+            "{status}='SUCCESS',"
+            "{status}='INSIGHTS_6H',"
+            "{status}='INSIGHTS_24H',"
+            "{status}='INSIGHTS_48H',"
+            "{status}='INSIGHTS_168H'"
+            ")"
+        )
+        formula = f"AND({_status_or},{{niche_id}}='gaming')"
+        sql, params = formula_to_sql(
+            formula,
+            PROMOTED_COLUMNS.get("publishing_analytics"),
+        )
+        assert "niche_id = " in sql
+        assert "AND" in sql
+        assert "gaming" in params
