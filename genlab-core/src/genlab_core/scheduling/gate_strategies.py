@@ -75,7 +75,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any
 
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 
@@ -114,7 +113,7 @@ class StrategyConfig:
     agreement_window_days: int = _DEFAULT_AGREEMENT_WINDOW_DAYS
 
     @classmethod
-    def from_yaml_dict(cls, raw: dict | None) -> "StrategyConfig":
+    def from_yaml_dict(cls, raw: dict | None) -> StrategyConfig:
         """Parse a YAML ``strategies:`` block into a StrategyConfig.
 
         Shape (all keys optional):
@@ -141,12 +140,8 @@ class StrategyConfig:
             bandit_boost_max=float(b.get("boost_max", _DEFAULT_BANDIT_BOOST_MAX)),
             agreement_floor_enabled=bool(e.get("enabled", False)),
             agreement_min=float(e.get("min_agreement", _DEFAULT_AGREEMENT_MIN)),
-            agreement_min_samples=int(
-                e.get("min_samples", _DEFAULT_AGREEMENT_MIN_SAMPLES)
-            ),
-            agreement_window_days=int(
-                e.get("window_days", _DEFAULT_AGREEMENT_WINDOW_DAYS)
-            ),
+            agreement_min_samples=int(e.get("min_samples", _DEFAULT_AGREEMENT_MIN_SAMPLES)),
+            agreement_window_days=int(e.get("window_days", _DEFAULT_AGREEMENT_WINDOW_DAYS)),
         )
 
 
@@ -322,8 +317,7 @@ def apply_strategy_e(
 
     # Passed both checks — record for explainability, leave decision unchanged.
     new_reasons = list(decision.reasons) + [
-        f"Strategy E: agreement_rate={agreement_rate:.2%} (samples={sample_count}) "
-        "above floor"
+        f"Strategy E: agreement_rate={agreement_rate:.2%} (samples={sample_count}) above floor"
     ]
     return replace(decision, reasons=new_reasons)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 from genlab_core.scheduling.gate_strategies import (
     StrategyConfig,
@@ -11,7 +10,6 @@ from genlab_core.scheduling.gate_strategies import (
     apply_strategy_b,
     apply_strategy_e,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────
 
@@ -90,9 +88,7 @@ class TestStrategyConfigFromYaml:
 
     def test_partial_keys_use_defaults(self):
         """Operator can override only what they want; rest use defaults."""
-        c = StrategyConfig.from_yaml_dict(
-            {"bandit_boost": {"enabled": True}}
-        )
+        c = StrategyConfig.from_yaml_dict({"bandit_boost": {"enabled": True}})
         assert c.bandit_boost_enabled is True
         assert c.bandit_min_plays == 20  # default
         assert c.bandit_boost_max == 0.10  # default
@@ -145,9 +141,7 @@ class TestStrategyB:
         )
         assert out.confidence == approved_decision.confidence
 
-    def test_boost_only_when_observed_above_posterior(
-        self, approved_decision, blueprint
-    ):
+    def test_boost_only_when_observed_above_posterior(self, approved_decision, blueprint):
         """Below-posterior performance shouldn't bump confidence."""
         config = StrategyConfig(bandit_boost_enabled=True)
         # alpha=1, beta=99, n_plays=100 → observed_avg=0.0, posterior=0.01
@@ -273,9 +267,7 @@ class TestStrategyE:
         assert out == rejected_decision
 
     def test_fails_closed_when_sample_count_too_low(self, approved_decision):
-        config = StrategyConfig(
-            agreement_floor_enabled=True, agreement_min_samples=10
-        )
+        config = StrategyConfig(agreement_floor_enabled=True, agreement_min_samples=10)
         out = apply_strategy_e(
             approved_decision,
             niche_id="gaming",
@@ -349,9 +341,7 @@ class TestStrategyE:
 
     def test_rejection_drops_confidence_to_zero(self, approved_decision):
         """Worker's min_confidence gate must NEVER let an E-rejected blueprint through."""
-        config = StrategyConfig(
-            agreement_floor_enabled=True, agreement_min_samples=10
-        )
+        config = StrategyConfig(agreement_floor_enabled=True, agreement_min_samples=10)
         out = apply_strategy_e(
             approved_decision,
             niche_id="gaming",
