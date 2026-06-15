@@ -190,13 +190,9 @@ class TestVisualPathsJsonDecode:
         from server.core.calibration_helper import log_calibration_for_action
 
         client = self._client_with_visual_paths("[]")
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
 
         passed_bp = mock_eval.call_args.args[0]
         # visual_paths in the wrapper must be a list (decoded), not a string
@@ -213,13 +209,9 @@ class TestVisualPathsJsonDecode:
         from server.core.calibration_helper import log_calibration_for_action
 
         client = self._client_with_visual_paths('["/path/a.mp4"]')
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
 
         passed_bp = mock_eval.call_args.args[0]
         assert passed_bp["extra"]["visual_paths"] == ["/path/a.mp4"]
@@ -231,13 +223,9 @@ class TestVisualPathsJsonDecode:
         from server.core.calibration_helper import log_calibration_for_action
 
         client = self._client_with_visual_paths("not-valid-json!!!")
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
         passed_bp = mock_eval.call_args.args[0]
         assert passed_bp["extra"]["visual_paths"] == []
 
@@ -248,13 +236,9 @@ class TestVisualPathsJsonDecode:
         from server.core.calibration_helper import log_calibration_for_action
 
         client = self._client_with_visual_paths(["/b.mp4", "/c.mp4"])
-        with patch(
-            "genlab_core.scheduling.auto_approval_gate.evaluate"
-        ) as mock_eval:
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
             with patch("genlab_core.scheduling.calibration_logger.log"):
-                log_calibration_for_action(
-                    client=client, record_id="bp1", action="approved"
-                )
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
         passed_bp = mock_eval.call_args.args[0]
         assert passed_bp["extra"]["visual_paths"] == ["/b.mp4", "/c.mp4"]
 
@@ -299,9 +283,7 @@ class TestQueueActionAliases:
         with patch(
             "genlab_core.scheduling.calibration_logger.log",
         ) as mock_log:
-            log_calibration_for_action(
-                client=client, record_id="bp1", action="held"
-            )
+            log_calibration_for_action(client=client, record_id="bp1", action="held")
         kwargs = mock_log.call_args.kwargs
         assert kwargs["operator_action"] == "rejected"
 
@@ -314,8 +296,6 @@ class TestQueueActionAliases:
         with patch(
             "genlab_core.scheduling.calibration_logger.log",
         ) as mock_log:
-            log_calibration_for_action(
-                client=client, record_id="bp1", action="released"
-            )
+            log_calibration_for_action(client=client, record_id="bp1", action="released")
         kwargs = mock_log.call_args.kwargs
         assert kwargs["operator_action"] == "skipped"
