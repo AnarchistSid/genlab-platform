@@ -1,15 +1,18 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import babel from "@rolldown/plugin-babel";
 import path from "path";
 
+// Vite 8 / @vitejs/plugin-react@6 removed the inline `babel` option;
+// React Compiler now ships via the separate @rolldown/plugin-babel
+// chain so the official preset can be composed cleanly. Same runtime
+// behaviour (RC enabled for the project) — just expressed through the
+// new API.
 export default defineConfig({
   plugins: [
-    react({
-      babel: {
-        plugins: [["babel-plugin-react-compiler", {}]],
-      },
-    }),
+    react(),
+    babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
   ],
   resolve: {
