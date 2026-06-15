@@ -246,8 +246,9 @@ class TestCommentPreservation:
 
     def test_no_module_level_pyyaml_dump_remaining(self):
         """Guardrail: the file must not regress to yaml.dump for writes."""
-        from genlab_core.learning import config_updater as mod
         from pathlib import Path as P
+
+        from genlab_core.learning import config_updater as mod
 
         src = P(mod.__file__).read_text()
         # Allow yaml.dump in comments/docstrings but not as a function call.
@@ -257,9 +258,8 @@ class TestCommentPreservation:
             for line in src.splitlines()
             if "yaml.dump" in line
             and not line.lstrip().startswith("#")
-            and 'PyYAML' not in line  # docstring mention
+            and "PyYAML" not in line  # docstring mention
         ]
         assert live_calls == [], (
-            "yaml.dump call resurfaced — would strip comments. "
-            f"Found: {live_calls}"
+            f"yaml.dump call resurfaced — would strip comments. Found: {live_calls}"
         )
