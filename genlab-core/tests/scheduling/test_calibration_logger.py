@@ -235,3 +235,140 @@ class TestReadyForEnforcement:
         s = self._make(0, 0)
         assert s.agreement_rate == 0.0
         assert s.ready_for_enforcement is False
+
+
+# ── P2 (Bug #14, 2026-06-15): optional decided_at for backfill ────────────
+
+
+class TestDecidedAtOverride:
+    """Pin the 2026-06-15 backfill support.
+
+    Bug: the schema default ``decided_at DEFAULT NOW()`` is right for
+    live operator clicks but wrong for the AUTO #2 D1.2 backfill which
+    needs to preserve the historical operator-click timestamp from
+    ``dashboard_events``. Without a way to override, the backfill
+    would stamp every historical row with backfill-run-time, making
+    confusion-matrix windowing meaningless.
+
+    The fix: ``log()`` takes an optional ``decided_at: datetime | None``
+    kwarg. ``None`` keeps the live-path NOW() default; passing a
+    timestamp uses an INSERT variant that includes the column.
+    """
+
+    def test_live_path_omits_decided_at_from_sql(self, monkeypatch):
+        """Without the kwarg, the INSERT must NOT include decided_at —
+        the schema's NOW() default takes over (preserving the live-path
+        round-trip cost and behavior)."""
+        import os
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True, confidence=0.9,
+            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+        )
+        # No decided_at param — live path
+        log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+        )
+
+        sql = cur.execute.call_args.args[0]
+        assert "decided_at" not in sql, (
+            "Live path INSERT must NOT include decided_at — schema's NOW() "
+            "default is the source of truth so live operator clicks stay fast"
+        )
+
+    def test_backfill_path_includes_decided_at_in_sql_and_params(self, monkeypatch):
+        """With the kwarg, the INSERT must include the column AND the
+        datetime must be in the parameters tuple."""
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True, confidence=0.9,
+            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+        )
+        historical = datetime(2026, 6, 1, 12, 30, tzinfo=UTC)
+        log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            decided_at=historical,
+        )
+
+        sql = cur.execute.call_args.args[0]
+        params = cur.execute.call_args.args[1]
+        assert "decided_at" in sql, "Backfill path MUST include decided_at column"
+        assert historical in params, (
+            "The historical timestamp must reach the SQL parameter list verbatim"
+        )
+
+    def test_none_decided_at_explicit_uses_live_path(self, monkeypatch):
+        """``decided_at=None`` (explicit) is the same as omitting the kwarg —
+        callers shouldn't have to think about the dispatch."""
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True, confidence=0.9,
+            passed_checks=["a"], failed_checks=[], reasons=["ok"],
+        )
+        log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            decided_at=None,  # explicit None
+        )
+
+        sql = cur.execute.call_args.args[0]
+        assert "decided_at" not in sql
