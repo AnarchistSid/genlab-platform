@@ -27,11 +27,36 @@ start tolerated). Per-niche overrides can be added later via niche config.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_visual_paths(raw: Any) -> list:
+    """Best-effort decode of a visual_paths field into a list.
+
+    The Postgres path stores ``visual_paths`` as a JSON-encoded
+    string in many blueprints. `bool` of any non-empty string is True,
+    so a naive `bool(extra["visual_paths"])` check passes for the
+    string ``"[]"`` (an empty list serialized) even though no video
+    actually exists.
+
+    Mirrors ``calibration_helper._safe_visual_paths`` and
+    ``auto_approver._safe_json_list``. Returns [] on any failure.
+    """
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            decoded = json.loads(raw)
+            return decoded if isinstance(decoded, list) else []
+        except (ValueError, TypeError):
+            return []
+    return []
+
 
 # Default thresholds. Calibrated from the 2026-06-13 prod data probe:
 # current VISUAL_READY blueprints range composite=None..1.0, virality=0.0..0.1.
@@ -110,7 +135,22 @@ def evaluate(
     confidences: list[float] = []
 
     # ── 1. Video clip present ─────────────────────────────────────────
-    has_video = bool(extra.get("visual_paths") or blueprint.get("visual_paths"))
+    # 2026-06-15 audit fix: defensively decode visual_paths inside the
+    # gate. The 4 caller-side wrapper-builders (auto_approver,
+    # calibration_helper, review_server, dashboard preview) all decode
+    # JSON strings to lists — but ONLY when ``blueprint["extra"]`` is
+    # NOT a dict. On the Postgres path EVERY blueprint has ``extra`` as
+    # a dict, so the caller-side decode short-circuits and
+    # ``extra["visual_paths"]`` is whatever shape the original write
+    # put there — often the literal JSON string ``"[]"`` or
+    # ``'["/x.mp4"]'``. ``bool`` of any non-empty string is True, so
+    # this check used to falsely pass ``has_video=True`` for blueprints
+    # with empty visual_paths arrays. Decoding inline closes that hole
+    # regardless of which caller-side build/skip the wrapper.
+    has_video = bool(
+        _decode_visual_paths(extra.get("visual_paths"))
+        or _decode_visual_paths(blueprint.get("visual_paths"))
+    )
     if require_video:
         if has_video:
             passed.append("has_video")

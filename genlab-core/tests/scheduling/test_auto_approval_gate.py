@@ -266,3 +266,77 @@ class TestDefensiveExtraHandling:
         }
         decision = evaluate(bp)
         assert "has_video" in decision.passed_checks
+
+
+class TestVisualPathsStringDecodeInGate:
+    """Pin the 2026-06-15 audit fix.
+
+    Bug: the gate's has_video check did `bool(extra.get("visual_paths"))`.
+    On the Postgres path every blueprint has extra as a dict, so the
+    caller-side wrapper-builders (auto_approver, calibration_helper)
+    that do the JSON-decode short-circuit and never run. extra
+    ["visual_paths"] arrives as the literal JSON string `"[]"` or
+    `'["/x.mp4"]'`, and bool of any non-empty string is True — so
+    has_video=True for blueprints with empty visual_paths arrays.
+
+    Fix: gate decodes inline via _decode_visual_paths.
+    """
+
+    def test_empty_array_string_decoded_to_false(self):
+        """The headline pin: extra.visual_paths = "[]" (empty array
+        as string) must produce has_video=False."""
+        decision = evaluate(_bp(visual_paths=None, validation_status={"all_passed": True}))
+        # In _bp, visual_paths=None drops the key from extra. Let me
+        # use the actual problematic shape directly via dict.
+        bp = {
+            "id": "x",
+            "niche_id": "gaming",
+            "status": "VISUAL_READY",
+            "hook_text": "h",
+            "extra": {
+                "visual_paths": "[]",  # the BUG case: string with empty array
+                "composite_score": 0.5,
+                "virality_score": 0.5,
+                "validation_status": {"all_passed": True},
+            },
+        }
+        decision = evaluate(bp)
+        assert "has_video" in decision.failed_checks, (
+            "extra.visual_paths='[]' (empty array as string) must fail "
+            "has_video — bool of any non-empty string is True without the "
+            "fix, so this would have falsely passed."
+        )
+
+    def test_non_empty_array_string_decoded_to_true(self):
+        """Boundary: a string containing a real array should pass."""
+        bp = {
+            "id": "x",
+            "niche_id": "gaming",
+            "status": "VISUAL_READY",
+            "hook_text": "h",
+            "extra": {
+                "visual_paths": '["/a.mp4"]',
+                "composite_score": 0.5,
+                "virality_score": 0.5,
+                "validation_status": {"all_passed": True},
+            },
+        }
+        decision = evaluate(bp)
+        assert "has_video" in decision.passed_checks
+
+    def test_malformed_json_decoded_to_false(self):
+        """Garbled string must not pass has_video."""
+        bp = {
+            "id": "x",
+            "niche_id": "gaming",
+            "status": "VISUAL_READY",
+            "hook_text": "h",
+            "extra": {
+                "visual_paths": "not-valid-json!!",
+                "composite_score": 0.5,
+                "virality_score": 0.5,
+                "validation_status": {"all_passed": True},
+            },
+        }
+        decision = evaluate(bp)
+        assert "has_video" in decision.failed_checks
