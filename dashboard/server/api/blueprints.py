@@ -397,6 +397,60 @@ def _paginate(records, page, per_page):
     }
 
 
+def _count_posts_on_date(
+    client,
+    niche_id: str,
+    target_date_ist: str,
+    *,
+    exclude_blueprint_id: str = "",
+) -> int:
+    """Count VISUAL_READY+approved + PUBLISHED blueprints for a (niche, IST date).
+
+    Used by the reschedule endpoints' cap check (2026-06-15 audit T#55)
+    to refuse moves that would push a niche over its per-day cap. Mirrors
+    the bucket-by-IST-date logic in publishing_queue._next_available_slot
+    so reschedule sees the same world the approve path does.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if not niche_id or not target_date_ist:
+        return 0
+
+    try:
+        records = client.blueprints.all(
+            formula="OR({status}='VISUAL_READY',{status}='PUBLISHED')",
+        )
+    except Exception as exc:
+        logger.warning("[reschedule] failed to query for cap check: %s", exc)
+        # Re-raise so caller fails CLOSED — the wrapped except in the
+        # caller will surface this as a 500.
+        raise
+
+    ist = ZoneInfo("Asia/Kolkata")
+    count = 0
+    for r in records:
+        f = r.get("fields", {}) if isinstance(r, dict) else {}
+        if (f.get("niche_id") or "").strip() != niche_id:
+            continue
+        if (f.get("action_taken") or "").strip() != "approved" and f.get("status") != "PUBLISHED":
+            continue
+        rid = str(r.get("id", "") or "")
+        if exclude_blueprint_id and rid == str(exclude_blueprint_id):
+            continue
+        sched_raw = f.get("scheduled_for", "")
+        if not sched_raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(sched_raw).replace("Z", "+00:00"))
+            row_date = dt.astimezone(ist).strftime("%Y-%m-%d")
+            if row_date == target_date_ist:
+                count += 1
+        except (ValueError, TypeError):
+            pass
+    return count
+
+
 # Frontend sort values → (field_name, descending)
 SORT_MAP = {
     "newest": ("id", True),
@@ -1043,6 +1097,41 @@ def reschedule(record_id):
             return api_error(
                 error=f"Slot {target_date} {target_slot} IST is already occupied by blueprint {occupant['id']}",
                 code=409,
+            )
+        # 2026-06-15 audit T#55: also check per-day cap. Without this,
+        # operator drag-drop to a different TIME on a day that's already
+        # at cap would succeed (slot is free) but the publisher would
+        # silently skip the move at publish time. Same producer/consumer
+        # drift PR #220 closed for the approve path — apply here too.
+        try:
+            from server.core.publishing_queue import _effective_per_day_cap
+
+            cap = _effective_per_day_cap(bp_niche) if bp_niche else 1
+            posts_on_day = _count_posts_on_date(
+                _get_client(), bp_niche, target_date, exclude_blueprint_id=record_id
+            )
+            if posts_on_day >= cap:
+                return api_error(
+                    error=(
+                        f"Daily cap reached for {bp_niche} on {target_date} "
+                        f"({posts_on_day}/{cap}). Publisher would silently "
+                        f"skip this move. Reschedule to a different day OR "
+                        f"enable multi_publish for the relevant platform."
+                    ),
+                    code=409,
+                )
+        except Exception as cap_exc:  # noqa: BLE001
+            # Fail-CLOSED on cap-lookup error: reject the reschedule rather
+            # than silently allow over-scheduling. Matches the defensive
+            # posture of _next_available_slot in PR #220.
+            logger.warning(
+                "[reschedule] cap check failed for %s — rejecting reschedule: %s",
+                record_id,
+                cap_exc,
+            )
+            return api_error(
+                error=f"Cap check failed: {cap_exc}. Reschedule blocked for safety.",
+                code=500,
             )
 
     try:
