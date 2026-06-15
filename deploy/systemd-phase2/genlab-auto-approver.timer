@@ -1,0 +1,31 @@
+[Unit]
+Description=GenLab AUTO #2 Auto-Approval Worker Timer
+# Wait for the postgres pool + the daily-verify timer's expectations
+# so a worker fire never lands during a pipeline-warming window.
+After=genlab-postgres-ready.target
+
+[Timer]
+# Every 30 minutes during operator-active hours (06:00 → 22:00 UTC).
+# This window covers IST 11:30 → 03:30, capturing the full daily
+# operator-review cycle for the owner's primary timezone.
+#
+# Why 30 min and not faster:
+# - calibration_logger writes ~5 rows/day across all niches; the
+#   worker's job density is similarly low
+# - faster timers burn cron + log volume for no signal
+# - the 06:30 UTC publish window is the only hard deadline; a 30-min
+#   worker leaves 12+ opportunities to fire before that
+#
+# Why not 24x7:
+# - 22:00 UTC → 06:00 UTC is operator-asleep time; if anything goes
+#   wrong, there's no one to notice for hours
+# - holding the worker quiescent during sleep hours bounds the
+#   blast radius of any regression
+OnCalendar=*-*-* 06,06:30,07,07:30,08,08:30,09,09:30,10,10:30,11,11:30,12,12:30,13,13:30,14,14:30,15,15:30,16,16:30,17,17:30,18,18:30,19,19:30,20,20:30,21,21:30,22:00:00 UTC
+# Catch up on missed fires after reboot — important because
+# auto_approver is idempotent and a missed cycle just means slower
+# review-queue drain.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

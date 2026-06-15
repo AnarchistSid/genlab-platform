@@ -1,0 +1,47 @@
+[Unit]
+Description=GenLab AUTO #2 Auto-Approval Worker (dry-run by default)
+After=network-online.target genlab-postgres-ready.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# AUTO #2 D3.9 (2026-06-15): periodic worker that walks every niche's
+# VISUAL_READY blueprints and calls run_pass(). The worker is gated by
+# THREE independent safety knobs that must ALL line up for any approval
+# to fire:
+#
+#   1. Per-niche `auto_publish.enabled: true` in publishing.yaml
+#      (default false — operator's Day-8 flip step)
+#   2. GENLAB_AUTO_APPROVE_DISABLED env var NOT set (kill switch)
+#   3. Gate confidence ≥ policy.min_confidence (today 0.85)
+#
+# The --dry-run flag below adds a FOURTH safety knob (covered by Day 3
+# of the runbook): the worker runs at full frequency producing the same
+# logs it would in enforcement mode, but NEVER touches the backlog.
+# Operator monitors dry-run output for 1-7 days before removing the
+# flag.
+#
+# To flip to live enforcement (the Day-8 step):
+#   1. Edit BlackboxBrief/config/publishing.yaml: auto_publish.enabled: true
+#      (or whichever niche is ready; flip ONE niche per change)
+#   2. Land via PR — NEVER hand-edit on prod (deploy-pipeline-gap lesson)
+#   3. Remove --dry-run from THIS unit's ExecStart (also via PR)
+#   4. systemctl daemon-reload && systemctl restart genlab-auto-approver.timer
+#
+# Kill switch (panic stop):
+#   systemctl stop genlab-auto-approver.timer
+#   echo 'GENLAB_AUTO_APPROVE_DISABLED=1' >> /opt/genlab/.env
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scheduling.auto_approver --niche all --dry-run
+TimeoutSec=300
+# Per-niche failures don't fail the whole exec — run_pass returns
+# exit_code=1 only if a niche had errors, but the work for OTHER niches
+# already happened. Surface to systemd so the alert wires fire on
+# repeated failures.
+
+[Install]
+WantedBy=multi-user.target
