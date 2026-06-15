@@ -14,7 +14,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pytest
-
 import server.review_server as review_server_module
 from server.review_server import app
 
@@ -178,8 +177,8 @@ class TestWorkerDashboardLockstep:
     """
 
     def test_worker_sees_what_dashboard_writes(self, kill_file, monkeypatch):
-        from server.api.auto_approval import _read_kill_switch_state
         from genlab_core.scheduling.auto_approver import _kill_switch_active
+        from server.api.auto_approval import _read_kill_switch_state
 
         # Initially both report off
         assert _read_kill_switch_state()["active"] is False
