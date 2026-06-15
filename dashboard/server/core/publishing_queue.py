@@ -63,11 +63,28 @@ def _lock_key(niche_id: str) -> int:
 def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
     """Acquire a PostgreSQL advisory lock scoped to niche_id.
 
-    Prevents two concurrent approve() calls from picking the same
-    publish slot for the same niche. The lock is transaction-scoped
-    and released on commit/rollback.
+    Best-effort SERIALIZATION-TOKEN — NOT a transactional guarantee.
+    The lock is held on a SEPARATE psycopg connection from the actual
+    blueprints.update() write, so two workers acquiring the lock in
+    sequence don't strictly serialize the read-modify-write cycle on
+    the pooled write connection. The DB's read-committed isolation
+    DOES make the second worker see the first's commit ONCE the
+    pooled connection has commit-acknowledged — race window is real
+    but on the order of microseconds.
 
-    Falls through silently if Postgres is not configured (SharePoint mode).
+    2026-06-15 audit T#58:
+    - Previously: ``except Exception: ... yield`` silently bypassed
+      the lock on any failure (network blip, pool exhaustion). Now
+      lock failures log at ERROR + add a 2s connect_timeout so a
+      stalled Postgres doesn't hang the operator click.
+    - For true cap enforcement under concurrent writes, see the
+      UNIQUE INDEX on auto_approval_calibration (PR #244) for the
+      calibration analogue. A blueprints-level unique constraint
+      would need a trigger (Postgres doesn't support functional
+      unique on a "per-day count" predicate directly).
+
+    Falls through silently ONLY if Postgres is not configured
+    (SharePoint mode — the lock is meaningless there).
     """
     dsn = os.getenv("DATABASE_URL", "")
     if not dsn:
@@ -82,12 +99,23 @@ def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
 
     lock_key = _lock_key(niche_id)
     try:
-        with psycopg.connect(dsn) as conn:
+        with psycopg.connect(dsn, connect_timeout=2) as conn:
             conn.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
             yield
             conn.commit()
     except Exception as e:
-        logger.warning("[QUEUE] Advisory lock failed (non-fatal): %s", e)
+        # 2026-06-15 audit T#58 fix: bumped from WARNING to ERROR so
+        # operators see lock failures in alerts. Still falls through to
+        # `yield` (the operator click would block forever if we raised)
+        # but the failure is now LOUD enough to investigate.
+        logger.error(
+            "[QUEUE] Advisory lock acquisition FAILED for niche=%s — slot "
+            "selection MAY race under concurrent approvals. PR #220's "
+            "per-day cap still enforces at write time. Investigate Postgres "
+            "connection pool / network. Error: %s",
+            niche_id,
+            e,
+        )
         yield
 
 

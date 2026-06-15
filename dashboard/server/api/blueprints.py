@@ -1012,13 +1012,24 @@ def approve_and_schedule(blueprint_id):
 
 @bp.route("/batch-approve-schedule", methods=["POST"])
 def batch_approve_schedule():
-    """Approve and auto-schedule multiple blueprints."""
+    """Approve and auto-schedule multiple blueprints.
+
+    2026-06-15 audit T#58 / M4: the loop wraps each iteration in a
+    per-niche advisory lock so iteration N's slot pick sees iteration
+    N-1's write committed. Without this, bulk-approving 5 blueprints
+    in <1s → all 5 reads happen before any write propagates → all 5
+    pick the same slot.
+
+    Note: the lock is per-niche, but the request may span multiple
+    niches. Acquiring the lock INSIDE the loop (per-iteration) means
+    multi-niche bulks don't deadlock on per-niche-lock ordering.
+    """
     body = request.get_json(silent=True) or {}
     ids = body.get("ids", [])
     if not ids:
         return api_error(error="No blueprint IDs provided")
 
-    from server.core.publishing_queue import _next_available_slot
+    from server.core.publishing_queue import _advisory_lock, _next_available_slot
 
     client = _get_client()
     results = []
@@ -1033,16 +1044,23 @@ def batch_approve_schedule():
                 continue
             fields = record.get("fields", {})
             niche_id = (fields.get("niche_id") or "").strip()
-            scheduled_for = _next_available_slot(niche_id=niche_id, exclude_record_id=str(bp_id))
+            # Lock-then-pick-then-write — keeps the slot-pick + update
+            # atomic per-niche so bulk-iterations don't all see the same
+            # stale state. Lock MUST span both the slot pick AND the
+            # update so iteration N+1 sees iteration N's committed write.
+            with _advisory_lock(niche_id):
+                scheduled_for = _next_available_slot(
+                    niche_id=niche_id, exclude_record_id=str(bp_id)
+                )
 
-            update_fields = {
-                "action_taken": "approved",
-                "reviewed_at": datetime.now(UTC).isoformat(),
-            }
-            if scheduled_for:
-                update_fields["scheduled_for"] = scheduled_for
+                update_fields = {
+                    "action_taken": "approved",
+                    "reviewed_at": datetime.now(UTC).isoformat(),
+                }
+                if scheduled_for:
+                    update_fields["scheduled_for"] = scheduled_for
 
-            client.blueprints.update(str(bp_id), update_fields, typecast=True)
+                client.blueprints.update(str(bp_id), update_fields, typecast=True)
             # S2 (2026-06-15): the bulk-review path. Before this fix,
             # bulk-approving 5 blueprints emitted 0 calibration rows
             # — the highest-volume operator path was the dimmest
