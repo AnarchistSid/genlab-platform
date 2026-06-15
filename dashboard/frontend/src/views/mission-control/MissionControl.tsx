@@ -12,6 +12,7 @@ import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
+import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
 import { AiInsightCard } from "./AiInsightCard";
 import { PublishTimeline } from "./PublishTimeline";
@@ -198,6 +199,12 @@ export default function MissionControl() {
           </div>
           <div className="area-monetisation flex flex-col gap-3">
             <PublishingHealth />
+            {/* AUTO #2 D1.4 (2026-06-15): daily SLO at-a-glance — answers
+                "are we hitting the 1 reel/channel/day commitment?" without
+                the operator scanning analytics. Sits above the calibration
+                card because today's SLO is more urgent than this week's
+                enforcement-readiness. */}
+            <DailySloBadge />
             {/* AUTO #1c (2026-06-13): per-niche calibration progress
                 toward AUTO #2 enforcement. Updates every 60s; surfaces
                 when each niche crosses the ≥30-samples + ≥90%-agreement
