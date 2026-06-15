@@ -150,3 +150,152 @@ class TestLogCalibrationForAction:
         passed_bp = mock_eval.call_args.args[0]
         assert passed_bp["extra"] is existing_extra
         assert passed_bp["extra"]["custom_field"] == "do not delete me"
+
+
+class TestVisualPathsJsonDecode:
+    """Pin the 2026-06-15 audit fix: visual_paths must be JSON-decoded.
+
+    Bug: Postgres path stores visual_paths as a JSON string. The
+    previous code passed the raw string through, and the gate's
+    has_video check (`bool(extra.get("visual_paths"))`) returned True
+    for the string `"[]"` — meaning calibration verdict disagreed
+    with what the worker would compute for the same blueprint.
+    """
+
+    def _client_with_visual_paths(self, raw_value):
+        """Build a mock client whose blueprint has the given raw
+        visual_paths value (string or list)."""
+        from unittest.mock import MagicMock
+
+        client = MagicMock()
+        client.blueprints.get.return_value = {
+            "id": "bp1",
+            "fields": {
+                "niche_id": "gaming",
+                "hook_text": "h",
+                "composite_score": 0.7,
+                "virality_score": 0.1,
+                "visual_paths": raw_value,
+                "validation_status": {"all_passed": True},
+                "action_taken_source": "",
+            },
+        }
+        return client
+
+    def test_empty_list_string_decoded_to_empty_list(self):
+        """The bug case: `"[]"` string must decode to `[]` so the gate
+        sees has_video=False (the post truly has no video)."""
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._client_with_visual_paths("[]")
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
+            with patch("genlab_core.scheduling.calibration_logger.log"):
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
+
+        passed_bp = mock_eval.call_args.args[0]
+        # visual_paths in the wrapper must be a list (decoded), not a string
+        assert passed_bp["extra"]["visual_paths"] == [], (
+            "'[]' string must decode to [] — bool(string) is True even when "
+            "string represents empty list. Gate would report has_video=True "
+            "for a video-less blueprint."
+        )
+
+    def test_non_empty_list_string_decoded_correctly(self):
+        """`'["/a.mp4"]'` decodes to `["/a.mp4"]` — gate sees has_video=True."""
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._client_with_visual_paths('["/path/a.mp4"]')
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
+            with patch("genlab_core.scheduling.calibration_logger.log"):
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
+
+        passed_bp = mock_eval.call_args.args[0]
+        assert passed_bp["extra"]["visual_paths"] == ["/path/a.mp4"]
+
+    def test_malformed_json_string_falls_back_to_empty_list(self):
+        """Garbled string mustn't raise — fall back to []."""
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._client_with_visual_paths("not-valid-json!!!")
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
+            with patch("genlab_core.scheduling.calibration_logger.log"):
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
+        passed_bp = mock_eval.call_args.args[0]
+        assert passed_bp["extra"]["visual_paths"] == []
+
+    def test_list_value_preserved(self):
+        """When the field is already a list (SharePoint path), no decode needed."""
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._client_with_visual_paths(["/b.mp4", "/c.mp4"])
+        with patch("genlab_core.scheduling.auto_approval_gate.evaluate") as mock_eval:
+            with patch("genlab_core.scheduling.calibration_logger.log"):
+                log_calibration_for_action(client=client, record_id="bp1", action="approved")
+        passed_bp = mock_eval.call_args.args[0]
+        assert passed_bp["extra"]["visual_paths"] == ["/b.mp4", "/c.mp4"]
+
+
+class TestQueueActionAliases:
+    """Pin the 2026-06-15 audit fix: queue verbs map to calibration verbs.
+
+    Publishing Queue endpoints use ``held`` and ``released`` — neither
+    is in calibration_logger.VALID_OPERATOR_ACTIONS. Without the
+    alias, every queue-action calibration call would be silently
+    skipped. After the fix:
+      - held → rejected  (operator says don't publish, at least for now)
+      - released → skipped (operator removes from queue, no content verdict)
+    """
+
+    def _setup(self, monkeypatch):
+        """Common setup: env + mock blueprint."""
+        from unittest.mock import MagicMock
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+        client = MagicMock()
+        client.blueprints.get.return_value = {
+            "id": "bp1",
+            "fields": {
+                "niche_id": "gaming",
+                "hook_text": "h",
+                "composite_score": 0.7,
+                "virality_score": 0.1,
+                "visual_paths": ["/v.mp4"],
+                "validation_status": {"all_passed": True},
+                "action_taken_source": "",
+            },
+        }
+        return client
+
+    def test_held_mapped_to_rejected(self, monkeypatch):
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._setup(monkeypatch)
+        with patch(
+            "genlab_core.scheduling.calibration_logger.log",
+        ) as mock_log:
+            log_calibration_for_action(client=client, record_id="bp1", action="held")
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["operator_action"] == "rejected"
+
+    def test_released_mapped_to_skipped(self, monkeypatch):
+        from unittest.mock import patch
+
+        from server.core.calibration_helper import log_calibration_for_action
+
+        client = self._setup(monkeypatch)
+        with patch(
+            "genlab_core.scheduling.calibration_logger.log",
+        ) as mock_log:
+            log_calibration_for_action(client=client, record_id="bp1", action="released")
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["operator_action"] == "skipped"

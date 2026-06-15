@@ -34,6 +34,7 @@ no duplication of the wrapper-build + gate-eval + logger glue.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -43,10 +44,41 @@ logger = logging.getLogger(__name__)
 # operator_action values. "archived" doesn't map directly — the
 # closest semantic equivalent is "rejected" (operator explicitly
 # moved the blueprint out of the active queue). Mapping here so the
-# 4 call sites stay shape-agnostic.
+# call sites stay shape-agnostic.
 _ACTION_ALIAS: dict[str, str] = {
     "archived": "rejected",
+    # Hold/release/approve via the Publishing Queue endpoints
+    # (api/publishing_queue.py) map to the same canonical actions —
+    # operator's intent matches the verb regardless of which UI
+    # surface emitted it.
+    "held": "rejected",
+    "released": "skipped",
 }
+
+
+def _safe_visual_paths(raw: Any) -> list:
+    """Decode a ``visual_paths`` field into a list.
+
+    The Postgres path stores ``visual_paths`` as a JSON-encoded
+    string for many blueprints; the gate's ``has_video`` check
+    relies on `bool(visual_paths)`. A raw string `"[]"` is truthy
+    but represents an empty list — gate then reports `has_video=
+    True` when the post actually has no video. PR #221's auto_approver
+    fix uses ``_safe_json_list``; the dashboard preview endpoint uses
+    ``_safe_json_parse``. This helper is the third copy — kept here
+    because the calibration_helper module is the natural shared layer.
+
+    Returns [] on any decode failure — never raises.
+    """
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            decoded = json.loads(raw)
+            return decoded if isinstance(decoded, list) else []
+        except (ValueError, TypeError):
+            return []
+    return []
 
 
 def log_calibration_for_action(
@@ -77,12 +109,20 @@ def log_calibration_for_action(
         niche_id = (flat.get("niche_id") or "").strip()
 
         # Build the gate's `extra` wrapper if missing — same pattern as
-        # the dashboard preview endpoint + auto_approver (PR #221). All
-        # 3 sites must stay aligned; a new score field added to the
-        # gate needs to land in all 3.
+        # the dashboard preview endpoint + auto_approver (PR #221) +
+        # the backfill script (PR #224). All 4 sites must stay
+        # aligned; a new score field added to the gate needs to land
+        # in all 4.
+        #
+        # 2026-06-15 audit fix: visual_paths must be JSON-decoded
+        # (Postgres path stores it as a string). Without the decode,
+        # `bool("[]")` is True so the gate reports `has_video=True`
+        # even for video-less blueprints — calibration verdict
+        # disagrees with what the worker would decide, defeating the
+        # whole purpose of S2.
         if not isinstance(flat.get("extra"), dict):
             flat["extra"] = {
-                "visual_paths": flat.get("visual_paths"),
+                "visual_paths": _safe_visual_paths(flat.get("visual_paths")),
                 "composite_score": flat.get("composite_score"),
                 "virality_score": flat.get("virality_score"),
                 "validation_status": flat.get("validation_status"),

@@ -942,8 +942,15 @@ def _execute_review_action(
         _flat = {"id": _bp.get("id"), **_fields}
         _niche = (_flat.get("niche_id") or "").strip()
         if not isinstance(_flat.get("extra"), dict):
+            # 2026-06-15 audit fix: visual_paths must be JSON-decoded
+            # (Postgres stores it as a string). `bool("[]")` is True
+            # so without the decode, the gate sees has_video=True
+            # even for video-less blueprints — operator's calibration
+            # row would disagree with what the worker would decide.
+            from server.core.calibration_helper import _safe_visual_paths
+
             _flat["extra"] = {
-                "visual_paths": _flat.get("visual_paths"),
+                "visual_paths": _safe_visual_paths(_flat.get("visual_paths")),
                 "composite_score": _flat.get("composite_score"),
                 "virality_score": _flat.get("virality_score"),
                 "validation_status": _flat.get("validation_status"),
