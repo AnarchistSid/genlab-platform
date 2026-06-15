@@ -235,6 +235,17 @@ def archive_item(record_id):
                 "scheduled_for": None,
             },
         )
+        # S2 (2026-06-15): archive previously bypassed calibration_logger.
+        # Operator-driven archive is semantically a strong reject (don't
+        # publish this), so the helper maps "archived" → "rejected" for
+        # the confusion-matrix denominator. Without this, every archive
+        # was an invisible operator action — making "operator agreed
+        # with gate's reject" appear less common than reality.
+        from server.core.calibration_helper import log_calibration_for_action
+
+        log_calibration_for_action(
+            client=client, record_id=record_id, action="archived"
+        )
 
         try:
             from server.review_server import socketio

@@ -894,6 +894,16 @@ def batch_review():
                     if slot:
                         fields["scheduled_for"] = slot
             client.blueprints.update(str(rid), fields, typecast=True)
+            # S2 (2026-06-15): batch-review previously bypassed
+            # calibration_logger. Operator productivity scaled but
+            # calibration data stayed flat. Helper is best-effort +
+            # swallows exceptions so a calibration failure never
+            # breaks the batch loop.
+            from server.core.calibration_helper import log_calibration_for_action
+
+            log_calibration_for_action(
+                client=client, record_id=str(rid), action=action_taken
+            )
             results.append({"id": rid, "action": action_taken, "status": "ok"})
         except Exception as exc:
             logger.error("Batch review failed for %s: %s", rid, exc)
@@ -928,6 +938,15 @@ def approve_and_schedule(blueprint_id):
             update_fields["scheduled_for"] = scheduled_for
 
         client.blueprints.update(blueprint_id, update_fields, typecast=True)
+        # S2 (2026-06-15): single approve-and-schedule previously
+        # bypassed calibration_logger — counted as one of the 4 paths
+        # making AUTO #2 calibration data accumulate slower than
+        # operator throughput would suggest.
+        from server.core.calibration_helper import log_calibration_for_action
+
+        log_calibration_for_action(
+            client=client, record_id=blueprint_id, action="approved"
+        )
 
         return api_success(
             data={
@@ -974,6 +993,15 @@ def batch_approve_schedule():
                 update_fields["scheduled_for"] = scheduled_for
 
             client.blueprints.update(str(bp_id), update_fields, typecast=True)
+            # S2 (2026-06-15): the bulk-review path. Before this fix,
+            # bulk-approving 5 blueprints emitted 0 calibration rows
+            # — the highest-volume operator path was the dimmest
+            # calibration source.
+            from server.core.calibration_helper import log_calibration_for_action
+
+            log_calibration_for_action(
+                client=client, record_id=str(bp_id), action="approved"
+            )
             results.append({"id": bp_id, "status": "ok", "scheduled_for": scheduled_for})
         except Exception as e:
             logger.warning("batch approve-schedule failed for %s: %s", bp_id, e)
