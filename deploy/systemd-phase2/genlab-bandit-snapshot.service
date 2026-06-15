@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab Bandit Arms Daily Snapshot (S6, AUTO #2 runbook)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+ExecStart=/opt/genlab/scripts/bandit_arms_snapshot.sh
+TimeoutSec=120
+# rotation soft-fail returns exit 3 — log but don't repeat-mark the unit failed
+SuccessExitStatus=0 3
+StandardOutput=append:/opt/genlab/.logs/bandit_arms_snapshot.systemd.log
+StandardError=append:/opt/genlab/.logs/bandit_arms_snapshot.systemd.log

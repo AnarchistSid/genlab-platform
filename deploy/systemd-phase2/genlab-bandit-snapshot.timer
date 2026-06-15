@@ -1,0 +1,12 @@
+[Unit]
+Description=GenLab Bandit Arms Daily Snapshot Timer (S6, AUTO #2 runbook)
+
+[Timer]
+# 03:00 IST = 21:30 UTC (prior day). Chose evening UTC because it's
+# after every niche pipeline finishes — captures the day's full bandit
+# updates without racing the next morning's first publish.
+OnCalendar=*-*-* 21:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
