@@ -156,7 +156,7 @@ class TestStrategyB:
 
     def test_boost_capped_at_max(self, approved_decision, blueprint):
         """A residual larger than boost_max is clamped to boost_max."""
-        config = StrategyConfig(bandit_boost_enabled=True, bandit_boost_max=0.05)
+        StrategyConfig(bandit_boost_enabled=True, bandit_boost_max=0.05)
         # alpha=2, beta=1, n_plays=1 normally cold-starts under min_plays;
         # use min_plays=1 + huge residual to exercise the cap path.
         config_with_loose_min = StrategyConfig(
