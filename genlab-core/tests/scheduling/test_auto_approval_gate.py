@@ -161,6 +161,33 @@ class TestViralityScore:
         assert "virality_score" not in decision.failed_checks
         assert decision.approved is True
 
+    def test_default_threshold_is_002_per_d13(self):
+        """Pin the AUTO #2 D1.3 threshold value. 2026-06-15 lowered
+        ``_DEFAULT_MIN_VIRALITY_SCORE`` from 0.05 → 0.02 per the
+        rollout runbook. Reverting silently would make future
+        noise-floor blueprints (0.01-0.04) fail virality even though
+        operator data shows they're approval-worthy. If you genuinely
+        need to bump the threshold back up, update this pin AND the
+        runbook AND the operator's expectation."""
+        from genlab_core.scheduling.auto_approval_gate import _DEFAULT_MIN_VIRALITY_SCORE
+
+        assert _DEFAULT_MIN_VIRALITY_SCORE == 0.02, (
+            f"D1.3 threshold value drift: {_DEFAULT_MIN_VIRALITY_SCORE} != 0.02. "
+            "Update both the constant AND this pin AND the runbook if you "
+            "need to change the floor."
+        )
+
+    def test_virality_just_above_002_threshold_passes(self):
+        """Boundary regression: 0.03 must pass under the new floor."""
+        decision = evaluate(_bp(virality_score=0.03, validation_status={"all_passed": True}))
+        assert "virality_score" in decision.passed_checks
+
+    def test_virality_just_below_002_threshold_fails(self):
+        """Boundary regression: 0.01 must still fail at the new floor."""
+        decision = evaluate(_bp(virality_score=0.01, validation_status={"all_passed": True}))
+        assert "virality_score" in decision.failed_checks
+        assert decision.approved is False
+
 
 class TestConfidenceAggregation:
     def test_confidence_in_unit_interval(self):

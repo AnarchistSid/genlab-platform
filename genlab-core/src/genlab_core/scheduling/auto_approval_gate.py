@@ -39,7 +39,16 @@ logger = logging.getLogger(__name__)
 # clear them — conservative enough that operator-facing previews don't
 # fire on garbage. Each niche can override via niche_config later.
 _DEFAULT_MIN_COMPOSITE_SCORE: Final[float] = 0.3
-_DEFAULT_MIN_VIRALITY_SCORE: Final[float] = 0.05
+# 2026-06-15 (AUTO #2 D1.3): lowered from 0.05 → 0.02 per the rollout
+# runbook. Prod blueprint distribution (verified 2026-06-15) showed
+# virality_score clusters at {0.00, 0.05, 0.10, 0.15, 0.20} with no
+# scores in the 0.02-0.04 range — this lowering doesn't move any
+# CURRENT blueprint from "fail virality" to "pass virality" (natural
+# distribution gap), but it gives future noise-floor blueprints
+# (0.01-0.04 range as the scorer matures) a more permissive floor
+# matching the calibration data that shows operators DO approve such
+# blueprints.
+_DEFAULT_MIN_VIRALITY_SCORE: Final[float] = 0.02
 _DEFAULT_REQUIRE_VIDEO: Final[bool] = True
 _DEFAULT_REQUIRE_HOOK_TEXT: Final[bool] = True
 _DEFAULT_REQUIRE_QC_PASS: Final[bool] = True
