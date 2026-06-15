@@ -163,3 +163,103 @@ class TestConfigUpdater:
         )
         changes = updater._update_hook_type_ratios(records, dry_run=True)
         assert changes == []
+
+
+class TestCommentPreservation:
+    """Regression pins for T#69: config_updater must NOT strip YAML comments.
+
+    Pre-fix (yaml.dump): every load → mutate → dump cycle silently rewrote
+    the file, dropping comments and reformatting. Three prod templates.yaml
+    files lost their carefully-written documentation across multiple weekly
+    config_updater runs. ruamel.yaml roundtrip mode preserves them.
+    """
+
+    def _seed_templates_with_comments(self, path):
+        """Hand-write a templates.yaml with header + inline comments so we
+        can check survival across a round-trip."""
+        path.write_text(
+            "# HEADER: This file controls hook-type sampling.\n"
+            "# Lines starting with # must survive config_updater runs.\n"
+            "\n"
+            "version: '1.0'\n"
+            "# Section comment: existing ratios\n"
+            "hook_type_ratios:\n"
+            "  hook_a: 0.30  # inline: legacy a\n"
+            "  hook_b: 0.20  # inline: legacy b\n"
+        )
+
+    def test_existing_comments_survive_a_write(self, tmp_path):
+        """Header + section + inline comments all present after config_updater."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        templates = config_dir / "templates.yaml"
+        self._seed_templates_with_comments(templates)
+
+        # Drive a real change so the writer actually fires.
+        updater = ConfigUpdater(config_dir=config_dir)
+        records = _make_records(25, hook_type="hook_c", reward=0.80)
+        changes = updater.run(feedback_records=records)
+        assert len(changes) >= 1, "test setup wrong — no changes triggered"
+
+        post = templates.read_text()
+        assert "# HEADER: This file controls hook-type sampling." in post, (
+            "header comment was lost — yaml.dump regression"
+        )
+        assert "# Lines starting with # must survive config_updater runs." in post
+        assert "# Section comment: existing ratios" in post
+        assert "# inline: legacy a" in post, "inline comment on existing key was lost"
+        assert "# inline: legacy b" in post
+
+    def test_key_order_preserved(self, tmp_path):
+        """version key must stay before hook_type_ratios after a write."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        templates = config_dir / "templates.yaml"
+        self._seed_templates_with_comments(templates)
+
+        updater = ConfigUpdater(config_dir=config_dir)
+        records = _make_records(25, hook_type="hook_c", reward=0.80)
+        updater.run(feedback_records=records)
+
+        post = templates.read_text()
+        version_idx = post.find("version:")
+        ratios_idx = post.find("hook_type_ratios:")
+        assert 0 <= version_idx < ratios_idx, (
+            f"key order changed: version@{version_idx}, ratios@{ratios_idx}"
+        )
+
+    def test_new_key_appended_not_inserted(self, tmp_path):
+        """New hook_type appears in hook_type_ratios without reordering."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        templates = config_dir / "templates.yaml"
+        self._seed_templates_with_comments(templates)
+
+        updater = ConfigUpdater(config_dir=config_dir)
+        records = _make_records(25, hook_type="hook_c", reward=0.80)
+        updater.run(feedback_records=records)
+
+        post = templates.read_text()
+        assert "hook_c:" in post
+        # hook_a still comes before hook_c (we appended, not prepended)
+        assert post.find("hook_a:") < post.find("hook_c:")
+
+    def test_no_module_level_pyyaml_dump_remaining(self):
+        """Guardrail: the file must not regress to yaml.dump for writes."""
+        from pathlib import Path as P
+
+        from genlab_core.learning import config_updater as mod
+
+        src = P(mod.__file__).read_text()
+        # Allow yaml.dump in comments/docstrings but not as a function call.
+        # Find live call sites (anything not preceded by # or inside docstring).
+        live_calls = [
+            line
+            for line in src.splitlines()
+            if "yaml.dump" in line
+            and not line.lstrip().startswith("#")
+            and "PyYAML" not in line  # docstring mention
+        ]
+        assert live_calls == [], (
+            f"yaml.dump call resurfaced — would strip comments. Found: {live_calls}"
+        )

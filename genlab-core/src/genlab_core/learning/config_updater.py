@@ -20,9 +20,52 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 logger = logging.getLogger(__name__)
+
+# Roundtrip-preserving YAML loader/dumper. ``typ="rt"`` preserves
+# comments, blank lines, and key order in the loaded structure so a
+# load → mutate → dump cycle on an existing file keeps the human-
+# written commentary intact. PyYAML's yaml.dump strips ALL of this —
+# every config_updater run silently rewrote 3 prod templates.yaml
+# files losing their comments (audit T#62, fix T#69 2026-06-15).
+#
+# Module-level singleton: ruamel.yaml stores per-instance defaults
+# (indent, width, mapping flow style), and constructing a fresh
+# instance per call would discard any tuning we add later.
+_RT_YAML = YAML(typ="rt")
+_RT_YAML.preserve_quotes = True
+_RT_YAML.default_flow_style = False
+_RT_YAML.allow_unicode = True
+# ruamel.yaml defaults to width=80 which mangles long inline lists;
+# 4096 is "effectively never wrap" without going to sys.maxsize
+# (some versions reject very large widths).
+_RT_YAML.width = 4096
+
+
+def _rt_load(path: Path) -> Any:
+    """Load a YAML file with comments + structure preserved.
+
+    Returns the parsed structure (typically a ``CommentedMap``) or an
+    empty ``dict`` for missing/empty files. The returned object can
+    be mutated like a regular dict; subsequent ``_rt_dump`` will
+    preserve any comments that survived the mutation.
+    """
+    if not path.exists():
+        return {}
+    with open(path) as f:
+        loaded = _RT_YAML.load(f)
+    return loaded if loaded is not None else {}
+
+
+def _rt_dump(path: Path, data: Any) -> None:
+    """Dump ``data`` to ``path`` atomically using roundtrip mode."""
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w") as f:
+        _RT_YAML.dump(data, f)
+    tmp_path.replace(path)
+
 
 CHANGE_THRESHOLD = 0.10  # 10% — minimum difference to justify a config update
 # 2026-06-15 audit T#59: lowered from 20 → 5. At current channel reach
@@ -102,8 +145,7 @@ class ConfigUpdater:
             logger.info("[CONFIG_UPDATE] schedule.yaml not found — skipping schedule update")
             return []
 
-        with open(schedule_path) as f:
-            schedule = yaml.safe_load(f) or {}
+        schedule = _rt_load(schedule_path)
 
         rewards_by_slot: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
         for r in records:
@@ -175,8 +217,7 @@ class ConfigUpdater:
             logger.info("[CONFIG_UPDATE] templates.yaml not found — skipping hook ratio update")
             return []
 
-        with open(templates_path) as f:
-            templates = yaml.safe_load(f) or {}
+        templates = _rt_load(templates_path)
 
         rewards_by_hook: dict[str, list[float]] = defaultdict(list)
         for r in records:
@@ -231,11 +272,27 @@ class ConfigUpdater:
             changes.append(change)
 
         if not dry_run and changes:
-            new_ratios = {
-                **current_ratios,
-                **{c["key"].split(".")[-1]: c["new_value"] for c in changes},
-            }
-            self._write_yaml_key(templates_path, templates, "hook_type_ratios", new_ratios)
+            # MUTATE the existing CommentedMap in place rather than
+            # building a new plain dict — ruamel.yaml's comment metadata
+            # attaches to the loaded mapping object, and replacing it
+            # with `{**current_ratios, ...}` would silently strip every
+            # inline comment on the surviving keys (T#69 regression).
+            #
+            # If hook_type_ratios doesn't exist yet, fall back to
+            # creating it; new keys legitimately have no prior comments
+            # to preserve.
+            if "hook_type_ratios" not in templates:
+                templates["hook_type_ratios"] = {}
+            ratios = templates["hook_type_ratios"]
+            for c in changes:
+                key = c["key"].split(".")[-1]
+                ratios[key] = c["new_value"]
+            _rt_dump(templates_path, templates)
+            logger.info(
+                "[CONFIG_UPDATE] Wrote %d hook_type_ratios update(s) to %s",
+                len(changes),
+                templates_path,
+            )
 
         return changes
 
@@ -259,7 +316,16 @@ class ConfigUpdater:
 
     def _write_yaml_key(self, path: Path, data: dict, key: str, value: Any) -> None:
         """Write a nested YAML key using dot notation.
-        Uses atomic tmp+rename to avoid corrupting YAML on crash.
+
+        Uses atomic tmp+rename to avoid corrupting YAML on crash. The
+        dump path goes through ``_rt_dump`` (ruamel.yaml roundtrip
+        mode) so existing comments + key order + blank lines survive
+        the write — PyYAML's yaml.dump would strip them all (T#69).
+
+        Note: ``data`` must have been loaded via ``_rt_load`` for
+        comment preservation to actually work; a plain dict carries
+        no comment metadata to round-trip. The callers in this
+        module all use ``_rt_load`` so the contract holds.
         """
         keys = key.split(".")
         target = data
@@ -267,9 +333,5 @@ class ConfigUpdater:
             target = target.setdefault(k, {})
         target[keys[-1]] = value
 
-        tmp_path = path.with_suffix(".yaml.tmp")
-        with open(tmp_path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        tmp_path.replace(path)
-
+        _rt_dump(path, data)
         logger.info("[CONFIG_UPDATE] Wrote %s=%r to %s", key, value, path)
