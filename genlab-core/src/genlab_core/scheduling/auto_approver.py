@@ -74,6 +74,106 @@ from genlab_core.scheduling.auto_approval_gate import (
 logger = logging.getLogger(__name__)
 
 
+def _pick_next_available_slot(
+    *,
+    backlog_client: Any,
+    niche_id: str,
+    exclude_record_id: str = "",
+    canonical_slot_ist: str = "12:00",
+) -> str | None:
+    """Return the next available scheduled_for ISO string for ``niche_id``.
+
+    Cap-aware: walks IST days 0..7 forward from "now + 1h", counts
+    existing VISUAL_READY+approved + PUBLISHED blueprints per
+    (niche, day), returns the canonical 12:00 IST slot on the first
+    day where count < effective_cap.
+
+    Returns ``None`` if no day in the next 7 has capacity — caller
+    should treat this as "skip this approval, retry next pass" not
+    "schedule for some default".
+
+    Mirrors ``dashboard/server/core/publishing_queue.py::_next_available_slot``
+    so the worker shares the same per-day-cap contract as the operator
+    path (PR #220). Implemented here in genlab-core because the worker
+    runs outside the dashboard's import boundary.
+    """
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from genlab_core.publishing.daily_cap import _load_caps, _load_caps_config
+    from genlab_core.scheduling.multi_publish_gate import (
+        effective_cap,
+        is_multi_publish_enabled,
+    )
+
+    ist = ZoneInfo("Asia/Kolkata")
+
+    # Effective cap (defaults to 1 with multi_publish off).
+    caps_config = _load_caps_config()
+    caps = _load_caps()
+    daily_post_cap = int(caps.get("instagram", 1))
+    ceiling = int((caps_config.get("max_per_day_ceiling") or {}).get("instagram", daily_post_cap))
+    enabled = is_multi_publish_enabled(caps_config, platform="instagram")
+    cap = effective_cap(
+        niche_id=niche_id,
+        platform="instagram",
+        daily_post_cap=daily_post_cap,
+        max_per_day_ceiling=ceiling,
+        multi_publish_enabled=enabled,
+    )
+
+    # Count existing scheduled_for per (niche, IST date), excluding self.
+    posts_per_day: dict[str, int] = {}
+    try:
+        records = backlog_client.get_blueprints_by_status("VISUAL_READY", niche_id=niche_id)
+        records += backlog_client.get_blueprints_by_status("PUBLISHED", niche_id=niche_id)
+    except Exception:
+        records = []
+    for r in records:
+        f = r.get("fields", r) if isinstance(r, dict) else {}
+        rid = str(r.get("id", "") or f.get("id", "") or "")
+        if exclude_record_id and rid == str(exclude_record_id):
+            continue
+        if (f.get("niche_id") or "").strip() != niche_id:
+            continue
+        sched_raw = f.get("scheduled_for", "")
+        if not sched_raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(sched_raw).replace("Z", "+00:00"))
+            day_key = dt.astimezone(ist).strftime("%Y-%m-%d")
+            posts_per_day[day_key] = posts_per_day.get(day_key, 0) + 1
+        except (ValueError, TypeError):
+            pass
+
+    # Walk forward, picking first day with headroom.
+    now_ist = datetime.now(ist)
+    earliest = now_ist + timedelta(hours=1)
+    base_date = earliest.date()
+    hour, minute = (int(x) for x in canonical_slot_ist.split(":"))
+
+    for day_offset in range(0, 8):
+        candidate_date = base_date + timedelta(days=day_offset)
+        day_key = candidate_date.strftime("%Y-%m-%d")
+        if posts_per_day.get(day_key, 0) >= cap:
+            continue
+        candidate = datetime(
+            candidate_date.year,
+            candidate_date.month,
+            candidate_date.day,
+            hour,
+            minute,
+            tzinfo=ist,
+        )
+        if candidate <= earliest:
+            continue
+        from datetime import UTC as _UTC
+
+        return candidate.astimezone(_UTC).isoformat().replace("+00:00", "Z")
+
+    return None
+
+
 def _safe_json_list(raw: Any) -> list:
     """Best-effort decode of a JSON list field. Returns [] on any
     failure (None, malformed JSON, wrong type) — never raises.
@@ -392,9 +492,47 @@ def _execute_approval(
     can exclude this row from the confusion matrix (a gate auto-approval
     voting agree with itself would inflate accuracy).
     """
+    # 2026-06-15 audit T#56: pick a cap-aware slot before approving.
+    # Without this, the worker writes action_taken=approved but no
+    # scheduled_for — the publisher then has no schedule gate to honor
+    # and either publishes immediately (wrong time) OR
+    # _schedule_gate.evaluate rejects (blueprint stuck).
+    #
+    # Mirrors the dashboard's _next_available_slot per-day-cap logic
+    # (PR #220) so the worker shares the same producer/consumer
+    # contract. Returns None on no-capacity-for-7-days → worker skips
+    # this approval (safer than over-scheduling).
+    try:
+        scheduled_for = _pick_next_available_slot(
+            backlog_client=backlog_client,
+            niche_id=niche_id,
+            exclude_record_id=record_id,
+        )
+    except Exception as slot_exc:  # noqa: BLE001
+        # Fail-CLOSED: cap-lookup failure must NEVER let the worker
+        # over-schedule. Skip this blueprint; next pass retries.
+        result.errors.append(f"slot lookup failed for {record_id}: {slot_exc}")
+        logger.warning(
+            "[auto_approver] niche=%s bp=%s slot lookup failed: %s",
+            niche_id,
+            record_id,
+            slot_exc,
+        )
+        return False
+
+    if scheduled_for is None:
+        logger.info(
+            "[auto_approver] niche=%s bp=%s — no cap-available slot in next 7 days, skipping",
+            niche_id,
+            record_id,
+        )
+        result.errors.append(f"no slot available for {record_id}")
+        return False
+
     update_fields = {
         "action_taken": "approved",
         "reviewed_at": datetime.now(UTC).isoformat(),
+        "scheduled_for": scheduled_for,
         # Source tag — calibration logger skips these in the confusion
         # matrix; dashboard "auto-approved today" feed counts them.
         "action_taken_source": AUTO_APPROVAL_SOURCE_TAG,
