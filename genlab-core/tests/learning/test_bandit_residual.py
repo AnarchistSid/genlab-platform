@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import csv
-import math
-from pathlib import Path
 
 import pytest
-
 from genlab_core.learning.bandit_residual import (
-    _DEFAULT_DRIFT_THRESHOLD,
     ArmResidual,
     _compute_residual,
     compute_residuals,
@@ -41,9 +37,7 @@ class TestComputeResidualMath:
         # observed_avg = k*0.5 / k = 0.5
         # posterior_mean = (1+k*0.5) / (2+k) → approaches 0.5 as k→∞
         # At k=100: posterior = 51/102 = 0.5 → residual = 0 ✓
-        observed_avg, residual, _, _, _ = _compute_residual(
-            alpha=51.0, beta=51.0, n_plays=100
-        )
+        observed_avg, residual, _, _, _ = _compute_residual(alpha=51.0, beta=51.0, n_plays=100)
         assert observed_avg == pytest.approx(0.5, abs=1e-9)
         assert residual == pytest.approx(0.0, abs=1e-9)
 
@@ -105,9 +99,7 @@ class TestComputeResidualMath:
         # to surface DRIFT, not just explored-ness; a well-calibrated arm
         # gets score 0 regardless of n_plays. Refine test to use a *drifted*
         # well-explored arm vs a *drifted* cold one:
-        _, _, _, _, score_cold = _compute_residual(
-            alpha=2.0, beta=1.0, n_plays=1
-        )  # res=0.333, n=1
+        _, _, _, _, score_cold = _compute_residual(alpha=2.0, beta=1.0, n_plays=1)  # res=0.333, n=1
         _, _, _, _, score_warm = _compute_residual(
             alpha=70.0, beta=30.0, n_plays=98
         )  # res ≈ (69/98) - 0.7 = 0.0041, n=98
@@ -125,9 +117,7 @@ class TestComputeResidualMath:
         # Construct alpha just over 1 with n_plays=0... can't, n_plays guarded.
         # Construct alpha way over n_plays+1 (impossible if reward clipped, but
         # we should still clamp defensively).
-        observed_avg, _, _, _, _ = _compute_residual(
-            alpha=15.0, beta=1.0, n_plays=10
-        )
+        observed_avg, _, _, _, _ = _compute_residual(alpha=15.0, beta=1.0, n_plays=10)
         # (15-1)/10 = 1.4 → clamped to 1.0
         assert observed_avg == 1.0
 

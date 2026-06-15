@@ -155,13 +155,11 @@ def compute_residuals(
         n_plays = int(r.get("n_plays") or 0)
         posterior_mean = alpha / (alpha + beta) if (alpha + beta) > 0 else 0.0
 
-        observed_avg, residual, is_cold_start, is_drift_flagged, ranking_score = (
-            _compute_residual(
-                alpha=alpha,
-                beta=beta,
-                n_plays=n_plays,
-                drift_threshold=drift_threshold,
-            )
+        observed_avg, residual, is_cold_start, is_drift_flagged, ranking_score = _compute_residual(
+            alpha=alpha,
+            beta=beta,
+            n_plays=n_plays,
+            drift_threshold=drift_threshold,
         )
         out.append(
             ArmResidual(
