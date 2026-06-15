@@ -378,3 +378,172 @@ class TestDecidedAtOverride:
 
         sql = cur.execute.call_args.args[0]
         assert "decided_at" not in sql
+
+
+# ── S1 (2026-06-15): action_taken_source filter — gate-vs-gate guard ──
+
+
+class TestNonOperatorSourceFilter:
+    """Pin the S1 fix.
+
+    Bug: ``calibration_logger.log`` accepted operator actions on any
+    blueprint, including ones the worker had just auto-approved.
+    Operator's later "review" of an auto-approved post is a
+    correction, not a fresh decision — but the row entered the
+    confusion matrix as gate-vs-operator, inflating apparent
+    disagreement.
+
+    The fix: optional ``action_taken_source`` kwarg. When it matches
+    an entry in ``_NON_OPERATOR_SOURCE_TAGS`` (currently just
+    ``auto_approver_v1``), the row is silently dropped.
+    """
+
+    def test_auto_approver_source_skips_log(self, monkeypatch):
+        """The headline pin. action_taken_source='auto_approver_v1'
+        must skip the log — no DB call, no row written."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        fake_psycopg = MagicMock()
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
+        )
+        result = log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            action_taken_source="auto_approver_v1",
+        )
+
+        assert result is False, "Auto-source row must be filtered out"
+        # And — critically — psycopg.connect must NOT have been called.
+        # If we even open a connection we've already paid the cost of
+        # the bug we're trying to avoid.
+        fake_psycopg.connect.assert_not_called()
+
+    def test_none_source_writes_normally(self, monkeypatch):
+        """Backward-compat: callers that don't pass action_taken_source
+        get the pre-S1 behavior — row writes normally."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
+        )
+        # No action_taken_source kwarg — pre-S1 default behavior
+        result = log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+        )
+
+        assert result is True
+        cur.execute.assert_called_once()
+
+    def test_empty_string_source_writes_normally(self, monkeypatch):
+        """Empty string ≡ None — operator's first decision on a never-
+        auto-approved blueprint has action_taken_source='' from the
+        DB, not None. Must NOT be treated as auto-source."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
+        )
+        result = log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            action_taken_source="",  # empty string, NOT None
+        )
+
+        assert result is True, "Empty source must NOT be treated as auto-source"
+        cur.execute.assert_called_once()
+
+    def test_unknown_source_writes_normally(self, monkeypatch):
+        """A source tag we don't recognize (e.g. ``operator`` or
+        ``api_v3``) must NOT trip the filter — only the explicit
+        non-operator allowlist does."""
+        from unittest.mock import MagicMock
+
+        from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
+        from genlab_core.scheduling.calibration_logger import log
+
+        monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@127.0.0.1:1/d")
+
+        cur = MagicMock()
+        conn = MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cur
+        ctx_mgr = MagicMock()
+        ctx_mgr.__enter__.return_value = conn
+
+        fake_psycopg = MagicMock()
+        fake_psycopg.connect.return_value = ctx_mgr
+        monkeypatch.setitem(__import__("sys").modules, "psycopg", fake_psycopg)
+
+        decision = AutoApprovalDecision(
+            approved=True,
+            confidence=0.9,
+            passed_checks=["a"],
+            failed_checks=[],
+            reasons=["ok"],
+        )
+        result = log(
+            blueprint_id="bp1",
+            niche_id="gaming",
+            decision=decision,
+            operator_action="approved",
+            action_taken_source="operator",  # unknown source
+        )
+
+        assert result is True
+        cur.execute.assert_called_once()
