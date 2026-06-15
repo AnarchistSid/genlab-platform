@@ -73,6 +73,29 @@ from genlab_core.scheduling.auto_approval_gate import (
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_json_list(raw: Any) -> list:
+    """Best-effort decode of a JSON list field. Returns [] on any
+    failure (None, malformed JSON, wrong type) — never raises.
+
+    Mirrors the helper used in
+    ``dashboard/server/api/blueprints.py::_safe_json_parse(..., expected_type=list)``
+    so the auto_approver's ``extra`` wrapper construction lines up
+    byte-for-byte with the dashboard preview endpoint's normalization.
+    """
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        import json
+
+        try:
+            decoded = json.loads(raw)
+            return decoded if isinstance(decoded, list) else []
+        except (ValueError, TypeError):
+            return []
+    return []
+
+
 # Environment kill switch — wins over any per-niche YAML setting.
 # Useful when the operator needs to halt all auto-approvals immediately
 # (e.g., during an incident) without editing 5 YAML files.
@@ -277,6 +300,29 @@ def run_pass(
         blueprint = {"id": record_id, **fields}
         if not record_id:
             continue
+
+        # ── Build the gate's `extra` wrapper (showstopper #1, 2026-06-15) ──
+        # The gate's ``evaluate()`` reads composite_score / virality_score
+        # / validation_status / visual_paths from ``blueprint["extra"]``.
+        # Some storage paths flatten those to top-level fields. Without
+        # this wrapper, the gate sees None for every score and aggregates
+        # to confidence~0.5 for EVERY blueprint regardless of quality —
+        # meaning the worker either auto-approves nothing (when
+        # ``min_confidence > 0.5``) or everything (≤0.5). It also makes
+        # calibration data not predict worker behavior because the
+        # preview endpoint + ``calibration_logger`` DO build this
+        # wrapper, while the worker DIDN'T.
+        #
+        # Mirrors ``dashboard/server/api/blueprints.py::auto_approval_preview``
+        # — keep the two sites in sync; if the gate adds a new field, both
+        # wrappers must expose it.
+        if not isinstance(blueprint.get("extra"), dict):
+            blueprint["extra"] = {
+                "visual_paths": _safe_json_list(blueprint.get("visual_paths")),
+                "composite_score": blueprint.get("composite_score"),
+                "virality_score": blueprint.get("virality_score"),
+                "validation_status": blueprint.get("validation_status"),
+            }
 
         # ── Idempotency: never re-approve ─────────────────────────────────
         existing_action = (blueprint.get("action_taken") or "").strip()

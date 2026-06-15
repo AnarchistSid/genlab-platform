@@ -370,3 +370,149 @@ class TestPolicyLoading:
     def test_unknown_niche_returns_disabled_default(self):
         policy = load_policy("nonexistent_niche")
         assert policy.enabled is False
+
+
+# ── P1 (Showstopper #1, 2026-06-15): the gate's `extra` wrapper ───────────
+
+
+class TestGateExtraWrapper:
+    """Pin the showstopper #1 fix.
+
+    Bug: ``auto_approver._execute_approval`` built ``blueprint = {"id":
+    ..., **fields}`` and passed it straight to ``gate_evaluate``. But
+    the gate's ``evaluate()`` reads ``composite_score`` etc. from
+    ``blueprint["extra"]``. On the Postgres path those fields are
+    top-level, not under ``extra``, so the gate saw None for every
+    score and aggregated confidence to ~0.5 regardless of blueprint
+    quality. The dashboard preview endpoint already builds an ``extra``
+    wrapper; the worker didn't. Round-3 audit caught this 2026-06-15.
+
+    The fix: build the same wrapper before ``gate_evaluate(blueprint)``.
+    """
+
+    def _enabled_policy(self):
+        return AutoApprovalPolicy(enabled=True, min_confidence=0.7, max_approvals_per_pass=10)
+
+    def test_top_level_scores_wrapped_into_extra(self, monkeypatch):
+        """The bug case: flat blueprint with top-level composite_score +
+        virality_score (no ``extra`` key). The gate must SEE these values
+        via the wrapper, not None."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+
+        seen_blueprints = []
+
+        def _capturing_gate(bp: dict) -> AutoApprovalDecision:
+            seen_blueprints.append(bp)
+            return _decision(approved=True, confidence=0.9)
+
+        # Top-level scores, NO extra key — the Postgres path's shape
+        flat_record = {
+            "id": "bp1",
+            "fields": {
+                "hook_text": "h",
+                "composite_score": 0.85,
+                "virality_score": 0.12,
+                "visual_paths": '["/path/a.mp4"]',
+                "validation_status": {"qc_passed": True},
+            },
+        }
+
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy(),
+        ):
+            run_pass(
+                "gaming",
+                backlog_client=_stub_client([flat_record]),
+                gate_evaluate=_capturing_gate,
+            )
+
+        assert len(seen_blueprints) == 1
+        seen = seen_blueprints[0]
+        assert isinstance(seen.get("extra"), dict), (
+            "auto_approver MUST build an `extra` wrapper before calling the gate; "
+            "without it the gate sees None for every score (Showstopper #1)"
+        )
+        extra = seen["extra"]
+        assert extra["composite_score"] == 0.85
+        assert extra["virality_score"] == 0.12
+        assert extra["visual_paths"] == ["/path/a.mp4"], (
+            "visual_paths JSON string must be decoded to a list"
+        )
+        assert extra["validation_status"] == {"qc_passed": True}
+
+    def test_existing_extra_dict_preserved_not_overwritten(self, monkeypatch):
+        """SharePoint path already has ``extra`` as a dict. The wrapper
+        must NOT replace it — only build one when missing."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+
+        seen_blueprints = []
+
+        def _capturing_gate(bp: dict) -> AutoApprovalDecision:
+            seen_blueprints.append(bp)
+            return _decision(approved=True, confidence=0.9)
+
+        existing_extra = {
+            "composite_score": 0.99,
+            "virality_score": 0.99,
+            "visual_paths": ["/already/here.mp4"],
+            "custom_field": "do not delete me",
+        }
+        record_with_extra = {
+            "id": "bp2",
+            "fields": {
+                "hook_text": "h",
+                # These top-level values should be IGNORED — extra wins
+                "composite_score": 0.1,
+                "virality_score": 0.1,
+                "extra": existing_extra,
+            },
+        }
+
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy(),
+        ):
+            run_pass(
+                "gaming",
+                backlog_client=_stub_client([record_with_extra]),
+                gate_evaluate=_capturing_gate,
+            )
+
+        assert seen_blueprints[0]["extra"] is existing_extra, (
+            "Existing extra dict must be preserved untouched"
+        )
+        assert seen_blueprints[0]["extra"]["custom_field"] == "do not delete me"
+
+    def test_malformed_visual_paths_string_falls_back_to_empty_list(self, monkeypatch):
+        """A garbled visual_paths string mustn't raise — fall back to []."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+
+        seen_blueprints = []
+
+        def _capturing_gate(bp: dict) -> AutoApprovalDecision:
+            seen_blueprints.append(bp)
+            return _decision(approved=True, confidence=0.9)
+
+        record = {
+            "id": "bp3",
+            "fields": {
+                "hook_text": "h",
+                "visual_paths": "not-valid-json!!!",
+                "composite_score": 0.5,
+                "virality_score": 0.5,
+            },
+        }
+
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._enabled_policy(),
+        ):
+            run_pass(
+                "gaming",
+                backlog_client=_stub_client([record]),
+                gate_evaluate=_capturing_gate,
+            )
+
+        # Must not have raised — and visual_paths is [] in the wrapper
+        assert seen_blueprints[0]["extra"]["visual_paths"] == []

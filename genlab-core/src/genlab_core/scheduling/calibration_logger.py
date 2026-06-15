@@ -30,6 +30,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime  # noqa: F401 — used in type-only annotation
 
 from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
 
@@ -73,11 +74,20 @@ def log(
     niche_id: str,
     decision: AutoApprovalDecision | None,
     operator_action: str,
+    decided_at: datetime | None = None,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 
     Returns True if the row was written, False on any failure
     (including missing DATABASE_URL — see module docstring).
+
+    Args:
+        decided_at: When the operator made the decision. Defaults to
+            ``NOW()`` via the schema's column default — pass an
+            explicit timestamp ONLY when backfilling historical rows
+            (e.g. AUTO #2 D1.2 backfill from ``dashboard_events``).
+            Passing ``None`` keeps the long-standing fail-open default
+            so live operator clicks don't need to compute a timestamp.
     """
     if not blueprint_id or not niche_id:
         logger.warning(
@@ -116,25 +126,53 @@ def log(
     try:
         with psycopg.connect(dsn, connect_timeout=5) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO auto_approval_calibration
-                        (blueprint_id, niche_id,
-                         gate_approved, gate_confidence,
-                         gate_passed_checks, gate_failed_checks,
-                         operator_action)
-                    VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
-                    """,
-                    (
-                        str(blueprint_id),
-                        str(niche_id),
-                        gate_approved,
-                        gate_confidence,
-                        passed,
-                        failed,
-                        operator_action,
-                    ),
-                )
+                # Two INSERT variants: the live path lets the column's
+                # ``DEFAULT now()`` set decided_at; the backfill path
+                # supplies the historical operator-click timestamp.
+                # Keeping the live shape untouched preserves the
+                # operator-review fast path (NOW() is cheaper than a
+                # round-trip to Python's datetime serializer).
+                if decided_at is None:
+                    cur.execute(
+                        """
+                        INSERT INTO auto_approval_calibration
+                            (blueprint_id, niche_id,
+                             gate_approved, gate_confidence,
+                             gate_passed_checks, gate_failed_checks,
+                             operator_action)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+                        """,
+                        (
+                            str(blueprint_id),
+                            str(niche_id),
+                            gate_approved,
+                            gate_confidence,
+                            passed,
+                            failed,
+                            operator_action,
+                        ),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO auto_approval_calibration
+                            (blueprint_id, niche_id,
+                             gate_approved, gate_confidence,
+                             gate_passed_checks, gate_failed_checks,
+                             operator_action, decided_at)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                        """,
+                        (
+                            str(blueprint_id),
+                            str(niche_id),
+                            gate_approved,
+                            gate_confidence,
+                            passed,
+                            failed,
+                            operator_action,
+                            decided_at,
+                        ),
+                    )
             conn.commit()
         logger.info(
             "[calibration] logged bp=%s niche=%s gate=%s op=%s",
