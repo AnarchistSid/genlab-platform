@@ -74,7 +74,7 @@ def log(
     niche_id: str,
     decision: AutoApprovalDecision | None,
     operator_action: str,
-    decided_at: "datetime | None" = None,
+    decided_at: datetime | None = None,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 

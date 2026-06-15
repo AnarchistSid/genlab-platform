@@ -259,8 +259,6 @@ class TestDecidedAtOverride:
         """Without the kwarg, the INSERT must NOT include decided_at —
         the schema's NOW() default takes over (preserving the live-path
         round-trip cost and behavior)."""
-        import os
-        from datetime import UTC, datetime
         from unittest.mock import MagicMock
 
         from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
@@ -346,7 +344,6 @@ class TestDecidedAtOverride:
     def test_none_decided_at_explicit_uses_live_path(self, monkeypatch):
         """``decided_at=None`` (explicit) is the same as omitting the kwarg —
         callers shouldn't have to think about the dispatch."""
-        from datetime import UTC, datetime
         from unittest.mock import MagicMock
 
         from genlab_core.scheduling.auto_approval_gate import AutoApprovalDecision
