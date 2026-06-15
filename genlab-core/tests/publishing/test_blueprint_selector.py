@@ -127,7 +127,6 @@ class TestScheduledForOrdering:
     """
 
     def _make_bp(self, bp_id: str, scheduled_for: str | None, score: float = 0.5):
-        from unittest.mock import MagicMock
 
         return {
             "id": bp_id,
