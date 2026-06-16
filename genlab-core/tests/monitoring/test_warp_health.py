@@ -26,8 +26,15 @@ def _show_result(load_state="loaded", active_state="active", sub_state="running"
 
 
 def _ss_result(listening: bool):
-    """Build a fake `ss -tln` result with or without WARP's SOCKS port."""
+    """Build a fake `ss -tln` result with or without WARP's SOCKS port.
+
+    Sets returncode=0 explicitly — without it MagicMock's default
+    auto-attribute returns a MagicMock instance which compares !=0
+    in the post-restart port-listening probe, falsely tripping the
+    escalation path.
+    """
     r = MagicMock()
+    r.returncode = 0
     if listening:
         r.stdout = (
             "State Recv-Q Send-Q Local Address:Port Peer Address:Port\n"
@@ -67,17 +74,31 @@ def _is_active_result(active: bool = False):
     return r
 
 
-def _run_router(show, ss, *, restart=None, is_active=None):
+def _run_router(show, ss, *, restart=None, is_active=None, ss_post_restart=None):
     """subprocess.run side_effect that routes by command.
 
-    ``restart`` and ``is_active`` are optional — when None they default
-    to the "sudoers not configured" + "inactive" shape which is what
-    happens on a fresh prod box before the operator adds the sudoers
-    entry. Tests that exercise the happy-path or other failure modes
-    of ``_attempt_warp_restart`` override them.
+    Args:
+        show: result of ``systemctl show warp-svc`` (initial state probe)
+        ss: result of the INITIAL ``ss -ltn`` (pre-restart port check)
+        restart: result of ``sudo -n systemctl restart warp-svc``
+            (each call returns the same mock — escalation reuses)
+        is_active: result of post-restart ``systemctl is-active``
+        ss_post_restart: result of the POST-restart ``ss -ltn`` —
+            used to verify the new layered escalation logic
+            (2026-06-16). When None, falls back to the same ss
+            result as before — that's the pre-escalation behaviour.
+
+    All ``restart`` and ``ss_post_restart`` invocations after the
+    first one return the SAME mock — escalation re-checks happen
+    against the same fake state.
     """
     restart_mock = restart if restart is not None else _restart_result()
     is_active_mock = is_active if is_active is not None else _is_active_result(active=False)
+
+    # Whether we've seen at least one ``sudo -n systemctl restart`` —
+    # once we have, subsequent ss calls represent the POST-restart
+    # port-bind check inside ``_attempt_warp_restart``'s escalation.
+    state = {"restart_seen": False}
 
     def _side_effect(cmd, *_a, **_k):
         # Order matters — ``sudo -n systemctl restart`` would otherwise
@@ -85,6 +106,7 @@ def _run_router(show, ss, *, restart=None, is_active=None):
         # since cmd[0] is "sudo" but downstream parsing inspects more
         # of the argv. Keep ``sudo`` branch first to be explicit.
         if cmd[0] == "sudo":
+            state["restart_seen"] = True
             return restart_mock
         if cmd[0] == "systemctl":
             # is-active vs show — both go through systemctl.
@@ -92,6 +114,10 @@ def _run_router(show, ss, *, restart=None, is_active=None):
                 return is_active_mock
             return show
         if cmd[0] == "ss":
+            # Post-restart probes return ss_post_restart so the
+            # escalation logic sees the wedge clear (or not).
+            if state["restart_seen"] and ss_post_restart is not None:
+                return ss_post_restart
             return ss
         return MagicMock()
 
@@ -242,7 +268,8 @@ class TestWarpAutoFix:
 
     def test_happy_path_reports_success(self):
         """Restart returns 0, post-restart is-active confirms 'active'
-        → auto_fix carries the single canonical success string."""
+        AND ss confirms port 40000 LISTENING → auto_fix is the
+        canonical happy-path string."""
         with (
             patch("subprocess.run") as mock_run,
             patch("time.sleep"),
@@ -252,10 +279,11 @@ class TestWarpAutoFix:
                 _ss_result(listening=False),
                 restart=_restart_result(returncode=0, stderr=""),
                 is_active=_is_active_result(active=True),
+                ss_post_restart=_ss_result(listening=True),
             )
             alerts = check_warp_health()
         assert len(alerts) == 1
-        assert alerts[0].auto_fix == "restarted warp-svc, daemon now active"
+        assert alerts[0].auto_fix == "restarted warp-svc, port 40000 LISTENING"
 
     def test_restart_succeeds_but_daemon_still_inactive(self):
         """The pessimistic case: sudo worked, restart returned 0, but
@@ -333,3 +361,76 @@ class TestWarpAutoFix:
         assert len(alerts) == 1
         assert "restart raised: OSError" in alerts[0].auto_fix
         assert "PATH borked" in alerts[0].auto_fix
+
+
+class TestWarpAutoFixEscalation:
+    """Pins for the 2026-06-16 escalation logic (PR 'feat/warp-autofix-escalation').
+
+    The 2026-06-12 autonomy-doc finding: 12 warp_down events / 0 auto-fix
+    successes. Root cause: ``systemctl restart`` returns rc=0 + unit
+    flips Active, but port 40000 stays unbound (the wedge needs reboot).
+
+    Escalation:
+      attempt 1 → wait 3s → check is-active AND ss → if either fails,
+      attempt 2 → wait 8s → re-check → if still wedged, return
+      "REBOOT REQUIRED" string.
+
+    Reboot is NOT auto-attempted — operator must SSH and reboot.
+    """
+
+    def test_daemon_active_but_port_unbound_triggers_second_restart_then_reboot_string(self):
+        """The wedge shape from 2026-06-12: systemctl reports active,
+        port is dead. Should attempt 2 restarts, then escalate to
+        REBOOT REQUIRED."""
+        with patch("subprocess.run") as mock_run, patch("time.sleep"):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(returncode=0, stderr=""),
+                is_active=_is_active_result(active=True),
+                ss_post_restart=_ss_result(listening=False),  # wedged
+            )
+            alerts = check_warp_health()
+        assert len(alerts) == 1
+        assert "REBOOT REQUIRED" in alerts[0].auto_fix
+        assert "2 restart attempts" in alerts[0].auto_fix
+        assert "SSH and run: reboot" in alerts[0].auto_fix
+
+    def test_first_restart_unbinds_port_no_second_attempt(self):
+        """Happy escalation: first restart works AND port comes up.
+        Don't bother with a second restart."""
+        with patch("subprocess.run") as mock_run, patch("time.sleep"):
+            mock_run.side_effect = _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(returncode=0, stderr=""),
+                is_active=_is_active_result(active=True),
+                ss_post_restart=_ss_result(listening=True),
+            )
+            alerts = check_warp_health()
+        assert "LISTENING" in alerts[0].auto_fix
+        # NOT the "2 attempts" wording
+        assert "2 restart attempts" not in alerts[0].auto_fix
+
+    def test_reboot_string_does_not_invoke_reboot_command(self):
+        """Operator must reboot manually. The auto-fix MUST NOT run
+        ``reboot`` itself — too dangerous to losing the box mid-publish."""
+        reboot_called = {"value": False}
+
+        def _spy(cmd, *_a, **_k):
+            if cmd == ["reboot"] or (isinstance(cmd, str) and "reboot" in cmd):
+                reboot_called["value"] = True
+            # Route normally
+            return _run_router(
+                _show_result(active_state="inactive", sub_state="dead"),
+                _ss_result(listening=False),
+                restart=_restart_result(returncode=0, stderr=""),
+                is_active=_is_active_result(active=True),
+                ss_post_restart=_ss_result(listening=False),
+            )(cmd, *_a, **_k)
+
+        with patch("subprocess.run", side_effect=_spy), patch("time.sleep"):
+            check_warp_health()
+        assert reboot_called["value"] is False, (
+            "auto-fix MUST NOT call reboot. Reboot is operator-only."
+        )
