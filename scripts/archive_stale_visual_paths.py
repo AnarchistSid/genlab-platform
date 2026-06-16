@@ -82,22 +82,44 @@ def _decode_visual_paths(raw) -> list[str]:
     return []
 
 
-def find_stale_blueprints(conn, *, include_scheduled: bool = False) -> list[dict]:
+def find_stale_blueprints(
+    conn,
+    *,
+    include_scheduled: bool = False,
+    archive_past_scheduled: bool = True,
+    past_grace_seconds: int = 3600,
+) -> list[dict]:
     """Return every blueprint whose visual_paths reference deleted files.
 
     Args:
         conn: open psycopg connection.
         include_scheduled: if True, include rows with non-empty
-            ``scheduled_for``. Default False respects
-            ``.claude/rules/cleanup_safety.md`` ("Scheduled posts are
-            sacred").
+            ``scheduled_for`` (overrides everything; broadest archive).
+        archive_past_scheduled: if True (default), archive a blueprint
+            whose ``scheduled_for`` is in the PAST by more than
+            ``past_grace_seconds``. The publisher has already had its
+            chance — keeping such a row stuck at VISUAL_READY just
+            keeps re-failing the next publisher pass. The cleanup_safety
+            rule "Scheduled posts are sacred" is about FUTURE-scheduled
+            queue items; past-scheduled-but-not-published are already
+            broken, archiving doesn't create a new gap.
+        past_grace_seconds: how long after ``scheduled_for`` we wait
+            before treating a row as past-scheduled. 3600 (1h) is the
+            normal publisher window — gives the 12:05 IST publisher
+            time to land its post before we'd flag a 12:00 IST
+            schedule as past.
 
     Returns:
         List of dicts with keys: id, niche_id, status, scheduled_for,
         stale_paths (the missing media), present_paths (any media
-        still on disk).
+        still on disk), past_scheduled (bool — true when the row
+        passes the past-scheduled gate).
     """
+    from datetime import timedelta
+
     out: list[dict] = []
+    now = datetime.now(UTC)
+    grace = timedelta(seconds=past_grace_seconds)
     with conn.cursor() as cur:
         cur.execute("SET app.niche_id TO 'all'")
         cur.execute(
@@ -117,18 +139,31 @@ def find_stale_blueprints(conn, *, include_scheduled: bool = False) -> list[dict
             missing = [p for p in paths if not os.path.exists(p)]
             if not missing:
                 continue  # all present — nothing to do
-            if not include_scheduled and scheduled_for is not None:
-                # cleanup_safety.md — scheduled posts are sacred
-                logger.info(
-                    "[archive_stale] SKIPPING scheduled bp=%s niche=%s (sched=%s) "
-                    "even though %d/%d paths are gone — use --include-scheduled to override",
-                    str(bp_id)[:8],
-                    niche_id,
-                    scheduled_for,
-                    len(missing),
-                    len(paths),
-                )
-                continue
+
+            past_scheduled = False
+            if scheduled_for is not None and not include_scheduled:
+                # Distinguish FUTURE schedule (sacred per
+                # cleanup_safety.md) from PAST schedule (publisher
+                # already had its chance).
+                is_past = scheduled_for + grace < now
+                if not (is_past and archive_past_scheduled):
+                    logger.info(
+                        "[archive_stale] SKIPPING scheduled bp=%s niche=%s "
+                        "(sched=%s, %s) — %d/%d paths are gone but row is "
+                        "%s",
+                        str(bp_id)[:8],
+                        niche_id,
+                        scheduled_for,
+                        "past" if is_past else "future",
+                        len(missing),
+                        len(paths),
+                        "in cleanup_safety protection window"
+                        if is_past
+                        else "future-scheduled (sacred)",
+                    )
+                    continue
+                past_scheduled = True
+
             out.append(
                 {
                     "id": str(bp_id),
@@ -138,6 +173,7 @@ def find_stale_blueprints(conn, *, include_scheduled: bool = False) -> list[dict
                     "stale_paths": missing,
                     "present_paths": present,
                     "all_missing": len(present) == 0,
+                    "past_scheduled": past_scheduled,
                 }
             )
     return out
@@ -228,9 +264,32 @@ def main(argv: list[str] | None = None) -> int:
         "--include-scheduled",
         action="store_true",
         help=(
-            "Include blueprints with non-empty scheduled_for. Default "
-            "respects cleanup_safety.md and skips them — override only "
-            "with explicit operator decision."
+            "Include ALL blueprints with non-empty scheduled_for (FUTURE "
+            "and PAST). Default respects cleanup_safety.md for future "
+            "schedules — override only with explicit operator decision."
+        ),
+    )
+    parser.add_argument(
+        "--no-past-scheduled",
+        action="store_true",
+        help=(
+            "Disable default archival of PAST-scheduled blueprints. "
+            "By default the script archives blueprints whose "
+            "scheduled_for has already passed (publisher already had "
+            "its chance) — pass this flag to fully restore the "
+            "cleanup_safety.md 'sacred schedule' behaviour for both "
+            "past and future schedules."
+        ),
+    )
+    parser.add_argument(
+        "--past-grace-seconds",
+        type=int,
+        default=3600,
+        help=(
+            "How long after scheduled_for before a row counts as "
+            "past-scheduled. Default 3600 = 1 hour (one publisher "
+            "window). Larger values reduce false-positives at the "
+            "cost of leaving broken rows around longer."
         ),
     )
     parser.add_argument(
@@ -253,7 +312,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        records = find_stale_blueprints(conn, include_scheduled=args.include_scheduled)
+        records = find_stale_blueprints(
+            conn,
+            include_scheduled=args.include_scheduled,
+            archive_past_scheduled=not args.no_past_scheduled,
+            past_grace_seconds=args.past_grace_seconds,
+        )
 
         print(f"# {datetime.now(UTC).isoformat()} — {len(records)} stale blueprint(s) found")
         for r in records:
