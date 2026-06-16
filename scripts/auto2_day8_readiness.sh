@@ -48,6 +48,8 @@ MIN_SAMPLES=30
 MIN_AGREEMENT="0.90"
 START_DATE=""
 DRY_RUN_UNIT="genlab-auto-approver.service"
+SSH_HOST="46.224.237.56"
+PROD_HOSTNAME="ubuntu-4gb-nbg1-1"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -56,6 +58,8 @@ while [[ $# -gt 0 ]]; do
         --min-agreement) MIN_AGREEMENT="$2"; shift 2 ;;
         --start-date)   START_DATE="$2"; shift 2 ;;
         --dry-run-unit) DRY_RUN_UNIT="$2"; shift 2 ;;
+        --ssh-host)     SSH_HOST="$2"; shift 2 ;;
+        --local)        SSH_HOST=""; shift 1 ;;
         -h|--help)
             sed -n '/^# Usage/,/^# Operator-only/p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -63,6 +67,24 @@ while [[ $# -gt 0 ]]; do
         *) echo "Unknown flag: $1" >&2; exit 1 ;;
     esac
 done
+
+# Auto-detect when we're running ON the prod box itself — don't try to
+# SSH from prod back to prod (no self-host SSH key configured by design).
+# Operator can also force this with --local.
+if [[ -n "$SSH_HOST" && "$(uname -n)" == "$PROD_HOSTNAME" ]]; then
+    SSH_HOST=""
+fi
+
+# Wrapper: when SSH_HOST is set, run the command remotely; when empty,
+# run locally. Each remote check below uses this so the script body
+# stays readable.
+run_on_prod() {
+    if [[ -z "$SSH_HOST" ]]; then
+        bash -c "$1"
+    else
+        ssh -o ConnectTimeout=10 -o BatchMode=yes "root@${SSH_HOST}" "$1"
+    fi
+}
 
 if [[ -z "$NICHE" ]]; then
     echo "ERROR: --niche is required" >&2
@@ -198,12 +220,10 @@ fi
 # second line because grep -c exit-codes 1 on zero matches but still
 # prints "0". Use ``|| true`` to swallow the exit code, then default
 # via ``${var:-0}``.
-TRACEBACK_COUNT=$(ssh -o ConnectTimeout=10 -o BatchMode=yes root@46.224.237.56 \
-    "journalctl -u $DRY_RUN_UNIT --since '5 days ago' 2>/dev/null | grep -cE 'Traceback|ERROR' || true" \
-    2>/dev/null || echo "ssh-fail")
+TRACEBACK_COUNT=$(run_on_prod "journalctl -u $DRY_RUN_UNIT --since '5 days ago' 2>/dev/null | grep -cE 'Traceback|ERROR' || true" 2>/dev/null || echo "prod-unreachable")
 TRACEBACK_COUNT=$(echo "$TRACEBACK_COUNT" | head -1 | tr -d ' \n')
-if [[ "$TRACEBACK_COUNT" == "ssh-fail" ]]; then
-    emit fail "05. ssh to prod failed — could not check worker logs"
+if [[ "$TRACEBACK_COUNT" == "prod-unreachable" ]]; then
+    emit fail "05. could not reach prod to check worker logs"
 elif [[ "${TRACEBACK_COUNT:-0}" -eq 0 ]]; then
     emit pass "05. 0 tracebacks/errors in $DRY_RUN_UNIT logs last 5d"
 else
@@ -214,12 +234,10 @@ fi
 # Looser version: the calibration agreement rate IS the dry-run alignment
 # rate (gate vs operator). Check 3 already covered it; reinforce here
 # that the worker has been ACTING on the gate's verdict.
-WORKER_RUNS=$(ssh -o ConnectTimeout=10 -o BatchMode=yes root@46.224.237.56 \
-    "journalctl -u $DRY_RUN_UNIT --since '24 hours ago' 2>/dev/null | grep -c 'examined=' || true" \
-    2>/dev/null || echo "ssh-fail")
+WORKER_RUNS=$(run_on_prod "journalctl -u $DRY_RUN_UNIT --since '24 hours ago' 2>/dev/null | grep -c 'examined=' || true" 2>/dev/null || echo "prod-unreachable")
 WORKER_RUNS=$(echo "$WORKER_RUNS" | head -1 | tr -d ' \n')
-if [[ "$WORKER_RUNS" == "ssh-fail" ]]; then
-    emit fail "06. ssh to prod failed — could not count worker runs"
+if [[ "$WORKER_RUNS" == "prod-unreachable" ]]; then
+    emit fail "06. could not reach prod to count worker runs"
 elif [[ "${WORKER_RUNS:-0}" -ge 12 ]]; then
     # 24h * (60/30min) = 48 runs/day expected — accept ≥12 (every 2h)
     emit pass "06. worker fired $WORKER_RUNS times in last 24h (timer healthy)"
@@ -241,11 +259,11 @@ else
 fi
 
 # ── Check 8: WARP healthy ──────────────────────────────────────────
-WARP_IP=$(ssh -o ConnectTimeout=10 -o BatchMode=yes root@46.224.237.56 \
-    "curl -s --max-time 8 --socks5 127.0.0.1:40000 https://ifconfig.me 2>/dev/null || echo FAIL" \
-    2>/dev/null || echo "ssh-fail")
+WARP_IP=$(run_on_prod "curl -s --max-time 8 --socks5 127.0.0.1:40000 https://ifconfig.me 2>/dev/null || echo FAIL" 2>/dev/null || echo "prod-unreachable")
 HETZNER_IP="46.224.237.56"
-if [[ "$WARP_IP" == "ssh-fail" || "$WARP_IP" == "FAIL" || -z "$WARP_IP" ]]; then
+if [[ "$WARP_IP" == "prod-unreachable" ]]; then
+    emit fail "08. could not reach prod to probe WARP"
+elif [[ "$WARP_IP" == "FAIL" || -z "$WARP_IP" ]]; then
     emit fail "08. WARP proxy probe failed (returned: ${WARP_IP:-empty})"
 elif [[ "$WARP_IP" == "$HETZNER_IP" ]]; then
     emit fail "08. WARP returned Hetzner IP ($WARP_IP) — proxy not routing through Cloudflare"
@@ -287,11 +305,11 @@ else
 fi
 
 # ── Check 12: publishing.yaml exists with enabled: false ──────────
-YAML_STATE=$(ssh -o ConnectTimeout=10 -o BatchMode=yes root@46.224.237.56 \
-    "grep -E '^[[:space:]]*enabled:' /opt/genlab/BlackboxBrief/config/publishing.yaml 2>/dev/null | head -1" \
-    2>/dev/null || echo "ssh-fail")
-if [[ "$YAML_STATE" == "ssh-fail" || -z "$YAML_STATE" ]]; then
-    emit fail "12. publishing.yaml missing or unreadable on prod"
+YAML_STATE=$(run_on_prod "grep -E '^[[:space:]]*enabled:' /opt/genlab/BlackboxBrief/config/publishing.yaml 2>/dev/null | head -1" 2>/dev/null || echo "prod-unreachable")
+if [[ "$YAML_STATE" == "prod-unreachable" ]]; then
+    emit fail "12. could not reach prod to read publishing.yaml"
+elif [[ -z "$YAML_STATE" ]]; then
+    emit fail "12. publishing.yaml missing or has no 'enabled:' line"
 elif [[ "$YAML_STATE" == *"false"* ]]; then
     emit pass "12. publishing.yaml has enabled: false (ready to flip)"
 elif [[ "$YAML_STATE" == *"true"* ]]; then
