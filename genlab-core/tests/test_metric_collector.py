@@ -9,6 +9,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from genlab_core.learning import platform_reward_multipliers as _prm
 from genlab_core.learning.metric_collector import (
     _fetch_facebook,
     _fetch_instagram_reels_6h,
@@ -21,6 +24,21 @@ from genlab_core.learning.metric_collector import (
 from genlab_core.learning.pending_feedback_store import PendingFeedbackStore
 from genlab_core.learning.pending_feedback_task import PendingFeedbackTask
 from genlab_core.learning.reward_shaper import RewardShaper
+
+
+@pytest.fixture(autouse=True)
+def _stub_platform_multipliers_to_unity(monkeypatch):
+    """Pin pre-D3.8 fractional Beta math by neutralising the platform
+    multiplier in every test in this module.
+
+    The D3.8 multiplier path is covered in
+    ``test_platform_reward_multipliers.py``; tests here are about the
+    bandit-updater wiring and assume reward feeds through unchanged.
+    """
+    monkeypatch.setattr(_prm, "_CACHE", {})
+    monkeypatch.setattr(_prm, "get_multiplier", lambda _platform: 1.0)
+    yield
+    _prm.clear_cache()
 
 
 # ---------------------------------------------------------------------------
