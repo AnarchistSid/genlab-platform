@@ -15,5 +15,3 @@ WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 ExecStart=/opt/genlab/scripts/systemd_failure_alert.sh "%i"
 TimeoutSec=60
-StandardOutput=append:/opt/genlab/.logs/systemd_failure_alert.systemd.log
-StandardError=append:/opt/genlab/.logs/systemd_failure_alert.systemd.log
