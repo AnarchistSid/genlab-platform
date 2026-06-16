@@ -178,15 +178,52 @@ _catalog_cache_ts: float = 0.0
 _CATALOG_TTL = 300  # 5 minutes
 
 
+def _expand_catalog_env_vars(catalog: dict) -> dict:
+    """Expand ``${ENV_VAR}`` placeholders in all affiliate URLs.
+
+    The affiliate catalog YAML stores Amazon URLs with the affiliate tag
+    as a placeholder, e.g.::
+
+        url: "https://www.amazon.com/dp/B086PJKVVT?tag=${AMAZON_US_AFFILIATE_TAG}"
+
+    Without this expansion the literal string ``${AMAZON_US_AFFILIATE_TAG}``
+    flows all the way to Amazon, which silently rejects the unknown tag.
+    Clicks happen but earn zero commission — the exact symptom that
+    caused 0 attributed sales while ``affiliate_clicks`` was accumulating
+    rows (2026-06-17 investigation; bug present since ``/links/go``
+    endpoint shipped).
+
+    Mirrors ``affiliate_matcher._load_catalog`` (genlab-core), which has
+    always done this expansion correctly. The two implementations
+    diverged because dashboard's loader was added later without
+    referencing the canonical one.
+
+    Mutates *catalog* in place and returns it for chaining.
+    """
+    for niche_data in (catalog.get("niches") or {}).values():
+        for product in niche_data.get("products") or []:
+            for net_info in (product.get("networks") or {}).values():
+                url = net_info.get("url", "")
+                if url and "${" in url:
+                    net_info["url"] = os.path.expandvars(url)
+    return catalog
+
+
 def _load_catalog() -> dict:
-    """Load affiliate catalog YAML with 5-minute in-memory cache."""
+    """Load affiliate catalog YAML with 5-minute in-memory cache.
+
+    Expands ``${ENV_VAR}`` placeholders in affiliate URLs after loading
+    so the catalog cached in memory holds already-resolved URLs. See
+    ``_expand_catalog_env_vars`` for why this matters.
+    """
     global _catalog_cache, _catalog_cache_ts
     now = time.time()
     if _catalog_cache and (now - _catalog_cache_ts) < _CATALOG_TTL:
         return _catalog_cache
     try:
         with open(_CATALOG_PATH, encoding="utf-8") as f:
-            _catalog_cache = yaml.safe_load(f) or {}
+            catalog = yaml.safe_load(f) or {}
+            _catalog_cache = _expand_catalog_env_vars(catalog)
             _catalog_cache_ts = now
             return _catalog_cache
     except Exception as e:
