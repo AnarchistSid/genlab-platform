@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab Systemd Failure Alert for %I (instance = name of failing unit)
+After=network-online.target postgresql.service
+# This is a template unit instantiated via OnFailure= directives on
+# other genlab-* services. It writes a CRITICAL row to
+# pipeline_alerts including the failing unit name + journal context
+# so the dashboard CriticalAlertsBanner surfaces it to the operator
+# within seconds of the next Mission Control poll.
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+ExecStart=/opt/genlab/scripts/systemd_failure_alert.sh "%i"
+TimeoutSec=60
+StandardOutput=append:/opt/genlab/.logs/systemd_failure_alert.systemd.log
+StandardError=append:/opt/genlab/.logs/systemd_failure_alert.systemd.log

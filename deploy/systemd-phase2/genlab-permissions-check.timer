@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab Permissions Drift Detector Timer (nightly)
+
+[Timer]
+# 04:00 IST = 22:30 UTC (prior day). Pre-empts the morning pipeline
+# fires (gaming 09:30, anime 11:30, AI 08:00 IST) so any drift that
+# accumulated overnight from deploys is surfaced before any pipeline
+# would hit it.
+OnCalendar=*-*-* 22:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

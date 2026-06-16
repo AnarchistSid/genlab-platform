@@ -2,6 +2,11 @@
 Description=GenLab FB Post Survival Check
 After=network-online.target docker.service
 
+# Surface unit failures to the dashboard CriticalAlertsBanner
+# (2026-06-16 outage prevention). Template unit lives at
+# scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab
