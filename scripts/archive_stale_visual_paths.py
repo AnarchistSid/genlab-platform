@@ -228,6 +228,9 @@ def archive_blueprints(conn, records: list[dict], reason: str) -> int:
         cur.execute("SET app.niche_id TO 'all'")
         # Only act on blueprints we observed; if status flipped to
         # PUBLISHED between detect and archive, skip (TOCTOU defense).
+        # Explicit ::uuid[] cast on the ANY() parameter — psycopg3
+        # can't infer the array type from a Python list[str] in this
+        # position and raises IndeterminateDatatype otherwise.
         cur.execute(
             """
             UPDATE blueprints
@@ -240,7 +243,7 @@ def archive_blueprints(conn, records: list[dict], reason: str) -> int:
                     'archived_by', 'archive_stale_visual_paths.py'
                 ),
                 updated_at = NOW()
-            WHERE id = ANY(%s)
+            WHERE id = ANY(%s::uuid[])
               AND status IN ('VISUAL_READY', 'DRAFTED')
             """,
             (reason, ids),
