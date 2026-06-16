@@ -1040,70 +1040,95 @@ def check_services() -> list[Alert]:
     return alerts
 
 
+def _check_warp_port_listening(host: str = "127.0.0.1", port: int = 40000) -> bool:
+    """Probe whether the WARP SOCKS port is in LISTEN state.
+
+    ``ss -ltn`` is preferred over a TCP connect — connect would
+    succeed during the brief window after the daemon binds the
+    socket but before it's actually proxying. ss reads the kernel's
+    listen-queue directly.
+    """
+    try:
+        result = subprocess.run(
+            ["ss", "-ltn", f"sport = :{port}"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return False
+    if result.returncode != 0:
+        return False
+    return f"{host}:{port}" in result.stdout or f"*:{port}" in result.stdout
+
+
 def _attempt_warp_restart() -> str:
-    """Try ``sudo -n systemctl restart warp-svc`` and report the truthful
-    outcome as a short string suitable for the Alert.auto_fix field.
+    """Escalating recovery for warp-svc — restart → re-verify → second
+    attempt → reboot-recommendation.
+
+    The original single-shot ``systemctl restart`` was insufficient for
+    the daily WARP wedge documented in the 2026-06-12 autonomy gap
+    analysis: ``systemctl restart warp-svc`` returns rc=0 + the unit
+    flips Active, but port 40000 stays unbound — yt-dlp still fails
+    with "connection refused". The wedge requires a full system reboot
+    (verified). This function escalates:
+
+      1. Try ``sudo -n systemctl restart warp-svc``.
+      2. Wait 3s, check ``systemctl is-active`` AND port 40000 in LISTEN.
+      3. If port still unbound: 2nd restart attempt (transient race).
+      4. Wait 8s, re-check.
+      5. If still unbound: return an explicit operator-actionable
+         "REBOOT REQUIRED" string. Auto-reboot is INTENTIONALLY NOT
+         attempted — losing the box mid-deploy or mid-publisher could
+         strand state. Reboot stays operator-gated.
 
     Returns one of:
 
-      * ``"restarted warp-svc, daemon now active"`` — restart succeeded
-        AND the post-restart ``systemctl is-active`` check confirms the
-        unit is running. This is the only "happy path" string.
-
-      * ``"restart applied but warp-svc still inactive after 3s"`` —
-        the restart command succeeded (rc=0) but the unit didn't come
-        back up. Suggests a startup misconfiguration; operator should
-        check ``journalctl -u warp-svc``.
-
-      * ``"sudoers not configured — add: genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc"`` —
-        ``sudo -n`` returned the canonical "a password is required"
-        marker. This is the single most likely failure on day one and
-        gives the operator the exact line to add to ``/etc/sudoers.d/``.
-
-      * ``"restart failed (rc=N): <stderr-snippet>"`` — fallback for
-        any other non-zero exit (e.g. unit-not-found, daemon-reload
-        needed). Includes a trimmed stderr so the operator has a
-        starting point without digging into the journal.
-
+      * ``"restarted warp-svc, port 40000 LISTENING"`` — happy path
+      * ``"restarted warp-svc, daemon active but port 40000 NOT listening"``
+        — unit up but proxy not bound (the 2026-06-12 silent failure)
+      * ``"REBOOT REQUIRED — 2 restart attempts left warp-svc wedged at
+        unit-active-but-port-unbound. SSH and run: reboot"`` — the
+        escalation terminal state
+      * ``"sudoers not configured — add: genlab ALL=(root) NOPASSWD:
+        /bin/systemctl restart warp-svc"`` — first-time setup gap
+      * ``"restart failed (rc=N): <stderr-snippet>"`` — other systemctl
+        failure
       * ``"restart raised: <exception>"`` — subprocess itself failed
-        (PATH issue, permission denied at the OS level, etc.). Bubbles
-        the exception class + message instead of swallowing.
 
-    Always returns a non-empty string — the Alert.auto_fix field must
-    be informative even when nothing improved.
+    Always returns a non-empty string so Alert.auto_fix stays
+    informative.
     """
     import time
 
-    try:
-        result = subprocess.run(
-            ["sudo", "-n", "systemctl", "restart", "warp-svc"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except Exception as exc:
-        return f"restart raised: {type(exc).__name__}: {exc}"
+    def _do_restart() -> tuple[int, str, str]:
+        """Run sudo -n systemctl restart and return (rc, stdout, stderr)."""
+        try:
+            result = subprocess.run(
+                ["sudo", "-n", "systemctl", "restart", "warp-svc"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            return result.returncode, result.stdout, result.stderr
+        except Exception as exc:
+            return -1, "", f"{type(exc).__name__}: {exc}"
 
-    if result.returncode != 0:
-        stderr_lc = (result.stderr or "").lower()
-        # sudo -n emits one of these markers when NOPASSWD isn't set;
-        # both shapes are documented in sudo(8) and appear depending
-        # on distro / sudo version.
+    rc, _, stderr = _do_restart()
+    if rc != 0:
+        stderr_lc = (stderr or "").lower()
         if "password is required" in stderr_lc or "a terminal is required" in stderr_lc:
             return (
                 "sudoers not configured — add: "
                 "genlab ALL=(root) NOPASSWD: /bin/systemctl restart warp-svc"
             )
-        # Trim stderr to one line + cap at 120 chars so the alert
-        # row stays scannable.
-        stderr_snippet = (result.stderr or "").strip().splitlines()[:1]
+        if rc == -1:
+            return f"restart raised: {stderr}"
+        stderr_snippet = (stderr or "").strip().splitlines()[:1]
         snippet = stderr_snippet[0][:120] if stderr_snippet else "no stderr"
-        return f"restart failed (rc={result.returncode}): {snippet}"
+        return f"restart failed (rc={rc}): {snippet}"
 
-    # Restart command succeeded — give warp-svc a moment to come up,
-    # then verify. 3s is empirically enough for the daemon's normal
-    # init sequence on prod (Cloudflare's startup is sub-second
-    # typically; the buffer protects against systemd's own latency).
+    # First restart succeeded — wait + verify daemon active AND port bound.
     time.sleep(3)
     try:
         verify = subprocess.run(
@@ -1113,12 +1138,33 @@ def _attempt_warp_restart() -> str:
             timeout=5,
         )
     except Exception as exc:
-        # Restart said it worked; verification raised. Report that
-        # honestly rather than claim victory.
         return f"restart applied, verification raised: {type(exc).__name__}: {exc}"
 
-    if verify.returncode == 0 and verify.stdout.strip() == "active":
-        return "restarted warp-svc, daemon now active"
+    daemon_active = verify.returncode == 0 and verify.stdout.strip() == "active"
+    port_listening = _check_warp_port_listening()
+
+    if daemon_active and port_listening:
+        return "restarted warp-svc, port 40000 LISTENING"
+
+    # Daemon-active but port-unbound is the wedge shape that needs
+    # reboot. Try a SECOND restart first — a fraction of these are
+    # transient (systemd race during init); if it sticks after attempt
+    # #2 we escalate to operator.
+    if daemon_active and not port_listening:
+        rc2, _, _ = _do_restart()
+        if rc2 == 0:
+            time.sleep(8)
+            if _check_warp_port_listening():
+                return "restarted warp-svc (2 attempts), port 40000 LISTENING"
+        # 2 restarts didn't unbind the wedge — operator must reboot.
+        return (
+            "REBOOT REQUIRED — 2 restart attempts left warp-svc wedged at "
+            "unit-active-but-port-unbound (2026-06-12 wedge shape). "
+            "SSH and run: reboot"
+        )
+
+    # Daemon not active after restart — unusual; report honestly so
+    # operator sees journalctl is the next step.
     return "restart applied but warp-svc still inactive after 3s"
 
 
