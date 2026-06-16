@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab Auto-Archive Stale visual_paths Timer (nightly, pre-publisher)
+
+[Timer]
+# 03:00 IST = 21:30 UTC (prior day). Fires AFTER cleanup_artifacts.sh
+# (01:00 IST) prunes old .tmp/runs/ but BEFORE the morning pipeline
+# timers (gaming 09:30, AI 08:00) and well before the publisher
+# (12:05 IST). Net effect: by the time the publisher runs, no
+# blueprint references already-deleted media.
+OnCalendar=*-*-* 21:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

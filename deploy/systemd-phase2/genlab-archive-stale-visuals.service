@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab Auto-Archive Stale visual_paths (2026-06-16 outage prevention)
+After=network-online.target postgresql.service
+
+# Surface unit failures to the dashboard CriticalAlertsBanner
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=UV_FROZEN=1
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/archive_stale_visual_paths.py --apply
+TimeoutSec=300
