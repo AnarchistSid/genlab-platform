@@ -193,3 +193,149 @@ class TestIGCaptionFallbackChain:
         }
         story = _call_llm_path(s, result=result)
         assert story["content"]["instagram"]["caption"] == "valid YT content"
+
+
+class TestFallbackWarnLog:
+    """Pin the observability log added 2026-06-17 (followup to PRs #273+#275).
+
+    The WARN fires only when the LLM omitted ``instagram_caption`` AND
+    the upstream retry (PR #275) didn't recover. Operators can grep
+    ``[BaseWriting] instagram_caption fallback fired`` in journalctl
+    to spot per-niche prompt regressions and decide whether to tighten
+    the LLM prompt further for that niche.
+
+    These tests exercise the REAL ``base_writing.py`` LLM-write path
+    (not the inline replica above) so the log assertion catches
+    drift between the two.
+    """
+
+    def _make_real_strategy(self, niche_id: str = "anime"):
+        from pathlib import Path
+
+        from genlab_core.strategies.base_writing import BaseWritingStrategy
+
+        class _TestStrategy(BaseWritingStrategy):
+            def __init__(self) -> None:
+                super().__init__(niche_id=niche_id, niche_root=Path("/tmp"))
+
+        return _TestStrategy()
+
+    def test_warn_fires_when_ig_caption_missing(self, caplog):
+        """LLM omits instagram_caption → WARN log fires + names the
+        fallback source it used."""
+        from unittest.mock import patch
+
+        strategy = self._make_real_strategy("anime")
+        fake_result = {
+            "hook": "Test hook",
+            # instagram_caption MISSING — triggers fallback
+            "facebook_content": "Fallback came from FB",
+            "twitter_content": "Tweet",
+            "youtube_content": "YT desc",
+            "threads_content": "Threads",
+        }
+        story = {
+            "story_id": "s1",
+            "title": "Test story title for log assertion",
+            "summary": "Summary",
+            "source": "TestSource",
+            "video_id": "v1",
+        }
+        with (
+            patch(
+                "genlab_core.writing.video_content_writer.write_video_content",
+                return_value=fake_result,
+            ),
+            caplog.at_level("WARNING", logger="genlab_core.strategies.base_writing"),
+        ):
+            strategy._write_story_llm(
+                story, llm_client=object(), extra_instructions="", existing_hooks=[]
+            )
+
+        warn_messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        # The fallback-fired log must be among the WARNs
+        fallback_logs = [m for m in warn_messages if "instagram_caption fallback fired" in m]
+        assert len(fallback_logs) == 1, (
+            f"Expected exactly one fallback WARN log, got {len(fallback_logs)}: {warn_messages}"
+        )
+        msg = fallback_logs[0]
+        assert "niche=anime" in msg
+        assert "fallback_source=facebook_content" in msg
+
+    def test_warn_does_not_fire_when_ig_caption_present(self, caplog):
+        """Happy path: LLM returns instagram_caption → NO fallback,
+        NO log. Pinned to prevent false-positive operator alerts."""
+        from unittest.mock import patch
+
+        strategy = self._make_real_strategy("gaming")
+        fake_result = {
+            "hook": "Test hook",
+            "instagram_caption": "🎮 Real IG content from LLM",
+            "facebook_content": "FB",
+            "twitter_content": "Tweet",
+            "youtube_content": "YT",
+            "threads_content": "Threads",
+        }
+        story = {
+            "story_id": "s1",
+            "title": "T",
+            "summary": "S",
+            "source": "Src",
+            "video_id": "v1",
+        }
+        with (
+            patch(
+                "genlab_core.writing.video_content_writer.write_video_content",
+                return_value=fake_result,
+            ),
+            caplog.at_level("WARNING", logger="genlab_core.strategies.base_writing"),
+        ):
+            strategy._write_story_llm(
+                story, llm_client=object(), extra_instructions="", existing_hooks=[]
+            )
+
+        warn_messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        fallback_logs = [m for m in warn_messages if "instagram_caption fallback fired" in m]
+        assert fallback_logs == [], (
+            f"WARN should NOT fire when IG is present, but got: {fallback_logs}"
+        )
+
+    def test_warn_names_correct_source_per_fallback_level(self, caplog):
+        """The log says exactly which fallback rung satisfied
+        (facebook_content vs youtube_content vs hook vs story.title)
+        so operators can spot e.g. 'always falling back to title' =
+        LLM-completely-broken vs 'always falling back to FB' = just
+        IG prompt tuning needed."""
+        from unittest.mock import patch
+
+        strategy = self._make_real_strategy("movies")
+        # LLM returns only hook + a title is available; should fall back
+        # all the way through to hook (FB + YT both missing).
+        fake_result = {
+            "hook": "Just the hook survived",
+            "twitter_content": "tw",
+            # no instagram_caption, no facebook_content, no youtube_content
+        }
+        story = {
+            "story_id": "s2",
+            "title": "Some Movie Trailer Title",
+            "summary": "S",
+            "source": "Src",
+            "video_id": "v2",
+        }
+        with (
+            patch(
+                "genlab_core.writing.video_content_writer.write_video_content",
+                return_value=fake_result,
+            ),
+            caplog.at_level("WARNING", logger="genlab_core.strategies.base_writing"),
+        ):
+            strategy._write_story_llm(
+                story, llm_client=object(), extra_instructions="", existing_hooks=[]
+            )
+
+        warn_messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        fallback_logs = [m for m in warn_messages if "instagram_caption fallback fired" in m]
+        assert len(fallback_logs) == 1
+        # Should pick the next non-empty fallback after IG + FB + YT all empty
+        assert "fallback_source=hook" in fallback_logs[0]

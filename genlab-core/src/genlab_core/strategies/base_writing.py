@@ -321,13 +321,41 @@ class BaseWritingStrategy(WritingStrategy):
         #   5. story title — last resort, never empty
         # The result is then trimmed to IG's ~2200-char limit
         # downstream by `_adapt_instagram`'s `enforce_platform_rules`.
-        ig_caption = (
-            result.get("instagram_caption", "")
-            or result.get("facebook_content", "")
-            or result.get("youtube_content", "")
-            or result.get("hook", "")
-            or story.get("title", "")
-        )
+        # Track which fallback level fired so we can WARN-log it.
+        # PR #275's upstream retry should have already forced the LLM
+        # to emit `instagram_caption`; if we're still falling back
+        # here, the retry didn't help and the prompt may need
+        # further tightening for this niche. The log is the
+        # observability signal that closes the feedback loop.
+        _ig_raw = result.get("instagram_caption", "")
+        _fb_raw = result.get("facebook_content", "")
+        _yt_raw = result.get("youtube_content", "")
+        _hook_raw = result.get("hook", "")
+        _title_raw = story.get("title", "")
+        ig_caption = _ig_raw or _fb_raw or _yt_raw or _hook_raw or _title_raw
+        if not _ig_raw:
+            # Determine which fallback rung satisfied (matches the
+            # `or`-chain order so the log tells us exactly what the
+            # downstream IG caption was built from).
+            if _fb_raw:
+                fallback_source = "facebook_content"
+            elif _yt_raw:
+                fallback_source = "youtube_content"
+            elif _hook_raw:
+                fallback_source = "hook"
+            elif _title_raw:
+                fallback_source = "story.title"
+            else:
+                fallback_source = "<all-empty>"
+            logger.warning(
+                "[BaseWriting] instagram_caption fallback fired (niche=%s, "
+                "fallback_source=%s, title=%r) — LLM omitted IG; PR #275 "
+                "retry did not recover. Consider tightening this niche's "
+                "writing prompt.",
+                self._niche_id,
+                fallback_source,
+                (story.get("title", "") or "")[:60],
+            )
         hashtags = re.findall(r"#\w+", ig_caption)
         content["instagram"] = {"caption": ig_caption, "hashtags": hashtags}
         # Use hook as YouTube title (more engaging than raw headline)
