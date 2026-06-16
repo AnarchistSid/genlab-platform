@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab Cross-Source CRITICAL Alert Notifier (Slack/webhook pump)
+After=network-online.target postgresql.service
+
+# Surface unit failures to the dashboard CriticalAlertsBanner
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=UV_FROZEN=1
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/notify_critical_alerts.py
+TimeoutSec=60
+# Exit codes:
+#   0 = success (no alerts OR all posted) — webhook unset is also 0
+#   1 = pre-flight (DB connect failed) — real signal, OnFailure fires
+#   2 = at least one POST failed — operator should investigate but
+#       the alert stays in the table for the next 5-min run to retry,
+#       so not a true OnFailure case
+SuccessExitStatus=0 2

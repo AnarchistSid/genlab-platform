@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab Cross-Source CRITICAL Alert Notifier Timer (every 5 min)
+
+[Timer]
+# Every 5 min during the day — alerts get pushed within one
+# OnCalendar window. The receiver (Slack) handles its own rate
+# limiting; nothing to throttle on the producer side.
+OnUnitActiveSec=5min
+# 30s after boot so we don't fight pipeline startup for DB connections.
+OnBootSec=30s
+
+[Install]
+WantedBy=timers.target
