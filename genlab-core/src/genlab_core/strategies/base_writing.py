@@ -298,7 +298,36 @@ class BaseWritingStrategy(WritingStrategy):
             story["hook_style"] = result["hook_style"]
             content["hook_style"] = result["hook_style"]
 
-        ig_caption = result.get("instagram_caption", "")
+        # 2026-06-17 fix: when the LLM returns no `instagram_caption`,
+        # fall back through facebook_content → youtube_content → hook
+        # → title rather than letting IG/Threads/TikTok silently fail.
+        #
+        # Why this matters: the 2026-06-17 funnel audit found 90 of 156
+        # affiliate-matched blueprints (anime/movies/sports) had empty
+        # IG captions, because the LLM occasionally omits
+        # `instagram_caption` from its JSON response. `_adapt_instagram`
+        # then early-returns on the empty caption, `inject_cta` has no
+        # caption to mutate, and the IG affiliate CTA never reaches
+        # users — even though `affiliate_product` IS attached to the
+        # blueprint. Gaming + ai_creators don't see this because their
+        # LLM prompts reliably return `instagram_caption`; the affected
+        # niches' prompts are looser.
+        #
+        # The fallback chain is ordered by content quality:
+        #   1. instagram_caption — the LLM's explicit IG output (best)
+        #   2. facebook_content — same intent, slightly different shape
+        #   3. youtube_content — descriptive but longer
+        #   4. hook — short but on-message
+        #   5. story title — last resort, never empty
+        # The result is then trimmed to IG's ~2200-char limit
+        # downstream by `_adapt_instagram`'s `enforce_platform_rules`.
+        ig_caption = (
+            result.get("instagram_caption", "")
+            or result.get("facebook_content", "")
+            or result.get("youtube_content", "")
+            or result.get("hook", "")
+            or story.get("title", "")
+        )
         hashtags = re.findall(r"#\w+", ig_caption)
         content["instagram"] = {"caption": ig_caption, "hashtags": hashtags}
         # Use hook as YouTube title (more engaging than raw headline)
