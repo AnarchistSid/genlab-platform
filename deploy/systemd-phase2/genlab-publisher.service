@@ -19,4 +19,15 @@ Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
 Environment=HOME=/opt/genlab
 Environment=UV_FROZEN=1
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_platforms --niche all
+
+# Exit-code semantics from publish_all_platforms.py (R-83 contract):
+#   0 = SUCCESS (at least one platform live)
+#   1 = NO_BLUEPRINTS — nothing to publish today (BENIGN)
+#   2 = ALL_FAILED — single blueprint, every enabled platform failed
+#         → REAL signal; OnFailure handler fires + writes CRITICAL alert
+#   3 = DAILY_CAP — already published today (BENIGN)
+#   4 = LOCK_HELD — concurrent run, retry next timer (BENIGN)
+# Without this allowlist, 3/4 non-zero exits fire OnFailure → operator
+# alert fatigue → L4 OnFailure value collapses to noise.
+SuccessExitStatus=0 1 3 4
 TimeoutSec=1800
