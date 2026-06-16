@@ -156,3 +156,115 @@ def _stub_find_when_fake_conn(monkeypatch):
 
     monkeypatch.setattr(mod, "find_stale_blueprints", patched)
     yield
+
+
+class TestPastScheduledLogic:
+    """Pin the nuance added 2026-06-16: past-scheduled rows are archivable
+    by default (publisher already had its chance), future-scheduled remain
+    sacred per cleanup_safety.md."""
+
+    def _stub_blueprint_rows(self):
+        """Build a list of (id, niche, status, scheduled_for, vp) tuples
+        as find_stale_blueprints would receive from psql."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        return [
+            # 1) past-scheduled stale — should be archived by default
+            ("aaa-aaa", "movies", "VISUAL_READY", now - timedelta(hours=5), ["/gone1.mp4"]),
+            # 2) future-scheduled stale — should be sacred
+            ("bbb-bbb", "anime", "VISUAL_READY", now + timedelta(days=2), ["/gone2.mp4"]),
+            # 3) no schedule, stale — should be archived
+            ("ccc-ccc", "gaming", "DRAFTED", None, ["/gone3.mp4"]),
+        ]
+
+    def test_past_scheduled_archived_by_default(self, monkeypatch):
+        """Default settings: past-scheduled rows surface in the archive list."""
+        rows = self._stub_blueprint_rows()
+        conn = self._fake_conn_with_rows(rows)
+        records = mod.find_stale_blueprints(conn)
+        ids = {r["id"] for r in records}
+        # Past-scheduled + no-schedule should be archived
+        assert "aaa-aaa" in ids
+        assert "ccc-ccc" in ids
+        # Future-scheduled stays sacred
+        assert "bbb-bbb" not in ids
+        # past_scheduled flag tracked correctly
+        past_record = next(r for r in records if r["id"] == "aaa-aaa")
+        assert past_record["past_scheduled"] is True
+        no_sched = next(r for r in records if r["id"] == "ccc-ccc")
+        assert no_sched["past_scheduled"] is False
+
+    def test_no_past_scheduled_flag_restores_old_behavior(self, monkeypatch):
+        """--no-past-scheduled flag: past-scheduled rows become sacred again."""
+        rows = self._stub_blueprint_rows()
+        conn = self._fake_conn_with_rows(rows)
+        records = mod.find_stale_blueprints(conn, archive_past_scheduled=False)
+        ids = {r["id"] for r in records}
+        assert "aaa-aaa" not in ids  # past now skipped
+        assert "bbb-bbb" not in ids  # future still skipped
+        assert "ccc-ccc" in ids  # no schedule still archived
+
+    def test_include_scheduled_wins(self, monkeypatch):
+        """--include-scheduled archives both past + future schedules."""
+        rows = self._stub_blueprint_rows()
+        conn = self._fake_conn_with_rows(rows)
+        records = mod.find_stale_blueprints(conn, include_scheduled=True)
+        ids = {r["id"] for r in records}
+        assert ids == {"aaa-aaa", "bbb-bbb", "ccc-ccc"}
+
+    def test_grace_seconds_respected(self, monkeypatch):
+        """A row scheduled 30 min ago should NOT count as past when grace=3600 (1h)."""
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        rows = [
+            ("zzz-zzz", "movies", "VISUAL_READY", now - timedelta(minutes=30), ["/gone.mp4"]),
+        ]
+        conn = self._fake_conn_with_rows(rows)
+        records = mod.find_stale_blueprints(conn, past_grace_seconds=3600)
+        # 30 min < 1h grace → still treated as in-flight → skip
+        assert records == []
+        # With a 5-min grace: past_grace_seconds=300 → 30 min > 5 min → archive
+        records = mod.find_stale_blueprints(conn, past_grace_seconds=300)
+        assert len(records) == 1
+        assert records[0]["id"] == "zzz-zzz"
+
+    def _fake_conn_with_rows(self, rows):
+        """Build a fake connection whose cursor.fetchall() returns the
+        given list (in the same shape psql would return)."""
+
+        class _C:
+            def __init__(self, rows):
+                self._rows = rows
+                self._fetched = False
+
+            def execute(self, *args, **kwargs):
+                pass
+
+            def fetchall(self):
+                if self._fetched:
+                    return []
+                self._fetched = True
+                return self._rows
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                pass
+
+        class _Conn:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def cursor(self):
+                return _C(self._rows)
+
+            def commit(self):
+                pass
+
+            def close(self):
+                pass
+
+        return _Conn(rows)
