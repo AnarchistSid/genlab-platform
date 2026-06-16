@@ -122,10 +122,21 @@ for rel in "$@"; do
   # rsync over ssh, creating intermediate directories as needed.
   # ``--mkpath`` is rsync 3.2+; fall back to a manual ssh mkdir on older
   # rsync versions if needed.
+  #
+  # ``--chown=genlab:genlab`` ensures the file lands owned by the
+  # genlab user (not root, the SSH user). Pipelines run as ``genlab``
+  # via systemd and need to write back to files like uv.lock during
+  # ``uv run`` — root-owned files break the pipeline with
+  # "Permission denied" (regression observed 2026-06-16 ai_creators
+  # 08:00 IST: uv.lock root-owned → entire pipeline aborted at
+  # process startup before any work). The flag requires
+  # ``rsync 3.1+`` on both ends; all current prod hosts have 3.2+.
   if ! rsync \
         --quiet \
         --checksum \
         --mkpath \
+        --chown=genlab:genlab \
+        --chmod=ugo=rwX,Du=rwx,Dgo=rx \
         -e "ssh -o StrictHostKeyChecking=no" \
         "${local_path}" \
         "${DEPLOY_USER}@${DEPLOY_HOST}:${remote_path}"; then
