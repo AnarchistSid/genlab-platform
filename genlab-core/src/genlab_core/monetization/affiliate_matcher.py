@@ -23,8 +23,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from genlab_core.monetization.seasonal import get_seasonal_products, load_seasonal_config
 
 logger = logging.getLogger(__name__)
@@ -78,23 +76,15 @@ def _count_today_affiliate_blueprints(niche_id: str) -> int:
 def _load_catalog(catalog_path: Path | None = None) -> dict[str, Any]:
     """Load the affiliate catalog YAML from disk.
 
-    Expands ``${ENV_VAR}`` placeholders in all affiliate URLs so that
-    tags like ``${AMAZON_US_AFFILIATE_TAG}`` resolve to their actual
-    values from the environment.
+    Delegates to the canonical ``genlab_core.monetization.catalog_loader``
+    so this implementation can never drift from the dashboard's loader
+    (see ``catalog_loader.py`` docstring for the history that motivated
+    the extraction). Local wrapper preserves the optional-``path``
+    signature this module's callers expect.
     """
-    path = catalog_path or _CATALOG_PATH
-    with open(path, encoding="utf-8") as fh:
-        catalog = yaml.safe_load(fh)
+    from genlab_core.monetization.catalog_loader import load_catalog
 
-    # Expand ${...} env var placeholders in all network URLs
-    for niche_data in (catalog.get("niches") or {}).values():
-        for product in niche_data.get("products") or []:
-            for net_info in (product.get("networks") or {}).values():
-                url = net_info.get("url", "")
-                if "${" in url:
-                    net_info["url"] = os.path.expandvars(url)
-
-    return catalog
+    return load_catalog(catalog_path or _CATALOG_PATH)
 
 
 def _keyword_hits(
