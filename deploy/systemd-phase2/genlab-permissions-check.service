@@ -19,5 +19,3 @@ TimeoutSec=120
 # purposes (the actual signal is the pipeline_alerts row, not the
 # unit's exit status).
 SuccessExitStatus=0 2
-StandardOutput=append:/opt/genlab/.logs/check_permissions_drift.systemd.log
-StandardError=append:/opt/genlab/.logs/check_permissions_drift.systemd.log

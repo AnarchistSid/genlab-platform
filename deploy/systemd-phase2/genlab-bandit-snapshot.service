@@ -18,5 +18,3 @@ ExecStart=/opt/genlab/scripts/bandit_arms_snapshot.sh
 TimeoutSec=120
 # rotation soft-fail returns exit 3 — log but don't repeat-mark the unit failed
 SuccessExitStatus=0 3
-StandardOutput=append:/opt/genlab/.logs/bandit_arms_snapshot.systemd.log
-StandardError=append:/opt/genlab/.logs/bandit_arms_snapshot.systemd.log
