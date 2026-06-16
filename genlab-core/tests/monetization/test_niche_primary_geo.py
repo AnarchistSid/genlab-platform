@@ -30,7 +30,6 @@ justification is auditable.
 from __future__ import annotations
 
 import pytest
-
 from genlab_core.monetization.geo_link_resolver import NICHE_PRIMARY_GEO
 
 
