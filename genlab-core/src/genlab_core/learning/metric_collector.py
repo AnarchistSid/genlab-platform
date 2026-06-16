@@ -1339,10 +1339,13 @@ def _default_bandit_updater(
 ) -> None:
     """Default bandit updater — writes reward into bandit_arms table.
 
-    Math (2026-05-16 audit fix):
-      * Fractional Thompson update preserves signal magnitude:
-            alpha += clip(reward, 0, 1)
-            beta  += 1 - clip(reward, 0, 1)
+    Math (2026-05-16 audit fix + 2026-06-15 D3.8 platform multipliers):
+      * Per-platform multiplier scales reward BEFORE clip:
+            scaled = reward * get_multiplier(platform)
+            alpha += clip(scaled, 0, 1)
+            beta  += 1 - clip(scaled, 0, 1)
+      * Multipliers live in ``config/platform_reward_multipliers.yaml``;
+        default 1.0 for any platform not listed (no behaviour change).
       * n_plays is incremented per observation.
 
     Multi-arm credit (2026-05-17 closure):
@@ -1374,7 +1377,27 @@ def _default_bandit_updater(
             logger.warning("[bandit_updater] No bandit_arms proxy")
             return
 
-        reward_clipped = max(0.0, min(1.0, float(reward)))
+        # D3.8 (2026-06-15, AUTO #2 runbook): scale by per-platform
+        # multiplier BEFORE clip(0, 1). Platforms with higher
+        # monetisation density per impression earn more bandit credit
+        # per post, biasing the gate toward arms that perform on
+        # monetisation-heavy surfaces. Default 1.0 preserves pre-D3.8
+        # behaviour for any platform not listed in the YAML.
+        from genlab_core.learning.platform_reward_multipliers import get_multiplier
+
+        platform_multiplier = get_multiplier(platform)
+        scaled_reward = float(reward) * platform_multiplier
+        reward_clipped = max(0.0, min(1.0, scaled_reward))
+        if platform_multiplier != 1.0:
+            logger.debug(
+                "[bandit_updater] %s/%s: raw_reward=%.3f * mult=%.2f -> %.3f (clipped %.3f)",
+                niche_id,
+                platform,
+                reward,
+                platform_multiplier,
+                scaled_reward,
+                reward_clipped,
+            )
 
         # Build the target set: primary arm (content_type) plus any
         # extra arms the publisher recorded for this task.

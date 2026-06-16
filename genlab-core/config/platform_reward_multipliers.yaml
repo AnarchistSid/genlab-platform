@@ -1,0 +1,52 @@
+# Per-platform reward multipliers (D3.8, AUTO #2 runbook Day-3)
+#
+# Each platform's bandit reward gets multiplied by this scalar BEFORE the
+# clip(0, 1) that feeds Thompson Sampling alpha/beta. Platforms with
+# higher monetisation density per impression earn more bandit credit per
+# post — making the bandit prefer arms that perform on monetisation-
+# heavy platforms.
+#
+# How the math works
+# ------------------
+#   raw_reward                = RewardShaper.compute_reward(platform, metrics)
+#   bandit_reward             = raw_reward * multiplier
+#   alpha_bump                = clip(bandit_reward, 0, 1)
+#   beta_bump                 = 1 - alpha_bump
+#
+# With multiplier > 1.0, the platform's high-reward posts saturate at
+# the clip ceiling sooner — same per-post bump but reached at lower raw
+# reward. With multiplier < 1.0, the platform's posts contribute less
+# per observation.
+#
+# Multipliers chosen from monetisation economics as of 2026-06-15:
+# - YouTube      direct AdSense + brand deals + Premium revenue share
+# - TikTok       Creator Fund + brand deals; growing
+# - Instagram    Bonuses + brand deals; plateaued, default 1.0
+# - Threads      No monetisation programme yet; default 1.0
+# - Facebook     Reach harder to monetise per-impression; slight discount
+# - X / Twitter  Premium revenue share weak; significant discount
+#
+# Backwards-compat (R-08 design intent):
+# Multipliers apply to NEW bandit updates only. Existing alpha/beta
+# values in bandit_arms reflect historical un-multiplied rewards and
+# are NOT retroactively scaled. Snapshots from S6 (the 03:00 IST
+# bandit_arms CSVs) provide the rollback line.
+#
+# Tuning guidance:
+# - Start CONSERVATIVE (close to 1.0). A bad multiplier permanently
+#   depresses an arm; you can't un-bias a Beta posterior.
+# - Adjust ±0.1 at a time. Wait 1-2 weeks between changes.
+# - Default 1.0 means "no change vs pre-D3.8 behaviour."
+
+version: "1.0"
+
+multipliers:
+  youtube: 1.5
+  tiktok: 1.2
+  instagram: 1.0
+  threads: 1.0
+  facebook: 0.8
+  twitter: 0.6
+  # Alias kept in lockstep with the canonical 'twitter' key — some call
+  # sites still use the legacy 'x_twitter' identifier.
+  x_twitter: 0.6
