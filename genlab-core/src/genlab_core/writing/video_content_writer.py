@@ -151,6 +151,25 @@ NICHE_VOICE: dict[str, dict[str, Any]] = {
 }
 
 
+# Fields the writer must always populate. Used by
+# _complete_and_parse_json to detect "valid JSON but missing required
+# keys" responses and trigger a retry. See 2026-06-17 audit: anime/
+# movies/sports had ~75% rate of LLM omitting instagram_caption +
+# threads_content (the two most-constrained fields). PR #273 added
+# downstream fallback; this set drives the upstream retry so we
+# rarely need the fallback.
+_REQUIRED_LLM_FIELDS: frozenset[str] = frozenset(
+    {
+        "hook",
+        "instagram_caption",
+        "twitter_content",
+        "youtube_content",
+        "facebook_content",
+        "threads_content",
+    }
+)
+
+
 def _complete_and_parse_json(
     llm_client: Any,
     system: str,
@@ -159,25 +178,47 @@ def _complete_and_parse_json(
     temperature: float,
     niche_id: str,
 ) -> dict:
-    """Call the LLM and parse its JSON response, retrying once on parse failure.
+    """Call the LLM and parse its JSON response, retrying once on parse
+    failure OR on missing-required-field.
 
-    Claude occasionally emits malformed JSON (unescaped quotes/colons inside
-    string values). A single retry with an explicit reminder of the prior
-    parse error fixes the vast majority of these. On a second failure we let
-    the JSONDecodeError propagate so ``write_video_content`` can return its
-    title-derived fallback content.
+    Two recoverable failure modes:
+    1. **Malformed JSON** — Claude occasionally emits unescaped
+       quotes/colons inside string values. A retry with an explicit
+       reminder of the parse error fixes the vast majority.
+    2. **Valid JSON but missing required keys** — added 2026-06-17 to
+       close the cascading-empty-IG bug. Anime/movies/sports LLM
+       responses sometimes drop ``instagram_caption`` and/or
+       ``threads_content`` when the model can't satisfy the tight
+       length constraints. We re-prompt naming the specific missing
+       fields rather than letting the empty values cascade through
+       _adapt_instagram + inject_cta.
+
+    On a second failure of either kind we let the error propagate so
+    ``write_video_content`` falls through to its title-derived
+    fallback content (a degraded but safe outcome).
     """
     last_err: Exception | None = None
+    last_missing: list[str] = []
     for attempt in range(2):
         retry_user = user
-        if attempt > 0 and last_err is not None:
-            retry_user = (
-                f"{user}\n\n"
-                f"IMPORTANT: your previous response was not valid JSON "
-                f"({type(last_err).__name__}: {last_err}). "
-                "Return ONLY a valid JSON object. Escape any quotes or colons "
-                "inside string values. No markdown, no prose, no code fences."
-            )
+        if attempt > 0:
+            if last_missing:
+                retry_user = (
+                    f"{user}\n\n"
+                    f"IMPORTANT: your previous response was valid JSON but "
+                    f"OMITTED these required fields: {', '.join(last_missing)}.\n"
+                    "These fields are REQUIRED and must have non-empty string\n"
+                    "values. Re-generate with ALL required keys present, even\n"
+                    "if the length targets are hard to satisfy exactly."
+                )
+            elif last_err is not None:
+                retry_user = (
+                    f"{user}\n\n"
+                    f"IMPORTANT: your previous response was not valid JSON "
+                    f"({type(last_err).__name__}: {last_err}). "
+                    "Return ONLY a valid JSON object. Escape any quotes or colons "
+                    "inside string values. No markdown, no prose, no code fences."
+                )
         response = llm_client.complete(
             system=system,
             user=retry_user,
@@ -186,9 +227,10 @@ def _complete_and_parse_json(
         )
         clean = re.sub(r"```(?:json)?|```", "", response).strip()
         try:
-            return json.loads(clean)
+            parsed = json.loads(clean)
         except json.JSONDecodeError as exc:
             last_err = exc
+            last_missing = []
             if attempt == 0:
                 logger.info(
                     "[%s] LLM JSON parse failed (attempt 1/2): %s — retrying",
@@ -197,6 +239,32 @@ def _complete_and_parse_json(
                 )
                 continue
             raise
+
+        # JSON parsed cleanly; verify required fields are present + non-empty.
+        # Missing/empty fields trigger a re-prompt rather than silently
+        # cascading into downstream fallbacks.
+        missing = sorted(k for k in _REQUIRED_LLM_FIELDS if not str(parsed.get(k, "")).strip())
+        if missing and attempt == 0:
+            last_missing = missing
+            last_err = None
+            logger.info(
+                "[%s] LLM omitted required fields %s (attempt 1/2) — retrying",
+                niche_id,
+                missing,
+            )
+            continue
+        if missing:
+            # Second attempt also missing fields — log WARN so we can
+            # measure prompt regression over time, then return what we
+            # have so the downstream fallback (base_writing PR #273)
+            # produces something rather than crashing the pipeline.
+            logger.warning(
+                "[%s] LLM omitted required fields %s after retry — "
+                "downstream fallback will fill from related fields",
+                niche_id,
+                missing,
+            )
+        return parsed
 
 
 def write_video_content(
@@ -302,10 +370,13 @@ def write_video_content(
         "HASHTAGS: exactly 3-5 tags. Each tag must be a full word (no '#AI #Cl').\n"
         "Pick tags that are actually searched for — niche-specific over generic.\n"
         "\n"
-        "STRICT CHARACTER LIMITS (content will be truncated if exceeded):\n"
+        "CHARACTER LIMITS — TARGETS, not strict requirements (content will be\n"
+        "truncated if exceeded, but better to be SLIGHTLY off-target than to\n"
+        "omit a field entirely):\n"
         "- hook: ≤60 characters, single line, no trailing punctuation unless ?\n"
-        "- instagram_caption: EXACTLY 150-170 chars body + blank line + CTA +\n"
-        "  blank line + 3-5 hashtags. TOTAL ≤ 200 chars including hashtags.\n"
+        "- instagram_caption: ~150-200 chars body + blank line + CTA +\n"
+        "  blank line + 3-5 hashtags. Aim for the target; do not skip if exact\n"
+        "  length is hard to satisfy.\n"
         "- twitter_content: ≤280 chars. Punchy, conversational. NO links.\n"
         "- youtube_content: Question format, ≤40 characters total.\n"
         "- facebook_content: 200-300 chars ending in an engaging question.\n"
@@ -340,9 +411,21 @@ def write_video_content(
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
-        + "Respond ONLY with valid JSON with these exact keys: "
-        "hook, instagram_caption, twitter_content, youtube_content, "
-        "facebook_content, threads_content. No markdown, no explanation."
+        + "OUTPUT FORMAT — strictly enforced:\n"
+        "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
+        "have non-empty string values:\n"
+        "  - hook\n"
+        "  - instagram_caption  ← REQUIRED, never empty, never omit\n"
+        "  - twitter_content\n"
+        "  - youtube_content\n"
+        "  - facebook_content\n"
+        "  - threads_content    ← REQUIRED, never empty, never omit\n"
+        "\n"
+        "If you can't satisfy a length target exactly, produce content close\n"
+        "to the target — DO NOT omit the field. A field that's slightly\n"
+        "off-length is acceptable; a missing field breaks the publish.\n"
+        "\n"
+        "No markdown, no explanation, no code fences."
     )
 
     user = (
@@ -361,7 +444,7 @@ def write_video_content(
             llm_client=llm_client,
             system=system,
             user=user,
-            max_tokens=800,
+            max_tokens=1200,
             temperature=0.65,
             niche_id=niche_id,
         )
