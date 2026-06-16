@@ -149,43 +149,75 @@ class TestNoOpWhenUnconfigured:
 
 
 class TestTransformSuccessSwapsNetwork:
-    def test_in_geo_amazon_transforms_to_earnkaro(
+    """EarnKaro happy path — exercised via a synthetic IN-geo niche
+    rather than a real one.
+
+    Until 2026-06-17, gaming/sports/movies/anime defaulted to IN in
+    ``NICHE_PRIMARY_GEO``. The flip to US (driven by 91% US-click
+    audience data — see ``test_niche_primary_geo.py``) means no
+    real niche currently triggers EarnKaro auto-transform. But the
+    transform code path itself is still correct + worth pinning,
+    so these tests inject a temporary IN-geo niche via monkeypatch
+    rather than coupling to which real niches are India-targeted.
+    """
+
+    def test_amazon_url_with_in_geo_niche_transforms_to_earnkaro(
         self, amazon_product, monkeypatch, _no_url_health_check
     ):
-        """The happy path: IN-geo niche + amazon URL + key set →
-        URL becomes ekaro.in short link, network becomes earnkaro."""
+        """The happy path: any IN-geo niche + amazon URL + key set →
+        URL becomes ekaro.in short link, network becomes earnkaro.
+
+        Uses a synthetic "test_in_geo" niche injected into
+        NICHE_PRIMARY_GEO so the test doesn't break when production
+        niches' geos change."""
         monkeypatch.setenv("EARNKARO_CONVERT_KEY", "test-key")
+        from genlab_core.monetization import geo_link_resolver as _glr
+
+        monkeypatch.setitem(_glr.NICHE_PRIMARY_GEO, "test_in_geo", "IN")
         with patch(
             "genlab_core.monetization.earnkaro_client.convert_url",
             return_value="https://ekaro.in/abc123",
         ) as mock_convert:
             url, network = resolve_affiliate_link_with_network(
-                amazon_product, "gaming", "instagram", blueprint_id="bpX"
+                amazon_product, "test_in_geo", "instagram", blueprint_id="bpX"
             )
             mock_convert.assert_called_once_with("https://www.amazon.in/dp/B0XYZ?tag=aspirehub-21")
-            # URL is ekaro.in short link (with UTM params appended)
             assert "ekaro.in/abc123" in url
-            # Network attribution flipped — analytics will record EarnKaro
             assert network == "earnkaro"
             # EarnKaro-specific sub_id param appended (ref=)
-            assert "ref=gaming_bpX" in url
+            assert "ref=test_in_geo_bpX" in url
 
-    def test_transform_called_for_each_of_three_in_niches(
+    def test_no_production_niche_currently_triggers_earnkaro(
         self, amazon_product, monkeypatch, _no_url_health_check
     ):
-        """All 4 IN-geo niches (gaming, sports, movies, anime) should
-        attempt the transform. Pin one per niche so a future change to
-        NICHE_PRIMARY_GEO that accidentally moves a niche to US fails
-        this test loudly."""
+        """Inverse pin to the 2026-06-17 NICHE_PRIMARY_GEO flip:
+        with all 5 production niches now defaulting to US, NONE
+        of them should attempt the EarnKaro transform — even with
+        the key set + a real amazon.in URL on the product.
+
+        If a future PR re-introduces an IN-defaulted niche WITHOUT
+        also updating the EarnKaro account / SubID configuration,
+        this test still passes (the IN-geo transform path is the
+        intentional outcome). But pairing this with the
+        ``test_niche_primary_geo.py`` US-default assertion means
+        a niche moving to IN trips a test failure THERE first,
+        forcing the rationale to be documented before this side
+        effect happens silently."""
         monkeypatch.setenv("EARNKARO_CONVERT_KEY", "test-key")
-        for niche in ("gaming", "sports", "movies", "anime"):
+        for niche in ("ai_creators", "gaming", "sports", "movies", "anime"):
             with patch(
                 "genlab_core.monetization.earnkaro_client.convert_url",
-                return_value="https://ekaro.in/perfix",
+                return_value="https://ekaro.in/should-not-be-called",
             ) as mock_convert:
-                _, network = resolve_affiliate_link_with_network(amazon_product, niche, "instagram")
-                assert mock_convert.called, f"niche={niche} should transform"
-                assert network == "earnkaro", f"niche={niche} should be earnkaro"
+                url, network = resolve_affiliate_link_with_network(
+                    amazon_product, niche, "instagram"
+                )
+                assert not mock_convert.called, (
+                    f"niche={niche} is US-default post-2026-06-17 — "
+                    "EarnKaro transform must NOT fire"
+                )
+                # Network stays amazon (no swap to earnkaro)
+                assert network in ("amazon", ""), f"niche={niche} unexpected network: {network!r}"
 
 
 # ── Graceful fallback: transform failure preserves original ───────────────
