@@ -1644,6 +1644,32 @@ class PushToBacklog:
                             prior_status,
                             new_status,
                         )
+                        # Revive path also re-assigns a CTA variant via
+                        # inject_cta (revive_fields contains the new
+                        # affiliate_cta_variant). Record to ab_tests with
+                        # the same shape as the create path so the
+                        # analytics join still works after a revive.
+                        variants_csv = revive_fields.get("affiliate_cta_variant", "")
+                        if variants_csv:
+                            try:
+                                from genlab_core.monetization.ab_test_recorder import (
+                                    record_cta_variant_assignment,
+                                )
+
+                                record_cta_variant_assignment(
+                                    client,
+                                    niche_id=revive_fields.get("niche_id", ""),
+                                    candidate_id=revive_fields.get("candidate_id", "")
+                                    or fields.get("candidate_id", ""),
+                                    variants_csv=variants_csv,
+                                    story_id=story_id,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                logger.warning(
+                                    "[PUSH] ab_test revive-recorder failed for '%s': %s",
+                                    title,
+                                    exc,
+                                )
                     else:
                         client.blueprints.create(fields, typecast=True)
                         blueprints_pushed += 1
@@ -1652,6 +1678,34 @@ class PushToBacklog:
                             title,
                             fields["status"],
                         )
+
+                    # Record CTA variant assignment to ab_tests (2026-06-16
+                    # producer wire — closes the half-wired ab_tests table
+                    # surfaced by the docs audit). Best-effort: any DB
+                    # failure logs WARN and continues; ab_tests is an
+                    # analytics sidecar and must NEVER block blueprint
+                    # creation. Fires on BOTH create + revive branches
+                    # because both paths re-assign a CTA variant.
+                    variants_csv = fields.get("affiliate_cta_variant", "")
+                    if variants_csv:
+                        try:
+                            from genlab_core.monetization.ab_test_recorder import (
+                                record_cta_variant_assignment,
+                            )
+
+                            record_cta_variant_assignment(
+                                client,
+                                niche_id=fields.get("niche_id", ""),
+                                candidate_id=fields.get("candidate_id", ""),
+                                variants_csv=variants_csv,
+                                story_id=story_id,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "[PUSH] ab_test recorder import/call failed for '%s': %s",
+                                title,
+                                exc,
+                            )
                     # Record in content_memory for persistent URL-level dedup
                     try:
                         cm = getattr(client, "content_memory", None)
