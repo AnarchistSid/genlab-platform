@@ -2,6 +2,11 @@
 Description=GenLab AUTO #2 Auto-Approval Worker (dry-run by default)
 After=network-online.target genlab-postgres-ready.target
 
+# Surface unit failures to the dashboard CriticalAlertsBanner
+# (2026-06-16 outage prevention). Template unit lives at
+# scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab

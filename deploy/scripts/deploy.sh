@@ -39,10 +39,13 @@
 #
 # Exit codes
 # ----------
-#   0 — all files transferred AND checksum-verified
+#   0 — all files transferred AND checksum + ownership verified
 #   1 — usage error / pre-flight failure
 #   2 — checksum mismatch (deploy aborted)
 #   3 — rsync transport failure
+#   4 — ownership mismatch on remote — file is not owned by
+#       genlab:genlab after deploy (deploy aborted; would have broken
+#       pipelines silently in the past — 2026-06-16 outage)
 
 set -euo pipefail
 
@@ -145,11 +148,17 @@ for rel in "$@"; do
     exit 3
   fi
 
-  # Post-transfer checksum verify — the audit's "rsync+checksum verify"
-  # recommendation, made non-skippable.
-  remote_sum="$(ssh -o StrictHostKeyChecking=no \
+  # Post-transfer verify: md5 catches transport corruption + the
+  # ownership check catches the silent failure mode that broke every
+  # pipeline on 2026-06-16 (uv.lock root-owned → pipeline aborts at
+  # "uv run" with EACCES). Root-owned files DON'T mismatch the
+  # checksum but the pipeline still can't write them, so the md5
+  # gate alone never surfaced this class of bug.
+  remote_check="$(ssh -o StrictHostKeyChecking=no \
     "${DEPLOY_USER}@${DEPLOY_HOST}" \
-    "md5sum ${remote_path} | awk '{print \$1}'")"
+    "md5sum ${remote_path} | awk '{print \$1}'; stat -c '%U:%G' ${remote_path}")"
+  remote_sum="$(echo "${remote_check}" | head -1)"
+  remote_owner="$(echo "${remote_check}" | tail -1)"
 
   if [ "${local_sum}" != "${remote_sum}" ]; then
     echo "CHECKSUM MISMATCH for ${rel}:" >&2
@@ -159,7 +168,15 @@ for rel in "$@"; do
     exit 2
   fi
 
-  echo "  ${rel}  OK md5=${local_sum}" >> "${LOG_FILE}"
+  if [ "${remote_owner}" != "genlab:genlab" ]; then
+    echo "OWNERSHIP MISMATCH for ${rel}:" >&2
+    echo "  expected: genlab:genlab" >&2
+    echo "  got     : ${remote_owner}" >&2
+    echo "  ${rel}  BAD_OWNER got=${remote_owner}" >> "${LOG_FILE}"
+    exit 4
+  fi
+
+  echo "  ${rel}  OK md5=${local_sum} owner=${remote_owner}" >> "${LOG_FILE}"
 done
 
 echo "[deploy] all files verified."

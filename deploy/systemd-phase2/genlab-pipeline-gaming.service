@@ -3,6 +3,11 @@ Description=GenLab Gaming Pipeline (CriticalRush)
 After=network-online.target docker.service
 Wants=network-online.target
 
+# Surface unit failures to the dashboard CriticalAlertsBanner
+# (2026-06-16 outage prevention). Template unit lives at
+# scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab
@@ -11,6 +16,7 @@ WorkingDirectory=/opt/genlab/CriticalRush
 EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
 # Task #35 (2026-06-13): bake the prod hotfixes (yt-dlp wrapper +
 # cookies chown) into the pipeline lifecycle so they survive future
 # deploys. The leading `+` runs as root (drops to User=genlab for the

@@ -55,7 +55,7 @@ echo "" | tee -a "$LOG_FILE"
 
 # ── Run unified pipeline ─────────────────────────────────────────
 cd "$CHANNEL_ROOT"
-"$UV" run --package blackbox-brief python run_pipeline.py "$@" 2>&1 | tee -a "$LOG_FILE"
+"$UV" run --frozen --package blackbox-brief python run_pipeline.py "$@" 2>&1 | tee -a "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
 
 echo "" | tee -a "$LOG_FILE"

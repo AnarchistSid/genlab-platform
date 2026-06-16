@@ -53,7 +53,7 @@ echo "=== ${CHANNEL_NAME} daily_intel — ${RUN_ID} ===" | tee "$LOG_FILE"
 echo "Started: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" | tee -a "$LOG_FILE"
 
 cd "$CHANNEL_ROOT"
-"$UV" run --package "$PACKAGE" python run_pipeline.py "$@" 2>&1 | tee -a "$LOG_FILE"
+"$UV" run --frozen --package "$PACKAGE" python run_pipeline.py "$@" 2>&1 | tee -a "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
 
 echo "Finished: $(date -u '+%Y-%m-%d %H:%M:%S UTC') | exit=$EXIT_CODE" | tee -a "$LOG_FILE"

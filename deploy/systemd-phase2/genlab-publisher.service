@@ -3,6 +3,11 @@ Description=GenLab Publisher
 After=network-online.target docker.service
 Wants=network-online.target
 
+# Surface unit failures to the dashboard CriticalAlertsBanner
+# (2026-06-16 outage prevention). Template unit lives at
+# scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab
@@ -12,5 +17,6 @@ EnvironmentFile=/opt/genlab/.env
 Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=BACKLOG_CONFIG_PATH=/opt/genlab/genlab-core/config/lists_config.yaml
 Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
 ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_platforms --niche all
 TimeoutSec=1800

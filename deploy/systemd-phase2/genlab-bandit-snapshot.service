@@ -3,6 +3,11 @@ Description=GenLab Bandit Arms Daily Snapshot (S6, AUTO #2 runbook)
 After=network-online.target postgresql.service
 Wants=network-online.target
 
+# Surface unit failures to the dashboard CriticalAlertsBanner
+# (2026-06-16 outage prevention). Template unit lives at
+# scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
 [Service]
 Type=oneshot
 User=genlab
