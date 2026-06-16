@@ -228,9 +228,11 @@ def archive_blueprints(conn, records: list[dict], reason: str) -> int:
         cur.execute("SET app.niche_id TO 'all'")
         # Only act on blueprints we observed; if status flipped to
         # PUBLISHED between detect and archive, skip (TOCTOU defense).
-        # Explicit ::uuid[] cast on the ANY() parameter — psycopg3
-        # can't infer the array type from a Python list[str] in this
-        # position and raises IndeterminateDatatype otherwise.
+        # Explicit ::text and ::uuid[] casts so psycopg3 doesn't raise
+        # IndeterminateDatatype. The `%s` for `reason` sits inside
+        # jsonb_build_object which is anyvariadic and gives the planner
+        # no type hint; the `%s` for ids is a list[str] that PG can't
+        # infer as uuid[] without help.
         cur.execute(
             """
             UPDATE blueprints
@@ -238,7 +240,7 @@ def archive_blueprints(conn, records: list[dict], reason: str) -> int:
                 action_taken = NULL,
                 scheduled_for = NULL,
                 extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object(
-                    'archived_reason', %s,
+                    'archived_reason', %s::text,
                     'archived_at', NOW()::text,
                     'archived_by', 'archive_stale_visual_paths.py'
                 ),
