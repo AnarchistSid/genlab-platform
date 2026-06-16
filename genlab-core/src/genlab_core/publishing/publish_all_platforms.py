@@ -79,12 +79,18 @@ from genlab_core.publishing.transcode import (
 
 logger = logging.getLogger(__name__)
 
-# Exit codes
+# Exit codes — semantics pinned in the genlab-publisher.service
+# SuccessExitStatus allowlist (0, 1, 3, 4). Any code OUTSIDE the
+# allowlist (2 + 5+ + unexpected) triggers the OnFailure handler →
+# CRITICAL alert on Mission Control. Adding a new exit code? Update
+# both this enum AND the .service file's SuccessExitStatus to keep
+# the dashboard signal honest.
 EXIT_SUCCESS = 0
-EXIT_NO_BLUEPRINTS = 1
-EXIT_ALL_FAILED = 2
-EXIT_DAILY_CAP = 3
-EXIT_LOCK_HELD = 4
+EXIT_NO_BLUEPRINTS = 1  # benign — no fresh content today
+EXIT_ALL_FAILED = 2  # real signal — every platform failed on the chosen blueprint
+EXIT_DAILY_CAP = 3  # benign — already published today
+EXIT_LOCK_HELD = 4  # benign — concurrent run, next timer retry
+EXIT_UNEXPECTED = 5  # real signal — unhandled exception in run_publish
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +465,12 @@ def main() -> int:
             total_exit = max(total_exit, exit_code)
         except Exception as exc:
             logger.error("[publish] Failed for %s: %s", nid, exc)
-            total_exit = 1
+            # EXIT_UNEXPECTED (5), not 1: an unhandled exception is a
+            # real signal that needs operator attention. Using 1 would
+            # lump it in with the BENIGN "no blueprints today" exit code
+            # and the SuccessExitStatus allowlist in the systemd unit
+            # would silence the OnFailure alert.
+            total_exit = max(total_exit, EXIT_UNEXPECTED)
         finally:
             lock.release()
 

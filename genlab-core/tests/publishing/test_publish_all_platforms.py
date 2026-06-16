@@ -757,3 +757,51 @@ class TestPreflightTokenRefresh:
         )
         # preflight's creds resolver was asked for threads.
         assert any(call.args and call.args[0] == "threads" for call in mock_creds.call_args_list)
+
+
+class TestExitCodeContract:
+    """Pin the exit-code semantics that genlab-publisher.service's
+    SuccessExitStatus allowlist depends on. Drift here would silently
+    re-introduce the 2026-06-16 alert-fatigue problem (3/4 non-zero
+    exits being benign yet firing OnFailure handlers)."""
+
+    def test_exit_code_constants_have_documented_values(self):
+        """Drift detector — the unit file pins these exact codes."""
+        from genlab_core.publishing.publish_all_platforms import (
+            EXIT_ALL_FAILED,
+            EXIT_DAILY_CAP,
+            EXIT_LOCK_HELD,
+            EXIT_NO_BLUEPRINTS,
+            EXIT_SUCCESS,
+            EXIT_UNEXPECTED,
+        )
+
+        # These values are pinned by genlab-publisher.service's
+        # SuccessExitStatus=0 1 3 4 — changing them silently breaks
+        # the dashboard alert signal.
+        assert EXIT_SUCCESS == 0, "SUCCESS must be 0 (default 'success')"
+        assert EXIT_NO_BLUEPRINTS == 1, "NO_BLUEPRINTS must be 1 (allowlisted as benign)"
+        assert EXIT_ALL_FAILED == 2, "ALL_FAILED must be 2 (real signal, fires OnFailure)"
+        assert EXIT_DAILY_CAP == 3, "DAILY_CAP must be 3 (allowlisted as benign)"
+        assert EXIT_LOCK_HELD == 4, "LOCK_HELD must be 4 (allowlisted as benign)"
+        assert EXIT_UNEXPECTED == 5, "UNEXPECTED must be 5 (real signal, fires OnFailure)"
+
+    def test_systemd_unit_pins_correct_allowlist(self):
+        """The .service file and the Python enum must agree."""
+        from pathlib import Path
+
+        # Find the unit file at the repo root
+        repo_root = Path(__file__).resolve().parents[3]
+        unit = repo_root / "deploy" / "systemd-phase2" / "genlab-publisher.service"
+        if not unit.exists():
+            import pytest
+
+            pytest.skip(f"unit file not found at {unit}")
+        text = unit.read_text()
+        assert "SuccessExitStatus=0 1 3 4" in text, (
+            "publisher.service SuccessExitStatus must allowlist exits "
+            "0 (SUCCESS), 1 (NO_BLUEPRINTS), 3 (DAILY_CAP), 4 (LOCK_HELD). "
+            "Codes 2 (ALL_FAILED) + 5 (UNEXPECTED) MUST NOT be allowlisted "
+            "— they are the operator-actionable signals the L4 OnFailure "
+            "handler exists to surface."
+        )
