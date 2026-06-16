@@ -575,3 +575,34 @@ content_filter:
     - trump
     - election
     - politics
+
+    # Cross-niche gaming-content guard (2026-06-16: Mistfall Hunter trailer leak)
+    - summer of gaming
+    - game awards
+    - showcase trailer
+    - class trailer
+    - boss trailer
+    - weapon showcase
+    - patch notes
+    - skill tree
+    - loadout
+    - video game
+    - pc gaming
+    - ps5
+    - ps4
+    - xbox
+    - nintendo
+    - steam release
+    - early access
+    - extraction shooter
+    - souls-like
+    - soulslike
+    - battle royale
+    - moba
+    - fps
+    - rpg
+    - mmo
+    - indie game
+    - game studio
+    - gamescom
+    - esports

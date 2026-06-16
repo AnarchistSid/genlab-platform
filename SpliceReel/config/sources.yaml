@@ -78,11 +78,12 @@ youtube_channels:
     type: "rss"
     weight: 0.8
     category: "movie_trailers"
-  - name: "IGN"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCKy1dAqELo0zrOtPkf0eTMw"
-    type: "rss"
-    weight: 0.7
-    category: "movie_reviews"
+  # IGN broad YouTube channel removed 2026-06-16 — too gaming-heavy
+  # (3 misrouted game-trailer blueprints in last 30 days: Mistfall Hunter
+  # Class Trailer, Wolf Among Us 2 Story Trailer, Last Harbor Reveal
+  # Trailer). The IGN Movies RSS feed above stays — it's scoped to
+  # movie articles only. Gaming pipeline still has the broad IGN
+  # channel in its own sources.yaml.
   - name: "Screen Junkies"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCOpcACMWblDls9Z6GERVi1A"
     type: "rss"
@@ -480,6 +481,36 @@ content_filter:
     - subbed
     - family vlog
 
+    # Cross-niche gaming-content guard (2026-06-16: Mistfall Hunter trailer leak)
+    - summer of gaming
+    - game awards
+    - showcase trailer
+    - class trailer
+    - boss trailer
+    - weapon showcase
+    - patch notes
+    - skill tree
+    - loadout
+    - video game
+    - pc gaming
+    - ps5
+    - ps4
+    - xbox
+    - nintendo
+    - steam release
+    - early access
+    - extraction shooter
+    - souls-like
+    - soulslike
+    - battle royale
+    - moba
+    - fps
+    - rpg
+    - mmo
+    - indie game
+    - game studio
+    - gamescom
+    - esports
 reddit:
   # FetchRedditClips stage — film discourse subs surface viral clips
   # within minutes of premieres + reaction videos. r/movieclips and
