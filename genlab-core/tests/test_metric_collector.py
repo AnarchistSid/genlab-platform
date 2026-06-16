@@ -10,7 +10,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.learning import platform_reward_multipliers as _prm
 from genlab_core.learning.metric_collector import (
     _fetch_facebook,
