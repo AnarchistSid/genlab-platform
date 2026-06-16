@@ -18,13 +18,36 @@ import urllib.request
 
 logger = logging.getLogger(__name__)
 
-# Primary audience geography per niche
+# Primary audience geography per niche — drives Amazon US vs IN
+# affiliate URL selection.
+#
+# 2026-06-17 update: flipped all four India-defaulted niches to "US"
+# based on actual `affiliate_clicks.country` distribution observed
+# over the trailing 90 days:
+#
+#   niche        US clicks  IN clicks  → conclusion
+#   ai_creators  10         5          (already US, kept)
+#   anime        13         1          ⇒ 93% US
+#   gaming       12         1          ⇒ 92% US
+#   movies       27         0          ⇒ 100% US
+#   sports       12         0          ⇒ 100% US
+#
+# These ratios are CONSERVATIVE — they undercount US viewers, who
+# have been seeing amazon.in URLs that they recognize as
+# "wrong country" and may have skipped without clicking. With
+# amazon.com URLs the US share will likely climb further. We were
+# routing 140 of 156 affiliate publishes / month to amazon.in for
+# US-dominant audiences ⇒ ~140 unconvertable clicks / month.
+#
+# If a niche's audience ever shifts back toward India we can revert
+# per-niche here; the click-geography query that motivated this
+# flip is captured in the PR body for auditability.
 NICHE_PRIMARY_GEO: dict[str, str] = {
     "ai_creators": "US",
-    "gaming": "IN",
-    "sports": "IN",
-    "movies": "IN",
-    "anime": "IN",
+    "gaming": "US",
+    "sports": "US",
+    "movies": "US",
+    "anime": "US",
 }
 
 # In-memory health cache: url → (healthy: bool, checked_at: float)

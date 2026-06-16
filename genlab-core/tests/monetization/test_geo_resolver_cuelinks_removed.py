@@ -155,19 +155,29 @@ class TestCuelinksRemovedFromCandidates:
         assert "aspirehub-21" in url
 
 
-class TestNicheGeoMappingUnchanged:
-    """The candidate-list edit must not have changed niche → geo
-    mapping. ai_creators stays US; gaming/sports/movies/anime stay IN.
-    This is the integrity pin for the docstring's selection order."""
+class TestNicheGeoMapping:
+    """Niche → primary-audience-geo mapping.
+
+    Updated 2026-06-17 from the original IN-defaulted setup based on
+    actual `affiliate_clicks.country` data showing 91% US audience
+    across all 5 niches. See the docstring of
+    ``geo_link_resolver.NICHE_PRIMARY_GEO`` for the click-distribution
+    snapshot that motivated the flip + the test in
+    ``test_niche_primary_geo.py`` that is now the canonical pin.
+
+    This pin in particular guards that the cuelinks-removal edit
+    didn't accidentally mutate the mapping in either direction — it
+    asserts the post-2026-06-17 US defaults.
+    """
 
     @pytest.mark.parametrize(
         "niche,expected_geo",
         [
             ("ai_creators", "US"),
-            ("gaming", "IN"),
-            ("sports", "IN"),
-            ("movies", "IN"),
-            ("anime", "IN"),
+            ("gaming", "US"),
+            ("sports", "US"),
+            ("movies", "US"),
+            ("anime", "US"),
         ],
     )
     def test_niche_geo_mapping(self, niche, expected_geo):
