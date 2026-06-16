@@ -141,6 +141,7 @@ def find_stale_blueprints(
                 continue  # all present — nothing to do
 
             past_scheduled = False
+            future_stale = False
             if scheduled_for is not None and not include_scheduled:
                 # Distinguish FUTURE schedule (sacred per
                 # cleanup_safety.md) from PAST schedule (publisher
@@ -161,6 +162,26 @@ def find_stale_blueprints(
                         if is_past
                         else "future-scheduled (sacred)",
                     )
+                    # Future-scheduled stale rows aren't archived (sacred)
+                    # but they ARE going to fail when the publisher
+                    # attempts them on their schedule. Record so the
+                    # caller can write a CRITICAL alert NOW instead of
+                    # waiting days for the publisher to find out.
+                    if not is_past:
+                        future_stale = True
+                        out.append(
+                            {
+                                "id": str(bp_id),
+                                "niche_id": niche_id,
+                                "status": status,
+                                "scheduled_for": scheduled_for.isoformat(),
+                                "stale_paths": missing,
+                                "present_paths": present,
+                                "all_missing": len(present) == 0,
+                                "past_scheduled": False,
+                                "future_stale": True,
+                            }
+                        )
                     continue
                 past_scheduled = True
 
@@ -174,9 +195,63 @@ def find_stale_blueprints(
                     "present_paths": present,
                     "all_missing": len(present) == 0,
                     "past_scheduled": past_scheduled,
+                    "future_stale": future_stale,
                 }
             )
     return out
+
+
+def write_future_stale_alerts(conn, records: list[dict]) -> int:
+    """For each future-scheduled stale blueprint, write a CRITICAL row
+    to pipeline_alerts so the operator sees it on Mission Control NOW
+    (rather than discovering it days later when the publisher tries).
+
+    Returns count of alerts written. Idempotent — dedups by message
+    body so a nightly run doesn't multiply rows.
+    """
+    future_stale = [r for r in records if r.get("future_stale")]
+    if not future_stale:
+        return 0
+    written = 0
+    with conn.cursor() as cur:
+        cur.execute("SET app.niche_id TO 'all'")
+        for r in future_stale:
+            message = (
+                f"Future-scheduled blueprint {r['id'][:8]} ({r['niche_id']}) "
+                f"will fail at scheduled time {r['scheduled_for']} — "
+                f"{len(r['stale_paths'])} visual_paths file(s) missing on disk. "
+                f"Re-render the blueprint OR archive it manually to clear the slot.\n\n"
+                f"Sample missing path: {r['stale_paths'][0]}\n\n"
+                f"Quick fix: GET /api/v1/blueprints/{r['id']}/details on the "
+                f"dashboard, then either Reject (clears the slot) or trigger "
+                f"a re-render."
+            )
+            # Dedupe — don't write if an unresolved row with the same
+            # check_name + blueprint id already exists.
+            cur.execute(
+                """
+                SELECT 1 FROM pipeline_alerts
+                WHERE check_name = 'future_stale_visual_paths'
+                  AND resolved_at IS NULL
+                  AND message LIKE %s
+                LIMIT 1
+                """,
+                (f"%blueprint {r['id'][:8]} ({r['niche_id']})%",),
+            )
+            if cur.fetchone():
+                continue
+            cur.execute(
+                """
+                INSERT INTO pipeline_alerts
+                    (niche_id, check_name, severity, message, created_at, resolved_at)
+                VALUES (%s::text, 'future_stale_visual_paths', 'CRITICAL',
+                        %s::text, NOW(), NULL)
+                """,
+                (r["niche_id"], message),
+            )
+            written += 1
+    conn.commit()
+    return written
 
 
 def write_backup(records: list[dict], backup_dir: Path) -> Path | None:
@@ -325,12 +400,15 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         print(f"# {datetime.now(UTC).isoformat()} — {len(records)} stale blueprint(s) found")
+        archivable = [r for r in records if not r.get("future_stale")]
+        future_stale = [r for r in records if r.get("future_stale")]
         for r in records:
+            tag = "FUTURE_STALE_ALERT" if r.get("future_stale") else "ARCHIVE"
             print(
-                f"  {r['id'][:8]}  {r['niche_id']:<12} {r['status']:<14} "
+                f"  [{tag:<18}] {r['id'][:8]}  {r['niche_id']:<12} {r['status']:<14} "
+                f"sched={r['scheduled_for'] or 'none':<27} "
                 f"stale={len(r['stale_paths'])}  "
-                f"present={len(r['present_paths'])}  "
-                f"sample=...{r['stale_paths'][0][-50:]}"
+                f"present={len(r['present_paths'])}"
             )
 
         if not records:
@@ -339,7 +417,24 @@ def main(argv: list[str] | None = None) -> int:
 
         if not args.apply:
             print()
-            print("DRY-RUN — no changes made. Re-run with --apply to archive.")
+            print(
+                f"DRY-RUN — no changes made. Re-run with --apply to "
+                f"archive {len(archivable)} + alert on {len(future_stale)} future-stale."
+            )
+            return 0
+
+        # Write CRITICAL pipeline_alerts for future-stale BEFORE the
+        # archive UPDATE so the operator sees them even if the archive
+        # step somehow fails after.
+        if future_stale:
+            n_alerts = write_future_stale_alerts(conn, records)
+            print(f"# wrote {n_alerts} CRITICAL future_stale_visual_paths alert(s)")
+
+        # Subsequent archive only acts on the records WITHOUT future_stale
+        # — past-scheduled + no-schedule rows.
+        records = archivable
+        if not records:
+            print("# nothing to archive (only future-stale alerts written)")
             return 0
 
         backup_path = write_backup(records, args.backup_dir)
