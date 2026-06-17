@@ -1085,8 +1085,12 @@ dependencies = [
     { name = "feedparser" },
     { name = "genlab-core" },
     { name = "httpx" },
-    { name = "pytrends" },
     { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+trends = [
+    { name = "pytrends" },
 ]
 
 [package.metadata]
@@ -1094,9 +1098,10 @@ requires-dist = [
     { name = "feedparser", specifier = ">=6.0" },
     { name = "genlab-core", editable = "genlab-core" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "pytrends", specifier = ">=4.9" },
+    { name = "pytrends", marker = "extra == 'trends'", specifier = ">=4.9" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
+provides-extras = ["trends"]
 
 [[package]]
 name = "frozenlist"
