@@ -849,7 +849,7 @@ def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
 
 # ── monetisationprogress pool + TTL cache (audit P-1) ───────────────────────
 #
-# Was: ``pg_connect(db_url, connect_timeout=3, niche_id=niche_id or "all")`` per get_channel_metrics
+# Was: ``psycopg.connect(db_url, connect_timeout=3)`` per get_channel_metrics
 # call, which RewardShaper invokes once per (niche, platform) per reward
 # computation. A 48h-window batch of 30 tasks × 5 platforms = 150 fresh
 # connections per run; on a slow-Postgres day each connect can hit the 3s

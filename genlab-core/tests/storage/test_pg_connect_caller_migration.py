@@ -127,7 +127,6 @@ _MIGRATED_SITES = (
     ("genlab-core/src/genlab_core/scheduling/auto_approver.py", "auto_approver"),
     ("genlab-core/src/genlab_core/learning/preference_collector.py", "preference_collector"),
     ("genlab-core/src/genlab_core/learning/bandit_residual.py", "bandit_residual"),
-    ("genlab-core/src/genlab_core/learning/metric_collector.py", "metric_collector"),
     ("genlab-core/src/genlab_core/monitoring/health_monitor.py", "health_monitor"),
     ("genlab-core/src/genlab_core/pipeline/shared_ingestion.py", "shared_ingestion"),
 )
