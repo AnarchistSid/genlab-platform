@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -335,6 +336,27 @@ class AutoApprovalPolicy:
     # Imported lazily inside load_policy to avoid the cross-module
     # import cycle at module load time.
     strategies: Any = None  # actually StrategyConfig — typed Any to avoid forward-ref
+    # W4.3 (2026-06-17): graduated rollout knob. ``rollout_pct`` is the
+    # probability (0.0-1.0) that any single eligible blueprint actually
+    # gets auto-approved when ``enabled=true``. Lets operators flip a
+    # niche on at e.g. 10% traffic, watch outcomes for a week, then
+    # ramp to 50%, then 100% — without committing all 5/day at once.
+    #
+    # Set to 1.0 (default) preserves the pre-W4.3 behaviour: every
+    # blueprint that passes the gate gets approved (up to
+    # ``max_approvals_per_pass``).
+    #
+    # Setting to 0.0 effectively disables auto-approval even with
+    # ``enabled=true`` — useful as a soft kill switch for one niche
+    # without yanking the whole subsystem (the global kill switch
+    # remains as the panic button).
+    #
+    # The dice roll uses Python's stdlib ``random.random()`` which is
+    # deterministic per-process if seeded but, in worker context, is
+    # genuinely random across runs. Operators observe the law of large
+    # numbers: at 0.1 they'll see ~1 of every 10 eligible blueprints
+    # approved, not exactly 1; at 0.5 ~half; at 1.0 all.
+    rollout_pct: float = 1.0
 
 
 def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprovalPolicy:
@@ -400,11 +422,27 @@ def load_policy(niche_id: str, *, genlab_root: Path | None = None) -> AutoApprov
         from genlab_core.scheduling.gate_strategies import StrategyConfig
 
         strategies = StrategyConfig.from_yaml_dict(block.get("strategies"))
+        # W4.3: rollout_pct ∈ [0.0, 1.0]. Defensively clamp instead of
+        # raising — a yaml typo (rollout_pct: 50 meaning 50%) should
+        # degrade to 1.0 (full traffic) not block all approvals. We log
+        # so operators can spot the typo, but never fail-closed on a
+        # rollout knob (that's what enabled=false is for).
+        rollout_pct_raw = float(block.get("rollout_pct", 1.0))
+        if rollout_pct_raw < 0.0 or rollout_pct_raw > 1.0:
+            logger.warning(
+                "[auto_approver] %s rollout_pct=%s out of [0.0, 1.0] — clamping to 1.0",
+                niche_id,
+                rollout_pct_raw,
+            )
+            rollout_pct = 1.0
+        else:
+            rollout_pct = rollout_pct_raw
         return AutoApprovalPolicy(
             enabled=bool(block.get("enabled", False)),
             min_confidence=float(block.get("min_confidence", 0.85)),
             max_approvals_per_pass=int(block.get("max_approvals_per_pass", 3)),
             strategies=strategies,
+            rollout_pct=rollout_pct,
         )
     except (TypeError, ValueError) as exc:
         logger.warning(
@@ -429,6 +467,11 @@ class AutoApprovalPassResult:
     skipped_low_confidence: list[str] = field(default_factory=list)
     skipped_gate_rejected: list[str] = field(default_factory=list)
     skipped_idempotent: list[str] = field(default_factory=list)
+    # W4.3: blueprints that passed the gate + confidence but lost the
+    # rollout_pct dice roll. Distinct from skipped_low_confidence so
+    # operators can see the rollout knob's actual throttle effect in
+    # dashboards (vs gate quality issues).
+    skipped_rollout: list[str] = field(default_factory=list)
     cap_reached: bool = False
     kill_switch_active: bool = False
     policy_disabled: bool = False
@@ -599,6 +642,28 @@ def run_pass(
             continue
         if decision.confidence < policy.min_confidence:
             result.skipped_low_confidence.append(record_id)
+            continue
+
+        # ── W4.3: graduated rollout dice roll ─────────────────────────────
+        # Blueprint passed the gate AND cleared min_confidence. The
+        # rollout knob throttles approval *volume* (vs *quality*, which
+        # is min_confidence's job). At 1.0 (default) the call always
+        # returns True; at 0.0 it always returns False; in between it's
+        # a Bernoulli trial. We use stdlib random.random() — operators
+        # see law-of-large-numbers averaging, not exact quotas.
+        #
+        # Fast-path: skip the rng call entirely at 1.0 so the default
+        # path has zero behaviour change (matches the W4.3 invariant
+        # in the policy docstring).
+        if policy.rollout_pct < 1.0 and random.random() >= policy.rollout_pct:
+            result.skipped_rollout.append(record_id)
+            logger.info(
+                "[auto_approver] niche=%s bp=%s — passed gate+confidence "
+                "but lost rollout dice (pct=%.2f)",
+                niche_id,
+                record_id,
+                policy.rollout_pct,
+            )
             continue
 
         # ── Decide → act ──────────────────────────────────────────────────

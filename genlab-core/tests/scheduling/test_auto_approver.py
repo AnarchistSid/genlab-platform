@@ -788,3 +788,231 @@ class TestStrategyLayerIntegration:
             )
         # B failure is fail-open per design — base gate's approval stands
         assert "bp1" in result.auto_approved
+
+
+# ── W4.3: graduated rollout dice ───────────────────────────────────────────
+
+
+class TestRolloutPct:
+    """W4.3: rollout_pct throttles approval VOLUME among gate+confidence
+    qualifiers. Lets operators ramp niches 10% → 50% → 100% to observe
+    real-world outcomes at increasing scale without changing min_confidence.
+
+    Default is 1.0 (full traffic) — pre-W4.3 behaviour. 0.0 acts as a
+    soft per-niche kill (vs the global kill switch).
+    """
+
+    def _policy(self, rollout_pct: float = 1.0, **overrides):
+        kwargs = dict(
+            enabled=True,
+            min_confidence=0.5,
+            max_approvals_per_pass=100,
+            rollout_pct=rollout_pct,
+        )
+        kwargs.update(overrides)
+        return AutoApprovalPolicy(**kwargs)
+
+    def test_default_rollout_is_1_0_preserves_pre_w43_behaviour(self):
+        """The dataclass default — verifies we didn't accidentally
+        introduce a behavioural change for niches that haven't opted in."""
+        policy = AutoApprovalPolicy()
+        assert policy.rollout_pct == 1.0
+
+    def test_rollout_1_0_approves_every_qualifier(self, monkeypatch):
+        """At full rollout the dice roll is a no-op (skipped via
+        fast-path). All 10 qualifiers get approved."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._policy(rollout_pct=1.0),
+        ):
+            client = _stub_client(
+                [{"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}} for i in range(10)]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+            assert len(result.auto_approved) == 10
+            assert result.skipped_rollout == []
+
+    def test_rollout_0_0_blocks_every_qualifier(self, monkeypatch):
+        """Soft per-niche kill — gate+confidence pass but nothing
+        approves. Distinct from enabled=false (worker still runs,
+        candidates still examined, calibration still logged)."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._policy(rollout_pct=0.0),
+        ):
+            client = _stub_client(
+                [{"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}} for i in range(5)]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+            assert result.auto_approved == []
+            assert len(result.skipped_rollout) == 5
+            assert result.candidates_examined == 5
+
+    def test_rollout_pct_throttles_volume_when_dice_loses(self, monkeypatch):
+        """Force the dice to ALWAYS lose by patching random.random to
+        return ≥ rollout_pct. Verifies the rollout path filters
+        approvals without altering gate/confidence semantics."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        # random.random() returns 0.9 → 0.9 >= 0.5 → dice lost
+        monkeypatch.setattr(
+            "genlab_core.scheduling.auto_approver.random.random",
+            lambda: 0.9,
+        )
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._policy(rollout_pct=0.5),
+        ):
+            client = _stub_client(
+                [{"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}} for i in range(3)]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+            assert result.auto_approved == []
+            assert result.skipped_rollout == ["bp0", "bp1", "bp2"]
+
+    def test_rollout_pct_approves_when_dice_wins(self, monkeypatch):
+        """Force the dice to ALWAYS win by patching random.random to
+        return < rollout_pct. Approval path runs end-to-end."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        # random.random() returns 0.1 → 0.1 < 0.5 → dice won
+        monkeypatch.setattr(
+            "genlab_core.scheduling.auto_approver.random.random",
+            lambda: 0.1,
+        )
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._policy(rollout_pct=0.5),
+        ):
+            client = _stub_client(
+                [{"id": f"bp{i}", "fields": {"hook_text": "h", "extra": {}}} for i in range(3)]
+            )
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=lambda bp: _decision(approved=True, confidence=0.9),
+                dry_run=True,
+            )
+            assert result.auto_approved == ["bp0", "bp1", "bp2"]
+            assert result.skipped_rollout == []
+
+    def test_rollout_does_not_consume_idempotent_or_gate_rejected(self, monkeypatch):
+        """The dice roll runs AFTER idempotency + gate + confidence
+        filters. A blueprint stopped earlier shouldn't appear in the
+        rollout bucket — it'd skew operator's read of the throttle's
+        actual effect."""
+        monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
+        # Force dice to always lose so rollout would catch anything that
+        # reaches it
+        monkeypatch.setattr(
+            "genlab_core.scheduling.auto_approver.random.random",
+            lambda: 0.99,
+        )
+        with patch(
+            "genlab_core.scheduling.auto_approver.load_policy",
+            return_value=self._policy(rollout_pct=0.5),
+        ):
+            client = _stub_client(
+                [
+                    # already actioned — must skip idempotent
+                    {
+                        "id": "bp_idem",
+                        "fields": {"hook_text": "h", "action_taken": "approved", "extra": {}},
+                    },
+                    # gate rejects — must skip gate-rejected
+                    {"id": "bp_gate", "fields": {"hook_text": "h", "extra": {}}},
+                    # passes everything — dice catches it
+                    {"id": "bp_dice", "fields": {"hook_text": "h", "extra": {}}},
+                ]
+            )
+
+            # gate approves only bp_dice (and bp_idem, which is filtered earlier)
+            def gate(bp):
+                return _decision(
+                    approved=bp.get("id") != "bp_gate",
+                    confidence=0.9,
+                )
+
+            result = run_pass(
+                "gaming",
+                backlog_client=client,
+                gate_evaluate=gate,
+                dry_run=True,
+            )
+            assert result.skipped_idempotent == ["bp_idem"]
+            assert result.skipped_gate_rejected == ["bp_gate"]
+            assert result.skipped_rollout == ["bp_dice"]
+            assert result.auto_approved == []
+
+    def test_rollout_pct_in_yaml_loaded_correctly(self, tmp_path):
+        """End-to-end: a publishing.yaml with rollout_pct gets loaded
+        into the policy's rollout_pct field."""
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES as _NICHE_ROOT_NAMES
+
+        niche_root = tmp_path / _NICHE_ROOT_NAMES["gaming"] / "niches" / "gaming"
+        (niche_root / "config").mkdir(parents=True)
+        (niche_root / "config" / "publishing.yaml").write_text(
+            "auto_publish:\n"
+            "  enabled: true\n"
+            "  min_confidence: 0.85\n"
+            "  max_approvals_per_pass: 3\n"
+            "  rollout_pct: 0.1\n"
+        )
+        policy = load_policy("gaming", genlab_root=tmp_path)
+        assert policy.enabled is True
+        assert policy.rollout_pct == 0.1
+
+    def test_rollout_pct_out_of_range_clamps_to_1_0(self, tmp_path, caplog):
+        """A yaml typo (50 instead of 0.5) must NOT silently block all
+        approvals — degrade to 1.0 with a WARN log."""
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES as _NICHE_ROOT_NAMES
+
+        niche_root = tmp_path / _NICHE_ROOT_NAMES["gaming"] / "niches" / "gaming"
+        (niche_root / "config").mkdir(parents=True)
+        (niche_root / "config" / "publishing.yaml").write_text(
+            "auto_publish:\n  enabled: true\n  rollout_pct: 50\n"  # typo: meant 0.5
+        )
+        with caplog.at_level("WARNING"):
+            policy = load_policy("gaming", genlab_root=tmp_path)
+        assert policy.rollout_pct == 1.0
+        assert any("rollout_pct=50" in r.message for r in caplog.records)
+
+    def test_rollout_pct_negative_clamps_to_1_0(self, tmp_path):
+        """Negative rollout is also a config error — same clamp."""
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES as _NICHE_ROOT_NAMES
+
+        niche_root = tmp_path / _NICHE_ROOT_NAMES["gaming"] / "niches" / "gaming"
+        (niche_root / "config").mkdir(parents=True)
+        (niche_root / "config" / "publishing.yaml").write_text(
+            "auto_publish:\n  enabled: true\n  rollout_pct: -0.1\n"
+        )
+        policy = load_policy("gaming", genlab_root=tmp_path)
+        assert policy.rollout_pct == 1.0
+
+    def test_rollout_pct_default_when_omitted_in_yaml(self, tmp_path):
+        """Existing publishing.yaml files (no rollout_pct key) must
+        default to 1.0 — no behaviour change on deploy."""
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES as _NICHE_ROOT_NAMES
+
+        niche_root = tmp_path / _NICHE_ROOT_NAMES["gaming"] / "niches" / "gaming"
+        (niche_root / "config").mkdir(parents=True)
+        (niche_root / "config" / "publishing.yaml").write_text(
+            "auto_publish:\n  enabled: true\n  min_confidence: 0.85\n"
+        )
+        policy = load_policy("gaming", genlab_root=tmp_path)
+        assert policy.rollout_pct == 1.0
