@@ -65,14 +65,35 @@ def _connect():
 
 
 def fetch_pending(conn, *, lookback_hours: int = 24) -> list[dict]:
-    """Return un-notified unresolved CRITICAL alerts in the window."""
+    """Return un-notified unresolved CRITICAL alerts in the window.
+
+    Case-insensitive severity match (``ILIKE 'critical'``) — the
+    post-Wave-4 audit (2026-06-17) found this query was previously
+    case-sensitive ``= 'CRITICAL'``, which silently missed 4 of 6
+    alert-writer sources because they emit lowercase ``'critical'``:
+
+      * ``monitoring/health_monitor.py``  (pipeline / channel failures)
+      * ``engagement/token_health.py``    (OAuth expiry)
+      * ``learning/hook_classifier.py``   (training failure)
+      * ``scripts/archive_stale_visual_paths.py``
+
+    The 2 writers that survived the prior filter emit uppercase:
+
+      * ``scripts/systemd_failure_alert.sh``
+      * ``scripts/check_permissions_drift.sh``
+
+    Prod query on 2026-06-17 returned 3 of each casing — operator's
+    Slack pump had been silently dropping half the critical class for
+    however long. Using ``ILIKE`` keeps the fix surgical (one query)
+    and tolerant of future writer drift.
+    """
     with conn.cursor() as cur:
         cur.execute("SET app.niche_id TO 'all'")
         cur.execute(
             """
             SELECT id, niche_id, check_name, message, created_at
             FROM pipeline_alerts
-            WHERE severity = 'CRITICAL'
+            WHERE severity ILIKE 'critical'
               AND resolved_at IS NULL
               AND notified_at IS NULL
               AND created_at >= NOW() - (%s::int || ' hours')::interval

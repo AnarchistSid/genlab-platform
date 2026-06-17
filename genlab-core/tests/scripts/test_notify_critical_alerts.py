@@ -148,3 +148,53 @@ class _FakeRequests:
         if self._captured is not None:
             self._captured.update(json or {})
         return self._response
+
+
+# ── fetch_pending: severity case-insensitivity (post-Wave-4 audit bug #1) ──
+
+
+class TestFetchPendingILike:
+    """Verify the severity filter is case-insensitive.
+
+    The audit found prod had 3 lowercase + 3 uppercase 'critical' rows,
+    and the old ``severity = 'CRITICAL'`` predicate silently dropped half.
+    The fix (``ILIKE 'critical'``) catches both casings — pin that here
+    so a future "tidy-up" edit can't quietly regress.
+    """
+
+    def _fake_conn_capturing_sql(self, captured: list[str]):
+        from unittest.mock import MagicMock
+
+        cur = MagicMock()
+        cur.fetchall.return_value = []  # no rows
+
+        def execute(sql, params=None):
+            captured.append(sql)
+
+        cur.execute = execute
+        # Cursor context manager
+        cur.__enter__ = MagicMock(return_value=cur)
+        cur.__exit__ = MagicMock(return_value=False)
+
+        conn = MagicMock()
+        conn.cursor.return_value = cur
+        return conn
+
+    def test_query_uses_ilike_severity(self):
+        captured: list[str] = []
+        conn = self._fake_conn_capturing_sql(captured)
+        mod.fetch_pending(conn, lookback_hours=24)
+
+        # The SELECT (second execute call after the SET) must use ILIKE
+        select_sqls = [s for s in captured if "SELECT" in s]
+        assert select_sqls, "fetch_pending must run a SELECT"
+        select_sql = select_sqls[0]
+        assert "ILIKE 'critical'" in select_sql, (
+            "severity match must be case-insensitive (ILIKE 'critical') — "
+            "the audit found 4 of 6 alert writers emit lowercase 'critical' "
+            "and the previous '= CRITICAL' silently dropped them"
+        )
+        assert "= 'CRITICAL'" not in select_sql, (
+            "regression guard: the old case-sensitive predicate must not "
+            "reappear via a tidy-up edit"
+        )
