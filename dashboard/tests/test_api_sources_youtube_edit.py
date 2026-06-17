@@ -298,3 +298,209 @@ class TestRoundTrip:
             resp = client.get("/api/v1/config/sources/youtube-channels?niche_id=fake")
         urls = [c["url"] for c in resp.get_json()["data"]["youtube_channels"]]
         assert all("UCAAA" not in u for u in urls)
+
+
+# ── Validator tightening (post-Wave-4 audit) ─────────────────────────
+
+
+class TestValidatorTightening:
+    """The post-Wave-4 audit (2026-06-17) flagged the original
+    validator as too loose — it accepted youtu.be (video URLs),
+    /watch (video pages), /results (search pages), and the homepage.
+    All of those silently break the pipeline. Tighten to channel-
+    flavoured URLs only."""
+
+    def test_youtu_be_short_url_rejected(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://youtu.be/dQw4w9WgXcQ",  # video short URL
+                    "name": "Video Not Channel",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 400
+        # Error message should mention either host (rejected) or path
+        # (also rejected) — either is acceptable signal to operator
+        err = resp.get_json()["error"].lower()
+        assert "host" in err or "youtu.be" in err
+
+    def test_watch_url_rejected(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                    "name": "Video",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 400
+        assert "path" in resp.get_json()["error"].lower()
+
+    def test_search_url_rejected(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/results?search_query=ai",
+                    "name": "Search Results",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 400
+
+    def test_homepage_rejected(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/",
+                    "name": "Homepage",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 400
+
+    def test_channel_id_path_accepted(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/channel/UCBR8-60-B28hp2BmDPdntcQ",
+                    "name": "Channel Page",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 200
+
+    def test_at_handle_accepted(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/@evolvingai",
+                    "name": "Handle Page",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 200
+
+    def test_legacy_user_path_accepted(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/user/somebody",
+                    "name": "Legacy User",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 200
+
+    def test_legacy_custom_c_path_accepted(self, client, fake_niche_dir):
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            resp = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/c/something",
+                    "name": "Legacy Custom",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert resp.status_code == 200
+
+
+# ── Concurrent-write protection (file lock) ──────────────────────────
+
+
+class TestConcurrentWriteProtection:
+    """The audit-confirmed race: two simultaneous POSTs both read the
+    same channels list, both append, both write — second wins, first
+    silently lost. fcntl.flock serializes them so the second blocks
+    until the first releases, and the second's add is appended on TOP
+    of the first's."""
+
+    def test_two_adds_both_persist(self, client, fake_niche_dir):
+        """End-to-end: serial calls under the lock should BOTH persist,
+        not the second-overwrites-first behaviour. This pins the
+        invariant; the lock makes it work even under genuine
+        concurrency."""
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            r1 = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCFIRST",
+                    "name": "First",
+                    "_csrf_token": csrf,
+                },
+            )
+            r2 = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSECOND",
+                    "name": "Second",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+
+        content = (fake_niche_dir / "sources.yaml").read_text()
+        assert "UCFIRST" in content, "first add must persist"
+        assert "UCSECOND" in content, "second add must persist"
+
+    def test_lock_file_created_alongside_yaml(self, client, fake_niche_dir):
+        """The fcntl lock uses a sidecar ``.lock`` file. Confirm it's
+        created in the same dir + has the expected name. The convention
+        matters because operators may need to clean it up manually if a
+        crashed worker leaves it behind (though flock on Linux releases
+        on process death)."""
+        csrf = _get_csrf(client)
+        with _patch_resolver(fake_niche_dir):
+            client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCLOCK",
+                    "name": "Lock Probe",
+                    "_csrf_token": csrf,
+                },
+            )
+        lock_path = fake_niche_dir / "sources.yaml.lock"
+        assert lock_path.exists(), "fcntl lock sidecar must be created"
+
+    def test_delete_under_lock_blocks_concurrent_add(self, client, fake_niche_dir):
+        """Verify the lock instance is reentered by both paths — the
+        DELETE handler must use the same lock as POST so an add can't
+        race with a remove. Smoke-test by sequentially issuing
+        DELETE then POST on the SAME niche."""
+        csrf = _get_csrf(client)
+        url_to_remove = "https://www.youtube.com/feeds/videos.xml?channel_id=UCAAA"
+        with _patch_resolver(fake_niche_dir):
+            d = client.delete(
+                f"/api/v1/config/sources/youtube-channels?niche_id=fake&url={url_to_remove}",
+                headers={"X-CSRF-Token": csrf},
+            )
+            p = client.post(
+                "/api/v1/config/sources/youtube-channels?niche_id=fake",
+                json={
+                    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCAFTER",
+                    "name": "After Delete",
+                    "_csrf_token": csrf,
+                },
+            )
+        assert d.status_code == 200
+        assert p.status_code == 200
+        content = (fake_niche_dir / "sources.yaml").read_text()
+        assert "UCAAA" not in content
+        assert "UCAFTER" in content

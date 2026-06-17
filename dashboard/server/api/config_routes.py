@@ -219,8 +219,54 @@ def templates():
 #     the same registry-backed lookup the read endpoints use
 #   * name is required, max 100 chars
 
-_VALID_YOUTUBE_HOSTS = {"www.youtube.com", "youtube.com", "youtu.be"}
+# Pipeline-valid YouTube source patterns. Tightened 2026-06-17 after the
+# post-Wave-4 audit flagged that the original allowlist (which included
+# ``youtu.be`` and accepted ANY youtube.com path) would let operators
+# add invalid pipeline sources — video URLs, search pages, the homepage
+# — and the pipeline would silently fail to extract a channel feed.
+#
+# Two accepted patterns:
+#   1. RSS channel feed:  https://www.youtube.com/feeds/videos.xml?channel_id=UC...
+#   2. Channel page:      https://www.youtube.com/@<handle>  OR  /channel/UC...
+#
+# Rejected (and previously accepted by mistake):
+#   - youtu.be/*           (video short URLs — not channels)
+#   - /watch?v=...         (video pages)
+#   - /results?search_query (search pages)
+#   - /              (homepage)
+_VALID_YOUTUBE_HOSTS = {"www.youtube.com", "youtube.com"}
+# Path prefixes that identify a channel-flavoured URL. We use prefix
+# matching (not regex) so operators get a predictable error message
+# and so URL-encoded edge cases (%40 for @, etc.) don't bite.
+_VALID_YOUTUBE_PATH_PREFIXES = (
+    "/feeds/videos.xml",  # RSS feed — the canonical pipeline source
+    "/channel/",  # /channel/UC... — channel-id page
+    "/@",  # /@handle — channel handle page
+    "/c/",  # /c/<custom> — legacy custom URL
+    "/user/",  # /user/<name> — pre-2013 legacy
+)
 _NAME_MAX_LEN = 100
+
+
+def _rt_yaml_singleton():
+    """Module-level ruamel parser (avoid re-instantiating per request).
+
+    Constructing ``YAML(typ='rt')`` compiles parsers — keeping one
+    around is the standard ruamel pattern. Cached in module globals.
+    """
+    cached = getattr(_rt_yaml_singleton, "_cached", None)
+    if cached is not None:
+        return cached
+    from ruamel.yaml import YAML
+
+    yaml_rt = YAML(typ="rt")
+    yaml_rt.preserve_quotes = True
+    yaml_rt.default_flow_style = False
+    yaml_rt.allow_unicode = True
+    yaml_rt.indent(mapping=2, sequence=4, offset=2)
+    yaml_rt.width = 4096
+    _rt_yaml_singleton._cached = yaml_rt  # type: ignore[attr-defined]
+    return yaml_rt
 
 
 def _load_sources_yaml_rt(niche_id: str):
@@ -229,41 +275,83 @@ def _load_sources_yaml_rt(niche_id: str):
     Returns ``(loaded_data, path)`` or ``(None, None)`` if no niche /
     no file. Caller's responsibility to handle the None path.
     """
-    from ruamel.yaml import YAML
-
     config_dir = _config_dir_for_niche(niche_id)
     if config_dir is None:
         return None, None
     path = config_dir / "sources.yaml"
     if not path.exists():
         return None, None
-    yaml_rt = YAML(typ="rt")
-    yaml_rt.preserve_quotes = True
-    yaml_rt.default_flow_style = False
-    yaml_rt.allow_unicode = True
-    yaml_rt.indent(mapping=2, sequence=4, offset=2)
-    yaml_rt.width = 4096
     with open(path, encoding="utf-8") as f:
-        data = yaml_rt.load(f)
+        data = _rt_yaml_singleton().load(f)
     return data, path
 
 
 def _dump_sources_yaml_rt(data, path):
     """Write sources.yaml back via ruamel round-trip."""
-    from ruamel.yaml import YAML
-
-    yaml_rt = YAML(typ="rt")
-    yaml_rt.preserve_quotes = True
-    yaml_rt.default_flow_style = False
-    yaml_rt.allow_unicode = True
-    yaml_rt.indent(mapping=2, sequence=4, offset=2)
-    yaml_rt.width = 4096
     with open(path, "w", encoding="utf-8") as f:
-        yaml_rt.dump(data, f)
+        _rt_yaml_singleton().dump(data, f)
+
+
+class _SourcesWriteLock:
+    """File-lock wrapper around the read-modify-write of sources.yaml.
+
+    Post-Wave-4 audit (2026-06-17) flagged that two simultaneous POSTs
+    to ``/youtube-channels`` (e.g. operator with two browser tabs)
+    both read the same channels list, both appended different entries,
+    both wrote — second wins, first silently lost. Same race on DELETE.
+
+    Implementation: ``fcntl.flock(LOCK_EX)`` on a sidecar file named
+    ``<path>.lock``. We don't lock the yaml itself because some editors
+    truncate-then-write, which would race with our open(); the sidecar
+    lock is the conventional pattern for "this file is being modified".
+
+    Scope: process-local + cross-process on the SAME host. ``flock``
+    advisory locks are honored only by processes that opt in (i.e. our
+    own code). An operator hand-editing the yaml in vim won't be
+    blocked. That's acceptable for our threat model — the rule
+    (per cleanup_safety.md and the 2026-06-14 deploy-pipeline-gap
+    lesson) is "all prod changes go through git, not hand-edits", so
+    the only legitimate writer is this API.
+    """
+
+    def __init__(self, sources_yaml_path):
+        import fcntl
+
+        self._fcntl = fcntl
+        # Sidecar lock file co-located with the yaml. ``.lock`` suffix
+        # is the de facto convention; vim and other tools won't touch
+        # it during a normal edit.
+        self._lock_path = sources_yaml_path.parent / (sources_yaml_path.name + ".lock")
+        self._fh = None
+
+    def __enter__(self):
+        # Open as O_CREAT|O_RDWR via "a+" — creates the lock file if
+        # it doesn't exist, doesn't truncate if it does. Then flock the
+        # underlying fd EX (exclusive) — second caller blocks here until
+        # the first one releases.
+        self._fh = open(self._lock_path, "a+")
+        self._fcntl.flock(self._fh.fileno(), self._fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        if self._fh is not None:
+            self._fcntl.flock(self._fh.fileno(), self._fcntl.LOCK_UN)
+            self._fh.close()
+            self._fh = None
+        # Don't suppress exceptions
+        return False
 
 
 def _validate_youtube_url(url: str) -> str | None:
-    """Return None if valid, else an error message."""
+    """Return None if valid, else an error message.
+
+    Tightened by the post-Wave-4 audit: previously accepted any
+    ``youtube.com`` URL (including ``/watch``, ``/results``, and the
+    homepage) plus all ``youtu.be`` URLs (which are video short links,
+    not channels). Pipeline silently no-oped on those. Now requires
+    the path to look like a known channel-flavoured surface so
+    operator typos surface at API time, not deep in the fetcher.
+    """
     from urllib.parse import urlparse
 
     if not url or not isinstance(url, str):
@@ -273,6 +361,15 @@ def _validate_youtube_url(url: str) -> str | None:
         return "url must use http/https"
     if (parsed.hostname or "").lower() not in _VALID_YOUTUBE_HOSTS:
         return f"url host must be one of {sorted(_VALID_YOUTUBE_HOSTS)}"
+    # Path-shape check: must look like a channel-flavoured URL. We
+    # match prefixes (not full regex) so the error message is
+    # predictable and the check is robust against URL-encoded handles.
+    path = parsed.path or "/"
+    if not any(path.startswith(prefix) for prefix in _VALID_YOUTUBE_PATH_PREFIXES):
+        return (
+            f"url path must be a channel-flavoured surface (one of "
+            f"{list(_VALID_YOUTUBE_PATH_PREFIXES)}) — got {path!r}"
+        )
     return None
 
 
@@ -318,38 +415,48 @@ def add_youtube_channel():
     if url_err:
         return api_error(error=url_err, code=400)
 
-    data, path = _load_sources_yaml_rt(niche_id)
-    if data is None:
+    # First pass: locate the sources.yaml path so we can acquire the
+    # file lock around the read-modify-write. We re-load inside the
+    # lock to catch any concurrent write that landed between this
+    # pre-flight and our lock acquisition (TOCTOU defense).
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
         return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
-    channels = data.get("youtube_channels")
-    if channels is None:
-        # The key is missing entirely (shouldn't happen — all 5 niches
-        # ship with the key) but degrade to creating it so the
-        # operator's first add still works.
-        from ruamel.yaml.comments import CommentedSeq
+    sources_path = config_dir / "sources.yaml"
 
-        channels = CommentedSeq()
-        data["youtube_channels"] = channels
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        channels = data.get("youtube_channels")
+        if channels is None:
+            # The key is missing entirely (shouldn't happen — all 5 niches
+            # ship with the key) but degrade to creating it so the
+            # operator's first add still works.
+            from ruamel.yaml.comments import CommentedSeq
 
-    for existing in channels:
-        if str(existing.get("url", "")).strip() == url:
-            return api_error(
-                error=f"url already present in youtube_channels: {url}",
-                code=409,
-            )
+            channels = CommentedSeq()
+            data["youtube_channels"] = channels
 
-    from ruamel.yaml.comments import CommentedMap
+        for existing in channels:
+            if str(existing.get("url", "")).strip() == url:
+                return api_error(
+                    error=f"url already present in youtube_channels: {url}",
+                    code=409,
+                )
 
-    new_entry = CommentedMap()
-    new_entry["url"] = url
-    new_entry["name"] = name
-    channels.append(new_entry)
+        from ruamel.yaml.comments import CommentedMap
 
-    try:
-        _dump_sources_yaml_rt(data, path)
-    except OSError as exc:
-        logger.exception("sources.yaml write failed")
-        return api_error(error=f"write failed: {exc}", code=500)
+        new_entry = CommentedMap()
+        new_entry["url"] = url
+        new_entry["name"] = name
+        channels.append(new_entry)
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
 
     logger.info(
         "[config_routes] M-19 added youtube_channel niche=%s name=%s url=%s",
@@ -375,24 +482,33 @@ def remove_youtube_channel():
     if not url:
         return api_error(error="url is required", code=400)
 
-    data, path = _load_sources_yaml_rt(niche_id)
-    if data is None:
+    # Same lock pattern as add — acquire BEFORE loading the yaml so
+    # a concurrent add can't slip an entry in between our read and
+    # write. Pre-flight the path outside the lock so the 404 is fast.
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
         return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
-    channels = data.get("youtube_channels") or []
-    new_channels = [c for c in channels if str(c.get("url", "")).strip() != url]
-    if len(new_channels) == len(channels):
-        return api_not_found(
-            message=f"url not found in youtube_channels for niche={niche_id}: {url}"
-        )
-    # Replace in place to preserve any block-level comments attached
-    # to the parent mapping. ruamel CommentedSeq supports slice assign.
-    channels[:] = new_channels
+    sources_path = config_dir / "sources.yaml"
 
-    try:
-        _dump_sources_yaml_rt(data, path)
-    except OSError as exc:
-        logger.exception("sources.yaml write failed")
-        return api_error(error=f"write failed: {exc}", code=500)
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        channels = data.get("youtube_channels") or []
+        new_channels = [c for c in channels if str(c.get("url", "")).strip() != url]
+        if len(new_channels) == len(channels):
+            return api_not_found(
+                message=f"url not found in youtube_channels for niche={niche_id}: {url}"
+            )
+        # Replace in place to preserve any block-level comments attached
+        # to the parent mapping. ruamel CommentedSeq supports slice assign.
+        channels[:] = new_channels
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
 
     logger.info(
         "[config_routes] M-19 removed youtube_channel niche=%s url=%s",
