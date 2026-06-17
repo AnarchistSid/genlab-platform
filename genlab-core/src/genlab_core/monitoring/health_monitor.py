@@ -961,6 +961,100 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
     return alerts
 
 
+def check_publish_silence(niche_id: str) -> list[Alert]:
+    """Alert when a niche has produced ZERO successful publishes.
+
+    ``check_publish_failures`` triggers on ≥5 FAILED in 24h, but a
+    full pipeline outage that produces no publish ATTEMPTS at all
+    would never trip the existing checks. The 2026-06-17 post-Wave-4
+    audit confirmed this gap empirically: 2026-06-14, -15, -16 had
+    1+0+1 publishes (full outage for 2 days, near-outage for 1) and
+    zero alerts fired.
+
+    Two-tier alert:
+      * 0 SUCCESS in last 24h → warning
+      * 0 SUCCESS in last 48h → critical (the publisher is REALLY broken)
+
+    Rationale: 1/day is the baseline (5 niches × 1 reel each by design).
+    A genuine 24h gap could be a slow operator review queue or a
+    once-broken publisher that just self-healed. 48h is unambiguous
+    breakage — by then the publisher's launchd has fired 7-10 times
+    and produced nothing.
+
+    Counts SUCCESS only (not the metric-flipped INSIGHTS_*H states)
+    because we want to know "did publishing happen", not "did
+    metric_collector run". Per the R-09 cap-bypass investigation
+    (PR #220), status flips to INSIGHTS_6H ~5h post-publish, so any
+    publish in the last 24h shows as either SUCCESS or INSIGHTS_6H
+    depending on timing. We accept that fuzziness — a publish from 23h
+    ago that's already INSIGHTS_6H will count as silence here, which
+    nudges us toward false-positive (over-alerting) rather than
+    false-negative (missing real outages). The 48h critical threshold
+    sidesteps this concern entirely (48h >> 5h flip window).
+    """
+    alerts: list[Alert] = []
+    try:
+        import psycopg
+
+        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        cur = conn.cursor()
+        # Count SUCCESS-flavoured statuses over 24h + 48h. R-09 lesson:
+        # status flips post-publish, so allowlist all "did-publish"
+        # states. Mirrors ``publishing/daily_cap._PUBLISHED_STATUSES``.
+        cur.execute(
+            """
+            SELECT
+                COUNT(*) FILTER (
+                    WHERE created_at > NOW() - INTERVAL '24 hours'
+                ) AS in_24h,
+                COUNT(*) FILTER (
+                    WHERE created_at > NOW() - INTERVAL '48 hours'
+                ) AS in_48h
+            FROM publishing_analytics
+            WHERE niche_id = %s
+              AND status IN (
+                  'SUCCESS',
+                  'INSIGHTS_6H',
+                  'INSIGHTS_24H',
+                  'INSIGHTS_48H',
+                  'INSIGHTS_168H'
+              )
+            """,
+            (niche_id,),
+        )
+        in_24h, in_48h = cur.fetchone()
+        conn.close()
+        if in_48h == 0:
+            alerts.append(
+                Alert(
+                    check="publish_silence",
+                    severity="critical",
+                    message=(
+                        f"No successful publishes for {niche_id} in "
+                        "the last 48 hours — pipeline is silently dead"
+                    ),
+                    niche_id=niche_id,
+                    details={"publishes_24h": int(in_24h), "publishes_48h": int(in_48h)},
+                )
+            )
+        elif in_24h == 0:
+            alerts.append(
+                Alert(
+                    check="publish_silence",
+                    severity="warning",
+                    message=(
+                        f"No successful publishes for {niche_id} in "
+                        "the last 24 hours — investigate before 48h critical"
+                    ),
+                    niche_id=niche_id,
+                    details={"publishes_24h": int(in_24h), "publishes_48h": int(in_48h)},
+                )
+            )
+    except Exception as e:
+        logger.debug("Publish silence check failed: %s", e)
+    return alerts
+
+
 # ── System checks ─────────────────────────────────────────────────────
 
 
@@ -1639,6 +1733,7 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_stuck_publishing(nid))
         all_alerts.extend(check_content_gap(nid))
         all_alerts.extend(check_publish_failures(nid))
+        all_alerts.extend(check_publish_silence(nid))
         all_alerts.extend(archive_orphan_drafts(nid))
         all_alerts.extend(archive_orphan_intake_stories(nid))
         # 2026-06-14 engagement-loop audit follow-ups (PR #199):
