@@ -90,11 +90,14 @@ class TestHappyPath:
             budget_usd=5.0,
         )
         assert ok is True
-        # The INSERT was issued
-        mock_db["cur"].execute.assert_called_once()
-        call_args = mock_db["cur"].execute.call_args
-        sql = call_args[0][0]
-        params = call_args[0][1]
+        # 2 execute calls: 1 SET app.niche_id (SR-A/C/D shim) + 1 INSERT.
+        # The shim's SET is the post-2026-06-17 pg_connect contract;
+        # the INSERT is the actual write we care about.
+        assert mock_db["cur"].execute.call_count == 2
+        # The INSERT call is the second one.
+        insert_call = mock_db["cur"].execute.call_args_list[-1]
+        sql = insert_call[0][0]
+        params = insert_call[0][1]
 
         # Spot-check the SQL has the upsert clause
         assert "ON CONFLICT (run_id, niche_id) DO UPDATE" in sql
@@ -121,6 +124,8 @@ class TestHappyPath:
             summary=summary,
             by_model={"claude-haiku-4-5": 0.1},
         )
+        # call_args is the LAST call. With pg_connect shim, that's the
+        # INSERT (preceded by SET app.niche_id). params from the INSERT.
         params = mock_db["cur"].execute.call_args[0][1]
         # by_model is at index 9 in the INSERT — json.dumps'd
         by_model_str = params[9]

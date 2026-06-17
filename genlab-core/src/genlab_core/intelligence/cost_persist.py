@@ -86,10 +86,17 @@ def persist_run_cost(
         return False
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401  — keep import for the except below
     except ImportError:
         logger.warning("[cost_persist] psycopg not installed, skipping write")
         return False
+
+    # SR-A/C/D Tier-1 migration (2026-06-17): route through pg_connect
+    # so the RLS GUC is set from the niche_id we already receive as a
+    # required arg. Behaviour preserved (still admin-mode-fallback when
+    # the env flag is unset, which is Phase-1 default) — but now the
+    # write is tenant-aware, ready for Phase-2 fail-closed.
+    from genlab_core.storage.tenant_context import pg_connect
 
     by_category = summary.get("by_category") or {}
     if not isinstance(by_category, dict):
@@ -107,7 +114,7 @@ def persist_run_cost(
         by_model = {}
 
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """

@@ -153,10 +153,15 @@ def log(
 
     # Lazy import: psycopg shouldn't be required when calibration is unused.
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except above
     except ImportError:
         logger.warning("[calibration] psycopg not installed, skipping write")
         return False
+
+    # SR-A/C/D Tier-1 migration (2026-06-17): route through pg_connect
+    # so the RLS GUC is set from niche_id. Behaviour preserved (Phase-1
+    # admin-mode fallback when env flag unset).
+    from genlab_core.storage.tenant_context import pg_connect
 
     gate_approved = decision.approved if decision is not None else None
     gate_confidence = decision.confidence if decision is not None else None
@@ -164,7 +169,7 @@ def log(
     failed = json.dumps(decision.failed_checks) if decision is not None else "[]"
 
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # Two INSERT variants: the live path lets the column's
                 # ``DEFAULT now()`` set decided_at; the backfill path
@@ -261,11 +266,18 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
     if not dsn:
         return empty
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except above
     except ImportError:
         return empty
+
+    # SR-A/C/D Tier-1 migration (2026-06-17): route through pg_connect.
+    # ``stats`` is a read path scoped to ``niche_id`` already (the
+    # SELECT has WHERE niche_id = %s), but adding the GUC is still
+    # right — RLS protects against a malformed query.
+    from genlab_core.storage.tenant_context import pg_connect
+
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
