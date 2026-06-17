@@ -167,7 +167,6 @@ def track_record():
     try:
         import os
 
-        import psycopg
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
