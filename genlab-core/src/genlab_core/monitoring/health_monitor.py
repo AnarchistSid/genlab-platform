@@ -18,6 +18,8 @@ import pathlib
 import subprocess
 from datetime import UTC, datetime, timedelta
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
+
 logger = logging.getLogger(__name__)
 
 RUNS_DIR = pathlib.Path(os.environ.get("GENLAB_PROJECT_ROOT", "/opt/genlab")) / ".tmp" / "runs"
@@ -270,9 +272,7 @@ def check_bandit_staleness(niche_id: str) -> list[Alert]:
     """Check if bandit arms haven't been updated recently."""
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         cur.execute(
             "SELECT max(updated_at) FROM bandit_arms WHERE niche_id = %s",
@@ -313,9 +313,7 @@ def check_bandit_posterior_drift(niche_id: str) -> list[Alert]:
     """
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
 
         # Count pending_feedback rows for this niche where reward_48h
@@ -438,9 +436,7 @@ def check_missing_media(niche_id: str) -> list[Alert]:
     """
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         cur.execute(
             "SELECT id, title, extra->>'visual_paths', scheduled_for FROM blueprints "
@@ -559,9 +555,7 @@ def check_content_gap(niche_id: str) -> list[Alert]:
     """Check if a niche has no scheduled content for the next 48h."""
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         cur.execute(
             "SELECT count(*) FROM blueprints "
@@ -601,9 +595,7 @@ def check_stuck_publishing(niche_id: str) -> list[Alert]:
     """
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         # publish_attempts lives in the extra JSONB field on Postgres, not as
         # a top-level column. The publisher's own recovery reads it via
@@ -708,9 +700,7 @@ def archive_orphan_drafts(niche_id: str) -> list[Alert]:
     """
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
 
         # Branch 1 (original): no-video drafts, 7-day age.
@@ -884,9 +874,7 @@ def archive_orphan_intake_stories(niche_id: str) -> list[Alert]:
     """
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         cur.execute(
             """
@@ -933,9 +921,7 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
     """Check for high publish failure rate in last 24h."""
     alerts = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         cur.execute(
             "SELECT status, count(*) FROM publishing_analytics "
@@ -994,9 +980,7 @@ def check_publish_silence(niche_id: str) -> list[Alert]:
     """
     alerts: list[Alert] = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id)
         cur = conn.cursor()
         # Count SUCCESS-flavoured statuses over 24h + 48h. R-09 lesson:
         # status flips post-publish, so allowlist all "did-publish"
@@ -1564,9 +1548,7 @@ def check_foreign_host_writes() -> list[Alert]:
     """
     alerts: list[Alert] = []
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
         cur = conn.cursor()
         cur.execute(
             """
@@ -1614,9 +1596,7 @@ def archive_stranded_engagement_reviews(niche_id: str) -> list[Alert]:
     """
     alerts: list[Alert] = []
     try:
-        import psycopg
-
-        with psycopg.connect(os.environ.get("DATABASE_URL", "")) as conn:
+        with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -1672,9 +1652,7 @@ def detect_dead_pollers(niche_id: str) -> list[Alert]:
     """
     alerts: list[Alert] = []
     try:
-        import psycopg
-
-        with psycopg.connect(os.environ.get("DATABASE_URL", "")) as conn:
+        with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id=niche_id) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -1787,9 +1765,7 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
     if not alerts:
         return 0
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
         cur = conn.cursor()
 
         # Ensure table exists
@@ -1858,9 +1834,7 @@ def write_alerts_to_db(alerts: list[Alert]) -> int:
 def resolve_stale_alerts() -> int:
     """Auto-resolve alerts older than 24h (they'll be re-created if still active)."""
     try:
-        import psycopg
-
-        conn = psycopg.connect(os.environ.get("DATABASE_URL", ""))
+        conn = pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all")
         cur = conn.cursor()
         cur.execute(
             "UPDATE pipeline_alerts SET resolved_at = NOW() "

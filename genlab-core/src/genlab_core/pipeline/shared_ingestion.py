@@ -32,11 +32,11 @@ from pathlib import Path
 from typing import Any
 
 import feedparser
-import psycopg
 import requests
 import yaml
 
 from genlab_core.intelligence.niche_classifier import NicheClassifier
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
 
 logger = logging.getLogger(__name__)
 
@@ -233,9 +233,7 @@ class _FeedHealthTracker:
         if not db_url:
             return len(self._zero_claim_names)
         try:
-            import psycopg
-
-            with psycopg.connect(db_url) as conn:
+            with pg_connect(db_url, niche_id="all") as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -792,7 +790,7 @@ class SharedIngestionPipeline:
         """
 
         try:
-            with psycopg.connect(self._db_url) as conn:
+            with pg_connect(self._db_url, niche_id="all") as conn:
                 with conn.cursor() as cur:
                     for entry in routed_entries:
                         try:
@@ -850,7 +848,7 @@ class SharedIngestionPipeline:
             return
 
         try:
-            with psycopg.connect(self._db_url) as conn:
+            with pg_connect(self._db_url, niche_id="all") as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -960,7 +958,7 @@ class SharedIngestionPipeline:
         if not self._db_url:
             return []
         try:
-            with psycopg.connect(self._db_url) as conn:
+            with pg_connect(self._db_url, niche_id="all") as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT title FROM content_pool WHERE fetched_at > NOW() - INTERVAL '48 hours' ORDER BY fetched_at DESC LIMIT %s",

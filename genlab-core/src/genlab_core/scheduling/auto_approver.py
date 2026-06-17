@@ -71,6 +71,7 @@ from genlab_core.scheduling.auto_approval_gate import (
 from genlab_core.scheduling.auto_approval_gate import (
     evaluate as gate_evaluate_default,
 )
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
 
 logger = logging.getLogger(__name__)
 
@@ -191,11 +192,11 @@ def _lookup_bandit_arm(niche_id: str, arm_id: str) -> dict | None:
     if not dsn:
         return None
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
     except ImportError:
         return None
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, connect_timeout=5, niche_id=niche_id) as conn:
             with conn.cursor() as cur:
                 cur.execute("SET app.niche_id = ''")  # bypass RLS — arms are global
                 cur.execute(

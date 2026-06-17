@@ -53,6 +53,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
+
 logger = logging.getLogger(__name__)
 
 # Match metric_collector's defaults. If the priors ever change, both
@@ -234,13 +236,13 @@ def _query_bandit_arms() -> list[dict]:
         return []
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
     except ImportError:
         logger.warning("[bandit_residual] psycopg not installed")
         return []
 
     rows: list[dict] = []
-    with psycopg.connect(dsn, connect_timeout=5) as conn:
+    with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
         # Bypass RLS so the diagnostic sees every niche in one pass.
         # bandit_arms is global state anyway — niches don't have their
         # own arms isolated from each other.

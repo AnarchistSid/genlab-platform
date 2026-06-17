@@ -76,9 +76,17 @@ def test_refresh_sql_uses_configurable_days_and_min_fetched():
     with patch("psycopg.connect", return_value=conn):
         tracker.refresh_zero_claim_disables("postgresql://x", days=7, min_fetched=25)
 
-    # Confirm the SQL was called with our params (positional binding).
-    assert cur.execute.call_count == 1
-    _sql, params = cur.execute.call_args.args
+    # Post-Tier-5 (PR #311, 2026-06-17): the pg_connect shim adds a
+    # ``SET app.niche_id`` cursor call before the caller's SQL. Find
+    # the SELECT by content rather than fixed index so the pin
+    # survives future shim setup-call additions.
+    select_calls = [
+        c
+        for c in cur.execute.call_args_list
+        if "content_pool" in c[0][0] or "source_name" in c[0][0]
+    ]
+    assert select_calls, "expected a SELECT against content_pool"
+    _sql, params = select_calls[0].args
     assert params == (7, 25)
 
 

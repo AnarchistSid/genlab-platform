@@ -36,6 +36,8 @@ import logging
 import os
 from datetime import date, timedelta
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-5
+
 logger = logging.getLogger(__name__)
 
 # Floor on view count to filter literal-zero or single-impression noise.
@@ -75,7 +77,6 @@ def collect_weekly_pairs(window_days: int = DEFAULT_WINDOW_DAYS) -> int:
     "Created 0 pairs from N eligible blueprints" log made the threshold
     failure invisible).
     """
-    import psycopg
     from psycopg.rows import dict_row
 
     dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
@@ -83,7 +84,7 @@ def collect_weekly_pairs(window_days: int = DEFAULT_WINDOW_DAYS) -> int:
     pairs_created = 0
 
     try:
-        conn = psycopg.connect(dsn, row_factory=dict_row)
+        conn = pg_connect(dsn, row_factory=dict_row, niche_id="all")
         cur = conn.cursor()
 
         # Set RLS to allow all niches
