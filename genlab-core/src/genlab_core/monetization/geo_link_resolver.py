@@ -10,6 +10,7 @@ link health checker).
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 import urllib.error
@@ -49,6 +50,110 @@ NICHE_PRIMARY_GEO: dict[str, str] = {
     "movies": "US",
     "anime": "US",
 }
+
+# 2026-06-17 (follow-up to PR #277): dynamic geo override from
+# observed clicks. The hardcoded NICHE_PRIMARY_GEO above is the
+# **fallback** — the real audience may drift away from those
+# defaults over months. The dynamic resolver queries
+# affiliate_clicks for the last-30-day country distribution per
+# niche and returns the dominant country (≥60% threshold so a 50/50
+# split doesn't flap).
+#
+# Cached for 1 hour per process to avoid hammering Postgres on
+# every link resolution. The cache survives a pipeline run (resolver
+# is called many times per blueprint) but expires across runs so
+# audience shifts surface within hours of accumulating in the data.
+#
+# Falls back to the hardcoded dict on DB error / missing env /
+# insufficient data — fail-OPEN so a transient DB outage never
+# breaks link generation.
+_DYNAMIC_GEO_TTL_SECONDS: int = 3600
+_DYNAMIC_GEO_DOMINANCE_THRESHOLD: float = 0.6
+_DYNAMIC_GEO_MIN_CLICKS: int = 10
+_dynamic_geo_cache: dict[str, tuple[str, float]] = {}
+_dynamic_geo_lock = threading.Lock()
+
+
+def _compute_dynamic_geo(niche_id: str) -> str | None:
+    """Query affiliate_clicks for the last-30d dominant country.
+
+    Returns:
+        "US" / "IN" / similar when one country has ≥60% of last-30d
+        clicks AND there are ≥10 clicks total (so a single click in
+        an outlier country doesn't flip the geo).
+        None when there's insufficient data or the DB is unreachable
+        (caller falls back to NICHE_PRIMARY_GEO[niche_id]).
+    """
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        return None
+    try:
+        import psycopg
+    except ImportError:
+        return None
+    try:
+        with psycopg.connect(db_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT country, COUNT(*) AS clicks
+                    FROM affiliate_clicks
+                    WHERE niche_id = %s
+                      AND created_at >= NOW() - INTERVAL '30 days'
+                      AND country IS NOT NULL AND country != ''
+                    GROUP BY country
+                    ORDER BY clicks DESC
+                    """,
+                    (niche_id,),
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        logger.debug(
+            "[GeoResolver] dynamic geo query failed for niche=%s: %s — falling back to hardcoded",
+            niche_id,
+            exc,
+        )
+        return None
+
+    if not rows:
+        return None
+    total = sum(int(r[1]) for r in rows)
+    if total < _DYNAMIC_GEO_MIN_CLICKS:
+        return None
+    top_country, top_clicks = rows[0]
+    share = int(top_clicks) / total
+    if share < _DYNAMIC_GEO_DOMINANCE_THRESHOLD:
+        # Audience is split — don't flap; stick with the hardcoded
+        # default until a clear winner emerges.
+        return None
+    return str(top_country).upper()
+
+
+def _resolve_niche_geo(niche_id: str) -> str:
+    """Niche → audience geo, dynamic if possible, hardcoded fallback.
+
+    The cache means each niche's geo is computed at most once per hour
+    per process — the rest is O(1) dict lookup.
+    """
+    now = time.monotonic()
+    with _dynamic_geo_lock:
+        cached = _dynamic_geo_cache.get(niche_id)
+        if cached and (now - cached[1]) < _DYNAMIC_GEO_TTL_SECONDS:
+            return cached[0]
+
+    dynamic = _compute_dynamic_geo(niche_id)
+    geo = dynamic if dynamic else NICHE_PRIMARY_GEO.get(niche_id, "US")
+    with _dynamic_geo_lock:
+        _dynamic_geo_cache[niche_id] = (geo, now)
+    if dynamic and dynamic != NICHE_PRIMARY_GEO.get(niche_id):
+        logger.info(
+            "[GeoResolver] dynamic geo for niche=%s: %s (hardcoded fallback was %s)",
+            niche_id,
+            dynamic,
+            NICHE_PRIMARY_GEO.get(niche_id, "<none>"),
+        )
+    return geo
+
 
 # In-memory health cache: url → (healthy: bool, checked_at: float)
 # TTL = 6 hours. Shared across the pipeline run.
@@ -190,7 +295,12 @@ def resolve_affiliate_link_with_network(
     Falls through to next candidate on broken/placeholder links.
     """
     networks = product.get("networks", {})
-    geo = NICHE_PRIMARY_GEO.get(niche_id, "US")
+    # Use the dynamic resolver: queries affiliate_clicks for last-30d
+    # country distribution, caches for 1 hour, falls back to the
+    # hardcoded NICHE_PRIMARY_GEO dict on any error / insufficient
+    # data. See ``_resolve_niche_geo`` docstring for the dominance
+    # thresholds + cache semantics.
+    geo = _resolve_niche_geo(niche_id)
 
     # Build candidate list — Amazon Associates first (real commission),
     # then per-geo affiliate networks (EarnKaro for IN; ShareASale/CJ/
