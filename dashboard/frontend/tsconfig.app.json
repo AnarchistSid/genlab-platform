@@ -24,8 +24,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    /* Path aliases */
-    "baseUrl": ".",
+    /* Path aliases — TS 6+ resolves `paths` relative to the tsconfig
+       directory by default, so `baseUrl` is no longer needed (and is
+       deprecated for removal in TS 7). */
     "paths": {
       "@/*": ["./src/*"]
     }
