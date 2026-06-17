@@ -54,6 +54,16 @@ youtube_channels:
     name: "The AI Advantage"
   - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCf4tGwyNQGyFWX3F-9rUk9A"
     name: "Prompt Engineering"
+  # --- Added 2026-06-17 per operator feedback ("no AI generated posts
+  # by creators the way evolving ai and other big channels"). Channel
+  # IDs resolved via YouTube channel-page scrape of @handle pages +
+  # search-result verification. ---
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCJMowYtxtfkk_T3aQ5TG8Sg"
+    name: "Evolving AI"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC4QZ_LsYcvcq7qOsOhpAX4A"
+    name: "ColdFusion"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCIgnGlGkVRhd4qNFcEwLL4A"
+    name: "AI Search"
   # MattVidPro AI entry removed (was UCXD9sGdcD3-l12dPo_PhTZQ — empty side-channel,
   # 7 subs / 0 videos).  Real channel is already present above as line ~24
   # (UC5Wz4fFacYuON6IKbhSa7Zw — 300K subs, custom URL @mattvidpro).
