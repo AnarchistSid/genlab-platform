@@ -10,6 +10,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -163,11 +164,10 @@ def top_posts():
     _dsn = os.environ.get("DATABASE_URL", "")
     if _dsn and top:
         try:
-            import psycopg
             from psycopg.rows import dict_row
 
             post_ids = [p["post_id"] for p in top]
-            with psycopg.connect(_dsn, row_factory=dict_row) as _conn:
+            with pg_connect(_dsn, row_factory=dict_row, niche_id="all") as _conn:
                 rows = _conn.execute(
                     "SELECT pa.post_id, b.hook, b.hook_text, b.title "
                     "FROM publishing_analytics pa "
@@ -1389,11 +1389,10 @@ def monetization():
         catalog_networks: dict[str, int] = {}
 
         if dsn:
-            import psycopg
             from psycopg.rows import dict_row
 
             try:
-                with psycopg.connect(dsn, row_factory=dict_row) as conn:
+                with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
                     total_published = conn.execute(
                         "SELECT COUNT(*) AS cnt FROM blueprints WHERE status = 'PUBLISHED'"
                     ).fetchone()["cnt"]
@@ -1468,7 +1467,6 @@ def demographics():
 @bp.route("/cross-niche", methods=["GET"])
 def cross_niche_analytics():
     """Per-niche analytics comparison — reach, likes, posts, publish rate, affiliate clicks."""
-    import psycopg
     from psycopg.rows import dict_row
 
     dsn = os.environ.get("DATABASE_URL", "")
@@ -1477,7 +1475,7 @@ def cross_niche_analytics():
 
     result = {}
     try:
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
             # Engagement aggregates per niche
             rows = conn.execute(
                 "SELECT niche_id, COUNT(*) AS records, "

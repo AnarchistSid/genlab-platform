@@ -8,6 +8,7 @@ import logging
 import os
 
 from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_success
 
@@ -23,10 +24,11 @@ def recent_events():
     if not dsn:
         return api_success(data=[])
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             rows = conn.execute(
                 """SELECT id, event_type, title, body, entity_id, entity_type, niche_id, created_at
                    FROM dashboard_events

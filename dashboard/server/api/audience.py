@@ -9,6 +9,7 @@ import logging
 import os
 
 from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -23,10 +24,9 @@ def current_audience():
     if not dsn:
         return api_error(error="DATABASE_URL not configured", code=503)
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
             conn.execute("SELECT set_config('app.niche_id', 'all', true)")
             rows = conn.execute("""
                 SELECT DISTINCT ON (niche_id, platform, metric_name)
@@ -64,10 +64,9 @@ def audience_history():
     if not dsn:
         return api_error(error="DATABASE_URL not configured", code=503)
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
             conn.execute("SELECT set_config('app.niche_id', 'all', true)")
             if niche_id:
                 rows = conn.execute(

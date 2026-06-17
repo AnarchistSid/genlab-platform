@@ -22,6 +22,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from flask import Blueprint, jsonify, redirect, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("links", __name__)
@@ -78,10 +79,9 @@ def _get_click_counts(niche_id: str) -> dict[str, int]:
         if not dsn:
             return {}
 
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id=niche_id) as conn:
             rows = conn.execute(
                 "SELECT product_id, COUNT(*) AS cnt "
                 "FROM affiliate_clicks "
@@ -98,7 +98,7 @@ def _get_click_counts(niche_id: str) -> dict[str, int]:
             all_counts.setdefault("_global", {})[product_id] = cnt
 
         # Also fetch per-niche counts
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id=niche_id) as conn:
             niche_rows = conn.execute(
                 "SELECT niche_id, product_id, COUNT(*) AS cnt "
                 "FROM affiliate_clicks "
@@ -1083,10 +1083,9 @@ def link_subscribe():
 
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
-            import psycopg
             from psycopg.rows import dict_row
 
-            with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
                 conn.execute(
                     "INSERT INTO email_subscribers (email, channel_slug, niche_id) "
                     "VALUES (%s, %s, %s) "
@@ -1146,9 +1145,7 @@ def link_unsubscribe():
     try:
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
-            import psycopg
-
-            with psycopg.connect(dsn) as conn:
+            with pg_connect(dsn, niche_id="all") as conn:
                 conn.execute(
                     "UPDATE email_subscribers SET is_active = false, unsubscribed_at = NOW() "
                     "WHERE email = %s AND channel_slug = %s",

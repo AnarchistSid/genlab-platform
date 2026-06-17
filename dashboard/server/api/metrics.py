@@ -7,7 +7,8 @@ Routes:
 import logging
 import os
 
-from flask import Blueprint
+from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -19,14 +20,15 @@ bp = Blueprint("metrics_api", __name__, url_prefix="/api/v1/metrics")
 def publishing_metrics():
     """Publishing health metrics for dashboard."""
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
             return api_error(error="DATABASE_URL not configured", code=503)
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             # Success rate by platform (last 7 days)
             rates = conn.execute("""
                 SELECT platform,

@@ -8,7 +8,8 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
-from flask import Blueprint
+from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -463,12 +464,13 @@ def _build_overview() -> dict:
     total_comments = 0
     niche_daily_reach: dict[str, list[dict]] = {}
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
         _dsn = os.environ.get("DATABASE_URL", "")
         if _dsn:
-            with psycopg.connect(_dsn, row_factory=dict_row) as _conn:
+            with pg_connect(
+                _dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+            ) as _conn:
                 # Aggregate totals
                 agg = _conn.execute(
                     "SELECT "

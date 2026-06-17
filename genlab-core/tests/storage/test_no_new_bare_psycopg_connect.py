@@ -75,28 +75,11 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "genlab-core/src/genlab_core/pipeline/shared_ingestion.py",
         # Maintenance/backfill scripts — operator-driven one-shots
         # that pre-date the shim. Migration is low priority.
-        "scripts/notify_critical_alerts.py",
-        "scripts/check_rls_policy_drift.py",
-        "scripts/archive_stale_visual_paths.py",
         "scripts/backfill_calibration_2026_06_15.py",
         "scripts/validate_calibration_data.py",
         "scripts/recompress_oversized_reels.py",
         "scripts/scrape_affiliate_revenue.py",
         # Dashboard endpoints — long-tail tier-3 migration
-        "dashboard/server/api/alerts.py",
-        "dashboard/server/api/audience.py",
-        "dashboard/server/api/analytics.py",
-        "dashboard/server/api/costs.py",
-        "dashboard/server/api/events.py",
-        "dashboard/server/api/learning.py",
-        "dashboard/server/api/links.py",
-        "dashboard/server/api/metrics.py",
-        "dashboard/server/api/overview.py",
-        "dashboard/server/api/revenue.py",
-        "dashboard/server/api/sources.py",
-        "dashboard/server/core/email_sender.py",
-        "dashboard/server/core/publishing_queue.py",
-        "dashboard/server/core/monetisation_progress_pg.py",
     }
 )
 

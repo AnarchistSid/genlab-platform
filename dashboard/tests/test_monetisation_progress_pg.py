@@ -120,11 +120,19 @@ class TestNicheFilter:
         with patch("psycopg.connect", return_value=conn):
             monetisation_progress_pg.fetch_progress()
 
-        # The conn.cursor() returns a cursor context manager.
+        # Post-Tier-4 (PR #309, 2026-06-17): the pg_connect shim
+        # issues a SET app.niche_id before any caller SQL, so the
+        # SELECT against monetisationprogress is no longer at index 0.
+        # Find it by content instead — keeps the pin robust if the
+        # shim adds future setup calls.
         cursor = conn.cursor.return_value
-        sql = cursor.execute.call_args_list[0][0][0]
+        select_calls = [
+            c for c in cursor.execute.call_args_list
+            if "monetisationprogress" in c[0][0]
+        ]
+        assert select_calls, "expected a SELECT against monetisationprogress"
+        sql = select_calls[0][0][0]
         assert "WHERE" not in sql.upper()
-        assert "monetisationprogress" in sql
 
     def test_niche_filter_adds_where_clause_and_sets_rls(self) -> None:
         conn = _make_mock_conn([])
@@ -133,11 +141,18 @@ class TestNicheFilter:
 
         cursor = conn.cursor.return_value
         calls = cursor.execute.call_args_list
-        # First: SET rls context. Second: SELECT with WHERE.
-        assert "set_config" in calls[0][0][0]
-        assert calls[0][0][1] == ("gaming",)
-        assert "WHERE niche_id = %s" in calls[1][0][0]
-        assert calls[1][0][1] == ("gaming",)
+        # Two execute calls:
+        #   * SET app.niche_id = 'gaming'  (from pg_connect shim)
+        #   * SELECT ... WHERE niche_id = %s
+        # Previously the manual ``SELECT set_config`` after pg_connect
+        # was a third call; PR #309 removed it as redundant.
+        set_calls = [c for c in calls if "set_config" in c[0][0]]
+        select_calls = [c for c in calls if "monetisationprogress" in c[0][0]]
+        assert set_calls, "expected pg_connect's SET app.niche_id"
+        assert set_calls[0][0][1] == ("gaming",)
+        assert select_calls, "expected the SELECT against monetisationprogress"
+        assert "WHERE niche_id = %s" in select_calls[0][0][0]
+        assert select_calls[0][0][1] == ("gaming",)
 
 
 # ---------------------------------------------------------------------------

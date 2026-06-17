@@ -46,6 +46,7 @@ import logging
 import os
 
 from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -111,9 +112,8 @@ def source_performance():
     try:
         # Lazy import so the dashboard test harness doesn't require
         # psycopg installed when this endpoint isn't exercised.
-        import psycopg
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
