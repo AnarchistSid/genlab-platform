@@ -90,7 +90,7 @@ if [[ "$DRIFT_COUNT" -eq 0 ]]; then
         UPDATE pipeline_alerts
         SET resolved_at = NOW()
         WHERE check_name = 'permissions_drift'
-          AND severity = 'CRITICAL'
+          AND severity = 'critical'
           AND resolved_at IS NULL;
     " 2>&1 >> "$LOG_FILE" || log "WARN: could not auto-resolve prior alert"
     unset PGPASSWORD
@@ -120,7 +120,7 @@ SQL_INSERT=$(cat <<SQL
 INSERT INTO pipeline_alerts (
     niche_id, check_name, severity, message, created_at, resolved_at
 ) VALUES (
-    'all', 'permissions_drift', 'CRITICAL',
+    'all', 'permissions_drift', 'critical',
     \$msg\$$MESSAGE\$msg\$,
     NOW(), NULL
 );

@@ -102,7 +102,7 @@ SQL_INSERT=$(cat <<SQL
 INSERT INTO pipeline_alerts (
     niche_id, check_name, severity, message, created_at, resolved_at
 ) VALUES (
-    '$NICHE', 'systemd_unit_failed', 'CRITICAL',
+    '$NICHE', 'systemd_unit_failed', 'critical',
     \$msg\$$MESSAGE\$msg\$,
     NOW(), NULL
 );
