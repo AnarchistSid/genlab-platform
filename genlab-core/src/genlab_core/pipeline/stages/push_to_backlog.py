@@ -1671,6 +1671,35 @@ class PushToBacklog:
                                     exc,
                                 )
                     else:
+                        # W4.1 (2026-06-17): compute auto-approval confidence
+                        # at push time so it's available to downstream
+                        # consumers (dashboard preview, AUTO #2 worker, etc.)
+                        # without re-running the gate. Stored in extra so no
+                        # schema migration is required (_split_fields buckets
+                        # unknown keys into extra automatically).
+                        try:
+                            from genlab_core.scheduling.auto_approval_gate import (
+                                evaluate as _aag_evaluate,
+                            )
+
+                            _synth = {
+                                "hook_text": fields.get("hook_text", ""),
+                                "visual_paths": fields.get("visual_paths", ""),
+                                "extra": {
+                                    "composite_score": fields.get("composite_score"),
+                                    "virality_score": fields.get("virality_score"),
+                                    "validation_status": fields.get("validation_status"),
+                                },
+                            }
+                            _decision = _aag_evaluate(_synth)
+                            fields["auto_approval_confidence"] = round(_decision.confidence, 4)
+                            fields["auto_approval_predicted"] = _decision.approved
+                        except Exception as exc:  # noqa: BLE001
+                            logger.debug(
+                                "[PUSH] auto-approval confidence calc failed: %s",
+                                exc,
+                            )
+
                         client.blueprints.create(fields, typecast=True)
                         blueprints_pushed += 1
                         logger.info(
