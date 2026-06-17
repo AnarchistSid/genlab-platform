@@ -1,0 +1,14 @@
+[Unit]
+Description=GenLab RLS Policy Drift Detector Timer (nightly)
+
+[Timer]
+# 04:30 IST = 23:00 UTC (prior day). Runs AFTER permissions-check (22:30
+# UTC) so if both fire and produce alerts, they hit the operator in
+# stable order. Pre-empts the morning pipeline fires (gaming 09:30,
+# anime 11:30, AI 08:00 IST) so any drift accumulated overnight from
+# deploys is surfaced before any pipeline would hit it.
+OnCalendar=*-*-* 23:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
