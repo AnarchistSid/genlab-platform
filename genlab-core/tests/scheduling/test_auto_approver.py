@@ -861,14 +861,14 @@ class TestRolloutPct:
             assert result.candidates_examined == 5
 
     def test_rollout_pct_throttles_volume_when_dice_loses(self, monkeypatch):
-        """Force the dice to ALWAYS lose by patching random.random to
+        """Force the dice to ALWAYS lose by patching _dice_value to
         return ≥ rollout_pct. Verifies the rollout path filters
         approvals without altering gate/confidence semantics."""
         monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
-        # random.random() returns 0.9 → 0.9 >= 0.5 → dice lost
+        # _dice_value returns 0.9 → 0.9 >= 0.5 → dice lost
         monkeypatch.setattr(
-            "genlab_core.scheduling.auto_approver.random.random",
-            lambda: 0.9,
+            "genlab_core.scheduling.auto_approver._dice_value",
+            lambda record_id: 0.9,
         )
         with patch(
             "genlab_core.scheduling.auto_approver.load_policy",
@@ -887,13 +887,13 @@ class TestRolloutPct:
             assert result.skipped_rollout == ["bp0", "bp1", "bp2"]
 
     def test_rollout_pct_approves_when_dice_wins(self, monkeypatch):
-        """Force the dice to ALWAYS win by patching random.random to
+        """Force the dice to ALWAYS win by patching _dice_value to
         return < rollout_pct. Approval path runs end-to-end."""
         monkeypatch.delenv("GENLAB_AUTO_APPROVE_DISABLED", raising=False)
-        # random.random() returns 0.1 → 0.1 < 0.5 → dice won
+        # _dice_value returns 0.1 → 0.1 < 0.5 → dice won
         monkeypatch.setattr(
-            "genlab_core.scheduling.auto_approver.random.random",
-            lambda: 0.1,
+            "genlab_core.scheduling.auto_approver._dice_value",
+            lambda record_id: 0.1,
         )
         with patch(
             "genlab_core.scheduling.auto_approver.load_policy",
@@ -920,8 +920,8 @@ class TestRolloutPct:
         # Force dice to always lose so rollout would catch anything that
         # reaches it
         monkeypatch.setattr(
-            "genlab_core.scheduling.auto_approver.random.random",
-            lambda: 0.99,
+            "genlab_core.scheduling.auto_approver._dice_value",
+            lambda record_id: 0.99,
         )
         with patch(
             "genlab_core.scheduling.auto_approver.load_policy",
@@ -1016,3 +1016,74 @@ class TestRolloutPct:
         )
         policy = load_policy("gaming", genlab_root=tmp_path)
         assert policy.rollout_pct == 1.0
+
+
+# ── W4.3 deterministic dice (post-audit semantic fix) ──────────────────────
+
+
+class TestDiceValue:
+    """The dice MUST be a property of the blueprint, not the pass.
+
+    Post-Wave-4 audit (2026-06-17) found the original ``random.random()``
+    impl produced wrong semantic: at rollout_pct=0.1, blueprints
+    weren't 10%-approved-ever — they were 100%-approved-eventually
+    after enough passes (each pass re-rolled). The fix is a
+    deterministic per-blueprint hash so the same blueprint gets the
+    same outcome on every pass.
+    """
+
+    def test_same_id_same_value(self):
+        from genlab_core.scheduling.auto_approver import _dice_value
+
+        v1 = _dice_value("bp_abc123")
+        v2 = _dice_value("bp_abc123")
+        assert v1 == v2, "dice MUST be deterministic per record_id"
+
+    def test_different_ids_likely_different_values(self):
+        from genlab_core.scheduling.auto_approver import _dice_value
+
+        # Not a strict property (hash collisions exist) but on 100
+        # distinct IDs we expect ≥95 distinct dice values.
+        ids = [f"bp_{i:08d}" for i in range(100)]
+        values = {_dice_value(i) for i in ids}
+        assert len(values) >= 95
+
+    def test_dice_in_unit_range(self):
+        from genlab_core.scheduling.auto_approver import _dice_value
+
+        for i in range(50):
+            v = _dice_value(f"bp_{i}")
+            assert 0.0 <= v < 1.0
+
+    def test_distribution_is_roughly_uniform_at_threshold(self):
+        """At rollout_pct=0.5, half of ~1000 distinct ids should pass.
+
+        This is the property operators rely on for graduated rollout:
+        at 0.5 they get *roughly* half the volume, not "first half"
+        or "last half". 10% tolerance is generous — sha256 distribution
+        is excellent.
+        """
+        from genlab_core.scheduling.auto_approver import _dice_value
+
+        passed = sum(1 for i in range(1000) if _dice_value(f"bp_{i:08d}") < 0.5)
+        assert 400 <= passed <= 600, f"expected ~500, got {passed}"
+
+    def test_rollout_is_per_blueprint_not_per_pass(self, monkeypatch):
+        """The fix's reason for being: two passes over the SAME
+        blueprint at rollout_pct=0.5 must produce the SAME decision.
+
+        Pre-fix (random.random()) failed this — each pass would re-roll
+        and a blueprint that lost pass 1 could win pass 2. That's not
+        rollout, it's latency.
+        """
+        from genlab_core.scheduling.auto_approver import _dice_value
+
+        rec_id = "deterministic_bp"
+        # If dice is < 0.5 it would approve at rollout_pct=0.5; if ≥0.5
+        # it would skip. Either way, the SAME blueprint must produce
+        # the SAME decision across N passes.
+        decisions = {_dice_value(rec_id) < 0.5 for _ in range(20)}
+        assert len(decisions) == 1, (
+            "the same blueprint MUST produce the same dice decision on every pass — "
+            "this is the operator's mental model of graduated rollout"
+        )
