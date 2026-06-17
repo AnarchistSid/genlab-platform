@@ -127,8 +127,7 @@ class TestNicheFilter:
         # shim adds future setup calls.
         cursor = conn.cursor.return_value
         select_calls = [
-            c for c in cursor.execute.call_args_list
-            if "monetisationprogress" in c[0][0]
+            c for c in cursor.execute.call_args_list if "monetisationprogress" in c[0][0]
         ]
         assert select_calls, "expected a SELECT against monetisationprogress"
         sql = select_calls[0][0][0]
