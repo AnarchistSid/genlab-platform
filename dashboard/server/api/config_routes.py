@@ -193,6 +193,215 @@ def templates():
         return api_error(error=str(e), code=502)
 
 
+# ── M-19: sources YouTube-channels edit API ────────────────
+#
+# Operator-facing CRUD for the ``youtube_channels`` list in each
+# niche's ``config/sources.yaml``. All 5 niches share this top-level
+# key (verified 2026-06-17) so a single endpoint can serve all of
+# them. Tracks:
+#   * GET    /api/v1/config/sources/youtube-channels?niche_id=X
+#   * POST   /api/v1/config/sources/youtube-channels?niche_id=X
+#                body {url, name}
+#   * DELETE /api/v1/config/sources/youtube-channels?niche_id=X&url=...
+#
+# Writes preserve comments + structure via ruamel.yaml round-trip
+# (per the 2026-06-15 T#69 lesson: PyYAML's yaml.dump strips comments,
+# destroys hand-edited config). The 6 system reminders in the operator
+# instructions about "PR-based change, NOT a hand-edit" are operator-
+# scope; this endpoint is for operator-scope edits authorized via the
+# dashboard auth + CSRF gate.
+#
+# Validation:
+#   * niche_id whitelisted via _config_dir_for_niche (returns None on
+#     unknown → 404)
+#   * URL must be http/https YouTube domain
+#   * No path traversal possible — niche → path mapping goes through
+#     the same registry-backed lookup the read endpoints use
+#   * name is required, max 100 chars
+
+_VALID_YOUTUBE_HOSTS = {"www.youtube.com", "youtube.com", "youtu.be"}
+_NAME_MAX_LEN = 100
+
+
+def _load_sources_yaml_rt(niche_id: str):
+    """Load sources.yaml via ruamel round-trip (preserves comments).
+
+    Returns ``(loaded_data, path)`` or ``(None, None)`` if no niche /
+    no file. Caller's responsibility to handle the None path.
+    """
+    from ruamel.yaml import YAML
+
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None:
+        return None, None
+    path = config_dir / "sources.yaml"
+    if not path.exists():
+        return None, None
+    yaml_rt = YAML(typ="rt")
+    yaml_rt.preserve_quotes = True
+    yaml_rt.default_flow_style = False
+    yaml_rt.allow_unicode = True
+    yaml_rt.indent(mapping=2, sequence=4, offset=2)
+    yaml_rt.width = 4096
+    with open(path, encoding="utf-8") as f:
+        data = yaml_rt.load(f)
+    return data, path
+
+
+def _dump_sources_yaml_rt(data, path):
+    """Write sources.yaml back via ruamel round-trip."""
+    from ruamel.yaml import YAML
+
+    yaml_rt = YAML(typ="rt")
+    yaml_rt.preserve_quotes = True
+    yaml_rt.default_flow_style = False
+    yaml_rt.allow_unicode = True
+    yaml_rt.indent(mapping=2, sequence=4, offset=2)
+    yaml_rt.width = 4096
+    with open(path, "w", encoding="utf-8") as f:
+        yaml_rt.dump(data, f)
+
+
+def _validate_youtube_url(url: str) -> str | None:
+    """Return None if valid, else an error message."""
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        return "url is required"
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https"):
+        return "url must use http/https"
+    if (parsed.hostname or "").lower() not in _VALID_YOUTUBE_HOSTS:
+        return f"url host must be one of {sorted(_VALID_YOUTUBE_HOSTS)}"
+    return None
+
+
+@bp.route("/sources/youtube-channels", methods=["GET"])
+def list_youtube_channels():
+    """List the ``youtube_channels`` entries for a niche.
+
+    Returns the list in declaration order — the same order the
+    pipeline iterates. Useful for the operator to see which channels
+    are currently active and where new ones would land.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    data, _path = _load_sources_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    channels = data.get("youtube_channels") or []
+    # Normalise to {url, name} — ruamel CommentedMap is dict-like
+    result = [{"url": str(c.get("url", "")), "name": str(c.get("name", ""))} for c in channels]
+    return api_success(data={"niche_id": niche_id, "youtube_channels": result})
+
+
+@bp.route("/sources/youtube-channels", methods=["POST"])
+def add_youtube_channel():
+    """Append a new {url, name} entry to ``youtube_channels``.
+
+    Idempotent on URL: if the URL already exists in the list, returns
+    409 — operator's intent for the duplicate ID is ambiguous (re-
+    name? re-add at end?) so we surface rather than guess.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    body = request.get_json(silent=True) or {}
+    url = (body.get("url") or "").strip()
+    name = (body.get("name") or "").strip()
+    if not name:
+        return api_error(error="name is required", code=400)
+    if len(name) > _NAME_MAX_LEN:
+        return api_error(error=f"name must be ≤{_NAME_MAX_LEN} chars", code=400)
+    url_err = _validate_youtube_url(url)
+    if url_err:
+        return api_error(error=url_err, code=400)
+
+    data, path = _load_sources_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    channels = data.get("youtube_channels")
+    if channels is None:
+        # The key is missing entirely (shouldn't happen — all 5 niches
+        # ship with the key) but degrade to creating it so the
+        # operator's first add still works.
+        from ruamel.yaml.comments import CommentedSeq
+
+        channels = CommentedSeq()
+        data["youtube_channels"] = channels
+
+    for existing in channels:
+        if str(existing.get("url", "")).strip() == url:
+            return api_error(
+                error=f"url already present in youtube_channels: {url}",
+                code=409,
+            )
+
+    from ruamel.yaml.comments import CommentedMap
+
+    new_entry = CommentedMap()
+    new_entry["url"] = url
+    new_entry["name"] = name
+    channels.append(new_entry)
+
+    try:
+        _dump_sources_yaml_rt(data, path)
+    except OSError as exc:
+        logger.exception("sources.yaml write failed")
+        return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-19 added youtube_channel niche=%s name=%s url=%s",
+        niche_id,
+        name,
+        url,
+    )
+    return api_success(data={"niche_id": niche_id, "added": {"url": url, "name": name}})
+
+
+@bp.route("/sources/youtube-channels", methods=["DELETE"])
+def remove_youtube_channel():
+    """Remove the entry whose ``url`` matches the query param.
+
+    URL is the natural key — names can collide ("Two Minute Papers"
+    might appear twice with different channel IDs if someone re-added
+    it). URL-as-key gives operators an unambiguous handle.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    url = (request.args.get("url") or "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    if not url:
+        return api_error(error="url is required", code=400)
+
+    data, path = _load_sources_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    channels = data.get("youtube_channels") or []
+    new_channels = [c for c in channels if str(c.get("url", "")).strip() != url]
+    if len(new_channels) == len(channels):
+        return api_not_found(
+            message=f"url not found in youtube_channels for niche={niche_id}: {url}"
+        )
+    # Replace in place to preserve any block-level comments attached
+    # to the parent mapping. ruamel CommentedSeq supports slice assign.
+    channels[:] = new_channels
+
+    try:
+        _dump_sources_yaml_rt(data, path)
+    except OSError as exc:
+        logger.exception("sources.yaml write failed")
+        return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-19 removed youtube_channel niche=%s url=%s",
+        niche_id,
+        url,
+    )
+    return api_success(data={"niche_id": niche_id, "removed": {"url": url}})
+
+
 # ── Notification Preferences ───────────────────────────────
 _NOTIF_PREFS_FILE = _DASHBOARD_ROOT / ".tmp" / "notification_prefs.json"
 
