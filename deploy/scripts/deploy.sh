@@ -40,12 +40,46 @@
 # Exit codes
 # ----------
 #   0 — all files transferred AND checksum + ownership verified
+#       (HEAD-advance step is best-effort — non-zero result there
+#       still exits 0 since the files ARE on prod and verified)
 #   1 — usage error / pre-flight failure
 #   2 — checksum mismatch (deploy aborted)
 #   3 — rsync transport failure
 #   4 — ownership mismatch on remote — file is not owned by
 #       genlab:genlab after deploy (deploy aborted; would have broken
 #       pipelines silently in the past — 2026-06-16 outage)
+#
+# Flags
+# -----
+#   --no-advance-head   — Skip the post-deploy ``git reset --mixed
+#                         origin/main`` step on prod. Use when
+#                         deploying a hot-fix from a branch that's
+#                         NOT yet merged into main (advancing HEAD
+#                         would falsely suggest the deploy is in
+#                         main). Default: advance.
+#
+# The git-HEAD-advance step
+# -------------------------
+# 2026-06-17 audit found prod's git HEAD had been stuck at PR #237
+# for weeks while ~60 newer PRs were merged into main. Every
+# subsequent deploy added to the apparent ``git_drift`` count: files
+# in the working tree no longer matched the stale HEAD even though
+# they DID match current origin/main. The 108-file alert that
+# surfaced on 2026-06-17 was 98 false positives (deploys matching
+# origin/main) + 10 genuine local diffs.
+#
+# Fix: after a successful deploy + verify, on prod run
+# ``git fetch origin && git reset --mixed origin/main``. This:
+#   * Advances HEAD + index to origin/main (no ``--hard``, so
+#     working tree is UNTOUCHED — operator edits + branch hot-fixes
+#     are preserved as ``M`` in ``git status``)
+#   * Files just rsync'd that match origin/main go from ``M`` to
+#     clean (the 98-false-positive class disappears)
+#   * Files genuinely diverging from origin/main stay ``M``,
+#     surfacing the real drift signal cleanly
+#
+# Idempotent: re-running when HEAD already matches origin/main is
+# a no-op.
 
 set -euo pipefail
 
@@ -54,6 +88,30 @@ DEPLOY_HOST="${GENLAB_DEPLOY_HOST:-46.224.237.56}"
 DEPLOY_USER="${GENLAB_DEPLOY_USER:-root}"
 REMOTE_BASE="/opt/genlab"
 LOG_FILE="${REPO_ROOT}/deploy/.deploy.log"
+
+# ── Flag parsing ─────────────────────────────────────────────────────
+# Defaults: post-deploy HEAD advance is ON. Consume our recognized
+# flags off the front of $@ so the rest is the file list.
+ADVANCE_HEAD=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-advance-head)
+      ADVANCE_HEAD=0
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: unknown flag '$1' (use --no-advance-head or --)" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 # ── Pre-flight ────────────────────────────────────────────────────────
 #
@@ -180,4 +238,50 @@ for rel in "$@"; do
 done
 
 echo "[deploy] all files verified."
+
+# ── Post-deploy: advance prod's git HEAD to origin/main ──────────────
+# Best-effort. Failure here doesn't reverse the deploy — the files
+# are on prod and verified. We just log + warn so the next operator
+# session can investigate.
+if [ "${ADVANCE_HEAD}" -eq 1 ]; then
+  echo "[deploy] advancing prod git HEAD to origin/main..."
+  # Capture before-state for the audit log
+  before_sha=$(ssh -o StrictHostKeyChecking=no \
+    "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    "sudo -u genlab bash -c 'cd ${REMOTE_BASE} && git rev-parse HEAD 2>/dev/null'" \
+    2>/dev/null || echo "unknown")
+
+  # ``git fetch origin && git reset --mixed origin/main``:
+  #   * --mixed (default) moves HEAD + index but NOT working tree.
+  #     Operator hand-edits + branch-ahead-of-main files are
+  #     preserved as ``M`` in ``git status`` (now real signal,
+  #     not stale-HEAD noise).
+  #   * Runs as the ``genlab`` user so the repo's permissions stay
+  #     consistent (root running git would chown the index file).
+  if ssh -o StrictHostKeyChecking=no \
+       "${DEPLOY_USER}@${DEPLOY_HOST}" \
+       "sudo -u genlab bash -c 'cd ${REMOTE_BASE} && git fetch origin --quiet 2>&1 && git reset --mixed origin/main --quiet 2>&1'" \
+       >/dev/null 2>&1; then
+    after_sha=$(ssh -o StrictHostKeyChecking=no \
+      "${DEPLOY_USER}@${DEPLOY_HOST}" \
+      "sudo -u genlab bash -c 'cd ${REMOTE_BASE} && git rev-parse HEAD 2>/dev/null'" \
+      2>/dev/null || echo "unknown")
+    if [ "${before_sha}" = "${after_sha}" ]; then
+      echo "[deploy] HEAD unchanged (was already at origin/main: ${after_sha:0:8})"
+    else
+      echo "[deploy] HEAD advanced ${before_sha:0:8} → ${after_sha:0:8}"
+    fi
+    echo "  HEAD_ADVANCED before=${before_sha:0:8} after=${after_sha:0:8}" \
+      >> "${LOG_FILE}"
+  else
+    # Failure to advance is non-fatal. The files are deployed and
+    # verified; we just lose the git_drift visibility improvement.
+    echo "[deploy] WARN: git HEAD advance failed (deploy itself succeeded)" >&2
+    echo "  HEAD_ADVANCE_FAILED before=${before_sha:0:8}" >> "${LOG_FILE}"
+  fi
+else
+  echo "[deploy] --no-advance-head: skipping git HEAD advance"
+  echo "  HEAD_ADVANCE_SKIPPED" >> "${LOG_FILE}"
+fi
+
 echo "── ${run_id} done ──" >> "${LOG_FILE}"
