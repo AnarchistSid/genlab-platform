@@ -27,12 +27,22 @@ def push_event(
     Non-blocking: failures are logged but never raise.
     """
     try:
-        import psycopg
-
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
             return
-        with psycopg.connect(dsn) as conn:
+        # SR-A/C/D Tier-1 migration (2026-06-17): route through
+        # pg_connect so the RLS GUC is set from niche_id. Behaviour
+        # preserved (Phase-1 admin-mode fallback when env flag unset).
+        # Passing niche_id="" stays in admin mode explicitly — which
+        # matches the caller's intent when no niche is supplied.
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # Empty niche_id → admin mode. Explicit "" matches the
+        # ContextVar's "none-set" sentinel semantics: callers who
+        # have a niche pass it; callers who don't (cross-cutting
+        # events) get admin.
+        effective_niche = niche_id or ""
+        with pg_connect(dsn, niche_id=effective_niche) as conn:
             conn.execute(
                 """INSERT INTO dashboard_events (event_type, title, body, entity_id, entity_type, niche_id)
                    VALUES (%s, %s, %s, %s, %s, %s)""",
