@@ -105,6 +105,24 @@ _MIGRATED_SITES = (
         "genlab-core/src/genlab_core/media/trending_video_fetcher.py",
         "trending_video_fetcher",
     ),
+    # Tier-4 (this PR, 2026-06-17 night)
+    ("dashboard/server/api/alerts.py", "api_alerts"),
+    ("dashboard/server/api/analytics.py", "api_analytics"),
+    ("dashboard/server/api/audience.py", "api_audience"),
+    ("dashboard/server/api/costs.py", "api_costs"),
+    ("dashboard/server/api/events.py", "api_events"),
+    ("dashboard/server/api/learning.py", "api_learning"),
+    ("dashboard/server/api/links.py", "api_links"),
+    ("dashboard/server/api/metrics.py", "api_metrics"),
+    ("dashboard/server/api/overview.py", "api_overview"),
+    ("dashboard/server/api/revenue.py", "api_revenue"),
+    ("dashboard/server/api/sources.py", "api_sources"),
+    ("dashboard/server/core/email_sender.py", "email_sender"),
+    ("dashboard/server/core/publishing_queue.py", "publishing_queue"),
+    ("dashboard/server/core/monetisation_progress_pg.py", "monetisation_progress_pg"),
+    ("scripts/notify_critical_alerts.py", "notify_critical_alerts"),
+    ("scripts/check_rls_policy_drift.py", "check_rls_policy_drift"),
+    ("scripts/archive_stale_visual_paths.py", "archive_stale_visual_paths"),
 )
 
 

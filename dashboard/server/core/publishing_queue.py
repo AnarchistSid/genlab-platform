@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 logger = logging.getLogger(__name__)
 
@@ -92,14 +93,14 @@ def _advisory_lock(niche_id: str) -> Generator[None, None, None]:
         return
 
     try:
-        import psycopg  # noqa: F811 — only imported here to avoid top-level dep
+        import psycopg  # noqa: F401, F811 — only imported here to avoid top-level dep
     except ImportError:
         yield
         return
 
     lock_key = _lock_key(niche_id)
     try:
-        with psycopg.connect(dsn, connect_timeout=2) as conn:
+        with pg_connect(dsn, connect_timeout=2, niche_id=niche_id) as conn:
             conn.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
             yield
             conn.commit()

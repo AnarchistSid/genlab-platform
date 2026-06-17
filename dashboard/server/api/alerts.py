@@ -14,7 +14,8 @@ Routes:
 import logging
 import os
 
-from flask import Blueprint
+from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -26,7 +27,6 @@ bp = Blueprint("alerts_api", __name__, url_prefix="/api/v1/alerts")
 def publishing_alerts():
     """Return categorized publishing alerts."""
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
@@ -34,7 +34,9 @@ def publishing_alerts():
             return api_error(error="DATABASE_URL not configured", code=503)
 
         # TODO: migrate to shared connection pool when BacklogClient supports raw SQL
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             critical = []
             warning = []
             info = []
@@ -187,12 +189,13 @@ def system_alerts():
         alerts = {}
 
         # Pipeline: check if all niches ran today
-        import psycopg
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
         if dsn:
-            with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            with pg_connect(
+                dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+            ) as conn:
                 niches_today = conn.execute(
                     "SELECT DISTINCT niche_id FROM blueprints "
                     "WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
@@ -304,7 +307,6 @@ def critical_alerts():
         }
     """
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
@@ -314,7 +316,12 @@ def critical_alerts():
             # hides itself when it's 0.
             return api_success(data={"unresolved_critical": [], "count": 0})
 
-        with psycopg.connect(dsn, row_factory=dict_row, connect_timeout=5) as conn:
+        with pg_connect(
+            dsn,
+            row_factory=dict_row,
+            connect_timeout=5,
+            niche_id=request.args.get("niche_id", "all") or "all",
+        ) as conn:
             rows = conn.execute(
                 """
                 SELECT id::text AS id,

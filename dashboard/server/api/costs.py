@@ -30,6 +30,7 @@ import logging
 import os
 
 from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -53,9 +54,7 @@ def _connect_or_error():
     if not dsn:
         return None, api_error(error="DATABASE_URL not configured", code=503)
     try:
-        import psycopg
-
-        return psycopg.connect(dsn, connect_timeout=5), None
+        return pg_connect(dsn, connect_timeout=5, niche_id="all"), None
     except Exception as exc:
         logger.exception("costs API: psycopg.connect failed")
         return None, api_error(error=f"DB connect failed: {exc}", code=503)

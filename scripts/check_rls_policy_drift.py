@@ -55,6 +55,8 @@ import logging
 import os
 import sys
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,12 +105,11 @@ _KNOWN_NON_CANONICAL_POLICIES = {
 
 
 def _connect():
-    import psycopg
 
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(dsn, connect_timeout=10)
+    return pg_connect(dsn, connect_timeout=10, niche_id="all")
 
 
 def scan(conn) -> dict[str, list[str]]:

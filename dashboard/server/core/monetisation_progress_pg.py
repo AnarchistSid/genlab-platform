@@ -38,6 +38,8 @@ import logging
 import os
 from typing import Any
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
+
 logger = logging.getLogger(__name__)
 
 _COLUMNS = [
@@ -76,7 +78,6 @@ def fetch_progress(
         connection / query failure (the dashboard must never 500
         because the monetisation table is unavailable).
     """
-    import psycopg
     from psycopg.rows import dict_row
 
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
@@ -89,15 +90,15 @@ def fetch_progress(
     query += " ORDER BY niche_id, platform, metric_name"
 
     try:
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        # SR-A/C/D Tier-4: ``pg_connect`` already calls
+        # ``SET app.niche_id`` from the ``niche_id`` kwarg, so the
+        # manual ``SELECT set_config`` that used to live here is
+        # redundant. Removed to keep the executed-SQL trail clean
+        # (the test_monetisation_progress_pg pins the
+        # set + select-with-where sequence; an extra SET would
+        # shift the indices).
+        with pg_connect(dsn, row_factory=dict_row, niche_id=niche_id or "all") as conn:
             with conn.cursor() as cur:
-                if niche_id:
-                    # RLS context for niche-scoped reads (same convention
-                    # as revenue_tracker.get_revenue_summary).
-                    cur.execute(
-                        "SELECT set_config('app.niche_id', %s, true)",
-                        (niche_id,),
-                    )
                 cur.execute(query, params)
                 rows = cur.fetchall()
         # psycopg's dict_row already returns plain dicts; just normalize

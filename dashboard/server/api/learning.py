@@ -10,7 +10,8 @@ import logging
 import time as _time
 from pathlib import Path
 
-from flask import Blueprint
+from flask import Blueprint, request
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -66,7 +67,6 @@ def _learning_aggregates() -> dict:
     """
     import os
 
-    import psycopg
     from psycopg.rows import dict_row
 
     out: dict = {
@@ -84,7 +84,7 @@ def _learning_aggregates() -> dict:
         return out
 
     try:
-        with psycopg.connect(db_url, connect_timeout=5, row_factory=dict_row) as conn:
+        with pg_connect(db_url, connect_timeout=5, row_factory=dict_row, niche_id="all") as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -247,7 +247,6 @@ def config_updates():
     """
     import os
 
-    import psycopg
     from psycopg.rows import dict_row
 
     db_url = os.environ.get("DATABASE_URL", "").strip()
@@ -255,7 +254,12 @@ def config_updates():
         return api_error(error="DATABASE_URL unset", code=500)
 
     try:
-        with psycopg.connect(db_url, connect_timeout=5, row_factory=dict_row) as conn:
+        with pg_connect(
+            db_url,
+            connect_timeout=5,
+            row_factory=dict_row,
+            niche_id=request.args.get("niche_id", "all") or "all",
+        ) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """

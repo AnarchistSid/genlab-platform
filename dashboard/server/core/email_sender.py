@@ -7,6 +7,8 @@ Set RESEND_API_KEY in .env to enable.
 import logging
 import os
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
+
 _SENDER_DOMAIN = os.environ.get("GENLAB_SENDER_DOMAIN", "localhost")
 
 logger = logging.getLogger(__name__)
@@ -91,14 +93,13 @@ def send_batch_deals(
     if not is_configured():
         return 0
 
-    import psycopg
     from psycopg.rows import dict_row
 
     dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
     sent = 0
 
     try:
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
             rows = conn.execute(
                 "SELECT email FROM email_subscribers WHERE channel_slug = %s AND is_active = true",
                 (channel_slug,),

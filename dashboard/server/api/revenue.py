@@ -8,8 +8,9 @@ Routes:
 import logging
 import os
 
-from flask import Blueprint
+from flask import Blueprint, request
 from genlab_core.monetization.affiliate_economics import get_affiliate_economics
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-4
 
 from server.core.responses import api_error, api_success
 
@@ -31,10 +32,11 @@ def revenue_summary():
         if not dsn:
             return api_error(error="DATABASE_URL not configured", code=503)
 
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             # Total clicks per window
             clicks_today = conn.execute(
                 "SELECT COUNT(*) AS cnt FROM affiliate_clicks "
@@ -149,10 +151,11 @@ def click_trends():
     if not dsn:
         return api_success(data=[])
     try:
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             rows = conn.execute(
                 "SELECT created_at::date AS day, COUNT(*) AS clicks "
                 "FROM affiliate_clicks "
@@ -175,10 +178,11 @@ def revenue_attribution():
         if not dsn:
             return api_error(error="DATABASE_URL not configured", code=503)
 
-        import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        with pg_connect(
+            dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
+        ) as conn:
             # Clicks by channel (last 30d)
             by_channel = conn.execute(
                 "SELECT channel_id, COUNT(*) AS cnt "
