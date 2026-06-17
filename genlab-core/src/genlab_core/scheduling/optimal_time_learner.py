@@ -115,9 +115,13 @@ def _query_4hour_bins(
     will still prevent two posts at exactly the same UTC hour.
     """
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # SR-A/C/D Tier-2 migration (2026-06-17): both call sites
+        # take niche_id as their first positional arg.
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -223,9 +227,13 @@ def get_optimal_hours(
         return []
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # SR-A/C/D Tier-2 migration (2026-06-17): both call sites
+        # take niche_id as their first positional arg.
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # Per-hour engagement aggregated over the lookback window.
                 # We join analytics → publishing_analytics on (post_id,

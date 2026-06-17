@@ -34,9 +34,12 @@ def record_lifecycle_snapshot(
         return
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
 
-        with psycopg.connect(dsn) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # SR-A/C/D Tier-2 migration (2026-06-17).
+        with pg_connect(dsn, niche_id=niche_id) as conn:
             conn.execute(
                 "INSERT INTO analytics (niche_id, post_id, platform, metric_type, value, collected_at, window, extra) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb) "
@@ -69,10 +72,16 @@ def get_lifecycle_data(post_id: str) -> list[dict[str, Any]]:
         return []
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # ``get_lifecycle_data`` is a cross-niche read (post_id is the
+        # filter, not niche_id) — uses "all" for admin-mode RLS so
+        # all niches' rows are visible. The SELECT itself doesn't
+        # filter by niche; this is the legitimate cross-tenant query.
+        with pg_connect(dsn, niche_id="all", row_factory=dict_row) as conn:
             rows = conn.execute(
                 "SELECT window, value as reach, collected_at, extra "
                 "FROM analytics "

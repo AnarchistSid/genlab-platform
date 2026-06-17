@@ -150,9 +150,14 @@ def emit_token_expiry_alert(
     }
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # SR-A/C/D Tier-2 migration (2026-06-17): niche_id available in
+        # enclosing scope. ``IS NOT DISTINCT FROM`` already handles the
+        # None-niche case (cross-cutting alerts); GUC mirrors that.
+        with pg_connect(dsn, niche_id=niche_id or "all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # Deduplicate: don't pile up the same unresolved alert
                 # if the poller fires before the 1h throttle window.
