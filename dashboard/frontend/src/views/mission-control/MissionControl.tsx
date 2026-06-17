@@ -12,6 +12,7 @@ import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
+import { TrackRecordCard } from "./TrackRecordCard";
 import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
 import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
@@ -217,6 +218,12 @@ export default function MissionControl() {
                 threshold so operator can flip enforcement on with
                 evidence rather than gut. */}
             <AutoApprovalCalibrationCard />
+            {/* W4.4: per-day trend so operator sees climb/flat/regress
+                BEFORE the calibration card hits its 30-sample readiness
+                threshold. Surfaces regressions earlier — at day 7 of
+                a drifting gate, both cards visible side-by-side give
+                the operator more signal than the snapshot alone. */}
+            <TrackRecordCard />
             <MonetisationCompact />
           </div>
         </div>
