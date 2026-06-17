@@ -244,7 +244,7 @@ def write_future_stale_alerts(conn, records: list[dict]) -> int:
                 """
                 INSERT INTO pipeline_alerts
                     (niche_id, check_name, severity, message, created_at, resolved_at)
-                VALUES (%s::text, 'future_stale_visual_paths', 'CRITICAL',
+                VALUES (%s::text, 'future_stale_visual_paths', 'critical',
                         %s::text, NOW(), NULL)
                 """,
                 (r["niche_id"], message),
