@@ -195,28 +195,32 @@ class TestTransformSuccessSwapsNetwork:
         of them should attempt the EarnKaro transform — even with
         the key set + a real amazon.in URL on the product.
 
-        If a future PR re-introduces an IN-defaulted niche WITHOUT
-        also updating the EarnKaro account / SubID configuration,
-        this test still passes (the IN-geo transform path is the
-        intentional outcome). But pairing this with the
-        ``test_niche_primary_geo.py`` US-default assertion means
-        a niche moving to IN trips a test failure THERE first,
-        forcing the rationale to be documented before this side
-        effect happens silently."""
+        2026-06-17 follow-up: with the dynamic resolver now layered
+        on top of the hardcoded defaults, the assertion needs an
+        explicit "dynamic returns None" stub to actually exercise
+        the hardcoded path. Otherwise the test would query the prod
+        database during pytest, which is wrong for an isolated unit
+        test."""
         monkeypatch.setenv("EARNKARO_CONVERT_KEY", "test-key")
-        for niche in ("ai_creators", "gaming", "sports", "movies", "anime"):
-            with patch(
-                "genlab_core.monetization.earnkaro_client.convert_url",
-                return_value="https://ekaro.in/should-not-be-called",
-            ) as mock_convert:
-                url, network = resolve_affiliate_link_with_network(
-                    amazon_product, niche, "instagram"
-                )
-                assert not mock_convert.called, (
-                    f"niche={niche} is US-default post-2026-06-17 — "
-                    "EarnKaro transform must NOT fire"
-                )
-                # Network stays amazon (no swap to earnkaro)
+        # Force the dynamic resolver to no-op so we exercise the
+        # hardcoded NICHE_PRIMARY_GEO defaults that this test is
+        # actually about.
+        from genlab_core.monetization import geo_link_resolver as _glr
+
+        _glr._dynamic_geo_cache.clear()
+        with patch.object(_glr, "_compute_dynamic_geo", return_value=None):
+            for niche in ("ai_creators", "gaming", "sports", "movies", "anime"):
+                with patch(
+                    "genlab_core.monetization.earnkaro_client.convert_url",
+                    return_value="https://ekaro.in/should-not-be-called",
+                ) as mock_convert:
+                    url, network = resolve_affiliate_link_with_network(
+                        amazon_product, niche, "instagram"
+                    )
+                    assert not mock_convert.called, (
+                        f"niche={niche} is US-default post-2026-06-17 — "
+                        "EarnKaro transform must NOT fire"
+                    )
                 assert network in ("amazon", ""), f"niche={niche} unexpected network: {network!r}"
 
 
