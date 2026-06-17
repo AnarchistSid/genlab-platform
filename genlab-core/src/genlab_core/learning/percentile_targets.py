@@ -98,9 +98,14 @@ def get_percentile_target(
         return None
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        # SR-A/C/D Tier-2 migration (2026-06-17): niche_id is the
+        # function's required arg; the WHERE clause filters by it too
+        # (belt + suspenders with RLS).
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # analytics.value carries the metric reading; metric_type
                 # carries the canonical metric name; platform + niche_id

@@ -273,7 +273,9 @@ def _emit_training_failure_alert(niche_id: str, error: str) -> None:
         import json
         import os
 
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
+
+        from genlab_core.storage.tenant_context import pg_connect
 
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
@@ -285,7 +287,8 @@ def _emit_training_failure_alert(niche_id: str, error: str) -> None:
             "/opt/genlab/genlab-core/models` (PR #200's ExecStartPre handles "
             "this automatically going forward)."
         )
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # SR-A/C/D Tier-2 migration (2026-06-17).
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 # Dedup against any open alert for the same niche.
                 cur.execute(

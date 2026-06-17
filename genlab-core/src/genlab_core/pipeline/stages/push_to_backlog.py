@@ -1057,9 +1057,10 @@ class PushToBacklog:
         try:
             db_url = os.environ.get("DATABASE_URL")
             if db_url:
-                import psycopg as _psycopg
+                # SR-A/C/D Tier-2 migration (2026-06-17).
+                from genlab_core.storage.tenant_context import pg_connect
 
-                with _psycopg.connect(db_url) as _conn:
+                with pg_connect(db_url, niche_id=niche_id) as _conn:
                     with _conn.cursor() as _cur:
                         _cur.execute(
                             "SELECT title FROM content_pool WHERE claimed_by = %s AND claimed_at > NOW() - INTERVAL '48 hours'",

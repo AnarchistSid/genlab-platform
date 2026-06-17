@@ -42,8 +42,10 @@ def test_alert_inserted_with_actionable_message(monkeypatch):
     with patch("psycopg.connect", return_value=conn):
         _emit_training_failure_alert("gaming", "Permission denied: hook_classifier_gaming.json")
 
-    # First call was the dedup SELECT; second was the INSERT.
-    assert cur.execute.call_count == 2
+    # 3 calls: SET app.niche_id (pg_connect shim) + SELECT (dedup) +
+    # INSERT. The pg_connect migration (PR #303 / this PR's Tier-2 batch)
+    # adds the SET before the original queries.
+    assert cur.execute.call_count == 3
     insert_sql, insert_params = cur.execute.call_args.args
     assert "INSERT INTO pipeline_alerts" in insert_sql
 
@@ -74,8 +76,9 @@ def test_alert_dedups_against_existing_unresolved_alert(monkeypatch):
     with patch("psycopg.connect", return_value=conn):
         _emit_training_failure_alert("gaming", "some error")
 
-    # Only the dedup SELECT; no INSERT call.
-    assert cur.execute.call_count == 1
+    # 2 calls: SET app.niche_id (pg_connect shim) + SELECT (dedup hit
+    # → no INSERT). pg_connect migration adds the SET; rest unchanged.
+    assert cur.execute.call_count == 2
     sql = cur.execute.call_args.args[0]
     assert "SELECT" in sql
 

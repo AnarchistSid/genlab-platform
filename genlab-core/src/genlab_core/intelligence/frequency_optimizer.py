@@ -32,10 +32,15 @@ def analyze_frequency(niche_id: str) -> dict[str, Any]:
         return {"current_rate": 1, "recommended_rate": 1, "reason": "No database"}
 
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except below
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        # SR-A/C/D Tier-2 migration (2026-06-17): route through pg_connect
+        # so the niche_id GUC is set for RLS. niche_id is the function's
+        # required first arg — clean migration.
+        from genlab_core.storage.tenant_context import pg_connect
+
+        with pg_connect(dsn, niche_id=niche_id, row_factory=dict_row) as conn:
             # Get publishing history.
             # 2026-06-15: count SUCCESS *and* INSIGHTS_* — the metric
             # collector flips status to INSIGHTS_6H/24H/48H/168H over a

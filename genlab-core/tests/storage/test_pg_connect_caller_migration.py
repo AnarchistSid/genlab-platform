@@ -32,11 +32,41 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 # in PR ``feat/sr-acd-tier1-migration``. Future tier-2/3 migrations
 # append here.
 _MIGRATED_SITES = (
+    # Tier-1 (PR #303, 2026-06-17 evening)
     ("genlab-core/src/genlab_core/intelligence/cost_persist.py", "cost_persist"),
     ("genlab-core/src/genlab_core/observability/dashboard_events.py", "dashboard_events"),
     (
         "genlab-core/src/genlab_core/scheduling/calibration_logger.py",
         "calibration_logger",
+    ),
+    # Tier-2 (this PR, 2026-06-17 late evening)
+    (
+        "genlab-core/src/genlab_core/intelligence/frequency_optimizer.py",
+        "frequency_optimizer",
+    ),
+    (
+        "genlab-core/src/genlab_core/intelligence/lifecycle_tracker.py",
+        "lifecycle_tracker",
+    ),
+    (
+        "genlab-core/src/genlab_core/learning/hook_classifier.py",
+        "hook_classifier",
+    ),
+    (
+        "genlab-core/src/genlab_core/learning/percentile_targets.py",
+        "percentile_targets",
+    ),
+    (
+        "genlab-core/src/genlab_core/scheduling/optimal_time_learner.py",
+        "optimal_time_learner",
+    ),
+    (
+        "genlab-core/src/genlab_core/engagement/token_health.py",
+        "token_health",
+    ),
+    (
+        "genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py",
+        "push_to_backlog",
     ),
 )
 
