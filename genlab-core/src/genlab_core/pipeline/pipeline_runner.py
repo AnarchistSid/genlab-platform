@@ -371,6 +371,35 @@ class GenericPipelineRunner:
             return ctx
 
         finally:
+            # 2026-06-17: cost-persistence safety net. RunReport is the
+            # last pipeline stage and the canonical caller of
+            # ``persist_run_cost()`` — but if any earlier stage crashes,
+            # RunReport never runs and the cost row never lands in
+            # ``pipeline_run_costs``. Audit on 2026-06-17 found ~57% of
+            # recent runs (13 cost rows vs ~30 run dirs / 7d) had this
+            # silent gap. The finally block runs on the happy, error,
+            # and abort paths alike, so persisting here catches the
+            # crash case while remaining a no-op on the happy path
+            # (RunReport already wrote the row; ON CONFLICT DO UPDATE
+            # in cost_persist.py:125 makes the second write idempotent).
+            try:
+                summary = cost_acc.summary()
+                if summary.get("entry_count", 0) > 0:
+                    from genlab_core.intelligence.cost_persist import (
+                        persist_run_cost,
+                    )
+
+                    persist_run_cost(
+                        run_id=run_id,
+                        niche_id=niche_id,
+                        summary=summary,
+                    )
+            except Exception:
+                logger.debug(
+                    "[Pipeline] finally cost persist failed",
+                    exc_info=True,
+                )
+
             # R-27: reset the cost-accumulator contextvar so the next
             # run starts fresh. Reset BEFORE log/context teardown so
             # any final accumulator-touching log line still sees the
