@@ -16,6 +16,7 @@ import { TrackRecordCard } from "./TrackRecordCard";
 import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
 import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
+import { SourcesEditor } from "./SourcesEditor";
 import { AiInsightCard } from "./AiInsightCard";
 import { PublishTimeline } from "./PublishTimeline";
 import { UpcomingQueue } from "./UpcomingQueue";
@@ -198,6 +199,11 @@ export default function MissionControl() {
                 The 2026-06-13 deep dive found 22 of 30 top sources fetch
                 hundreds of items per 14d that NEVER convert to blueprints. */}
             <SourceQualityCard />
+            {/* M-19 (2026-06-18): write-path companion to SourceQualityCard.
+                Operator picks the worst offenders from the quality table
+                above, then prunes them here without git-committing
+                sources.yaml. */}
+            <SourcesEditor />
           </div>
 
           {/* Row 6: Pipeline Countdowns + Publishing Health + Monetisation */}
