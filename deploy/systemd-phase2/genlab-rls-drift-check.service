@@ -1,0 +1,20 @@
+[Unit]
+Description=GenLab RLS Policy Drift Detector (post-Wave-4 audit prevention)
+After=network-online.target postgresql.service
+
+# Surface unit failures to the dashboard CriticalAlertsBanner via the
+# OnFailure handler at scripts/systemd_failure_alert.sh.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/check_rls_policy_drift.py
+TimeoutSec=120
+# Exit 1 = drift found + CRITICAL alert written to pipeline_alerts;
+# treat as success for systemd's restart logic. The downstream
+# observability surface is the alert pump, not the unit's exit status.
+SuccessExitStatus=0 1
