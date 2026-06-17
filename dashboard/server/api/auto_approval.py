@@ -184,6 +184,14 @@ def track_record():
         with pg_connect(dsn, connect_timeout=5, row_factory=dict_row, niche_id=niche_id) as conn:
             # Agreement = TP + TN per the existing calibration_logger
             # convention. Aligns with calibration-stats' agreement_count.
+            # Note: gate-vs-gate filtering happens at INSERT time in
+            # ``calibration_logger.log()`` (S1 fix, 2026-06-15) — rows
+            # whose ``action_taken_source`` matches an auto-approver
+            # tag are simply never written. So no WHERE-clause filter
+            # is needed here, and the table schema doesn't carry an
+            # ``action_taken_source`` column at all (caught at deploy
+            # 2026-06-17 evening when the prod schema diverged from a
+            # docstring assumption).
             rows = conn.execute(
                 """
                 SELECT
@@ -197,7 +205,6 @@ def track_record():
                 FROM auto_approval_calibration
                 WHERE niche_id = %s
                   AND decided_at > NOW() - (%s || ' days')::interval
-                  AND action_taken_source IS DISTINCT FROM 'auto_approver_v1'
                 GROUP BY 1
                 ORDER BY 1
                 """,
