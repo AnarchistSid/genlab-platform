@@ -166,3 +166,57 @@ jobs:
         working-directory: dashboard/frontend
       - run: npm run test
         working-directory: dashboard/frontend
+
+  # U-21: informational mypy gate. genlab-core configures [tool.mypy] in
+  # pyproject.toml but no CI step ever ran it, so type-check signal was
+  # invisible — 226 errors across 83 files lurked unnoticed (audit
+  # 2026-06-17). This job runs mypy on the full genlab-core source tree
+  # and posts the output to the GitHub Actions job summary, but
+  # ``continue-on-error: true`` means a failure does NOT block the PR.
+  #
+  # The intent is **visibility without velocity loss** — operators see
+  # type debt accumulate on each PR and can ratchet down by either
+  # fixing errors or tightening the mypy config when ready. Once the
+  # error count is low enough, flip ``continue-on-error`` to ``false``
+  # (or remove it) to turn this into a hard gate.
+  mypy-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.10.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - name: mypy genlab-core
+        id: mypy
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          uvx mypy --config-file genlab-core/pyproject.toml \
+            genlab-core/src/genlab_core/ \
+            | tee mypy-report.txt
+      - name: Summarize to job summary
+        if: always()
+        run: |
+          {
+            echo "## mypy report (informational)"
+            echo
+            echo "Full output saved as a build artifact. Top of report:"
+            echo
+            echo '```'
+            tail -30 mypy-report.txt 2>/dev/null || echo "(no report generated)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload full mypy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mypy-report
+          path: mypy-report.txt
+          retention-days: 14
