@@ -186,14 +186,39 @@ class TestIdempotencyOnFailure:
 
         mock_rl.acquire.return_value = True
 
+        # 2026-06-17: also patch the MODULE-LEVEL ``_toxicity_gate`` singleton
+        # (line ~135 in comment_processor.py). ``mock_gate_cls`` patches the
+        # ``ToxicityGate`` *class*, but the module-level instance was already
+        # built at import time using the real class, so the class patch
+        # doesn't replace it. Previously this test happened to pass because
+        # of a side-effect of test ordering (other tests not having loaded
+        # the module yet); U-04's Detoxify model change shifted the import
+        # order enough to expose the latent bug. Patching the GLOBAL is
+        # the deterministic fix.
         mock_result = MagicMock()
         mock_result.is_toxic = False
         mock_result.max_score = 0.02  # low toxicity score
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
 
+        # Outbound check fires AFTER the LLM generates the reply
+        # (comment_processor.py:572: ``check_outbound(reply).max_score``).
+        # Without this stub, the default MagicMock returns a non-numeric
+        # value that ``classify_reply_action`` interprets as max-toxicity
+        # → routes to 'discard' → ``_mark_replied`` never runs.
+        mock_outbound = MagicMock()
+        mock_outbound.max_score = 0.05  # low outbound toxicity = auto
+        mock_outbound.is_toxic = False
+        mock_gate_cls.return_value.check_outbound.return_value = mock_outbound
+
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you liked it"
 
+        # Replace the module-level singleton with the mocked instance, so
+        # comment_processor uses the mock instead of the real ToxicityGate
+        # that was instantiated at import time.
+        from genlab_core.engagement import comment_processor as cp_mod
+
         with (
+            patch.object(cp_mod, "_toxicity_gate", mock_gate_cls.return_value),
             patch("genlab_core.engagement.comment_processor._post_reply", return_value=True),
             patch("genlab_core.engagement.comment_processor._mark_replied") as mock_mark,
         ):
