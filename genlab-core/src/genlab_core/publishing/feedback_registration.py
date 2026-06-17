@@ -60,7 +60,20 @@ def register_pending_feedback(
             # futures. For platforms in ``prior_published`` the post_id was
             # lost across the run boundary so we fall back to "" (same as
             # the original code's "no matching future" fall-through).
+            #
+            # W3.2 (2026-06-17): normalize to ``{platform}:{id}`` shape so
+            # the join with publishing_analytics.post_id actually matches.
+            # Pre-fix prod data shows IG stored as raw numeric (e.g.,
+            # ``18067901951361934``) while analytics consistently uses
+            # ``instagram:DWQeTghibLu`` — that mismatch broke the
+            # reward-attribution join silently, so the bandit never
+            # learned from IG-only feedback. Normalizing at write time
+            # is the cleanest fix (downstream consumers don't need to
+            # de-dupe two formats). Existing rows can be backfilled
+            # with a one-off UPDATE if needed; new writes are correct
+            # going forward.
             post_id_for_plat = outcome.successful_post_ids.get(plat, "")
+            post_id_for_plat = _normalize_post_id(plat, post_id_for_plat)
             bandit_ctx = _build_bandit_context(fields, niche_id)
 
             task = PendingFeedbackTask(
@@ -78,6 +91,33 @@ def register_pending_feedback(
             fb_store.create(task)
     except Exception as e:
         logger.warning("[publish] PendingFeedback registration failed (non-fatal): %s", e)
+
+
+def _normalize_post_id(platform: str, post_id: str) -> str:
+    """Return the post_id in canonical ``{platform}:{id}`` form.
+
+    publishing_analytics consistently writes the prefixed shape, but
+    some platform publishers (notably IG, which returns the bare
+    Graph-API numeric id) historically wrote the bare id to
+    pending_feedback. That asymmetry broke the
+    ``pending_feedback.post_id ↔ analytics.post_id`` join, so the
+    bandit + hook classifier silently lost feedback for IG-only
+    publishes.
+
+    Rules:
+    - Empty / falsy post_id passes through unchanged (caller's
+      existing fallback handling stays the same).
+    - Already-prefixed (contains ``:``) passes through — don't
+      double-prefix even if the prefix doesn't match ``platform``.
+      Trusting the existing prefix preserves the (rare) case where
+      a caller intentionally tagged it differently.
+    - Bare id → ``{platform}:{id}``.
+    """
+    if not post_id:
+        return post_id
+    if ":" in post_id:
+        return post_id
+    return f"{platform}:{post_id}"
 
 
 def _is_published_status(pstatus: Any) -> bool:

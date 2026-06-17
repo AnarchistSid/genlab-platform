@@ -89,7 +89,10 @@ class TestRegisterPendingFeedback:
             backlog_client=MagicMock(),
         )
         MockTask.assert_called_once()
-        assert MockTask.call_args.kwargs["platform_post_id"] == "ig999"
+        # W3.2 (2026-06-17): post_id is now normalized to ``{platform}:{id}``
+        # so the join with publishing_analytics.post_id matches. Bare
+        # 'ig999' becomes 'instagram:ig999'.
+        assert MockTask.call_args.kwargs["platform_post_id"] == "instagram:ig999"
 
     @patch("genlab_core.learning.pending_feedback_task.PendingFeedbackTask")
     @patch("genlab_core.learning.pending_feedback_store.PendingFeedbackStore")
