@@ -315,6 +315,31 @@ export interface YoutubeChannelEntry {
   name: string;
 }
 
+// ── AUTO #2: per-niche auto_publish rollout_pct slider ──────
+//
+// Read returns all 4 fields (display context); write only accepts
+// rollout_pct per the runbook (enabled flip stays git-commit-only).
+export interface AutoPublishPolicy {
+  enabled: boolean;
+  min_confidence: number;
+  max_approvals_per_pass: number;
+  rollout_pct: number;        // 0.0..1.0
+}
+
+export const autoPublish = {
+  get: (nicheId: string) =>
+    get<{ niche_id: string; auto_publish: AutoPublishPolicy }>(
+      "/config/auto-publish",
+      { niche_id: nicheId },
+    ),
+  setRolloutPct: (nicheId: string, rolloutPct: number) =>
+    mutate<{ niche_id: string; updated: { rollout_pct: number } }>(
+      "PATCH",
+      `/config/auto-publish?niche_id=${encodeURIComponent(nicheId)}`,
+      { rollout_pct: rolloutPct },
+    ),
+};
+
 export const sources = {
   performance: (days = 14, minFetched = 5) =>
     get<SourcePerformanceResponse>("/sources/performance", {

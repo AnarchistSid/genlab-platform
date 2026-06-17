@@ -518,6 +518,185 @@ def remove_youtube_channel():
     return api_success(data={"niche_id": niche_id, "removed": {"url": url}})
 
 
+# ── AUTO #2: per-niche auto_publish rollout_pct slider ──────
+#
+# Operator-facing read/write for the ``auto_publish`` block in each
+# niche's publishing.yaml. We expose READ for all 4 fields (enabled,
+# min_confidence, max_approvals_per_pass, rollout_pct) so the slider
+# UI can show context, but we ONLY allow WRITE for ``rollout_pct``.
+#
+# Rationale (per AUTO_2_ROLLOUT_ADDENDUM_2026-06-15-PM.md):
+#   * ``enabled`` flip stays on the git-commit path — operator must
+#     edit publishing.yaml + commit + deploy. This is the calibrated
+#     opt-in gate, not a slider.
+#   * ``min_confidence`` + ``max_approvals_per_pass`` are tuning
+#     parameters set during runbook §4 calibration; changing them
+#     post-rollout would invalidate the calibration data and is
+#     intentionally manual.
+#   * ``rollout_pct`` IS designed for in-session ramping (10% →
+#     50% → 100% over a week). The whole point of W4.3 is that
+#     operators can slide it without rebuilding the wheel.
+#
+# Like M-19/M-20/M-21, writes go through ruamel round-trip (comment
+# preservation) + the file-lock helper.
+
+# Same nested-config resolver used by auto_approver.load_policy. We
+# duplicate the candidate-paths list here rather than reaching into
+# genlab_core's internals — dashboard's import boundary stays clean.
+_PUBLISHING_YAML_CANDIDATES = lambda niche_id, niche_root: [  # noqa: E731
+    niche_root / "niches" / niche_id / "config" / "publishing.yaml",
+    niche_root / "config" / "publishing.yaml",
+]
+
+
+def _resolve_publishing_yaml(niche_id: str):
+    """Find publishing.yaml for a niche, returning (path, niche_folder)
+    or (None, None) if not found.
+
+    Handles the gaming-niche nested-config layout (config under
+    ``CriticalRush/niches/gaming/``) using the same candidate-paths
+    convention as ``auto_approver.load_policy``.
+    """
+    for niche in _niche_registry():
+        if niche["id"] != niche_id:
+            continue
+        folder = niche["folder"]
+        niche_root = _GENLAB_ROOT / folder
+        for cand in _PUBLISHING_YAML_CANDIDATES(niche_id, niche_root):
+            if cand.exists():
+                return cand, folder
+        return None, folder
+    return None, None
+
+
+def _load_publishing_yaml_rt(niche_id: str):
+    """Load publishing.yaml via ruamel round-trip (preserves comments)."""
+    path, _folder = _resolve_publishing_yaml(niche_id)
+    if path is None:
+        return None, None
+    with open(path, encoding="utf-8") as f:
+        data = _rt_yaml_singleton().load(f)
+    return data, path
+
+
+def _dump_publishing_yaml_rt(data, path):
+    """Write publishing.yaml back via ruamel round-trip."""
+    with open(path, "w", encoding="utf-8") as f:
+        _rt_yaml_singleton().dump(data, f)
+
+
+@bp.route("/auto-publish", methods=["GET"])
+def get_auto_publish():
+    """Return the auto_publish block for a niche.
+
+    All 4 fields surfaced for read so the dashboard can show context.
+    Defaults match auto_approver.AutoApprovalPolicy defaults — kept in
+    sync manually because dashboard doesn't import genlab_core's
+    AutoApprovalPolicy dataclass.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+
+    data, _path = _load_publishing_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"publishing.yaml not found for niche={niche_id}")
+    block = data.get("auto_publish") or {}
+    if not isinstance(block, dict):
+        block = {}
+    return api_success(
+        data={
+            "niche_id": niche_id,
+            "auto_publish": {
+                "enabled": bool(block.get("enabled", False)),
+                "min_confidence": float(block.get("min_confidence", 0.85)),
+                "max_approvals_per_pass": int(block.get("max_approvals_per_pass", 3)),
+                # W4.3: rollout_pct defaults to 1.0 (full traffic). We
+                # match auto_approver's loader which clamps out-of-range
+                # to 1.0; here we just surface the raw stored value so
+                # the operator sees what's actually persisted.
+                "rollout_pct": float(block.get("rollout_pct", 1.0)),
+            },
+        }
+    )
+
+
+@bp.route("/auto-publish", methods=["PATCH"])
+def update_auto_publish():
+    """Update ONLY the ``rollout_pct`` field of auto_publish.
+
+    Body: ``{"rollout_pct": <float in [0.0, 1.0]>}``.
+
+    enabled / min_confidence / max_approvals_per_pass are NOT
+    writeable via this endpoint — those decisions belong on the
+    git-commit path per the AUTO #2 rollout runbook §4-5.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    body = request.get_json(silent=True) or {}
+    raw_pct = body.get("rollout_pct")
+    if raw_pct is None:
+        return api_error(error="rollout_pct is required", code=400)
+    try:
+        pct = float(raw_pct)
+    except (TypeError, ValueError):
+        return api_error(error="rollout_pct must be a number", code=400)
+    if pct < 0.0 or pct > 1.0:
+        return api_error(error="rollout_pct must be in [0.0, 1.0]", code=400)
+
+    path, _folder = _resolve_publishing_yaml(niche_id)
+    if path is None:
+        return api_not_found(message=f"publishing.yaml not found for niche={niche_id}")
+
+    # Reuse the sources-write-lock helper — same fcntl.flock on
+    # ``<path>.lock`` pattern. The class is named for sources but the
+    # implementation is path-agnostic; renaming would be a wider
+    # change and provides no behavioural benefit.
+    with _SourcesWriteLock(path):
+        data, real_path = _load_publishing_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(
+                message=f"publishing.yaml not found for niche={niche_id}"
+            )
+        block = data.get("auto_publish")
+        if block is None or not isinstance(block, dict):
+            # No auto_publish block yet — create with safe defaults.
+            # The operator's first slide should land cleanly even on a
+            # niche that hasn't been calibrated.
+            from ruamel.yaml.comments import CommentedMap
+
+            block = CommentedMap()
+            block["enabled"] = False  # ← stays off until git-commit flip
+            block["min_confidence"] = 0.85
+            block["max_approvals_per_pass"] = 3
+            data["auto_publish"] = block
+
+        # ruamel preserves the comment attached to the rollout_pct key
+        # IF the key already exists. If we're creating it, the comment
+        # above it (the multi-line "W4.3 graduated rollout" block) was
+        # attached to ``auto_publish`` as a whole, so it survives.
+        block["rollout_pct"] = pct
+
+        try:
+            _dump_publishing_yaml_rt(data, real_path)
+        except OSError as exc:
+            logger.exception("publishing.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] AUTO#2 updated rollout_pct niche=%s value=%.3f",
+        niche_id,
+        pct,
+    )
+    return api_success(
+        data={
+            "niche_id": niche_id,
+            "updated": {"rollout_pct": pct},
+        }
+    )
+
+
 # ── Notification Preferences ───────────────────────────────
 _NOTIF_PREFS_FILE = _DASHBOARD_ROOT / ".tmp" / "notification_prefs.json"
 
