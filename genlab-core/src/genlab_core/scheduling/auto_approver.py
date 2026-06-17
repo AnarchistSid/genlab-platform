@@ -54,9 +54,9 @@ v2 (future, when operator wants stronger audit surface):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import os
-import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -313,6 +313,32 @@ def _kill_switch_active() -> tuple[bool, str]:
 AUTO_APPROVAL_SOURCE_TAG = "auto_approver_v1"
 
 
+# W4.3 dice resolution. 10000 buckets gives 4-decimal-place granularity
+# on rollout_pct (good enough for operator-readable percentages) and
+# fits comfortably in a Python int from sha256's 256-bit hex digest.
+_DICE_BUCKETS: int = 10000
+
+
+def _dice_value(record_id: str) -> float:
+    """Return a deterministic dice value in [0.0, 1.0) for a blueprint.
+
+    The SAME record_id always produces the SAME value, so the W4.3
+    rollout decision is a *property of the blueprint* rather than a
+    *property of the pass*. This is the post-Wave-4-audit semantic
+    correction (2026-06-17): the original ``random.random()`` per-pass
+    implementation produced "graduated latency", not "graduated
+    rollout" — at rollout_pct=0.1, every blueprint would eventually
+    win the dice on some pass and auto-approve, just slower.
+
+    The hash is sha256 — overkill for this use, but cheap and removes
+    any ambiguity about distribution. Bucket count is fixed at
+    ``_DICE_BUCKETS`` (10000) so an operator can reason "rollout 0.1
+    means hash bucket 0-999".
+    """
+    h = hashlib.sha256(record_id.encode("utf-8")).hexdigest()
+    return (int(h, 16) % _DICE_BUCKETS) / _DICE_BUCKETS
+
+
 # ── Policy ─────────────────────────────────────────────────────────────────
 
 
@@ -351,11 +377,26 @@ class AutoApprovalPolicy:
     # without yanking the whole subsystem (the global kill switch
     # remains as the panic button).
     #
-    # The dice roll uses Python's stdlib ``random.random()`` which is
-    # deterministic per-process if seeded but, in worker context, is
-    # genuinely random across runs. Operators observe the law of large
-    # numbers: at 0.1 they'll see ~1 of every 10 eligible blueprints
-    # approved, not exactly 1; at 0.5 ~half; at 1.0 all.
+    # The dice roll is DETERMINISTIC per blueprint: the dice value is
+    # ``sha256(record_id) % 10000 / 10000.0``, so the SAME blueprint
+    # gets the SAME dice outcome on every pass. This matches the
+    # operator's mental model of graduated rollout: at 0.1, the same
+    # ~10% of blueprints get approved (the ones whose hash falls
+    # under the threshold); the remaining 90% are deferred-not-doomed
+    # — they'll auto-approve when the operator raises rollout_pct.
+    #
+    # The 2026-06-17 post-Wave-4 audit flagged the original
+    # implementation: it used ``random.random()`` and ran the dice
+    # per-pass. That produced the wrong semantic: at 0.1, blueprints
+    # weren't "10% approved" — they were "100% approved after enough
+    # passes", just slower. Operators ramping 10% → 50% → 100% over
+    # a week would have seen 100% of the queue accumulate, not a
+    # graduated exposure to risk.
+    #
+    # Tradeoff vs random: the same 10% will repeatedly auto-approve
+    # across runs, which makes operator inspection harder (no
+    # rerolling). Acceptable because the goal of rollout_pct is
+    # *volume control*, not *fairness across blueprints*.
     rollout_pct: float = 1.0
 
 
@@ -644,18 +685,29 @@ def run_pass(
             result.skipped_low_confidence.append(record_id)
             continue
 
-        # ── W4.3: graduated rollout dice roll ─────────────────────────────
-        # Blueprint passed the gate AND cleared min_confidence. The
-        # rollout knob throttles approval *volume* (vs *quality*, which
-        # is min_confidence's job). At 1.0 (default) the call always
-        # returns True; at 0.0 it always returns False; in between it's
-        # a Bernoulli trial. We use stdlib random.random() — operators
-        # see law-of-large-numbers averaging, not exact quotas.
+        # ── W4.3: graduated rollout dice (deterministic) ──────────────────
+        # Blueprint passed gate + min_confidence. The rollout knob
+        # throttles approval *volume* (vs *quality*, which is
+        # min_confidence's job).
         #
-        # Fast-path: skip the rng call entirely at 1.0 so the default
-        # path has zero behaviour change (matches the W4.3 invariant
-        # in the policy docstring).
-        if policy.rollout_pct < 1.0 and random.random() >= policy.rollout_pct:
+        # Per-blueprint deterministic dice: the dice value is
+        # ``sha256(record_id) % 10000 / 10000``, fixed per blueprint.
+        # The SAME blueprint gets the SAME outcome on every pass —
+        # so at rollout_pct=0.1, the same ~10% always-approve, and
+        # the other 90% are deferred-not-doomed (they auto-approve
+        # when the operator raises rollout_pct).
+        #
+        # The 2026-06-17 post-Wave-4 audit flagged the original
+        # ``random.random()`` per-pass implementation: at 0.1 it
+        # didn't gate VOLUME, it just SLOWED the queue — eventually
+        # every blueprint would win the dice on some pass and
+        # auto-approve. That's not graduated rollout, that's
+        # graduated latency.
+        #
+        # Fast-path: skip the dice at 1.0 so the default code path
+        # is identical to pre-W4.3 (zero behaviour change for niches
+        # that haven't opted in).
+        if policy.rollout_pct < 1.0 and _dice_value(record_id) >= policy.rollout_pct:
             result.skipped_rollout.append(record_id)
             logger.info(
                 "[auto_approver] niche=%s bp=%s — passed gate+confidence "
