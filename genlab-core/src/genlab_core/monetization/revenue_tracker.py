@@ -10,6 +10,8 @@ import logging
 from datetime import date, timedelta
 from typing import Any
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,14 +28,13 @@ def record_revenue(
     report_date: date | None = None,
 ) -> None:
     """Record an affiliate revenue event."""
-    import psycopg
 
     report_date = report_date or date.today()
     try:
         import os
 
         dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
-        conn = psycopg.connect(dsn)
+        conn = pg_connect(dsn, niche_id=niche_id)
         with conn:
             conn.execute(
                 """INSERT INTO affiliate_revenue
@@ -62,7 +63,6 @@ def get_revenue_summary(
     niche_id: str | None = None,
 ) -> dict[str, Any]:
     """Get aggregate revenue data for the dashboard."""
-    import psycopg
     from psycopg.rows import dict_row
 
     since = date.today() - timedelta(days=window_days)
@@ -70,7 +70,7 @@ def get_revenue_summary(
         import os
 
         dsn = os.environ.get("DATABASE_URL", "dbname=genlab")
-        conn = psycopg.connect(dsn, row_factory=dict_row)
+        conn = pg_connect(dsn, row_factory=dict_row, niche_id=niche_id or "all")
         cur = conn.cursor()
 
         # Set RLS context

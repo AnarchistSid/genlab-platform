@@ -16,6 +16,8 @@ import logging
 import os
 from typing import Any
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
+
 logger = logging.getLogger(__name__)
 
 SIMILARITY_THRESHOLD = 0.4  # text-embedding-3-small cosine similarities are typically 0.3-0.6
@@ -69,9 +71,7 @@ class EmbeddingMatcher:
             return False
 
         try:
-            import psycopg
-
-            conn = psycopg.connect(self._dsn, autocommit=True)
+            conn = pg_connect(self._dsn, autocommit=True, niche_id="all")
             conn.execute(
                 """INSERT INTO product_embeddings (product_id, product_name, product_category, niche_ids, embedding, updated_at)
                    VALUES (%s, %s, %s, %s, %s::vector, NOW())
@@ -96,10 +96,9 @@ class EmbeddingMatcher:
             return []
 
         try:
-            import psycopg
             from psycopg.rows import dict_row
 
-            conn = psycopg.connect(self._dsn, row_factory=dict_row)
+            conn = pg_connect(self._dsn, row_factory=dict_row, niche_id=niche_id or "all")
             cur = conn.cursor()
 
             # Cosine similarity search

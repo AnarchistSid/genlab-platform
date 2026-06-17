@@ -1129,10 +1129,11 @@ class FetchTrendingVideos:
             return []
 
         try:
-            import psycopg
             from psycopg.rows import dict_row
 
-            with psycopg.connect(database_url, row_factory=dict_row) as conn:
+            from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
+
+            with pg_connect(database_url, row_factory=dict_row, niche_id=niche_id) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
