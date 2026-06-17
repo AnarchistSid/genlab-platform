@@ -31,10 +31,19 @@ class ToxicityGate:
     INBOUND_THRESHOLD = 0.7
     OUTBOUND_THRESHOLD = 0.3
     # R-77: inbound harassment can hide in any of these dimensions, not just the
-    # aggregate "toxicity" score. Detoxify "original" also emits "obscene", which
-    # we deliberately exclude — mild profanity is common in comments and isn't
-    # harassment we should refuse to engage with.
+    # aggregate "toxicity" score. Detoxify "original-small" emits the same
+    # Jigsaw categories as "original" (including "obscene", which we
+    # deliberately exclude — mild profanity is common in comments and isn't
+    # harassment we should refuse to engage with).
     _INBOUND_TOXIC_DIMS = ("toxicity", "severe_toxicity", "threat", "insult", "identity_attack")
+
+    # U-04 (2026-06-17): swap "original" → "original-small". Same Jigsaw
+    # category set, Albert backbone instead of BERT, ~3× lighter on RAM —
+    # which matters because the engagement worker runs on a 4 GB Hetzner
+    # box where Detoxify's BERT load competes with the publish pipeline
+    # (R-03). The available model_type keys are validated at import time
+    # against detoxify.MODEL_URLS in the test suite.
+    _MODEL_TYPE = "original-small"
 
     def __init__(self) -> None:
         self._model: Any = None
@@ -43,8 +52,8 @@ class ToxicityGate:
         if self._model is None:
             from detoxify import Detoxify
 
-            self._model = Detoxify("original")
-            logger.info("[TOXICITY] Detoxify model loaded")
+            self._model = Detoxify(self._MODEL_TYPE)
+            logger.info("[TOXICITY] Detoxify model loaded (model_type=%s)", self._MODEL_TYPE)
         return self._model
 
     def check_inbound(self, text: str) -> ToxicityResult:
