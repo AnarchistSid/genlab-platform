@@ -178,8 +178,11 @@ def track_record():
         # bin index; date_trunc + interval would also work but the
         # arithmetic stays explicit so an operator can re-run it by
         # hand to sanity-check.
-        with psycopg.connect(dsn, connect_timeout=5, row_factory=dict_row) as conn:
-            conn.execute("SET app.niche_id TO %s", (niche_id,))
+        # SR-A/C/D Tier-4 (2026-06-17): pg_connect sets app.niche_id
+        # automatically, so the manual ``SET app.niche_id`` is removed.
+        from genlab_core.storage.tenant_context import pg_connect
+
+        with pg_connect(dsn, connect_timeout=5, row_factory=dict_row, niche_id=niche_id) as conn:
             # Agreement = TP + TN per the existing calibration_logger
             # convention. Aligns with calibration-stats' agreement_count.
             rows = conn.execute(
