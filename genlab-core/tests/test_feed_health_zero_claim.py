@@ -81,7 +81,8 @@ def test_refresh_sql_uses_configurable_days_and_min_fetched():
     # the SELECT by content rather than fixed index so the pin
     # survives future shim setup-call additions.
     select_calls = [
-        c for c in cur.execute.call_args_list
+        c
+        for c in cur.execute.call_args_list
         if "content_pool" in c[0][0] or "source_name" in c[0][0]
     ]
     assert select_calls, "expected a SELECT against content_pool"
