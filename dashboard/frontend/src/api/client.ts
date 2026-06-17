@@ -242,11 +242,40 @@ export interface CalibrationStats {
   ready_for_enforcement: boolean; // ≥30 samples AND ≥90% agreement
 }
 
+// W4.4 (2026-06-17): per-day agreement-rate trend for the operator's
+// readiness assessment. Complements calibration-stats (single-window
+// snapshot) by surfacing whether the niche's quality is improving,
+// flat, or regressing day over day.
+export interface TrackRecordBin {
+  date: string;       // ISO date "YYYY-MM-DD"
+  sample_count: number;
+  agreement: number;
+  rate: number;       // 0..1
+}
+
+export interface TrackRecordResponse {
+  niche_id: string;
+  window_days: number;
+  bin_days: number;
+  bins: TrackRecordBin[];
+  overall: {
+    sample_count: number;
+    agreement: number;
+    rate: number;
+  };
+}
+
 export const autoApproval = {
   calibrationStats: (nicheId: string, windowDays = 7) =>
     get<CalibrationStats>("/auto-approval/calibration-stats", {
       niche_id: nicheId,
       window_days: String(windowDays),
+    }),
+  trackRecord: (nicheId: string, windowDays = 30, binDays = 1) =>
+    get<TrackRecordResponse>("/auto-approval/track-record", {
+      niche_id: nicheId,
+      window_days: String(windowDays),
+      bin_days: String(binDays),
     }),
 };
 

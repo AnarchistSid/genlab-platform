@@ -102,6 +102,180 @@ def calibration_stats():
     )
 
 
+# ── W4.4: Track-record endpoint (per-day agreement trend) ─────────────
+#
+# Closes W4.4 from the autonomy plan. ``calibration-stats`` returns a
+# single-window snapshot — useful for the Day-8 readiness check but
+# blind to TRENDS. If a niche's agreement rate is climbing day over
+# day, the operator should see that signal earlier. If it's regressing,
+# even earlier. This endpoint returns per-day bins so the dashboard
+# can sparkline the trend.
+#
+# Mirrors calibration-stats' validation surface (whitelisted niche_id,
+# 1..90 day window). Adds bin_days for granularity control — typically
+# 1 (daily) but operators may want 7 (weekly) for a 90-day view.
+
+
+@bp.route("/track-record", methods=["GET"])
+def track_record():
+    """Per-day (or per-bin) agreement-rate trend for a niche.
+
+    Query params:
+        niche_id (required): one of the 5 valid niches
+        window_days (optional, default 30): rolling window size
+        bin_days (optional, default 1): bin size — 1 = daily, 7 = weekly
+
+    Response:
+        {
+          "niche_id": "gaming",
+          "window_days": 30,
+          "bin_days": 1,
+          "bins": [
+            {"date": "2026-05-20", "sample_count": 5, "agreement": 4,
+             "rate": 0.80},
+            ...
+          ],
+          "overall": {"sample_count": 105, "agreement": 95, "rate": 0.905}
+        }
+
+    Returns an empty bins list when no calibration data exists in
+    the window — frontend renders a "no data yet" message.
+    """
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if not niche_id:
+        return api_error(error="niche_id query param required", code=400)
+    if niche_id not in _VALID_NICHES:
+        return api_error(
+            error=f"niche_id must be one of {sorted(_VALID_NICHES)}",
+            code=400,
+        )
+
+    try:
+        window_days = int(request.args.get("window_days", "30"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    try:
+        bin_days = int(request.args.get("bin_days", "1"))
+    except (TypeError, ValueError):
+        return api_error(error="bin_days must be an integer", code=400)
+    if bin_days < 1 or bin_days > window_days:
+        return api_error(error=f"bin_days must be 1..{window_days}", code=400)
+
+    try:
+        import os
+
+        import psycopg
+        from psycopg.rows import dict_row
+
+        dsn = os.environ.get("DATABASE_URL", "")
+        if not dsn:
+            return api_error(error="DATABASE_URL not configured", code=503)
+
+        # Bin SQL: floor((NOW() - decided_at) / bin_days) gives the
+        # bin index; date_trunc + interval would also work but the
+        # arithmetic stays explicit so an operator can re-run it by
+        # hand to sanity-check.
+        with psycopg.connect(dsn, connect_timeout=5, row_factory=dict_row) as conn:
+            conn.execute("SET app.niche_id TO %s", (niche_id,))
+            # Agreement = TP + TN per the existing calibration_logger
+            # convention. Aligns with calibration-stats' agreement_count.
+            rows = conn.execute(
+                """
+                SELECT
+                    (decided_at::date) AS day,
+                    COUNT(*) AS sample_count,
+                    COUNT(*) FILTER (
+                        WHERE (gate_approved = true AND operator_action = 'approved')
+                           OR (gate_approved = false AND operator_action IN
+                                ('rejected', 'revised', 'skipped'))
+                    ) AS agreement_count
+                FROM auto_approval_calibration
+                WHERE niche_id = %s
+                  AND decided_at > NOW() - (%s || ' days')::interval
+                  AND action_taken_source IS DISTINCT FROM 'auto_approver_v1'
+                GROUP BY 1
+                ORDER BY 1
+                """,
+                (niche_id, window_days),
+            ).fetchall()
+
+        # Optionally re-bin into bin_days groups. Default bin_days=1
+        # means "one bin per day"; bin_days=7 groups by week.
+        if bin_days == 1:
+            bins = [
+                {
+                    "date": r["day"].isoformat(),
+                    "sample_count": int(r["sample_count"]),
+                    "agreement": int(r["agreement_count"]),
+                    "rate": round(r["agreement_count"] / r["sample_count"], 3)
+                    if r["sample_count"]
+                    else 0.0,
+                }
+                for r in rows
+            ]
+        else:
+            # Group consecutive days into bin_days-sized buckets.
+            # We bin from the most-recent day backwards so the latest
+            # bin always reflects the latest data even when the window
+            # isn't a clean multiple of bin_days.
+            from datetime import timedelta
+
+            day_to_row = {r["day"]: r for r in rows}
+            bins = []
+            if rows:
+                today = max(day_to_row)
+                cursor = today
+                while True:
+                    bin_end = cursor
+                    bin_start = bin_end - timedelta(days=bin_days - 1)
+                    samples = 0
+                    agreements = 0
+                    d = bin_start
+                    while d <= bin_end:
+                        if d in day_to_row:
+                            samples += int(day_to_row[d]["sample_count"])
+                            agreements += int(day_to_row[d]["agreement_count"])
+                        d += timedelta(days=1)
+                    if samples:
+                        bins.append(
+                            {
+                                "date": bin_end.isoformat(),
+                                "sample_count": samples,
+                                "agreement": agreements,
+                                "rate": round(agreements / samples, 3),
+                            }
+                        )
+                    cursor = bin_start - timedelta(days=1)
+                    if cursor < min(day_to_row):
+                        break
+                bins.reverse()  # chronological order
+
+        total_samples = sum(b["sample_count"] for b in bins)
+        total_agreement = sum(b["agreement"] for b in bins)
+        overall = {
+            "sample_count": total_samples,
+            "agreement": total_agreement,
+            "rate": round(total_agreement / total_samples, 3) if total_samples else 0.0,
+        }
+
+        return api_success(
+            data={
+                "niche_id": niche_id,
+                "window_days": window_days,
+                "bin_days": bin_days,
+                "bins": bins,
+                "overall": overall,
+            }
+        )
+
+    except Exception as exc:
+        logger.exception("track-record failed for %s", niche_id)
+        return api_error(error=f"Track-record query failed: {exc}", code=500)
+
+
 # ── D3.10: Global kill-switch endpoint ────────────────────────────────
 #
 # Tiny file-backed flag the auto_approver worker checks before doing
