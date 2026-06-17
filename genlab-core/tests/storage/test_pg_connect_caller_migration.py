@@ -123,6 +123,13 @@ _MIGRATED_SITES = (
     ("scripts/notify_critical_alerts.py", "notify_critical_alerts"),
     ("scripts/check_rls_policy_drift.py", "check_rls_policy_drift"),
     ("scripts/archive_stale_visual_paths.py", "archive_stale_visual_paths"),
+    # Tier-5 (this PR, 2026-06-17 night)
+    ("genlab-core/src/genlab_core/scheduling/auto_approver.py", "auto_approver"),
+    ("genlab-core/src/genlab_core/learning/preference_collector.py", "preference_collector"),
+    ("genlab-core/src/genlab_core/learning/bandit_residual.py", "bandit_residual"),
+    ("genlab-core/src/genlab_core/learning/metric_collector.py", "metric_collector"),
+    ("genlab-core/src/genlab_core/monitoring/health_monitor.py", "health_monitor"),
+    ("genlab-core/src/genlab_core/pipeline/shared_ingestion.py", "shared_ingestion"),
 )
 
 

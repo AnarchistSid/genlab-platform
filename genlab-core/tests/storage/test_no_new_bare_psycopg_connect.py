@@ -67,12 +67,6 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "genlab-core/src/genlab_core/scripts/collect_audience_metrics.py",
         # Pending caller migration (PR #305-ish per audit doc). Each
         # listed here MUST be removed when its site is migrated.
-        "genlab-core/src/genlab_core/scheduling/auto_approver.py",
-        "genlab-core/src/genlab_core/learning/preference_collector.py",
-        "genlab-core/src/genlab_core/learning/bandit_residual.py",
-        "genlab-core/src/genlab_core/learning/metric_collector.py",
-        "genlab-core/src/genlab_core/monitoring/health_monitor.py",
-        "genlab-core/src/genlab_core/pipeline/shared_ingestion.py",
         # Maintenance/backfill scripts — operator-driven one-shots
         # that pre-date the shim. Migration is low priority.
         "scripts/backfill_calibration_2026_06_15.py",
