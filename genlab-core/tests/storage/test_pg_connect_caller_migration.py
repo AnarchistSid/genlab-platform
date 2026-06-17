@@ -68,6 +68,43 @@ _MIGRATED_SITES = (
         "genlab-core/src/genlab_core/pipeline/stages/push_to_backlog.py",
         "push_to_backlog",
     ),
+    # Tier-3 (this PR, 2026-06-17 night)
+    (
+        "genlab-core/src/genlab_core/monetization/ab_test_attribution.py",
+        "ab_test_attribution",
+    ),
+    (
+        "genlab-core/src/genlab_core/monetization/affiliate_matcher.py",
+        "affiliate_matcher",
+    ),
+    (
+        "genlab-core/src/genlab_core/monetization/embedding_matcher.py",
+        "embedding_matcher",
+    ),
+    (
+        "genlab-core/src/genlab_core/monetization/geo_link_resolver.py",
+        "geo_link_resolver",
+    ),
+    (
+        "genlab-core/src/genlab_core/monetization/proxy_revenue_aggregator.py",
+        "proxy_revenue_aggregator",
+    ),
+    (
+        "genlab-core/src/genlab_core/monetization/revenue_tracker.py",
+        "revenue_tracker",
+    ),
+    (
+        "genlab-core/src/genlab_core/monitoring/fb_survival_check.py",
+        "fb_survival_check",
+    ),
+    (
+        "genlab-core/src/genlab_core/learning/hook_training_data.py",
+        "hook_training_data",
+    ),
+    (
+        "genlab-core/src/genlab_core/media/trending_video_fetcher.py",
+        "trending_video_fetcher",
+    ),
 )
 
 

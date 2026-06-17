@@ -39,10 +39,10 @@ import sys
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-import psycopg
 from psycopg.rows import dict_row
 
 from genlab_core.monetization.affiliate_economics import get_affiliate_economics
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def aggregate_proxy_revenue(
     economics = get_affiliate_economics()
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
 
-    with psycopg.connect(dsn, row_factory=dict_row) as conn, conn.transaction():
+    with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn, conn.transaction():
         # Pull yesterday's clicks bucketed by (niche, network). blueprint_id
         # could be added to the GROUP BY but the dashboard's existing
         # estimate doesn't bucket on it, so we match its shape.

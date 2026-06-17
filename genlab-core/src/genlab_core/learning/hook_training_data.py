@@ -266,12 +266,14 @@ def _query_completed_feedback(backlog_client: Any) -> list[dict]:
         logger.warning("[hook_training] DATABASE_URL unset — returning empty")
         return []
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
+
+        from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
     except ImportError:
         logger.warning("[hook_training] psycopg not installed — returning empty")
         return []
     try:
-        with psycopg.connect(db_url, connect_timeout=5) as conn:
+        with pg_connect(db_url, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """

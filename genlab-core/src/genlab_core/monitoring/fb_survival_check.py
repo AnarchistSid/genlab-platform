@@ -38,8 +38,9 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-import psycopg
 from psycopg.rows import dict_row
+
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def find_candidates(
     is set) so the daily run is idempotent and cheap.
     """
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
-    with psycopg.connect(dsn, row_factory=dict_row) as conn:
+    with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -104,7 +105,7 @@ def mark_checked(
     """Stamp ``extra.fb_survival_checked`` so we don't re-check the row tomorrow."""
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
     timestamp = datetime.now(UTC).isoformat()
-    with psycopg.connect(dsn) as conn:
+    with pg_connect(dsn, niche_id="all") as conn:
         # NOTE: every jsonb_build_object argument needs an explicit
         # ::text cast — psycopg3 won't infer types through a variadic
         # function, and a missing cast raises IndeterminateDatatype.
@@ -132,7 +133,7 @@ def mark_removed(
     """
     dsn = dsn or os.environ.get("DATABASE_URL") or "dbname=genlab"
     timestamp = datetime.now(UTC).isoformat()
-    with psycopg.connect(dsn) as conn:
+    with pg_connect(dsn, niche_id="all") as conn:
         # Every jsonb_build_object argument needs an explicit ::text cast
         # (see mark_checked note). All four go through.
         conn.execute(

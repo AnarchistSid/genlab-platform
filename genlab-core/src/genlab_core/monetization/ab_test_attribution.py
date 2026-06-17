@@ -31,6 +31,8 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
+from genlab_core.storage.tenant_context import pg_connect  # SR-A/C/D Tier-3
+
 logger = logging.getLogger(__name__)
 
 # How old an ``active`` ab_tests row must be before we attribute. The
@@ -57,13 +59,13 @@ def _fetch_attributable_rows(min_age_hours: int = _MIN_AGE_HOURS) -> list[dict[s
         logger.debug("[abAttribution] DATABASE_URL unset, skipping")
         return []
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
         from psycopg.rows import dict_row
     except ImportError:
         logger.debug("[abAttribution] psycopg not installed, skipping")
         return []
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 # SET app.niche_id = 'all' bypasses the per-tenant RLS so
                 # this batch job sees every niche's rows. Same pattern used
@@ -104,11 +106,11 @@ def _was_clicked(candidate_id: str, platform: str = "") -> bool:
     if not dsn:
         return False
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
     except ImportError:
         return False
     try:
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor() as cur:
                 cur.execute("SET app.niche_id = 'all'")
                 # platform filter is optional — when present, narrows to
@@ -143,12 +145,12 @@ def _mark_completed(ab_test_id: str, clicked: bool) -> bool:
     if not dsn:
         return False
     try:
-        import psycopg
+        import psycopg  # noqa: F401 — kept for the except ImportError clause
     except ImportError:
         return False
     try:
         now_iso = datetime.now(UTC).isoformat()
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, connect_timeout=5, niche_id="all") as conn:
             with conn.cursor() as cur:
                 cur.execute("SET app.niche_id = 'all'")
                 cur.execute(
