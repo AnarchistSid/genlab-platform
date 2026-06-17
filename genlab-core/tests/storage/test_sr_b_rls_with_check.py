@@ -59,7 +59,10 @@ class TestSRBWithCheckBlocksCrossTenantInsert:
     Pre-migration: an app-role connection with ``app.niche_id='A'``
     could INSERT a row with ``niche_id='B'`` and that row would belong
     to tenant B (cross-tenant data injection). Post-migration:
-    Postgres raises ``CheckViolation``.
+    Postgres raises ``InsufficientPrivilege`` (SQLSTATE 42501 — the
+    PostgreSQL error class for RLS WITH CHECK violations; distinct from
+    SQLSTATE 23514 ``CheckViolation`` which is for ordinary table
+    CHECK constraints).
     """
 
     def test_stories_blocks_foreign_niche_insert(self):
@@ -70,7 +73,7 @@ class TestSRBWithCheckBlocksCrossTenantInsert:
             with conn.cursor() as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", (_TEST_NICHE,))
                 # Per-tenant context set; try to write a foreign-tenant row.
-                with pytest.raises(psycopg.errors.CheckViolation):
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
                     cur.execute(
                         "INSERT INTO stories (id, niche_id, story_id, status) "
                         "VALUES (%s::uuid, %s, %s, 'NEW')",
@@ -85,7 +88,7 @@ class TestSRBWithCheckBlocksCrossTenantInsert:
         with _open_app_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", (_TEST_NICHE,))
-                with pytest.raises(psycopg.errors.CheckViolation):
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
                     cur.execute(
                         "INSERT INTO blueprints (id, niche_id, blueprint_id, status) "
                         "VALUES (%s::uuid, %s, %s, 'DRAFTED')",
@@ -159,7 +162,7 @@ class TestSRBWithCheckBlocksCrossTenantInsert:
         with _open_app_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT set_config('app.niche_id', %s, true)", (_TEST_NICHE,))
-                with pytest.raises(psycopg.errors.CheckViolation):
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
                     cur.execute(
                         "UPDATE stories SET niche_id = %s WHERE id = %s::uuid",
                         (_OTHER_NICHE, record_id),
