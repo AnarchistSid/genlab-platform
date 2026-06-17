@@ -14,12 +14,23 @@ banned_phrases:
   - "follow for daily gaming content 🎮"
 
 hook_examples:
-  - "The indie game outselling Helldivers right now"
-  - "Why pros are quitting Valorant for this"
-  - "5 million copies in 72 hours and you've never heard of it"
-  - "What happens when a 14-year-old beats a world champion live"
-  - "The patch nobody asked for that broke the meta entirely"
-  - "Twitch had 200K viewers on a game that hasn't released yet"
+  # 2026-06-17: rebalanced toward AAA + big-franchise content. The
+  # previous 6 examples skewed indie/underdog ("never heard of",
+  # "nobody asked for", "hasn't released yet"), which biased the LLM
+  # toward writing about obscure games — and the published feed showed
+  # exactly that pattern (MECCHA CHAMELEON, Pro Cycling Manager 26,
+  # SpaceCraft instead of AAA trailers). Operator feedback: "no new
+  # game trailers or anything interesting".
+  #
+  # The new mix: 4 AAA / franchise-tentpole examples, 2 underdog-but-
+  # mainstream examples. Keeps the hook diversity (not all "trailer
+  # dropped" homogeneity) while killing the indie bias.
+  - "The GTA 6 trailer dropped early — every detail you missed"
+  - "Call of Duty just changed multiplayer forever"
+  - "Why everyone's switching from Fortnite to this"
+  - "The Final Fantasy 17 reveal had ONE moment that broke Twitter"
+  - "Marvel Rivals just got the buff that ends the meta"
+  - "Why pros are jumping ship from Valorant to this"
 
 tone_notes: >
   You sound like a Twitch streamer reacting live. High energy, niche slang
