@@ -111,15 +111,55 @@ _TABLES = (
 
 
 def upgrade() -> None:
-    """Add WITH CHECK to all existing niche_isolation policies.
+    """Add WITH CHECK to every existing niche_isolation policy.
 
-    Idempotent via ALTER POLICY (no DROP/CREATE window). PostgreSQL
-    silently no-ops if the policy doesn't exist — but every table in
-    _TABLES was created with a niche_isolation policy by an earlier
-    migration, so this should always succeed.
+    Drift-tolerant: prod was observed (2026-06-17) to be MISSING the
+    niche_isolation policy on ``affiliate_clicks`` (the l2g3h4i5j6k7
+    migration's `_POLICY.format(t="affiliate_clicks")` was created
+    historically but is no longer present — likely DROPped by an
+    out-of-band .sql or ad-hoc operator action; not in any later
+    Alembic revision). A naive ``ALTER POLICY`` against a missing
+    policy raises ``UndefinedObject`` and aborts the whole
+    transaction, blocking the fix on the 17 tables that DO have it.
+
+    Wrap each ALTER in a ``DO`` block that introspects ``pg_policies``
+    first and skips silently when the policy is absent. We still WARN
+    via RAISE NOTICE so a drift-detection sweep can pick it up — the
+    drift IS a real bug (the missing policy means affiliate_clicks
+    has no read-side isolation either), but it's a separate finding
+    that doesn't block this PR's write-side guard.
+
+    The list (_TABLES) reflects the canonical set every Alembic
+    migration intends to protect. Mirror updates here when a future
+    revision adds a new RLS-protected table.
     """
+    # Dollar-quoting ($srb$ ... $srb$) avoids the single-quote escaping
+    # tarpit — _WITH_CHECK_EXPR contains literal single quotes (for
+    # 'app.niche_id', '', 'all') that would close a normal '...' string.
+    # Per PostgreSQL docs, anything between matching $tag$ markers is
+    # taken verbatim (no escape interpretation).
     for table in _TABLES:
-        op.execute(f"ALTER POLICY niche_isolation ON {table} WITH CHECK ({_WITH_CHECK_EXPR});")
+        op.execute(
+            f"""
+            DO $srb$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_policies
+                    WHERE schemaname = current_schema()
+                      AND tablename = '{table}'
+                      AND policyname = 'niche_isolation'
+                ) THEN
+                    ALTER POLICY niche_isolation ON {table}
+                        WITH CHECK ({_WITH_CHECK_EXPR});
+                ELSE
+                    RAISE NOTICE 'SR-B skip: no niche_isolation policy on %, '
+                                 'WITH CHECK not added (drift — file separately)',
+                                 '{table}';
+                END IF;
+            END
+            $srb$;
+            """
+        )
 
 
 def downgrade() -> None:
