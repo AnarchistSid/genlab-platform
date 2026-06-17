@@ -21,6 +21,13 @@
 #     enabled: true
 #     min_confidence: 0.85
 #     max_approvals_per_pass: 3
+#     # W4.3 graduated rollout (default: 1.0 = full traffic). Strongly
+#     # recommended to RAMP, not jump to 1.0 on first flip:
+#     #   Week 1: rollout_pct: 0.1   → ~10% of qualifiers auto-approved
+#     #   Week 2: rollout_pct: 0.25  → if Week-1 confusion-matrix holds
+#     #   Week 3: rollout_pct: 0.50
+#     #   Week 4: rollout_pct: 1.0   → full traffic
+#     # rollout_pct: 0.1
 #
 # Do NOT flip without:
 #   1. calibration_logger data showing ≥30 samples × ≥90% agreement
@@ -28,8 +35,16 @@
 #   2. operator-runbook § 6 pre-flight checks
 #   3. PR-based change (NOT a hand-edit on prod) per the 2026-06-14
 #      deploy-pipeline-gap lesson
+#
+# Soft kill knobs (in order of severity, all reversible via PR):
+#   - rollout_pct: 0.0  → blocks all approvals for this niche only
+#   - enabled: false    → disables auto-approve for this niche (worker
+#                         still runs, calibration still logs)
+#   - global kill switch (file at /opt/genlab/.runtime/auto_approve_kill_switch)
+#                       → disables for ALL niches; operator panic button
 
 auto_publish:
   enabled: false
   min_confidence: 0.85
   max_approvals_per_pass: 3
+  # rollout_pct: 1.0  # W4.3, default — uncomment + ramp when enabling
