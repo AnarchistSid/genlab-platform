@@ -363,6 +363,22 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
     Stories scoring below 0.3 should be rejected before VideoSourcer runs.
     Prevents opinion articles, release schedules, and weekly roundups from
     entering the video pipeline and wasting API quota.
+
+    **2026-06-18 (sports fixture detection)**: ESPN scoreboard already
+    skips ``state='pre'`` (scheduled) games at fetch time. But RSS
+    sources (BBC Sport, Sky Sports, Bleacher Report, The Athletic)
+    don't tag game state — they publish PREVIEW articles for upcoming
+    fixtures with titles like "Atletico Madrid - Athletic Bilbao" or
+    "Koln - Bayer Leverkusen". These have no game-result content,
+    therefore no video clip will ever exist, and they died at
+    DownloadTopVideos / VideoGate for two consecutive days producing
+    zero sports blueprints. Detect them HERE so the visual gate
+    (min_visual_potential=0.3) zero-rejects them before they displace
+    real video stories from the top-N cut.
+
+    Fixture-title pattern: ``Team - Team`` or ``Team vs Team`` with no
+    score-like digits. Match the unscored-team-vs-team shape; any
+    "Final" / "Live" / digit-bearing variant skips this check.
     """
     title = (story.get("title") or "").lower()
     description = (story.get("description") or story.get("summary") or "").lower()
@@ -377,6 +393,17 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
             )
             return 0.0
 
+    # Sports fixture-preview detection (2026-06-18). Pattern: a title
+    # that's just "Team A - Team B" or "Team A vs Team B" with no
+    # score digits AND no Final/Live indicators. Limited to sports —
+    # other niches don't have this shape.
+    if niche_id == "sports" and _is_fixture_preview(story.get("title") or "", text):
+        logger.debug(
+            "[VISUAL_SCORE] 0.0 (fixture preview — no clip yet): %s",
+            story.get("title", "")[:60],
+        )
+        return 0.0
+
     niche_signals = _STRONG_VISUAL_SIGNALS.get(niche_id, [])
     strong_matches = sum(1 for sig in niche_signals if sig in text)
 
@@ -386,3 +413,69 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
         return 0.7
     else:
         return 0.4  # Unknown — let through at lower priority
+
+
+def _is_fixture_preview(title: str, text: str) -> bool:
+    """True iff title looks like a not-yet-played sports fixture.
+
+    Examples that match (return True):
+        ``Atletico Madrid - Athletic Bilbao``
+        ``Koln - Bayer Leverkusen``
+        ``Lakers vs Celtics``
+
+    Examples that DON'T match (return False — let the normal scoring
+    proceed):
+        ``Lakers 102, Celtics 98``                  (has scores)
+        ``Lakers vs Celtics: Final``                (has Final marker)
+        ``Lakers vs Celtics — LIVE updates``        (Live marker)
+        ``Premier League round-up``                 (not a fixture shape)
+        ``Atletico Madrid extend win streak to 8``  (has video signal)
+
+    Designed to be cheap (regex on the title only) and conservative
+    (false negatives are fine — they fall through to normal scoring).
+    """
+    import re
+
+    # Result/live indicators anywhere in title or description means
+    # the game has happened — don't treat as fixture preview.
+    result_indicators = (
+        "final",
+        "live",
+        "ft ",
+        " ft",
+        "in-progress",
+        "in progress",
+        "highlights",
+        "recap",
+        "won ",
+        " won",
+        "beats",
+        "beat ",
+        "extends",
+        "comeback",
+        "victory",
+        "loss to",
+        "defeats",
+        "defeated",
+    )
+    text_lower = text
+    if any(ind in text_lower for ind in result_indicators):
+        return False
+
+    # Score-like digits (e.g. "102-98", "2-1", "3:0") = game played.
+    if re.search(r"\b\d+\s*[-:]\s*\d+\b", title):
+        return False
+    if re.search(r"\b\d+\s*,\s*\d+\b", title):  # "Lakers 102, Celtics 98"
+        return False
+
+    # Fixture shapes: "Team A - Team B" or "Team A vs Team B"
+    # (allowing team names with spaces). The title must consist
+    # ONLY of the matchup (with optional emoji/decoration before/after).
+    # 80 char cap keeps the regex bounded.
+    if len(title) > 80:
+        return False
+    fixture_re = re.compile(
+        r"^[\W]*[A-Z][A-Za-zÀ-ÿ\s.&]{2,30}\s+(?:-|–|vs\.?|v\.?)\s+[A-Z][A-Za-zÀ-ÿ\s.&]{2,30}[\W]*$",
+        re.IGNORECASE,
+    )
+    return bool(fixture_re.match(title.strip()))

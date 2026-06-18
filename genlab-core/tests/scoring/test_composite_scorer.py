@@ -13,6 +13,8 @@ import pytest
 from genlab_core.scoring.composite_scorer import (
     CompositeScorer,
     VideoScore,
+    _is_fixture_preview,
+    score_visual_potential,
 )
 
 # ---------------------------------------------------------------------------
@@ -309,3 +311,101 @@ class TestViewCountFloor:
         assert CompositeScorer("gaming").min_view_count == 5000
         assert CompositeScorer("anime").min_view_count == 2000
         assert CompositeScorer("gaming", min_view_count=99).min_view_count == 99
+
+
+# ── 2026-06-18: Sports fixture-preview detection ──────────────
+
+
+class TestFixturePreviewDetection:
+    """Sports fixture previews ("Atletico Madrid - Athletic Bilbao")
+    are RSS-source text articles for games that HAVEN'T happened yet.
+    They have no video clip and they died at DownloadTopVideos for
+    two consecutive days producing zero sports blueprints. Pin the
+    fixture-detection so the visual gate (min_visual_potential=0.3)
+    zero-rejects them before they displace real video stories in the
+    top-N cut.
+    """
+
+    @staticmethod
+    def _s(title: str) -> dict:
+        return {"title": title, "description": ""}
+
+    def test_dash_separated_teams_is_fixture(self):
+        """The 2026-06-18 prod payload — exact strings that killed
+        ClutchWire today."""
+        assert _is_fixture_preview("Atletico Madrid - Athletic Bilbao", "")
+        assert _is_fixture_preview("Koln - Bayer Leverkusen", "")
+
+    def test_vs_separated_teams_is_fixture(self):
+        assert _is_fixture_preview("Lakers vs Celtics", "")
+        assert _is_fixture_preview("Lakers v Celtics", "")
+
+    def test_unicode_dash_handled(self):
+        """Some RSS feeds use en-dash (–) instead of hyphen (-)."""
+        assert _is_fixture_preview("Real Madrid – Barcelona", "")
+
+    def test_played_game_with_scores_not_fixture(self):
+        """Games with score-shaped numerals are NOT previews — let
+        them through to normal scoring."""
+        assert not _is_fixture_preview("Lakers 102, Celtics 98", "")
+        assert not _is_fixture_preview("Real Madrid 2-1 Barcelona", "")
+        assert not _is_fixture_preview("Bayern 3:0 Dortmund", "")
+
+    def test_final_marker_not_fixture(self):
+        """``Final`` anywhere in the text means game ended."""
+        assert not _is_fixture_preview(
+            "Lakers vs Celtics: Final",
+            "lakers vs celtics: final",
+        )
+
+    def test_live_marker_not_fixture(self):
+        assert not _is_fixture_preview(
+            "Lakers vs Celtics — LIVE updates",
+            "lakers vs celtics — live updates",
+        )
+
+    def test_highlights_marker_not_fixture(self):
+        """Highlights = the game happened, this IS what we want."""
+        assert not _is_fixture_preview(
+            "Lakers vs Celtics highlights",
+            "lakers vs celtics highlights",
+        )
+
+    def test_non_matchup_title_not_fixture(self):
+        """Round-ups, single-team news, etc. don't match the
+        Team-vs-Team shape."""
+        assert not _is_fixture_preview("Premier League round-up", "")
+        assert not _is_fixture_preview(
+            "Atletico Madrid extend win streak to 8",
+            "atletico madrid extend win streak to 8",
+        )
+        assert not _is_fixture_preview("LeBron's top plays 2026", "")
+
+    def test_long_title_rejected(self):
+        """80-char cap keeps regex bounded — long titles can't be
+        fixture previews."""
+        long_title = "Atletico Madrid - Athletic Bilbao " * 5  # ~170 chars
+        assert not _is_fixture_preview(long_title, "")
+
+    def test_visual_potential_zero_for_sports_fixture(self):
+        """End-to-end: a sports fixture preview gets visual_potential
+        0.0, NOT the default 0.4, so the 0.3 min-gate rejects it."""
+        story = self._s("Atletico Madrid - Athletic Bilbao")
+        assert score_visual_potential(story, "sports") == 0.0
+
+    def test_visual_potential_unchanged_for_other_niches(self):
+        """The fixture check is sports-only. A `Team - Team`
+        title in anime or movies (e.g. anime crossover episode
+        titles) shouldn't get the sports treatment."""
+        # Unlikely shape but pin the guard
+        story = self._s("Naruto - Sasuke")
+        assert score_visual_potential(story, "anime") == 0.4  # default
+
+    def test_visual_potential_unchanged_for_sports_with_video_signal(self):
+        """A sports story with strong visual signal (e.g. 'highlights')
+        still gets 0.7+, not 0.0 — fixture check fires only when no
+        other signal explains the visual-quality score."""
+        story = self._s("Lakers vs Celtics highlights — Final")
+        # Has both 'highlights' (strong signal) and 'Final' (result marker)
+        # — should NOT trigger fixture check, should score 0.7+
+        assert score_visual_potential(story, "sports") >= 0.7
