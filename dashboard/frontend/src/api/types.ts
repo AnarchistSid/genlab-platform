@@ -353,25 +353,33 @@ export interface YouTubeDemographics {
 
 // ── Monetization ────────────────────────────────────────────
 
+/**
+ * Wire shape of GET /api/v1/analytics/monetization (R-06 audit
+ * 2026-06-18: the type used to declare a config/metrics shape that
+ * the server never actually returned — see dashboard/server/api/
+ * analytics.py:1430). The wire shape comes wrapped in
+ * ``{status, data: {...}}`` by ``api_success``; the inner ``data``
+ * object is what callers see.
+ */
+export interface MonetizationActiveProgram {
+  name: string;
+  slug: string;
+  commission: string;
+  cta_text?: string;
+}
+
 export interface MonetizationData {
-  config: {
-    affiliate_programs: Array<{
-      name: string;
-      domain: string;
-      commission_range?: string;
-    }>;
-    newsletter_ctas_enabled: boolean;
-    utm_tracking_enabled: boolean;
-  };
-  metrics: {
-    total_published: number;
-    with_affiliate_links: number;
-    with_newsletter_ctas: number;
-    affiliate_rate: number;
-    newsletter_rate: number;
-  };
-  // Catalog network breakdown (from unified affiliate system)
-  catalog_networks?: Record<string, number>;
+  active_programs: MonetizationActiveProgram[];
+  total_programs: number;
+  posts_with_affiliate_links: number;
+  posts_with_newsletter_cta: number;
+  total_published: number;
+  catalog_networks: Record<string, number>;
+}
+
+/** Envelope wrapper that ``analytics.monetization`` returns from the API. */
+export interface MonetizationDataEnvelope {
+  data: MonetizationData;
 }
 
 // ── Analytics Overview (Phase 5) ────────────────────────────

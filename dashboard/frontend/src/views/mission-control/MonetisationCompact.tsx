@@ -4,6 +4,7 @@ import { useRevenueSummary } from "@/hooks/use-revenue";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { formatCompact } from "@/lib/format";
 import { NICHE_IDS, getNicheInfo } from "@/niches/registry";
+import type { MonetisationPlatformProgress } from "@/api/types";
 
 const NICHES = NICHE_IDS.map((id) => {
   const info = getNicheInfo(id);
@@ -11,11 +12,16 @@ const NICHES = NICHE_IDS.map((id) => {
 });
 
 export function MonetisationCompact() {
-  const { data: resp } = useMonetisationProgress();
-  const progressData = (resp && typeof resp === "object" && "data" in resp) ? (resp as any).data : resp;
+  // ``useMonetisationProgress`` already unwraps the ``{data: ...}``
+  // envelope in the API client (see ``monetisation.progress`` in
+  // api/client.ts), so the data is the inner object directly. The
+  // earlier ``(resp as any).data`` fallback was dead defensive code.
+  const { data: progressData } = useMonetisationProgress();
+  // ``revenue.summary`` returns the typed shape inline — no envelope
+  // wrapper, no `any` cast needed.
   const { data: revenueData } = useRevenueSummary();
-  const clicks = revenueData?.clicks ?? (revenueData as any)?.data?.clicks;
-  const estRevenue = revenueData?.estimated_revenue_inr_30d ?? (revenueData as any)?.data?.estimated_revenue_inr_30d;
+  const clicks = revenueData?.clicks;
+  const estRevenue = revenueData?.estimated_revenue_inr_30d;
 
   return (
     <div className="bento-card">
@@ -32,8 +38,10 @@ export function MonetisationCompact() {
 
           if (nicheProgress) {
             // Iterate all platforms and find the metric closest to threshold
-            for (const [, platProgress] of Object.entries(nicheProgress) as [string, any][]) {
-              for (const metric of (platProgress?.metrics ?? [])) {
+            for (const [, platProgress] of Object.entries(
+              nicheProgress,
+            ) as [string, MonetisationPlatformProgress][]) {
+              for (const metric of platProgress?.metrics ?? []) {
                 if (metric.target_value && !metric.is_threshold_met) {
                   const pct = metric.pct_complete ?? 0;
                   if (!nearestMetric || pct > nearestMetric.pct) {

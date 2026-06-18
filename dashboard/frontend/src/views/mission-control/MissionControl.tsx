@@ -61,7 +61,11 @@ function getSprintNumber(): number {
 
 // ── Alert Logic ────────────────────────────────────────────
 
-function useAlertMessage(): { message: string; type: "error" | "warning" | "info" } | null {
+function useAlertMessage(): {
+  message: string;
+  type: "error" | "warning" | "info";
+  link?: string;
+} | null {
   const { data } = useCrossNicheOverview();
   const { data: healthResp } = useChannelHealth();
 
@@ -148,7 +152,7 @@ export default function MissionControl() {
         <AlertBanner
           message={alertInfo.message}
           type={alertInfo.type}
-          link={(alertInfo as any).link}
+          link={alertInfo.link}
           dismissable
         />
       )}
