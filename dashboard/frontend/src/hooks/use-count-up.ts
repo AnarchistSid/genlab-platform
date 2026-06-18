@@ -10,11 +10,18 @@ export function useCountUp(
 ): string {
   const duration = opts?.duration ?? 800;
   const defaultFormatter = (n: number) => n.toLocaleString();
-  // Keep a stable ref to the formatter so it never triggers re-animation
-  const formatterRef = useRef(opts?.formatter ?? defaultFormatter);
-  formatterRef.current = opts?.formatter ?? defaultFormatter;
+  const formatter = opts?.formatter ?? defaultFormatter;
+  // Keep a stable ref to the formatter so it never triggers re-animation.
+  // Ref mutation goes through useEffect (react-hooks/refs forbids
+  // writing to refs during render).
+  const formatterRef = useRef(formatter);
+  useEffect(() => {
+    formatterRef.current = formatter;
+  }, [formatter]);
 
-  const [display, setDisplay] = useState(() => formatterRef.current(0));
+  // Compute the initial display from the freshly-resolved formatter
+  // rather than reading the ref during render (react-hooks/refs).
+  const [display, setDisplay] = useState(() => formatter(0));
   const rafRef = useRef<number>(0);
   const prevEnd = useRef(end);
 

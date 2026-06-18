@@ -1,3 +1,10 @@
+// shadcn/ui upstream pattern: components export their cva ``*Variants``
+// alongside the component so consumers can compose new styles
+// (e.g. ``buttonVariants({ variant: "ghost" })`` inside a custom button).
+// React Fast Refresh's only-export-components rule wants components in
+// isolation, but splitting variant objects across files fights the shadcn
+// convention recognized by anyone arriving from the shadcn docs.
+/* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"

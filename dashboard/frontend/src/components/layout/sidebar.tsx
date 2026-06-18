@@ -3,20 +3,9 @@ import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity,
-  BarChart3,
-  Brain,
-  Calendar,
   ChevronDown,
-  ClipboardCheck,
-  Compass,
-  ListChecks,
   Lock,
   Menu,
-  MessageCircle,
-  Settings,
-  ShieldCheck,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,6 +14,7 @@ import { getAllNiches } from "@/niches/registry";
 import { crossNiche } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
 import { getSocket } from "@/api/socket";
+import { navItems, bottomNavItems } from "./nav-items";
 
 type SocketStatus = "connected" | "reconnecting" | "disconnected";
 
@@ -52,7 +42,10 @@ function useSocketStatus(): SocketStatus {
     socket.io.on("reconnect_attempt", onReconnectAttempt);
     socket.io.on("reconnect", onReconnect);
 
-    // Sync initial state after attaching listeners
+    // Sync initial state after attaching listeners. One-shot
+    // external-system sync — the rule's render-cascading concern
+    // doesn't apply here (state only changes when the socket emits).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus(socket.connected ? "connected" : "disconnected");
 
     return () => {
@@ -82,22 +75,9 @@ function useIsNarrow(breakpoint = 768): boolean {
   return isNarrow;
 }
 
-export const navItems = [
-  { to: "/", icon: Compass, label: "Mission Control", shortcut: "G M" },
-  { to: "/analytics", icon: BarChart3, label: "Analytics", shortcut: "G A" },
-  { to: "/pipeline", icon: Activity, label: "Pipeline", shortcut: "G P", liveDot: true },
-  { to: "/schedule", icon: Calendar, label: "Schedule", shortcut: "G S" },
-  { to: "/queue", icon: ListChecks, label: "Publishing Queue", shortcut: "G Q" },
-  { to: "/monetisation", icon: TrendingUp, label: "Monetisation", shortcut: "G $" },
-  { to: "/content", icon: ClipboardCheck, label: "Content Review", shortcut: "G C" },
-  { to: "/learning", icon: Brain, label: "Learning", shortcut: "G L" },
-  { to: "/engagement", icon: MessageCircle, label: "Engagement", shortcut: "G E" },
-  { to: "/health", icon: ShieldCheck, label: "System Health", shortcut: "G H" },
-];
-
-const bottomItems = [
-  { to: "/settings", icon: Settings, label: "Settings", shortcut: "G ," },
-];
+// navItems + bottomNavItems moved to ./nav-items so this file only
+// exports React components (react-refresh/only-export-components).
+const bottomItems = bottomNavItems;
 
 function NicheSwitcher({ collapsed }: { collapsed?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -291,10 +271,13 @@ export function Sidebar() {
   });
   const agentsRunning = (overview?.global?.agents_running ?? 0) > 0;
 
-  // Close overlay when navigating or switching to desktop
-  useEffect(() => {
+  // Close overlay when switching to desktop (React 19 idiom: track
+  // previous + reset during render — see stories.tsx).
+  const [prevIsNarrow, setPrevIsNarrow] = useState(isNarrow);
+  if (prevIsNarrow !== isNarrow) {
+    setPrevIsNarrow(isNarrow);
     if (!isNarrow) setOverlayOpen(false);
-  }, [isNarrow]);
+  }
 
   // Icon-only collapsed sidebar for 640px–767px
   if (isNarrow) {

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Play,
@@ -192,12 +192,14 @@ export default function RunsView() {
     routeId ?? null
   );
 
-  // Sync route param to selected ID
-  useEffect(() => {
-    if (routeId) {
-      setSelectedId(routeId);
-    }
-  }, [routeId]);
+  // Sync route param to selected ID (React 19 idiom: reset during render
+  // when a "controlling" prop changes, rather than via useEffect →
+  // setState which cascades renders).
+  const [prevRouteId, setPrevRouteId] = useState(routeId);
+  if (routeId && prevRouteId !== routeId) {
+    setPrevRouteId(routeId);
+    setSelectedId(routeId);
+  }
 
   // Real-time updates
   useSocketUpdates();

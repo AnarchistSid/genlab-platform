@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Command, Settings, ChevronRight } from "lucide-react";
-import { Sidebar, navItems } from "./sidebar";
+import { Sidebar } from "./sidebar";
+import { navItems } from "./nav-items";
 import { NotificationCenter } from "./notification-center";
 import { ActivityFeed, ActivityToggle } from "./activity-feed";
 import { OfflineBanner } from "./offline-banner";

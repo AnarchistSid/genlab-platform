@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 
 interface Props {
   data: number[];
@@ -8,9 +8,14 @@ interface Props {
 }
 
 export function MiniSparkline({ data, color, width = 100, height = 24 }: Props) {
+  // ``useId`` gives a stable, SSR-safe, render-pure unique value per
+  // component instance — replaces the prior Math.random() inside
+  // useMemo which violated react-hooks/purity.
+  const reactId = useId();
   const gradientId = useMemo(
-    () => `spark-${color.replace(/[^a-z0-9]/gi, "")}-${Math.random().toString(36).slice(2, 6)}`,
-    [color],
+    () =>
+      `spark-${color.replace(/[^a-z0-9]/gi, "")}-${reactId.replace(/:/g, "")}`,
+    [color, reactId],
   );
 
   const path = useMemo(() => {

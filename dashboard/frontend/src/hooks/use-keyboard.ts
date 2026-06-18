@@ -49,9 +49,13 @@ export function useKeyboardShortcuts(): void {
     clearAll();
   }, [location.pathname, clearAll]);
 
-  // Stabilize mutation.mutate via ref so the keydown effect doesn't re-register every render
+  // Stabilize mutation.mutate via ref so the keydown effect doesn't
+  // re-register every render. Ref mutation must happen in an effect
+  // (react-hooks/refs forbids writing refs during render).
   const reviewRef = useRef(reviewMutation.mutate);
-  reviewRef.current = reviewMutation.mutate;
+  useEffect(() => {
+    reviewRef.current = reviewMutation.mutate;
+  }, [reviewMutation.mutate]);
 
   // "g" prefix state for two-key navigation combos
   const gPrefixRef = useRef(false);

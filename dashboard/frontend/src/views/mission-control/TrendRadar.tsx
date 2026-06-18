@@ -29,9 +29,14 @@ export function TrendRadar() {
     return { trends: items.slice(0, 4), hasRealData: items.length > 0 };
   })();
 
-  // Cache TTL: 6h
+  // Cache TTL: 6h. ``Date.now()`` is intentional impure read — the
+  // displayed label refreshes whenever the parent re-renders for any
+  // reason (which happens at the 60s React Query refetch cadence on
+  // Mission Control). A truly-pure pattern would use a useInterval
+  // heartbeat, but a 6h TTL countdown drifting by ≤1min is fine.
   const cacheTtl = dataUpdatedAt
-    ? Math.max(0, 6 * 60 * 60 * 1000 - (Date.now() - dataUpdatedAt))
+    ? // eslint-disable-next-line react-hooks/purity
+      Math.max(0, 6 * 60 * 60 * 1000 - (Date.now() - dataUpdatedAt))
     : null;
   const cacheMin = cacheTtl != null ? Math.floor(cacheTtl / 60000) : null;
   const cacheLabel = cacheMin != null

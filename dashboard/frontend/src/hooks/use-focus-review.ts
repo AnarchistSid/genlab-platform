@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { blueprints } from "@/api/client";
@@ -49,12 +49,12 @@ export function useFocusReviewQueue() {
     skipped: 0,
   });
 
-  // Clamp currentIndex when items array shrinks
-  useEffect(() => {
-    if (items.length > 0 && currentIndex >= items.length) {
-      setCurrentIndex(Math.max(0, items.length - 1));
-    }
-  }, [items.length, currentIndex]);
+  // Clamp currentIndex when items array shrinks (React 19 idiom:
+  // derive during render rather than useEffect → setState which
+  // cascades — see stories.tsx for the same pattern).
+  if (items.length > 0 && currentIndex >= items.length) {
+    setCurrentIndex(Math.max(0, items.length - 1));
+  }
 
   const reviewed = stats.approved + stats.rejected + stats.revised + stats.skipped;
   const isComplete = items.length > 0 && currentIndex >= items.length;

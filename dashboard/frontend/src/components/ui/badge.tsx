@@ -1,3 +1,6 @@
+// shadcn/ui upstream pattern: component exports its cva ``badgeVariants``
+// alongside the component (see button.tsx for the same rationale).
+/* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"

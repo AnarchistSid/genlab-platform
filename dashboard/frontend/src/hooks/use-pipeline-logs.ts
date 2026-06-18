@@ -10,6 +10,18 @@ export function usePipelineLogs(nicheId: string | null) {
   const [lines, setLines] = useState<PipelineLogEntry[]>([]);
   const latestTsRef = useRef<string | null>(null);
 
+  // Reset on niche change (React 19 idiom — see stories.tsx).
+  // The ref reset cannot happen during render (react-hooks/refs); it
+  // moves into an effect coupled to nicheId.
+  const [prevNicheId, setPrevNicheId] = useState(nicheId);
+  if (prevNicheId !== nicheId) {
+    setPrevNicheId(nicheId);
+    setLines([]);
+  }
+  useEffect(() => {
+    latestTsRef.current = null;
+  }, [nicheId]);
+
   // Initial fetch when niche changes
   const { data: initialData } = useQuery({
     queryKey: ["pipeline-logs", nicheId],
@@ -22,21 +34,19 @@ export function usePipelineLogs(nicheId: string | null) {
     refetchInterval: false, // Socket handles live updates
   });
 
-  // Seed from initial fetch
+  // Seed from initial fetch. This is a synchronization between an
+  // external (network) system and React state, which is exactly what
+  // useEffect is for — ESLint's set-state-in-effect rule is overly
+  // conservative for the external-data-arrives-fresh pattern.
   useEffect(() => {
     if (!initialData?.data) return;
     const entries = initialData.data as PipelineLogEntry[];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLines(entries.slice(-MAX_LOG_LINES));
     if (entries.length > 0) {
       latestTsRef.current = entries[entries.length - 1].ts;
     }
   }, [initialData]);
-
-  // Reset on niche change
-  useEffect(() => {
-    setLines([]);
-    latestTsRef.current = null;
-  }, [nicheId]);
 
   // Socket listener for live log lines
   useEffect(() => {

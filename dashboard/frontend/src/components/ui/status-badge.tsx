@@ -1,3 +1,7 @@
+// shadcn-style ui primitive: exports cva variants + a status→variant utility
+// alongside the component for discoverability (the table of keyword→variant
+// mappings is the source of truth that any caller needs to see in one place).
+/* eslint-disable react-refresh/only-export-components */
 /**
  * StatusBadge — semantic status indicator for live application state.
  *
