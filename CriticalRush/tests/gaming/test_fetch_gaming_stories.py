@@ -195,3 +195,128 @@ class TestDeduplication:
             assert len(elden_stories) == 1
             assert elden_stories[0]["score"] == 0.8
             assert elden_stories[0]["source"] == "steam_spike"
+
+
+# ---------------------------------------------------------------------------
+# Twitch non-game category filter (2026-06-18 outage fix)
+# ---------------------------------------------------------------------------
+
+
+class TestTwitchNonGameFilter:
+    """The Twitch helix top-games endpoint returns non-game categories
+    like 'Just Chatting' and 'IRL' mixed with real games. The fetcher
+    must filter these out — see the 2026-06-18 outage root-cause.
+    """
+
+    def _mock_helix_response(self, games):
+        """Build a mocked Twitch helix response with given game dicts."""
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json.return_value = {"data": games}
+        return resp
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_skips_entries_with_empty_igdb_id(self, mock_get, monkeypatch):
+        """The canonical "not a real game" signal from Twitch is
+        ``igdb_id == ""``. Drop any such entry."""
+        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
+        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+
+        mock_get.return_value = self._mock_helix_response(
+            [
+                {"id": "1", "name": "Real Game", "igdb_id": "100", "box_art_url": ""},
+                {"id": "2", "name": "Just Chatting", "igdb_id": "", "box_art_url": ""},
+                {"id": "3", "name": "Another Game", "igdb_id": "200", "box_art_url": ""},
+                {"id": "4", "name": "IRL", "igdb_id": "", "box_art_url": ""},
+            ]
+        )
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        titles = [s["title"] for s in stories]
+        assert "Real Game" in titles
+        assert "Another Game" in titles
+        assert "Just Chatting" not in titles
+        assert "IRL" not in titles
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_skips_hardcoded_non_game_category_ids(self, mock_get, monkeypatch):
+        """Belt-and-suspenders: even if Twitch populates igdb_id for
+        a non-game category, the hardcoded ID list catches it."""
+        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
+        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+
+        mock_get.return_value = self._mock_helix_response(
+            [
+                {
+                    "id": "509658",  # Just Chatting ID in non-game list
+                    "name": "Just Chatting (with bogus igdb)",
+                    "igdb_id": "999",  # Twitch could in theory populate this
+                    "box_art_url": "",
+                },
+                {"id": "9999", "name": "Real Game", "igdb_id": "100", "box_art_url": ""},
+            ]
+        )
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        titles = [s["title"] for s in stories]
+        assert any("Real Game" in t for t in titles)
+        assert not any("Just Chatting" in t for t in titles)
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_returns_at_most_5_real_games(self, mock_get, monkeypatch):
+        """Even with 20 real-game entries, we cap at 5 (top-N by Twitch chart rank)."""
+        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
+        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+
+        many_games = [
+            {"id": str(i), "name": f"Game {i}", "igdb_id": str(100 + i), "box_art_url": ""}
+            for i in range(20)
+        ]
+        mock_get.return_value = self._mock_helix_response(many_games)
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        assert len(stories) == 5
+        # All returned stories must have proper rank ordering (highest score first)
+        scores = [s["score"] for s in stories]
+        assert scores == sorted(scores, reverse=True)
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_returns_empty_when_all_entries_are_non_games(self, mock_get, monkeypatch):
+        """Edge case: Twitch chart is entirely non-game categories. Should
+        return 0 stories cleanly, letting Steam + RSS provide content."""
+        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
+        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+
+        mock_get.return_value = self._mock_helix_response(
+            [
+                {"id": "1", "name": "Just Chatting", "igdb_id": "", "box_art_url": ""},
+                {"id": "2", "name": "IRL", "igdb_id": "", "box_art_url": ""},
+            ]
+        )
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        with patch("niches.gaming.tools._twitch_auth.TwitchTokenManager") as MockToken:
+            MockToken.return_value.get_token.return_value = "fake-token"
+            fetcher = TwitchTrendingFetcher()
+            stories = fetcher.fetch()
+
+        assert stories == []
