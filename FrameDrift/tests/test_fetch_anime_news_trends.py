@@ -1,4 +1,18 @@
-"""Tests for FrameDrift Google Trends integration in fetch_anime_news."""
+"""Tests for FrameDrift Google Trends integration in fetch_anime_news.
+
+U-10 (2026-06-18): this module exercises the pytrends-backed code
+path. After making pytrends optional, the test file is also
+optional — skip the WHOLE module when pytrends (and its transitive
+pandas dep) aren't installed. The graceful-skip path itself is
+covered by genlab-core/tests/intel/test_google_trends.py's
+TestPytrendsGracefulSkip + the fd_strategies.fetch_anime_news
+try/except shipped with U-10.
+"""
+
+import pytest
+
+pytest.importorskip("pytrends")
+pytest.importorskip("pandas")
 
 from unittest.mock import MagicMock, patch
 

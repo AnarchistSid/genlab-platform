@@ -1,11 +1,25 @@
 """Tests for GoogleTrendsIntel."""
 
+import importlib.util
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from genlab_core.intel.google_trends import (
     NICHE_SEED_KEYWORDS,
     TRENDS_CATEGORIES,
     GoogleTrendsIntel,
+)
+
+# U-10 (2026-06-18): pandas is a transitive dep of pytrends. After
+# making pytrends optional, pandas is also no longer guaranteed in
+# every CI matrix slot — the test-core (3.12/3.13/3.14) jobs install
+# genlab-core only, not FrameDrift's [trends] extra. Tests that
+# require pandas (just one — test_realtime_trending_returns_list, the
+# DataFrame mock) skip cleanly when pandas isn't there.
+_HAS_PANDAS = importlib.util.find_spec("pandas") is not None
+_pandas_required = pytest.mark.skipif(
+    not _HAS_PANDAS, reason="pandas not installed (optional dep, lands via pytrends extra)"
 )
 
 
@@ -34,6 +48,7 @@ class TestGoogleTrendsIntel:
         for niche in ["gaming", "sports", "movies", "ai_creators"]:
             assert niche in TRENDS_CATEGORIES
 
+    @_pandas_required
     def test_realtime_trending_returns_list(self):
         intel = GoogleTrendsIntel()
         # Mock pytrends client
