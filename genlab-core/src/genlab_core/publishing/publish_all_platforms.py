@@ -131,6 +131,106 @@ EXIT_UNEXPECTED = 5  # real signal — unhandled exception in run_publish
 
 
 # ---------------------------------------------------------------------------
+# Per-niche enabled-platform filter (2026-06-18)
+# ---------------------------------------------------------------------------
+
+
+# Mapping from per-niche config's platform names to the canonical names
+# the publisher uses. Inverse of ``platform_status.PLATFORM_ID_MAP``:
+# config uses "x", code uses "twitter".
+_CONFIG_PLATFORM_ALIASES: dict[str, str] = {
+    "x": "twitter",
+    "x_twitter": "twitter",
+}
+
+
+def _filter_enabled_platforms(niche_id: str, default_list: list[str]) -> list[str]:
+    """Return ``default_list`` minus any platform the niche's
+    ``publishing.yaml`` explicitly disables.
+
+    Pre-2026-06-18 the publisher hardcoded
+    ``["instagram", "youtube", "facebook", "twitter", "threads"]``
+    regardless of per-niche settings. Three niches (sports, movies,
+    anime) set ``platforms.x.enabled: false`` because they don't have
+    Twitter credentials provisioned. The hardcoded list still tried
+    Twitter, hit "No x_twitter credentials" CREDENTIAL failure, and
+    the run_publish ``any_success=False`` path returned ``EXIT_ALL_
+    FAILED`` causing systemd to mark publisher.service as failed
+    every cycle.
+
+    Defaults are conservative: if config can't be loaded or the
+    ``platforms`` block is missing, fall back to ``default_list``
+    unchanged. ONLY explicit ``enabled: false`` removes a platform.
+
+    Config alias note: per-niche YAMLs use ``platforms.x`` while the
+    publisher uses ``twitter``. ``_CONFIG_PLATFORM_ALIASES`` maps
+    config-side names to publisher-side names so the filter compares
+    apples to apples.
+    """
+    try:
+        from pathlib import Path
+
+        import yaml as _yaml
+
+        from genlab_core.pipeline.cli import NICHE_DIR_NAMES, _resolve_genlab_root
+
+        root = _resolve_genlab_root()
+        dir_name = NICHE_DIR_NAMES.get(niche_id)
+        if not dir_name:
+            return default_list
+        niche_root = Path(root) / dir_name
+        # Gaming's nested layout first, then flat layout (matches
+        # ``auto_approver.load_policy``).
+        candidates = [
+            niche_root / "niches" / niche_id / "config" / "publishing.yaml",
+            niche_root / "config" / "publishing.yaml",
+        ]
+        data = None
+        for candidate in candidates:
+            if candidate.exists():
+                with open(candidate, encoding="utf-8") as f:
+                    data = _yaml.safe_load(f) or {}
+                break
+        if not isinstance(data, dict):
+            return default_list
+        platforms_block = data.get("platforms")
+        if not isinstance(platforms_block, dict):
+            # BB-style configs use per-platform yamls instead of a
+            # consolidated ``platforms`` block — no filter needed.
+            return default_list
+
+        # Build the set of explicitly-disabled platforms (publisher-side
+        # names, applying the config→publisher alias map).
+        disabled: set[str] = set()
+        for config_name, settings in platforms_block.items():
+            if not isinstance(settings, dict):
+                continue
+            if settings.get("enabled") is False:
+                publisher_name = _CONFIG_PLATFORM_ALIASES.get(config_name, config_name)
+                disabled.add(publisher_name)
+
+        if not disabled:
+            return default_list
+
+        filtered = [p for p in default_list if p not in disabled]
+        if len(filtered) < len(default_list):
+            logger.info(
+                "[publish] %s: filtered platforms %s (config-disabled: %s)",
+                niche_id,
+                filtered,
+                sorted(disabled),
+            )
+        return filtered
+    except Exception:
+        logger.warning(
+            "[publish] %s: platform-enabled filter failed — using full default list",
+            niche_id,
+            exc_info=True,
+        )
+        return default_list
+
+
+# ---------------------------------------------------------------------------
 # Core Publish Loop
 # ---------------------------------------------------------------------------
 
@@ -421,13 +521,19 @@ def main() -> int:
     from genlab_core.http.backlog_client import BacklogClient
     from genlab_core.publishing.daily_cap import DailyCapEnforcer
 
-    enabled = args.platforms or [
+    default_platforms = [
         "instagram",
         "youtube",
         "facebook",
         "twitter",
         "threads",
     ]
+    # Operator-supplied --platforms overrides the default + the
+    # per-niche enabled filter (so they can force a single-platform
+    # debug run). When unspecified, ``default_platforms`` gets filtered
+    # below by each niche's ``platforms.<name>.enabled: false`` setting.
+    operator_explicit_platforms = args.platforms is not None
+    enabled = args.platforms or list(default_platforms)
 
     niches = (
         ["ai_creators", "gaming", "sports", "movies", "anime"]
@@ -455,11 +561,30 @@ def main() -> int:
             enforcer = DailyCapEnforcer(backlog_client=shared_client, niche_id=nid)
             enforcer.log_headroom()
 
+            # 2026-06-18 fix: filter the default platform list by each
+            # niche's per-platform ``enabled: false`` setting in
+            # ``publishing.yaml``. Pre-fix, the publisher hardcoded
+            # ``["instagram", "youtube", "facebook", "twitter",
+            # "threads"]`` and ignored that anime/movies/sports all set
+            # ``platforms.x.enabled: false`` (no Twitter creds). Every
+            # cycle the retry-only pass tried Twitter, hit "No
+            # x_twitter credentials", `_on_failure` marked it FAILED,
+            # ``any_success`` was False (other platforms hit daily-cap-
+            # reached), and ``run_publish`` returned ``EXIT_ALL_FAILED``
+            # → systemd marked publisher.service as failed → OnFailure
+            # alert spam.
+            #
+            # Operator --platforms override skips this filter (debug
+            # flag); the default-list path filters per niche.
+            niche_enabled = (
+                enabled if operator_explicit_platforms else _filter_enabled_platforms(nid, enabled)
+            )
+
             exit_code = run_publish(
                 niche_id=nid,
                 backlog_client=shared_client,
                 daily_cap=enforcer,
-                enabled_platforms=enabled,
+                enabled_platforms=niche_enabled,
                 retry_only=args.retry_only,
             )
             total_exit = max(total_exit, exit_code)
