@@ -4,7 +4,6 @@ import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.intel.google_trends import (
     NICHE_SEED_KEYWORDS,
     TRENDS_CATEGORIES,
