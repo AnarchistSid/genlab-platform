@@ -174,6 +174,60 @@ def _reddit_app_token() -> str | None:
     return str(token)
 
 
+# ── Reddit session-cookie auth (2026-06-18 alternative path) ─────
+#
+# Reddit's OAuth app-registration flow has aggressive reCAPTCHA that
+# resists automation (verified 2026-06-18). Session cookies from a
+# logged-in browser DO work for ``/r/*/search.json`` calls with HTTP
+# 200 — verified by curl-with-cookies against prod-via-WARP returning
+# 200 + JSON results.
+#
+# This is a 2nd-class fallback when OAuth env vars aren't set:
+#   1. OAuth client_credentials (PR #321) — preferred when available
+#   2. Session-cookie auth (this PR) — preferred when cookie file exists
+#   3. Anon (the failing path) — last-ditch, will still 403 in prod
+#
+# Operator setup for cookies path:
+#   * Log into reddit.com in a real browser
+#   * Export Netscape cookies.txt (browser extension or Playwright)
+#   * Place at /opt/genlab/.reddit_cookies.txt (mode 0600, owner genlab)
+#
+# Cookies have shorter TTL than OAuth tokens (~30 days vs unlimited
+# for app credentials), so OAuth is the long-term path; cookies are
+# the immediate-unblock path when the captcha-blocked registration
+# flow can't complete.
+
+_REDDIT_COOKIE_PATH = os.environ.get(
+    "REDDIT_COOKIES_PATH",
+    "/opt/genlab/.reddit_cookies.txt",
+)
+
+
+def _reddit_cookie_jar():
+    """Return a ``requests``-compatible cookie jar from the Netscape
+    cookies file, or None if not configured / file missing / unreadable.
+
+    Caller's responsibility: pass the returned jar as ``cookies=`` to
+    the requests.get/post call. Falls back to None silently — the
+    OAuth + anon paths both work without this.
+    """
+    try:
+        import http.cookiejar
+
+        if not os.path.isfile(_REDDIT_COOKIE_PATH):
+            return None
+        jar = http.cookiejar.MozillaCookieJar(_REDDIT_COOKIE_PATH)
+        try:
+            jar.load(ignore_discard=True, ignore_expires=True)
+        except (OSError, http.cookiejar.LoadError) as exc:
+            logger.warning("Reddit cookies load failed: %s", exc)
+            return None
+        return jar if len(jar) > 0 else None
+    except Exception:
+        logger.warning("Reddit cookie jar setup failed", exc_info=True)
+        return None
+
+
 def _url_host_is_allowed(url: str) -> bool:
     """Return True when ``url``'s host ends in any allow-listed suffix.
 
@@ -617,18 +671,39 @@ class VideoSourcer:
         #   3. Optional: REDDIT_USER_AGENT (default: "GenLab/1.0 by /u/genlab-bot")
         import requests as _req
 
+        # 3-tier auth resolution (2026-06-18):
+        #   1. OAuth app token (preferred — long-lived, official)
+        #   2. Session cookie jar (browser-session auth — short TTL but
+        #      works when OAuth app reg is captcha-blocked)
+        #   3. Anon (will 403 from data-center IPs; the existing
+        #      ``except Exception`` swallow lets the pipeline continue)
         token = _reddit_app_token()
+        cookie_jar = None if token else _reddit_cookie_jar()
+
         if token:
             base_url = "https://oauth.reddit.com"
             headers = {
                 "Authorization": f"bearer {token}",
                 "User-Agent": _REDDIT_UA,
             }
+            auth_mode = "oauth"
+        elif cookie_jar is not None:
+            # Cookie auth uses www.reddit.com (NOT oauth.reddit.com —
+            # session cookies are scoped to .reddit.com, not oauth.*).
+            base_url = "https://www.reddit.com"
+            headers = {
+                # Browser-like UA matches the session that issued the
+                # cookies; mismatched UA can trigger Reddit's bot
+                # heuristics even with valid cookies.
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            }
+            auth_mode = "cookie"
         else:
             base_url = "https://www.reddit.com"
-            # Fallback UA matches the original anon-path approach;
-            # data-center IPs will still 403 but caller's
-            # ``except Exception`` already handles that gracefully.
             headers = {
                 "User-Agent": (
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -636,26 +711,30 @@ class VideoSourcer:
                     "Chrome/120.0.0.0 Safari/537.36"
                 ),
             }
+            auth_mode = "anon"
 
         for sub in subreddits:
             if len(results) >= self.max_results:
                 break
             try:
                 encoded_q = quote(query)
-                # OAuth uses /search (no .json suffix), anon uses /search.json
+                # OAuth uses /search (no .json suffix); cookie + anon
+                # use /search.json. The trailing-.json is the
+                # difference between the OAuth-API host and the web
+                # host's JSON-render endpoint.
                 path_suffix = "/search" if token else "/search.json"
                 url = (
                     f"{base_url}/r/{sub}{path_suffix}?"
                     f"q={encoded_q}&sort=relevance&t=week&limit={self.max_results}"
                     f"&restrict_sr=on"
                 )
-                resp = _req.get(url, headers=headers, timeout=10)
+                resp = _req.get(url, headers=headers, cookies=cookie_jar, timeout=10)
                 if resp.status_code != 200:
                     logger.warning(
                         "Reddit search HTTP %d for r/%s (auth=%s)",
                         resp.status_code,
                         sub,
-                        "oauth" if token else "anon",
+                        auth_mode,
                     )
                     continue
                 data = resp.json()
