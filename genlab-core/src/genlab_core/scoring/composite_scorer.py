@@ -430,25 +430,52 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
         return 0.4  # Unknown — let through at lower priority
 
 
+_VIDEO_BEARING_SOURCES = frozenset(
+    {
+        "scorebat",  # ScoreBat highlights — embed provided but
+        # not propagated to story dict; the source name itself
+        # is the marker.
+        "youtube",
+        "youtube_subscribed_channel",
+        "youtube_channel_rss",
+        "content_pool",
+        "reddit_video",
+        "tiktok",
+        "twitch_clip",
+    }
+)
+
+
 def _has_video_field(story: dict) -> bool:
-    """True iff the story carries a non-empty video identifier from
-    any video-fetching source.
+    """True iff the story carries a video identifier OR comes from
+    a known video-bearing source.
 
     Used by ``score_visual_potential`` to skip the fixture-preview
-    check for stories that ALREADY have a verified video — those
+    check for stories that ALREADY represent a real video — those
     "Team A - Team B" titles ARE the matchup highlights video itself
     (ScoreBat, YouTube channel RSS, content_pool), not preview text
     articles.
 
-    Fields checked match the source-bearing keys populated by:
-      * ``FetchTrendingVideos`` → ``video_id`` + ``download_url``
-      * ``FetchScoreBatHighlights`` → ``video_url`` + ``embed``
-      * ``FetchRedditClips`` → ``video_url``
-      * Content pool claimed stories → ``video_id``
+    Two detection paths:
+      1. Direct URL/ID fields (``video_id``, ``video_url``,
+         ``download_url``, ``embed``) — populated by
+         ``FetchTrendingVideos`` + ``FetchRedditClips``.
+      2. Source-name match (``source`` or ``video_source`` field in
+         ``_VIDEO_BEARING_SOURCES``) — used for sources like ScoreBat
+         that intentionally don't propagate their embed URL into the
+         story dict (the embed lives elsewhere and VideoGate matches
+         it later).
+
+    Either path passing → the story is video-bearing → fixture check
+    must skip.
     """
     for key in ("video_id", "video_url", "download_url", "embed"):
         v = story.get(key)
         if v and isinstance(v, str) and v.strip():
+            return True
+    for key in ("source", "video_source"):
+        v = story.get(key)
+        if v and isinstance(v, str) and v.strip().lower() in _VIDEO_BEARING_SOURCES:
             return True
     return False
 
