@@ -119,3 +119,75 @@ def test_gaming_does_not_fall_through_to_global():
     with patch.dict(os.environ, env, clear=False):
         val = resolve_niche_env("gaming", "META_ACCESS_TOKEN", "META_ACCESS_TOKEN")
         assert val == ""
+
+
+# ── SR-E (2026-06-18): per-tenant YouTube API key ──────────────────
+
+
+class TestResolveYoutubeApiKey:
+    """SR-E enables tenant-2 onboarding by allowing per-niche
+    YOUTUBE_API_KEY env vars with global fallback. Read-only Data
+    API key — global fallback is safe (no cross-channel write risk).
+    """
+
+    def test_per_niche_key_wins_over_global(self, monkeypatch):
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("YOUTUBE_API_KEY", "global-key")
+        monkeypatch.setenv("CLUTCHWIRE_YOUTUBE_API_KEY", "sports-tenant-key")
+
+        assert resolve_youtube_api_key("sports") == "sports-tenant-key"
+
+    def test_falls_back_to_global_when_no_per_niche_key(self, monkeypatch):
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("YOUTUBE_API_KEY", "global-key")
+        monkeypatch.delenv("CLUTCHWIRE_YOUTUBE_API_KEY", raising=False)
+
+        assert resolve_youtube_api_key("sports") == "global-key"
+
+    def test_returns_empty_when_neither_set(self, monkeypatch):
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+        monkeypatch.delenv("CLUTCHWIRE_YOUTUBE_API_KEY", raising=False)
+
+        assert resolve_youtube_api_key("sports") == ""
+
+    def test_unknown_niche_uses_global(self, monkeypatch):
+        """Unlike OAuth credentials, unknown niche falls through to
+        global (read-only key, no cross-channel write risk)."""
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("YOUTUBE_API_KEY", "global-key")
+        assert resolve_youtube_api_key("unknown_niche") == "global-key"
+
+    def test_empty_niche_id_uses_global(self, monkeypatch):
+        """Cross-niche callers (e.g. SharedIngestion) pass niche_id=''."""
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("YOUTUBE_API_KEY", "global-key")
+        assert resolve_youtube_api_key("") == "global-key"
+
+    def test_whitespace_in_per_niche_key_stripped(self, monkeypatch):
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("CLUTCHWIRE_YOUTUBE_API_KEY", "  sports-key  \n")
+        assert resolve_youtube_api_key("sports") == "sports-key"
+
+    def test_all_5_niches_resolve(self, monkeypatch):
+        """Pin all 5 prefixes resolve correctly. Catches typos in
+        the NICHE_CREDENTIAL_PREFIXES map."""
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        monkeypatch.setenv("CLUTCHWIRE_YOUTUBE_API_KEY", "sports")
+        monkeypatch.setenv("SPLICEREEL_YOUTUBE_API_KEY", "movies")
+        monkeypatch.setenv("FRAMEDRIFT_YOUTUBE_API_KEY", "anime")
+        monkeypatch.setenv("CRITICALRUSH_YOUTUBE_API_KEY", "gaming")
+        monkeypatch.setenv("BLACKBOXBRIEF_YOUTUBE_API_KEY", "ai")
+
+        assert resolve_youtube_api_key("sports") == "sports"
+        assert resolve_youtube_api_key("movies") == "movies"
+        assert resolve_youtube_api_key("anime") == "anime"
+        assert resolve_youtube_api_key("gaming") == "gaming"
+        assert resolve_youtube_api_key("ai_creators") == "ai"
