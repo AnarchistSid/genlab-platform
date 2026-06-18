@@ -82,7 +82,16 @@ interface NicheRowProps {
   accent: string;
   label: string;
   bins: TrackRecordBin[];
-  overall: { sample_count: number; agreement: number; rate: number } | undefined;
+  // W3 (2026-06-18): rollup now carries engagement aggregates.
+  overall:
+    | {
+        sample_count: number;
+        agreement: number;
+        rate: number;
+        collected_count: number;
+        avg_reward_48h: number | null;
+      }
+    | undefined;
 }
 
 function NicheRow({ accent, label, bins, overall }: NicheRowProps) {
@@ -116,16 +125,60 @@ function NicheRow({ accent, label, bins, overall }: NicheRowProps) {
         <>
           {/* Inline sparkline */}
           <Sparkline bins={bins} />
-          {/* Overall rate */}
+          {/* Overall agreement rate */}
           <span className={`ml-auto text-xs tabular-nums ${ratePillColor}`}>
             {Math.round((overall?.rate ?? 0) * 100)}%
           </span>
           <span className="text-xs text-zinc-500 tabular-nums">
             ({overall?.sample_count ?? 0})
           </span>
+          {/* W3 (2026-06-18): engagement chip. Shows reward signal
+              alongside calibration agreement so the operator can spot
+              "high agreement BUT low engagement" (alignment-on-garbage)
+              in one glance. */}
+          <EngagementChip
+            collectedCount={overall?.collected_count ?? 0}
+            avgReward={overall?.avg_reward_48h ?? null}
+          />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * W3 engagement chip. Three states:
+ *   - no data (collected_count === 0): muted "—" placeholder so the
+ *     row stays the same width across niches (no layout shift)
+ *   - has data: shows "R X.XXX (N)" — R is the avg_reward_48h to
+ *     3 decimals, N is the collected platform-count. Operator
+ *     scanning the column sees the magnitude immediately; the
+ *     tooltip gives the full breakdown.
+ */
+function EngagementChip({
+  collectedCount,
+  avgReward,
+}: {
+  collectedCount: number;
+  avgReward: number | null;
+}) {
+  if (collectedCount === 0 || avgReward === null) {
+    return (
+      <span
+        className="text-xs text-zinc-600 tabular-nums"
+        title="No 48h-window reward data yet for this window's posts"
+      >
+        R —
+      </span>
+    );
+  }
+  return (
+    <span
+      className="text-xs text-cyan-400 tabular-nums"
+      title={`Mean reward_48h across ${collectedCount} collected platform-publish rows in the window`}
+    >
+      R {avgReward.toFixed(3)} ({collectedCount})
+    </span>
   );
 }
 
