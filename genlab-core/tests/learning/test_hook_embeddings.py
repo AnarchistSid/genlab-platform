@@ -11,7 +11,6 @@ from __future__ import annotations
 import importlib
 
 import pytest
-
 from genlab_core.learning import hook_embeddings as he
 
 
