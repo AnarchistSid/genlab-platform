@@ -33,8 +33,15 @@ espn_api:
 # Operators wanting text-context back can either:
 #   * Add ``fetch_espn_news: true`` (top-level, PR #319 flag) to
 #     re-enable ESPN news API
-#   * Add a tier_1/tier_3 block here (this file) to re-add specific
-#     RSS feeds
+#   * Add entries under ``tier_1.sources`` / ``tier_3.sources``
+#     (kept as empty stubs below to preserve schema test pins)
+
+# Schema stubs — keys present so callers' ``config.get('tier_1',
+# {}).get('sources', [])`` returns [] without KeyError. Add entries
+# here to opt-in to text RSS sources.
+tier_1:
+  refresh_interval_minutes: 15
+  sources: []
 
 tier_2:
   refresh_interval_minutes: 60
@@ -55,6 +62,10 @@ tier_2:
       type: "reddit"
       subreddit: "nfl"
       weight: 0.9
+
+tier_3:
+  refresh_interval_minutes: 180
+  sources: []
 
 youtube_channels:
   - name: "NBA"

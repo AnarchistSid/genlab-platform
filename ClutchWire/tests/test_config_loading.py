@@ -41,11 +41,20 @@ class TestConfigLoading:
         assert "feature_flags" in data
 
     def test_sources_yaml_has_tiers(self):
+        """Tier-schema present; sources lists allowed to be empty.
+
+        2026-06-18: tier_1 + tier_3 were emptied (kept as stubs) when
+        text-only RSS feeds were removed for the video-first niche.
+        tier_2 still carries Reddit subs that are video-bearing.
+        ``len >= 1`` on tier_1 was the old contract; the new contract
+        is tier_2 (Reddit, video-bearing) must have entries — tier_1/
+        tier_3 are operator-opt-in surfaces."""
         data = _load("sources.yaml")
         assert "tier_1" in data
         assert "tier_2" in data
         assert "tier_3" in data
-        assert len(data["tier_1"]["sources"]) >= 1
+        # Tier-2 still required to have entries (Reddit video sources)
+        assert len(data["tier_2"]["sources"]) >= 1
 
     def test_scoring_weights_sum(self):
         data = _load("scoring_weights.yaml")
