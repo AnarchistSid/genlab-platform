@@ -11,17 +11,30 @@ espn_api:
     epl: "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/news"
   timeout_seconds: 10
 
-tier_1:
-  refresh_interval_minutes: 15
-  sources:
-    - name: "ESPN"
-      type: "rss"
-      url: "https://www.espn.com/espn/rss/news"
-      weight: 1.0
-    - name: "The Athletic"
-      type: "rss"
-      url: "https://theathletic.com/rss/"
-      weight: 1.0
+# 2026-06-18: tier_1 + tier_3 text-only RSS feeds removed.
+# ClutchWire is video-first (CLAUDE.md ``video_gate: require``,
+# ``fallback_to_text_render: false``). ESPN news, The Athletic, BBC
+# Sport, Sky Sports, Bleacher Report all publish op-eds, transfer
+# rumours, and weekly previews — none have video clips that
+# DownloadTopVideos can use. Pre-fix they contributed ~90/100 stories
+# per run, displaced real video candidates in the top-N cut, and
+# produced 0 blueprints for two consecutive days (2026-06-17/18).
+#
+# Video clips now come from:
+#   * ``espn_api.scoreboard`` (game state metadata, drives YouTube
+#     highlight search)
+#   * ``youtube_channels`` (NBA/NFL/Premier League/HouseOfHighlights/
+#     etc., RSS-of-uploads — actual video files via yt-dlp)
+#   * ``tier_2`` Reddit subreddits (post-PR #321 OAuth, video-bearing
+#     posts via ``is_video=true`` filter)
+#   * FetchScoreBatHighlights (separate pipeline stage, 10 football
+#     highlights per run)
+#
+# Operators wanting text-context back can either:
+#   * Add ``fetch_espn_news: true`` (top-level, PR #319 flag) to
+#     re-enable ESPN news API
+#   * Add a tier_1/tier_3 block here (this file) to re-add specific
+#     RSS feeds
 
 tier_2:
   refresh_interval_minutes: 60
@@ -42,22 +55,6 @@ tier_2:
       type: "reddit"
       subreddit: "nfl"
       weight: 0.9
-
-tier_3:
-  refresh_interval_minutes: 180
-  sources:
-    - name: "BBC Sport"
-      type: "rss"
-      url: "https://feeds.bbci.co.uk/sport/rss.xml"
-      weight: 0.8
-    - name: "Sky Sports"
-      type: "rss"
-      url: "https://www.skysports.com/rss/12040"
-      weight: 0.8
-    - name: "Bleacher Report"
-      type: "rss"
-      url: "https://bleacherreport.com/articles/feed"
-      weight: 0.7
 
 youtube_channels:
   - name: "NBA"
