@@ -458,3 +458,50 @@ class TestVideoBearingSkipsFixtureCheck:
         only populated values do."""
         story = self._s("Lakers vs Celtics", video_id="", video_url="")
         assert score_visual_potential(story, "sports") == 0.0
+
+
+class TestSourceFieldVideoDetection:
+    """ScoreBat stories don't have a video_url/video_id in the story
+    dict (the embed lives elsewhere; VideoGate matches it later).
+    Detect them by `source` / `video_source` field instead.
+
+    Regression: PR #323's first-deploy still rejected all 10 ScoreBat
+    matchup-titled stories because they lacked video_id."""
+
+    @staticmethod
+    def _s(title: str, **extra) -> dict:
+        return {"title": title, "description": "", **extra}
+
+    def test_scorebat_source_marker_passes(self):
+        """source='scorebat' → video-bearing even without video_id."""
+        story = self._s("Angers - PSG", source="scorebat")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_video_source_field_also_works(self):
+        """video_source field is an alternate marker."""
+        story = self._s("Lakers vs Celtics", video_source="scorebat")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_youtube_channel_rss_source_passes(self):
+        story = self._s("NBA - GSW vs LAL", source="youtube_channel_rss")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_content_pool_source_passes(self):
+        story = self._s("Real Madrid - Barcelona", source="content_pool")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_unknown_source_still_rejects_fixture(self):
+        """Unknown source name + no video_id → fixture check still
+        applies. Pins that we don't over-generously bypass for any
+        random `source` value."""
+        story = self._s("Atletico Madrid - Athletic Bilbao", source="rss_espn")
+        assert score_visual_potential(story, "sports") == 0.0
+
+    def test_source_case_insensitive(self):
+        """Match should be case-insensitive — some fetchers capitalize."""
+        story = self._s("Angers - PSG", source="ScoreBat")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_empty_source_falls_through_to_fixture_check(self):
+        story = self._s("Real Madrid - Barcelona", source="")
+        assert score_visual_potential(story, "sports") == 0.0
