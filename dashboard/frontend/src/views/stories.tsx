@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useQueryStates, parseAsString } from "nuqs";
 import { Newspaper, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
@@ -143,10 +143,17 @@ export default function StoriesView() {
     return p;
   }, [page, filterParams.source, filterParams.q, selectedNicheId]);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
+  // Reset to page 1 when filters change.
+  // React 19 idiom: "store previous prop, reset during render" rather than
+  // the equivalent useEffect → setState, which trips
+  // react-hooks/set-state-in-effect (cascading-render warning).
+  // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const filtersKey = `${filterParams.source ?? ""}|${filterParams.q ?? ""}`;
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (prevFiltersKey !== filtersKey) {
+    setPrevFiltersKey(filtersKey);
     setPage(1);
-  }, [filterParams.source, filterParams.q]);
+  }
 
   const { data: response, isLoading, isError } = useStories(params);
 

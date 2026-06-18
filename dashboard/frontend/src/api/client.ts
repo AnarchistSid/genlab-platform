@@ -15,7 +15,7 @@ import type {
   TrendDataPoint,
   AudienceSnapshot,
   ViralityBreakdownData,
-  MonetizationData,
+  MonetizationDataEnvelope,
   MonetisationProgressData,
   YouTubeDemographics,
   AnalyticsOverviewResponse,
@@ -474,7 +474,7 @@ export const analytics = {
   viralityBreakdown: (params?: Record<string, string>) =>
     get<ViralityBreakdownData>("/analytics/virality-breakdown", params),
   monetization: (params?: Record<string, string>) =>
-    get<MonetizationData>("/analytics/monetization", params),
+    get<MonetizationDataEnvelope>("/analytics/monetization", params),
   demographics: () =>
     get<{ data: YouTubeDemographics | null; message?: string }>("/analytics/demographics"),
   topPosts: () =>
@@ -581,15 +581,24 @@ export const platformPosts = {
 
 export const monetisation = {
   progress: () =>
-    get<MonetisationProgressData | { data: MonetisationProgressData }>("/monetisation/progress").then(
-      (d) => {
-        // Handle both wrapped {data: {...}} and direct {...} formats
-        if (d && typeof d === "object" && "data" in d && typeof (d as any).data === "object") {
-          return (d as { data: MonetisationProgressData }).data;
-        }
-        return d as MonetisationProgressData;
-      },
-    ),
+    get<MonetisationProgressData | { data: MonetisationProgressData }>(
+      "/monetisation/progress",
+    ).then((d): MonetisationProgressData => {
+      // Handle both wrapped {data: {...}} and direct {...} formats.
+      // Tightened from the prior ``(d as any).data`` cast: narrow via
+      // a typed envelope check.
+      const envelope = d as { data?: MonetisationProgressData };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as MonetisationProgressData;
+    }),
 };
 
 export const learning = {

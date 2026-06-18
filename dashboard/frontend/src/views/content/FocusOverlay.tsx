@@ -83,11 +83,16 @@ export function FocusOverlay({
   const [editingHook, setEditingHook] = useState(false);
   const [hookDraft, setHookDraft] = useState("");
 
-  // Reset editing state when navigating between blueprints
-  useEffect(() => {
+  // Reset editing state when navigating between blueprints (React 19
+  // idiom: track previous, reset during render). The classic
+  // useEffect → setState pattern cascades renders
+  // (react-hooks/set-state-in-effect).
+  const [prevIndex, setPrevIndex] = useState(currentIndex);
+  if (prevIndex !== currentIndex) {
+    setPrevIndex(currentIndex);
     setEditingHook(false);
     setHookDraft("");
-  }, [currentIndex]);
+  }
 
   const goPrev = useCallback(() => {
     if (currentIndex > 0) onNavigate(currentIndex - 1);

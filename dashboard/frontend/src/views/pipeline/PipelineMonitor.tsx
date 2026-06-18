@@ -202,7 +202,6 @@ export default function PipelineMonitor() {
   const { niches: nicheStatuses, isLoading } = usePipelineMonitor();
   const { data: runsData, isLoading: runsLoading } = usePipelineRuns(20);
   const activeNiches = getActiveNiches();
-  const [logNicheId, setLogNicheId] = useState<string | null>(null);
 
   // Build a lookup from niche id → status
   const statusMap = useMemo(() => {
@@ -213,15 +212,14 @@ export default function PipelineMonitor() {
     return map;
   }, [nicheStatuses]);
 
-  // Auto-select the running niche for logs (or first active)
-  useEffect(() => {
-    const running = nicheStatuses.find((n) => n.pipeline_status === "running");
-    if (running) {
-      setLogNicheId(running.id);
-    } else if (!logNicheId && activeNiches.length > 0) {
-      setLogNicheId(activeNiches[0].id);
-    }
-  }, [nicheStatuses, activeNiches, logNicheId]);
+  // Auto-select the running niche for logs (or first active). Derived
+  // directly from props — replaces a prior ``useState + useEffect``
+  // setState dance that cascaded renders
+  // (react-hooks/set-state-in-effect).
+  const logNicheId: string | null =
+    nicheStatuses.find((n) => n.pipeline_status === "running")?.id ??
+    activeNiches[0]?.id ??
+    null;
 
   const runs = useMemo(() => {
     if (!runsData) return [];

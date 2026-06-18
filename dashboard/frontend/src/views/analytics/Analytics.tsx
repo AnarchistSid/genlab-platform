@@ -592,14 +592,20 @@ export default function Analytics() {
                 className="bg-bg-elevated border border-border rounded-lg text-text-secondary text-xs px-2.5 py-1.5 cursor-pointer hover:bg-bg-raised transition-colors"
                 onClick={() => {
                   import("@/lib/export").then(({ exportToCSV }) => {
-                    exportToCSV(topPerformers, [
-                      { key: "hook_text" as any, header: "Hook" },
-                      { key: "niche_id" as any, header: "Niche" },
-                      { key: "platform" as any, header: "Platform" },
-                      { key: "total_reach" as any, header: "Reach" },
-                      { key: "engagement_rate" as any, header: "Eng %" },
-                      { key: "published_at" as any, header: "Published" },
-                    ], `genlab-analytics-${timeWindow}.csv`);
+                    // ``TopPerformer`` declares every key below; the
+                    // earlier ``as any`` casts were unneeded.
+                    exportToCSV(
+                      topPerformers,
+                      [
+                        { key: "hook_text", header: "Hook" },
+                        { key: "niche_id", header: "Niche" },
+                        { key: "platform", header: "Platform" },
+                        { key: "total_reach", header: "Reach" },
+                        { key: "engagement_rate", header: "Eng %" },
+                        { key: "published_at", header: "Published" },
+                      ],
+                      `genlab-analytics-${timeWindow}.csv`,
+                    );
                   });
                 }}
                 title="Export top performers as CSV"

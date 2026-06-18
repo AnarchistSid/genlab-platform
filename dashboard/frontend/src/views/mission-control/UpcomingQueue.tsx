@@ -25,7 +25,11 @@ export function UpcomingQueue() {
   const { data } = usePublishingQueue();
   const items = data?.data ?? [];
 
-  // Get next 3 FUTURE scheduled items (exclude past dates and published)
+  // Get next 3 FUTURE scheduled items (exclude past dates and published).
+  // ``Date.now()`` is intentional impure read — see TrendRadar.tsx for
+  // the same pattern + rationale (queue refreshes at the React Query
+  // cadence; 60s drift is fine for "upcoming in N hours" UX).
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const upcoming = items
     .filter((item) => {

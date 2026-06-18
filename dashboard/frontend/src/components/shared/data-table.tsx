@@ -64,7 +64,9 @@ export function DataTable<T>({
       if (aVal == null) return 1;
       if (bVal == null) return -1;
 
-      let cmp = 0;
+      // ``cmp`` is unconditionally assigned in both branches below, so
+      // an initializer would be dead code (no-useless-assignment).
+      let cmp: number;
       if (typeof aVal === "number" && typeof bVal === "number") {
         cmp = aVal - bVal;
       } else {

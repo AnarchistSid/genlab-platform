@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { FileText, AlertTriangle, ArrowUpDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -134,12 +134,20 @@ export default function ContentReviewView() {
     // across niches, regardless of the sidebar's global niche selection.
     params.niche_id = activeNiche;
     return params;
-  }, [activeStatus, activeNiche, sort, selectedNicheId]);
+    // selectedNicheId intentionally excluded — ``activeNiche`` is the
+    // local-filter value that takes precedence; the sidebar selection
+    // is only used to seed ``activeNiche`` elsewhere.
+  }, [activeStatus, activeNiche, sort]);
 
   const { data, isLoading, error, refetch } = useBlueprints(apiParams);
 
-  // Client-side filter for niche (in case API doesn't filter by niche)
-  const allItems: Blueprint[] = data?.data ?? [];
+  // Client-side filter for niche (in case API doesn't filter by niche).
+  // Memoized so the downstream ``filtered`` useMemo's deps are stable
+  // (react-hooks/exhaustive-deps would otherwise flag the `?? []` site).
+  const allItems: Blueprint[] = useMemo(
+    () => (data?.data ?? []) as Blueprint[],
+    [data?.data],
+  );
 
   const filtered = useMemo(() => {
     let items = allItems;
@@ -168,7 +176,9 @@ export default function ContentReviewView() {
     }
 
     return sortBlueprints(items, sort);
-  }, [allItems, activeStatus, activeNiche, selectedNicheId, sort, searchQuery]);
+    // selectedNicheId intentionally excluded — same rationale as
+    // ``apiParams`` above (activeNiche is the local source of truth).
+  }, [allItems, activeStatus, activeNiche, sort, searchQuery]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
 
@@ -192,8 +202,14 @@ export default function ContentReviewView() {
     setOverlayIndex(null);
   }, []);
 
-  // Clear selection when filters change
-  useEffect(() => { clearSelection(); }, [activeStatus, activeNiche, sort, clearSelection]);
+  // Clear selection when filters change (React 19 idiom: track previous
+  // filter key, reset during render — see stories.tsx).
+  const filtersKey = `${activeStatus}|${activeNiche}|${sort}`;
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (prevFiltersKey !== filtersKey) {
+    setPrevFiltersKey(filtersKey);
+    clearSelection();
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────
 

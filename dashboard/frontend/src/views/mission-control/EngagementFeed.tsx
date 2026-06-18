@@ -9,9 +9,10 @@ export function EngagementFeed() {
 
   // Handle both shapes: direct array or { comments: [...] }
   const rawData = resp.data;
+  const wrapped = rawData as { comments?: EngagementComment[] } | undefined;
   const comments: EngagementComment[] = Array.isArray(rawData)
     ? rawData
-    : (rawData as any)?.comments ?? [];
+    : (wrapped?.comments ?? []);
 
   const displayComments = comments.slice(0, 5);
   const totalCount = comments.length;

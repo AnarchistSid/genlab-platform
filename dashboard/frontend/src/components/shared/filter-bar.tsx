@@ -23,7 +23,10 @@ interface FilterBarProps {
   className?: string;
 }
 
-export function useFilterParams(filters: FilterDefinition[]) {
+// Internal — not exported because the only external reference was a stale
+// comment. Keeping it private lets ``filter-bar.tsx`` export only the
+// FilterBar component itself (react-refresh/only-export-components).
+function useFilterParams(filters: FilterDefinition[]) {
   const parsersMap = useMemo(() => {
     const parsers: Record<string, typeof parseAsString> = {};
     for (const filter of filters) {
@@ -70,10 +73,15 @@ export function FilterBar({
     [setParams]
   );
 
-  // Sync local state when URL params change externally
-  useEffect(() => {
-    setLocalSearch(params["q"] ?? "");
-  }, [params]);
+  // Sync local state when URL params change externally (e.g. nav button
+  // changes the URL while this bar is mounted). React 19 idiom: derive
+  // during render via prev-key compare.
+  const externalQ = params["q"] ?? "";
+  const [prevExternalQ, setPrevExternalQ] = useState(externalQ);
+  if (prevExternalQ !== externalQ) {
+    setPrevExternalQ(externalQ);
+    setLocalSearch(externalQ);
+  }
 
   // Cleanup on unmount
   useEffect(() => {

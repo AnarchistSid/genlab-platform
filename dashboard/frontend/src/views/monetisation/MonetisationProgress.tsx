@@ -22,6 +22,7 @@ import type {
   MonetisationMetric,
   MonetisationPlatformProgress,
   MonetisationProgressData,
+  MonetizationActiveProgram,
 } from "@/api/types";
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -331,15 +332,17 @@ function AffiliateSummary() {
     staleTime: 5 * 60_000,
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const raw = monetData as any;
-  const programs = raw?.data?.active_programs ?? raw?.active_programs ?? [];
-  const totalPublished = raw?.data?.total_published ?? raw?.total_published ?? 0;
-  const affiliateCount = raw?.data?.posts_with_affiliate_links ?? raw?.posts_with_affiliate_links ?? 0;
-  const catalogNetworks: Record<string, number> = raw?.data?.catalog_networks ?? raw?.catalog_networks ?? {};
+  // ``analytics.monetization`` returns ``{data: MonetizationData}`` —
+  // the envelope is the API client's contract. revenue.summary returns
+  // its typed shape inline (no envelope).
+  const monetInner = monetData?.data;
+  const programs: MonetizationActiveProgram[] = monetInner?.active_programs ?? [];
+  const totalPublished = monetInner?.total_published ?? 0;
+  const affiliateCount = monetInner?.posts_with_affiliate_links ?? 0;
+  const catalogNetworks: Record<string, number> = monetInner?.catalog_networks ?? {};
 
-  const clicks = revData?.clicks ?? (revData as any)?.data?.clicks ?? { today: 0, last_7d: 0, last_30d: 0 };
-  const estRevenue = revData?.estimated_revenue_inr_30d ?? (revData as any)?.data?.estimated_revenue_inr_30d ?? 0;
+  const clicks = revData?.clicks ?? { today: 0, last_7d: 0, last_30d: 0 };
+  const estRevenue = revData?.estimated_revenue_inr_30d ?? 0;
 
   return (
     <div
@@ -386,7 +389,7 @@ function AffiliateSummary() {
       {programs.length > 0 && (
         <div className="px-3 pt-1 pb-3 border-t border-border">
           <div className="text-[11px] text-text-muted mb-1 mt-1">Active Programs</div>
-          {programs.map((p: { name: string; slug: string; commission: string }) => (
+          {programs.map((p: MonetizationActiveProgram) => (
             <div key={p.slug} className="flex justify-between py-0.5 text-xs">
               <span className="text-text-secondary">{p.name}</span>
               {p.commission && (
@@ -412,10 +415,11 @@ function RevenueSection() {
     staleTime: 300_000,
   });
 
-  const clicks = revData?.clicks ?? (revData as any)?.data?.clicks;
-  const byProduct: Record<string, number> = revData?.by_product ?? (revData as any)?.data?.by_product ?? {};
-  const byNetwork: Record<string, number> = revData?.by_network ?? (revData as any)?.data?.by_network ?? {};
-  const estRevenue = revData?.estimated_revenue_inr_30d ?? (revData as any)?.data?.estimated_revenue_inr_30d ?? 0;
+  // revenue.summary returns its typed shape inline (no envelope).
+  const clicks = revData?.clicks;
+  const byProduct: Record<string, number> = revData?.by_product ?? {};
+  const byNetwork: Record<string, number> = revData?.by_network ?? {};
+  const estRevenue = revData?.estimated_revenue_inr_30d ?? 0;
   const trends = trendsData ?? [];
 
   // Sort products by clicks descending, take top 10
@@ -537,9 +541,9 @@ function RevenueSection() {
 const ALL_NICHE_IDS = ["ai_creators", "gaming", "sports", "movies", "anime"];
 
 export default function MonetisationProgressView() {
-  const { data: resp, isLoading, isError, refetch } = useMonetisationProgress();
-  // Handle both unwrapped (direct MonetisationProgressData) and wrapped ({data: ...}) formats
-  const progressData = (resp && typeof resp === "object" && "data" in resp) ? (resp as any).data : resp;
+  // ``useMonetisationProgress`` already unwraps the envelope in the
+  // API client (monetisation.progress).
+  const { data: progressData, isLoading, isError, refetch } = useMonetisationProgress();
   const [triggering, setTriggering] = useState(false);
 
   if (isError && !progressData) {

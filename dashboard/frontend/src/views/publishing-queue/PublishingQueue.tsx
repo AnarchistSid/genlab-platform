@@ -420,6 +420,12 @@ function VirtualizedPostList({
   mutating: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  // TanStack Virtual returns un-memoizable functions by design (it owns
+  // the scroll-positioning state internally). React Compiler can't safely
+  // memoize this component; that's a structural limitation of the
+  // library, not a bug in this usage. Suppressing is the recommended
+  // workaround until @tanstack/react-virtual ships a compiler-safe API.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,

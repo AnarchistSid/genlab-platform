@@ -118,14 +118,24 @@ export default function BlueprintsView() {
     return params;
   }, [filterParams.status, filterParams.q, sortParams.sort, page, selectedNicheId]);
 
-  // Reset to page 1 when filters or sort change
-  useEffect(() => {
+  // Reset to page 1 when filters or sort change (React 19 idiom —
+  // see stories.tsx for the same pattern + rationale).
+  const filtersKey = `${filterParams.status ?? ""}|${filterParams.q ?? ""}|${sortParams.sort ?? ""}`;
+  const [prevFiltersKey, setPrevFiltersKey] = useState(filtersKey);
+  if (prevFiltersKey !== filtersKey) {
+    setPrevFiltersKey(filtersKey);
     setPage(1);
-  }, [filterParams.status, filterParams.q, sortParams.sort]);
+  }
 
   const { data, isLoading, error, refetch } = useBlueprints(apiParams);
 
-  const blueprints: Blueprint[] = data?.data ?? [];
+  // Memoize the blueprints array so callers depending on it via
+  // useCallback/useEffect don't re-fire every render
+  // (react-hooks/exhaustive-deps would otherwise flag this site).
+  const blueprints: Blueprint[] = useMemo(
+    () => (data?.data ?? []) as Blueprint[],
+    [data?.data],
+  );
   const meta = data?.meta ?? { page: 1, per_page: 25, total: 0, total_pages: 1 };
   const selectionCount = selectedIds.size;
 
@@ -187,12 +197,17 @@ export default function BlueprintsView() {
     [setSortParams]
   );
 
-  // Clear detail panel when the selected blueprint disappears from the list
-  useEffect(() => {
-    if (detailId && blueprints.length > 0 && !blueprints.some((b) => b.id === detailId)) {
-      setDetailId(null);
-    }
-  }, [detailId, blueprints]);
+  // Clear detail panel when the selected blueprint disappears from the
+  // list. Derived during render (React 19 idiom) — checking each frame
+  // is cheap because ``blueprints.some`` short-circuits and the page
+  // size is bounded at 25.
+  if (
+    detailId &&
+    blueprints.length > 0 &&
+    !blueprints.some((b) => b.id === detailId)
+  ) {
+    setDetailId(null);
+  }
 
   // Keyboard: Escape closes detail, J/K navigates list, Enter opens detail
   useEffect(() => {

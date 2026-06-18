@@ -1,12 +1,10 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useCrossNicheOverview } from "@/hooks/use-cross-niche-overview";
-import { useChannelHealth } from "@/hooks/use-channel-health";
 import { AnimatedKPICard } from "@/components/kpi/AnimatedKPICard";
 
 export function KpiHero() {
   const { data, isLoading } = useCrossNicheOverview();
-  const { data: healthResp } = useChannelHealth();
 
   const stats = useMemo(() => {
     if (!data) return null;
@@ -49,7 +47,9 @@ export function KpiHero() {
       nicheCount,
       healthPct,
     };
-  }, [data, healthResp]);
+    // healthResp not read inside the closure — platform_health comes
+    // from ``data.global``. Excluding satisfies exhaustive-deps.
+  }, [data]);
 
   const cards = useMemo(
     () =>

@@ -2,7 +2,27 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSocket } from "@/api/socket";
 import type { SocketEvents } from "@/api/socket";
-import { useNotificationStore } from "@/stores/notification-store";
+import {
+  useNotificationStore,
+  type NotificationType,
+} from "@/stores/notification-store";
+
+const VALID_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set<
+  NotificationType
+>([
+  "pipeline_complete",
+  "pipeline_error",
+  "publish_success",
+  "publish_failure",
+  "review_needed",
+  "info",
+]);
+
+function coerceNotificationType(raw: string): NotificationType {
+  return VALID_NOTIFICATION_TYPES.has(raw as NotificationType)
+    ? (raw as NotificationType)
+    : "info";
+}
 
 /**
  * Hook that subscribes to Socket.IO events and creates notifications.
@@ -91,7 +111,9 @@ export function useNotifications() {
       const age = Date.now() - new Date(ev.created_at).getTime();
       if (age > 3600_000) continue;
       addNotification({
-        type: ev.type as any,
+        // Server emits arbitrary string types; narrow to the
+        // notification-store's union here so the store stays typed.
+        type: coerceNotificationType(ev.type),
         title: ev.title,
         body: ev.body,
         entity_id: ev.entity_id,

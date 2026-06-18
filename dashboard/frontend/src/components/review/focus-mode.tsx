@@ -469,9 +469,17 @@ export function FocusMode() {
 
   const [feedbackAction, setFeedbackAction] = useState<ReviewAction | null>(null);
   const feedbackOpenRef = useRef(false);
-  feedbackOpenRef.current = feedbackAction !== null;
+  // Ref mutation must happen in an effect, not during render
+  // (react-hooks/refs).
+  useEffect(() => {
+    feedbackOpenRef.current = feedbackAction !== null;
+  }, [feedbackAction]);
 
-  // Resolve niche-specific DetailView
+  // Resolve niche-specific DetailView. Note: ``DetailView`` here SELECTS
+  // an existing top-level component from the niche registry — it does
+  // NOT define a new component (which is what react-hooks/static-components
+  // is meant to flag). The lint rule fires at the JSX usage site, so the
+  // disable comment lives there (not here).
   const DetailView = useMemo(() => {
     const resolvedId = selectedNicheId === "all" ? "ai_creators" : selectedNicheId;
     return getDetailView(resolvedId as NicheId) ?? GenericDetailView;
@@ -699,9 +707,13 @@ export function FocusMode() {
               )}
             </div>
 
-            {/* Right — Niche-specific DetailView (40%) */}
+            {/* Right — Niche-specific DetailView (40%). The lookup happens
+                in a useMemo above; DetailView is SELECTED from a static
+                registry, not defined in-component. The lint rule can't
+                see that distinction so we suppress at the usage site. */}
             <div className="flex w-[40%] flex-col justify-center">
               {currentItem ? (
+                // eslint-disable-next-line react-hooks/static-components
                 <DetailView item={currentItem} />
               ) : (
                 <div className="space-y-3">

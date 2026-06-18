@@ -47,7 +47,12 @@ export function useConnectionStatus(): {
     socket.io.on("reconnect_attempt", onReconnecting);
     socket.io.on("reconnect_failed", onReconnectFailed);
 
-    // Sync initial state
+    // Sync initial state from the external socket system. This is the
+    // canonical "subscribe to an external store" useEffect pattern —
+    // setState here is a one-shot sync at subscribe time, not a render-
+    // cascading update. ESLint's set-state-in-effect rule is overly
+    // conservative for this case.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (socket.connected) setStatus("connected");
 
     return () => {

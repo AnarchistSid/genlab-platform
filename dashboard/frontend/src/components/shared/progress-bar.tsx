@@ -29,6 +29,11 @@ export function ProgressBar({
       const t = setTimeout(() => setWidth(Math.max(value, 0.5)), 100);
       return () => clearTimeout(t);
     }
+    // External-system sync (the animated case schedules a timer; the
+    // non-animated case writes the value directly). Both paths are
+    // legitimate useEffect uses — set-state-in-effect rule is
+    // conservative for this animation-on-mount idiom.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWidth(value);
   }, [value, animated]);
 

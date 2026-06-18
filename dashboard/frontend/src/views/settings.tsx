@@ -152,7 +152,6 @@ function SourcesTab({ nicheId }: { nicheId?: string }) {
   }
 
   // Normalize: the API returns { data: ... } where data could be an array or object with sources key
-  let sources: SourceRow[] = [];
   const raw = data?.data;
   const rawList: Array<Record<string, unknown>> = [];
   if (Array.isArray(raw)) {
@@ -163,8 +162,10 @@ function SourcesTab({ nicheId }: { nicheId?: string }) {
       rawList.push(...(obj.sources as Array<Record<string, unknown>>));
     }
   }
-  // Map API fields (source_id, enabled) to SourceRow (name, status)
-  sources = rawList.map((s) => ({
+  // Map API fields (source_id, enabled) to SourceRow (name, status). The
+  // [] initializer was useless — the .map below is the only assignment
+  // that's read (no-useless-assignment).
+  const sources: SourceRow[] = rawList.map((s) => ({
     name: (s.source_id as string) ?? (s.name as string) ?? "",
     url: (s.url as string) ?? "",
     type: (s.type as string) ?? "",
