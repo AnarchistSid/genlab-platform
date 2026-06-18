@@ -8,8 +8,20 @@ dependencies = [
     "httpx>=0.27",
     "feedparser>=6.0",
     "pyyaml>=6.0",
-    "pytrends>=4.9",
 ]
+
+# U-10 (2026-06-18): ``pytrends`` upstream archived 2023-04-13. Moved
+# from required deps to optional extras. The pipeline's Google Trends
+# enrichment paths now graceful-skip when pytrends isn't installed
+# (see fd_strategies/fetch_anime_news._fetch_google_trends + the
+# stub_mode flag in config/sources.yaml). Operators who want the
+# real-fetch path can ``uv pip install framedrift[trends]``.
+#
+# trendspyg (active fork, different API) is the eventual replacement;
+# a future PR will add a TrendspygBackend behind the same internal
+# interface and swap defaults.
+[project.optional-dependencies]
+trends = ["pytrends>=4.9"]
 
 [tool.uv.sources]
 genlab-core = { workspace = true }

@@ -355,8 +355,26 @@ def _fetch_google_trends(config: dict, titles: list[str]) -> list[dict]:
 
     Returns list of dicts: [{"title": str, "trend_score": int}, ...]
     where trend_score is the max interest value (0-100) from the last 7 days.
+
+    Graceful-skip (U-10, 2026-06-18): ``pytrends`` is an OPTIONAL
+    dependency as of this PR — its upstream repo was archived
+    2023-04-13 and we don't want to keep it on the required-dep path.
+    When the import fails, every title gets ``trend_score=0`` (same
+    as a per-batch failure) and the caller continues without
+    enrichment. The stub mode (``_google_trends_stub``) is the
+    sanctioned no-dep path; this real-fetch path is for operators
+    who've explicitly installed pytrends.
     """
-    from pytrends.request import TrendReq
+    try:
+        from pytrends.request import TrendReq
+    except ImportError:
+        logger.warning(
+            "[google_trends] pytrends not installed — skipping real fetch. "
+            "Install via ``uv pip install pytrends`` (archived upstream) or "
+            "switch ``google_trends.stub_mode: true`` in config/sources.yaml. "
+            "trendspyg is being evaluated as a future replacement."
+        )
+        return [{"title": t[:100], "trend_score": 0} for t in titles]
 
     gt_config = config.get("google_trends", {})
     if not gt_config.get("enabled", False):

@@ -1,7 +1,6 @@
 """Google Trends integration for trending topic discovery.
 
-Uses pytrends (unofficial Python wrapper for Google Trends) to discover
-what topics are trending right now. Results are used to:
+Used to:
 1. Inform which YouTube search keywords to prioritize
 2. Score content relevance (trending topics get higher priority)
 3. Generate trend-aware hooks ("everyone is talking about X right now")
@@ -10,6 +9,32 @@ Usage:
     intel = GoogleTrendsIntel()
     trending = intel.get_trending_topics("gaming", top_n=10)
     # Returns: ["Marvel Rivals", "GTA 6 release", "Elden Ring DLC", ...]
+
+Backend status (U-10, 2026-06-18)
+=================================
+The TIER ORDER inside ``get_trending_topics`` is:
+
+  Tier 0  Fresh cache (6h TTL) — always tried first
+  Tier 1  Google Trends official RSS feed (zero auth, reliable) — PRIMARY
+  Tier 2  pytrends ``trending_searches`` — flaky in prod (rate-limited),
+          now graceful-skip on ImportError
+  Tier 3  pytrends ``related_queries`` — same flakiness, same graceful-skip
+  Tier 4  Stale cache — best-effort fallback
+  Tier 5  Hardcoded seed keywords — final safety net
+
+The pytrends upstream (PyPI v4.9.2, 2023-04-13) is ARCHIVED. We
+deliberately keep it as an optional dep — if installed, tiers 2/3
+still try; if not, the function falls straight through to RSS + cache.
+
+Replacement candidates evaluated 2026-06-18:
+  * trendspyg (v0.6.1, active fork) — DIFFERENT API (functional, not
+    OO TrendReq); needs adapter; planned for follow-up PR
+  * pytrends-modern (v0.2.11, early-stage) — too new to depend on
+
+This file's API surface is small enough that a clean
+``GoogleTrendsBackend`` ABC will be a natural follow-up: RSSBackend
+(primary) + PytrendsLegacyBackend (deprecated) + TrendspygBackend
+(future). For now: soft-import keeps prod safe.
 """
 
 from __future__ import annotations
@@ -161,6 +186,11 @@ class GoogleTrendsIntel:
         self.tz = tz
         self._pytrends = None
 
+    # Sentinel: distinguishes "client never tried to import" (None) from
+    # "import failed, don't keep retrying" (False). Same pattern
+    # ``metric_collector._PG_POOL`` uses for its psycopg_pool init.
+    _PYTRENDS_UNAVAILABLE = False
+
     def _get_client(self):
         if self._pytrends is None:
             try:
@@ -168,8 +198,25 @@ class GoogleTrendsIntel:
 
                 self._pytrends = TrendReq(hl="en-US", tz=self.tz)
             except ImportError:
-                pass
-        return self._pytrends
+                # U-10 (2026-06-18): pytrends upstream archived. Log
+                # once at WARN so operators see the skip in journalctl;
+                # subsequent calls hit this branch and short-circuit
+                # without re-logging (the sentinel avoids spam every
+                # call from get_trending_score_multiplier).
+                if self._pytrends is None and not self._PYTRENDS_UNAVAILABLE:
+                    logger.warning(
+                        "[google_trends] pytrends not installed — Tier-2/3 "
+                        "(realtime + daily) paths will be skipped; falling "
+                        "through to Tier-1 RSS. To enable, install "
+                        "``pytrends`` (archived 2023-04-13, optional dep) "
+                        "or wait for the trendspyg backend in a follow-up."
+                    )
+                    type(self)._PYTRENDS_UNAVAILABLE = True
+                self._pytrends = False  # type: ignore[assignment]
+        # Distinguishing False (import failed) from None (untried) so
+        # the caller's ``if pt is None`` check still triggers the
+        # skip path — False is falsy too.
+        return self._pytrends if self._pytrends else None
 
     def get_trending_topics(
         self,
