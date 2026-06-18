@@ -19,16 +19,33 @@ set -uo pipefail
 PROJECT_ROOT="${GENLAB_PROJECT_ROOT:-/opt/genlab}"
 COOKIES="${PROJECT_ROOT}/.youtube_cookies.txt"
 SESSION="${PROJECT_ROOT}/.youtube_session.json"
-YT_DLP="${PROJECT_ROOT}/.venv/bin/yt-dlp"
+
+# Resolve yt-dlp with the order pipelines actually use:
+#   1. $YT_DLP_BIN env override (operator escape hatch)
+#   2. project venv (the deploy.sh-managed install)
+#   3. system path (/usr/local/bin/yt-dlp from apt/pipx/global pip)
+# Previously this hardcoded only the venv path; when the venv was
+# rebuilt without yt-dlp (uv resolved a different lock, or someone
+# moved the tool out of the project's pyproject deps) the timer
+# silently no-op'd for weeks. The cookies file got "fresh" mtimes
+# from unrelated pipeline runs, hiding the broken keep-warm path
+# until cookies finally aged out and pipelines started failing.
+# Now we prefer the venv but fall through to anything on PATH —
+# and HARD-fail with exit 1 if neither is reachable, so systemd
+# marks the unit failed and OnFailure handlers fire an alert.
+YT_DLP="${YT_DLP_BIN:-${PROJECT_ROOT}/.venv/bin/yt-dlp}"
+if [[ ! -x "$YT_DLP" ]]; then
+    if command -v yt-dlp >/dev/null 2>&1; then
+        YT_DLP=$(command -v yt-dlp)
+    else
+        echo "yt-dlp not found (tried venv + PATH); cookies will go stale"
+        exit 1
+    fi
+fi
 
 # "Me at the zoo" — first YouTube video, public, 19s, uploaded 2005.
 # Zero chance of takedown, zero age/region restriction.
 WARM_URL="${GENLAB_YT_WARM_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
-
-if [[ ! -x "$YT_DLP" ]]; then
-    echo "yt-dlp not found at $YT_DLP"
-    exit 0  # soft-fail: don't disrupt timers
-fi
 
 # Read visitor_data from session file if present
 EXTRACTOR_ARGS="youtube:player_client=android,ios,tv,web"
