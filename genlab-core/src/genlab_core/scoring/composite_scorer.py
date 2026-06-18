@@ -397,7 +397,22 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
     # that's just "Team A - Team B" or "Team A vs Team B" with no
     # score digits AND no Final/Live indicators. Limited to sports —
     # other niches don't have this shape.
-    if niche_id == "sports" and _is_fixture_preview(story.get("title") or "", text):
+    #
+    # **2026-06-18 follow-up**: ScoreBat publishes highlights videos
+    # with the matchup AS the title ("Angers - PSG" IS the title of
+    # the highlights video, not a preview article). FetchTrendingVideos
+    # / FetchScoreBatHighlights both populate ``video_id`` or
+    # ``download_url``. When a story has a verified video field, the
+    # fixture pattern is a video TITLE, not a preview ARTICLE — skip
+    # the zero-reject. The historical bug this guards: PR #320 dropped
+    # ALL of the 10 ScoreBat highlights + 12 YouTube trending videos
+    # in today's run because their titles all match the matchup
+    # pattern.
+    if (
+        niche_id == "sports"
+        and not _has_video_field(story)
+        and _is_fixture_preview(story.get("title") or "", text)
+    ):
         logger.debug(
             "[VISUAL_SCORE] 0.0 (fixture preview — no clip yet): %s",
             story.get("title", "")[:60],
@@ -413,6 +428,29 @@ def score_visual_potential(story: dict, niche_id: str) -> float:
         return 0.7
     else:
         return 0.4  # Unknown — let through at lower priority
+
+
+def _has_video_field(story: dict) -> bool:
+    """True iff the story carries a non-empty video identifier from
+    any video-fetching source.
+
+    Used by ``score_visual_potential`` to skip the fixture-preview
+    check for stories that ALREADY have a verified video — those
+    "Team A - Team B" titles ARE the matchup highlights video itself
+    (ScoreBat, YouTube channel RSS, content_pool), not preview text
+    articles.
+
+    Fields checked match the source-bearing keys populated by:
+      * ``FetchTrendingVideos`` → ``video_id`` + ``download_url``
+      * ``FetchScoreBatHighlights`` → ``video_url`` + ``embed``
+      * ``FetchRedditClips`` → ``video_url``
+      * Content pool claimed stories → ``video_id``
+    """
+    for key in ("video_id", "video_url", "download_url", "embed"):
+        v = story.get(key)
+        if v and isinstance(v, str) and v.strip():
+            return True
+    return False
 
 
 def _is_fixture_preview(title: str, text: str) -> bool:
