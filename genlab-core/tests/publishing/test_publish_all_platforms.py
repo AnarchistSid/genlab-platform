@@ -805,3 +805,182 @@ class TestExitCodeContract:
             "— they are the operator-actionable signals the L4 OnFailure "
             "handler exists to surface."
         )
+
+
+# ── 2026-06-18: per-niche platform-enabled filter ──────────────
+
+
+class TestFilterEnabledPlatforms:
+    """Publisher must respect ``platforms.<name>.enabled: false`` in
+    each niche's publishing.yaml. Pre-2026-06-18 the publisher
+    hardcoded [instagram, youtube, facebook, twitter, threads]
+    regardless of per-niche config. 3 niches (sports, movies, anime)
+    set ``x.enabled: false`` (no Twitter creds); the publisher tried
+    Twitter anyway → CREDENTIAL failure → ``any_success=False`` →
+    ``EXIT_ALL_FAILED`` → systemd marked publisher.service as failed
+    every cycle.
+    """
+
+    DEFAULT_PLATFORMS = ["instagram", "youtube", "facebook", "twitter", "threads"]
+
+    def test_returns_default_when_no_config_file(self, tmp_path, monkeypatch):
+        """If publishing.yaml doesn't exist for the niche, no filter
+        applies — full default list passes through."""
+        from genlab_core.publishing import publish_all_platforms
+
+        # Patch NICHE_DIR_NAMES to point at a non-existent dir
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert result == self.DEFAULT_PLATFORMS
+
+    def test_drops_explicitly_disabled_platform(self, tmp_path, monkeypatch):
+        """``x.enabled: false`` removes 'twitter' from the list
+        (with config→publisher name alias applied)."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "platforms:\n"
+            "  instagram:\n    enabled: true\n"
+            "  x:\n    enabled: false\n"
+            "  youtube:\n    enabled: true\n"
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert "twitter" not in result
+        assert "instagram" in result
+        assert "youtube" in result
+
+    def test_x_twitter_alias_also_works(self, tmp_path, monkeypatch):
+        """Some configs may use ``x_twitter`` instead of ``x`` —
+        both alias to publisher-side ``twitter`` and get dropped."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text("platforms:\n  x_twitter:\n    enabled: false\n")
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert "twitter" not in result
+
+    def test_no_platforms_block_returns_default(self, tmp_path, monkeypatch):
+        """BB-style configs use per-platform yamls (no consolidated
+        ``platforms`` block). Filter returns default unchanged so
+        existing BB behaviour doesn't break."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "BBNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "auto_publish:\n  enabled: false\n# No platforms block — BB uses per-platform yamls\n"
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"bb_niche": "BBNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms("bb_niche", self.DEFAULT_PLATFORMS)
+        assert result == self.DEFAULT_PLATFORMS
+
+    def test_enabled_true_does_not_filter(self, tmp_path, monkeypatch):
+        """Only explicit ``enabled: false`` drops a platform.
+        ``enabled: true`` or absent does nothing."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "platforms:\n  instagram:\n    enabled: true\n  twitter:\n    enabled: true\n"
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert result == self.DEFAULT_PLATFORMS
+
+    def test_malformed_yaml_returns_default_gracefully(self, tmp_path, monkeypatch):
+        """Yaml parse error → log warning + return default. Don't
+        crash the publisher because of a config bug."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text("not: valid: yaml: at all: ::: :::\n")
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert result == self.DEFAULT_PLATFORMS
+
+    def test_gaming_nested_layout_works(self, tmp_path, monkeypatch):
+        """Gaming uses CriticalRush/niches/gaming/config/publishing.yaml
+        not the flat layout. Filter must find both."""
+        from genlab_core.publishing import publish_all_platforms
+
+        # Gaming-style nested layout
+        cfg_dir = tmp_path / "CriticalRush" / "niches" / "gaming" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text("platforms:\n  facebook:\n    enabled: false\n")
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"gaming": "CriticalRush"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms("gaming", self.DEFAULT_PLATFORMS)
+        assert "facebook" not in result
+        assert "instagram" in result
