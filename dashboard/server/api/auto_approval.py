@@ -211,20 +211,79 @@ def track_record():
                 (niche_id, window_days),
             ).fetchall()
 
+            # W3 (2026-06-18): engagement signal per day. JOINs the
+            # ``pending_feedback`` table via ``blueprints.candidate_id``
+            # (NOT ``blueprints.id`` — pending_feedback's task_id
+            # prefix is the candidate sha256 hash, not the blueprint
+            # UUID; verified via direct DB query). LEFT JOIN so days
+            # with no engagement-data still appear (zero rewards).
+            #
+            # Two metrics per day:
+            #   * ``collected_count`` — how many pending_feedback rows
+            #     across all platforms+blueprints have populated
+            #     reward_48h (i.e. the 48h engagement window closed
+            #     and Insights wrote back)
+            #   * ``avg_reward_48h`` — mean across collected rows;
+            #     NULL when collected_count = 0
+            #
+            # Operator value: pair calibration agreement (gate vs
+            # operator alignment) with post-publish reality (did the
+            # auto-approved posts actually earn engagement). A day
+            # with high agreement BUT low avg_reward means the gate
+            # +operator are aligned on garbage; a day with high
+            # agreement AND high avg_reward means alignment-on-good.
+            engagement_rows = conn.execute(
+                """
+                SELECT
+                    (aac.decided_at::date) AS day,
+                    COUNT(DISTINCT pf.id) AS collected_count,
+                    ROUND(AVG(pf.reward_48h)::numeric, 4) AS avg_reward_48h
+                FROM auto_approval_calibration aac
+                LEFT JOIN blueprints b ON b.id::text = aac.blueprint_id
+                LEFT JOIN pending_feedback pf
+                       ON pf.task_id LIKE b.candidate_id || '__%%'
+                      AND pf.niche_id = aac.niche_id
+                      AND pf.reward_48h IS NOT NULL
+                WHERE aac.niche_id = %s
+                  AND aac.decided_at > NOW() - (%s || ' days')::interval
+                GROUP BY 1
+                """,
+                (niche_id, window_days),
+            ).fetchall()
+            engagement_by_day = {
+                r["day"]: {
+                    "collected_count": int(r["collected_count"] or 0),
+                    "avg_reward_48h": float(r["avg_reward_48h"])
+                    if r["avg_reward_48h"] is not None
+                    else None,
+                }
+                for r in engagement_rows
+            }
+
         # Optionally re-bin into bin_days groups. Default bin_days=1
         # means "one bin per day"; bin_days=7 groups by week.
+        def _eng_for_day(day_key):
+            """Pull engagement metrics for a day key; default to empty
+            when no calibration data ever fired for that day."""
+            return engagement_by_day.get(day_key, {"collected_count": 0, "avg_reward_48h": None})
+
         if bin_days == 1:
-            bins = [
-                {
-                    "date": r["day"].isoformat(),
-                    "sample_count": int(r["sample_count"]),
-                    "agreement": int(r["agreement_count"]),
-                    "rate": round(r["agreement_count"] / r["sample_count"], 3)
-                    if r["sample_count"]
-                    else 0.0,
-                }
-                for r in rows
-            ]
+            bins = []
+            for r in rows:
+                eng = _eng_for_day(r["day"])
+                bins.append(
+                    {
+                        "date": r["day"].isoformat(),
+                        "sample_count": int(r["sample_count"]),
+                        "agreement": int(r["agreement_count"]),
+                        "rate": round(r["agreement_count"] / r["sample_count"], 3)
+                        if r["sample_count"]
+                        else 0.0,
+                        # W3 (2026-06-18): engagement enrichment
+                        "collected_count": eng["collected_count"],
+                        "avg_reward_48h": eng["avg_reward_48h"],
+                    }
+                )
         else:
             # Group consecutive days into bin_days-sized buckets.
             # We bin from the most-recent day backwards so the latest
@@ -242,11 +301,21 @@ def track_record():
                     bin_start = bin_end - timedelta(days=bin_days - 1)
                     samples = 0
                     agreements = 0
+                    # W3: accumulate engagement across the bin's days.
+                    # avg_reward_48h is a weighted average across the
+                    # days that HAD collected rewards (each day's
+                    # contribution = day_collected * day_avg).
+                    bin_collected = 0
+                    bin_reward_sum = 0.0
                     d = bin_start
                     while d <= bin_end:
                         if d in day_to_row:
                             samples += int(day_to_row[d]["sample_count"])
                             agreements += int(day_to_row[d]["agreement_count"])
+                        eng_d = _eng_for_day(d)
+                        if eng_d["collected_count"] and eng_d["avg_reward_48h"] is not None:
+                            bin_collected += eng_d["collected_count"]
+                            bin_reward_sum += eng_d["collected_count"] * eng_d["avg_reward_48h"]
                         d += timedelta(days=1)
                     if samples:
                         bins.append(
@@ -255,6 +324,10 @@ def track_record():
                                 "sample_count": samples,
                                 "agreement": agreements,
                                 "rate": round(agreements / samples, 3),
+                                "collected_count": bin_collected,
+                                "avg_reward_48h": round(bin_reward_sum / bin_collected, 4)
+                                if bin_collected
+                                else None,
                             }
                         )
                     cursor = bin_start - timedelta(days=1)
@@ -264,10 +337,22 @@ def track_record():
 
         total_samples = sum(b["sample_count"] for b in bins)
         total_agreement = sum(b["agreement"] for b in bins)
+        # W3 engagement rollup across the whole window. Weighted-avg
+        # (sum_of_rewards / total_collected) matches per-bin math.
+        total_collected = sum(b.get("collected_count", 0) for b in bins)
+        total_reward_sum = sum(
+            b["collected_count"] * b["avg_reward_48h"]
+            for b in bins
+            if b.get("collected_count") and b.get("avg_reward_48h") is not None
+        )
         overall = {
             "sample_count": total_samples,
             "agreement": total_agreement,
             "rate": round(total_agreement / total_samples, 3) if total_samples else 0.0,
+            "collected_count": total_collected,
+            "avg_reward_48h": round(total_reward_sum / total_collected, 4)
+            if total_collected
+            else None,
         }
 
         return api_success(
