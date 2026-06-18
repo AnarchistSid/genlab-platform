@@ -518,6 +518,404 @@ def remove_youtube_channel():
     return api_success(data={"niche_id": niche_id, "removed": {"url": url}})
 
 
+# ── M-20: rss_feeds_extra source-edit endpoints ──────────────
+#
+# Schema in sources.yaml:
+#   rss_feeds_extra:
+#     - url: "https://example.com/feed.xml"
+#       name: "Display Name"
+#       max_age_hours: 24             # optional, defaults to 168
+#
+# Natural key is ``url`` (matches the M-19 pattern for youtube_channels).
+# Validator: must be HTTPS (RSS endpoints are public — there's no
+# legitimate http:// pipeline input today), must have a non-empty path,
+# must be a parseable URL with a host.
+_DEFAULT_RSS_MAX_AGE_HOURS = 168
+_RSS_MAX_AGE_HOURS_LIMIT = 24 * 30  # 30 days — sanity cap on freshness
+
+
+def _validate_rss_url(url: str) -> str | None:
+    """Return None if valid, else an error message.
+
+    Permissive on path-shape (RSS endpoints have wildly varied URLs —
+    ``/feed``, ``/rss.xml``, ``/atom``, query-string-based, etc.).
+    Strict on scheme + host to reduce malicious-input surface; we
+    don't try to dereference the URL at validation time, so a host
+    with no DNS will surface in the pipeline run, not here.
+    """
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        return "url is required"
+    parsed = urlparse(url.strip())
+    if parsed.scheme != "https":
+        return "url must use https (RSS feeds should be served over TLS)"
+    if not parsed.hostname:
+        return "url must include a host"
+    if not parsed.path or parsed.path == "/":
+        return "url must include a path (e.g. /feed, /rss.xml)"
+    return None
+
+
+def _validate_rss_max_age_hours(value) -> str | None:
+    """Coerce + range-check max_age_hours. None / missing is allowed
+    (caller falls back to the default). Returns error message on bad
+    input, else None."""
+    if value is None:
+        return None
+    try:
+        ivalue = int(value)
+    except (TypeError, ValueError):
+        return "max_age_hours must be an integer"
+    if ivalue <= 0:
+        return "max_age_hours must be positive"
+    if ivalue > _RSS_MAX_AGE_HOURS_LIMIT:
+        return f"max_age_hours must be ≤{_RSS_MAX_AGE_HOURS_LIMIT} (30 days)"
+    return None
+
+
+@bp.route("/sources/rss-feeds", methods=["GET"])
+def list_rss_feeds():
+    """List the ``rss_feeds_extra`` entries for a niche."""
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    data, _path = _load_sources_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    feeds = data.get("rss_feeds_extra") or []
+    result = [
+        {
+            "url": str(f.get("url", "")),
+            "name": str(f.get("name", "")),
+            "max_age_hours": int(f.get("max_age_hours", _DEFAULT_RSS_MAX_AGE_HOURS)),
+        }
+        for f in feeds
+    ]
+    return api_success(data={"niche_id": niche_id, "rss_feeds_extra": result})
+
+
+@bp.route("/sources/rss-feeds", methods=["POST"])
+def add_rss_feed():
+    """Append a new {url, name, max_age_hours?} entry to rss_feeds_extra.
+
+    409 on duplicate URL (same idempotency contract as M-19).
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    body = request.get_json(silent=True) or {}
+    url = (body.get("url") or "").strip()
+    name = (body.get("name") or "").strip()
+    raw_max_age = body.get("max_age_hours")
+
+    if not name:
+        return api_error(error="name is required", code=400)
+    if len(name) > _NAME_MAX_LEN:
+        return api_error(error=f"name must be ≤{_NAME_MAX_LEN} chars", code=400)
+    url_err = _validate_rss_url(url)
+    if url_err:
+        return api_error(error=url_err, code=400)
+    age_err = _validate_rss_max_age_hours(raw_max_age)
+    if age_err:
+        return api_error(error=age_err, code=400)
+    max_age_hours = int(raw_max_age) if raw_max_age is not None else _DEFAULT_RSS_MAX_AGE_HOURS
+
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    sources_path = config_dir / "sources.yaml"
+
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        feeds = data.get("rss_feeds_extra")
+        if feeds is None:
+            from ruamel.yaml.comments import CommentedSeq
+
+            feeds = CommentedSeq()
+            data["rss_feeds_extra"] = feeds
+
+        for existing in feeds:
+            if str(existing.get("url", "")).strip() == url:
+                return api_error(
+                    error=f"url already present in rss_feeds_extra: {url}",
+                    code=409,
+                )
+
+        from ruamel.yaml.comments import CommentedMap
+
+        new_entry = CommentedMap()
+        new_entry["url"] = url
+        new_entry["name"] = name
+        new_entry["max_age_hours"] = max_age_hours
+        feeds.append(new_entry)
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-20 added rss_feed niche=%s name=%s url=%s max_age_hours=%d",
+        niche_id,
+        name,
+        url,
+        max_age_hours,
+    )
+    return api_success(
+        data={
+            "niche_id": niche_id,
+            "added": {"url": url, "name": name, "max_age_hours": max_age_hours},
+        }
+    )
+
+
+@bp.route("/sources/rss-feeds", methods=["DELETE"])
+def remove_rss_feed():
+    """Remove the rss_feeds_extra entry whose ``url`` matches the query param."""
+    niche_id = request.args.get("niche_id", "").strip()
+    url = (request.args.get("url") or "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    if not url:
+        return api_error(error="url is required", code=400)
+
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    sources_path = config_dir / "sources.yaml"
+
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        feeds = data.get("rss_feeds_extra") or []
+        new_feeds = [f for f in feeds if str(f.get("url", "")).strip() != url]
+        if len(new_feeds) == len(feeds):
+            return api_not_found(
+                message=f"url not found in rss_feeds_extra for niche={niche_id}: {url}"
+            )
+        feeds[:] = new_feeds
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-20 removed rss_feed niche=%s url=%s",
+        niche_id,
+        url,
+    )
+    return api_success(data={"niche_id": niche_id, "removed": {"url": url}})
+
+
+# ── M-21: reddit subreddits source-edit endpoints ───────────
+#
+# Schema in sources.yaml:
+#   reddit:
+#     enabled: true
+#     listing: top
+#     time_window: day
+#     per_sub_limit: 15
+#     subreddits:
+#       - name: "AnimeSakuga"
+#       - name: "anime"
+#
+# Natural key is ``name`` (case-insensitive — Reddit treats subreddit
+# names case-insensitively, so we lowercase for dedup but preserve the
+# operator's casing for display).
+#
+# Validator: per Reddit's own rules — alphanumeric + underscore only,
+# 3-21 chars, can't start with underscore. We strip a leading "r/" or
+# "/r/" before validating (operators frequently paste these).
+import re
+
+_SUBREDDIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]{2,20}$")
+
+
+def _normalize_subreddit_name(raw: str) -> str:
+    """Strip ``r/`` or ``/r/`` prefix and trim whitespace.
+
+    Operators frequently paste ``r/anime`` or ``/r/anime`` — accept
+    those without forcing them to know the canonical bare-name form.
+    """
+    s = (raw or "").strip()
+    if s.startswith("/r/"):
+        s = s[3:]
+    elif s.startswith("r/"):
+        s = s[2:]
+    return s.strip("/")
+
+
+def _validate_subreddit_name(name: str) -> str | None:
+    """Return None if valid, else an error message."""
+    if not name:
+        return "subreddit name is required"
+    if len(name) < 3:
+        return "subreddit name must be ≥3 chars"
+    if len(name) > 21:
+        return "subreddit name must be ≤21 chars (Reddit's limit)"
+    if not _SUBREDDIT_NAME_RE.match(name):
+        return "subreddit name must be alphanumeric + underscore only (no slashes, dots, hyphens)"
+    return None
+
+
+@bp.route("/sources/subreddits", methods=["GET"])
+def list_subreddits():
+    """List ``reddit.subreddits`` entries for a niche.
+
+    Some niches store extra fields (min_score, time_filter, content_type)
+    on the entry — we return them as-is so the operator can see what's
+    configured, but only ``name`` is part of the write contract here.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    data, _path = _load_sources_yaml_rt(niche_id)
+    if data is None:
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    reddit_cfg = data.get("reddit") or {}
+    subs = reddit_cfg.get("subreddits") or []
+    result = [
+        {
+            "name": str(s.get("name", "")),
+            # surface read-only metadata so UI can show "min_score: 1000"
+            "min_score": s.get("min_score"),
+            "time_filter": s.get("time_filter"),
+            "content_type": s.get("content_type"),
+        }
+        for s in subs
+    ]
+    return api_success(data={"niche_id": niche_id, "subreddits": result})
+
+
+@bp.route("/sources/subreddits", methods=["POST"])
+def add_subreddit():
+    """Append a ``{name: X}`` entry to reddit.subreddits.
+
+    Case-insensitive dedup (Reddit treats names case-insensitively).
+    409 on duplicate.
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    body = request.get_json(silent=True) or {}
+    name = _normalize_subreddit_name(body.get("name", ""))
+    name_err = _validate_subreddit_name(name)
+    if name_err:
+        return api_error(error=name_err, code=400)
+
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    sources_path = config_dir / "sources.yaml"
+
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        reddit_cfg = data.get("reddit")
+        if reddit_cfg is None:
+            # No reddit: section yet — operator wants to add the first
+            # sub. Create the minimal-shape parent so subsequent reads
+            # land. Defaults match the existing per-niche files.
+            from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
+            reddit_cfg = CommentedMap()
+            reddit_cfg["enabled"] = True
+            reddit_cfg["listing"] = "top"
+            reddit_cfg["time_window"] = "day"
+            reddit_cfg["per_sub_limit"] = 15
+            reddit_cfg["subreddits"] = CommentedSeq()
+            data["reddit"] = reddit_cfg
+        subs = reddit_cfg.get("subreddits")
+        if subs is None:
+            from ruamel.yaml.comments import CommentedSeq
+
+            subs = CommentedSeq()
+            reddit_cfg["subreddits"] = subs
+
+        name_lc = name.lower()
+        for existing in subs:
+            if str(existing.get("name", "")).strip().lower() == name_lc:
+                return api_error(
+                    error=f"subreddit already present in reddit.subreddits: {name}",
+                    code=409,
+                )
+
+        from ruamel.yaml.comments import CommentedMap
+
+        new_entry = CommentedMap()
+        new_entry["name"] = name
+        subs.append(new_entry)
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-21 added subreddit niche=%s name=%s",
+        niche_id,
+        name,
+    )
+    return api_success(data={"niche_id": niche_id, "added": {"name": name}})
+
+
+@bp.route("/sources/subreddits", methods=["DELETE"])
+def remove_subreddit():
+    """Remove the subreddit entry whose ``name`` matches the query param.
+
+    Match is case-insensitive (so ``r/AnimeSakuga`` removes the same
+    row whether it's stored as ``AnimeSakuga`` or ``animesakuga``).
+    """
+    niche_id = request.args.get("niche_id", "").strip()
+    name = _normalize_subreddit_name(request.args.get("name", ""))
+    if not niche_id:
+        return api_error(error="niche_id is required", code=400)
+    name_err = _validate_subreddit_name(name)
+    if name_err:
+        return api_error(error=name_err, code=400)
+
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None or not (config_dir / "sources.yaml").exists():
+        return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+    sources_path = config_dir / "sources.yaml"
+
+    with _SourcesWriteLock(sources_path):
+        data, path = _load_sources_yaml_rt(niche_id)
+        if data is None:
+            return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
+        reddit_cfg = data.get("reddit") or {}
+        subs = reddit_cfg.get("subreddits") or []
+        name_lc = name.lower()
+        new_subs = [s for s in subs if str(s.get("name", "")).strip().lower() != name_lc]
+        if len(new_subs) == len(subs):
+            return api_not_found(
+                message=f"subreddit not found in reddit.subreddits for niche={niche_id}: {name}"
+            )
+        subs[:] = new_subs
+
+        try:
+            _dump_sources_yaml_rt(data, path)
+        except OSError as exc:
+            logger.exception("sources.yaml write failed")
+            return api_error(error=f"write failed: {exc}", code=500)
+
+    logger.info(
+        "[config_routes] M-21 removed subreddit niche=%s name=%s",
+        niche_id,
+        name,
+    )
+    return api_success(data={"niche_id": niche_id, "removed": {"name": name}})
+
+
 # ── AUTO #2: per-niche auto_publish rollout_pct slider ──────
 #
 # Operator-facing read/write for the ``auto_publish`` block in each
