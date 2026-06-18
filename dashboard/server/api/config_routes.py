@@ -540,33 +540,31 @@ def remove_youtube_channel():
 # Like M-19/M-20/M-21, writes go through ruamel round-trip (comment
 # preservation) + the file-lock helper.
 
-# Same nested-config resolver used by auto_approver.load_policy. We
-# duplicate the candidate-paths list here rather than reaching into
-# genlab_core's internals — dashboard's import boundary stays clean.
-_PUBLISHING_YAML_CANDIDATES = lambda niche_id, niche_root: [  # noqa: E731
-    niche_root / "niches" / niche_id / "config" / "publishing.yaml",
-    niche_root / "config" / "publishing.yaml",
-]
-
 
 def _resolve_publishing_yaml(niche_id: str):
     """Find publishing.yaml for a niche, returning (path, niche_folder)
     or (None, None) if not found.
 
-    Handles the gaming-niche nested-config layout (config under
-    ``CriticalRush/niches/gaming/``) using the same candidate-paths
-    convention as ``auto_approver.load_policy``.
+    Reuses ``_config_dir_for_niche`` (same registry+folder lookup
+    pattern as M-19's sources.yaml resolver), which already handles
+    the gaming-niche nested-config layout (``CriticalRush/niches/
+    gaming/config/``). niche_id is used ONLY to gate the registry
+    lookup — the final path is built from registry-controlled strings
+    + the hardcoded ``"publishing.yaml"`` filename. Keeps the taint
+    chain bounded (CodeQL py/path-injection clean).
     """
-    for niche in _niche_registry():
-        if niche["id"] != niche_id:
-            continue
-        folder = niche["folder"]
-        niche_root = _GENLAB_ROOT / folder
-        for cand in _PUBLISHING_YAML_CANDIDATES(niche_id, niche_root):
-            if cand.exists():
-                return cand, folder
-        return None, folder
-    return None, None
+    config_dir = _config_dir_for_niche(niche_id)
+    if config_dir is None:
+        return None, None
+    path = config_dir / "publishing.yaml"
+    if not path.exists():
+        return None, None
+    # Recover the folder name from the path for logging/test purposes;
+    # cheaper than re-walking the registry.
+    folder = (
+        path.parts[len(_GENLAB_ROOT.parts)] if len(path.parts) > len(_GENLAB_ROOT.parts) else None
+    )
+    return path, folder
 
 
 def _load_publishing_yaml_rt(niche_id: str):
@@ -656,9 +654,7 @@ def update_auto_publish():
     with _SourcesWriteLock(path):
         data, real_path = _load_publishing_yaml_rt(niche_id)
         if data is None:
-            return api_not_found(
-                message=f"publishing.yaml not found for niche={niche_id}"
-            )
+            return api_not_found(message=f"publishing.yaml not found for niche={niche_id}")
         block = data.get("auto_publish")
         if block is None or not isinstance(block, dict):
             # No auto_publish block yet — create with safe defaults.

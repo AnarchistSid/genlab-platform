@@ -131,9 +131,7 @@ class TestGetAutoPublish:
 
 
 class TestPatchAutoPublish:
-    def test_happy_path_persists_and_preserves_comments(
-        self, client, fake_publishing_path
-    ):
+    def test_happy_path_persists_and_preserves_comments(self, client, fake_publishing_path):
         token = _get_csrf(client)
         with _patch_resolver(fake_publishing_path):
             resp = client.patch(
@@ -156,7 +154,7 @@ class TestPatchAutoPublish:
         [
             (-0.01, "[0.0, 1.0]"),
             (1.01, "[0.0, 1.0]"),
-            (50, "[0.0, 1.0]"),       # common typo: 50 meant 50%
+            (50, "[0.0, 1.0]"),  # common typo: 50 meant 50%
             ("not-a-number", "number"),
             (None, "required"),
         ],
