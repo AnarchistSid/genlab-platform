@@ -1239,7 +1239,12 @@ class FetchTrendingVideos:
         config = context.get("niche_config", {})
         vs_config = config.get("video_sourcing", {})
 
-        api_key = os.environ.get("YOUTUBE_API_KEY") or os.environ.get("YOUTUBE_DATA_API_KEY")
+        # SR-E (2026-06-18): prefer the per-niche prefixed key
+        # ``{PREFIX}_YOUTUBE_API_KEY`` over the shared global. Caller
+        # already pulled ``niche_id`` from context above.
+        from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
+        api_key = resolve_youtube_api_key(niche_id) or os.environ.get("YOUTUBE_DATA_API_KEY")
         if not api_key:
             logger.error("[FetchTrendingVideos] YOUTUBE_API_KEY not set")
             context.setdefault("run_stats", {})["trending_videos_found"] = 0

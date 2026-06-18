@@ -174,6 +174,40 @@ def resolve_youtube_credentials(niche_id: str) -> dict[str, str]:
     }
 
 
+def resolve_youtube_api_key(niche_id: str = "") -> str:
+    """Resolve the YouTube Data API v3 key for a niche (SR-E).
+
+    Reads ``{PREFIX}_YOUTUBE_API_KEY`` first (e.g.
+    ``CLUTCHWIRE_YOUTUBE_API_KEY``), falls back to the shared
+    ``YOUTUBE_API_KEY`` global. The global fallback is allowed for
+    this credential ONLY (unlike OAuth refresh-tokens which never
+    fall back across channels) because:
+
+    1. The Data API key is read-only — it queries trending/search/
+       video metadata, never writes to a YouTube account. There's
+       no cross-channel risk from sharing.
+    2. Phase-1 single-tenant currently uses one global key. Forcing
+       per-niche keys before tenant-2 onboarding would be churn for
+       no security benefit.
+    3. SR-E ("per-tenant YouTube API key") is about tenant-2 SaaS
+       isolation. Tenant-2 will set
+       ``TENANT2_<NICHE>_YOUTUBE_API_KEY`` (after the tenant-aware
+       prefix registry lands in a future PR) and that PREFIX value
+       will win over the global tenant-1 key — quota DoS prevention
+       works as soon as the env var is set per-tenant.
+
+    No warning is logged when falling back to the global; the global
+    IS the supported phase-1 source. Empty return means caller falls
+    back to its own default (typically logs a "no key" warning).
+    """
+    prefix = NICHE_CREDENTIAL_PREFIXES.get(niche_id, "")
+    if prefix:
+        prefixed = os.environ.get(f"{prefix}_YOUTUBE_API_KEY", "").strip()
+        if prefixed:
+            return prefixed
+    return os.environ.get("YOUTUBE_API_KEY", "").strip()
+
+
 def resolve_youtube_analytics_credentials(niche_id: str = "") -> dict[str, str]:
     """Resolve YouTube Analytics OAuth credentials for a niche.
 

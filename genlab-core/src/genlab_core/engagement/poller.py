@@ -48,9 +48,16 @@ async def poll_youtube_comments(niche_id: str, channel_id: str) -> list[dict]:
     """
     import os
 
+    from genlab_core.publishing.niche_credentials import resolve_youtube_api_key
+
     logger.debug("[POLLER] YouTube poll for %s (channel=%s)", niche_id, channel_id)
 
-    api_key = os.environ.get("YOUTUBE_API_KEY", "") or os.environ.get("YOUTUBE_DATA_API_KEY", "")
+    # SR-E (2026-06-18): prefer the per-niche prefixed key
+    # ``{PREFIX}_YOUTUBE_API_KEY`` (e.g. ``CLUTCHWIRE_YOUTUBE_API_KEY``)
+    # over the shared global. Phase-1 single-tenant uses the global;
+    # phase-2 tenant-2 onboarding sets per-prefix keys for quota
+    # isolation. Falls back to global if per-niche key not set.
+    api_key = resolve_youtube_api_key(niche_id) or os.environ.get("YOUTUBE_DATA_API_KEY", "")
 
     if not api_key:
         # Fall back to OAuth if no API key
