@@ -35,8 +35,11 @@ class TestGoogleTrendsIntel:
         ):
             topics = intel.get_trending_topics("gaming", top_n=5)
 
-        assert len(topics) > 0
-        assert topics == NICHE_SEED_KEYWORDS["gaming"]
+        # 2026-06-18: the seed-fallback now respects top_n (was
+        # returning the full seed list which silently leaked more
+        # search keywords than the caller asked for).
+        assert len(topics) == 5
+        assert topics == NICHE_SEED_KEYWORDS["gaming"][:5]
 
     def test_all_niches_have_seed_keywords(self):
         for niche in ["gaming", "sports", "movies", "anime", "ai_creators"]:
@@ -163,7 +166,8 @@ class TestPytrendsGracefulSkip:
             patch("genlab_core.intel.google_trends._read_stale_cache", return_value=None),
         ):
             topics = intel.get_trending_topics("gaming", top_n=5)
-        assert topics == NICHE_SEED_KEYWORDS["gaming"]
+        # 2026-06-18: seed-fallback respects top_n.
+        assert topics == NICHE_SEED_KEYWORDS["gaming"][:5]
 
     def test_warn_log_fires_exactly_once_across_many_calls(self, caplog):
         """The class-level ``_PYTRENDS_UNAVAILABLE`` sentinel exists so
@@ -195,3 +199,139 @@ class TestPytrendsGracefulSkip:
         intel._pytrends = mock_pt
         client = intel._get_client()
         assert client is mock_pt
+
+
+# ── Niche-pollution fix (2026-06-18) ──────────────────────────────
+
+
+class TestNichePollutionFix:
+    """The pre-2026-06-18 implementation appended ``general_terms``
+    after ``niche_terms`` in both _get_rss_trending and
+    _get_realtime_trending. That polluted the trending fetcher with
+    US-general topics (gas, moscow, tornado, james colombia, estadio
+    banorte) which then got prepended to NICHE_SEARCH_KEYWORDS and
+    pushed the niche-correct searches past the 2-3 per-run cap.
+
+    Result: AI niche fetched The Verge tech-news videos instead of AI
+    content, sports fetched Mexican soccer stadium news, etc. — root
+    cause of operator complaint "blackbox brief still not getting any
+    ai-generated content" on 2026-06-18.
+
+    These pins fix the behaviour to its forward-compatible contract:
+    return ONLY niche-matching terms; if none match, return empty and
+    let the next tier (seeds) take over.
+    """
+
+    def test_rss_drops_general_terms_when_niche_misses(self):
+        """Reproduce today's prod payload: gas, moscow, claude down,
+        is claude down. For sports, ZERO match → return empty (not
+        the off-topic list)."""
+        intel = GoogleTrendsIntel()
+        # Mock the general-RSS fetch path
+        fake_topics = ["gas", "moscow", "claude down", "is claude down"]
+
+        def fake_urlopen(*args, **kwargs):
+            # Mock response with RSS-shape XML
+            xml = (
+                '<?xml version="1.0"?><rss><channel>'
+                + "".join(f"<item><title>{t}</title></item>" for t in fake_topics)
+                + "</channel></rss>"
+            )
+            mock = MagicMock()
+            mock.read.return_value = xml.encode()
+            mock.__enter__ = lambda self: mock
+            mock.__exit__ = lambda self, *a: False
+            return mock
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            # Patch the category-RSS-first try to fail so we hit the general fallback
+            with patch.object(intel, "_get_rss_trending", wraps=intel._get_rss_trending):
+                result = intel._get_rss_trending("sports")
+        # Sports seeds = NBA, NFL, soccer, etc. None matches the trash.
+        # Result MUST be empty so the chain falls through to seeds.
+        assert result == [], f"expected [] (no niche match), got {result}"
+
+    def test_rss_keeps_niche_matching_terms(self):
+        """When the general RSS DOES include niche-matching terms
+        (e.g. 'claude down' for ai_creators — 'claude' is a seed),
+        those get returned (just not the general ones alongside)."""
+        intel = GoogleTrendsIntel()
+        fake_topics = ["gas", "moscow", "claude down", "is claude down"]
+
+        def fake_urlopen(*args, **kwargs):
+            xml = (
+                '<?xml version="1.0"?><rss><channel>'
+                + "".join(f"<item><title>{t}</title></item>" for t in fake_topics)
+                + "</channel></rss>"
+            )
+            mock = MagicMock()
+            mock.read.return_value = xml.encode()
+            mock.__enter__ = lambda self: mock
+            mock.__exit__ = lambda self, *a: False
+            return mock
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            result = intel._get_rss_trending("ai_creators")
+        # 'claude down' + 'is claude down' both contain 'claude' (seed).
+        # 'gas' + 'moscow' should be DROPPED.
+        assert "claude down" in result
+        assert "is claude down" in result
+        assert "gas" not in result, "off-topic 'gas' must be filtered out"
+        assert "moscow" not in result, "off-topic 'moscow' must be filtered out"
+
+    def test_realtime_drops_general_terms_when_niche_misses(self):
+        """Same fix in _get_realtime_trending. Pytrends returns
+        the trending DataFrame; we filter to niche-matching only."""
+        import pytest
+
+        pytest.importorskip("pandas")
+        import pandas as pd
+
+        intel = GoogleTrendsIntel()
+        mock_pt = MagicMock()
+        mock_pt.trending_searches.return_value = pd.DataFrame(
+            {0: ["tornado watch vs warning", "james colombia", "estadio banorte"]}
+        )
+        intel._pytrends = mock_pt
+
+        # Gaming seeds: gaming, video games, esports, etc.
+        # None of the mock topics match → return empty.
+        result = intel._get_realtime_trending("gaming")
+        assert result == [], f"expected [] (no niche match), got {result}"
+
+    def test_realtime_keeps_niche_matching_terms(self):
+        """Regression: real gaming match still returned through realtime."""
+        import pytest
+
+        pytest.importorskip("pandas")
+        import pandas as pd
+
+        intel = GoogleTrendsIntel()
+        mock_pt = MagicMock()
+        mock_pt.trending_searches.return_value = pd.DataFrame(
+            {0: ["tornado", "valorant patch notes", "playstation 6 leak"]}
+        )
+        intel._pytrends = mock_pt
+
+        result = intel._get_realtime_trending("gaming")
+        assert "valorant patch notes" in result
+        assert "playstation 6 leak" in result
+        assert "tornado" not in result, "off-topic 'tornado' must be filtered out"
+
+    def test_full_pipeline_falls_through_to_seeds_when_trends_off_topic(self):
+        """End-to-end: when ALL trend tiers return off-topic data,
+        ``get_trending_topics`` falls through to NICHE_SEED_KEYWORDS.
+        This pins the operator-visible contract: trends-pollution
+        cannot leak past the public API."""
+        intel = GoogleTrendsIntel()
+        # All tiers return empty (RSS + pytrends both filtered out)
+        with (
+            patch.object(intel, "_get_rss_trending", return_value=[]),
+            patch.object(intel, "_get_realtime_trending", return_value=[]),
+            patch.object(intel, "_get_daily_trending", return_value=[]),
+            patch("genlab_core.intel.google_trends._read_cache", return_value=None),
+            patch("genlab_core.intel.google_trends._read_stale_cache", return_value=None),
+        ):
+            topics = intel.get_trending_topics("ai_creators", top_n=3)
+        # MUST be the seed keywords — not garbage, not empty.
+        assert topics == NICHE_SEED_KEYWORDS["ai_creators"][:3]

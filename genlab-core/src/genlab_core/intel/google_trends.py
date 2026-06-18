@@ -277,8 +277,16 @@ class GoogleTrendsIntel:
             return stale[:top_n]
 
         seeds = NICHE_SEED_KEYWORDS.get(niche_id, ["trending", niche_id])
-        logger.warning("[%s] Google Trends unavailable — using seed keywords: %s", niche_id, seeds)
-        return seeds
+        logger.warning(
+            "[%s] Google Trends unavailable — using seed keywords (top %d of %d)",
+            niche_id,
+            top_n,
+            len(seeds),
+        )
+        # Respect the caller's top_n — pre-2026-06-18 this returned the
+        # full list which caused log spam and silently leaked more seeds
+        # into downstream search than top_n=5 expected (12 for AI etc.).
+        return seeds[:top_n]
 
     def _get_rss_trending(self, niche_id: str) -> list[str]:
         """Fetch daily trending Google searches via official RSS feed.
@@ -301,7 +309,13 @@ class GoogleTrendsIntel:
 
         topics: list[str] = []
 
-        # Try niche-specific RSS first
+        # **2026-06-18**: the niche-specific RSS endpoint
+        # (``?geo=US&cat=5``/``cat=8``/``cat=20``) silently returns
+        # the general feed — verified by ``curl`` test confirming
+        # identical bodies across all cat values. We keep the attempt
+        # for the eventual day Google honours ``cat=`` again, but apply
+        # the same niche-filter as the general fallback so a passing
+        # response that's actually general data doesn't leak.
         cat_id = _RSS_CATEGORIES.get(niche_id)
         if cat_id:
             try:
@@ -314,47 +328,82 @@ class GoogleTrendsIntel:
                     title_el = item.find("title")
                     if title_el is not None and title_el.text:
                         topics.append(title_el.text.strip())
+                # Pre-2026-06-18 this early-returned ``topics[:20]``
+                # unconditionally. That was the source of the
+                # niche-pollution complaint — category-RSS was
+                # silently general → top results passed through with
+                # no niche check. Now we fall through to the shared
+                # filter at the bottom of the function.
                 if topics:
                     logger.info(
-                        "[%s] Trends RSS category %s: %d topics", niche_id, cat_id, len(topics)
+                        "[%s] Trends RSS category %s: %d topics (will filter)",
+                        niche_id,
+                        cat_id,
+                        len(topics),
                     )
-                    return topics[:20]
             except Exception as e:
                 logger.debug("[%s] Category RSS failed (cat=%s): %s", niche_id, cat_id, e)
 
-        # Fall back to general RSS with keyword filtering
-        rss_url = f"https://trends.google.com/trending/rss?geo={self.geo}"
-        req = urllib.request.Request(
-            rss_url,
-            headers={"User-Agent": "GenLab/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = resp.read()
-
-        root = ET.fromstring(data)
-        for item in root.iter("item"):
-            title_el = item.find("title")
-            if title_el is not None and title_el.text:
-                topics.append(title_el.text.strip())
-
+        # Fall back to general RSS if category RSS returned nothing.
+        # Always filter at the end regardless of which feed we used.
         if not topics:
-            return []
+            rss_url = f"https://trends.google.com/trending/rss?geo={self.geo}"
+            req = urllib.request.Request(
+                rss_url,
+                headers={"User-Agent": "GenLab/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = resp.read()
 
-        # Filter for niche relevance
+            root = ET.fromstring(data)
+            for item in root.iter("item"):
+                title_el = item.find("title")
+                if title_el is not None and title_el.text:
+                    topics.append(title_el.text.strip())
+
+            if not topics:
+                return []
+
+        # Filter for niche relevance. **2026-06-18 fix**: the category-
+        # specific Google Trends RSS endpoint (``?cat=5``/``?cat=8``/
+        # ``?cat=20``) silently returns general trends — verified by
+        # curl test 2026-06-18 returning identical bodies across all
+        # cat values + the no-cat baseline. So this fallback path
+        # ALWAYS runs against the general feed (gas, moscow, tornado,
+        # etc.). The previous implementation appended ``general_terms``
+        # after ``niche_terms`` which meant niches with zero matches
+        # (most days) returned ENTIRELY off-topic keywords — those got
+        # prepended to NICHE_SEARCH_KEYWORDS in the trending fetcher
+        # and pushed the niche-correct searches past the per-run cap
+        # of 2-3 searches. Result: AI niche fetched Verge tech news,
+        # sports fetched soccer-stadium news, etc.
+        #
+        # The fix: drop ``general_terms`` from the return. When the
+        # general feed has zero niche matches, return empty and let the
+        # next tier (pytrends realtime → daily → stale cache → SEEDS)
+        # take over. NICHE_SEED_KEYWORDS is niche-correct by definition
+        # so the fall-through is safer than the pollution.
         niche_keywords = NICHE_SEED_KEYWORDS.get(niche_id, [])
-        niche_terms = []
-        general_terms = []
-        for term in topics:
-            term_lower = term.lower()
-            if any(kw.lower() in term_lower for kw in niche_keywords):
-                niche_terms.append(term)
-            else:
-                general_terms.append(term)
-
-        return (niche_terms + general_terms)[:20]
+        niche_terms = [
+            term for term in topics if any(kw.lower() in term.lower() for kw in niche_keywords)
+        ]
+        if not niche_terms:
+            logger.debug(
+                "[%s] General RSS had 0 niche-matching terms (out of %d) — "
+                "returning empty to let Tier-5 seed keywords take over",
+                niche_id,
+                len(topics),
+            )
+            return []
+        return niche_terms[:20]
 
     def _get_realtime_trending(self, niche_id: str) -> list[str]:
-        """Get today's real-time trending searches via pytrends."""
+        """Get today's real-time trending searches via pytrends.
+
+        Same niche-pollution fix as ``_get_rss_trending`` (2026-06-18):
+        when no terms match the niche, return empty so the chain falls
+        through to seeds rather than returning off-topic US trends.
+        """
         pt = self._get_client()
         if pt is None:
             return []
@@ -362,18 +411,20 @@ class GoogleTrendsIntel:
         topics = trending_df[0].tolist()
 
         niche_keywords = NICHE_SEED_KEYWORDS.get(niche_id, [])
-        niche_terms = []
-        general_terms = []
-
-        for term in topics:
-            term_str = str(term)
-            term_lower = term_str.lower()
-            if any(kw.lower() in term_lower for kw in niche_keywords):
-                niche_terms.append(term_str)
-            else:
-                general_terms.append(term_str)
-
-        return (niche_terms + general_terms)[:20]
+        niche_terms = [
+            str(term)
+            for term in topics
+            if any(kw.lower() in str(term).lower() for kw in niche_keywords)
+        ]
+        if not niche_terms:
+            logger.debug(
+                "[%s] pytrends realtime had 0 niche-matching terms (out of %d) — "
+                "returning empty to let Tier-5 seed keywords take over",
+                niche_id,
+                len(topics),
+            )
+            return []
+        return niche_terms[:20]
 
     def _get_daily_trending(self, niche_id: str) -> list[str]:
         """Get related queries from Google Trends for seed keywords."""
