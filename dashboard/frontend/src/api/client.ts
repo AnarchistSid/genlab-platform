@@ -251,6 +251,14 @@ export interface TrackRecordBin {
   sample_count: number;
   agreement: number;
   rate: number;       // 0..1
+  // W3 (2026-06-18): engagement enrichment via pending_feedback join.
+  // ``collected_count`` is the number of platforms where reward_48h is
+  // populated (post-publish 48h window closed + Insights wrote back).
+  // ``avg_reward_48h`` is the mean across collected; null when
+  // collected_count === 0 (distinguishes "no data yet" from
+  // "engagement = 0").
+  collected_count: number;
+  avg_reward_48h: number | null;
 }
 
 export interface TrackRecordResponse {
@@ -262,6 +270,10 @@ export interface TrackRecordResponse {
     sample_count: number;
     agreement: number;
     rate: number;
+    // W3 (2026-06-18): rollup engagement signal across the window.
+    // Weighted-avg: sum(per_bin collected * avg) / sum(per_bin collected).
+    collected_count: number;
+    avg_reward_48h: number | null;
   };
 }
 
