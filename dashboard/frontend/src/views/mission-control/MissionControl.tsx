@@ -18,6 +18,7 @@ import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
 import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
 import { SourcesEditor } from "./SourcesEditor";
+import { AdditionalSourcesEditor } from "./AdditionalSourcesEditor";
 import { AiInsightCard } from "./AiInsightCard";
 import { PublishTimeline } from "./PublishTimeline";
 import { UpcomingQueue } from "./UpcomingQueue";
@@ -205,6 +206,11 @@ export default function MissionControl() {
                 above, then prunes them here without git-committing
                 sources.yaml. */}
             <SourcesEditor />
+            {/* M-20 + M-21 (2026-06-18): operator write-path for RSS
+                feeds + reddit subreddits on the per-niche sources.yaml.
+                Tabs because each individual surface is smaller than
+                youtube_channels but operators still need both. */}
+            <AdditionalSourcesEditor />
           </div>
 
           {/* Row 6: Pipeline Countdowns + Publishing Health + Monetisation */}

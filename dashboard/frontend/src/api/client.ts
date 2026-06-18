@@ -305,14 +305,29 @@ export interface SourcePerformanceResponse {
   sources: SourcePerformanceRow[];
 }
 
-// ── M-19: youtube_channels source-edit endpoints ────────────────
+// ── M-19 / M-20 / M-21: per-niche source-edit endpoints ─────────
 //
-// Mounted under `/api/v1/config/sources/youtube-channels` (NOT
-// `/api/v1/sources/...` — config_routes.py owns the ruamel round-trip
-// for sources.yaml; sources.py is read-only performance data).
+// Mounted under `/api/v1/config/sources/...` (NOT `/api/v1/sources/...`
+// — config_routes.py owns the ruamel round-trip for sources.yaml;
+// sources.py is read-only performance data).
 export interface YoutubeChannelEntry {
   url: string;
   name: string;
+}
+
+export interface RssFeedEntry {
+  url: string;
+  name: string;
+  max_age_hours: number;
+}
+
+export interface SubredditEntry {
+  name: string;
+  // Read-only metadata that some niches store on each entry; the
+  // write-path only takes ``name``, so these are optional/nullable.
+  min_score?: number | null;
+  time_filter?: string | null;
+  content_type?: string | null;
 }
 
 // ── AUTO #2: per-niche auto_publish rollout_pct slider ──────
@@ -364,6 +379,42 @@ export const sources = {
     mutate<{ niche_id: string; removed: YoutubeChannelEntry }>(
       "DELETE",
       `/config/sources/youtube-channels?niche_id=${encodeURIComponent(nicheId)}&url=${encodeURIComponent(url)}`,
+    ),
+
+  // M-20: rss_feeds_extra
+  listRssFeeds: (nicheId: string) =>
+    get<{ niche_id: string; rss_feeds_extra: RssFeedEntry[] }>(
+      "/config/sources/rss-feeds",
+      { niche_id: nicheId },
+    ),
+  addRssFeed: (nicheId: string, entry: Omit<RssFeedEntry, "max_age_hours"> & { max_age_hours?: number }) =>
+    mutate<{ niche_id: string; added: RssFeedEntry }>(
+      "POST",
+      `/config/sources/rss-feeds?niche_id=${encodeURIComponent(nicheId)}`,
+      entry,
+    ),
+  removeRssFeed: (nicheId: string, url: string) =>
+    mutate<{ niche_id: string; removed: { url: string } }>(
+      "DELETE",
+      `/config/sources/rss-feeds?niche_id=${encodeURIComponent(nicheId)}&url=${encodeURIComponent(url)}`,
+    ),
+
+  // M-21: reddit.subreddits
+  listSubreddits: (nicheId: string) =>
+    get<{ niche_id: string; subreddits: SubredditEntry[] }>(
+      "/config/sources/subreddits",
+      { niche_id: nicheId },
+    ),
+  addSubreddit: (nicheId: string, name: string) =>
+    mutate<{ niche_id: string; added: { name: string } }>(
+      "POST",
+      `/config/sources/subreddits?niche_id=${encodeURIComponent(nicheId)}`,
+      { name },
+    ),
+  removeSubreddit: (nicheId: string, name: string) =>
+    mutate<{ niche_id: string; removed: { name: string } }>(
+      "DELETE",
+      `/config/sources/subreddits?niche_id=${encodeURIComponent(nicheId)}&name=${encodeURIComponent(name)}`,
     ),
 };
 
