@@ -275,3 +275,82 @@ class TestSportsStoryItem:
         assert d["teams"] == ["Lakers", "Celtics"]
         assert d["game_type"] == "regular_season"
         assert d["is_live"] is False
+
+
+# --- 2026-06-18: ESPN news opt-in fix ---
+
+
+class TestEspnNewsOptIn:
+    """ESPN ``fetch_news`` returns TEXT-ONLY articles. Sports is a
+    video-only niche per ClutchWire/CLAUDE.md — fetching text articles
+    polluted the candidate pool, displaced video stories in the top-N
+    cut, then died at DownloadTopVideos for two consecutive days
+    (2026-06-17/18) producing zero blueprints.
+
+    The fix makes ESPN news opt-in: ``fetch_news`` only runs when
+    ``sources.yaml`` has ``fetch_espn_news: true`` at the top level.
+    Default is off, preserving the post-fix behaviour."""
+
+    def test_default_skips_espn_news(self):
+        """Default config (no flag) MUST NOT call fetch_news."""
+        from cw_strategies import fetch_sports_news as mod
+
+        config = {"espn": {}, "rss_feeds": []}  # no fetch_espn_news flag
+
+        with (
+            patch.object(mod.ESPNFetcher, "fetch_scoreboard", return_value=[]),
+            patch.object(mod.ESPNFetcher, "fetch_news") as mock_news,
+            patch.object(mod.RSSFetcher, "fetch_all", return_value=[]),
+        ):
+            result = mod.fetch_all_sports_news(config)
+        mock_news.assert_not_called()
+        assert result == []
+
+    def test_flag_true_enables_espn_news(self):
+        """Operator opts in via ``fetch_espn_news: true``."""
+        from cw_strategies import fetch_sports_news as mod
+
+        config = {"fetch_espn_news": True, "espn": {}, "rss_feeds": []}
+
+        fake_article = SportsStoryItem(title="Transfer rumour", source="espn_news")
+        with (
+            patch.object(mod.ESPNFetcher, "fetch_scoreboard", return_value=[]),
+            patch.object(mod.ESPNFetcher, "fetch_news", return_value=[fake_article]),
+            patch.object(mod.RSSFetcher, "fetch_all", return_value=[]),
+        ):
+            result = mod.fetch_all_sports_news(config)
+        assert len(result) == 1
+        assert result[0]["title"] == "Transfer rumour"
+
+    def test_flag_false_explicit_skips_espn_news(self):
+        """Explicit ``fetch_espn_news: false`` is identical to absent."""
+        from cw_strategies import fetch_sports_news as mod
+
+        config = {"fetch_espn_news": False, "espn": {}, "rss_feeds": []}
+
+        with (
+            patch.object(mod.ESPNFetcher, "fetch_scoreboard", return_value=[]),
+            patch.object(mod.ESPNFetcher, "fetch_news") as mock_news,
+            patch.object(mod.RSSFetcher, "fetch_all", return_value=[]),
+        ):
+            mod.fetch_all_sports_news(config)
+        mock_news.assert_not_called()
+
+    def test_scoreboard_still_runs_unconditionally(self):
+        """ESPN scoreboard (game data, not text articles) MUST still
+        run — those headlines feed the video-discovery search."""
+        from cw_strategies import fetch_sports_news as mod
+
+        config = {"espn": {}, "rss_feeds": []}
+        fake_game = SportsStoryItem(
+            title="Lakers 102, Celtics 98 (Final)", source="espn_scoreboard"
+        )
+        with (
+            patch.object(mod.ESPNFetcher, "fetch_scoreboard", return_value=[fake_game]) as mock_sb,
+            patch.object(mod.ESPNFetcher, "fetch_news", return_value=[]),
+            patch.object(mod.RSSFetcher, "fetch_all", return_value=[]),
+        ):
+            result = mod.fetch_all_sports_news(config)
+        mock_sb.assert_called_once()
+        assert len(result) == 1
+        assert result[0]["source"] == "espn_scoreboard"
