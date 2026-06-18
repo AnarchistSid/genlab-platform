@@ -254,7 +254,26 @@ class RSSFetcher:
 
 
 def fetch_all_sports_news(config: dict | None = None) -> list[dict[str, Any]]:
-    """Entry point: fetch from all sports sources, return normalized dicts."""
+    """Entry point: fetch from all sports sources, return normalized dicts.
+
+    **2026-06-18 fix**: ESPN ``fetch_news`` is now opt-in (off by
+    default) because it returns TEXT-ONLY articles — Premier League
+    transfer rumours, op-eds, weekly previews — that have no video
+    field. They scored 0.4 on visual_potential (default for unknown),
+    cleared the 0.30 gate, displaced actual video candidates in the
+    top-N cut, and then died at DownloadTopVideos because there's no
+    video to download. Result on 2026-06-18: 24 ESPN news articles
+    fetched per run, 5 made it past scoring, 0 had video → 0
+    blueprints produced for two consecutive days.
+
+    ClutchWire's `CLAUDE.md` is explicit: ``video_gate: require`` +
+    ``fallback_to_text_render: false``. ESPN scoreboard (game
+    headlines + scores) is still fetched because those headlines feed
+    the video-discovery search; only the text news endpoint is gated.
+
+    Operators who want the previous behaviour can set
+    ``fetch_espn_news: true`` in ``config/sources.yaml`` (top-level).
+    """
     if config is None:
         config = _load_yaml(NICHE_ROOT / "config" / "sources.yaml")
 
@@ -263,7 +282,15 @@ def fetch_all_sports_news(config: dict | None = None) -> list[dict[str, Any]]:
 
     all_items: list[SportsStoryItem] = []
     all_items.extend(espn.fetch_scoreboard())
-    all_items.extend(espn.fetch_news())
+    # 2026-06-18: opt-in flag, default false (see docstring above).
+    if (config or {}).get("fetch_espn_news", False):
+        all_items.extend(espn.fetch_news())
+        logger.info("[fetch] ESPN news enabled via sources.yaml flag")
+    else:
+        logger.debug(
+            "[fetch] ESPN news skipped (default-off since 2026-06-18 — "
+            "text-only articles polluted candidate pool)"
+        )
     all_items.extend(rss.fetch_all())
 
     logger.info("[fetch] Total stories fetched: %d", len(all_items))
