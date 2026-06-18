@@ -188,8 +188,12 @@ def main() -> int:
     niche_clause = "" if args.niche == "all" else "AND niche_id = %s"
     limit_clause = "" if args.limit is None else f"LIMIT {int(args.limit)}"
 
+    # ``visual_paths`` is NOT a top-level column on blueprints — the
+    # gate's defensive ``blueprint.get("visual_paths") or extra.get(...)``
+    # check returns the extra value (which is the only one populated
+    # in this schema). Select only real columns + extra.
     select_sql = f"""
-        SELECT id, niche_id, hook_text, visual_paths, extra
+        SELECT id, niche_id, hook_text, extra
         FROM blueprints
         WHERE NOT (extra ? 'auto_approval_confidence')
           {niche_clause}
@@ -211,7 +215,7 @@ def main() -> int:
                 rows = cur.fetchall()
             # Convert tuple rows to dicts (psycopg returns tuples by
             # default when using `cursor` instead of `dict_row` factory)
-            cols = ["id", "niche_id", "hook_text", "visual_paths", "extra"]
+            cols = ["id", "niche_id", "hook_text", "extra"]
             row_dicts = [dict(zip(cols, r, strict=True)) for r in rows]
 
             logger.info(
