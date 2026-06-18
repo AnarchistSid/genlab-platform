@@ -13,6 +13,7 @@ import { TopPostSpotlight } from "./TopPostSpotlight";
 import { LearningLoopCard } from "./LearningLoopCard";
 import { AutoApprovalCalibrationCard } from "./AutoApprovalCalibrationCard";
 import { TrackRecordCard } from "./TrackRecordCard";
+import { RolloutPctSlider } from "./RolloutPctSlider";
 import { AutoApprovalKillSwitch } from "./AutoApprovalKillSwitch";
 import { DailySloBadge } from "./DailySloBadge";
 import { SourceQualityCard } from "./SourceQualityCard";
@@ -230,6 +231,12 @@ export default function MissionControl() {
                 a drifting gate, both cards visible side-by-side give
                 the operator more signal than the snapshot alone. */}
             <TrackRecordCard />
+            {/* AUTO #2 (W4.3, 2026-06-18): per-niche rollout_pct slider.
+                Lets operator ramp graduated rollout (10% → 50% → 100%
+                over a week) without a git commit per slide. Slider only
+                writes rollout_pct; ``enabled`` flip stays git-commit
+                only per the AUTO #2 runbook §4-5. */}
+            <RolloutPctSlider />
             <MonetisationCompact />
           </div>
         </div>
