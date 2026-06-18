@@ -459,3 +459,79 @@ class TestRedditOAuth:
         with patch("requests.post", side_effect=ConnectionError("network down")):
             token = video_sourcer._reddit_app_token()
         assert token is None
+
+
+# ── Reddit session-cookie auth path (2026-06-18 alternative to OAuth) ───
+
+
+class TestRedditCookieAuth:
+    """When OAuth env vars aren't set BUT a session-cookie file is
+    present, video_sourcer should load the cookie jar and use it for
+    Reddit search calls. This unblocks the OAuth-captcha-blocked path
+    discovered 2026-06-18.
+    """
+
+    def test_returns_none_when_no_cookie_file(self, monkeypatch, tmp_path):
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setattr(video_sourcer, "_REDDIT_COOKIE_PATH", str(tmp_path / "missing.txt"))
+        assert video_sourcer._reddit_cookie_jar() is None
+
+    def test_returns_none_when_cookie_file_empty(self, monkeypatch, tmp_path):
+        """File exists but no cookies inside → return None (no auth)."""
+        from genlab_core.media import video_sourcer
+
+        empty = tmp_path / "empty_cookies.txt"
+        empty.write_text("# Netscape HTTP Cookie File\n\n")
+        monkeypatch.setattr(video_sourcer, "_REDDIT_COOKIE_PATH", str(empty))
+        assert video_sourcer._reddit_cookie_jar() is None
+
+    def test_returns_jar_when_cookies_present(self, monkeypatch, tmp_path):
+        """Properly-formatted Netscape file → returns a jar with entries."""
+        from genlab_core.media import video_sourcer
+
+        path = tmp_path / "good_cookies.txt"
+        # Real Netscape format — tab-separated fields, expires=0 for session
+        path.write_text(
+            "# Netscape HTTP Cookie File\n"
+            "\n"
+            ".reddit.com\tTRUE\t/\tTRUE\t0\treddit_session\tfake-session-value\n"
+            ".reddit.com\tTRUE\t/\tTRUE\t0\tloid\tfake-loid-value\n"
+        )
+        monkeypatch.setattr(video_sourcer, "_REDDIT_COOKIE_PATH", str(path))
+
+        jar = video_sourcer._reddit_cookie_jar()
+        assert jar is not None
+        cookie_names = {c.name for c in jar}
+        assert "reddit_session" in cookie_names
+        assert "loid" in cookie_names
+
+    def test_handles_malformed_file_gracefully(self, monkeypatch, tmp_path):
+        """Corrupt/invalid file → return None, log warning, don't raise."""
+        from genlab_core.media import video_sourcer
+
+        bad = tmp_path / "bad_cookies.txt"
+        bad.write_text("this is not a cookies file at all\njust some junk\n")
+        monkeypatch.setattr(video_sourcer, "_REDDIT_COOKIE_PATH", str(bad))
+
+        # Must not raise; returns None
+        result = video_sourcer._reddit_cookie_jar()
+        assert result is None
+
+    def test_env_var_override_works(self, monkeypatch, tmp_path):
+        """REDDIT_COOKIES_PATH env var overrides the default path.
+        Pin this for the OOTB-test → CI-test → prod-test pipeline."""
+        import importlib
+
+        from genlab_core.media import video_sourcer
+
+        custom = tmp_path / "custom_cookies.txt"
+        custom.write_text(
+            "# Netscape HTTP Cookie File\n.reddit.com\tTRUE\t/\tTRUE\t0\treddit_session\tvalue\n"
+        )
+        monkeypatch.setenv("REDDIT_COOKIES_PATH", str(custom))
+        importlib.reload(video_sourcer)
+
+        # After reload, _REDDIT_COOKIE_PATH should match the env var
+        assert video_sourcer._REDDIT_COOKIE_PATH == str(custom)
+        assert video_sourcer._reddit_cookie_jar() is not None
