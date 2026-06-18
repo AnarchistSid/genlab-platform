@@ -409,3 +409,52 @@ class TestFixturePreviewDetection:
         # Has both 'highlights' (strong signal) and 'Final' (result marker)
         # — should NOT trigger fixture check, should score 0.7+
         assert score_visual_potential(story, "sports") >= 0.7
+
+
+class TestVideoBearingSkipsFixtureCheck:
+    """ScoreBat highlights videos use the matchup as the title
+    ("Angers - PSG" IS the video title, not a preview article).
+    FetchScoreBat / FetchTrendingVideos populate video_id /
+    download_url / video_url. When ANY of those is set, the fixture-
+    check must be SKIPPED — the title is a video title, not a
+    preview-article title.
+
+    Regression: PR #320's first deploy dropped 12 YouTube trending
+    videos + 10 ScoreBat highlights in a single sports run because
+    their matchup titles matched _is_fixture_preview without this
+    guard."""
+
+    @staticmethod
+    def _s(title: str, **extra) -> dict:
+        return {"title": title, "description": "", **extra}
+
+    def test_scorebat_highlight_with_video_url_passes(self):
+        """ScoreBat returns `video_url` — fixture check must skip."""
+        story = self._s("Angers - PSG", video_url="https://www.scorebat.com/...")
+        assert score_visual_potential(story, "sports") == 0.4  # default
+
+    def test_youtube_trending_with_video_id_passes(self):
+        """FetchTrendingVideos returns `video_id` — same skip."""
+        story = self._s("Manchester City - Southampton", video_id="abc123")
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_youtube_trending_with_download_url_passes(self):
+        """Both `video_id` and `download_url` populated — same skip."""
+        story = self._s(
+            "Real Madrid – Barcelona",
+            video_id="xyz789",
+            download_url="https://www.youtube.com/watch?v=xyz789",
+        )
+        assert score_visual_potential(story, "sports") == 0.4
+
+    def test_text_only_fixture_still_rejected(self):
+        """The original PR #320 contract is preserved: text-only
+        fixture previews (no video field) still zero-reject."""
+        story = self._s("Atletico Madrid - Athletic Bilbao")
+        assert score_visual_potential(story, "sports") == 0.0
+
+    def test_empty_video_field_still_rejects(self):
+        """Empty-string video fields don't bypass the check —
+        only populated values do."""
+        story = self._s("Lakers vs Celtics", video_id="", video_url="")
+        assert score_visual_potential(story, "sports") == 0.0
