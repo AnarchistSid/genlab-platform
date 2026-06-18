@@ -102,6 +102,78 @@ _KNOWN_VIDEO_CDN_HOST_SUFFIXES: frozenset[str] = frozenset(
 )
 
 
+# ── Reddit OAuth app-only auth (2026-06-18) ──────────────────────
+#
+# Reddit's anon search.json endpoint 403s from data-center IPs
+# (verified 2026-06-18 even WITH WARP routing through Cloudflare).
+# The official fix is OAuth2 ``client_credentials`` grant — app-only
+# auth, no user login needed.
+#
+# Set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET to enable. Tokens are
+# cached in module-level state for the configured TTL (Reddit issues
+# 1-hour tokens; we cache for 50min to leave a safety margin).
+
+_REDDIT_UA = os.environ.get(
+    "REDDIT_USER_AGENT",
+    "GenLab/1.0 (multi-niche-pipeline) by /u/genlab-bot",
+)
+_REDDIT_TOKEN_CACHE: dict[str, Any] = {"token": None, "expires_at": 0.0}
+_REDDIT_TOKEN_TTL_SECONDS = 50 * 60  # Reddit issues 1h, refresh at 50min
+
+
+def _reddit_app_token() -> str | None:
+    """Return a cached OAuth2 app-only access token, or None if not
+    configured. None is a valid return — caller falls back to anon path.
+
+    Reddit's client_credentials grant requires:
+      * client_id + client_secret (HTTP basic auth)
+      * grant_type=client_credentials in POST body
+      * a real, non-default User-Agent
+    """
+    import time as _time
+
+    client_id = os.environ.get("REDDIT_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        return None
+
+    now = _time.time()
+    cached = _REDDIT_TOKEN_CACHE.get("token")
+    if cached and now < float(_REDDIT_TOKEN_CACHE.get("expires_at", 0.0)):
+        return str(cached)
+
+    try:
+        import requests as _req
+
+        resp = _req.post(
+            "https://www.reddit.com/api/v1/access_token",
+            data={"grant_type": "client_credentials"},
+            auth=(client_id, client_secret),
+            headers={"User-Agent": _REDDIT_UA},
+            timeout=10,
+        )
+    except Exception:
+        logger.warning("Reddit OAuth token request failed", exc_info=True)
+        return None
+
+    if resp.status_code != 200:
+        logger.warning(
+            "Reddit OAuth token HTTP %d (check REDDIT_CLIENT_ID/SECRET)",
+            resp.status_code,
+        )
+        return None
+
+    try:
+        token = resp.json().get("access_token")
+    except (ValueError, AttributeError):
+        return None
+    if not token:
+        return None
+    _REDDIT_TOKEN_CACHE["token"] = token
+    _REDDIT_TOKEN_CACHE["expires_at"] = now + _REDDIT_TOKEN_TTL_SECONDS
+    return str(token)
+
+
 def _url_host_is_allowed(url: str) -> bool:
     """Return True when ``url``'s host ends in any allow-listed suffix.
 
@@ -529,32 +601,61 @@ class VideoSourcer:
         subreddits = NICHE_SUBREDDITS.get(self.niche_id, ["videos"])
         results: list[VideoSearchResult] = []
 
-        # Use requests with a realistic User-Agent. Reddit blocks urllib's
-        # default UA and short UA strings like "GenLab/1.0" from data center IPs.
+        # **2026-06-18**: anon search.json calls 403 from data-center
+        # IPs (Hetzner, even through WARP). Reddit's anti-scraping
+        # policy applies to search.json specifically, not just any IP.
+        # Solution: switch to OAuth2 app-only auth when
+        # ``REDDIT_CLIENT_ID`` + ``REDDIT_CLIENT_SECRET`` are present
+        # in the environment. Falls back to anon (the failing path) so
+        # operators not yet set up still get the same behaviour they
+        # had before — there's no NEW regression risk from this change.
+        #
+        # Operator setup (~5 min):
+        #   1. https://www.reddit.com/prefs/apps → Create app
+        #      → script type
+        #   2. Set REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET in .env
+        #   3. Optional: REDDIT_USER_AGENT (default: "GenLab/1.0 by /u/genlab-bot")
         import requests as _req
 
-        _ua = (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
+        token = _reddit_app_token()
+        if token:
+            base_url = "https://oauth.reddit.com"
+            headers = {
+                "Authorization": f"bearer {token}",
+                "User-Agent": _REDDIT_UA,
+            }
+        else:
+            base_url = "https://www.reddit.com"
+            # Fallback UA matches the original anon-path approach;
+            # data-center IPs will still 403 but caller's
+            # ``except Exception`` already handles that gracefully.
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            }
 
         for sub in subreddits:
             if len(results) >= self.max_results:
                 break
             try:
                 encoded_q = quote(query)
+                # OAuth uses /search (no .json suffix), anon uses /search.json
+                path_suffix = "/search" if token else "/search.json"
                 url = (
-                    f"https://www.reddit.com/r/{sub}/search.json?"
+                    f"{base_url}/r/{sub}{path_suffix}?"
                     f"q={encoded_q}&sort=relevance&t=week&limit={self.max_results}"
                     f"&restrict_sr=on"
                 )
-                resp = _req.get(url, headers={"User-Agent": _ua}, timeout=10)
+                resp = _req.get(url, headers=headers, timeout=10)
                 if resp.status_code != 200:
                     logger.warning(
-                        "Reddit search HTTP %d for r/%s",
+                        "Reddit search HTTP %d for r/%s (auth=%s)",
                         resp.status_code,
                         sub,
+                        "oauth" if token else "anon",
                     )
                     continue
                 data = resp.json()

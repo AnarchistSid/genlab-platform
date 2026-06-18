@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 from genlab_core.media.video_sourcer import (
     VideoSearchResult,
@@ -332,3 +333,129 @@ class TestFindVideoDirectUrl:
         assert result is not None
         assert result.backend == "direct_url"
         assert "twitch.tv" in result.url
+
+
+# ── Reddit OAuth app-only auth (2026-06-18) ──────────────────
+
+
+class TestRedditOAuth:
+    """`_reddit_app_token` returns a cached OAuth token when client
+    credentials are configured, falls back to None (anon path) when
+    they aren't.
+
+    Why this exists: Reddit's anon search.json 403s from data-center
+    IPs (verified 2026-06-18 even WITH WARP through Cloudflare). OAuth
+    bypasses the anon rate limit entirely.
+    """
+
+    def setup_method(self):
+        # Reset module cache between tests so token-expiry/refresh
+        # behaviour is testable.
+        from genlab_core.media import video_sourcer
+
+        video_sourcer._REDDIT_TOKEN_CACHE.clear()
+        video_sourcer._REDDIT_TOKEN_CACHE.update({"token": None, "expires_at": 0.0})
+
+    def test_returns_none_when_credentials_missing(self, monkeypatch):
+        from genlab_core.media.video_sourcer import _reddit_app_token
+
+        monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+        assert _reddit_app_token() is None
+
+    def test_returns_none_when_client_id_only(self, monkeypatch):
+        from genlab_core.media.video_sourcer import _reddit_app_token
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+        assert _reddit_app_token() is None
+
+    def test_returns_token_when_credentials_present(self, monkeypatch):
+        """OAuth POST returns 200 → token cached + returned."""
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret123")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"access_token": "tk_test_value", "token_type": "bearer"}
+
+        with patch("requests.post", return_value=mock_resp) as mock_post:
+            token = video_sourcer._reddit_app_token()
+        assert token == "tk_test_value"
+        # Verify HTTP basic auth + grant_type passed correctly
+        call_kwargs = mock_post.call_args.kwargs
+        assert call_kwargs["data"] == {"grant_type": "client_credentials"}
+        assert call_kwargs["auth"] == ("abc", "secret123")
+        # User-Agent is non-default (matches Reddit policy)
+        assert "GenLab" in call_kwargs["headers"]["User-Agent"]
+
+    def test_returns_none_on_http_error(self, monkeypatch):
+        """4xx/5xx response → None (caller falls back to anon)."""
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret123")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 401  # bad credentials
+        mock_resp.json.return_value = {"error": "invalid_grant"}
+
+        with patch("requests.post", return_value=mock_resp):
+            token = video_sourcer._reddit_app_token()
+        assert token is None
+
+    def test_caches_token_within_ttl(self, monkeypatch):
+        """Second call within TTL must NOT re-request from Reddit
+        (cost + rate-limit avoidance)."""
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret123")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"access_token": "tk_first"}
+
+        with patch("requests.post", return_value=mock_resp) as mock_post:
+            t1 = video_sourcer._reddit_app_token()
+            t2 = video_sourcer._reddit_app_token()
+            t3 = video_sourcer._reddit_app_token()
+        assert t1 == t2 == t3 == "tk_first"
+        assert mock_post.call_count == 1, "second + third calls must use cache"
+
+    def test_re_requests_after_ttl_expires(self, monkeypatch):
+        """When cached token's expires_at is in the past, refresh."""
+        import time as _time
+
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret123")
+
+        # Pre-populate an expired cache entry
+        video_sourcer._REDDIT_TOKEN_CACHE["token"] = "tk_stale"
+        video_sourcer._REDDIT_TOKEN_CACHE["expires_at"] = _time.time() - 60
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"access_token": "tk_fresh"}
+
+        with patch("requests.post", return_value=mock_resp):
+            token = video_sourcer._reddit_app_token()
+        assert token == "tk_fresh"
+
+    def test_handles_request_exception_gracefully(self, monkeypatch):
+        """Network failure → None (no exception leaks to caller).
+        Pinned because the original anon path used the same
+        ``except Exception`` swallow contract — OAuth path must keep
+        that semantic for backwards compatibility."""
+        from genlab_core.media import video_sourcer
+
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "abc")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret123")
+
+        with patch("requests.post", side_effect=ConnectionError("network down")):
+            token = video_sourcer._reddit_app_token()
+        assert token is None
