@@ -305,12 +305,41 @@ export interface SourcePerformanceResponse {
   sources: SourcePerformanceRow[];
 }
 
+// ── M-19: youtube_channels source-edit endpoints ────────────────
+//
+// Mounted under `/api/v1/config/sources/youtube-channels` (NOT
+// `/api/v1/sources/...` — config_routes.py owns the ruamel round-trip
+// for sources.yaml; sources.py is read-only performance data).
+export interface YoutubeChannelEntry {
+  url: string;
+  name: string;
+}
+
 export const sources = {
   performance: (days = 14, minFetched = 5) =>
     get<SourcePerformanceResponse>("/sources/performance", {
       days: String(days),
       min_fetched: String(minFetched),
     }),
+
+  listYoutubeChannels: (nicheId: string) =>
+    get<{ niche_id: string; youtube_channels: YoutubeChannelEntry[] }>(
+      "/config/sources/youtube-channels",
+      { niche_id: nicheId },
+    ),
+  addYoutubeChannel: (nicheId: string, entry: YoutubeChannelEntry) =>
+    mutate<{ niche_id: string; added: YoutubeChannelEntry }>(
+      "POST",
+      `/config/sources/youtube-channels?niche_id=${encodeURIComponent(nicheId)}`,
+      entry,
+    ),
+  // Backend takes ``url`` as a QUERY param (not body) — see
+  // config_routes.py:remove_youtube_channel.
+  removeYoutubeChannel: (nicheId: string, url: string) =>
+    mutate<{ niche_id: string; removed: YoutubeChannelEntry }>(
+      "DELETE",
+      `/config/sources/youtube-channels?niche_id=${encodeURIComponent(nicheId)}&url=${encodeURIComponent(url)}`,
+    ),
 };
 
 export const stories = {
