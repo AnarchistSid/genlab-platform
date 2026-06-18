@@ -15,6 +15,11 @@ on:
 jobs:
   test-core:
     runs-on: ubuntu-latest
+    # 2026-06-18: 20-min job cap. test-core runs 4200+ tests across
+    # a 3-version matrix; baseline ~2 minutes. 20min = ~10× headroom
+    # for runner slowness, prevents indefinite hangs on a Postgres
+    # connection waiting that the service-container failed.
+    timeout-minutes: 20
     # R-04 + U-17: matrix across all CLAUDE.md-supported Python versions.
     # The workspace floor is ``requires-python>=3.12``; CI used to only
     # exercise 3.13 — a 3.12 syntax regression (PEP-695 type aliases,
@@ -72,7 +77,7 @@ jobs:
           from detoxify import Detoxify
           Detoxify('original-small')
           "
-      - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q
+      - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q --timeout=120
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
@@ -115,6 +120,16 @@ jobs:
 
   test-channels:
     runs-on: ubuntu-latest
+    # 2026-06-18: hard 15-minute cap. The chronic
+    # ``test-channels (clutchwire|blackbox-brief|criticalrush)`` flake
+    # observed 6+ times in one day hangs FOREVER without this — GitHub
+    # Actions' default cap is 6 hours per job, which is operationally
+    # useless. 15min is ~3× the green-run baseline (~5min): enough
+    # slack for a slow runner, tight enough to fail-fast when a test
+    # actually deadlocks (network call without a mock, blocking
+    # ``input()``, etc.). The matrix's ``fail-fast: false`` is kept so
+    # one stuck shard doesn't kill the others mid-run.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -145,7 +160,13 @@ jobs:
       # command construction doesn't raise "FFmpeg not found".
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: uv sync --frozen
-      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q
+      # ``--timeout=120`` (pytest-timeout) — per-test ceiling. Belt-
+      # and-suspenders with the job-level ``timeout-minutes: 15``:
+      # job-cap catches setup hangs (uv sync, apt install);
+      # per-test cap catches a single test stuck on a real network
+      # call. Both required because GitHub's per-test signal is
+      # cleaner than the job-kill SIGKILL.
+      - run: uv run --package ${{ matrix.package }} pytest ${{ matrix.test_path }} --tb=short -q --timeout=120
 
   # U-18 / R-72 / R-04: gate the dashboard frontend. The build (tsc -b && vite
   # build) catches type/build errors; the vitest suite (108 tests) was never run

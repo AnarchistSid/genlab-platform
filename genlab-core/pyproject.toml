@@ -61,6 +61,13 @@ dev = [
     "hypothesis>=6.151.9",
     "pytest>=9.0.2",
     "pytest-cov>=6.0",
+    # 2026-06-18: belt-and-suspenders with the CI ``timeout-minutes:
+    # 15`` job cap. ``pytest-timeout`` gives per-test SIGTERM after
+    # 120s (set via ``--timeout=120`` in CI invocations) so a single
+    # deadlocked test fails fast with a clean traceback instead of
+    # GitHub Actions SIGKILL-ing the whole job and producing only
+    # "Job cancelled — exceeded the timeout".
+    "pytest-timeout>=2.3",
 ]
 
 [tool.mypy]
