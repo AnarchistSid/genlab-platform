@@ -198,11 +198,11 @@ class InstagramClient:
                 except Exception as _cdn_exc:
                     _cdn_last_exc = _cdn_exc
                     if _cdn_attempt == 0:
-                        logger.warning("CDN upload failed (attempt 1), retrying: %s", _cdn_exc)
+                        self._log.warning("CDN upload failed (attempt 1), retrying: %s", _cdn_exc)
                         continue
                     raise
                 if _cdn_attempt == 0 and not cdn_url:
-                    logger.warning("CDN upload returned None (attempt 1), retrying")
+                    self._log.warning("CDN upload returned None (attempt 1), retrying")
             if not cdn_url:
                 tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
                 from pathlib import Path as _Path
@@ -293,16 +293,16 @@ class InstagramClient:
             )
             data = _safe_json(resp)
             if resp.status_code == 200 and "id" in data:
-                logger.info("Instagram: replied to comment %s (media=%s)", parent_id, context_id)
+                self._log.info("Instagram: replied to comment %s (media=%s)", parent_id, context_id)
                 return True
-            logger.warning(
+            self._log.warning(
                 "Instagram: reply failed (HTTP %d): %s",
                 resp.status_code,
                 data.get("error", {}).get("message", str(data)),
             )
             return False
         except Exception as exc:
-            logger.warning("Instagram: post_reply exception: %s", exc)
+            self._log.warning("Instagram: post_reply exception: %s", exc)
             return False
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -312,7 +312,7 @@ class InstagramClient:
         of a Page using EAA tokens.  This is a no-op that always returns
         ``True`` to keep the engagement pipeline happy.
         """
-        logger.debug(
+        self._log.debug(
             "Instagram: like() is a no-op (API unsupported for EAA tokens) — target=%s",
             target_id,
         )
@@ -392,17 +392,17 @@ class InstagramClient:
             data = _safe_json(resp)
             if resp.status_code == 200 and "id" in data:
                 username = data.get("username", "")
-                logger.info(
+                self._log.info(
                     "Instagram: channel verified — id=%s username=%s",
                     data["id"],
                     username,
                 )
                 return True
             error_msg = data.get("error", {}).get("message", "") or f"HTTP {resp.status_code}"
-            logger.error("Instagram: channel verification failed: %s", error_msg)
+            self._log.error("Instagram: channel verification failed: %s", error_msg)
             return False
         except Exception as exc:
-            logger.error("Instagram: channel verification exception: %s", exc)
+            self._log.error("Instagram: channel verification exception: %s", exc)
             return False
 
     # ------------------------------------------------------------------
@@ -454,7 +454,7 @@ class InstagramClient:
             # fails the same way. Bail out so the publisher's outer retry
             # loop can re-upload to a fresh CDN URL instead of burning 30s.
             if "2207077" in (self._last_error or ""):
-                logger.warning(
+                self._log.warning(
                     "Reel container failed with 2207077 — skipping in-client retry "
                     "(outer publisher loop will retry with a fresh CDN URL)"
                 )
@@ -467,7 +467,7 @@ class InstagramClient:
             # past the executor timeout (orphaned-thread risk).
             remaining = _deadline - time.monotonic()
             if _retry_count < 1 and remaining > _RETRY_MIN_REMAINING_SECONDS:
-                logger.warning(
+                self._log.warning(
                     "Reel container ERROR — retrying in 30s (attempt %d/2, %.0fs budget left)",
                     _retry_count + 1,
                     remaining,
@@ -483,7 +483,7 @@ class InstagramClient:
                     _deadline=_deadline,
                 )
             if _retry_count < 1:
-                logger.warning(
+                self._log.warning(
                     "Reel container ERROR — skipping retry (only %.0fs of the publish "
                     "budget left; staying under the executor timeout to avoid an "
                     "orphaned thread)",
@@ -493,7 +493,7 @@ class InstagramClient:
 
         if already_published:
             # Container transitioned to PUBLISHED during polling; skip media_publish
-            logger.info("Reel already PUBLISHED during polling — skipping media_publish")
+            self._log.info("Reel already PUBLISHED during polling — skipping media_publish")
             return creation_id
 
         return self._media_publish(creation_id=creation_id)
@@ -525,15 +525,15 @@ class InstagramClient:
             resp = requests.post(url, data=data, timeout=60)
             payload = _safe_json(resp)
             if "id" in payload:
-                logger.info("Reel container created: %s", payload["id"])
+                self._log.info("Reel container created: %s", payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
             self._last_error = f"Container creation failed: {error_msg}"
-            logger.error("Reel container creation failed: %s", error_msg)
+            self._log.error("Reel container creation failed: %s", error_msg)
             return None
         except Exception as exc:
             self._last_error = f"Container request error: {exc}"
-            logger.error("Reel container request error: %s", exc)
+            self._log.error("Reel container request error: %s", exc)
             return None
 
     def _poll_container_status(
@@ -561,7 +561,7 @@ class InstagramClient:
             elapsed = time.time() - poll_start
             if elapsed > max_poll_seconds:
                 self._last_error = f"Container polling timed out after {max_poll_seconds}s"
-                logger.error(
+                self._log.error(
                     "Reel container polling timed out after %ds (container=%s)",
                     max_poll_seconds,
                     creation_id,
@@ -574,7 +574,7 @@ class InstagramClient:
                 status_code = data.get("status_code", "UNKNOWN")
 
                 if status_code == "FINISHED":
-                    logger.info(
+                    self._log.info(
                         "Reel container processing complete (%.0fs): %s",
                         elapsed,
                         creation_id,
@@ -588,7 +588,7 @@ class InstagramClient:
                     # status field contains human-readable error detail
                     error_detail = data.get("status", "")
                     self._last_error = f"Container processing error: {error_detail or data}"
-                    logger.error(
+                    self._log.error(
                         "Reel container processing error: %s (detail: %s)",
                         data,
                         error_detail,
@@ -596,9 +596,9 @@ class InstagramClient:
                     return None
 
                 # IN_PROGRESS or UNKNOWN — keep waiting
-                logger.debug("Reel container status=%s (%.0fs elapsed)", status_code, elapsed)
+                self._log.debug("Reel container status=%s (%.0fs elapsed)", status_code, elapsed)
             except Exception as exc:
-                logger.warning("Reel status poll error (retrying): %s", exc)
+                self._log.warning("Reel status poll error (retrying): %s", exc)
 
             time.sleep(poll_interval)
             if elapsed > _POLL_SLOWDOWN_AFTER:
@@ -618,15 +618,15 @@ class InstagramClient:
             resp = requests.post(url, data=data, timeout=60)
             payload = _safe_json(resp)
             if "id" in payload:
-                logger.info("Reel published — post ID: %s", payload["id"])
+                self._log.info("Reel published — post ID: %s", payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
             self._last_error = f"media_publish failed: {error_msg}"
-            logger.error("Reel media_publish failed: %s", error_msg)
+            self._log.error("Reel media_publish failed: %s", error_msg)
             return None
         except Exception as exc:
             self._last_error = f"media_publish request error: {exc}"
-            logger.error("Reel media_publish request error: %s", exc)
+            self._log.error("Reel media_publish request error: %s", exc)
             return None
 
     def _graph_get(self, path: str, params: dict | None = None) -> dict:
