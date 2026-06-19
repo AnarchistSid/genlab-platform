@@ -359,6 +359,48 @@ class TestBacklogClientWiring:
             )
 
 
+class TestLoadPersonaPackagedFallback:
+    """Pin the prod-broken-on-2026-06-20 contract: the packaged personas/
+    directory MUST contain ``ai_creators.yaml`` (canonical) so that
+    engagement replies don't 100% fail when the gitignored operator
+    persona at ``BlackboxBrief/config/persona.yaml`` is missing from
+    prod deploy. The legacy ``ai_news`` alias must also resolve.
+    """
+
+    def test_packaged_personas_dir_contains_ai_creators_yaml(self):
+        from pathlib import Path
+
+        from genlab_core.engagement import comment_processor
+
+        personas_dir = Path(comment_processor.__file__).parent / "personas"
+        canonical = personas_dir / "ai_creators.yaml"
+        assert canonical.exists(), (
+            f"{canonical} MUST exist or every BB engagement reply fails — "
+            "the gitignored operator persona is missing from prod deploys."
+        )
+
+    def test_load_persona_finds_packaged_ai_creators(self, monkeypatch, tmp_path):
+        """When the operator persona is missing, the packaged fallback wins."""
+        # Point AGENT_ROOT at an empty dir so the first two candidate paths miss
+        monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
+        from genlab_core.engagement.comment_processor import _load_persona
+
+        persona = _load_persona("ai_creators")
+        assert persona.name == "Blackbox Brief"
+
+    def test_load_persona_resolves_ai_news_alias_to_canonical_file(self, monkeypatch, tmp_path):
+        """Legacy ``ai_news`` ID must hit the canonical ai_creators.yaml file
+        even when no ai_news.yaml exists — the normalize_niche() call in
+        the resolver is what prevents the Sprint-47-style rename from
+        silently breaking every reply on the legacy alias path.
+        """
+        monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
+        from genlab_core.engagement.comment_processor import _load_persona
+
+        persona = _load_persona("ai_news")
+        assert persona.name == "Blackbox Brief"
+
+
 class TestBotDisclosure:
     """R-78: the '[automated reply]' suffix must not push a reply over the
     platform char limit — the reply is trimmed, the disclosure preserved."""
