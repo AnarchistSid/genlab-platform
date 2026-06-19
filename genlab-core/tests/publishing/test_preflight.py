@@ -27,9 +27,11 @@ class TestResolveClientKwargsInstagram:
     @patch("genlab_core.publishing.preflight.resolve_meta_credentials")
     def test_returns_kwargs_when_creds_complete(self, mock_creds) -> None:
         mock_creds.return_value = {"ig_access_token": "tok", "ig_user_id": "u123"}
+        # P2 phase 1 activation: niche_id flows through to the client
         assert resolve_client_kwargs("instagram", "gaming") == {
             "access_token": "tok",
             "ig_user_id": "u123",
+            "niche_id": "gaming",
         }
 
     @patch("genlab_core.publishing.preflight.resolve_meta_credentials")
@@ -50,6 +52,7 @@ class TestResolveClientKwargsFacebook:
         assert resolve_client_kwargs("facebook", "gaming") == {
             "access_token": "tok",
             "page_id": "page123",
+            "niche_id": "gaming",
         }
 
     @patch("genlab_core.publishing.preflight.resolve_fb_credentials")
@@ -74,6 +77,7 @@ class TestResolveClientKwargsYouTube:
             "client_id": "cid",
             "client_secret": "csec",
             "refresh_token": "rt",
+            "niche_id": "gaming",
         }
 
     @patch(
@@ -125,7 +129,13 @@ class TestResolveClientKwargsXTwitter:
             "access_token": "at",
             "access_token_secret": "ats",
         }
-        assert resolve_client_kwargs("x_twitter", "gaming") == mock_creds.return_value
+        # P2 phase 1 activation: niche_id is layered on top of the resolver's
+        # bundle via defensive copy (mutating the resolver dict directly would
+        # leak state across calls).
+        assert resolve_client_kwargs("x_twitter", "gaming") == {
+            **mock_creds.return_value,
+            "niche_id": "gaming",
+        }
 
     @patch("genlab_core.publishing.preflight.resolve_twitter_credentials")
     def test_any_empty_value_returns_none(self, mock_creds) -> None:
@@ -147,6 +157,7 @@ class TestResolveClientKwargsThreads:
         assert resolve_client_kwargs("threads", "gaming") == {
             "access_token": "tok",
             "user_id": "u123",
+            "niche_id": "gaming",
         }
 
     @patch("genlab_core.publishing.preflight.resolve_threads_credentials")
@@ -162,6 +173,58 @@ class TestResolveClientKwargsUnknownPlatform:
         (which would skip the platform); the empty dict is "construct the
         client without per-niche kwargs"."""
         assert resolve_client_kwargs("myspace", "gaming") == {}
+
+
+class TestNicheIdFlowsThroughAllPlatforms:
+    """P2 phase 1 activation contract (2026-06-19): every known platform's
+    kwargs dict must include ``niche_id`` so the per-client constructor
+    can store it on ``self.niche_id``. Pins the end-to-end wire-up that
+    activates PRs #377/#378/#379 in production."""
+
+    @patch("genlab_core.publishing.preflight.resolve_meta_credentials")
+    def test_instagram_kwargs_include_niche_id(self, mock_creds) -> None:
+        mock_creds.return_value = {"ig_access_token": "t", "ig_user_id": "u"}
+        result = resolve_client_kwargs("instagram", "movies")
+        assert result is not None
+        assert result["niche_id"] == "movies"
+
+    @patch("genlab_core.publishing.preflight.resolve_fb_credentials")
+    def test_facebook_kwargs_include_niche_id(self, mock_creds) -> None:
+        mock_creds.return_value = ("t", "p")
+        result = resolve_client_kwargs("facebook", "sports")
+        assert result is not None
+        assert result["niche_id"] == "sports"
+
+    @patch("genlab_core.publishing.preflight.resolve_niche_env", return_value="")
+    @patch("genlab_core.publishing.preflight.resolve_youtube_credentials")
+    def test_youtube_kwargs_include_niche_id(self, mock_creds, _mock_env) -> None:
+        mock_creds.return_value = {
+            "refresh_token": "rt",
+            "client_id": "cid",
+            "client_secret": "csec",
+        }
+        result = resolve_client_kwargs("youtube", "ai_creators")
+        assert result is not None
+        assert result["niche_id"] == "ai_creators"
+
+    @patch("genlab_core.publishing.preflight.resolve_twitter_credentials")
+    def test_x_twitter_kwargs_include_niche_id(self, mock_creds) -> None:
+        mock_creds.return_value = {
+            "api_key": "k",
+            "api_secret": "s",
+            "access_token": "at",
+            "access_token_secret": "ats",
+        }
+        result = resolve_client_kwargs("x_twitter", "anime")
+        assert result is not None
+        assert result["niche_id"] == "anime"
+
+    @patch("genlab_core.publishing.preflight.resolve_threads_credentials")
+    def test_threads_kwargs_include_niche_id(self, mock_creds) -> None:
+        mock_creds.return_value = ("t", "u")
+        result = resolve_client_kwargs("threads", "gaming")
+        assert result is not None
+        assert result["niche_id"] == "gaming"
 
 
 # ---------------------------------------------------------------------------

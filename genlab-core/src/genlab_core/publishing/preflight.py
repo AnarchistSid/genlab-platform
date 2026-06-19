@@ -52,18 +52,25 @@ def resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
     a new platform pluggable before it has any niche-prefixed env vars
     declared.
     """
+    # P2 phase 1 activation (2026-06-19): all 5 platform clients accept
+    # ``niche_id`` as a kw-only arg (PRs #377/#378/#379). Pass it through
+    # so the client knows its operating niche — stored on ``self.niche_id``,
+    # available for per-niche logging / metrics / future per-niche rate
+    # limiting. Explicit token kwargs still take priority in each client's
+    # internal resolver, so per-niche re-resolution doesn't double up with
+    # the explicit values this function already provides.
     if registry_id == "instagram":
         creds = resolve_meta_credentials(niche_id)
         token = creds.get("ig_access_token", "")
         user_id = creds.get("ig_user_id", "")
         if token and user_id:
-            return {"access_token": token, "ig_user_id": user_id}
+            return {"access_token": token, "ig_user_id": user_id, "niche_id": niche_id}
         return None
 
     if registry_id == "facebook":
         token, page_id = resolve_fb_credentials(niche_id)
         if token and page_id:
-            return {"access_token": token, "page_id": page_id}
+            return {"access_token": token, "page_id": page_id, "niche_id": niche_id}
         return None
 
     if registry_id == "youtube":
@@ -80,6 +87,7 @@ def resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
                 "client_id": client_id,
                 "client_secret": client_secret,
                 "refresh_token": refresh_token,
+                "niche_id": niche_id,
             }
             if expected_channel:
                 kwargs["expected_channel_id"] = expected_channel
@@ -89,13 +97,14 @@ def resolve_client_kwargs(registry_id: str, niche_id: str) -> dict | None:
     if registry_id == "x_twitter":
         creds = resolve_twitter_credentials(niche_id)
         if all(creds.values()):
-            return creds
+            # Defensive copy — don't mutate the resolver's returned dict
+            return {**creds, "niche_id": niche_id}
         return None
 
     if registry_id == "threads":
         token, user_id = resolve_threads_credentials(niche_id)
         if token and user_id:
-            return {"access_token": token, "user_id": user_id}
+            return {"access_token": token, "user_id": user_id, "niche_id": niche_id}
         return None
 
     return {}
