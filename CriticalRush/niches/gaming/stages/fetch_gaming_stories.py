@@ -162,9 +162,44 @@ class SteamSpikeFetcher:
 
 
 class TwitchTrendingFetcher:
-    """Fetch top games from Twitch Helix API."""
+    """Fetch top games from Twitch Helix API.
+
+    Twitch's ``/helix/games/top`` returns the chart by viewer-count,
+    which mixes actual games WITH non-game "categories" that Twitch
+    treats as games for browse purposes: "Just Chatting", "IRL",
+    "Music", "Sports", "Pools, Hot Tubs, and Beaches", etc. These
+    non-game categories have no IGDB linkage (igdb_id is empty), no
+    real video associated with them, and a recurring directory URL
+    that re-deduplicates against yesterday's run — producing 0
+    blueprints per pipeline pass (2026-06-18 outage root cause).
+
+    We now skip any entry without an igdb_id, which is Twitch's own
+    signal that the row IS a real video game and not a content
+    category. Hardcoded fallback `_NON_GAME_CATEGORIES` covers the
+    handful of well-known IDs Twitch assigns to non-game categories
+    in case the igdb_id field is ever populated for them.
+    """
 
     TOP_GAMES_URL = "https://api.twitch.tv/helix/games/top"
+
+    # Twitch category IDs for known non-game "browse categories".
+    # Catches the rare case where Twitch populates igdb_id for these
+    # (the rows historically have igdb_id == "" but the API contract
+    # isn't pinned). Lookup via curl /helix/games?name=...
+    _NON_GAME_CATEGORIES = frozenset(
+        {
+            "509658",  # Just Chatting
+            "509672",  # IRL
+            "26936",  # Music
+            "518203",  # Sports
+            "116747788",  # Pools, Hot Tubs, and Beaches
+            "509663",  # Special Events
+            "417752",  # Talk Shows & Podcasts
+            "509659",  # ASMR
+            "743",  # Chess
+            "417751",  # Travel & Outdoors
+        }
+    )
 
     def __init__(self):
         from genlab_core.settings import settings
@@ -185,7 +220,7 @@ class TwitchTrendingFetcher:
 
             resp = requests.get(
                 self.TOP_GAMES_URL,
-                params={"first": 10},
+                params={"first": 20},  # over-fetch so we can keep 5 real games after filtering
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Client-Id": self._client_id,
@@ -195,8 +230,28 @@ class TwitchTrendingFetcher:
             resp.raise_for_status()
             games = resp.json().get("data", [])
 
+            # Filter out non-game categories. Two-pass: drop by hardcoded
+            # category-ID list AND drop entries with empty igdb_id (the
+            # canonical "I'm not a real game" signal from Twitch).
+            real_games: list[dict[str, Any]] = []
+            skipped_non_games: list[str] = []
+            for game in games:
+                game_id = str(game.get("id", ""))
+                igdb_id = str(game.get("igdb_id", "")).strip()
+                if game_id in self._NON_GAME_CATEGORIES or not igdb_id:
+                    skipped_non_games.append(game.get("name", "?"))
+                    continue
+                real_games.append(game)
+
+            if skipped_non_games:
+                logger.info(
+                    "[Twitch] Skipped %d non-game categories (no IGDB id or known browse category): %s",
+                    len(skipped_non_games),
+                    ", ".join(skipped_non_games[:5]),
+                )
+
             stories: list[dict[str, Any]] = []
-            for rank, game in enumerate(games[:5], start=1):
+            for rank, game in enumerate(real_games[:5], start=1):
                 score = round(1.0 - (rank - 1) * 0.18, 3)  # rank 1=1.0, 5=0.28
                 # Twitch provides box_art_url with {width}x{height} placeholders
                 box_art = (
@@ -219,7 +274,7 @@ class TwitchTrendingFetcher:
                     }
                 )
 
-            logger.info("[Twitch] Found %d trending games", len(stories))
+            logger.info("[Twitch] Found %d trending games (after non-game filter)", len(stories))
             return stories
 
         except Exception as e:
