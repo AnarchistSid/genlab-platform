@@ -721,9 +721,10 @@ class TestAffiliateMatchExecute:
         assert story["affiliate_url"].startswith("https://amzn.to/ps5")
         assert story["affiliate_network"] == "amazon"
         assert story["affiliate_commission_pct"] == 4.0
-        # CTA migrated from "link in bio" → "link in 1st comment" — bio
-        # links have near-zero CTR on Instagram per affiliate_matcher comment.
-        assert "1st comment" in story["affiliate_cta"]
+        # CTA pivoted back from "1st comment" → "link in bio" 2026-06-19.
+        # The 1st-comment promise was never fulfilled (instagram.py never
+        # posts comments) — bio link goes to working dashboard link-in-bio.
+        assert "link in bio" in story["affiliate_cta"]
         assert result["run_stats"]["affiliate"]["matched"] == 1
 
     @patch("genlab_core.monetization.affiliate_matcher._load_catalog")

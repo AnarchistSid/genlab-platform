@@ -501,16 +501,24 @@ class AffiliateMatch:
                     commission_pct = float(resolved_info.get("commission_pct", commission_pct))
 
             # Build CTA — actionable, price-aware, urgency-driven.
-            # "link in bio" has near-zero CTR; show price + emoji + verb.
+            #
+            # 2026-06-19: pivoted from "link in 1st comment" → "link in bio".
+            # The 1st-comment CTA was a dead promise — payload_builder.py
+            # only populates first_comment_text for facebook/twitter, and
+            # instagram.py:publish() has zero post_comment calls. Every IG
+            # follower was hitting a CTA pointing to a comment that never
+            # got posted. "Link in bio" routes to the dashboard's
+            # link-in-bio page (review.aspirehub.ai/links/<slug>) which
+            # has been the actual working monetization path since PR #272.
             price = product.get("price_inr", 0)
             if price and price < 1000:
-                cta = f"🛒 Get {product_name} for ₹{price} — link in 1st comment 👇"
+                cta = f"🛒 Get {product_name} for ₹{price} — link in bio 👆"
             elif price and price < 5000:
-                cta = f"🔥 {product_name} — only ₹{price}. Link in 1st comment 👇"
+                cta = f"🔥 {product_name} — only ₹{price}. Link in bio 👆"
             elif price:
-                cta = f"⭐ {product_name} (₹{price}) — link below 👇"
+                cta = f"⭐ {product_name} (₹{price}) — link in bio 👆"
             else:
-                cta = f"🔗 Get {product_name} — link in 1st comment 👇"
+                cta = f"🔗 Get {product_name} — link in bio 👆"
 
             story["affiliate_product"] = product_name
             story["affiliate_url"] = url

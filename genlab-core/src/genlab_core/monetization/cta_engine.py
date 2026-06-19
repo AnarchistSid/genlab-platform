@@ -233,9 +233,13 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
         else:
             hashtag_match = re.search(r"((?:\s*#\w+)+\s*)$", caption)
 
-            # Use price-aware CTA. IG users navigate to first pinned comment
-            # more reliably than bio links — also support both formats.
-            ig_cta_text = _build_cta_text(product_price, product_name) + " (1st comment)"
+            # 2026-06-19: pivoted from "(1st comment)" → "(link in bio)".
+            # The 1st-comment promise was never delivered — payload_builder
+            # only populates first_comment_text for facebook/twitter and
+            # instagram.py never calls post_comment. The bio link is the
+            # actual working monetization surface (review.aspirehub.ai/
+            # links/<slug>) post-PR #272.
+            ig_cta_text = _build_cta_text(product_price, product_name) + " (link in bio)"
             if bandit:
                 try:
                     variant = bandit.select(platform="instagram")
