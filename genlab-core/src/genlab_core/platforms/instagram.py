@@ -101,6 +101,24 @@ class InstagramClient:
         self._base_url = f"https://graph.facebook.com/{api_version}"
         self._max_poll_seconds = max_poll_seconds
         self._last_error: str = ""  # Captures detailed error from internal methods
+        # P2 phase 2 (2026-06-19): per-niche structured-logger adapter.
+        # Every log record emitted via ``self._log`` carries
+        # ``extra={"niche_id": <self.niche_id>, "platform": "instagram"}``
+        # so operators can filter Loki/Splunk queries by niche cleanly
+        # (e.g. ``{platform="instagram", niche_id="gaming"}`` JSON view).
+        # The structlog wrapper in observability/logging.py promotes
+        # ``extra`` keys into top-level JSON fields. Pattern proven; other
+        # 4 platform clients can follow in a single ~50-LOC PR.
+        # Falls back to module logger when niche_id is empty (legacy
+        # callers that don't pass niche_id keep their old log shape).
+        self._log: logging.LoggerAdapter | logging.Logger = (
+            logging.LoggerAdapter(
+                logger,
+                {"niche_id": self.niche_id, "platform": self.platform_id},
+            )
+            if self.niche_id
+            else logger
+        )
 
     @staticmethod
     def _resolve_access_token(explicit: str | None, niche_id: str) -> str:

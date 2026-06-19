@@ -482,6 +482,67 @@ class TestNicheIdResolution:
         assert client._ig_user_id == "CR_per_niche_user_id"
 
 
+class TestNicheLoggerAdapter:
+    """P2 phase 2 (2026-06-19): per-niche structured-logger adapter.
+    When niche_id is set, self._log injects extra={'niche_id': ..., 'platform':
+    'instagram'} so JSON log records carry niche identity for operator
+    filtering. When niche_id is empty (legacy callers), self._log is the
+    plain module logger — backward compatible."""
+
+    def test_niche_id_set_creates_logger_adapter(self):
+        """When niche_id is non-empty, self._log is a LoggerAdapter
+        carrying niche_id + platform in its extra context."""
+        import logging
+
+        from genlab_core.platforms.instagram import InstagramClient
+
+        client = InstagramClient(access_token="t", ig_user_id="u", niche_id="gaming")
+        assert isinstance(client._log, logging.LoggerAdapter)
+        assert client._log.extra == {"niche_id": "gaming", "platform": "instagram"}
+
+    def test_empty_niche_id_uses_module_logger_directly(self):
+        """Backward compat: legacy callers (no niche_id) get the plain
+        module logger — no adapter overhead, no per-niche context (since
+        there's none to inject)."""
+        import logging
+
+        from genlab_core.platforms.instagram import InstagramClient, logger
+
+        client = InstagramClient(access_token="t", ig_user_id="u")
+        # _log IS the module logger when niche_id is empty
+        assert client._log is logger
+        assert not isinstance(client._log, logging.LoggerAdapter)
+
+    def test_adapter_injects_niche_id_into_log_records(self, caplog):
+        """End-to-end: a log call via self._log surfaces niche_id in the
+        record's extra field. Verifies the structlog/JSON path can promote
+        it to a top-level field for Loki filtering."""
+        import logging
+
+        from genlab_core.platforms.instagram import InstagramClient
+
+        client = InstagramClient(access_token="t", ig_user_id="u", niche_id="sports")
+        with caplog.at_level(logging.INFO, logger="genlab_core.platforms.instagram"):
+            client._log.info("test log message")
+        assert any(r.message == "test log message" for r in caplog.records)
+        rec = next(r for r in caplog.records if r.message == "test log message")
+        # The LoggerAdapter merges extra into the record's __dict__
+        assert getattr(rec, "niche_id", None) == "sports"
+        assert getattr(rec, "platform", None) == "instagram"
+
+    def test_different_niches_get_different_adapters(self):
+        """Two IG client instances for different niches get distinct
+        adapters with distinct extra context — niche identity doesn't
+        bleed across instances."""
+        from genlab_core.platforms.instagram import InstagramClient
+
+        a = InstagramClient(access_token="t", ig_user_id="u", niche_id="gaming")
+        b = InstagramClient(access_token="t", ig_user_id="u", niche_id="movies")
+        assert a._log.extra["niche_id"] == "gaming"
+        assert b._log.extra["niche_id"] == "movies"
+        assert a._log is not b._log
+
+
 class TestVerifyChannel:
     def test_verify_channel_success(self, ig_client):
         """verify_channel returns True when the IG account is accessible."""
