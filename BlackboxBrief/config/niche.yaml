@@ -99,6 +99,12 @@ pipeline:
 
     # Phase 5: Rendering
     - class: bb_strategies.visual_render.BBVisualRenderStrategy
+      # P6 broader adoption (2026-06-19): primary render failure → abort.
+      # Downstream RenderTextOverlays / GenerateAudio / RenderWhisperCaptions
+      # / ValidateVideos all depend on a rendered video existing; without it
+      # they noop or fail. Layered-effect stages keep fail_mode=continue (a
+      # missing overlay/caption is acceptable, missing video is not).
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio

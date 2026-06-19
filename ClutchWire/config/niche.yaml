@@ -107,6 +107,11 @@ pipeline:
 
     # Phase 4: Rendering
     - class: cw_strategies.visual_render.SportVisualRenderStrategy
+      # P6 broader adoption (2026-06-19): primary render failure → abort.
+      # Layered-effect stages (text_overlays, audio, captions) keep
+      # fail_mode=continue — a missing overlay is acceptable, missing
+      # video is not.
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio

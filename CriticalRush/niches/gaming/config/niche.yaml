@@ -113,6 +113,12 @@ pipeline:
     # Phase 4: Rendering
     - class: niches.gaming.stages.render_gaming_video.RenderGamingVideo
       sandbox: true
+      # P6 broader adoption (2026-06-19): primary render failure → abort.
+      # Note: this requires SandboxAwareStageRunner to honor fail_mode
+      # (added in the same PR as this YAML edit). Without that runner
+      # change, fail_mode on a sandboxed stage would silently no-op.
+      # Layered-effect stages keep fail_mode=continue.
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio

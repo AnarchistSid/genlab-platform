@@ -295,6 +295,77 @@ class TestSandboxAwareStageRunner:
             )
 
 
+# ── P6 fail_mode contract for SandboxAwareStageRunner ───────────────────────
+
+
+class TestSandboxAwareStageRunnerFailMode:
+    """P6 broader adoption (2026-06-19): the sandbox runner must also honor
+    fail_mode=abort. Previously hardcoded fatal=False — silently no-op'd
+    fail_mode on any sandboxed stage (notably RenderGamingVideo)."""
+
+    def test_default_fail_mode_is_continue(self):
+        """Backward compat: default sandbox-runner behavior is unchanged."""
+        runner = SandboxAwareStageRunner(genlab_root=GENLAB_ROOT)
+        assert runner._fail_mode == "continue"
+
+    def test_fail_mode_abort_records_fatal_when_sandbox_enabled(self):
+        """When sandbox is enabled AND stage raises, fail_mode=abort
+        promotes the error to fatal."""
+        exc = RuntimeError("ffmpeg sigsegv'd")
+        stage = SandboxAwareStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        runner = SandboxAwareStageRunner(genlab_root=GENLAB_ROOT, fail_mode="abort")
+        with (
+            patch(
+                "genlab_core.media.sandbox_runner.sandbox_rendering_enabled",
+                return_value=True,
+            ),
+            patch("genlab_core.media.sandbox_runner.SandboxedFFmpegRunner"),
+        ):
+            result = runner.run_stage(stage, {}, pipeline_ctx)
+        assert result.success is False
+        pipeline_ctx.record_error.assert_called_once_with("SandboxAwareStage", exc, fatal=True)
+
+    def test_fail_mode_abort_forwards_to_local_fallback(self):
+        """When sandbox is disabled (fallback path), the LocalStageRunner
+        must also receive fail_mode=abort — otherwise the gating policy is
+        silently dropped when the sandbox feature flag is off."""
+        exc = RuntimeError("render exploded")
+        stage = SandboxAwareStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        runner = SandboxAwareStageRunner(genlab_root=GENLAB_ROOT, fail_mode="abort")
+        with patch(
+            "genlab_core.media.sandbox_runner.sandbox_rendering_enabled",
+            return_value=False,
+        ):
+            result = runner.run_stage(stage, {}, pipeline_ctx)
+        assert result.success is False
+        # The local fallback runner records with the forwarded fail_mode
+        pipeline_ctx.record_error.assert_called_once_with("SandboxAwareStage", exc, fatal=True)
+
+    def test_invalid_fail_mode_raises_at_construction(self):
+        """Typo in YAML should surface at startup."""
+        with pytest.raises(ValueError, match="fail_mode must be one of"):
+            SandboxAwareStageRunner(genlab_root=GENLAB_ROOT, fail_mode="abort_pipeline")
+
+    def test_factory_forwards_fail_mode_to_sandbox_runner(self):
+        """End-to-end: niche.yaml's fail_mode on a sandbox: true stage
+        reaches SandboxAwareStageRunner via the factory."""
+        factory = StageRunnerFactory(genlab_root=GENLAB_ROOT)
+        runner = factory.get_runner({"class": "X", "sandbox": True, "fail_mode": "abort"})
+        assert isinstance(runner, SandboxAwareStageRunner)
+        assert runner._fail_mode == "abort"
+
+    def test_factory_forwards_fail_mode_for_dict_sandbox_cfg(self):
+        """The egress-allowlist sandbox shape also forwards fail_mode."""
+        factory = StageRunnerFactory(genlab_root=GENLAB_ROOT)
+        runner = factory.get_runner(
+            {"class": "X", "sandbox": {"egress": ["api.example.com"]}, "fail_mode": "abort"}
+        )
+        assert isinstance(runner, SandboxAwareStageRunner)
+        assert runner._fail_mode == "abort"
+
+
 # ── StageRunnerFactory ───────────────────────────────────────────────────────
 
 
