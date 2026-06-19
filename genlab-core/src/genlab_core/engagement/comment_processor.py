@@ -315,10 +315,28 @@ def _mark_replied(comment_id: str, platform: str) -> None:
 
 
 def _load_persona(niche_id: str) -> NichePersona:
-    """Load persona YAML. Raises FileNotFoundError if absent."""
+    """Load persona YAML. Raises FileNotFoundError if absent.
+
+    Resolution order:
+
+    1. Channel operator persona at ``<niche-root>/config/persona.yaml`` —
+       gitignored by design (operators tune the voice per-deploy).
+    2. Same path via the legacy AGENT_ROOT fallback.
+    3. Packaged fallback at ``personas/{canonical_niche_id}.yaml`` — this
+       is the SAFETY net that prevents 100% reply failure when (1)+(2)
+       are missing from a fresh deploy.
+
+    Steps (3) uses :func:`normalize_niche` so legacy IDs like ``ai_news``
+    resolve to the canonical packaged file ``ai_creators.yaml``. Without
+    this normalisation a Sprint-47-style rename could silently break
+    every engagement reply for the affected niche (caught in prod on
+    2026-06-20 — ``ai_creators.yaml`` was missing from the packaged
+    fallback for months because the rename was incomplete).
+    """
     import yaml
 
     from genlab_core.pipeline.cli import NICHE_DIR_NAMES
+    from genlab_core.publishing.niche_validation import normalize_niche
 
     personas_dir = Path(__file__).parent / "personas"
     candidate_paths: list[Path] = []
@@ -341,8 +359,16 @@ def _load_persona(niche_id: str) -> NichePersona:
     except Exception:
         pass
 
-    # Then try package personas/ directory with alias resolution
-    candidate_paths.append(personas_dir / f"{niche_id}.yaml")
+    # Packaged fallback. Use the canonical ID so legacy aliases
+    # (ai_news -> ai_creators) resolve to the right packaged file
+    # instead of falling through to FileNotFoundError.
+    canonical_id = normalize_niche(niche_id)
+    candidate_paths.append(personas_dir / f"{canonical_id}.yaml")
+    # If the caller passed a legacy alias, also try the alias filename
+    # for back-compat with any operator who renamed their persona file
+    # from canonical to alias (or never renamed it from alias to canonical).
+    if canonical_id != niche_id:
+        candidate_paths.append(personas_dir / f"{niche_id}.yaml")
 
     for path in candidate_paths:
         if path.exists():
