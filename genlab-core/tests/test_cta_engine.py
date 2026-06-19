@@ -422,15 +422,67 @@ class TestTrackedUrl:
         out = _tracked_url("https://amzn.to/raw", "X", niche_id="gaming", attribution_id="c1")
         assert out.startswith("https://bb.example.com/links/go/")
 
-    def test_falls_back_to_raw_utm_without_domain(self, monkeypatch):
-        from genlab_core.monetization.cta_engine import _tracked_url
+    def test_falls_back_to_raw_utm_without_domain_in_soft_mode(self, monkeypatch):
+        """Soft mode (default in CI / local dev): no domain → warn once, fall back."""
+        from genlab_core.monetization import cta_engine
 
         monkeypatch.delenv("GENLAB_DOMAIN", raising=False)
-        out = _tracked_url(
+        monkeypatch.delenv("GENLAB_REQUIRE_TRACKING_DOMAIN", raising=False)
+        # Reset the one-time warning flag so it fires for this test
+        monkeypatch.setattr(cta_engine, "_TRACKING_DOMAIN_WARNING_EMITTED", False)
+        out = cta_engine._tracked_url(
             "https://amzn.to/raw", "Gaming Mouse", niche_id="gaming", attribution_id="cand-1"
         )
         assert "amzn.to/raw" in out  # raw URL preserved (no regression)
         assert "utm_source" in out
+
+    def test_raises_without_domain_in_strict_mode(self, monkeypatch):
+        """2026-06-19 regression pin: prod sets GENLAB_REQUIRE_TRACKING_DOMAIN=1.
+        Missing GENLAB_DOMAIN must raise loudly so the silent monetization-
+        bypass bug (100% of YT/FB/Threads attribution lost when env unset)
+        cannot recur."""
+        import pytest
+        from genlab_core.monetization.cta_engine import _tracked_url
+
+        monkeypatch.delenv("GENLAB_DOMAIN", raising=False)
+        monkeypatch.setenv("GENLAB_REQUIRE_TRACKING_DOMAIN", "1")
+        with pytest.raises(RuntimeError, match="GENLAB_DOMAIN is required"):
+            _tracked_url(
+                "https://amzn.to/raw",
+                "Gaming Mouse",
+                niche_id="gaming",
+                attribution_id="cand-1",
+            )
+
+    def test_strict_mode_does_not_apply_when_domain_is_set(self, monkeypatch):
+        """Strict mode is only about the unset case — if domain is set,
+        strict-mode flag is a no-op."""
+        from genlab_core.monetization.cta_engine import _tracked_url
+
+        monkeypatch.setenv("GENLAB_DOMAIN", "https://bb.example.com")
+        monkeypatch.setenv("GENLAB_REQUIRE_TRACKING_DOMAIN", "1")
+        out = _tracked_url(
+            "https://amzn.to/raw",
+            "Gaming Mouse Pro",
+            niche_id="gaming",
+            attribution_id="cand-1",
+        )
+        assert out == "https://bb.example.com/links/go/gaming-mouse-pro?bp=cand-1"
+
+    def test_soft_mode_warning_emitted_only_once(self, monkeypatch, caplog):
+        """Operator-friendly: log the warning once per process, not per CTA."""
+        import logging
+
+        from genlab_core.monetization import cta_engine
+
+        monkeypatch.delenv("GENLAB_DOMAIN", raising=False)
+        monkeypatch.delenv("GENLAB_REQUIRE_TRACKING_DOMAIN", raising=False)
+        monkeypatch.setattr(cta_engine, "_TRACKING_DOMAIN_WARNING_EMITTED", False)
+        with caplog.at_level(logging.WARNING, logger="genlab_core.monetization.cta_engine"):
+            for _ in range(3):
+                cta_engine._tracked_url("u", "p", niche_id="n", attribution_id="a")
+        domain_warnings = [r for r in caplog.records if "GENLAB_DOMAIN is unset" in r.message]
+        assert len(domain_warnings) == 1, f"expected 1 warning, got {len(domain_warnings)}"
 
     def test_product_slug(self):
         from genlab_core.monetization.cta_engine import _product_slug
