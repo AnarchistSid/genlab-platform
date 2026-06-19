@@ -556,3 +556,110 @@ class TestFetchGamingStoriesMergesUpstream:
             # win (score 1.0 > 0.4)
             overwatch = [s for s in result["stories"] if s.get("source_url") == same_url]
             assert len(overwatch) == 1, f"Expected dedup to one row, got {len(overwatch)}"
+
+
+# ---------------------------------------------------------------------------
+# Schema-tolerance for upstream stories — prevents 2026-06-19 hotfix regression
+# ---------------------------------------------------------------------------
+
+
+class TestFetchGamingStoriesUpstreamSchemaTolerance:
+    """Upstream fetchers (FetchTrendingVideos, FetchTwitchClips) use a
+    video-centric schema that may omit ``score`` and other fields. The
+    merge code must normalize these before passing to dedup + sort
+    (which previously raised KeyError, failing the stage).
+    """
+
+    def test_upstream_stories_without_score_dont_crash(self):
+        """Real prod regression (2026-06-19 11:02 UTC run): upstream
+        stories from FetchTrendingVideos didn't have a 'score' field.
+        The sort raised KeyError, retry-then-fail, 0 blueprints."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+
+        # Mimics actual FetchTrendingVideos output: title + source_url + a
+        # video-centric ``views`` field BUT NO ``score``.
+        scoreless_upstream = [
+            {
+                "title": "Elden Ring boss fight viral moment",
+                "source": "content_pool",
+                "source_url": "https://youtube.com/watch?v=abc123",
+                "video_id": "abc123",
+                "views": 50000,
+                # Note: no "score", no "summary", no "steam_app_id" etc.
+            }
+        ]
+
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
+            MockSteam.return_value.fetch.return_value = []
+            MockTwitch.return_value.fetch.return_value = []
+            MockRSS.return_value.fetch.return_value = []
+
+            stage = FetchGamingStories()
+            context = {
+                "niche_config": {},
+                "run_stats": {},
+                "feature_flags": {},
+                "stories": scoreless_upstream,
+            }
+            # Must NOT raise KeyError on 'score'
+            result = stage.execute(context)
+
+            # The story should survive (with a default score)
+            assert len(result["stories"]) == 1
+            assert result["stories"][0]["title"] == "Elden Ring boss fight viral moment"
+            assert "score" in result["stories"][0]  # normalize injected default
+
+    def test_mixed_with_and_without_score_sorts_cleanly(self):
+        """Upstream scoreless + local scored stories sort without crashing.
+        Higher score wins; missing-score defaults to a low value so local
+        stories still rank by their real score."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+
+        scoreless_upstream = [
+            {
+                "title": "Hollow Knight speedrun WR",
+                "source": "content_pool",
+                "source_url": "https://youtube.com/watch?v=def456",
+            }
+        ]
+        scored_twitch = [
+            {
+                "title": "Valorant",
+                "source": "twitch_trending",
+                "source_url": "https://twitch.tv/directory/game/Valorant",
+                "score": 1.0,
+                "published_at": _now_utc().isoformat(),
+                "summary": "Twitch trending #1",
+                "steam_app_id": None,
+                "igdb_game_id": "200",
+                "developer": None,
+            }
+        ]
+
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
+            MockSteam.return_value.fetch.return_value = []
+            MockTwitch.return_value.fetch.return_value = scored_twitch
+            MockRSS.return_value.fetch.return_value = []
+
+            stage = FetchGamingStories()
+            context = {
+                "niche_config": {},
+                "run_stats": {},
+                "feature_flags": {},
+                "stories": scoreless_upstream,
+            }
+            result = stage.execute(context)
+
+            assert len(result["stories"]) == 2
+            # Twitch (score 1.0) > upstream default (0.5)
+            assert result["stories"][0]["title"] == "Valorant"
