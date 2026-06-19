@@ -83,6 +83,27 @@ class TestMergeStories:
         assert ctx["stories"][0]["title"] == "existing"
         assert ctx["stories"][1]["title"] == "new"
 
+    def test_merge_with_prepend_puts_new_first(self):
+        """P1 phase 4: FetchTrendingVideos direct-fetch merges with prepend
+        so trending videos take priority in downstream top-N selection."""
+        ctx = {"stories": [{"title": "existing", "source": "rss", "source_url": "u"}]}
+        merge_stories(
+            ctx,
+            [{"title": "trending", "source": "youtube_trending", "source_url": "u2"}],
+            prepend=True,
+        )
+        assert len(ctx["stories"]) == 2
+        assert ctx["stories"][0]["title"] == "trending"  # new came first
+        assert ctx["stories"][1]["title"] == "existing"
+
+    def test_merge_default_does_not_prepend(self):
+        """Backward compatibility — default behavior must remain append."""
+        ctx = {"stories": [{"title": "a", "source": "s", "source_url": "u"}]}
+        # No prepend arg → default behavior
+        merge_stories(ctx, [{"title": "b", "source": "s", "source_url": "u"}])
+        assert ctx["stories"][0]["title"] == "a"
+        assert ctx["stories"][1]["title"] == "b"
+
     def test_merge_validates_each_item(self):
         ctx: dict = {"stories": []}
         with pytest.raises(Exception):  # noqa: B017

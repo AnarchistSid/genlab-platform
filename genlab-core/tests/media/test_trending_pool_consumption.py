@@ -55,6 +55,11 @@ def _pool_story(video_id: str, title: str | None = None) -> dict:
         "source_url": f"https://youtu.be/{video_id}",
         "title": title or f"Pool story {video_id}",
         "description": "A trending video clip we just routed via NicheClassifier.",
+        # P1 phase-4 (2026-06-19): merge_stories() now schema-validates each
+        # entry via StoryCandidate, which requires ``source``. Real production
+        # path at trending_video_fetcher.py:1183 always sets this from
+        # ``row["source_platform"] or "shared_pool"``; mock matches that.
+        "source": "shared_pool",
     }
 
 
