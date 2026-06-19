@@ -61,14 +61,67 @@ class XTwitterClient:
         api_secret: str | None = None,
         access_token: str | None = None,
         access_secret: str | None = None,
+        *,
+        niche_id: str = "",
     ) -> None:
-        self._api_key: str = api_key or os.environ.get("X_API_KEY", "")
-        self._api_secret: str = api_secret or os.environ.get("X_API_SECRET", "")
-        self._access_token: str = access_token or os.environ.get("X_ACCESS_TOKEN", "")
-        self._access_secret: str = access_secret or os.environ.get("X_ACCESS_SECRET", "")
+        """3-tier auth lookup matching InstagramClient (P2 phase 1, PR #377):
+          1. Explicit kwargs (api_key, api_secret, access_token, access_secret)
+          2. Per-niche via ``resolve_twitter_credentials(niche_id)`` when
+             ``niche_id`` is non-empty
+          3. Global env fallback (``X_API_KEY`` / ``X_API_SECRET`` /
+             ``X_ACCESS_TOKEN`` / ``X_ACCESS_SECRET``)
+        X uses OAuth 1.0a with a 4-field bundle. The resolver fetches
+        the bundle once per instantiation if niche_id is set.
+        """
+        self.niche_id = niche_id
+        ak, asec, atok, atok_sec = self._resolve_oauth1_bundle(
+            api_key, api_secret, access_token, access_secret, niche_id
+        )
+        self._api_key: str = ak
+        self._api_secret: str = asec
+        self._access_token: str = atok
+        self._access_secret: str = atok_sec
 
         # Rate-limit state uses module-level globals so cooldown persists
         # across client instances (publisher creates new client per niche)
+
+    @staticmethod
+    def _resolve_oauth1_bundle(
+        explicit_ak: str | None,
+        explicit_asec: str | None,
+        explicit_atok: str | None,
+        explicit_asec2: str | None,
+        niche_id: str,
+    ) -> tuple[str, str, str, str]:
+        """3-tier per-field resolution with niche-bundle fetched once."""
+        if explicit_ak and explicit_asec and explicit_atok and explicit_asec2:
+            return explicit_ak, explicit_asec, explicit_atok, explicit_asec2
+
+        niche_bundle: dict[str, str] = {}
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import (
+                resolve_twitter_credentials,
+            )
+
+            niche_bundle = resolve_twitter_credentials(niche_id)
+
+        ak = explicit_ak or niche_bundle.get("api_key", "") or os.environ.get("X_API_KEY", "")
+        asec = (
+            explicit_asec
+            or niche_bundle.get("api_secret", "")
+            or os.environ.get("X_API_SECRET", "")
+        )
+        atok = (
+            explicit_atok
+            or niche_bundle.get("access_token", "")
+            or os.environ.get("X_ACCESS_TOKEN", "")
+        )
+        atok_sec = (
+            explicit_asec2
+            or niche_bundle.get("access_secret", "")
+            or os.environ.get("X_ACCESS_SECRET", "")
+        )
+        return ak, asec, atok, atok_sec
 
     # ------------------------------------------------------------------
     # Internal factory helpers — one fresh client per call (not thread-safe
