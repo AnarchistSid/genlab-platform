@@ -132,6 +132,9 @@ from genlab_core.learning.metrics.instagram import (  # noqa: E402, F401
     _fetch_instagram,
     _fetch_instagram_reels_6h,
 )
+
+# P5a phase 4 (2026-06-19): X/Twitter fetcher moved to learning/metrics/x_twitter.py.
+from genlab_core.learning.metrics.x_twitter import _fetch_x  # noqa: E402, F401
 from genlab_core.learning.metrics.youtube import (  # noqa: E402, F401
     _YT_TOKEN_TTL,
     _fetch_youtube,
@@ -140,49 +143,6 @@ from genlab_core.learning.metrics.youtube import (  # noqa: E402, F401
     _yt_analytics_token_cache,
     _yt_token_cache,
 )
-
-
-def _fetch_x(post_id: str, niche_id: str = "") -> dict:
-    """Fetch X/Twitter metrics via API v2.
-
-    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["twitter"]``:
-    ``impressions, reply_chain_rate, engagements, profile_clicks``.
-    Raw ``likes/retweets/replies`` are also returned for compatibility
-    with ``upsert_analytics`` storage. ``profile_clicks`` requires the
-    organic_tweet metrics endpoint (premium-only) — stubbed as 0.
-    """
-    import os
-
-    import requests
-
-    bearer = os.getenv("X_BEARER_TOKEN", "").strip()  # X bearer is app-wide, no per-niche
-    if not bearer:
-        return {}
-    resp = requests.get(
-        f"https://api.twitter.com/2/tweets/{post_id}",
-        params={"tweet.fields": "public_metrics"},
-        headers={"Authorization": f"Bearer {bearer}"},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    public = resp.json().get("data", {}).get("public_metrics", {})
-    impressions = int(public.get("impression_count", 0))
-    likes = int(public.get("like_count", 0))
-    retweets = int(public.get("retweet_count", 0))
-    replies = int(public.get("reply_count", 0))
-    engagements = likes + retweets + replies
-    reply_chain_rate = (replies / impressions) if impressions > 0 else 0.0
-    return {
-        "impressions": impressions,
-        "likes": likes,
-        "retweets": retweets,
-        "replies": replies,
-        "engagements": engagements,
-        "reply_chain_rate": round(reply_chain_rate, 4),
-        # profile_clicks is in organic_tweet_metrics which requires
-        # Twitter API Pro tier. Omit the key entirely so compute_reward
-        # redistributes its 0.10 weight instead of pinning to a fake 0.
-    }
 
 
 def _fetch_tiktok(post_id: str, niche_id: str = "") -> dict:
