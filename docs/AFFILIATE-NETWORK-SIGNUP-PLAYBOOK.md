@@ -27,7 +27,11 @@ systemctl restart genlab-publisher.service genlab-engagement-worker.service
 ### Path
 
 1. Already have an Amazon Associates account (you do — `aspirehub06-20`
-   for IN, `aspirehub-20` for US — verified live)
+   for US, `aspirehub-21` for IN — verified live on prod 2026-06-19).
+   Amazon tag conventions: `-20` suffix = US marketplace, `-21` suffix
+   = IN marketplace. Tags are issued per-marketplace and do NOT track
+   cross-marketplace, so a US tag on amazon.in earns nothing and
+   vice versa.
 2. Amazon requires **10 verified affiliate sales within any 30-day
    window** before granting PA-API access
 3. Once eligible: Amazon Associates Central → Tools → Product
@@ -40,9 +44,9 @@ systemctl restart genlab-publisher.service genlab-engagement-worker.service
 ```env
 AMAZON_PA_API_KEY=AKIA...
 AMAZON_PA_API_SECRET=...
-# Per-region tags already set:
-AMAZON_US_AFFILIATE_TAG=aspirehub-20
-AMAZON_IN_AFFILIATE_TAG=aspirehub06-20
+# Per-region tags already set on prod (verified 2026-06-19):
+AMAZON_US_AFFILIATE_TAG=aspirehub06-20
+AMAZON_IN_AFFILIATE_TAG=aspirehub-21
 ```
 
 ### Acceleration plan
