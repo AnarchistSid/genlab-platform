@@ -138,6 +138,9 @@ def _product_slug(name: str) -> str:
     return re.sub(r"[^a-z0-9-]", "", slug)
 
 
+_TRACKING_DOMAIN_WARNING_EMITTED = False
+
+
 def _tracked_url(raw_url: str, product_name: str, *, niche_id: str, attribution_id: str) -> str:
     """Route the published affiliate link through the /links/go redirect so
     clicks are tracked (R-23).
@@ -146,13 +149,49 @@ def _tracked_url(raw_url: str, product_name: str, *, niche_id: str, attribution_
     affiliate catalog, logs the click to ``affiliate_clicks`` keyed on the
     ``?bp`` param (R-23/CD-5), and 302s to the real URL — gracefully falling
     back to the channel page if the slug is unknown, so a published link never
-    breaks. Falls back to the raw UTM URL when no public domain is configured
-    (``GENLAB_DOMAIN`` unset), preserving prior behavior.
+    breaks.
+
+    Two operating modes for the ``GENLAB_DOMAIN`` env var (2026-06-19):
+
+    * **Strict (production)** — ``GENLAB_REQUIRE_TRACKING_DOMAIN=1``: raises
+      ``RuntimeError`` if ``GENLAB_DOMAIN`` is unset. This catches the silent
+      monetization-bypass bug (100% of YT/FB/Threads CTAs lost attribution
+      while the env var was empty for an unknown duration). Mirrors the
+      SR-A/C/D ``GENLAB_REQUIRE_TENANT_GUC`` two-mode pattern.
+    * **Soft (CI / local dev)** — strict-mode flag unset: emits a one-time
+      ``WARNING`` log line on first hit, then falls back to the raw UTM URL.
+      Tests don't need to set ``GENLAB_DOMAIN`` to avoid breakage.
     """
+    global _TRACKING_DOMAIN_WARNING_EMITTED
+
     domain = os.environ.get("GENLAB_DOMAIN", "").strip().rstrip("/")
     slug = _product_slug(product_name)
-    if not domain or not slug:
+
+    if not domain:
+        strict = os.environ.get("GENLAB_REQUIRE_TRACKING_DOMAIN", "").strip() == "1"
+        if strict:
+            raise RuntimeError(
+                "GENLAB_DOMAIN is required for affiliate click attribution "
+                "(GENLAB_REQUIRE_TRACKING_DOMAIN=1 is set). Set it to your "
+                "public dashboard URL (e.g. https://review.example.com). "
+                "Without it, /links/go redirects don't work and per-post "
+                "attribution is silently lost. To intentionally bypass "
+                "tracking, unset GENLAB_REQUIRE_TRACKING_DOMAIN."
+            )
+        if not _TRACKING_DOMAIN_WARNING_EMITTED:
+            logger.warning(
+                "GENLAB_DOMAIN is unset — affiliate clicks will bypass "
+                "/links/go and per-post attribution will be silently lost. "
+                "Set GENLAB_DOMAIN to your public dashboard URL. "
+                "Set GENLAB_REQUIRE_TRACKING_DOMAIN=1 to make this a hard error."
+            )
+            _TRACKING_DOMAIN_WARNING_EMITTED = True
         return append_utm_params(raw_url, niche_id=niche_id, blueprint_id=attribution_id)
+
+    if not slug:
+        # Legitimate fallback — not every product has a slug
+        return append_utm_params(raw_url, niche_id=niche_id, blueprint_id=attribution_id)
+
     if not domain.startswith(("http://", "https://")):
         domain = f"https://{domain}"
     base = f"{domain}/links/go/{slug}"
