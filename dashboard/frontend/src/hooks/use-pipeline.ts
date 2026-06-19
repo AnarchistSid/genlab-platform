@@ -8,7 +8,11 @@ export function usePipelineStatus() {
   return useQuery<{ data: { last_run: PipelineRun | null; health: string } }>({
     queryKey: queryKeys.pipeline.globalStatus(),
     queryFn: () => pipeline.status(),
-    refetchInterval: 15_000,
+    // pipeline_progress / pipeline_complete socket events drive real-time
+    // updates (see use-socket.ts). The 60s poll is the reconciliation
+    // safety net, not the primary update path. Previously 15s, which
+    // was 4× the necessary load with sockets wired.
+    refetchInterval: 60_000,
   });
 }
 

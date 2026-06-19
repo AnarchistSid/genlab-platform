@@ -96,8 +96,41 @@ export function useSocketUpdates() {
   useEffect(() => {
     const socket = getSocket();
 
-    // Event names use underscores to match server-side emit names
-    function onBlueprintUpdated(_event: BlueprintUpdatedEvent) {
+    // Event names use underscores to match server-side emit names.
+    //
+    // Surgical update: the event payload already carries ``id``,
+    // ``status``, and ``platform_publish_status`` — the only fields
+    // that change on a blueprint update. Write those directly to the
+    // detail cache so any open detail view skips a refetch round-trip
+    // entirely. Then invalidate the aggregate trees because list
+    // filtering / schedule slot derivation depend on the status fields
+    // we just changed.
+    //
+    // Same pattern as onPipelineProgress (below). Previously this
+    // handler ignored the payload and triple-invalidated, costing
+    // one network round-trip per active list AND per open detail view
+    // per event.
+    function onBlueprintUpdated(event: BlueprintUpdatedEvent) {
+      type DetailShape = { data?: Record<string, unknown> } | undefined;
+      queryClient.setQueryData<DetailShape>(
+        queryKeys.blueprints.detail(event.id),
+        (old) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: {
+              ...old.data,
+              status: event.status,
+              // Preserve old per-platform map if the event doesn't
+              // carry one (server omits the field on status-only
+              // transitions).
+              platform_publish_status:
+                event.platform_publish_status ??
+                old.data.platform_publish_status,
+            },
+          };
+        },
+      );
       void queryClient.invalidateQueries({ queryKey: queryKeys.blueprints.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.schedule.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.queue.all() });

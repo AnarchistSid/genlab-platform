@@ -15,7 +15,11 @@ export function usePublishingQueue(queueStatus?: string) {
       if (queueStatus) params.queue_status = queueStatus;
       return queue.list(params);
     },
-    refetchInterval: 15_000,
+    // blueprint_updated socket events invalidate `queue.all()` in
+    // use-socket.ts. The 60s poll is the reconciliation safety net,
+    // not the primary update path. Previously 15s, which was 4× the
+    // necessary load with sockets wired.
+    refetchInterval: 60_000,
   });
 }
 

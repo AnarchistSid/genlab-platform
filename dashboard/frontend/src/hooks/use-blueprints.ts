@@ -8,7 +8,12 @@ export function useBlueprints(params?: Record<string, string>) {
   return useQuery<PaginatedResponse<Blueprint>>({
     queryKey: queryKeys.blueprints.list(params),
     queryFn: () => blueprints.list(params),
-    refetchInterval: 15_000,
+    // Socket.IO `blueprint_updated` events drive real-time freshness via
+    // invalidation in use-socket.ts. The 60s poll is the reconciliation
+    // safety net for the "server died silently / event dropped" case —
+    // not the primary update path. Previously 15s, which was 4× the
+    // necessary load with sockets wired.
+    refetchInterval: 60_000,
   });
 }
 
