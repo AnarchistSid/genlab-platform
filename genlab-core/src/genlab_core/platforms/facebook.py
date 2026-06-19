@@ -68,11 +68,43 @@ class FacebookClient:
         access_token: str | None = None,
         page_id: str | None = None,
         api_version: str = META_GRAPH_API_VERSION,
+        *,
+        niche_id: str = "",
     ) -> None:
-        self._access_token: str = access_token or os.environ.get("META_ACCESS_TOKEN", "")
-        self._page_id: str = page_id or os.environ.get("META_FB_PAGE_ID", "")
+        """3-tier auth lookup matching InstagramClient (P2 phase 1, PR #377):
+        1. Explicit kwarg
+        2. Per-niche via ``resolve_fb_credentials(niche_id)``
+        3. Global env fallback ``META_ACCESS_TOKEN`` / ``META_FB_PAGE_ID``
+        """
+        self.niche_id = niche_id
+        self._access_token: str = self._resolve_access_token(access_token, niche_id)
+        self._page_id: str = self._resolve_page_id(page_id, niche_id)
         self._api_version = api_version
         self._base_url = f"https://graph.facebook.com/{api_version}"
+
+    @staticmethod
+    def _resolve_access_token(explicit: str | None, niche_id: str) -> str:
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
+            tok, _ = resolve_fb_credentials(niche_id)
+            if tok:
+                return tok
+        return os.environ.get("META_ACCESS_TOKEN", "")
+
+    @staticmethod
+    def _resolve_page_id(explicit: str | None, niche_id: str) -> str:
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_fb_credentials
+
+            _, pid = resolve_fb_credentials(niche_id)
+            if pid:
+                return pid
+        return os.environ.get("META_FB_PAGE_ID", "")
 
     # ------------------------------------------------------------------
     # Publisher protocol
