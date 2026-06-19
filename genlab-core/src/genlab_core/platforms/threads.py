@@ -86,6 +86,14 @@ class ThreadsClient:
         self._base_url = "https://graph.threads.net/v1.0"
         # Threads API: 250 posts/hr. Conservative rate limiter.
         self._rate_limiter = TokenBucket(rate=250 / 3600, burst=10)
+        # P2 phase 2: per-niche LoggerAdapter (mirrors IG pattern from PR #382).
+        # When niche_id set, log records carry {niche_id, platform} extras for
+        # operator log filtering. Empty niche_id → plain module logger (legacy).
+        self._log: logging.LoggerAdapter | logging.Logger = (
+            logging.LoggerAdapter(logger, {"niche_id": self.niche_id, "platform": self.platform_id})
+            if self.niche_id
+            else logger
+        )
 
     @staticmethod
     def _resolve_access_token(explicit: str | None, niche_id: str) -> str:
