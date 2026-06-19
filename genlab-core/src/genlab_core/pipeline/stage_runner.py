@@ -105,9 +105,35 @@ class LocalStageRunner:
     Supports retry via ``max_retries`` and ``retry_delay`` parameters
     (read from the stage declaration in niche.yaml).
 
+    Failure policy (P6, 2026-06-19): the ``fail_mode`` parameter controls
+    what happens after all retries are exhausted:
+
+      * ``"continue"`` (default) — log the error, record it on
+        ``PipelineContext`` with ``fatal=False``, and continue to the next
+        stage. This is the historical default that every stage has used
+        since the pipeline runner shipped. Appropriate for fetchers,
+        enrichers, and anything where partial pipeline output is still
+        useful.
+
+      * ``"abort"`` — record with ``fatal=True``, which sets
+        ``ctx.is_aborted`` so the runner's pre-stage check (line 19 / 329
+        of pipeline_runner.py) stops iterating. Appropriate for terminal
+        stages where downstream work is meaningless if this stage failed
+        (PushToBacklog, render, publish, validation gates).
+
+    Per-stage opt-in via niche.yaml::
+
+        - class: niches.gaming.stages.render_gaming_video.RenderGamingVideo
+          fail_mode: abort   # render failure → abort the whole run
+
+    Default ``continue`` preserves backward compatibility — every existing
+    niche.yaml continues to behave as before unless explicitly opted in.
+
     When a ``metrics`` instance is provided, each stage execution is
     automatically recorded with timing and status.
     """
+
+    _VALID_FAIL_MODES = frozenset({"continue", "abort"})
 
     def __init__(
         self,
@@ -115,10 +141,16 @@ class LocalStageRunner:
         metrics: PipelineMetrics | None = None,
         max_retries: int = 0,
         retry_delay: float = 0.0,
+        fail_mode: str = "continue",
     ) -> None:
+        if fail_mode not in self._VALID_FAIL_MODES:
+            raise ValueError(
+                f"fail_mode must be one of {sorted(self._VALID_FAIL_MODES)}, got {fail_mode!r}"
+            )
         self._metrics = metrics
         self._max_retries = max_retries
         self._retry_delay = retry_delay
+        self._fail_mode = fail_mode
 
     def run_stage(
         self,
@@ -178,14 +210,19 @@ class LocalStageRunner:
                         e,
                     )
                     continue
-                # Final attempt failed
-                pipeline_ctx.record_error(stage_name, e, fatal=False)
+                # Final attempt failed. fail_mode controls whether this
+                # aborts the rest of the pipeline (sets ctx.is_aborted via
+                # the record_error(fatal=True) path) or merely records and
+                # continues.
+                is_fatal = self._fail_mode == "abort"
+                pipeline_ctx.record_error(stage_name, e, fatal=is_fatal)
                 logger.error(
-                    "[Pipeline] Stage %s failed after %d attempt(s) (%.1fs): %s",
+                    "[Pipeline] Stage %s failed after %d attempt(s) (%.1fs): %s%s",
                     stage_name,
                     attempt + 1,
                     elapsed,
                     e,
+                    " — aborting pipeline (fail_mode=abort)" if is_fatal else "",
                 )
                 if self._metrics is not None:
                     self._metrics.record_stage(
@@ -458,19 +495,26 @@ class StageRunnerFactory:
     def get_runner(self, declaration: dict[str, Any]) -> StageRunner:
         """Return the StageRunner for a given stage declaration.
 
-        Reads ``retries`` and ``retry_delay_seconds`` from the declaration
-        to configure retry behavior on the returned runner.
+        Reads ``retries``, ``retry_delay_seconds``, and ``fail_mode`` from
+        the declaration to configure retry + failure-policy behavior on
+        the returned runner. See ``LocalStageRunner.__init__`` for the
+        ``fail_mode`` contract.
         """
         max_retries = int(declaration.get("retries", 0))
         retry_delay = float(declaration.get("retry_delay_seconds", 0))
+        fail_mode = str(declaration.get("fail_mode", "continue"))
         sandbox_cfg = declaration.get("sandbox")
 
+        # The cached self._local is shared and has the default fail_mode.
+        # If a stage opts into a non-default fail_mode (or retries), build
+        # a fresh runner so the cached one isn't mutated for other stages.
         if not sandbox_cfg:
-            if max_retries > 0:
+            if max_retries > 0 or fail_mode != "continue":
                 return LocalStageRunner(
                     metrics=self._metrics,
                     max_retries=max_retries,
                     retry_delay=retry_delay,
+                    fail_mode=fail_mode,
                 )
             return self._local
 
