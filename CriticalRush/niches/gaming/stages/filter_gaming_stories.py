@@ -1,7 +1,20 @@
 """Pipeline stage: Filter non-gaming noise from fetched stories.
 
 Runs AFTER FETCH, BEFORE ENRICH. Pure logic, no LLM calls.
-Steam/Twitch stories always pass. RSS stories are keyword-filtered.
+
+Trust model (2026-06-19 — fix for "useless content" symptom):
+    Stories whose ``source`` is from a gaming-by-construction fetcher are
+    auto-passed. The keyword filter is only consulted for the legacy ``rss``
+    path, which is the one source that can legitimately carry non-gaming
+    noise (general feeds where ``content_filter`` upstream may have let
+    through a stray item).
+
+    Why: YouTube trending (category=20 Gaming), Twitch (gaming-only
+    platform), Reddit (subreddits listed in ``sources.yaml`` are gaming),
+    Steam (gaming storefront) all produce gaming content by construction.
+    Their titles are often emoji + streamer slang ("MAX UMBRA, MIN VOLUME 😈")
+    that contain zero English gaming keywords — keyword-filtering them
+    silently dropped legitimate gameplay clips.
 
 Usage:
     stage = FilterGamingStories()
@@ -14,6 +27,34 @@ import logging
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Source values from gaming-by-construction fetchers — auto-pass without
+# consulting the keyword filter. Add new entries here as new gaming-specific
+# fetchers come online. Anything NOT in this allowlist falls through to the
+# generic keyword filter.
+_TRUSTED_GAMING_SOURCES = frozenset(
+    {
+        # Local (FetchGamingStories)
+        "steam_spike",
+        "twitch_trending",
+        # FetchTrendingVideos (YouTube category=20 Gaming for gaming niche)
+        "youtube_trending",
+        "youtube_rss",
+        "youtube_playlist",
+        "channel_subscription",
+        "shared_pool",  # content_pool entries claimed by gaming niche
+        # FetchTwitchClips (Twitch is a gaming-only platform)
+        "twitch_clips",
+        # FetchSteamTrailers (Steam is a gaming storefront)
+        "steam_trailer",
+    }
+)
+
+# FetchRedditClips uses the prefixed pattern "reddit:<subreddit>" rather than
+# a fixed source value. Subreddits are configured in ``sources.yaml`` per
+# niche, so anything that came back from Reddit on the gaming pipeline is
+# gaming-by-config-curation. Detect via prefix.
+_REDDIT_SOURCE_PREFIX = "reddit:"
 
 
 class FilterGamingStories:
@@ -155,8 +196,11 @@ class FilterGamingStories:
         return context
 
     def _is_gaming_content(self, story: dict[str, Any]) -> bool:
-        # Steam/Twitch stories are always gaming content
-        if story.get("source") in ("steam_spike", "twitch_trending"):
+        # Trust all gaming-by-construction fetcher sources outright. The
+        # keyword filter below is only meaningful for the legacy ``rss``
+        # path where general news feeds can carry off-topic items.
+        source = story.get("source", "")
+        if source in _TRUSTED_GAMING_SOURCES or source.startswith(_REDDIT_SOURCE_PREFIX):
             return True
 
         title_lower = story.get("title", "").lower()
