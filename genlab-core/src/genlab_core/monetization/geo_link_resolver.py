@@ -164,11 +164,32 @@ _health_lock = threading.Lock()
 _HEALTH_TTL = 6 * 3600  # 6 hours
 
 
+# HTTP codes that mean "the URL exists and is reachable", from the
+# perspective of a liveness check that doesn't care about the response
+# body. 2xx + 3xx are obvious; 405 deserves a special note:
+#
+#   amazon.com returns 405 (Method Not Allowed) to our ranged-GET
+#   liveness check on /dp/* URLs, while amazon.in returns 206
+#   (Partial Content) to the same request. Before adding 405 to
+#   this allowlist, every US-targeted catalog product failed the
+#   health check, NICHE_PRIMARY_GEO="US" fell back to amazon.in,
+#   and PR #277's geo→US routing was structurally a no-op for
+#   catalog matches. The 405 from amazon.com still proves the URL
+#   is reachable — the server is refusing the SPECIFIC request shape
+#   (ranged GET on a product page), not denying the URL exists.
+#
+# 416 (Range Not Satisfiable) is included for the same reason —
+# a server can reject our Range header without invalidating the URL.
+_HEALTHY_CODES = frozenset({200, 206, 301, 302, 303, 307, 308, 405, 416})
+
+
 def _is_url_healthy(url: str) -> bool:
     """Check if a URL is reachable (cached, non-blocking on first miss).
 
-    Returns True if the URL responds with 2xx/3xx, False on 404/5xx/timeout.
-    Results are cached for 6 hours to avoid hammering affiliate networks.
+    Returns True if the URL responds with any code in ``_HEALTHY_CODES``
+    (essentially "the URL exists and the server responded"), False on
+    404/5xx/timeout. Results are cached for 6 hours to avoid hammering
+    affiliate networks.
     """
     now = time.monotonic()
     with _health_lock:
@@ -176,15 +197,17 @@ def _is_url_healthy(url: str) -> bool:
         if cached and (now - cached[1]) < _HEALTH_TTL:
             return cached[0]
 
-    # Quick HEAD check with 5s timeout
+    # Quick liveness check with 5s timeout. We use ranged GET (1 byte)
+    # instead of HEAD because many CDNs return inaccurate codes to HEAD
+    # but respect the Range header on GET.
     try:
         req = urllib.request.Request(url, method="GET")
         req.add_header("User-Agent", "GenLab-LinkCheck/1.0")
         req.add_header("Range", "bytes=0-0")
         with urllib.request.urlopen(req, timeout=5) as resp:
-            healthy = resp.status in (200, 206, 301, 302, 303, 307, 308)
+            healthy = resp.status in _HEALTHY_CODES
     except urllib.error.HTTPError as exc:
-        healthy = exc.code in (200, 206, 301, 302, 303, 307, 308)
+        healthy = exc.code in _HEALTHY_CODES
     except Exception:
         healthy = False
 
