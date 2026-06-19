@@ -219,8 +219,15 @@ class TestTwitchNonGameFilter:
     def test_skips_entries_with_empty_igdb_id(self, mock_get, monkeypatch):
         """The canonical "not a real game" signal from Twitch is
         ``igdb_id == ""``. Drop any such entry."""
-        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
-        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+        # Patch the already-instantiated pydantic settings singleton —
+        # TwitchTrendingFetcher.__init__ reads settings.twitch_client_id
+        # at instance-construction time, so env-var monkeypatching alone
+        # doesn't propagate (env was sampled at module-import time, and
+        # CI's clean env never had the var to begin with).
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
 
         mock_get.return_value = self._mock_helix_response(
             [
@@ -248,8 +255,15 @@ class TestTwitchNonGameFilter:
     def test_skips_hardcoded_non_game_category_ids(self, mock_get, monkeypatch):
         """Belt-and-suspenders: even if Twitch populates igdb_id for
         a non-game category, the hardcoded ID list catches it."""
-        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
-        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+        # Patch the already-instantiated pydantic settings singleton —
+        # TwitchTrendingFetcher.__init__ reads settings.twitch_client_id
+        # at instance-construction time, so env-var monkeypatching alone
+        # doesn't propagate (env was sampled at module-import time, and
+        # CI's clean env never had the var to begin with).
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
 
         mock_get.return_value = self._mock_helix_response(
             [
@@ -277,8 +291,15 @@ class TestTwitchNonGameFilter:
     @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
     def test_returns_at_most_5_real_games(self, mock_get, monkeypatch):
         """Even with 20 real-game entries, we cap at 5 (top-N by Twitch chart rank)."""
-        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
-        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+        # Patch the already-instantiated pydantic settings singleton —
+        # TwitchTrendingFetcher.__init__ reads settings.twitch_client_id
+        # at instance-construction time, so env-var monkeypatching alone
+        # doesn't propagate (env was sampled at module-import time, and
+        # CI's clean env never had the var to begin with).
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
 
         many_games = [
             {"id": str(i), "name": f"Game {i}", "igdb_id": str(100 + i), "box_art_url": ""}
@@ -302,8 +323,15 @@ class TestTwitchNonGameFilter:
     def test_returns_empty_when_all_entries_are_non_games(self, mock_get, monkeypatch):
         """Edge case: Twitch chart is entirely non-game categories. Should
         return 0 stories cleanly, letting Steam + RSS provide content."""
-        monkeypatch.setenv("TWITCH_CLIENT_ID", "test-id")
-        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test-secret")
+        # Patch the already-instantiated pydantic settings singleton —
+        # TwitchTrendingFetcher.__init__ reads settings.twitch_client_id
+        # at instance-construction time, so env-var monkeypatching alone
+        # doesn't propagate (env was sampled at module-import time, and
+        # CI's clean env never had the var to begin with).
+        from genlab_core.settings import settings
+
+        monkeypatch.setattr(settings, "twitch_client_id", "test-id")
+        monkeypatch.setattr(settings, "twitch_client_secret", "test-secret")
 
         mock_get.return_value = self._mock_helix_response(
             [
