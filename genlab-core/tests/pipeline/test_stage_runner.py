@@ -113,6 +113,84 @@ class TestLocalStageRunner:
         assert ctx["existing"] is True
 
 
+# ── P6 fail_mode contract ────────────────────────────────────────────────────
+
+
+class TestLocalStageRunnerFailMode:
+    """P6 (2026-06-19): per-stage ``fail_mode`` policy from niche.yaml."""
+
+    def test_default_fail_mode_is_continue(self):
+        """Backward compat: default behavior records error non-fatally."""
+        exc = ValueError("transient")
+        stage = FakeStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        LocalStageRunner().run_stage(stage, {}, pipeline_ctx)
+        # fatal=False matches every existing niche.yaml since the runner
+        # shipped. Any change to this default is a major breaking change.
+        pipeline_ctx.record_error.assert_called_once_with("FakeStage", exc, fatal=False)
+
+    def test_fail_mode_continue_explicit(self):
+        """Explicit ``continue`` matches the default — operator can declare
+        intent in YAML without changing behavior."""
+        exc = RuntimeError("api outage")
+        stage = FakeStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        LocalStageRunner(fail_mode="continue").run_stage(stage, {}, pipeline_ctx)
+        pipeline_ctx.record_error.assert_called_once_with("FakeStage", exc, fatal=False)
+
+    def test_fail_mode_abort_marks_fatal(self):
+        """``fail_mode=abort`` records the error with fatal=True so the
+        next pre-stage ``ctx.is_aborted`` check stops the pipeline."""
+        exc = RuntimeError("render failed catastrophically")
+        stage = FakeStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        result = LocalStageRunner(fail_mode="abort").run_stage(stage, {}, pipeline_ctx)
+        assert result.success is False
+        pipeline_ctx.record_error.assert_called_once_with("FakeStage", exc, fatal=True)
+
+    def test_abort_after_retries_exhausted(self):
+        """Retry loop still runs first; abort kicks in only after the
+        final retry fails."""
+        exc = RuntimeError("flaky")
+        stage = FakeStage(raise_exc=exc)
+        pipeline_ctx = MagicMock()
+        result = LocalStageRunner(max_retries=2, fail_mode="abort").run_stage(
+            stage, {}, pipeline_ctx
+        )
+        assert result.success is False
+        # record_error is called ONCE (after final retry), with fatal=True
+        pipeline_ctx.record_error.assert_called_once_with("FakeStage", exc, fatal=True)
+
+    def test_abort_does_not_fire_on_success(self):
+        """Even with fail_mode=abort, a successful stage doesn't abort."""
+        stage = FakeStage(mutate={"ran": True})
+        pipeline_ctx = MagicMock()
+        result = LocalStageRunner(fail_mode="abort").run_stage(stage, {}, pipeline_ctx)
+        assert result.success is True
+        pipeline_ctx.record_error.assert_not_called()
+
+    def test_invalid_fail_mode_raises_at_construction(self):
+        """Typo in YAML should surface at startup, not at runtime."""
+        with pytest.raises(ValueError, match="fail_mode must be one of"):
+            LocalStageRunner(fail_mode="continue_on_error")  # close but wrong
+
+    def test_factory_reads_fail_mode_from_declaration(self):
+        """End-to-end: niche.yaml's ``fail_mode:`` reaches the runner."""
+        factory = StageRunnerFactory(genlab_root=GENLAB_ROOT)
+        runner = factory.get_runner({"class": "X", "fail_mode": "abort"})
+        # The factory returns a non-cached runner when fail_mode != continue
+        assert isinstance(runner, LocalStageRunner)
+        assert runner._fail_mode == "abort"
+
+    def test_factory_uses_cached_local_for_default_fail_mode(self):
+        """No regression: when fail_mode is default + no retries, the
+        cached _local runner is returned (no per-stage allocation)."""
+        factory = StageRunnerFactory(genlab_root=GENLAB_ROOT)
+        runner = factory.get_runner({"class": "X"})
+        # _local is the cached default-fail_mode no-retry runner
+        assert runner is factory._local
+
+
 # ── SandboxAwareStageRunner ──────────────────────────────────────────────────
 
 
