@@ -26,34 +26,51 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.pipeline.models import collect_emitted_sources
+from genlab_core.pipeline.stages.fetch_steam_trailers import FetchSteamTrailers
+from genlab_core.pipeline.stages.fetch_twitch_clips import FetchTwitchClips
+
 logger = logging.getLogger(__name__)
 
-# Source values from gaming-by-construction fetchers — auto-pass without
-# consulting the keyword filter. Add new entries here as new gaming-specific
-# fetchers come online. Anything NOT in this allowlist falls through to the
-# generic keyword filter.
-_TRUSTED_GAMING_SOURCES = frozenset(
+# P1, 2026-06-19 — trust list is now DERIVED from the actual producer stages
+# via FetcherStage.EMITTED_SOURCES, not maintained by hand. Adding a new
+# fetcher to the gaming pipeline now requires zero edits here — as long as
+# the new fetcher declares its EMITTED_SOURCES, the filter aggregates them
+# at module load. PR #360's "trust list drift from producers" bug class is
+# structurally prevented. A contract test pins the relationship at CI.
+#
+# Migrated fetchers (P1 phase 1): FetchTwitchClips, FetchSteamTrailers.
+# Still hardcoded below pending phase-2 migration of remaining fetchers:
+#   - FetchTrendingVideos (5 source values)
+#   - FetchGamingStories (steam_spike, twitch_trending, rss)
+#   - FetchRedditClips (uses "reddit:<subreddit>" prefix — see below)
+#
+# Once all fetchers expose EMITTED_SOURCES, the hardcoded extras list goes
+# empty and the registry becomes the sole source of truth.
+_REGISTRY_TRUSTED_SOURCES = collect_emitted_sources([FetchTwitchClips, FetchSteamTrailers])
+
+# Phase-1 fallback for fetchers not yet migrated. Empty this set as fetchers
+# adopt the FetcherStage mixin.
+_LEGACY_HARDCODED_SOURCES = frozenset(
     {
-        # Local (FetchGamingStories)
+        # FetchGamingStories (local — not yet a FetcherStage)
         "steam_spike",
         "twitch_trending",
-        # FetchTrendingVideos (YouTube category=20 Gaming for gaming niche)
+        # FetchTrendingVideos (not yet a FetcherStage)
         "youtube_trending",
         "youtube_rss",
         "youtube_playlist",
         "channel_subscription",
-        "shared_pool",  # content_pool entries claimed by gaming niche
-        # FetchTwitchClips (Twitch is a gaming-only platform)
-        "twitch_clips",
-        # FetchSteamTrailers (Steam is a gaming storefront)
-        "steam_trailer",
+        "shared_pool",
     }
 )
 
+_TRUSTED_GAMING_SOURCES = _REGISTRY_TRUSTED_SOURCES | _LEGACY_HARDCODED_SOURCES
+
 # FetchRedditClips uses the prefixed pattern "reddit:<subreddit>" rather than
-# a fixed source value. Subreddits are configured in ``sources.yaml`` per
-# niche, so anything that came back from Reddit on the gaming pipeline is
-# gaming-by-config-curation. Detect via prefix.
+# a fixed source value (one source per subreddit), so the registry can't
+# enumerate them. Detect via prefix. When FetchRedditClips becomes a
+# FetcherStage it can expose this prefix as a class attribute too.
 _REDDIT_SOURCE_PREFIX = "reddit:"
 
 

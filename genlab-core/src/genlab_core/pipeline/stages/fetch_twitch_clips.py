@@ -15,6 +15,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -108,12 +109,18 @@ def _fetch_clips_for_game(
         return []
 
 
-class FetchTwitchClips:
+class FetchTwitchClips(FetcherStage):
     """Pipeline stage: fetch trending Twitch clips for gaming niche.
 
     Returns direct MP4 URLs from Twitch CDN — no YouTube quota needed.
     Clips are added as stories with pre-filled clip_url for DownloadTopVideos.
     """
+
+    # P1, 2026-06-19 — declare emitted source values so downstream filters
+    # (e.g. FilterGamingStories) can derive their trust list from producers
+    # instead of maintaining a hand-edited frozenset. Closes PR #360's bug
+    # class permanently.
+    EMITTED_SOURCES = frozenset({"twitch_clips"})
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -195,7 +202,11 @@ class FetchTwitchClips:
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}
             new_stories = [s for s in new_stories if s["source_url"] not in existing_urls]
-            context["stories"] = existing + new_stories
+            # P1: ``merge_stories`` validates each item against StoryCandidate
+            # and replaces the copy-pasted ``context["stories"] = existing + new``
+            # convention with an intent-revealing function name. PR #358's
+            # REPLACE-not-MERGE bug class becomes impossible here.
+            merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["twitch_clips_found"] = len(all_clips)
