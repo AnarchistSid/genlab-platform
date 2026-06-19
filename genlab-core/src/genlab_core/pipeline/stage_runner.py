@@ -260,7 +260,16 @@ class SandboxAwareStageRunner:
 
     This runner also accepts an egress allowlist, defaulting to deny-all
     for render stages.
+
+    P6 (2026-06-19): accepts ``fail_mode: "continue" | "abort"`` matching
+    ``LocalStageRunner``'s contract. When ``abort``, a stage exception
+    records with ``fatal=True`` so ``ctx.is_aborted`` stops the pipeline.
+    Required for ``fail_mode: abort`` to actually work on sandboxed stages
+    (notably ``RenderGamingVideo``). Without this, the gating attribute
+    on a sandboxed stage would silently no-op.
     """
+
+    _VALID_FAIL_MODES = frozenset({"continue", "abort"})
 
     def __init__(
         self,
@@ -268,10 +277,16 @@ class SandboxAwareStageRunner:
         *,
         egress_allow: list[str] | None = None,
         metrics: PipelineMetrics | None = None,
+        fail_mode: str = "continue",
     ) -> None:
+        if fail_mode not in self._VALID_FAIL_MODES:
+            raise ValueError(
+                f"fail_mode must be one of {sorted(self._VALID_FAIL_MODES)}, got {fail_mode!r}"
+            )
         self._genlab_root = genlab_root
         self._egress_allow = egress_allow
         self._metrics = metrics
+        self._fail_mode = fail_mode
 
     def run_stage(
         self,
@@ -286,13 +301,17 @@ class SandboxAwareStageRunner:
 
         stage_name = stage.__class__.__name__
 
-        # If sandbox rendering isn't enabled, fall back to local
+        # If sandbox rendering isn't enabled, fall back to local — forward
+        # fail_mode so the local fallback honors it too.
         if not sandbox_rendering_enabled():
             logger.info(
                 "[Pipeline] Sandbox not enabled — running %s locally",
                 stage_name,
             )
-            return LocalStageRunner(metrics=self._metrics).run_stage(
+            return LocalStageRunner(
+                metrics=self._metrics,
+                fail_mode=self._fail_mode,
+            ).run_stage(
                 stage,
                 context,
                 pipeline_ctx,
@@ -334,12 +353,15 @@ class SandboxAwareStageRunner:
             )
         except Exception as e:
             elapsed = time.monotonic() - t0
-            pipeline_ctx.record_error(stage_name, e, fatal=False)
+            # P6: honor fail_mode like LocalStageRunner does.
+            is_fatal = self._fail_mode == "abort"
+            pipeline_ctx.record_error(stage_name, e, fatal=is_fatal)
             logger.error(
-                "[Pipeline] Stage %s failed after %.1fs (sandboxed): %s",
+                "[Pipeline] Stage %s failed after %.1fs (sandboxed): %s%s",
                 stage_name,
                 elapsed,
                 e,
+                " — aborting pipeline (fail_mode=abort)" if is_fatal else "",
             )
             if self._metrics is not None:
                 self._metrics.record_stage(
@@ -523,6 +545,7 @@ class StageRunnerFactory:
             return SandboxAwareStageRunner(
                 genlab_root=self._genlab_root,
                 metrics=self._metrics,
+                fail_mode=fail_mode,
             )
 
         if isinstance(sandbox_cfg, dict):
@@ -531,6 +554,7 @@ class StageRunnerFactory:
                 genlab_root=self._genlab_root,
                 egress_allow=egress,
                 metrics=self._metrics,
+                fail_mode=fail_mode,
             )
 
         return self._local

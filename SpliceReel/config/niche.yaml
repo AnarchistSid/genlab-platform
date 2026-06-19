@@ -106,6 +106,9 @@ pipeline:
 
     # Phase 4: Rendering
     - class: sr_strategies.visual_render.MovieVisualRenderStrategy
+      # P6 broader adoption (2026-06-19): primary render failure → abort.
+      # Layered-effect stages keep fail_mode=continue.
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
       parallel_group: post_render
     - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
