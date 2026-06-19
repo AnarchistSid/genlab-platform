@@ -564,7 +564,9 @@ class XTwitterClient:
             ``True`` on success, ``False`` on any failure.
         """
         if self._is_currently_rate_limited():
-            self._log.warning("X/Twitter: post_reply skipped — rate limited (context=%s)", context_id)
+            self._log.warning(
+                "X/Twitter: post_reply skipped — rate limited (context=%s)", context_id
+            )
             return False
 
         try:
@@ -623,7 +625,9 @@ class XTwitterClient:
                 tweet_fields=["public_metrics"],
             )
             if response.data is None:
-                self._log.warning("X/Twitter: get_metrics — no data returned for tweet %s", tweet_id)
+                self._log.warning(
+                    "X/Twitter: get_metrics — no data returned for tweet %s", tweet_id
+                )
                 return None
 
             pm = response.data.public_metrics or {}
