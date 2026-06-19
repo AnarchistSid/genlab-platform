@@ -116,7 +116,7 @@ class YouTubeClient:
 
                 self._quota_tracker = YouTubeQuotaTracker()
             except (ImportError, Exception) as exc:
-                logger.debug("YouTube quota tracker unavailable: %s", exc)
+                self._log.debug("YouTube quota tracker unavailable: %s", exc)
 
         # Cached googleapiclient service objects
         self._data_service: Any = None
@@ -247,7 +247,7 @@ class YouTubeClient:
             if items:
                 return items[0]["id"]
         except Exception as exc:
-            logger.warning("YouTube: failed to fetch channel ID: %s", exc)
+            self._log.warning("YouTube: failed to fetch channel ID: %s", exc)
         return None
 
     # ------------------------------------------------------------------
@@ -272,7 +272,7 @@ class YouTubeClient:
         try:
             token = self._get_access_token()
         except Exception as exc:
-            logger.error(
+            self._log.error(
                 "YouTube: channel verification failed — cannot get access token: %s",
                 exc,
             )
@@ -280,11 +280,11 @@ class YouTubeClient:
 
         actual = self._get_channel_id(token)
         if not actual:
-            logger.error("YouTube: channel verification failed — could not resolve channel ID")
+            self._log.error("YouTube: channel verification failed — could not resolve channel ID")
             return False
 
         if actual != self._expected_channel_id:
-            logger.error(
+            self._log.error(
                 "YouTube: CHANNEL MISMATCH — token resolves to %s but expected %s. "
                 "Refusing to publish to wrong channel.",
                 actual,
@@ -292,7 +292,7 @@ class YouTubeClient:
             )
             return False
 
-        logger.info("YouTube: channel verified — %s", actual)
+        self._log.info("YouTube: channel verified — %s", actual)
         return True
 
     # ------------------------------------------------------------------
@@ -393,7 +393,7 @@ class YouTubeClient:
             if not self._quota_tracker.can_upload():
                 qs = self._quota_tracker.status()
                 hard_stop = qs.get("hard_stop", 9800)
-                logger.error(
+                self._log.error(
                     "YouTube quota gate blocked upload: %d/%d units used (hard-stop, %d uploads today)",
                     qs["used"],
                     hard_stop,
@@ -419,7 +419,7 @@ class YouTubeClient:
                 privacy=privacy,
             )
         except Exception as exc:
-            logger.error("YouTube: upload failed: %s", exc)
+            self._log.error("YouTube: upload failed: %s", exc)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -438,7 +438,7 @@ class YouTubeClient:
             try:
                 self._quota_tracker.record("upload")
             except Exception as exc:
-                logger.warning("YouTube quota recording failed (non-fatal): %s", exc)
+                self._log.warning("YouTube quota recording failed (non-fatal): %s", exc)
 
         return PublishResult(
             platform=self.platform_id,
@@ -502,7 +502,7 @@ class YouTubeClient:
                     if chunk_attempt == CHUNK_RETRIES - 1:
                         raise  # exhausted retries — propagate
                     wait = 2**chunk_attempt
-                    logger.warning(
+                    self._log.warning(
                         "YouTube chunk upload retry %d/%d in %ds: %s",
                         chunk_attempt + 1,
                         CHUNK_RETRIES,
@@ -514,7 +514,7 @@ class YouTubeClient:
                 break
             if status:
                 pct = int(status.progress() * 100) if callable(status.progress) else 0
-                logger.info("YouTube upload progress: %d%%", pct)
+                self._log.info("YouTube upload progress: %d%%", pct)
         else:
             raise RuntimeError(f"YouTube upload stalled after {MAX_CHUNKS} chunks")
 
@@ -525,7 +525,7 @@ class YouTubeClient:
         if not video_id:
             raise RuntimeError(f"YouTube upload response missing 'id': {response}")
 
-        logger.info("YouTube video uploaded: %s", video_id)
+        self._log.info("YouTube video uploaded: %s", video_id)
         return video_id
 
     # ------------------------------------------------------------------
@@ -559,7 +559,7 @@ class YouTubeClient:
             )
             resp.raise_for_status()
             comment_id = resp.json().get("id", "")
-            logger.info(
+            self._log.info(
                 "YouTube: reply posted to comment %s on video %s (reply id=%s)",
                 parent_id,
                 context_id,
@@ -567,7 +567,7 @@ class YouTubeClient:
             )
             return True
         except Exception as exc:
-            logger.warning("YouTube: failed to post reply to comment %s: %s", parent_id, exc)
+            self._log.warning("YouTube: failed to post reply to comment %s: %s", parent_id, exc)
             return False
 
     def post_comment(self, video_id: str, text: str) -> str | None:
@@ -606,14 +606,14 @@ class YouTubeClient:
             resp.raise_for_status()
             data = resp.json()
             comment_id = data.get("id", "")
-            logger.info(
+            self._log.info(
                 "YouTube: top-level comment posted on %s (thread id=%s)",
                 video_id,
                 comment_id,
             )
             return comment_id
         except Exception as exc:
-            logger.warning("YouTube: failed to post comment on video %s: %s", video_id, exc)
+            self._log.warning("YouTube: failed to post comment on video %s: %s", video_id, exc)
             return None
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -621,7 +621,7 @@ class YouTubeClient:
 
         Always returns ``True`` to keep the engagement pipeline happy.
         """
-        logger.debug(
+        self._log.debug(
             "YouTube: like() is a no-op (API unsupported for comment likes) — target=%s",
             target_id,
         )
@@ -649,7 +649,7 @@ class YouTubeClient:
         age_hours = (now - pub_utc).total_seconds() / 3600
 
         if age_hours < _MIN_AGE_HOURS:
-            logger.debug(
+            self._log.debug(
                 "YouTube: skip metrics for %s — too recent (%.1fh < %dh)",
                 video_id,
                 age_hours,
@@ -665,7 +665,7 @@ class YouTubeClient:
             token = self._get_access_token()
             channel_id = self._get_channel_id(token)
             if not channel_id:
-                logger.warning("YouTube: cannot fetch metrics — channel ID unavailable")
+                self._log.warning("YouTube: cannot fetch metrics — channel ID unavailable")
                 return None
 
             service = self._get_analytics_service()
@@ -684,7 +684,7 @@ class YouTubeClient:
 
             rows = response.get("rows", [])
             if not rows:
-                logger.debug("YouTube: no analytics data for %s", video_id)
+                self._log.debug("YouTube: no analytics data for %s", video_id)
                 return None
 
             row = rows[0]
@@ -710,7 +710,7 @@ class YouTubeClient:
             )
 
         except Exception as exc:
-            logger.warning("YouTube: failed to fetch metrics for %s: %s", video_id, exc)
+            self._log.warning("YouTube: failed to fetch metrics for %s: %s", video_id, exc)
             return None
 
     # ------------------------------------------------------------------
@@ -738,7 +738,7 @@ class YouTubeClient:
             Dict with ``video_id`` and ``title`` on success, ``None`` on failure.
         """
         if title is None and description is None:
-            logger.warning("YouTube: update_video_metadata called with no changes")
+            self._log.warning("YouTube: update_video_metadata called with no changes")
             return None
 
         try:
@@ -758,7 +758,7 @@ class YouTubeClient:
             get_resp.raise_for_status()
             items = get_resp.json().get("items", [])
             if not items:
-                logger.warning("YouTube: video %s not found for metadata update", video_id)
+                self._log.warning("YouTube: video %s not found for metadata update", video_id)
                 return None
 
             snippet = items[0]["snippet"]
@@ -775,10 +775,10 @@ class YouTubeClient:
                 timeout=30,
             )
             update_resp.raise_for_status()
-            logger.info("YouTube: video %s metadata updated", video_id)
+            self._log.info("YouTube: video %s metadata updated", video_id)
             return {"video_id": video_id, "title": snippet["title"]}
         except Exception as exc:
-            logger.warning("YouTube: metadata update failed for %s: %s", video_id, exc)
+            self._log.warning("YouTube: metadata update failed for %s: %s", video_id, exc)
             return None
 
     # ------------------------------------------------------------------

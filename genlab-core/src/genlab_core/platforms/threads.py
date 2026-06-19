@@ -162,7 +162,7 @@ class ThreadsClient:
                 # Text-only (or fallback when media_type mismatch)
                 return self._publish_text(caption=caption)
         except Exception as exc:
-            logger.error("Threads: publish error: %s", exc)
+            self._log.error("Threads: publish error: %s", exc)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -199,7 +199,7 @@ class ThreadsClient:
             if post_id is None:
                 return False
 
-            logger.info(
+            self._log.info(
                 "Threads: posted reply to %s (reply_id=%s context=%s)",
                 parent_id,
                 post_id,
@@ -207,7 +207,7 @@ class ThreadsClient:
             )
             return True
         except Exception as exc:
-            logger.warning("Threads: post_reply failed for %s: %s", parent_id, exc)
+            self._log.warning("Threads: post_reply failed for %s: %s", parent_id, exc)
             return False
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -224,7 +224,7 @@ class ThreadsClient:
         Returns:
             ``True`` always (no-op).
         """
-        logger.debug("Threads: like() called for %s (no-op — API unsupported)", target_id)
+        self._log.debug("Threads: like() called for %s (no-op — API unsupported)", target_id)
         return True
 
     # ------------------------------------------------------------------
@@ -337,7 +337,7 @@ class ThreadsClient:
         except Exception:
             pass
 
-        logger.info("Threads: published video post %s — %s", post_id, post_url)
+        self._log.info("Threads: published video post %s — %s", post_id, post_url)
         return PublishResult(
             platform=self.platform_id,
             success=True,
@@ -370,7 +370,7 @@ class ThreadsClient:
             )
 
         post_url = self._get_permalink(post_id)
-        logger.info("Threads: published image post %s — %s", post_id, post_url)
+        self._log.info("Threads: published image post %s — %s", post_id, post_url)
         return PublishResult(
             platform=self.platform_id,
             success=True,
@@ -400,7 +400,7 @@ class ThreadsClient:
             )
 
         post_url = self._get_permalink(post_id)
-        logger.info("Threads: published text post %s — %s", post_id, post_url)
+        self._log.info("Threads: published text post %s — %s", post_id, post_url)
         return PublishResult(
             platform=self.platform_id,
             success=True,
@@ -444,13 +444,13 @@ class ThreadsClient:
             resp = requests.post(url, data=data, timeout=30)
             payload = _safe_json(resp)
             if resp.ok and "id" in payload:
-                logger.debug("Threads: created %s container %s", media_type, payload["id"])
+                self._log.debug("Threads: created %s container %s", media_type, payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
-            logger.error("Threads: container creation failed (%s): %s", media_type, error_msg)
+            self._log.error("Threads: container creation failed (%s): %s", media_type, error_msg)
             return None
         except Exception as exc:
-            logger.error("Threads: container request error: %s", exc)
+            self._log.error("Threads: container request error: %s", exc)
             return None
 
     def _threads_publish(self, *, container_id: str) -> str | None:
@@ -469,10 +469,10 @@ class ThreadsClient:
             if resp.ok and "id" in payload:
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
-            logger.error("Threads: threads_publish failed: %s", error_msg)
+            self._log.error("Threads: threads_publish failed: %s", error_msg)
             return None
         except Exception as exc:
-            logger.error("Threads: threads_publish request error: %s", exc)
+            self._log.error("Threads: threads_publish request error: %s", exc)
             return None
 
     def _poll_container(self, container_id: str, max_seconds: int = 120) -> str:
@@ -491,27 +491,27 @@ class ThreadsClient:
                     if status == "FINISHED":
                         return "FINISHED"
                     if status == "ERROR":
-                        logger.error(
+                        self._log.error(
                             "[Threads] container %s returned ERROR state",
                             container_id[:16],
                         )
                         return "ERROR"
                 else:
-                    logger.warning(
+                    self._log.warning(
                         "[Threads] container poll HTTP %d for %s",
                         resp.status_code,
                         container_id[:16],
                     )
             except Exception as exc:
                 consecutive_errors += 1
-                logger.warning(
+                self._log.warning(
                     "[Threads] container poll request error for %s (%d/3): %s",
                     container_id[:16],
                     consecutive_errors,
                     exc,
                 )
                 if consecutive_errors >= 3:
-                    logger.error("[Threads] container poll gave up after 3 consecutive errors")
+                    self._log.error("[Threads] container poll gave up after 3 consecutive errors")
                     return "ERROR"
             time.sleep(5)  # uses module-level time import (mockable in tests)
         return "TIMEOUT"
@@ -531,7 +531,7 @@ class ThreadsClient:
             if resp.ok:
                 return _safe_json(resp).get("permalink", "")
         except Exception as exc:
-            logger.debug("[Threads] permalink fetch failed (non-critical): %s", exc)
+            self._log.debug("[Threads] permalink fetch failed (non-critical): %s", exc)
         return ""
 
     def _resolve_url(self, path: Path | str) -> str:
@@ -578,7 +578,7 @@ class ThreadsClient:
             try:
                 issued_at = datetime.fromtimestamp(int(issued_at_str), tz=UTC)
             except (ValueError, TypeError):
-                logger.warning(
+                self._log.warning(
                     "[Threads] Cannot parse THREADS_TOKEN_ISSUED_AT=%r as ISO or Unix timestamp — "
                     "auto-refresh disabled until format is fixed.",
                     issued_at_str[:40],
@@ -631,17 +631,17 @@ class ThreadsClient:
                             }
                         )
                     except Exception as exc:
-                        logger.warning(
+                        self._log.warning(
                             "[Threads] Token refreshed but .env persistence failed: %s",
                             exc,
                         )
-                    logger.info(
+                    self._log.info(
                         "[Threads] Token refreshed successfully (expires in %ds)",
                         data.get("expires_in", 0),
                     )
                     return True
-            logger.warning("[Threads] Token refresh failed: %s", resp.text[:200])
+            self._log.warning("[Threads] Token refresh failed: %s", resp.text[:200])
             return False
         except Exception as e:
-            logger.warning("[Threads] Token refresh error: %s", e)
+            self._log.warning("[Threads] Token refresh error: %s", e)
             return False
