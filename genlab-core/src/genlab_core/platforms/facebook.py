@@ -166,17 +166,17 @@ class FacebookClient:
                     context_id=result.post_id,
                 )
                 if comment_ok:
-                    logger.info(
+                    self._log.info(
                         "Facebook: affiliate first-comment posted under %s",
                         result.post_id,
                     )
                 else:
-                    logger.warning(
+                    self._log.warning(
                         "Facebook: first-comment post returned False for %s",
                         result.post_id,
                     )
             except Exception as exc:
-                logger.warning(
+                self._log.warning(
                     "Facebook: first-comment exception (non-fatal): %s",
                     exc,
                 )
@@ -186,13 +186,13 @@ class FacebookClient:
     def _validate_token_preflight(self) -> bool:
         """Quick /me check to catch expired or missing tokens before publish."""
         if not self._access_token:
-            logger.error(
+            self._log.error(
                 "Facebook: no access token configured — "
                 "set FB_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN in .env"
             )
             return False
         if not self._page_id:
-            logger.error(
+            self._log.error(
                 "Facebook: no page ID configured — set META_FB_PAGE_ID or FB_PAGE_ID in .env"
             )
             return False
@@ -203,19 +203,19 @@ class FacebookClient:
                 timeout=10,
             )
             if resp.status_code == 400:
-                logger.error(
+                self._log.error(
                     "Facebook: token invalid or expired (HTTP 400). "
                     "Skipping Facebook publish. Refresh token in .env."
                 )
                 return False
             if resp.status_code != 200:
-                logger.warning(
+                self._log.warning(
                     "Facebook: token check returned HTTP %d — proceeding cautiously",
                     resp.status_code,
                 )
             return True
         except Exception as e:
-            logger.warning("Facebook: token pre-flight check failed: %s", e)
+            self._log.warning("Facebook: token pre-flight check failed: %s", e)
             return True  # Network error — don't block, let publish try
 
     def _resolve_video_url(self, payload: PublishPayload) -> str:
@@ -272,7 +272,7 @@ class FacebookClient:
 
             if "id" in response_data:
                 post_id = response_data["id"]
-                logger.info("Facebook: video published — post ID: %s", post_id)
+                self._log.info("Facebook: video published — post ID: %s", post_id)
                 return PublishResult(
                     platform=self.platform_id,
                     success=True,
@@ -282,7 +282,7 @@ class FacebookClient:
                 )
 
             error_msg = _extract_error_message(response_data)
-            logger.error("Facebook: video publish failed: %s", error_msg)
+            self._log.error("Facebook: video publish failed: %s", error_msg)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -291,7 +291,7 @@ class FacebookClient:
             )
 
         except Exception as exc:
-            logger.error("Facebook: video publish exception: %s", exc)
+            self._log.error("Facebook: video publish exception: %s", exc)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -316,7 +316,7 @@ class FacebookClient:
 
             if "id" in response_data:
                 post_id = response_data["id"]
-                logger.info("Facebook: feed post published — post ID: %s", post_id)
+                self._log.info("Facebook: feed post published — post ID: %s", post_id)
                 return PublishResult(
                     platform=self.platform_id,
                     success=True,
@@ -326,7 +326,7 @@ class FacebookClient:
                 )
 
             error_msg = _extract_error_message(response_data)
-            logger.error("Facebook: feed post failed: %s", error_msg)
+            self._log.error("Facebook: feed post failed: %s", error_msg)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -335,7 +335,7 @@ class FacebookClient:
             )
 
         except Exception as exc:
-            logger.error("Facebook: feed post exception: %s", exc)
+            self._log.error("Facebook: feed post exception: %s", exc)
             return PublishResult(
                 platform=self.platform_id,
                 success=False,
@@ -369,16 +369,16 @@ class FacebookClient:
             )
             data = _safe_json(resp)
             if resp.status_code == 200 and "id" in data:
-                logger.info("Facebook: replied to comment %s", parent_id)
+                self._log.info("Facebook: replied to comment %s", parent_id)
                 return True
-            logger.warning(
+            self._log.warning(
                 "Facebook: reply failed (HTTP %d): %s",
                 resp.status_code,
                 data.get("error", {}).get("message", str(data)),
             )
             return False
         except Exception as exc:
-            logger.warning("Facebook: post_reply exception: %s", exc)
+            self._log.warning("Facebook: post_reply exception: %s", exc)
             return False
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -399,16 +399,16 @@ class FacebookClient:
                 timeout=15,
             )
             if resp.status_code == 200:
-                logger.info("Facebook: liked target %s", target_id)
+                self._log.info("Facebook: liked target %s", target_id)
                 return True
-            logger.debug(
+            self._log.debug(
                 "Facebook: like() not supported for target %s (HTTP %d)",
                 target_id,
                 resp.status_code,
             )
             return True  # Fail-open — keep engagement pipeline happy
         except Exception as exc:
-            logger.debug("Facebook: like() exception (ignored): %s", exc)
+            self._log.debug("Facebook: like() exception (ignored): %s", exc)
             return True  # Fail-open
 
     # ------------------------------------------------------------------
@@ -443,7 +443,7 @@ class FacebookClient:
             response_data = _safe_json(resp)
 
             if resp.status_code != 200 or "error" in response_data:
-                logger.debug(
+                self._log.debug(
                     "Facebook: metrics request failed for %s (HTTP %d): %s",
                     post_id,
                     resp.status_code,
@@ -453,7 +453,7 @@ class FacebookClient:
 
             data_items: list[dict[str, Any]] = response_data.get("data", [])
             if not data_items:
-                logger.debug("Facebook: no insights data for post %s", post_id)
+                self._log.debug("Facebook: no insights data for post %s", post_id)
                 return None
 
             # Build a lookup from metric name → latest value
@@ -485,7 +485,7 @@ class FacebookClient:
             )
 
         except Exception as exc:
-            logger.warning("Facebook: get_metrics exception for %s: %s", post_id, exc)
+            self._log.warning("Facebook: get_metrics exception for %s: %s", post_id, exc)
             return None
 
     # ------------------------------------------------------------------
@@ -544,7 +544,7 @@ class FacebookClient:
                 timeout=15,
             )
         except requests.RequestException as exc:
-            logger.debug("Facebook: survival check transient error for %s: %s", clean_id, exc)
+            self._log.debug("Facebook: survival check transient error for %s: %s", clean_id, exc)
             return None
 
         data = _safe_json(resp)
@@ -562,7 +562,7 @@ class FacebookClient:
         err_code = (
             data.get("error", {}).get("code") if isinstance(data.get("error"), dict) else None
         )
-        logger.debug(
+        self._log.debug(
             "Facebook: survival check ambiguous for %s (HTTP %d, code=%s): %s",
             clean_id,
             resp.status_code,

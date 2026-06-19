@@ -277,7 +277,7 @@ class XTwitterClient:
             st.raise_for_status()
             info = self._processing_info(st.json())
         if info.get("state") == "failed":
-            logger.error("X/Twitter: v2 media processing failed for %s: %s", path.name, info)
+            self._log.error("X/Twitter: v2 media processing failed for %s: %s", path.name, info)
             return None
         return media_id
 
@@ -327,14 +327,14 @@ class XTwitterClient:
             return False
         elapsed = time.monotonic() - _module_rate_limited_at
         if elapsed > _RATE_LIMIT_COOLDOWN:
-            logger.info(
+            self._log.info(
                 "X/Twitter: rate-limit cooldown expired (%.0fs elapsed) — resuming",
                 elapsed,
             )
             _module_rate_limited = False
             return False
         remaining = int(_RATE_LIMIT_COOLDOWN - elapsed)
-        logger.warning(
+        self._log.warning(
             "X/Twitter: rate-limited — %ds remaining in cooldown, skipping",
             remaining,
         )
@@ -343,7 +343,7 @@ class XTwitterClient:
     def _handle_rate_limit(self, exc: BaseException) -> None:
         """Record rate-limit state after a 429."""
         global _module_rate_limited, _module_rate_limited_at
-        logger.warning(
+        self._log.warning(
             "X/Twitter: 429 Too Many Requests — entering %ds cooldown: %s",
             _RATE_LIMIT_COOLDOWN,
             exc,
@@ -398,7 +398,7 @@ class XTwitterClient:
                 media_ids=media_ids if media_ids else None,
             )
         except Exception as exc:
-            logger.error("X/Twitter: publish error: %s", exc)
+            self._log.error("X/Twitter: publish error: %s", exc)
             return _fail(str(exc))
 
         if tweet_id is None:
@@ -413,12 +413,12 @@ class XTwitterClient:
                     text=payload.first_comment_text,
                     reply_to=tweet_id,
                 )
-                logger.info(
+                self._log.info(
                     "X/Twitter: posted affiliate first-reply under %s",
                     tweet_id,
                 )
             except Exception as exc:
-                logger.warning(
+                self._log.warning(
                     "X/Twitter: first-reply exception (non-fatal): %s",
                     exc,
                 )
@@ -440,18 +440,18 @@ class XTwitterClient:
         for path in media_paths[:4]:
             path = Path(path)
             if not path.exists():
-                logger.warning("X/Twitter: media file not found: %s", path)
+                self._log.warning("X/Twitter: media file not found: %s", path)
                 continue
             try:
                 # R-42: v2 media upload (v1.1 media/upload retired 2025-06-09).
                 media_id = self._upload_media_v2(path)
                 if media_id:
                     media_ids.append(media_id)
-                    logger.debug("X/Twitter: uploaded media %s → %s (v2)", path.name, media_id)
+                    self._log.debug("X/Twitter: uploaded media %s → %s (v2)", path.name, media_id)
                 else:
-                    logger.error("X/Twitter: v2 media upload returned no id for %s", path.name)
+                    self._log.error("X/Twitter: v2 media upload returned no id for %s", path.name)
             except Exception as exc:
-                logger.error("X/Twitter: media upload failed for %s: %s", path.name, exc)
+                self._log.error("X/Twitter: media upload failed for %s: %s", path.name, exc)
 
         return media_ids
 
@@ -499,7 +499,7 @@ class XTwitterClient:
         for i, tweet_data in enumerate(thread_tweets):
             text = tweet_data.get("text", "")
             if not text:
-                logger.warning("X/Twitter: thread tweet %d has no text — skipping", i)
+                self._log.warning("X/Twitter: thread tweet %d has no text — skipping", i)
                 continue
 
             # Images can be attached by index into payload.media_paths
@@ -516,7 +516,7 @@ class XTwitterClient:
                     reply_to=reply_to,
                 )
             except Exception as exc:
-                logger.error("X/Twitter: thread broken at position %d: %s", i, exc)
+                self._log.error("X/Twitter: thread broken at position %d: %s", i, exc)
                 if posted_ids:
                     # Partial thread published — treat as failure
                     return _fail(
@@ -564,19 +564,19 @@ class XTwitterClient:
             ``True`` on success, ``False`` on any failure.
         """
         if self._is_currently_rate_limited():
-            logger.warning("X/Twitter: post_reply skipped — rate limited (context=%s)", context_id)
+            self._log.warning("X/Twitter: post_reply skipped — rate limited (context=%s)", context_id)
             return False
 
         try:
             client = self._get_client()
             client.create_tweet(text=text, in_reply_to_tweet_id=parent_id)
-            logger.info("X/Twitter: replied to tweet %s (context=%s)", parent_id, context_id)
+            self._log.info("X/Twitter: replied to tweet %s (context=%s)", parent_id, context_id)
             return True
         except Exception as exc:
             if self._is_rate_limit_error(exc):
                 self._handle_rate_limit(exc)
             else:
-                logger.warning("X/Twitter: post_reply failed for tweet %s: %s", parent_id, exc)
+                self._log.warning("X/Twitter: post_reply failed for tweet %s: %s", parent_id, exc)
             return False
 
     def like(self, target_id: str, *, context_id: str = "") -> bool:
@@ -592,10 +592,10 @@ class XTwitterClient:
         try:
             client = self._get_client()
             client.like(tweet_id=target_id)
-            logger.info("X/Twitter: liked tweet %s (context=%s)", target_id, context_id)
+            self._log.info("X/Twitter: liked tweet %s (context=%s)", target_id, context_id)
             return True
         except Exception as exc:
-            logger.warning("X/Twitter: like() failed for tweet %s: %s", target_id, exc)
+            self._log.warning("X/Twitter: like() failed for tweet %s: %s", target_id, exc)
             return False
 
     # ------------------------------------------------------------------
@@ -623,7 +623,7 @@ class XTwitterClient:
                 tweet_fields=["public_metrics"],
             )
             if response.data is None:
-                logger.warning("X/Twitter: get_metrics — no data returned for tweet %s", tweet_id)
+                self._log.warning("X/Twitter: get_metrics — no data returned for tweet %s", tweet_id)
                 return None
 
             pm = response.data.public_metrics or {}
@@ -643,7 +643,7 @@ class XTwitterClient:
                 },
             )
         except Exception as exc:
-            logger.warning("X/Twitter: get_metrics failed for tweet %s: %s", tweet_id, exc)
+            self._log.warning("X/Twitter: get_metrics failed for tweet %s: %s", tweet_id, exc)
             return None
 
     # ------------------------------------------------------------------
