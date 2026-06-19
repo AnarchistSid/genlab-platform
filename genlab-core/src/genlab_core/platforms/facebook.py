@@ -81,6 +81,12 @@ class FacebookClient:
         self._page_id: str = self._resolve_page_id(page_id, niche_id)
         self._api_version = api_version
         self._base_url = f"https://graph.facebook.com/{api_version}"
+        # P2 phase 2: per-niche LoggerAdapter (mirrors IG pattern from PR #382).
+        self._log: logging.LoggerAdapter | logging.Logger = (
+            logging.LoggerAdapter(logger, {"niche_id": self.niche_id, "platform": self.platform_id})
+            if self.niche_id
+            else logger
+        )
 
     @staticmethod
     def _resolve_access_token(explicit: str | None, niche_id: str) -> str:

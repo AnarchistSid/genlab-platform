@@ -85,6 +85,13 @@ class XTwitterClient:
         # Rate-limit state uses module-level globals so cooldown persists
         # across client instances (publisher creates new client per niche)
 
+        # P2 phase 2: per-niche LoggerAdapter (mirrors IG pattern from PR #382).
+        self._log: logging.LoggerAdapter | logging.Logger = (
+            logging.LoggerAdapter(logger, {"niche_id": self.niche_id, "platform": self.platform_id})
+            if self.niche_id
+            else logger
+        )
+
     @staticmethod
     def _resolve_oauth1_bundle(
         explicit_ak: str | None,

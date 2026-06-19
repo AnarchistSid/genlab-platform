@@ -121,6 +121,12 @@ class YouTubeClient:
         # Cached googleapiclient service objects
         self._data_service: Any = None
         self._analytics_service: Any = None
+        # P2 phase 2: per-niche LoggerAdapter (mirrors IG pattern from PR #382).
+        self._log: logging.LoggerAdapter | logging.Logger = (
+            logging.LoggerAdapter(logger, {"niche_id": self.niche_id, "platform": self.platform_id})
+            if self.niche_id
+            else logger
+        )
 
     @staticmethod
     def _resolve_oauth_bundle(
