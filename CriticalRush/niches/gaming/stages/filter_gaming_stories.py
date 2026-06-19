@@ -27,6 +27,7 @@ import logging
 from typing import Any
 
 from genlab_core.pipeline.models import collect_emitted_sources
+from genlab_core.pipeline.stages.fetch_reddit_clips import FetchRedditClips
 from genlab_core.pipeline.stages.fetch_steam_trailers import FetchSteamTrailers
 from genlab_core.pipeline.stages.fetch_twitch_clips import FetchTwitchClips
 
@@ -39,15 +40,18 @@ logger = logging.getLogger(__name__)
 # at module load. PR #360's "trust list drift from producers" bug class is
 # structurally prevented. A contract test pins the relationship at CI.
 #
-# Migrated fetchers (P1 phase 1): FetchTwitchClips, FetchSteamTrailers.
-# Still hardcoded below pending phase-2 migration of remaining fetchers:
-#   - FetchTrendingVideos (5 source values)
-#   - FetchGamingStories (steam_spike, twitch_trending, rss)
-#   - FetchRedditClips (uses "reddit:<subreddit>" prefix — see below)
+# Migrated fetchers (P1 phase 1 + phase 2): FetchTwitchClips, FetchSteamTrailers,
+# FetchRedditClips (declares empty EMITTED_SOURCES because Reddit emits the
+# variable ``reddit:<subreddit>`` prefix pattern — handled separately below).
+# Still hardcoded below pending future migration:
+#   - FetchTrendingVideos (5 source values) — larger refactor, separate PR
+#   - FetchGamingStories (steam_spike, twitch_trending, rss) — local fetcher
 #
 # Once all fetchers expose EMITTED_SOURCES, the hardcoded extras list goes
 # empty and the registry becomes the sole source of truth.
-_REGISTRY_TRUSTED_SOURCES = collect_emitted_sources([FetchTwitchClips, FetchSteamTrailers])
+_REGISTRY_TRUSTED_SOURCES = collect_emitted_sources(
+    [FetchTwitchClips, FetchSteamTrailers, FetchRedditClips]
+)
 
 # Phase-1 fallback for fetchers not yet migrated. Empty this set as fetchers
 # adopt the FetcherStage mixin.

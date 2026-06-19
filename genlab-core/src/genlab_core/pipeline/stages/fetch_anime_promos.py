@@ -17,6 +17,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ def _fetch_anilist_trailers(max_results: int = 20) -> list[dict]:
         return []
 
 
-class FetchAnimePromos:
+class FetchAnimePromos(FetcherStage):
     """Pipeline stage: fetch anime PVs/trailers from Jikan + AniList.
 
     Adds YouTube video IDs to context for downstream enrichment.
@@ -148,6 +149,11 @@ class FetchAnimePromos:
 
     Zero YouTube API quota cost (external APIs only).
     """
+
+    # P1 phase-2, 2026-06-19 — declare both emitted source values for the
+    # producer registry. Anime fetcher returns from two external APIs that
+    # each carry a distinct ``source`` tag.
+    EMITTED_SOURCES = frozenset({"jikan_promos", "anilist"})
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -214,7 +220,8 @@ class FetchAnimePromos:
             # Avoid duplicates with existing stories
             existing_urls = {s.get("source_url") for s in existing}
             new_stories = [s for s in new_stories if s["source_url"] not in existing_urls]
-            context["stories"] = existing + new_stories
+            # P1 phase-2: intent-revealing merge + StoryCandidate validation.
+            merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["anime_promos_found"] = len(unique)

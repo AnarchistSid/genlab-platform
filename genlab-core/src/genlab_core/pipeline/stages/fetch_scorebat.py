@@ -13,6 +13,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def _fetch_highlights(max_items: int = 10, competitions: list[str] | None = None
         return []
 
 
-class FetchScoreBatHighlights:
+class FetchScoreBatHighlights(FetcherStage):
     """Pipeline stage: fetch football highlight story angles from ScoreBat.
 
     ScoreBat results provide match context (teams, competition, score)
@@ -60,6 +61,9 @@ class FetchScoreBatHighlights:
 
     clip_url is None — VideoGate handles this correctly.
     """
+
+    # P1 phase-2, 2026-06-19 — declare emitted source for the producer registry.
+    EMITTED_SOURCES = frozenset({"scorebat"})
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -108,7 +112,8 @@ class FetchScoreBatHighlights:
                 for s in new_stories
                 if s.get("source_url") and s["source_url"] not in existing_urls
             ]
-            context["stories"] = existing + new_stories
+            # P1 phase-2: intent-revealing merge + StoryCandidate validation.
+            merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["scorebat_highlights_found"] = len(highlights)

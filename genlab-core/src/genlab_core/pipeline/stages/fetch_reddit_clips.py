@@ -21,17 +21,27 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
 
 
-class FetchRedditClips:
+class FetchRedditClips(FetcherStage):
     """Pipeline stage that augments context['stories'] with Reddit video posts.
 
     Reads:  context['sources_config']['reddit']
     Writes: context['stories'] (append) + run_stats.reddit_stories_found
     """
+
+    # P1 phase-2, 2026-06-19 — EMITTED_SOURCES is empty because Reddit emits
+    # a dynamic ``reddit:<subreddit>`` prefix pattern (one source per
+    # subreddit name configured in sources.yaml). Downstream consumers
+    # (FilterGamingStories) handle this via ``source.startswith("reddit:")``
+    # rather than the producer registry. Leaving the set empty is correct —
+    # the FetcherStage mixin is for the merge_stories validation, not the
+    # source-registry contribution.
+    EMITTED_SOURCES = frozenset()
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -84,7 +94,9 @@ class FetchRedditClips:
         new_stories = [
             s for s in stories if s.get("source_url") and s["source_url"] not in existing_urls
         ]
-        context["stories"] = existing + new_stories
+        # P1 phase-2: intent-revealing merge. Schema-validates each entry;
+        # ``StoryCandidate`` extra='allow' preserves Reddit-specific keys.
+        merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["reddit_stories_found"] = len(new_stories)
