@@ -92,10 +92,11 @@ class TestYouTubeCTA:
 class TestInstagramCTA:
     # IG fallback CTA produced by _build_cta_text when bandit is None
     # and no price is set on the affiliate match.  Includes the "off-caption"
-    # navigation hint "(1st comment)" — IG doesn't surface clickable links in
-    # post captions so we anchor users to the first pinned comment.
-    _IG_FALLBACK_NAV_HINT = "(1st comment)"
-    _IG_FALLBACK_CTA = "🔗 Get PS5 Console 👇 (1st comment)"
+    # navigation hint "(link in bio)" — IG doesn't surface clickable links in
+    # post captions so we anchor users to the bio link (dashboard hosts
+    # the per-niche link-in-bio page that actually opens to product URLs).
+    _IG_FALLBACK_NAV_HINT = "(link in bio)"
+    _IG_FALLBACK_CTA = "🔗 Get PS5 Console 👇 (link in bio)"
 
     def test_off_caption_nav_hint_used_not_direct_url(self):
         """IG caption must direct users off-caption (no raw URLs in IG)."""
@@ -375,8 +376,8 @@ class TestBanditIntegration:
             story = _make_story()
             fields = inject_cta({"caption": "Test caption."}, story)
             # Should fall back to the price-aware hardcoded format
-            # ("🔗 Get PS5 Console 👇" with no price + "(1st comment)" for IG)
-            assert "🔗 Get PS5 Console 👇 (1st comment)" in fields["caption"]
+            # ("🔗 Get PS5 Console 👇" with no price + "(link in bio)" for IG)
+            assert "🔗 Get PS5 Console 👇 (link in bio)" in fields["caption"]
             # No variant stored because bandit failed
             assert "affiliate_cta_variant" not in fields
 
@@ -397,7 +398,7 @@ class TestCaptionLengthEnforcement:
         assert len(fields["caption"]) <= 2200
         # CTA should still be present (original text truncated, not the CTA).
         # Anchor on the off-caption nav hint to survive future CTA copy changes.
-        assert "(1st comment)" in fields["caption"]
+        assert "(link in bio)" in fields["caption"]
         assert "#affiliate" in fields["caption"]
 
 
