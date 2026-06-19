@@ -86,7 +86,7 @@ def test_conftest_sets_sentinel_before_any_genlab_import():
     so the U-24 storage-test isolation bug doesn't reappear."""
     conftest_path = Path(__file__).parent / "conftest.py"
     content = conftest_path.read_text()
-    assert 'GENLAB_SUPPRESS_DOTENV' in content, (
+    assert "GENLAB_SUPPRESS_DOTENV" in content, (
         "tests/conftest.py must set GENLAB_SUPPRESS_DOTENV before any "
         "genlab_core import — see U-24 investigation doc"
     )
@@ -96,6 +96,4 @@ def test_conftest_sets_sentinel_before_any_genlab_import():
         or line.strip().startswith("os.environ['GENLAB_SUPPRESS_DOTENV']")
         for line in content.splitlines()
     )
-    assert sentinel_set, (
-        "tests/conftest.py must SET (not just reference) GENLAB_SUPPRESS_DOTENV"
-    )
+    assert sentinel_set, "tests/conftest.py must SET (not just reference) GENLAB_SUPPRESS_DOTENV"
