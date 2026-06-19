@@ -133,6 +133,11 @@ from genlab_core.learning.metrics.instagram import (  # noqa: E402, F401
     _fetch_instagram_reels_6h,
 )
 
+# P5a phases 5 + 6 (2026-06-19): TikTok + Threads fetchers moved to
+# learning/metrics/{tiktok,threads}.py. Re-exported below for backward compat.
+from genlab_core.learning.metrics.threads import _fetch_threads  # noqa: E402, F401
+from genlab_core.learning.metrics.tiktok import _fetch_tiktok  # noqa: E402, F401
+
 # P5a phase 4 (2026-06-19): X/Twitter fetcher moved to learning/metrics/x_twitter.py.
 from genlab_core.learning.metrics.x_twitter import _fetch_x  # noqa: E402, F401
 from genlab_core.learning.metrics.youtube import (  # noqa: E402, F401
@@ -144,86 +149,6 @@ from genlab_core.learning.metrics.youtube import (  # noqa: E402, F401
     _yt_token_cache,
 )
 
-
-def _fetch_tiktok(post_id: str, niche_id: str = "") -> dict:
-    """TikTok Content Posting API — video insights."""
-    import os
-
-    import requests
-
-    token = os.getenv("TIKTOK_ACCESS_TOKEN", "").strip()  # TikTok disabled, no per-niche yet
-    if not token:
-        return {}
-    try:
-        resp = requests.post(
-            "https://open.tiktokapis.com/v2/video/query/",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "filters": {"video_ids": [post_id]},
-                "fields": ["id", "like_count", "comment_count", "share_count", "view_count"],
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        videos = resp.json().get("data", {}).get("videos", [])
-        if not videos:
-            return {}
-        v = videos[0]
-        return {
-            "views": v.get("view_count", 0),
-            "likes": v.get("like_count", 0),
-            "comments": v.get("comment_count", 0),
-            "shares": v.get("share_count", 0),
-        }
-    except Exception as exc:
-        logger.warning("[metric_collector] TikTok fetch failed for %s: %s", post_id, exc)
-        return {}
-
-
-def _fetch_threads(post_id: str, niche_id: str = "") -> dict:
-    """Threads API — media insights.
-
-    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["threads"]``:
-    ``views, replies, reposts, discovery_share``. ``discovery_share``
-    isn't exposed by the Threads insights endpoint — stubbed as 0.
-    """
-    import requests
-
-    from genlab_core.publishing.niche_credentials import resolve_threads_credentials
-
-    token, _user_id = resolve_threads_credentials(niche_id)
-    if not token:
-        return {}
-    try:
-        resp = requests.get(
-            f"https://graph.threads.net/v1.0/{post_id}/insights",
-            params={
-                "metric": "views,likes,replies,reposts,quotes",
-                "access_token": token,
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        metrics: dict[str, Any] = {}
-        for item in resp.json().get("data", []):
-            name = item.get("name", "")
-            vals = item.get("values", [{}])
-            val = vals[0].get("value", 0) if vals else 0
-            metrics[name] = val
-        # discovery_share isn't exposed by the Threads API; omit the key
-        # so compute_reward redistributes its 0.15 weight to observed
-        # metrics (views / replies / reposts) rather than treating it
-        # as a real zero contribution.
-        return metrics
-    except Exception as exc:
-        logger.warning("[metric_collector] Threads fetch failed for %s: %s", post_id, exc)
-        return {}
-
-
-# ---------------------------------------------------------------------------
 # Core flow
 # ---------------------------------------------------------------------------
 
