@@ -1486,47 +1486,90 @@ def check_git_drift() -> list[Alert]:
 
 
 def check_swap() -> list[Alert]:
-    """Check if swap usage is high (memory pressure).
+    """Check if swap usage is high AND RAM is also under pressure.
 
     Thresholds are read from ``alerting.yaml`` (audit M-1):
     ``thresholds.swap_critical_pct`` (default 0.9 — fraction of total
     swap for the imminent-OOM warning) and ``thresholds.swap_warning_mb``
     (default 500 — absolute MB for the soft warning).
+
+    2026-06-19 update: warning alerts now also require RAM pressure.
+    Linux opportunistically keeps idle pages in swap even when RAM is
+    free, so swap > 500MB alone is a noisy false-positive (observed on
+    prod: 791MB swap with 1.7GB RAM free). The warning now fires only
+    when BOTH swap > warning_mb AND ``MemAvailable < 30%`` of total —
+    i.e., the system is genuinely running out of headroom and may start
+    thrashing.
+
+    CRITICAL stays unconditional: 90% swap utilization on a 1GB swap
+    partition is an imminent-OOM signal regardless of RAM state — the
+    kernel can hit unswappable allocations even with abundant RAM if
+    swap itself is full.
     """
     from genlab_core.monitoring.alerting_config import get_alerting_config
 
     cfg = get_alerting_config().thresholds
     critical_pct = cfg.swap_critical_pct  # was hardcoded 0.9
     warning_mb = cfg.swap_warning_mb  # was hardcoded 500
+    # New: ratio of MemAvailable / MemTotal below which we consider RAM
+    # to be under pressure. 0.3 = 30%. Below this AND swap > 500MB
+    # means we're genuinely running out of memory (not just opportunistic
+    # swap). Above this AND swap high means Linux is being lazy about
+    # swapping idle pages back in — not a real problem.
+    ram_pressure_pct = 0.3
 
     alerts = []
     try:
         result = subprocess.run(["free", "-b"], capture_output=True, text=True, timeout=5)
+        # Parse both Mem: and Swap: lines so we know the RAM-pressure
+        # context before deciding whether the swap warning is real.
+        mem_total = 0
+        mem_available = 0
+        swap_total = 0
+        swap_used = 0
         for line in result.stdout.split("\n"):
-            if line.startswith("Swap:"):
-                parts = line.split()
-                total = int(parts[1])
-                used = int(parts[2])
-                # R-67/R-03: a near-full swap on the 4GB box is an imminent-OOM
-                # signal and must reach notify() (which forwards only criticals),
-                # not sit as an unactioned warning.
-                if total > 0 and used > critical_pct * total:
-                    alerts.append(
-                        Alert(
-                            check="swap_pressure",
-                            severity="critical",
-                            message=f"Swap CRITICAL: {used // (1024 * 1024)}MB / "
-                            f"{total // (1024 * 1024)}MB (>{int(critical_pct * 100)}%) — imminent OOM",
-                        )
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[0] == "Mem:":
+                # free -b columns: total used free shared buff/cache available
+                mem_total = int(parts[1])
+                # Use 'available' (last column) — what apps can actually use,
+                # accounting for reclaimable cache/buffers.
+                if len(parts) >= 7:
+                    mem_available = int(parts[6])
+            elif parts[0] == "Swap:":
+                swap_total = int(parts[1])
+                swap_used = int(parts[2])
+
+        if swap_total > 0:
+            ram_available_pct = (mem_available / mem_total) if mem_total > 0 else 1.0
+            ram_under_pressure = ram_available_pct < ram_pressure_pct
+
+            # R-67/R-03: a near-full swap is an imminent-OOM signal
+            # regardless of RAM state — the kernel can hit unswappable
+            # allocations even with abundant RAM. Keep this unconditional.
+            if swap_used > critical_pct * swap_total:
+                alerts.append(
+                    Alert(
+                        check="swap_pressure",
+                        severity="critical",
+                        message=f"Swap CRITICAL: {swap_used // (1024 * 1024)}MB / "
+                        f"{swap_total // (1024 * 1024)}MB (>{int(critical_pct * 100)}%) — imminent OOM",
                     )
-                elif total > 0 and used > warning_mb * 1024 * 1024:
-                    alerts.append(
-                        Alert(
-                            check="swap_pressure",
-                            severity="warning",
-                            message=f"Swap at {used // (1024 * 1024)}MB / {total // (1024 * 1024)}MB",
-                        )
+                )
+            elif swap_used > warning_mb * 1024 * 1024 and ram_under_pressure:
+                # Warning only when BOTH conditions hold — see docstring.
+                alerts.append(
+                    Alert(
+                        check="swap_pressure",
+                        severity="warning",
+                        message=f"Swap at {swap_used // (1024 * 1024)}MB / "
+                        f"{swap_total // (1024 * 1024)}MB + RAM available "
+                        f"{int(ram_available_pct * 100)}% (<{int(ram_pressure_pct * 100)}%) — "
+                        f"genuine memory pressure",
                     )
+                )
     except Exception as e:
         logger.debug("Swap check failed: %s", e)
     return alerts
