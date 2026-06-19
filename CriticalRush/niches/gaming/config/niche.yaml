@@ -130,6 +130,10 @@ pipeline:
     - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
       retries: 2
       retry_delay_seconds: 30
+      # P6 adoption (2026-06-19): if PushToBacklog raises after retries
+      # exhausted, abort — downstream FetchInsights/PerformanceLearner
+      # have nothing to fetch if we couldn't persist the blueprint.
+      fail_mode: abort
     # PublishGamingContent removed in Sprint 67 — gaming now uses the canonical
     # publisher-all LaunchAgent like all other niches, gaining:
     # - Dashboard approval gate
