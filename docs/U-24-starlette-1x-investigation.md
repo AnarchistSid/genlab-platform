@@ -1,6 +1,27 @@
-# U-24 — starlette 0.x → 1.x investigation (2026-06-18)
+# U-24 — starlette 0.x → 1.x investigation (2026-06-18 → 2026-06-19)
 
-## TL;DR
+## Status: ✅ CLOSED 2026-06-19
+
+starlette is bumped to 1.3.1 in PR #350. Full test suite:
+`4348 passed, 72 skipped, 0 failed in 5m33s`.
+
+Resolved in 4 layered PRs:
+- **PR #335** — Investigation doc (this file's original version)
+- **PR #342** — `GENLAB_SUPPRESS_DOTENV` sentinel + autouse pop fixture
+  (partial fix; storage tests skip cleanly in isolation but full-suite
+  still failed because skipif had already been evaluated at collection)
+- **PR #349** — Convert storage-test `skipif(boolean)` to
+  `skipif("string")` so the predicate evaluates at run-time. THIS was
+  the breakthrough — pytest evaluates string conditions at execution
+  time via the test module's namespace, not at module-load time.
+- **PR #350** — Explicit `starlette>=1.0,<2` pin in pyproject.toml
+
+The original investigation notes below remain for historical context
++ as the operator playbook for "if this drift class returns".
+
+---
+
+## TL;DR (historical)
 
 `starlette` 1.x is **API-compatible** with our pinned FastAPI 0.136.3
 (FastAPI's only constraint is `starlette>=0.46.0`). The previously-
@@ -8,9 +29,13 @@ documented "starlette 1.x breaks 9 tests" is **not a starlette
 regression** — it's a **pre-existing test-isolation bug** that
 manifests when starlette 1.x changes test ordering.
 
-The upgrade can ship as soon as the test-isolation bug is fixed. The
-test-isolation bug is genuinely multi-day work (root-cause hunt for
-the `load_dotenv()` re-population path).
+**Update 2026-06-19**: The "multi-day work" estimate was actually a
+few hours — the breakthrough was understanding that
+`pytest.mark.skipif(boolean)` evaluates AT COLLECTION TIME (before
+any of conftest's pop hooks can run), but
+`pytest.mark.skipif("string")` evaluates AT EXECUTION TIME (in the
+test module's namespace, after fixtures). The 2-character change
+(adding quotes around the condition) unblocked the entire upgrade.
 
 ## Compatibility check
 
