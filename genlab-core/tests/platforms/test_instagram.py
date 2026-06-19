@@ -396,6 +396,92 @@ class TestInit:
         assert client._max_poll_seconds == 600
 
 
+class TestNicheIdResolution:
+    """P2 phase 1 (2026-06-19): per-niche token resolution via the new
+    ``niche_id`` kwarg. 3-tier lookup: explicit kwarg → niche-resolved →
+    global env fallback. Existing callers that don't pass ``niche_id``
+    continue to use the env fallback (backward compatible)."""
+
+    def test_niche_id_kwarg_resolves_via_niche_credentials(self, monkeypatch):
+        """When niche_id is set and explicit token is None, the client
+        resolves via ``resolve_meta_credentials(niche_id)`` — not the
+        global META_ACCESS_TOKEN."""
+        monkeypatch.setenv("META_ACCESS_TOKEN", "GLOBAL_token")  # should NOT be used
+        from genlab_core.platforms.instagram import InstagramClient
+
+        with patch(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            return_value={"ig_access_token": "CW_per_niche_token"},
+        ) as mock_resolve:
+            client = InstagramClient(niche_id="sports")
+        assert client._access_token == "CW_per_niche_token"
+        assert client.niche_id == "sports"
+        mock_resolve.assert_called_once_with("sports")
+
+    def test_explicit_token_overrides_niche_id(self, monkeypatch):
+        """Test fixtures pass access_token explicitly — this must win
+        over niche_id-resolved tokens AND env fallback. Otherwise existing
+        tests would unexpectedly route through the niche resolver."""
+        monkeypatch.setenv("META_ACCESS_TOKEN", "ENV_token")
+        from genlab_core.platforms.instagram import InstagramClient
+
+        with patch(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            return_value={"ig_access_token": "NICHE_token"},
+        ) as mock_resolve:
+            client = InstagramClient(access_token="EXPLICIT_token", niche_id="sports")
+        assert client._access_token == "EXPLICIT_token"
+        # When explicit is provided, niche resolver is NOT called (perf + correctness)
+        mock_resolve.assert_not_called()
+
+    def test_empty_niche_id_falls_back_to_env(self, monkeypatch):
+        """Backward compat: callers that don't pass niche_id keep using
+        the global env fallback (this is the legacy path that ~3 callers
+        in publishing/ still use)."""
+        monkeypatch.setenv("META_ACCESS_TOKEN", "ENV_token")
+        monkeypatch.setenv("META_IG_USER_ID", "ENV_user_id")
+        from genlab_core.platforms.instagram import InstagramClient
+
+        client = InstagramClient()  # no niche_id, no explicit token
+        assert client._access_token == "ENV_token"
+        assert client._ig_user_id == "ENV_user_id"
+
+    def test_niche_id_empty_resolution_falls_back_to_env(self, monkeypatch):
+        """If niche_id is set but the niche resolver returns empty (e.g.
+        unknown niche or missing credentials), fall back to env. The env
+        fallback is the LAST resort — niche-resolved overrides it when
+        present."""
+        monkeypatch.setenv("META_ACCESS_TOKEN", "ENV_fallback")
+        from genlab_core.platforms.instagram import InstagramClient
+
+        with patch(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            return_value={"ig_access_token": ""},  # missing per-niche
+        ):
+            client = InstagramClient(niche_id="some_niche")
+        assert client._access_token == "ENV_fallback"
+
+    def test_niche_id_resolves_ig_user_id_too(self, monkeypatch):
+        """ig_user_id has its own per-niche resolver path via
+        ``resolve_niche_env`` (META_IG_USER_ID isn't in the meta_credentials
+        bundle — it's a separate per-niche env var)."""
+        monkeypatch.setenv("META_IG_USER_ID", "GLOBAL_user")
+        from genlab_core.platforms.instagram import InstagramClient
+
+        with (
+            patch(
+                "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+                return_value={"ig_access_token": "tok"},
+            ),
+            patch(
+                "genlab_core.publishing.niche_credentials.resolve_niche_env",
+                return_value="CR_per_niche_user_id",
+            ),
+        ):
+            client = InstagramClient(niche_id="gaming")
+        assert client._ig_user_id == "CR_per_niche_user_id"
+
+
 class TestVerifyChannel:
     def test_verify_channel_success(self, ig_client):
         """verify_channel returns True when the IG account is accessible."""
