@@ -57,6 +57,24 @@ class LinUCBArm:
         self.b = np.zeros(d, dtype=np.float64)
         self.alpha = alpha
         self.n_obs = 0
+        # Cached inverse of A. Invariant: when not None, equals
+        # ``np.linalg.inv(self.A)``. Invalidated (set to None) whenever
+        # ``A`` mutates — only in :meth:`update` and :meth:`from_dict`.
+        # Avoids recomputing the d×d inversion (O(d³)) on every
+        # :meth:`predict` call. With the bandit selecting from N arms
+        # per scoring decision, the matrix is unchanged across the N
+        # predicts but was being inverted N times pre-cache.
+        self._A_inv_cache: np.ndarray | None = None
+
+    def _get_A_inv(self) -> np.ndarray:
+        """Return cached ``A^{-1}``, computing it on cache miss.
+
+        Raises :class:`numpy.linalg.LinAlgError` if ``A`` is singular —
+        caller (:meth:`predict`) catches and degrades gracefully.
+        """
+        if self._A_inv_cache is None:
+            self._A_inv_cache = np.linalg.inv(self.A)
+        return self._A_inv_cache
 
     def predict(self, x: np.ndarray) -> float:
         """Compute UCB score for this arm given context x.
@@ -74,7 +92,7 @@ class LinUCBArm:
              propagate NaN into the reward signal.
         """
         try:
-            A_inv = np.linalg.inv(self.A)
+            A_inv = self._get_A_inv()
         except np.linalg.LinAlgError:
             logger.warning(
                 "[LinUCB] singular matrix in arm predict (n_obs=%d) — "
@@ -108,6 +126,8 @@ class LinUCBArm:
         self.A += np.outer(x, x)
         self.b += reward * x
         self.n_obs += 1
+        # Invalidate cached inverse — A just mutated.
+        self._A_inv_cache = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize arm state to a JSON-compatible dict."""
@@ -127,6 +147,11 @@ class LinUCBArm:
         arm.A = A
         arm.b = np.array(data["b_vector"], dtype=np.float64)
         arm.n_obs = data.get("n_obs", 0)
+        # Don't pre-compute the inverse here — let the first predict
+        # trigger it lazily. Restored arms are sometimes loaded but
+        # never queried (e.g. cold-path persistence callers); paying
+        # the inversion eagerly would waste it.
+        arm._A_inv_cache = None
         return arm
 
 

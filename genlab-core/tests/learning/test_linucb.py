@@ -514,6 +514,66 @@ class TestArmLoaderLinUCBIntegration:
         assert "hook:test" in result
         assert result["hook:test"]["linucb_state"] is None
 
+    def test_predict_caches_matrix_inverse_across_calls(self):
+        """Pin the perf invariant: A^{-1} computed once, reused until update().
+
+        Before the cache, every predict() called np.linalg.inv(A) — O(d^3).
+        With ~5 arms x ~30 blueprints x 5 niches = ~750 unnecessary
+        inversions per pipeline cycle. The fix caches A^{-1} on the arm
+        and invalidates only when A mutates (in update()).
+        """
+        arm = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+        x = np.array([0.5] * CONTEXT_DIM)
+
+        # Before any predict, cache is empty
+        assert arm._A_inv_cache is None
+
+        # First predict populates the cache
+        s1 = arm.predict(x)
+        assert arm._A_inv_cache is not None
+        cached_after_first = arm._A_inv_cache
+
+        # Second predict reuses the SAME object (identity check, not equality)
+        s2 = arm.predict(x)
+        assert arm._A_inv_cache is cached_after_first, (
+            "Cache must be reused (identity), not recomputed and replaced"
+        )
+        assert s1 == s2
+
+    def test_update_invalidates_inverse_cache(self):
+        """Pin the correctness invariant: update() invalidates A^{-1} cache.
+
+        If update() forgets to invalidate, predict() would return scores
+        based on the stale (pre-update) inverse — silently wrong.
+        """
+        arm = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+        x = np.array([0.5] * CONTEXT_DIM)
+
+        # Prime the cache via a predict
+        arm.predict(x)
+        assert arm._A_inv_cache is not None
+
+        # Update must invalidate
+        arm.update(x, reward=0.5)
+        assert arm._A_inv_cache is None, "update() must invalidate the A^{-1} cache"
+
+        # Next predict repopulates with the post-update inverse
+        arm.predict(x)
+        assert arm._A_inv_cache is not None
+
+    def test_from_dict_starts_with_empty_inverse_cache(self):
+        """Pin the lazy-load invariant: restored arms compute A^{-1} only on first predict.
+
+        Many arms are loaded for persistence but never queried (cold paths).
+        Pre-computing the inverse eagerly in from_dict would waste it.
+        """
+        arm = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+        arm.update(np.array([0.5] * CONTEXT_DIM), reward=0.3)
+        restored = LinUCBArm.from_dict(arm.to_dict())
+        assert restored._A_inv_cache is None, (
+            "from_dict() must NOT eagerly compute A^{-1} — defer to first predict"
+        )
+
     def test_save_linucb_state(self):
         """save_arm should persist LinUCB state when provided."""
         from genlab_core.learning.arm_loader import save_arm
