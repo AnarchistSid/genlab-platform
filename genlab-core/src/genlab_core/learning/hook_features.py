@@ -113,6 +113,8 @@ def extract_text_features(text: str) -> dict[str, float]:
 def build_feature_vector(
     hook_text: str,
     audio_path: str | None = None,
+    *,
+    include_embeddings: bool = False,
 ) -> dict[str, float]:
     """Combine features into a flat dict for the classifier.
 
@@ -123,8 +125,31 @@ def build_feature_vector(
     Args:
         hook_text: The hook text to extract features from.
         audio_path: Unused. Reserved for future audio feature extraction.
+        include_embeddings: If True, appends semantic embedding features
+            from ``hook_embeddings.embed_hook`` to the 8 hand-engineered
+            text features. Keyed as ``emb_0``..``emb_<dim-1>``. The
+            embedding dim depends on the active tier (256 for TF-IDF /
+            zero fallback, 384 for sentence-transformers). Default
+            ``False`` preserves backwards compatibility with existing
+            XGBoost model files trained on the 8-feature vector — those
+            models would fail to load against a wider vector.
+
+            W3.3 Layer 2 — see ``docs/W3-3-transformer-hook-classifier-roadmap.md``.
+            Callers that opt in should embed the tier name in their
+            serialised model metadata so a load-time check catches drift.
 
     Returns:
         Dict of feature_name -> float value.
     """
-    return extract_text_features(hook_text)
+    features = extract_text_features(hook_text)
+
+    if include_embeddings:
+        # Lazy-import so opting out keeps the module dependency-free
+        # (sentence-transformers and sklearn don't load on the happy path).
+        from genlab_core.learning.hook_embeddings import embed_hook
+
+        embedding = embed_hook(hook_text)
+        for i, value in enumerate(embedding):
+            features[f"emb_{i}"] = float(value)
+
+    return features
