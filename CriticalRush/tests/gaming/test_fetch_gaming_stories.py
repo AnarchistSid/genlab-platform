@@ -348,3 +348,211 @@ class TestTwitchNonGameFilter:
             stories = fetcher.fetch()
 
         assert stories == []
+
+
+# ---------------------------------------------------------------------------
+# Source merge — prevents 2026-06-19 regression
+# ---------------------------------------------------------------------------
+
+
+class TestFetchGamingStoriesMergesUpstream:
+    """FetchGamingStories must MERGE its locally-fetched stories with any
+    upstream-populated context['stories'] (from FetchTrendingVideos,
+    FetchTwitchClips, FetchRedditClips), not REPLACE them.
+
+    Regression context (2026-06-19): line 507 used to do
+    ``context['stories'] = final``, silently dropping ~45 real video
+    sources per run and leaving only Twitch chart commentary as
+    blueprint candidates. Operator observed this as "CR is producing
+    useless content".
+    """
+
+    def test_upstream_stories_preserved_in_output(self):
+        """20 upstream content_pool stories + 1 Twitch trending story =
+        21 stories total in output (not just 1)."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+
+        # Simulate FetchTrendingVideos having populated 20 stories.
+        # Use distinct titles per story (real game titles) so the dedup
+        # engine doesn't collapse them — Jaccard threshold 0.80 would
+        # treat near-identical "Real gameplay clip 1/2/3" strings as
+        # duplicates.
+        distinct_game_titles = [
+            "Elden Ring",
+            "Cyberpunk 2077",
+            "Hollow Knight",
+            "Hades II",
+            "Stardew Valley",
+            "Factorio",
+            "Terraria",
+            "Minecraft Dungeons",
+            "Sekiro",
+            "Dark Souls Remastered",
+            "Returnal",
+            "Death Stranding",
+            "Subnautica",
+            "Among Us",
+            "Hollow Realm",
+            "Phasmophobia",
+            "Lethal Company",
+            "Helldivers 2",
+            "Palworld",
+            "Baldur's Gate 3",
+        ]
+        upstream_stories = [
+            {
+                "title": f"{title} viral moment",
+                "source": "content_pool",
+                "source_url": f"https://youtube.com/watch?v=clip{i:02d}",
+                "score": 0.5 + (i * 0.01),
+                "published_at": _now_utc().isoformat(),
+                "summary": "Real content",
+                "steam_app_id": None,
+                "igdb_game_id": None,
+                "developer": None,
+            }
+            for i, title in enumerate(distinct_game_titles)
+        ]
+
+        # FetchGamingStories' own Twitch fetcher returns 1 chart story
+        twitch_stories = [
+            {
+                "title": "Overwatch",
+                "source": "twitch_trending",
+                "source_url": "https://twitch.tv/directory/game/Overwatch",
+                "score": 1.0,
+                "published_at": _now_utc().isoformat(),
+                "summary": "Twitch trending rank #1",
+                "steam_app_id": None,
+                "igdb_game_id": "115",
+                "developer": None,
+            }
+        ]
+
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
+            MockSteam.return_value.fetch.return_value = []
+            MockTwitch.return_value.fetch.return_value = twitch_stories
+            MockRSS.return_value.fetch.return_value = []
+
+            stage = FetchGamingStories()
+            context = {
+                "niche_config": {"max_stories_per_run": 50},
+                "run_stats": {},
+                "feature_flags": {},
+                # Critical: upstream FetchTrendingVideos populated this
+                "stories": upstream_stories,
+            }
+            result = stage.execute(context)
+
+            stories = result["stories"]
+            content_pool_count = sum(1 for s in stories if s["source"] == "content_pool")
+            twitch_count = sum(1 for s in stories if s["source"] == "twitch_trending")
+
+            assert content_pool_count == 20, (
+                f"Expected 20 upstream content_pool stories preserved, "
+                f"got {content_pool_count} — FetchGamingStories is REPLACING "
+                f"context['stories'] instead of merging"
+            )
+            assert twitch_count == 1, "Expected the local Twitch story to also be present"
+            assert len(stories) == 21, (
+                f"Expected 21 total (20 upstream + 1 Twitch), got {len(stories)}"
+            )
+
+    def test_empty_upstream_works_as_before(self):
+        """Backwards-compat: when no upstream stories exist, behavior is
+        identical to the pre-fix (steam + twitch + rss only)."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+
+        steam = [
+            {
+                "title": "Elden Ring",
+                "source": "steam_spike",
+                "source_url": "https://store.steampowered.com/app/1245620",
+                "score": 0.7,
+                "published_at": _now_utc().isoformat(),
+                "summary": "Spike",
+                "steam_app_id": "1245620",
+                "igdb_game_id": None,
+                "developer": None,
+            }
+        ]
+
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
+            MockSteam.return_value.fetch.return_value = steam
+            MockTwitch.return_value.fetch.return_value = []
+            MockRSS.return_value.fetch.return_value = []
+
+            stage = FetchGamingStories()
+            # No 'stories' key in context — upstream didn't populate
+            context = {"niche_config": {}, "run_stats": {}, "feature_flags": {}}
+            result = stage.execute(context)
+
+            assert len(result["stories"]) == 1
+            assert result["stories"][0]["source"] == "steam_spike"
+
+    def test_dedup_between_upstream_and_local(self):
+        """If an upstream story has the same URL as a locally-fetched
+        story, dedup engine keeps one (not both)."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+
+        same_url = "https://twitch.tv/directory/game/Overwatch"
+        upstream = [
+            {
+                "title": "Overwatch (from content_pool)",
+                "source": "content_pool",
+                "source_url": same_url,
+                "score": 0.4,
+                "published_at": _now_utc().isoformat(),
+                "summary": "Upstream",
+                "steam_app_id": None,
+                "igdb_game_id": None,
+                "developer": None,
+            }
+        ]
+        twitch = [
+            {
+                "title": "Overwatch",
+                "source": "twitch_trending",
+                "source_url": same_url,
+                "score": 1.0,
+                "published_at": _now_utc().isoformat(),
+                "summary": "Twitch trending #1",
+                "steam_app_id": None,
+                "igdb_game_id": "115",
+                "developer": None,
+            }
+        ]
+
+        with (
+            patch.object(FetchGamingStories, "_load_sources_config", return_value={}),
+            patch("niches.gaming.stages.fetch_gaming_stories.SteamSpikeFetcher") as MockSteam,
+            patch("niches.gaming.stages.fetch_gaming_stories.TwitchTrendingFetcher") as MockTwitch,
+            patch("niches.gaming.stages.fetch_gaming_stories.RSSFeedAggregator") as MockRSS,
+        ):
+            MockSteam.return_value.fetch.return_value = []
+            MockTwitch.return_value.fetch.return_value = twitch
+            MockRSS.return_value.fetch.return_value = []
+
+            stage = FetchGamingStories()
+            context = {
+                "niche_config": {},
+                "run_stats": {},
+                "feature_flags": {},
+                "stories": upstream,
+            }
+            result = stage.execute(context)
+
+            # Dedup keeps one — the higher-scoring local Twitch story should
+            # win (score 1.0 > 0.4)
+            overwatch = [s for s in result["stories"] if s.get("source_url") == same_url]
+            assert len(overwatch) == 1, f"Expected dedup to one row, got {len(overwatch)}"

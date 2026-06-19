@@ -478,12 +478,27 @@ class FetchGamingStories(ContentResearchStrategy):
             logger.error("[FETCH] RSS failed: %s — continuing with other sources", e)
             rss_stories = []
 
-        # Merge all stories
+        # Merge all locally-fetched stories
         all_stories = steam_stories + twitch_stories + rss_stories
 
         # Apply source filters (reject garbage story types)
         source_filters = sources_config.get("source_filters", {})
         all_stories = self._apply_source_filters(all_stories, source_filters)
+
+        # 2026-06-19 FIX: merge with upstream-fetched stories instead of
+        # replacing them. The pipeline runs FetchTrendingVideos +
+        # FetchTwitchClips + FetchRedditClips BEFORE this stage, each of
+        # which appends to ``context["stories"]`` via the canonical
+        # ``context["stories"] = existing + new_stories`` pattern. Before
+        # this fix, line 507's ``context["stories"] = final`` REPLACED
+        # those upstream stories — silently dropping ~45 real video
+        # sources per run (20 content_pool YouTube clips + 25 Twitch
+        # clips), leaving only the local Steam-spike + Twitch-chart
+        # commentary as candidates. Operator observed this as "CR is
+        # producing useless content" — every shipped hook was about
+        # Twitch chart positions instead of actual gameplay clips.
+        upstream_stories = context.get("stories", [])
+        all_stories = upstream_stories + all_stories
 
         # 3-pass dedup via genlab-core DedupEngine
         # Load thresholds from niche config (with gaming-tuned defaults)
