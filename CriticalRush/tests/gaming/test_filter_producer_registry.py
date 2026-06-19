@@ -78,16 +78,44 @@ class TestProducerRegistryContract:
         assert "rss" not in _LEGACY_HARDCODED_SOURCES
         assert "rss" not in _TRUSTED_GAMING_SOURCES
 
-    def test_legacy_hardcoded_sources_remaining_after_phase_3(self):
-        """After phase 3 migration, only FetchTrendingVideos's 5 sources
-        remain hardcoded. Pins the shrunk set so we can easily see what's
-        left to migrate in the next phase."""
-        # FetchTrendingVideos sources (next migration phase)
-        assert "youtube_trending" in _TRUSTED_GAMING_SOURCES
-        assert "youtube_rss" in _TRUSTED_GAMING_SOURCES
-        assert "youtube_playlist" in _TRUSTED_GAMING_SOURCES
-        assert "channel_subscription" in _TRUSTED_GAMING_SOURCES
-        assert "shared_pool" in _TRUSTED_GAMING_SOURCES
+    def test_phase_4_FetchTrendingVideos_sources_in_registry(self):
+        """P1 phase 4 COMPLETE: FetchTrendingVideos migrated. Its 4 source
+        values now come from the producer registry. ``channel_subscription``
+        was in the v2-review-era hardcoded set but is NOT actually emitted
+        as a story.source value (only as TrendingVideo.search_query metadata
+        fallback) — correctly dropped during migration."""
+        from genlab_core.media.trending_video_fetcher import FetchTrendingVideos
+        from niches.gaming.stages.filter_gaming_stories import (
+            _REGISTRY_TRUSTED_SOURCES,
+        )
+
+        # FetchTrendingVideos declares its 4 actually-emitted source values
+        assert FetchTrendingVideos.EMITTED_SOURCES == frozenset(
+            {"youtube_trending", "youtube_rss", "youtube_playlist", "shared_pool"}
+        )
+        # All 4 are in the registry-derived trust set
+        for src in ("youtube_trending", "youtube_rss", "youtube_playlist", "shared_pool"):
+            assert src in _REGISTRY_TRUSTED_SOURCES, f"{src!r} missing from registry"
+        # channel_subscription was a phantom — never actually emitted, now dropped
+        assert "channel_subscription" not in FetchTrendingVideos.EMITTED_SOURCES
+        assert "channel_subscription" not in _REGISTRY_TRUSTED_SOURCES
+
+    def test_legacy_hardcoded_set_is_EMPTY_after_phase_4(self):
+        """P1 phase 4 COMPLETE: every gaming-pipeline fetcher now declares
+        its source values via EMITTED_SOURCES. The legacy fallback set goes
+        EMPTY — the producer registry is the SOLE source of truth.
+
+        If a future PR re-adds entries here without a TODO to migrate them
+        into a FetcherStage subclass, that's the smell that bit us in PR
+        #360 (allowlist drift). This test pins the empty state as the
+        target architectural shape."""
+        from niches.gaming.stages.filter_gaming_stories import _LEGACY_HARDCODED_SOURCES
+
+        assert _LEGACY_HARDCODED_SOURCES == frozenset(), (
+            f"_LEGACY_HARDCODED_SOURCES is no longer empty: {_LEGACY_HARDCODED_SOURCES}. "
+            "P1 phase 4 closed the migration — new sources MUST come from a "
+            "FetcherStage's EMITTED_SOURCES, not be added back here."
+        )
 
     def test_registry_and_legacy_sets_are_disjoint(self):
         """Migration health check: a source value should be in EITHER the

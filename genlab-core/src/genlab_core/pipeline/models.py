@@ -105,8 +105,10 @@ class StoryCandidate(BaseModel):
 def merge_stories(
     context: dict[str, Any],
     new_stories: list[StoryCandidate | dict[str, Any]],
+    *,
+    prepend: bool = False,
 ) -> None:
-    """Append-merge — for fetcher stages that ADD to the pool.
+    """Append- (or prepend-) merge — for fetcher stages that ADD to the pool.
 
     Replaces the ``context["stories"] = existing + new_stories`` pattern
     copy-pasted across 7+ fetcher files. The named function IS the contract:
@@ -118,6 +120,13 @@ def merge_stories(
     schema divergence raises with a clear ``ValidationError`` instead of a
     KeyError three stages later.
 
+    ``prepend=True`` puts the new stories FIRST in the resulting list, then
+    the existing ones — used by FetchTrendingVideos at the direct-fetch
+    merge site (P1 phase 4) where downstream stages give earlier-in-list
+    items priority (top-N selection by position before scoring). Default
+    ``prepend=False`` matches the historical append semantics that every
+    other migrated fetcher uses.
+
     Stories are stored as dicts (existing consumers read with ``.get(...)``).
     Typed access via ``StoryCandidate.from_raw(item)`` is a 1-line opt-in at
     the consumer's discretion.
@@ -126,7 +135,11 @@ def merge_stories(
     validated = [
         s if isinstance(s, StoryCandidate) else StoryCandidate.from_raw(s) for s in new_stories
     ]
-    context["stories"] = list(existing) + [s.model_dump() for s in validated]
+    new_dicts = [s.model_dump() for s in validated]
+    if prepend:
+        context["stories"] = new_dicts + list(existing)
+    else:
+        context["stories"] = list(existing) + new_dicts
 
 
 def replace_stories(

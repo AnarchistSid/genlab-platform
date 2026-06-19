@@ -55,6 +55,7 @@ import requests
 
 from genlab_core.config.tuning import get_tuning_config
 from genlab_core.http.circuit_breaker import YOUTUBE_CB, CircuitOpenError
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 
 logger = logging.getLogger(__name__)
 
@@ -1089,7 +1090,7 @@ class TrendingVideoFetcher:
 # ---------------------------------------------------------------------------
 
 
-class FetchTrendingVideos:
+class FetchTrendingVideos(FetcherStage):
     """Pipeline stage: fetch trending YouTube videos as primary content source.
 
     This stage runs FIRST in the pipeline. It finds trending videos on YouTube
@@ -1102,6 +1103,17 @@ class FetchTrendingVideos:
           stages:
             - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
 
+    P1 phase-4, 2026-06-19 — the final fetcher migration. Declares the 4 source
+    values this stage emits as stories. Downstream consumers (e.g.
+    FilterGamingStories) derive their trust list from this registry. After
+    this PR, ``_LEGACY_HARDCODED_SOURCES`` in filter_gaming_stories.py goes
+    EMPTY and the producer registry becomes the sole source of truth.
+
+    Note: ``channel_subscription`` was in the legacy hardcoded set but is
+    NOT actually emitted as a story ``source`` value here — it appears only
+    as a fallback for ``TrendingVideo.search_query`` metadata (line ~784).
+    Dropping it from the trust list is the correct cleanup.
+
     Reads from context:
         - ``niche_id``: niche identifier
         - ``niche_config.video_sourcing``: video sourcing config
@@ -1112,6 +1124,16 @@ class FetchTrendingVideos:
         - ``trending_videos``: raw TrendingVideo dicts for downstream use
         - ``run_stats.trending_videos_found``: count of videos found
     """
+
+    # P1 phase-4, 2026-06-19 — emitted source values for the producer registry.
+    # 4 entries (not 5 — see class docstring re: channel_subscription cleanup):
+    #   - "youtube_trending"     line 318: category-chart videos
+    #   - "youtube_rss"          line 619: subscribed channel RSS feeds
+    #   - "youtube_playlist"     line 675: playlistItems.list fallback
+    #   - "shared_pool"          line 1183: content_pool entries claimed by niche
+    EMITTED_SOURCES = frozenset(
+        {"youtube_trending", "youtube_rss", "youtube_playlist", "shared_pool"}
+    )
 
     @staticmethod
     def _read_from_content_pool(niche_id: str) -> list[dict]:
@@ -1305,9 +1327,10 @@ class FetchTrendingVideos:
                     niche_id,
                     len(pool_stories),
                 )
-                stories = context.get("stories", [])
-                stories.extend(pool_stories)
-                context["stories"] = stories
+                # P1 phase-4: intent-revealing merge — content_pool stories
+                # APPEND to whatever's already in the pool (default behavior).
+                # Schema-validates each entry against StoryCandidate.
+                merge_stories(context, pool_stories)
 
         # Fix #4 of the autonomy roadmap: gap-fill mode for the direct
         # YouTube fetch. Pre-fix, the direct fetch fired every run in
@@ -1473,7 +1496,12 @@ class FetchTrendingVideos:
                 niche_id,
                 cross_source_dupes,
             )
-        context["stories"] = deduped_video_stories + existing_stories
+        # P1 phase-4: PREPEND-merge — direct-fetch trending videos go FIRST
+        # so downstream top-N selection (by position, before scoring) gives
+        # them priority over pre-existing pool stories. The ``prepend=True``
+        # flag preserves the historical ordering exactly while gaining
+        # schema validation + intent-revealing function name.
+        merge_stories(context, deduped_video_stories, prepend=True)
         context["trending_videos"] = [v.to_dict() for v in videos]
         run_stats = context.setdefault("run_stats", {})
         run_stats["trending_videos_found"] = len(videos)

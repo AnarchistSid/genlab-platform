@@ -26,6 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from genlab_core.media.trending_video_fetcher import FetchTrendingVideos
 from genlab_core.pipeline.models import collect_emitted_sources
 from genlab_core.pipeline.stages.fetch_reddit_clips import FetchRedditClips
 from genlab_core.pipeline.stages.fetch_steam_trailers import FetchSteamTrailers
@@ -34,40 +35,33 @@ from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
 
 logger = logging.getLogger(__name__)
 
-# P1, 2026-06-19 — trust list is now DERIVED from the actual producer stages
-# via FetcherStage.EMITTED_SOURCES, not maintained by hand. Adding a new
-# fetcher to the gaming pipeline now requires zero edits here — as long as
-# the new fetcher declares its EMITTED_SOURCES, the filter aggregates them
-# at module load. PR #360's "trust list drift from producers" bug class is
-# structurally prevented. A contract test pins the relationship at CI.
+# P1 phase 4 COMPLETE, 2026-06-19 — trust list is now ENTIRELY DERIVED from
+# the actual producer stages via FetcherStage.EMITTED_SOURCES. The legacy
+# hardcoded fallback set is EMPTY — every gaming-pipeline fetcher declares
+# its source values via the registry. Adding a new fetcher to the gaming
+# pipeline now requires zero edits here. PR #360's "trust list drift from
+# producers" bug class is structurally prevented. Contract tests pin the
+# relationship at CI.
 #
-# Migrated fetchers (P1 phases 1+2+3): FetchTwitchClips, FetchSteamTrailers,
-# FetchRedditClips (declares empty EMITTED_SOURCES because Reddit emits the
-# variable ``reddit:<subreddit>`` prefix pattern — handled separately below),
-# FetchGamingStories (local fetcher with 3 source values: steam_spike,
-# twitch_trending, rss).
-#
-# Still hardcoded below pending future migration:
-#   - FetchTrendingVideos (5 source values) — larger refactor, separate PR
-#
-# Once that lands, the legacy hardcoded set goes empty and the registry
-# becomes the sole source of truth.
+# Migrated fetchers (all phases): FetchTwitchClips, FetchSteamTrailers,
+# FetchRedditClips (empty EMITTED_SOURCES — Reddit emits ``reddit:<subreddit>``
+# prefix pattern handled separately below), FetchGamingStories (local),
+# FetchTrendingVideos (4 source values).
 _REGISTRY_TRUSTED_SOURCES = collect_emitted_sources(
-    [FetchTwitchClips, FetchSteamTrailers, FetchRedditClips, FetchGamingStories]
+    [
+        FetchTwitchClips,
+        FetchSteamTrailers,
+        FetchRedditClips,
+        FetchGamingStories,
+        FetchTrendingVideos,
+    ]
 )
 
-# Phase-1 fallback for fetchers not yet migrated. Empty this set as fetchers
-# adopt the FetcherStage mixin.
-_LEGACY_HARDCODED_SOURCES = frozenset(
-    {
-        # FetchTrendingVideos (not yet a FetcherStage)
-        "youtube_trending",
-        "youtube_rss",
-        "youtube_playlist",
-        "channel_subscription",
-        "shared_pool",
-    }
-)
+# Empty after phase 4. Kept as a documented anchor for future fetcher
+# additions that can't yet declare EMITTED_SOURCES (e.g. a new fetcher
+# whose source values are dynamic). Adding entries here without a TODO to
+# migrate them into a real FetcherStage is the smell that bit us in PR #360.
+_LEGACY_HARDCODED_SOURCES: frozenset[str] = frozenset()
 
 _TRUSTED_GAMING_SOURCES = _REGISTRY_TRUSTED_SOURCES | _LEGACY_HARDCODED_SOURCES
 
