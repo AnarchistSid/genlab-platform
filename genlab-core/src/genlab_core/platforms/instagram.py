@@ -73,13 +73,64 @@ class InstagramClient:
         ig_user_id: str | None = None,
         api_version: str = META_GRAPH_API_VERSION,
         max_poll_seconds: int = _DEFAULT_MAX_POLL_SECONDS,
+        *,
+        niche_id: str = "",
     ) -> None:
-        self._access_token: str = access_token or os.environ.get("META_ACCESS_TOKEN", "")
-        self._ig_user_id: str = ig_user_id or os.environ.get("META_IG_USER_ID", "")
+        """Construct an Instagram client.
+
+        Token + IG user ID resolution priority (highest → lowest):
+          1. Explicit ``access_token`` / ``ig_user_id`` kwargs (test fixtures,
+             explicit operator override)
+          2. Per-niche resolution via ``resolve_meta_credentials(niche_id)``
+             when ``niche_id`` is non-empty (P2 phase 1, 2026-06-19)
+          3. Global env vars ``META_ACCESS_TOKEN`` / ``META_IG_USER_ID``
+             (legacy default — preserves backward compatibility for callers
+             that haven't migrated to ``niche_id``)
+
+        The ``niche_id`` kwarg is the per-niche migration path. Callers in
+        publish_all_platforms / preflight / retry_pass can pass ``niche_id``
+        to get correct per-channel token scoping
+        (CLUTCHWIRE_META_ACCESS_TOKEN, CRITICALRUSH_META_ACCESS_TOKEN, etc.)
+        instead of the global ``META_ACCESS_TOKEN``. The strict
+        no-cross-channel-fallback rule from ``niche_credentials`` is honored.
+        """
+        self.niche_id = niche_id  # public so dispatcher can introspect
+        self._access_token: str = self._resolve_access_token(access_token, niche_id)
+        self._ig_user_id: str = self._resolve_ig_user_id(ig_user_id, niche_id)
         self._api_version = api_version
         self._base_url = f"https://graph.facebook.com/{api_version}"
         self._max_poll_seconds = max_poll_seconds
         self._last_error: str = ""  # Captures detailed error from internal methods
+
+    @staticmethod
+    def _resolve_access_token(explicit: str | None, niche_id: str) -> str:
+        """3-tier lookup: explicit kwarg → niche-resolved → global env fallback."""
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_meta_credentials
+
+            tok = resolve_meta_credentials(niche_id).get("ig_access_token", "")
+            if tok:
+                return tok
+        return os.environ.get("META_ACCESS_TOKEN", "")
+
+    @staticmethod
+    def _resolve_ig_user_id(explicit: str | None, niche_id: str) -> str:
+        """3-tier lookup: explicit kwarg → niche-resolved → global env fallback."""
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_niche_env
+
+            uid = resolve_niche_env(
+                niche_id=niche_id,
+                global_var="META_IG_USER_ID",
+                niche_suffix="META_IG_USER_ID",
+            )
+            if uid:
+                return uid
+        return os.environ.get("META_IG_USER_ID", "")
 
     # ------------------------------------------------------------------
     # Publisher protocol
