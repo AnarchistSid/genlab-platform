@@ -37,6 +37,12 @@ engagement = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",
+    # Explicit pin (U-24 resolved 2026-06-19): starlette 1.x is API-compatible
+    # with FastAPI 0.115+. The test-isolation prerequisite was fixed in
+    # PR #349 (string-skipif + autouse pop). FastAPI's constraint is just
+    # ``starlette>=0.46``; we pin to ``>=1.0,<2`` to take the 1.x major
+    # release explicitly.
+    "starlette>=1.0,<2",
 ]
 bandit = ["numpy>=1.26"]
 learning = ["numpy>=1.26", "xgboost>=2.0"]
