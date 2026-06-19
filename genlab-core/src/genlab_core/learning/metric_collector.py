@@ -64,7 +64,6 @@ from genlab_core.learning.pending_feedback_task import (  # noqa: E402
     PendingFeedbackTask,
 )
 from genlab_core.learning.reward_shaper import RewardShaper  # noqa: E402
-from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Platform metric fetching (delegates to lightweight HTTP calls)
@@ -122,6 +121,13 @@ def fetch_platform_metrics(
 # for the phased rollout plan.
 # P5a phase 2 (2026-06-19): IG fetchers moved to learning/metrics/instagram.py.
 # Re-exported below so existing imports (tests, scripts) keep working unchanged.
+# P5a phase 3 (2026-06-19): FB fetchers moved to learning/metrics/facebook.py.
+# Re-exported below so existing imports (tests, scripts) keep working unchanged.
+from genlab_core.learning.metrics.facebook import (  # noqa: E402, F401
+    _fetch_facebook,
+    _fetch_facebook_reel_insights,
+    _fetch_facebook_video_object,
+)
 from genlab_core.learning.metrics.instagram import (  # noqa: E402, F401
     _fetch_instagram,
     _fetch_instagram_reels_6h,
@@ -134,242 +140,6 @@ from genlab_core.learning.metrics.youtube import (  # noqa: E402, F401
     _yt_analytics_token_cache,
     _yt_token_cache,
 )
-
-
-def _fetch_facebook_reel_insights(reel_id: str, token: str) -> dict:
-    """Pull Reel-specific metrics via /{reel_id}/video_insights.
-
-    Three Reels metrics that the page-post insights endpoint never
-    returned (and that the /{video_id}?fields= query can't reach):
-      * post_video_view_time — total ms watched across all viewers
-      * post_video_avg_time_watched — avg ms per play
-      * post_video_social_actions — dict like {"COMMENT": N, "SHARE": N,
-        "REACTION": N} of lifetime engagement actions
-
-    Returns a dict with the parsed values; empty dict on failure.
-    Used to compute completion_rate (avg_time / length) and recover
-    the shares signal that's not exposed on the video object directly.
-    """
-    import requests
-
-    metrics_param = "post_video_view_time,post_video_avg_time_watched,post_video_social_actions"
-    try:
-        resp = requests.get(
-            f"{META_GRAPH_BASE_URL}/{reel_id}/video_insights",
-            params={"metric": metrics_param, "access_token": token},
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            logger.debug(
-                "[metric_collector] fb reel insights soft-fail %d for %s",
-                resp.status_code,
-                reel_id,
-            )
-            return {}
-        body = resp.json()
-    except Exception as exc:
-        logger.debug(
-            "[metric_collector] fb reel insights fetch failed for %s: %s",
-            reel_id,
-            exc,
-        )
-        return {}
-
-    out: dict[str, Any] = {}
-    for item in body.get("data", []):
-        name = item.get("name", "")
-        vals = item.get("values", [{}])
-        val = vals[0].get("value", 0) if vals else 0
-        if name == "post_video_view_time":
-            out["total_view_time_ms"] = float(val)
-        elif name == "post_video_avg_time_watched":
-            out["avg_view_time_ms"] = float(val)
-        elif name == "post_video_social_actions":
-            # val is a dict keyed by action type: COMMENT, SHARE, REACTION, ...
-            if isinstance(val, dict):
-                out["shares"] = int(val.get("SHARE", 0))
-                out["reactions"] = int(val.get("REACTION", 0))
-                # COMMENT here matches comments.summary on the video object;
-                # keep both for cross-validation but prefer the explicit one.
-                out["social_comments"] = int(val.get("COMMENT", 0))
-    return out
-
-
-def _fetch_facebook_video_object(post_id: str, token: str) -> dict:
-    """Fetch views/likes/comments/length directly from the FB video object.
-
-    GenLab publishes only Reels, and the stored ``platform_post_id`` is a
-    video object ID (e.g. ``1579623663118068``), not a page-post story ID.
-    The legacy page-post ``/insights`` endpoint 400s on video IDs; the
-    video object itself exposes the engagement counts directly.
-
-    Returns ``{"views": int, "likes": int, "comments": int,
-    "video_length_s": float}`` or empty dict on failure.
-
-    NOTE: ``shares`` is not exposed on the video object for Reels.  The
-    page-level Reels Insights endpoint surfaces it under a different
-    auth surface — wiring that is a separate task.
-    """
-    import requests
-
-    try:
-        resp = requests.get(
-            f"{META_GRAPH_BASE_URL}/{post_id}",
-            params={
-                "fields": "likes.summary(true).limit(0),comments.summary(true).limit(0),views,length",
-                "access_token": token,
-            },
-            timeout=15,
-        )
-        if resp.status_code != 200:
-            logger.debug(
-                "[metric_collector] fb video object soft-fail %d for %s",
-                resp.status_code,
-                post_id,
-            )
-            return {}
-        body = resp.json()
-    except Exception as exc:
-        logger.debug("[metric_collector] fb video object fetch failed for %s: %s", post_id, exc)
-        return {}
-
-    likes_block = body.get("likes") or {}
-    comments_block = body.get("comments") or {}
-    return {
-        "views": int(body.get("views", 0)),
-        "likes": int((likes_block.get("summary") or {}).get("total_count", 0)),
-        "comments": int((comments_block.get("summary") or {}).get("total_count", 0)),
-        "video_length_s": float(body.get("length", 0)),
-    }
-
-
-def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
-    """Fetch Facebook post insights + shares + completion_rate.
-
-    Returns keys aligned with ``RewardShaper.BASE_WEIGHTS["facebook"]``:
-    ``minutes_viewed, shares, completion_rate, reach``.
-
-    Three Graph API round trips: /insights, /{post}?fields=shares,
-    /{post}/attachments → /{video_id}?fields=length. Each layer
-    soft-fails to the existing stub zero rather than crashing the
-    fetch — keeps the engagement bandit moving on partial data.
-    """
-    import requests
-
-    from genlab_core.publishing.niche_credentials import resolve_fb_credentials
-
-    token, _page_id = resolve_fb_credentials(niche_id)
-    if not token:
-        return {}
-
-    metrics: dict[str, Any] = {}
-    impressions = 0
-    reach = 0
-    video_views = 0
-    avg_watch_time_ms = 0.0
-
-    from genlab_core.platforms.meta_metric_deprecation import (
-        record_observation,
-        warn_if_deprecated,
-    )
-
-    # /insights — Meta deprecates metrics aggressively; if the call 400s we
-    # still want shares + completion_rate to populate from the post object.
-    fb_feed_metrics = (
-        "post_impressions,post_impressions_unique,"
-        "post_engaged_users,post_video_views,"
-        "post_video_avg_time_watched"
-    )
-    warn_if_deprecated(fb_feed_metrics, context="fb_feed_insights")
-    try:
-        resp = requests.get(
-            f"{META_GRAPH_BASE_URL}/{post_id}/insights",
-            params={
-                "metric": fb_feed_metrics,
-                "access_token": token,
-            },
-            timeout=15,
-        )
-        if resp.status_code == 200:
-            for item in resp.json().get("data", []):
-                name = item.get("name", "")
-                vals = item.get("values", [{}])
-                val = vals[0].get("value", 0) if vals else 0
-                record_observation(name, val, scope="fb_feed_insights")
-                if name == "post_impressions":
-                    impressions = int(val)
-                elif name == "post_impressions_unique":
-                    reach = int(val)
-                elif name == "post_engaged_users":
-                    metrics["engaged_users"] = val
-                elif name == "post_video_views":
-                    video_views = int(val)
-                    metrics["video_views"] = val
-                elif name == "post_video_avg_time_watched":
-                    avg_watch_time_ms = float(val)
-                    metrics["avg_watch_time"] = val
-        else:
-            logger.debug(
-                "[metric_collector] fb insights soft-fail %d for %s",
-                resp.status_code,
-                post_id,
-            )
-    except Exception as exc:
-        logger.debug("[metric_collector] fb insights fetch failed for %s: %s", post_id, exc)
-
-    metrics["impressions"] = impressions
-    metrics["reach"] = reach or impressions  # fall back to impressions if reach unavailable
-    # avg_watch_time is in milliseconds from Graph API; convert to minutes
-    metrics["minutes_viewed"] = round((video_views * avg_watch_time_ms) / 60_000.0, 2)
-
-    # Reel-era fallback: query the video object directly for real
-    # engagement counts when /insights returned nothing.  GenLab posts
-    # are video Reels; their stored ID is a video object ID and the
-    # page-post insights endpoint 400s on those IDs.
-    video_obj = _fetch_facebook_video_object(post_id, token)
-    if video_obj:
-        # Don't overwrite non-zero insights data with video-object data:
-        # prefer insights when available (more granular), fall back to
-        # video object when insights returned nothing.
-        if metrics["impressions"] == 0:
-            metrics["impressions"] = video_obj.get("views", 0)
-            metrics["reach"] = video_obj.get("views", 0)
-        if "video_views" not in metrics:
-            metrics["video_views"] = video_obj.get("views", 0)
-        metrics["likes"] = video_obj.get("likes", 0)
-        metrics["comments"] = video_obj.get("comments", 0)
-        if video_obj.get("video_length_s", 0) > 0:
-            metrics["video_length_s"] = video_obj["video_length_s"]
-
-    # Reel-specific insights — shares, total watch time, avg watch time.
-    # These come from a third endpoint (/video_insights with reel-specific
-    # metric set), separate from the page-post /insights and the video
-    # object query.  Without these the FB reward computed only from reach
-    # (~10% of full BASE_WEIGHTS magnitude).
-    reel_insights = _fetch_facebook_reel_insights(post_id, token)
-    if reel_insights:
-        metrics["shares"] = reel_insights.get("shares", 0)
-        # minutes_viewed: prefer total_view_time over the (views × avg)
-        # estimate since it's the authoritative total.
-        if reel_insights.get("total_view_time_ms", 0) > 0:
-            metrics["minutes_viewed"] = round(
-                reel_insights["total_view_time_ms"] / 60_000.0,
-                2,
-            )
-        # completion_rate: avg_watch_ms / (length_s × 1000), clamped [0,1].
-        avg_ms = reel_insights.get("avg_view_time_ms", 0.0)
-        length_s = metrics.get("video_length_s", 0)
-        if avg_ms > 0 and length_s > 0:
-            completion = min(1.0, (avg_ms / 1000.0) / length_s)
-            metrics["completion_rate"] = round(completion, 4)
-        # Surface reactions as a bonus signal (not in RewardShaper yet).
-        if "reactions" in reel_insights:
-            metrics["reactions"] = reel_insights["reactions"]
-
-    metrics.setdefault("shares", 0)
-    metrics.setdefault("completion_rate", 0.0)
-
-    return metrics
 
 
 def _fetch_x(post_id: str, niche_id: str = "") -> dict:
