@@ -20,12 +20,12 @@ R-48) are absent from the migrated schema and skipped here.
 
 from __future__ import annotations
 
-import os
+import os  # noqa: F401 - used at runtime via pytest skipif string eval
 
 import pytest
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("POSTGRES_PASSWORD"),
+    "not os.environ.get('POSTGRES_PASSWORD')",
     reason="POSTGRES_PASSWORD not set — skip PostgreSQL integration tests",
 )
 

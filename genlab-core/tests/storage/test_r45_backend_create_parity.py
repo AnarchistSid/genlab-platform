@@ -25,7 +25,7 @@ The helper-level pins run unconditionally.
 
 from __future__ import annotations
 
-import os
+import os  # noqa: F401 - used at runtime via pytest skipif string eval
 import uuid
 from typing import Any
 from unittest.mock import MagicMock
@@ -133,7 +133,7 @@ def test_r45_storage_backend_protocol_is_runtime_checkable() -> None:
 
 
 _REQUIRE_PG = pytest.mark.skipif(
-    not os.environ.get("POSTGRES_PASSWORD"),
+    "not os.environ.get('POSTGRES_PASSWORD')",
     reason="POSTGRES_PASSWORD not set — skip live-Postgres parity check",
 )
 

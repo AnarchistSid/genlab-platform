@@ -7,14 +7,14 @@ Set POSTGRES_PASSWORD env var to enable these tests.
 
 from __future__ import annotations
 
-import os
+import os  # noqa: F401 - used at runtime via pytest skipif string eval
 import uuid
 
 import pytest
 
 # Skip entire module if no PostgreSQL available
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("POSTGRES_PASSWORD"),
+    "not os.environ.get('POSTGRES_PASSWORD')",
     reason="POSTGRES_PASSWORD not set — skip PostgreSQL integration tests",
 )
 
