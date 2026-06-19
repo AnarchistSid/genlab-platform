@@ -76,6 +76,80 @@ class TestTopSelection:
         assert scores[0] == 0.8
 
 
+class TestUpstreamFetcherSourcesTrusted:
+    """2026-06-19 regression: PR #358 unlocked merging upstream-fetched stories
+    into context["stories"], but FilterGamingStories' two-entry trust list
+    (``steam_spike``/``twitch_trending`` only) silently dropped them via the
+    keyword filter. Twitch clip titles / YouTube gaming-category clips are
+    full of emoji + streamer slang with no English gaming keywords, so the
+    keyword filter rejected legitimate gameplay clips and only chart-
+    position commentary survived. Trust list now covers every gaming-by-
+    construction fetcher."""
+
+    def test_youtube_trending_clip_with_slang_title_passes(self):
+        """YouTube category=20 (Gaming) trending clip with no English gaming
+        keywords in its title is still gaming content — trust the source."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story("MAX UMBRA, MIN VOLUME 😈 #shorts", source="youtube_trending", score=0.8),
+        ]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 1
+        assert result["run_stats"]["filter"]["rejected"] == 0
+
+    def test_twitch_clip_with_no_keyword_title_passes(self):
+        """Twitch is a gaming-only platform — clip titles need no keyword."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story("RAGED so hard I broke my chair", source="twitch_clips", score=0.7),
+        ]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 1
+
+    def test_steam_trailer_source_passes(self):
+        """Steam is a gaming storefront — trailers pass without keyword check."""
+        stage = FilterGamingStories()
+        stories = [_make_story("Official Reveal Cinematic", source="steam_trailer", score=0.6)]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 1
+
+    def test_reddit_subreddit_prefix_passes(self):
+        """FetchRedditClips uses the ``reddit:<subreddit>`` source prefix
+        (one source per subreddit). All gaming subreddits are vetted in
+        sources.yaml, so anything that came back is gaming content."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story("Big play just happened", source="reddit:gaming", score=0.6),
+            _make_story("Massive clutch moment", source="reddit:LivestreamFail", score=0.7),
+        ]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 2
+
+    def test_shared_pool_passes(self):
+        """content_pool entries claimed by the gaming niche come in with
+        source='shared_pool' — these are already niche-claimed, trust them."""
+        stage = FilterGamingStories()
+        stories = [_make_story("Cross-niche entry no keyword", source="shared_pool", score=0.6)]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 1
+
+    def test_legacy_rss_still_keyword_filtered(self):
+        """The 'rss' source path is the legacy general-news path and is
+        the only source still subject to the keyword filter — verify it
+        keeps rejecting non-gaming noise."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story(
+                "Best T-Mobile smartphone deal this week",
+                source="rss",
+                score=0.9,
+                summary="Save on the latest phone sale",
+            ),
+        ]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 0
+
+
 class TestStats:
     def test_stats_written_to_context(self):
         """run_stats['filter'] has correct counts."""
