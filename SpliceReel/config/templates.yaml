@@ -180,3 +180,11 @@ platforms:
     max_caption_length: 500
     hashtag_count: 2
     structure: hook + 2 lines + 2 hashtags
+
+# Hook-type reward ratios — auto-written by genlab_core.learning.config_updater
+# from observed reward-per-hook-type. Cold-start: only "unknown" until the
+# hook classifier produces labelled buckets. Will be overwritten on the
+# weekly config_updater run (Monday 03:30 UTC). Don't hand-edit — surface
+# real distribution changes by adjusting hook_classifier outputs upstream.
+hook_type_ratios:
+  unknown: 1.0
