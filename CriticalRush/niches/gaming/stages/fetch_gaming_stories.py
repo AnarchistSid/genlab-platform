@@ -490,14 +490,27 @@ class FetchGamingStories(ContentResearchStrategy):
         # FetchTwitchClips + FetchRedditClips BEFORE this stage, each of
         # which appends to ``context["stories"]`` via the canonical
         # ``context["stories"] = existing + new_stories`` pattern. Before
-        # this fix, line 507's ``context["stories"] = final`` REPLACED
-        # those upstream stories — silently dropping ~45 real video
-        # sources per run (20 content_pool YouTube clips + 25 Twitch
-        # clips), leaving only the local Steam-spike + Twitch-chart
-        # commentary as candidates. Operator observed this as "CR is
-        # producing useless content" — every shipped hook was about
-        # Twitch chart positions instead of actual gameplay clips.
+        # this fix, ``context["stories"] = final`` REPLACED those upstream
+        # stories — silently dropping ~45 real video sources per run (20
+        # content_pool YouTube clips + 25 Twitch clips), leaving only the
+        # local Steam-spike + Twitch-chart commentary as candidates.
+        # Operator observed this as "CR is producing useless content" —
+        # every shipped hook was about Twitch chart positions instead of
+        # actual gameplay clips.
+        #
+        # Schema-normalize upstream stories before merging: upstream
+        # fetchers (FetchTrendingVideos, FetchTwitchClips) use a video-
+        # centric schema that may omit ``score`` (default 0.5) and other
+        # fields the local fetchers always populate. Without this normalize
+        # step the downstream ``sort(key=lambda s: s["score"])`` raises
+        # KeyError and the whole stage fails. Pin the contract: every
+        # story merged here MUST have ``score`` and ``source_url`` so
+        # dedup + sort work uniformly.
         upstream_stories = context.get("stories", [])
+        for s in upstream_stories:
+            s.setdefault("score", 0.5)
+            s.setdefault("source_url", "")
+            s.setdefault("title", "")
         all_stories = upstream_stories + all_stories
 
         # 3-pass dedup via genlab-core DedupEngine
@@ -516,7 +529,10 @@ class FetchGamingStories(ContentResearchStrategy):
         dedup_result = dedup.run(all_stories)
         deduped = dedup_result.unique
 
-        deduped.sort(key=lambda s: s["score"], reverse=True)
+        # Use .get with a default — belt-and-suspenders for the case where
+        # a story slipped past the schema-normalize above (e.g., via
+        # someone else's upstream fetcher in a future PR).
+        deduped.sort(key=lambda s: s.get("score", 0.0), reverse=True)
         final = deduped[:max_stories]
 
         context["stories"] = final
