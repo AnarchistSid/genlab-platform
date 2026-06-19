@@ -83,10 +83,24 @@ class YouTubeClient:
         *,
         expected_channel_id: str | None = None,
         enable_quota_gate: bool = True,
+        niche_id: str = "",
     ) -> None:
-        self._client_id: str = client_id or os.environ.get("YOUTUBE_CLIENT_ID", "")
-        self._client_secret: str = client_secret or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
-        self._refresh_token: str = refresh_token or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
+        """3-tier auth lookup matching InstagramClient (P2 phase 1, PR #377):
+          1. Explicit kwargs (client_id, client_secret, refresh_token)
+          2. Per-niche via ``resolve_youtube_credentials(niche_id)`` when
+             ``niche_id`` is non-empty
+          3. Global env fallback (``YOUTUBE_CLIENT_ID`` /
+             ``YOUTUBE_CLIENT_SECRET`` / ``YOUTUBE_REFRESH_TOKEN``)
+        YT uses a 3-field bundle, so the resolver fetches once per
+        instantiation and slots in any per-field defaults.
+        """
+        self.niche_id = niche_id
+        cid, csec, rtok = self._resolve_oauth_bundle(
+            client_id, client_secret, refresh_token, niche_id
+        )
+        self._client_id: str = cid
+        self._client_secret: str = csec
+        self._refresh_token: str = rtok
         self._access_token: str | None = None
         self._token_refreshed_at: float = 0.0
         self._TOKEN_TTL_SECONDS: int = _TOKEN_TTL_SECONDS
@@ -107,6 +121,49 @@ class YouTubeClient:
         # Cached googleapiclient service objects
         self._data_service: Any = None
         self._analytics_service: Any = None
+
+    @staticmethod
+    def _resolve_oauth_bundle(
+        explicit_cid: str | None,
+        explicit_csec: str | None,
+        explicit_rtok: str | None,
+        niche_id: str,
+    ) -> tuple[str, str, str]:
+        """3-tier per-field resolution: explicit → niche-bundle → env fallback.
+
+        The niche-resolver is called ONCE if any field needs it (the bundle
+        is fetched lazily to avoid a niche_credentials lookup when all 3
+        explicit kwargs are provided — e.g. by test fixtures).
+        """
+        # Tier 1 + early-exit when all explicit
+        if explicit_cid and explicit_csec and explicit_rtok:
+            return explicit_cid, explicit_csec, explicit_rtok
+
+        # Tier 2: per-niche bundle (fetch once if niche_id set)
+        niche_bundle: dict[str, str] = {}
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import (
+                resolve_youtube_credentials,
+            )
+
+            niche_bundle = resolve_youtube_credentials(niche_id)
+
+        cid = (
+            explicit_cid
+            or niche_bundle.get("client_id", "")
+            or os.environ.get("YOUTUBE_CLIENT_ID", "")
+        )
+        csec = (
+            explicit_csec
+            or niche_bundle.get("client_secret", "")
+            or os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+        )
+        rtok = (
+            explicit_rtok
+            or niche_bundle.get("refresh_token", "")
+            or os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
+        )
+        return cid, csec, rtok
 
     # ------------------------------------------------------------------
     # Internal: OAuth2 token management
