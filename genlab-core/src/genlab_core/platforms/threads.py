@@ -72,12 +72,44 @@ class ThreadsClient:
         self,
         access_token: str | None = None,
         user_id: str | None = None,
+        *,
+        niche_id: str = "",
     ) -> None:
-        self._access_token: str = access_token or os.environ.get("THREADS_ACCESS_TOKEN", "")
-        self._user_id: str = user_id or os.environ.get("THREADS_USER_ID", "")
+        """3-tier auth lookup matching InstagramClient (P2 phase 1, PR #377):
+        1. Explicit kwarg
+        2. Per-niche via ``resolve_threads_credentials(niche_id)``
+        3. Global env fallback ``THREADS_ACCESS_TOKEN`` / ``THREADS_USER_ID``
+        """
+        self.niche_id = niche_id
+        self._access_token: str = self._resolve_access_token(access_token, niche_id)
+        self._user_id: str = self._resolve_user_id(user_id, niche_id)
         self._base_url = "https://graph.threads.net/v1.0"
         # Threads API: 250 posts/hr. Conservative rate limiter.
         self._rate_limiter = TokenBucket(rate=250 / 3600, burst=10)
+
+    @staticmethod
+    def _resolve_access_token(explicit: str | None, niche_id: str) -> str:
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+
+            tok, _ = resolve_threads_credentials(niche_id)
+            if tok:
+                return tok
+        return os.environ.get("THREADS_ACCESS_TOKEN", "")
+
+    @staticmethod
+    def _resolve_user_id(explicit: str | None, niche_id: str) -> str:
+        if explicit:
+            return explicit
+        if niche_id:
+            from genlab_core.publishing.niche_credentials import resolve_threads_credentials
+
+            _, uid = resolve_threads_credentials(niche_id)
+            if uid:
+                return uid
+        return os.environ.get("THREADS_USER_ID", "")
 
     # ------------------------------------------------------------------
     # Publisher protocol
