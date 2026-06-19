@@ -81,20 +81,26 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(autouse=True)
 def _prevent_postgres_password_leak():
-    """U-24 belt-and-suspenders: wipe POSTGRES_PASSWORD after every test.
+    """U-24 belt-and-suspenders: wipe POSTGRES_PASSWORD around every test.
 
     The dotenv sentinel above stops settings.py from re-loading .env, but
     some test paths still indirectly trigger load_dotenv in other modules
     (e.g. ``scripts/collect_audience_metrics.py`` line 58) OR set
     POSTGRES_PASSWORD via unaudited monkeypatch fixtures whose cleanup
-    fires late. This autouse fixture guarantees the env var stays unset
-    after each test boundary so storage-test skipif predicates evaluate
-    consistently regardless of test ordering.
+    fires late. Even pytest collection-time imports can re-populate it
+    via deep import chains.
+
+    Wipe BEFORE setup (skipif predicates evaluate against a clean env)
+    AND AFTER teardown (next test sees clean env). The pop-before pop
+    pair makes the skipif evaluation deterministic regardless of test
+    ordering or collection-time side effects.
 
     Tests that genuinely need POSTGRES_PASSWORD (the integration tests
     in tests/storage/) should set it via ``monkeypatch.setenv`` in their
-    own fixtures — monkeypatch's cleanup runs before this fixture's
-    yield-side, so the value won't leak out.
+    own fixtures — monkeypatch's setup runs AFTER this autouse fixture's
+    setup phase, so the value is present during test execution and
+    cleaned up before this fixture's teardown.
     """
+    os.environ.pop("POSTGRES_PASSWORD", None)
     yield
     os.environ.pop("POSTGRES_PASSWORD", None)
