@@ -1,9 +1,21 @@
 """Test configuration — ensure tests use SharePoint mocks, not live Postgres.
 
 settings.py calls load_dotenv() at import time, which loads .env values into
-os.environ BEFORE conftest runs. We must pop the Postgres vars here AND
-individual test fixtures should use patch.dict("os.environ", ...) for full
-isolation against re-import or re-loading of .env.
+os.environ. Before the GENLAB_SUPPRESS_DOTENV guard (2026-06-19) this ran
+BEFORE conftest could pop the Postgres vars, so the FIRST test that
+imported anything from ``genlab_core`` re-populated POSTGRES_PASSWORD
+from .env and silently flipped storage-test skipif predicates True→False
+mid-suite — causing tests to fail against the operator's prod DB whenever
+test ordering changed (e.g. starlette 1.x upgrade). See
+``docs/U-24-starlette-1x-investigation.md`` for the full bug.
+
+Two layers of defense:
+  1. ``GENLAB_SUPPRESS_DOTENV=1`` opt-out in settings.py — set here at
+     the top of conftest BEFORE any genlab_core import.
+  2. Autouse fixture (below) that pops POSTGRES_PASSWORD after every
+     test — belt-and-suspenders for paths that bypass settings.py and
+     set the env var directly via load_dotenv elsewhere or unaudited
+     monkeypatch fixtures.
 """
 
 import os
@@ -11,10 +23,14 @@ import sys
 
 import pytest
 
+# Suppress load_dotenv() in settings.py BEFORE any genlab_core import.
+os.environ["GENLAB_SUPPRESS_DOTENV"] = "1"
+
 # Remove Postgres env vars so BacklogClient falls back to SharePoint proxies.
 # Tests mock the SharePoint Graph API — they don't need a real database.
 os.environ.pop("DATABASE_URL", None)
 os.environ.pop("GENLAB_USE_POSTGRES", None)
+os.environ.pop("POSTGRES_PASSWORD", None)
 
 # Also prevent load_dotenv from re-populating these if settings.py
 # is re-loaded during test discovery.
@@ -61,3 +77,24 @@ def pytest_collection_modifyitems(config, items):
         module_name = item.module.__name__.split(".")[-1] if item.module else ""
         if module_name in detoxify_modules:
             item.add_marker(skip_marker)
+
+
+@pytest.fixture(autouse=True)
+def _prevent_postgres_password_leak():
+    """U-24 belt-and-suspenders: wipe POSTGRES_PASSWORD after every test.
+
+    The dotenv sentinel above stops settings.py from re-loading .env, but
+    some test paths still indirectly trigger load_dotenv in other modules
+    (e.g. ``scripts/collect_audience_metrics.py`` line 58) OR set
+    POSTGRES_PASSWORD via unaudited monkeypatch fixtures whose cleanup
+    fires late. This autouse fixture guarantees the env var stays unset
+    after each test boundary so storage-test skipif predicates evaluate
+    consistently regardless of test ordering.
+
+    Tests that genuinely need POSTGRES_PASSWORD (the integration tests
+    in tests/storage/) should set it via ``monkeypatch.setenv`` in their
+    own fixtures — monkeypatch's cleanup runs before this fixture's
+    yield-side, so the value won't leak out.
+    """
+    yield
+    os.environ.pop("POSTGRES_PASSWORD", None)

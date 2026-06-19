@@ -32,8 +32,18 @@ _PROJECT_ROOT = Path(
 # pydantic-settings reads .env into model fields only — it does NOT call
 # load_dotenv(), leaving os.environ empty for direct lookups.
 # override=False means existing env vars (e.g. from shell) take precedence.
+#
+# GENLAB_SUPPRESS_DOTENV=1 disables the load — used by ``tests/conftest.py``
+# to prevent .env from re-populating POSTGRES_PASSWORD (and other prod
+# credentials) into os.environ after the conftest has explicitly popped
+# them. Without this guard, the FIRST test that imports ``genlab_core``
+# re-loads .env, mid-suite skipif predicates flip True→False, and
+# storage tests that should SKIP instead run against the operator's
+# prod DB → confusing test failures that only surface in CI when test
+# ordering changes (e.g. starlette 1.x upgrade). See
+# ``docs/U-24-starlette-1x-investigation.md`` for the full bug.
 _root_env = _PROJECT_ROOT / ".env"
-if _root_env.is_file():
+if _root_env.is_file() and not os.environ.get("GENLAB_SUPPRESS_DOTENV"):
     load_dotenv(str(_root_env), override=False)
 
 
