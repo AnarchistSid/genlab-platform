@@ -36,6 +36,12 @@ EXCLUDE_PATHS=(
     "$ROOT_DIR/.git"
     "$ROOT_DIR/node_modules"
     "$ROOT_DIR/dashboard/frontend/node_modules"
+    # Deploy logs are routinely created by root-invoked deploy.sh runs
+    # (e.g. one-shot SSH+sudo deploys for hot patches). Their ownership
+    # doesn't affect pipelines — logs are write-only operator records.
+    # Excluded 2026-06-19 after 2 deploy log files from earlier day's
+    # SSH-as-root hot-patches repeatedly tripped the drift check.
+    "$ROOT_DIR/.logs"
 )
 
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
