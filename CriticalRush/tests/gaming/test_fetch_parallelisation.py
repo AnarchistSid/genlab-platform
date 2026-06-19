@@ -41,12 +41,24 @@ class TestConcurrentFetch:
             {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
         ]
 
-        # DedupEngine pass-through
+        # DedupEngine pass-through.
+        # P1 phase-3 (2026-06-19): replace_stories() validates each entry
+        # against StoryCandidate (title + source + source_url required).
         dedup_result = MagicMock()
         dedup_result.unique = [
-            {"title": "Steam Game", "score": 0.8},
-            {"title": "Twitch Game", "score": 0.7},
-            {"title": "RSS Story", "score": 0.5},
+            {
+                "title": "Steam Game",
+                "source": "steam_spike",
+                "source_url": "http://s",
+                "score": 0.8,
+            },
+            {
+                "title": "Twitch Game",
+                "source": "twitch_trending",
+                "source_url": "http://t",
+                "score": 0.7,
+            },
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
         ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0
@@ -90,8 +102,13 @@ class TestConcurrentFetch:
 
         dedup_result = MagicMock()
         dedup_result.unique = [
-            {"title": "Twitch Game", "score": 0.7},
-            {"title": "RSS Story", "score": 0.5},
+            {
+                "title": "Twitch Game",
+                "source": "twitch_trending",
+                "source_url": "http://t",
+                "score": 0.7,
+            },
+            {"title": "RSS Story", "source": "rss", "source_url": "http://r", "score": 0.5},
         ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0
@@ -136,8 +153,15 @@ class TestConcurrentFetch:
         MockTwitch.return_value.fetch.side_effect = slow_twitch
         MockRSS.return_value.fetch.return_value = []
 
+        # P1 phase-3 (2026-06-19): replace_stories() validates each entry
+        # against StoryCandidate, which requires title + source + source_url.
+        # The real DedupEngine preserves all input fields, so this mock
+        # must too (was previously a partial shape that hid schema gaps).
         dedup_result = MagicMock()
-        dedup_result.unique = [{"title": "S", "score": 0.5}, {"title": "T", "score": 0.5}]
+        dedup_result.unique = [
+            {"title": "S", "source": "steam_spike", "source_url": "http://s", "score": 0.5},
+            {"title": "T", "source": "twitch_trending", "source_url": "http://t", "score": 0.5},
+        ]
         dedup_result.pass1_removed = 0
         dedup_result.pass2_removed = 0
         dedup_result.pass3_removed = 0

@@ -23,6 +23,7 @@ import feedparser
 import requests
 import yaml
 from genlab_core.intelligence.dedup_engine import DedupEngine
+from genlab_core.pipeline.models import FetcherStage, replace_stories
 from genlab_core.ratelimit.token_bucket import TokenBucket
 from genlab_core.strategies import ContentResearchStrategy
 
@@ -394,8 +395,23 @@ class RSSFeedAggregator:
 # ---------------------------------------------------------------------------
 
 
-class FetchGamingStories(ContentResearchStrategy):
-    """Pipeline stage: fetch, merge, deduplicate gaming stories."""
+class FetchGamingStories(FetcherStage, ContentResearchStrategy):
+    """Pipeline stage: fetch, merge, deduplicate gaming stories.
+
+    Hybrid producer+consumer: fetches 3 local sources (Steam spike, Twitch
+    trending, RSS), merges with upstream stories already in the pool, then
+    dedupes + sorts + truncates to ``max_stories`` (final step is REPLACE
+    semantics — see ``replace_stories(...)`` at the end of ``execute()``).
+    """
+
+    # P1 phase-3, 2026-06-19 — local fetcher emits 3 source values, but only
+    # 2 belong in the producer registry: ``steam_spike`` and ``twitch_trending``
+    # are gaming-by-construction (auto-trust). ``"rss"`` is INTENTIONALLY NOT
+    # in this set — FilterGamingStories' design treats RSS as the one path
+    # that MUST go through the keyword filter (gaming-news RSS feeds can
+    # carry off-topic noise like phone deals, movie news, etc.). Adding
+    # ``"rss"`` here would auto-pass it and break the keyword filter.
+    EMITTED_SOURCES = frozenset({"steam_spike", "twitch_trending"})
 
     def _load_sources_config(self) -> dict[str, Any]:
         config_path = PROJECT_ROOT / "niches" / "gaming" / "config" / "sources.yaml"
@@ -535,7 +551,10 @@ class FetchGamingStories(ContentResearchStrategy):
         deduped.sort(key=lambda s: s.get("score", 0.0), reverse=True)
         final = deduped[:max_stories]
 
-        context["stories"] = final
+        # P1 phase-3: intent-revealing REPLACE — after dedup+sort+truncate this
+        # is a narrowing operation, not a merge. The named function makes the
+        # filter-vs-fetcher semantics explicit (PR #358's bug class fix).
+        replace_stories(context, final)
 
         # Stats
         context.setdefault("run_stats", {})["fetch"] = {

@@ -40,15 +40,53 @@ class TestProducerRegistryContract:
         assert "steam_trailer" in _REGISTRY_TRUSTED_SOURCES
         assert "steam_trailer" in _TRUSTED_GAMING_SOURCES
 
-    def test_legacy_hardcoded_sources_still_present_during_phase_1(self):
-        """During phase-1 migration, fetchers not yet migrated still need
-        their sources in the trust list. Pins the set explicitly so we can
-        easily see what's left to migrate."""
-        # Local fetchers (FetchGamingStories — to be migrated in phase 2)
-        assert "steam_spike" in _TRUSTED_GAMING_SOURCES
-        assert "twitch_trending" in _TRUSTED_GAMING_SOURCES
-        # FetchTrendingVideos sources (to be migrated in phase 2)
+    def test_phase_3_migrated_FetchGamingStories_sources_in_registry(self):
+        """P1 phase 3: FetchGamingStories migrated. Its 2 trustable source
+        values (steam_spike, twitch_trending) now come from the producer
+        registry, NOT from the legacy hardcoded set. ``rss`` is INTENTIONALLY
+        excluded from EMITTED_SOURCES so it continues to go through the
+        keyword filter (RSS feeds can carry off-topic noise)."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+        from niches.gaming.stages.filter_gaming_stories import (
+            _LEGACY_HARDCODED_SOURCES,
+            _REGISTRY_TRUSTED_SOURCES,
+        )
+
+        # FetchGamingStories declares its 2 gaming-by-construction sources
+        assert FetchGamingStories.EMITTED_SOURCES == frozenset({"steam_spike", "twitch_trending"})
+        # Both are in the registry-derived trust set
+        assert "steam_spike" in _REGISTRY_TRUSTED_SOURCES
+        assert "twitch_trending" in _REGISTRY_TRUSTED_SOURCES
+        # And NEITHER is in the legacy set (clean migration)
+        assert "steam_spike" not in _LEGACY_HARDCODED_SOURCES
+        assert "twitch_trending" not in _LEGACY_HARDCODED_SOURCES
+
+    def test_rss_NOT_in_trust_set_so_keyword_filter_still_applies(self):
+        """Pin the design: ``rss`` is intentionally excluded from
+        EMITTED_SOURCES so RSS noise (phone deals, movie news, etc.) still
+        gets keyword-filtered. If a future fetcher accidentally adds ``rss``
+        to its EMITTED_SOURCES, this test fails."""
+        from niches.gaming.stages.fetch_gaming_stories import FetchGamingStories
+        from niches.gaming.stages.filter_gaming_stories import (
+            _LEGACY_HARDCODED_SOURCES,
+            _REGISTRY_TRUSTED_SOURCES,
+            _TRUSTED_GAMING_SOURCES,
+        )
+
+        assert "rss" not in FetchGamingStories.EMITTED_SOURCES
+        assert "rss" not in _REGISTRY_TRUSTED_SOURCES
+        assert "rss" not in _LEGACY_HARDCODED_SOURCES
+        assert "rss" not in _TRUSTED_GAMING_SOURCES
+
+    def test_legacy_hardcoded_sources_remaining_after_phase_3(self):
+        """After phase 3 migration, only FetchTrendingVideos's 5 sources
+        remain hardcoded. Pins the shrunk set so we can easily see what's
+        left to migrate in the next phase."""
+        # FetchTrendingVideos sources (next migration phase)
         assert "youtube_trending" in _TRUSTED_GAMING_SOURCES
+        assert "youtube_rss" in _TRUSTED_GAMING_SOURCES
+        assert "youtube_playlist" in _TRUSTED_GAMING_SOURCES
+        assert "channel_subscription" in _TRUSTED_GAMING_SOURCES
         assert "shared_pool" in _TRUSTED_GAMING_SOURCES
 
     def test_registry_and_legacy_sets_are_disjoint(self):
