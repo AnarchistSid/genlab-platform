@@ -13,6 +13,7 @@ from typing import Any
 
 import requests
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -64,12 +65,15 @@ def _fetch_trailers_for_app(app_id: int, max_trailers: int = 2) -> list[dict]:
         return []
 
 
-class FetchSteamTrailers:
+class FetchSteamTrailers(FetcherStage):
     """Pipeline stage: fetch official game trailers from Steam.
 
     Returns direct MP4 URLs from Valve CDN. No auth required.
     Runs before DownloadTopVideos — provides video candidates without YouTube quota.
     """
+
+    # P1, 2026-06-19 — declare emitted source for the producer registry.
+    EMITTED_SOURCES = frozenset({"steam_trailer"})
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -125,7 +129,10 @@ class FetchSteamTrailers:
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}
             new_stories = [s for s in new_stories if s["source_url"] not in existing_urls]
-            context["stories"] = existing + new_stories
+            # P1, 2026-06-19 — intent-revealing merge call. Schema-validates
+            # each new story; defaults score=0.5 if upstream omits it (PR #359
+            # bug class fix).
+            merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["steam_trailers_found"] = len(all_trailers)
