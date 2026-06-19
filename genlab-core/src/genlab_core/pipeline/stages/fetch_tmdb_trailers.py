@@ -19,6 +19,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from genlab_core.pipeline.models import FetcherStage, merge_stories
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ def _fetch_movie_trailer_ids(api_key: str, movie_ids: list[dict]) -> list[dict]:
     return results
 
 
-class FetchTMDBTrailers:
+class FetchTMDBTrailers(FetcherStage):
     """Pipeline stage: fetch YouTube trailer IDs from TMDB.
 
     Adds trailer video IDs to context for downstream download.
@@ -106,6 +107,9 @@ class FetchTMDBTrailers:
 
     Requires TMDB_API_KEY in environment.
     """
+
+    # P1 phase-2, 2026-06-19 — declare emitted source for the producer registry.
+    EMITTED_SOURCES = frozenset({"tmdb_trailer"})
 
     def execute(self, context: StageContext) -> StageContext:
         niche_id = context.get("niche_id", "")
@@ -162,7 +166,8 @@ class FetchTMDBTrailers:
             existing = context.get("stories", [])
             existing_urls = {s.get("source_url") for s in existing}
             new_stories = [s for s in new_stories if s["source_url"] not in existing_urls]
-            context["stories"] = existing + new_stories
+            # P1 phase-2: intent-revealing merge + StoryCandidate validation.
+            merge_stories(context, new_stories)
 
         run_stats = context.setdefault("run_stats", {})
         run_stats["tmdb_trailers_found"] = len(trailers)
