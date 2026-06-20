@@ -358,9 +358,48 @@ class BaseWritingStrategy(WritingStrategy):
             )
         hashtags = re.findall(r"#\w+", ig_caption)
         content["instagram"] = {"caption": ig_caption, "hashtags": hashtags}
-        # Use hook as YouTube title (more engaging than raw headline)
+
+        # Use hook as YouTube title (more engaging than raw headline).
+        #
+        # 2026-06-21 BUG #1 fix: validate the candidate YT title against
+        # the LLM-error-response rule. The headline prod symptom was
+        # SpliceReel YT short ``QrNDe-egDrg`` shipping with title
+        # ``"I need more story details to write an effective hook...."``
+        # — the LLM returned a meta-response instead of a hook, and it
+        # got published verbatim as the YouTube video title. None of the
+        # 9 form-based validator rules caught it (long enough, no
+        # markdown, complete sentence, no URL, etc.) — it was
+        # syntactically valid but semantically a refusal.
+        #
+        # New rule 10 in HookValidator detects LLM error/refusal
+        # patterns. When the candidate yt_title trips it, fall back to
+        # the cleaned story title — guarantees something user-readable
+        # ships even when the LLM had a bad day.
         hook = result.get("hook", "")
-        yt_title = hook if hook else result.get("youtube_content", "")[:40]
+        yt_title_candidate = hook if hook else result.get("youtube_content", "")[:40]
+        # Import locally to keep base_writing's import surface narrow
+        # (HookValidator is in intelligence/, not strategies/).
+        from genlab_core.intelligence.hook_validator import (
+            HookFailure,
+            HookValidator,
+        )
+
+        _hv = HookValidator()
+        _vr = _hv.validate(yt_title_candidate, platform="youtube")
+        if HookFailure.LLM_ERROR_RESPONSE in _vr.failures:
+            # Fallback: use the story title (always non-empty per pipeline
+            # contract) — truncate to YouTube's 100-char title limit.
+            yt_title = (story.get("title") or "Untitled")[:100]
+            logger.warning(
+                "[BaseWriting] YouTube title LLM-error leak intercepted "
+                "(niche=%s, title=%r) — falling back to story.title. "
+                "If this fires frequently, the writing prompt may need "
+                "tightening for this niche.",
+                self._niche_id,
+                yt_title_candidate[:80],
+            )
+        else:
+            yt_title = yt_title_candidate
         content["youtube"] = {
             "title": yt_title,
             "description": ig_caption,

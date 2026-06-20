@@ -42,6 +42,16 @@ class HookFailure(Enum):
     CONTAINS_URL = "contains_url"
     EMOJI_SPAM = "emoji_spam"
     MIXED_CAPS = "mixed_caps_lowercase"
+    # 2026-06-21 BUG #1: real prod symptom — YouTube title published as
+    # literal "I need more story details to write an effective hook...."
+    # because the LLM returned a meta-response (asking for more details)
+    # instead of writing a hook. None of the 9 form-based checks caught
+    # it: long enough, within char limit, no markdown/reddit/url/emoji
+    # spam, complete sentence (period). The hook was syntactically valid,
+    # but semantically a refusal/error string. This 10th rule pattern-
+    # matches common LLM error/refusal prefixes so they never reach the
+    # publish stage as user-visible content.
+    LLM_ERROR_RESPONSE = "llm_error_response"
 
 
 @dataclass
@@ -100,6 +110,55 @@ _URL_RE = re.compile(
     r"https?://\S+"
     r"|www\.\S+"
     r"|\w+\.(?:com|org|net|io|co|dev|app|ai)\b/?\S*",
+)
+
+# 2026-06-21 BUG #1: LLM error/refusal response patterns.
+#
+# The headline prod symptom that triggered this validator: SpliceReel YouTube
+# short ``QrNDe-egDrg`` shipped with title
+# ``"I need more story details to write an effective hook...."`` — a literal
+# LLM meta-response (asking for clarification instead of producing a hook).
+# The same content's IG hook + FB hook were correct, so the failure was
+# isolated to the YouTube title path.
+#
+# These patterns match the START of a string only (``re.match``), because LLM
+# error/refusal messages overwhelmingly start with one of these openers. This
+# choice is deliberate to MINIMIZE false positives on legitimate content:
+#   * ``"Why I cannot stop watching this trailer"`` — legitimate hook,
+#     starts with "Why", NOT with "I cannot" — passes.
+#   * ``"I need more story details..."`` — starts with "I need more",
+#     matches — rejected.
+#   * ``"As an AI demo lover, here's what blew my mind"`` — legitimate,
+#     starts with "As an AI demo" not "As an AI"-comma — passes.
+#
+# Each pattern is anchored at ``^`` (start of string) with ``re.IGNORECASE``
+# applied at match time. Patterns are intentionally short — adding more
+# variants is safe; making them too greedy (mid-string matches) would risk
+# false positives on legitimate content.
+_LLM_ERROR_RE = re.compile(
+    r"^(?:"
+    r"I need more "  # "I need more story details to..."
+    r"|I need additional "  # "I need additional context to..."
+    r"|I'd need more "  # "I'd need more information..."
+    r"|I'd need additional "  # "I'd need additional details..."
+    r"|I cannot "  # "I cannot write a hook without..."
+    r"|I can't "  # "I can't generate a hook..."
+    r"|I'm unable "  # "I'm unable to write..."
+    r"|I am unable "  # "I am unable to..."
+    r"|I apologize"  # "I apologize, but I cannot..."
+    r"|I'm sorry"  # "I'm sorry, but I need..."
+    r"|I don't have enough "  # "I don't have enough information to..."
+    r"|I don't have sufficient "  # "I don't have sufficient details..."
+    r"|As an AI[,]"  # "As an AI, I cannot..." (comma anchors to disclaimer)
+    r"|As a language model"  # "As a language model, I..."
+    r"|Without more (?:context|information|details)"  # "Without more context I cannot..."
+    r"|Without additional (?:context|information|details)"
+    r"|Unable to (?:generate|write|produce|create)"  # "Unable to generate a hook..."
+    r"|Insufficient (?:context|information|details|story)"  # "Insufficient story details..."
+    r"|Please provide more "  # "Please provide more details..."
+    r"|Could you provide "  # "Could you provide more..."
+    r")",
+    re.IGNORECASE,
 )
 
 # Known ALL-CAPS patterns that are intentional (not grammatical errors)
@@ -200,6 +259,7 @@ class HookValidator:
         self._check_url_presence(hook, result)
         self._check_emoji_density(hook, result)
         self._check_mixed_caps(hook, result)
+        self._check_llm_error_response(hook, result)
 
         result.passed = len(result.failures) == 0
         return result
@@ -329,6 +389,29 @@ class HookValidator:
 
         if caps_ratio > 0.3 and lower_ratio > 0.2:
             result.failures.append(HookFailure.MIXED_CAPS)
+
+    def _check_llm_error_response(self, hook: str, result: HookValidationResult) -> None:
+        """Rule 10 (2026-06-21): LLM error/refusal meta-responses.
+
+        The LLM sometimes responds with an instruction-style refusal/error
+        message ("I need more story details to write an effective hook")
+        instead of the requested content. None of rules 1-9 catch this:
+        the text is syntactically valid (long enough, no markdown, complete
+        sentence, no URL) — but semantically a refusal that must never
+        reach the publish stage as user-visible content.
+
+        Prod symptom (2026-06-20 SpliceReel YouTube short ``QrNDe-egDrg``):
+        title was literally ``"I need more story details to write an
+        effective hook...."`` — same content's IG/FB hooks were correct,
+        so the failure was isolated to the YouTube title path.
+
+        See ``_LLM_ERROR_RE`` at module scope for the pattern set + the
+        "anchor to start of string" rationale that minimizes false
+        positives on legitimate content (e.g., "Why I cannot stop watching
+        this trailer" passes — doesn't START with "I cannot ").
+        """
+        if _LLM_ERROR_RE.match(hook.strip()):
+            result.failures.append(HookFailure.LLM_ERROR_RESPONSE)
 
 
 # ------------------------------------------------------------------
