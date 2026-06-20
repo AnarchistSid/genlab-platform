@@ -45,9 +45,14 @@ class TestRunwayEndpoint:
 
     @patch("server.api.runway._get_client")
     def test_runway_critical_when_low_approved(self, mock_get, client):
+        # PR #396: the runway endpoint now groups VISUAL_READY records
+        # by ``niche_id`` in Python (one fetch for ALL niches instead
+        # of per-niche). Tests must therefore set ``niche_id`` on each
+        # record — pre-PR the mock returned the same records to every
+        # per-niche call regardless of arg, so the field was ignorable.
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            {"id": "1", "fields": {"action_taken": "approved"}},
+            {"id": "1", "fields": {"action_taken": "approved", "niche_id": "ai_creators"}},
         ]
         mock_get.return_value = mock_client
 
@@ -59,9 +64,15 @@ class TestRunwayEndpoint:
 
     @patch("server.api.runway._get_client")
     def test_runway_ok_when_enough_approved(self, mock_get, client):
+        # See note in test_runway_critical_when_low_approved about
+        # the PR #396 niche_id grouping change.
         mock_client = MagicMock()
         mock_client.blueprints.all.return_value = [
-            {"id": str(i), "fields": {"action_taken": "approved"}} for i in range(10)
+            {
+                "id": str(i),
+                "fields": {"action_taken": "approved", "niche_id": "ai_creators"},
+            }
+            for i in range(10)
         ]
         mock_get.return_value = mock_client
 
