@@ -93,6 +93,10 @@ def _sign(body: bytes, secret: str) -> str:
 def test_post_comment_dispatches_normal(client, monkeypatch):
     """A regular comment dispatches to reply_to_comment_normal."""
     monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+    # 2026-06-20 hardening: existing tests assume signature-skip is OK.
+    # The new default refuses unsigned events — explicitly opt into dev
+    # mode for these tests so the existing behavior is preserved.
+    monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
     payload = _make_comment_payload("c_001", "Great clip!")
     body = json.dumps(payload).encode()
 
@@ -110,6 +114,10 @@ def test_post_comment_dispatches_normal(client, monkeypatch):
 def test_post_question_dispatches_high(client, monkeypatch):
     """A comment with '?' dispatches to reply_to_comment_high."""
     monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+    # 2026-06-20 hardening: existing tests assume signature-skip is OK.
+    # The new default refuses unsigned events — explicitly opt into dev
+    # mode for these tests so the existing behavior is preserved.
+    monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
     payload = _make_comment_payload("c_002", "What settings do you use?")
     body = json.dumps(payload).encode()
 
@@ -125,6 +133,10 @@ def test_post_question_dispatches_high(client, monkeypatch):
 def test_post_non_json_body_returns_ok(client, monkeypatch):
     """Non-JSON body returns 200 (fail-open to prevent Meta retry floods)."""
     monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+    # 2026-06-20 hardening: existing tests assume signature-skip is OK.
+    # The new default refuses unsigned events — explicitly opt into dev
+    # mode for these tests so the existing behavior is preserved.
+    monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
     resp = client.post("/webhooks/meta", content=b"not-json-at-all")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -166,6 +178,10 @@ def test_post_valid_signature_accepted(client, monkeypatch):
 def test_post_no_comment_field_ignored(client, monkeypatch):
     """A change with field != 'comments' is silently ignored."""
     monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+    # 2026-06-20 hardening: existing tests assume signature-skip is OK.
+    # The new default refuses unsigned events — explicitly opt into dev
+    # mode for these tests so the existing behavior is preserved.
+    monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
     payload = {
         "object": "instagram",
         "entry": [
@@ -250,3 +266,107 @@ class TestResolveNicheInjectionGuard:
             mock_bc.return_value.publishing_analytics.all.return_value = []
             assert _resolve_niche("123_456") == "ai_creators"
         mock_bc.return_value.publishing_analytics.all.assert_called_once()
+
+
+class TestMandatorySignatureVerification:
+    """Pin the 2026-06-20 hardening: when ``META_APP_SECRET`` is missing
+    AND the default require-signature is in effect, the webhook MUST
+    refuse the request rather than silently accept an unsigned event.
+
+    Pre-fix the check was ``if _APP_SECRET: <verify>`` — an unset
+    secret resulted in every POST being accepted without verification.
+    An attacker who learned the public URL could inject fake comment
+    events: spam the engagement engine, exhaust dramatiq workers,
+    force reply-LLM API cost, or trigger replies to non-existent
+    comments on operator-owned pages.
+    """
+
+    def test_no_secret_default_returns_503(self, client, monkeypatch):
+        """``META_APP_SECRET`` missing + ``GENLAB_REQUIRE_WEBHOOK_SIGNATURE``
+        default-on → POST is refused with 503."""
+        monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+        monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", True)
+        resp = client.post("/webhooks/meta", content=b'{"any": "body"}')
+        assert resp.status_code == 503, (
+            "Pre-fix this would have been 200 (silent accept). The defense is "
+            "503 — operator must explicitly configure META_APP_SECRET or "
+            "explicitly opt OUT via GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0."
+        )
+        # Error message must name the env var so operators can fix it
+        assert "META_APP_SECRET" in resp.json()["detail"]
+
+    def test_no_secret_with_dev_escape_hatch_returns_200(self, client, monkeypatch):
+        """The dev/test escape hatch: ``META_APP_SECRET`` missing AND
+        ``GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0`` (parsed as False) →
+        POST is accepted with a WARNING log. Pin this so operators
+        running localhost dev servers aren't blocked."""
+        monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "")
+        monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
+        resp = client.post("/webhooks/meta", content=b'{"any": "body"}')
+        # 200 because the webhook also fail-opens on non-JSON / unknown
+        # event shapes (prevents Meta retry floods). The point is the
+        # request is ACCEPTED, not refused with 503.
+        assert resp.status_code == 200
+
+    def test_secret_set_still_validates_signature(self, client, monkeypatch):
+        """When ``META_APP_SECRET`` IS set, signature validation runs
+        regardless of the require-signature env. Bad signature → 403.
+        Pin against any regression that accidentally short-circuits
+        the verify when the env is provided."""
+        monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "real_secret")
+        monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", True)
+        resp = client.post(
+            "/webhooks/meta",
+            content=b'{"any": "body"}',
+            headers={"X-Hub-Signature-256": "sha256=wrong"},
+        )
+        assert resp.status_code == 403
+
+    def test_secret_set_with_dev_flag_still_validates(self, client, monkeypatch):
+        """When ``META_APP_SECRET`` IS set, signature validation runs
+        even if ``GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0``. The dev flag
+        only governs the missing-secret case, not the verification
+        itself. Belt + suspenders pin."""
+        monkeypatch.setattr("genlab_core.engagement.webhook._APP_SECRET", "real_secret")
+        monkeypatch.setattr("genlab_core.engagement.webhook._REQUIRE_SIGNATURE", False)
+        resp = client.post(
+            "/webhooks/meta",
+            content=b'{"any": "body"}',
+            headers={"X-Hub-Signature-256": "sha256=wrong"},
+        )
+        assert resp.status_code == 403, (
+            "GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0 must NOT disable signature "
+            "VERIFICATION when META_APP_SECRET is set — it only governs "
+            "the missing-secret case."
+        )
+
+    def test_require_signature_parses_truthy_strings(self, monkeypatch):
+        """The env-var parsing accepts the documented falsy values
+        (``"0"``, ``"false"``, ``"False"``, ``"FALSE"``, ``"no"``) as
+        opt-OUT. Everything else (including unset → default) treats
+        as opt-IN to mandatory signature. Pin the parsing so future
+        edits don't accidentally widen the opt-out (e.g. adding
+        ``"off"`` without thinking through the security impact).
+        """
+        import importlib
+
+        # Truthy: env unset, "1", "true", and even garbage like "x"
+        for v in ["1", "true", "yes", "anything"]:
+            monkeypatch.setenv("GENLAB_REQUIRE_WEBHOOK_SIGNATURE", v)
+            from genlab_core.engagement import webhook
+
+            importlib.reload(webhook)
+            assert webhook._REQUIRE_SIGNATURE is True, (
+                f"env={v!r} must be parsed as require-signature=True "
+                f"(only the documented falsy values may opt out)"
+            )
+
+        # Falsy: documented opt-out values
+        for v in ["0", "false", "False", "FALSE", "no"]:
+            monkeypatch.setenv("GENLAB_REQUIRE_WEBHOOK_SIGNATURE", v)
+            from genlab_core.engagement import webhook
+
+            importlib.reload(webhook)
+            assert webhook._REQUIRE_SIGNATURE is False, (
+                f"env={v!r} must be parsed as require-signature=False"
+            )

@@ -26,6 +26,18 @@ app = FastAPI(title="GenLab Engagement Webhook")
 
 _VERIFY_TOKEN = os.environ.get("META_WEBHOOK_VERIFY_TOKEN", "")
 _APP_SECRET = os.environ.get("META_APP_SECRET", "")
+# 2026-06-20 hardening: by default, refuse to accept unsigned events
+# when META_APP_SECRET is missing. Operators in dev/test environments
+# can set this to ``"0"`` to fall back to "accept unsigned with WARNING"
+# behaviour — the only safe place to do that is when the webhook is
+# bound to localhost or a private network.
+_REQUIRE_SIGNATURE = os.environ.get("GENLAB_REQUIRE_WEBHOOK_SIGNATURE", "1") not in (
+    "0",
+    "false",
+    "False",
+    "FALSE",
+    "no",
+)
 
 # Meta object IDs (media/comment) are numeric, occasionally with an underscore
 # separator (e.g. ``<page>_<post>``). R-60: anything outside this shape is
@@ -99,8 +111,45 @@ async def receive_meta_event(request: Request):
     """
     body = await request.body()
 
-    # Signature verification
-    if _APP_SECRET:
+    # Signature verification (MANDATORY, 2026-06-20 hardening).
+    #
+    # Pre-fix the check was ``if _APP_SECRET: <verify>`` — when
+    # ``META_APP_SECRET`` was unset, signature verification SILENTLY
+    # SKIPPED and every POST to ``/webhooks/meta`` was accepted as
+    # valid. An attacker who learned the public URL could inject fake
+    # comment events: spam the engagement engine, exhaust dramatiq
+    # workers, force reply-LLM API calls (cost), or trigger replies
+    # to non-existent comments (auditable footprint on the
+    # operator-owned brand pages).
+    #
+    # Two-layer defense:
+    #   1. ``GENLAB_REQUIRE_WEBHOOK_SIGNATURE`` env (default ``"1"``)
+    #      means "fail loudly on every request if ``META_APP_SECRET``
+    #      is missing". Set to ``"0"`` ONLY in dev/test environments
+    #      where the webhook is reachable only from localhost / a
+    #      private network.
+    #   2. When ``META_APP_SECRET`` IS set, verification is performed
+    #      and a bad signature still raises 403.
+    if not _APP_SECRET:
+        if _REQUIRE_SIGNATURE:
+            logger.error(
+                "[WEBHOOK] META_APP_SECRET is not set; refusing to accept "
+                "unsigned event. Set the env var, or set "
+                "GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0 for dev/test only."
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Webhook signature verification not configured "
+                    "(META_APP_SECRET missing). Refusing unsigned event."
+                ),
+            )
+        # Dev/test escape hatch — operator must explicitly opt OUT
+        logger.warning(
+            "[WEBHOOK] META_APP_SECRET unset AND GENLAB_REQUIRE_WEBHOOK_SIGNATURE=0; "
+            "accepting UNSIGNED event (dev mode)"
+        )
+    else:
         sig_header = request.headers.get("X-Hub-Signature-256", "")
         expected = "sha256=" + hmac.new(_APP_SECRET.encode(), body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig_header, expected):
