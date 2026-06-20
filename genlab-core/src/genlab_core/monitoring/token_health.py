@@ -419,6 +419,11 @@ def _run_native_platform_checks(niche_ids: tuple[str, ...] = _DEFAULT_NICHE_IDS)
     # (no per-niche kwarg). This preserves the pre-fix call shape for
     # callers/tests that opt out of per-niche checking.
     iter_niches = niche_ids if niche_ids else ("",)
+    # 2026-06-21 hotfix: track platforms whose ``__init__`` doesn't accept
+    # ``niche_id`` yet (e.g., the placeholder TikTokClient). Log ONCE per
+    # platform across the outer loop instead of once per (niche, platform)
+    # combination — keeps the warning surface readable on prod logs.
+    _niche_unaware_platforms_logged: set[str] = set()
     results = []
     for niche_id in iter_niches:
         for pid in list_platforms():
@@ -429,8 +434,38 @@ def _run_native_platform_checks(niche_ids: tuple[str, ...] = _DEFAULT_NICHE_IDS)
                 # ``resolve_meta_credentials(niche_id)`` etc. With
                 # ``niche_id=""`` (legacy single-pass), they fall back
                 # to global env vars — same as pre-fix.
+                #
+                # 2026-06-21 hotfix: some platform clients (TikTok at
+                # minimum) don't accept ``niche_id`` kwarg — they were
+                # never updated when per-niche credential resolution
+                # shipped. Without graceful fallback, every per-niche
+                # iteration for those clients TypeError-ed out and the
+                # whole pass crashed. Catch the niche_id-specific
+                # TypeError, log a warning naming the platform (so the
+                # operator can extend its constructor later), and fall
+                # back to the legacy global check for that one
+                # (platform × niche). Other platforms in the iteration
+                # are unaffected.
                 client_kwargs = {"niche_id": niche_id} if niche_id else {}
-                client = get_client(pid, **client_kwargs)
+                try:
+                    client = get_client(pid, **client_kwargs)
+                except TypeError as type_exc:
+                    if niche_id and "niche_id" in str(type_exc):
+                        if pid not in _niche_unaware_platforms_logged:
+                            logger.warning(
+                                "Platform %s constructor doesn't accept "
+                                "niche_id kwarg yet; falling back to global "
+                                "check (no per-niche credential validation "
+                                "for this platform). Update %sClient.__init__ "
+                                "to accept niche_id and resolve per-niche "
+                                "credentials.",
+                                pid,
+                                pid.title(),
+                            )
+                            _niche_unaware_platforms_logged.add(pid)
+                        client = get_client(pid)
+                    else:
+                        raise
                 if not isinstance(client, HealthCheckable):
                     logger.debug("Platform %s does not implement HealthCheckable — skipping", pid)
                     continue
