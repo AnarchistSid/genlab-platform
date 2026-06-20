@@ -2025,3 +2025,123 @@ class TestLinUCBStateDictPsycopgFix:
         parsed = raw_state if isinstance(raw_state, dict) else json.loads(raw_state)
         arm = LinUCBArm.from_dict(parsed)
         assert arm.A.shape == (6, 6)
+
+
+class TestCollectMetricsInjectsPercentileTargetsFn:
+    """Pin the 2026-06-20 fix: ``collect_metrics`` MUST construct a per-task
+    ``RewardShaper`` with ``percentile_targets_fn=get_percentile_target``
+    and ``niche_id=<task.niche_id>``.
+
+    Pre-fix, ``collect_metrics`` at ``metric_collector.py:572`` did
+    ``shaper = RewardShaper()`` — no args. This silently disabled the
+    percentile-relative target lookup shipped in 2026-06-13 commit
+    ``ca7be9f``. The ``self._percentile_targets_fn is None or not
+    self._niche_id`` guard at ``reward_shaper.py:344`` short-circuited
+    to the hardcoded fallback for every reward computation in prod.
+
+    Symptom: top-arm avg_reward stuck near 0.08 (vs the intended ~0.7
+    for the 70th-percentile floor), bandit effectively unable to
+    differentiate high- from low-performing arms within a niche.
+
+    Fix: construct shaper per-task inside the loop, passing both
+    ``percentile_targets_fn`` and the task's ``niche_id`` (which can
+    differ per task; ``collect_metrics``'s ``niche_id`` arg is an
+    optional FILTER, not a partition).
+    """
+
+    @patch("genlab_core.learning.metric_collector.process_pending_task")
+    @patch("genlab_core.learning.metric_collector.PendingFeedbackStore")
+    def test_shaper_passed_to_process_has_percentile_fn_and_niche(
+        self, mock_store_cls, mock_process
+    ):
+        """When ``collect_metrics`` dispatches a task to
+        ``process_pending_task``, the ``shaper`` argument MUST have
+        both ``_percentile_targets_fn`` and ``_niche_id`` populated
+        from the task. This is the pin that catches the regression
+        if anyone removes the per-task construction.
+        """
+        from genlab_core.learning.metric_collector import collect_metrics
+        from genlab_core.learning.percentile_targets import get_percentile_target
+
+        # One pending task for the gaming niche
+        task = _make_task(platform="instagram", niche_id="gaming", content_type="reaction")
+        store_instance = MagicMock()
+        store_instance.get_pending.return_value = [task]
+        store_instance.next_collection_window.return_value = "48h"
+        mock_store_cls.return_value = store_instance
+
+        # process_pending_task is mocked — we only care WHAT was passed
+        mock_process.return_value = True
+
+        # Run with a stub backlog_client so we don't try to construct one
+        collect_metrics(niche_id=None, backlog_client=MagicMock(), bandit_updater=None)
+
+        mock_process.assert_called_once()
+        passed_shaper = mock_process.call_args.args[2]  # (task, store, shaper, ...)
+
+        # The two invariants — without either, percentile fallback fires
+        assert passed_shaper._percentile_targets_fn is get_percentile_target, (
+            "RewardShaper must be constructed with percentile_targets_fn=get_percentile_target "
+            "or the 2026-06-13 ca7be9f fix is dead code in production"
+        )
+        assert passed_shaper._niche_id == "gaming", (
+            "RewardShaper must carry the per-task niche_id, not the optional "
+            "collect_metrics niche_id filter (which can be None)"
+        )
+
+    @patch("genlab_core.learning.metric_collector.process_pending_task")
+    @patch("genlab_core.learning.metric_collector.PendingFeedbackStore")
+    def test_per_task_niche_id_when_multiple_niches_in_one_run(self, mock_store_cls, mock_process):
+        """When ``collect_metrics`` processes tasks from MULTIPLE niches
+        in one call (because ``niche_id=None`` returns all pending),
+        EACH task's shaper must carry that task's specific niche_id.
+
+        Pin this because the bug-class "single shared shaper with one
+        global niche_id" would silently apply the wrong percentile
+        target to most tasks.
+        """
+        from genlab_core.learning.metric_collector import collect_metrics
+
+        tasks = [
+            _make_task(platform="instagram", niche_id="gaming", content_type="t1"),
+            _make_task(platform="youtube", niche_id="sports", content_type="t2"),
+            _make_task(platform="facebook", niche_id="movies", content_type="t3"),
+        ]
+        store_instance = MagicMock()
+        store_instance.get_pending.return_value = tasks
+        store_instance.next_collection_window.return_value = "48h"
+        mock_store_cls.return_value = store_instance
+
+        mock_process.return_value = True
+
+        collect_metrics(niche_id=None, backlog_client=MagicMock(), bandit_updater=None)
+
+        assert mock_process.call_count == 3
+        # Each call's shaper must match the corresponding task's niche
+        expected_niches = ["gaming", "sports", "movies"]
+        for call, expected_niche in zip(mock_process.call_args_list, expected_niches, strict=True):
+            shaper_arg = call.args[2]
+            assert shaper_arg._niche_id == expected_niche, (
+                f"Per-task shaper niche_id mismatch: expected {expected_niche}, "
+                f"got {shaper_arg._niche_id}. Sharing one shaper across tasks "
+                f"would cause this — the fix requires per-task construction."
+            )
+
+    @patch("genlab_core.learning.metric_collector.process_pending_task")
+    @patch("genlab_core.learning.metric_collector.PendingFeedbackStore")
+    def test_no_shaper_constructed_when_no_pending_tasks(self, mock_store_cls, mock_process):
+        """When ``get_pending`` returns [], no shaper is constructed
+        (early-return path at line 575). This pins the optimization —
+        if someone moves the shaper construction back outside the loop,
+        this test fails.
+        """
+        from genlab_core.learning.metric_collector import collect_metrics
+
+        store_instance = MagicMock()
+        store_instance.get_pending.return_value = []
+        mock_store_cls.return_value = store_instance
+
+        result = collect_metrics(niche_id=None, backlog_client=MagicMock(), bandit_updater=None)
+
+        assert result == 0
+        mock_process.assert_not_called()
