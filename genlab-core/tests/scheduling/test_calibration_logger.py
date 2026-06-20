@@ -22,6 +22,7 @@ from genlab_core.scheduling.calibration_logger import (
     CalibrationStats,
     log,
     stats,
+    stats_all_niches,
 )
 
 
@@ -203,6 +204,45 @@ class TestStats:
             assert s.agreement_count == 32  # tp + tn
             assert abs(s.agreement_rate - 0.914) < 0.01
             assert s.ready_for_enforcement is True  # ≥30 samples + ≥90%
+
+
+class TestStatsAllNiches:
+    """PR #392 — batch variant of stats() returns per-niche dict in ONE query."""
+
+    def test_no_db_returns_empty_dict(self, clean_env):
+        assert stats_all_niches() == {}
+
+    def test_query_returns_per_niche_results(self, monkeypatch):
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake")
+        # 3 niches have data: gaming(50,46), ai_creators(20,15), movies(8,5).
+        # sports + anime are absent — caller fills with zeros.
+        mock_psycopg = MagicMock()
+        mock_cur = MagicMock()
+        mock_cur.fetchall.return_value = [
+            ("gaming", 50, 40, 6, 3, 1),  # niche, sample, tp, tn, fp, fn
+            ("ai_creators", 20, 12, 3, 4, 1),
+            ("movies", 8, 4, 1, 2, 1),
+        ]
+        mock_conn = MagicMock()
+        mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+        mock_psycopg.connect.return_value.__enter__.return_value = mock_conn
+        with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
+            result = stats_all_niches(window_days=7)
+        assert set(result.keys()) == {"gaming", "ai_creators", "movies"}
+        assert result["gaming"].sample_count == 50
+        assert result["gaming"].agreement_count == 46  # tp + tn
+        assert result["gaming"].ready_for_enforcement is True  # ≥30 + ≥90%
+        assert result["ai_creators"].sample_count == 20
+        assert result["ai_creators"].ready_for_enforcement is False  # <30 samples
+        assert result["movies"].sample_count == 8
+
+    def test_query_failure_returns_empty_dict_fail_open(self, monkeypatch):
+        """Same fail-open contract as stats() — empty dict on DB error."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake")
+        mock_psycopg = MagicMock()
+        mock_psycopg.connect.side_effect = Exception("connection refused")
+        with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
+            assert stats_all_niches() == {}
 
 
 class TestReadyForEnforcement:
