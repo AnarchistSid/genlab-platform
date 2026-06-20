@@ -75,12 +75,24 @@ class RelevanceFilter:
         return min(1.0, hits / denominator)
 
     def filter(self, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Filter candidates, attaching relevance_score to each. Returns kept list."""
+        """Filter candidates, attaching relevance_score to each. Returns kept list.
+
+        Reads the secondary text from ``description`` (YouTube API shape) or
+        ``summary`` (RSS / BlackboxBrief legacy-bridge shape). Falling back
+        between the two restores relevance scoring for BB stories whose
+        ``content_research.py`` bridge populates ``summary`` instead of
+        ``description`` — pre-fix, those stories were scored on the title
+        alone, which let off-niche videos pass when the title was generic.
+        """
         kept: list[dict[str, Any]] = []
         rejected: list[dict[str, Any]] = []
 
         for v in candidates:
-            s = self.score(v.get("title", ""), v.get("description", ""))
+            # Prefer ``description`` (YouTube API field), fall back to
+            # ``summary`` (RSS feeds + BB legacy-bridge field) so that
+            # neither producer is forced to rename its data shape.
+            secondary_text = v.get("description") or v.get("summary", "")
+            s = self.score(v.get("title", ""), secondary_text)
             v["relevance_score"] = s
             if s >= self.threshold:
                 kept.append(v)
