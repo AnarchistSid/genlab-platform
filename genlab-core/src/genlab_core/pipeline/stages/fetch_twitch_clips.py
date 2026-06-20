@@ -37,6 +37,79 @@ _DEFAULT_GAME_IDS = [
 ]
 
 
+# Title-keyword markers for non-gameplay Twitch clips. A clip captured
+# while a streamer is in a "real" game category can still be an IRL
+# moment (reacting to chat, talking about life, eating, etc.) — the
+# game category check upstream doesn't filter these out because the
+# streamer technically WAS in that game's category at clip-time.
+#
+# These markers are conservative — we drop a clip when its title (which
+# the streamer or their chat names) clearly indicates non-gameplay
+# content. False-negatives are fine (we'll see them in another run);
+# false-positives (dropping a real gameplay clip) are also acceptable
+# because we have other sources (YouTube trending, Reddit, Steam).
+#
+# Caught in prod 2026-06-20 from a streamer "zullysk" Overwatch IRL-tic
+# clip that the LLM then hallucinated full Overwatch patch-notes content
+# around. Operator screenshot in the PR body.
+#
+# All markers are space-padded so they don't fragment-match inside
+# game/team/word names ("tic" inside "tactical", "irl" inside "irlbgames").
+_NON_GAMEPLAY_TITLE_MARKERS = (
+    # Every marker MUST be bracketed by spaces (or punctuation that
+    # the padded-with-spaces matcher treats as a boundary) so
+    # ``irlbgames`` doesn't false-positive on `` irl``. Verified
+    # by ``test_substring_false_positive_guard``.
+    " irl ",
+    " tic ",
+    " tics ",
+    " tic moment ",
+    " rant ",
+    " rants ",
+    " react ",
+    " reaction ",
+    " reacts ",
+    " talking ",
+    " talks about ",
+    " chat ",
+    " just chat ",
+    " story time ",
+    " storytime ",
+    " explains why ",
+    " opens up ",
+    " breaks down crying ",
+    " cries on stream ",
+    " asmr ",
+    " ramble ",
+    " rambles ",
+    " yelling at chat ",
+    " rant about ",
+    " chatting ",
+    " fan questions ",
+    " q&a ",
+    " qna ",
+    " ask me anything ",
+    " ama ",
+)
+
+
+def _is_non_gameplay_clip(title: str) -> bool:
+    """Return True when ``title`` contains a non-gameplay marker.
+
+    Conservative title-text heuristic for filtering Twitch clips that
+    were captured during non-gameplay moments (IRL reactions, talking,
+    chat, ASMR, etc.) even though the clip is attached to a real game
+    category. Caller drops the clip when this returns True.
+
+    Lowercase + bracketed by spaces so we don't accidentally match
+    substring fragments inside game/team/word names.
+    """
+    if not title:
+        return False
+    padded = " " + title.lower().strip() + " "
+    return any(marker in padded for marker in _NON_GAMEPLAY_TITLE_MARKERS)
+
+
 def _get_twitch_app_token(client_id: str, client_secret: str) -> str | None:
     """Get Twitch app access token via client credentials flow."""
     try:
@@ -165,6 +238,30 @@ class FetchTwitchClips(FetcherStage):
         all_clips = [c for c in all_clips if c.get("view_count", 0) >= min_views]
         all_clips.sort(key=lambda x: x.get("view_count", 0), reverse=True)
         logger.info("[TwitchClips] %d clips passed view filter (>=%d)", len(all_clips), min_views)
+
+        # Drop clips whose title indicates the captured moment is
+        # non-gameplay (IRL talking, reacts, ASMR, rants, etc.) even
+        # though the streamer was technically in a real game category.
+        # Without this, the LLM downstream hallucinated full gameplay-
+        # themed content around clips of streamers just talking in
+        # their rooms. See `_is_non_gameplay_clip` and the prod
+        # screenshot in the PR body. Added 2026-06-20.
+        before_filter = len(all_clips)
+        non_gameplay_titles: list[str] = []
+        kept: list[dict] = []
+        for clip in all_clips:
+            if _is_non_gameplay_clip(clip.get("title", "")):
+                non_gameplay_titles.append(clip.get("title", "")[:80])
+                continue
+            kept.append(clip)
+        all_clips = kept
+        if non_gameplay_titles:
+            logger.info(
+                "[TwitchClips] Dropped %d/%d non-gameplay clips by title heuristic: %s",
+                len(non_gameplay_titles),
+                before_filter,
+                non_gameplay_titles[:5],
+            )
 
         if all_clips:
             from genlab_core.cache.stable_ids import generate_story_id
