@@ -40,6 +40,51 @@ class QCGates:
             logger.info("[QCGates] No stories to validate")
             return context
 
+        # Filter out stories that earlier stages marked unpublishable.
+        # ``_skip_llm=True`` is set by:
+        #   * VideoGate (video_gate.py:205) when no valid clip exists
+        #   * WritingStrategy (base_writing.py:446) when LLM returned an
+        #     empty hook (banned/off-topic/un-writable content)
+        # Both signals mean: the content cannot be published. The story
+        # WILL be dropped at PushToBacklog (push_to_backlog.py:1173).
+        # Validating them here produces misleading "Missing required
+        # field: caption/body" failures that mask real QC regressions —
+        # the operator-facing dashboard's QC pass rate then attributes
+        # the problem to writing-quality regression when the actual
+        # cause is upstream (no clip / un-writable source).
+        #
+        # The bug surface (2026-06-20): HookStrategy's title-derived
+        # recovery (base_hooks.py:275, 296) pops ``_skip_llm`` for some
+        # stories whose LLM-skip was at the writing stage. Those
+        # stories then survive this filter, retain a recovered hook,
+        # but have no caption/body — failing QC for the wrong reason.
+        # Filtering by ``_skip_llm`` BEFORE recovery would be too
+        # aggressive (some recoveries DO complete the story). The
+        # right filter is here, AFTER all stages have had their chance
+        # to fix incomplete stories, and BEFORE QC validates them.
+        pre_filter = len(blueprints)
+        blueprints = [bp for bp in blueprints if not bp.get("_skip_llm")]
+        excluded = pre_filter - len(blueprints)
+        if excluded > 0:
+            logger.info(
+                "[QCGates] Excluded %d LLM-skipped stories from QC "
+                "(will be dropped at push_to_backlog)",
+                excluded,
+            )
+
+        if not blueprints:
+            logger.info("[QCGates] All stories LLM-skipped — nothing to validate")
+            context.setdefault("run_stats", {})["qc"] = {
+                "passed": 0,
+                "failed": 0,
+                "total": 0,
+                "pass_rate": "n/a",
+                "failure_reasons": {},
+                "failure_examples": [],
+                "excluded_skip_llm": excluded,
+            }
+            return context
+
         config = context.get("niche_config", {})
 
         # Pre-validation: 3-pass dedup to remove near-duplicate stories
@@ -145,6 +190,11 @@ class QCGates:
             "pass_rate": rate,
             "failure_reasons": failure_reasons,
             "failure_examples": failure_examples,
+            # Surface the upstream-skip count so the dashboard can
+            # distinguish "writing produced bad blueprints" from
+            # "writing correctly declined to write un-publishable
+            # source material". Pre-fix these were conflated.
+            "excluded_skip_llm": excluded,
         }
 
         return context
