@@ -3,26 +3,36 @@
 from pathlib import Path
 
 import yaml
+from genlab_core.niche_loader import load_niche_config
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+NICHE_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_DIR = NICHE_ROOT / "config"
 
 
 def _load(name: str) -> dict:
+    """Raw YAML loader for non-niche.yaml files (sources/visuals/templates etc.)"""
     with open(CONFIG_DIR / name) as f:
         return yaml.safe_load(f)
 
 
+def _load_niche() -> dict:
+    """Load niche.yaml via niche_loader so the P4 pipeline_template merge
+    (pipeline.inject → pipeline.stages) runs.
+    """
+    return load_niche_config("anime", NICHE_ROOT)
+
+
 class TestNicheConfig:
     def test_niche_id_is_anime(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         assert cfg["niche_id"] == "anime"
 
     def test_accent_color_is_sakura_pink(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         assert cfg["accent_color"] == "#7B3FE4"
 
     def test_pipeline_has_19_enabled_stages(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
         # Asserting *which* stages are present (rather than *how many*) means
         # adding a new stage doesn't break this test — only removing or
@@ -46,25 +56,25 @@ class TestNicheConfig:
         assert not missing, f"required stages missing/disabled in niche.yaml: {missing}"
 
     def test_enabled_stages_reference_allowed_packages(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
         allowed_prefixes = ("fd_strategies.", "genlab_core.")
         for stage in enabled:
             assert stage["class"].startswith(allowed_prefixes), f"Bad stage: {stage['class']}"
 
     def test_trend_cycle_config_present(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         tc = cfg["freshness"]["trend_cycle_modes"]
         assert tc["emerging_window_hours"] == 24
         assert tc["peak_window_hours"] == 72
         assert tc["declining_threshold_hours"] == 96
 
     def test_decay_half_life_is_24h(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         assert cfg["freshness"]["decay_half_life_hours"] == 24.0
 
     def test_brand_sensitivity_protected_brands(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         brands = cfg["brand_sensitivity"]["protected_brands"]
         assert "Studio Ghibli" in brands
         assert "MAPPA" in brands

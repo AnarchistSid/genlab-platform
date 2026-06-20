@@ -3,18 +3,30 @@
 from pathlib import Path
 
 import yaml
+from genlab_core.niche_loader import load_niche_config
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+NICHE_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_DIR = NICHE_ROOT / "config"
 
 
 def _load(name: str) -> dict:
+    """Raw YAML loader for non-niche.yaml files (sources/visuals/templates etc.)"""
     with open(CONFIG_DIR / name) as f:
         return yaml.safe_load(f)
 
 
+def _load_niche() -> dict:
+    """Load niche.yaml via the niche_loader so the P4 pipeline_template
+    merge (pipeline.inject → pipeline.stages) runs. Direct yaml.safe_load
+    of the raw niche.yaml file no longer contains pipeline.stages after
+    the P4 migration — only pipeline.inject + pipeline_template: backbone.
+    """
+    return load_niche_config("movies", NICHE_ROOT)
+
+
 class TestNicheConfig:
     def test_niche_id_is_movies(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         assert cfg["niche_id"] == "movies"
 
     def test_required_stages_are_enabled(self):
@@ -26,7 +38,7 @@ class TestNicheConfig:
         unrelated PRs in one week needed a count-bump just because a stage
         was added or re-enabled.
         """
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         enabled_classes = {s["class"] for s in cfg["pipeline"]["stages"] if s.get("enabled", True)}
         required = {
             # Fetch + score
@@ -50,21 +62,21 @@ class TestNicheConfig:
         assert not missing, f"required stages missing/disabled in niche.yaml: {missing}"
 
     def test_enabled_stages_reference_allowed_packages(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         enabled = [s for s in cfg["pipeline"]["stages"] if s.get("enabled", True)]
         allowed_prefixes = ("sr_strategies.", "genlab_core.")
         for stage in enabled:
             assert stage["class"].startswith(allowed_prefixes), f"Bad stage: {stage['class']}"
 
     def test_lifecycle_config_present(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         lc = cfg["freshness"]["film_lifecycle_modes"]
         assert lc["pre_release_days"] == 30
         assert lc["opening_weekend_hours"] == 72
         assert lc["long_tail_days"] == 21
 
     def test_decay_half_life_is_48h(self):
-        cfg = _load("niche.yaml")
+        cfg = _load_niche()
         assert cfg["freshness"]["decay_half_life_hours"] == 48.0
 
 
