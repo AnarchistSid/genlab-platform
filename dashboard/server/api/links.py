@@ -176,6 +176,16 @@ _catalog_cache: dict = {}
 _catalog_cache_ts: float = 0.0
 _CATALOG_TTL = 300  # 5 minutes
 
+# Slug → (niche_id, product_dict) reverse-lookup index, rebuilt every time
+# the catalog cache is refreshed. Hot-path `/links/go/<slug>` was doing
+# an O(niches × products) linear scan + slugify per click; with the index
+# it's a single O(1) dict lookup. See PR #390.
+#
+# Cleared/rebuilt in ``_load_catalog()`` whenever the underlying catalog
+# is (re)read from disk, so the index can never drift from the catalog
+# it indexes.
+_product_slug_index: dict[str, tuple[str, dict]] = {}
+
 
 def _expand_catalog_env_vars(catalog: dict) -> dict:
     """Backwards-compat shim — delegates to the canonical loader.
@@ -192,6 +202,43 @@ def _expand_catalog_env_vars(catalog: dict) -> dict:
     return expand_env_vars(catalog)
 
 
+def _rebuild_slug_index(catalog: dict) -> None:
+    """Build the slug → (niche_id, product) reverse-lookup index.
+
+    Called whenever the catalog cache is (re)populated. Last write wins
+    when two niches expose products with the same slug — operators
+    should keep slugs globally unique, and the regression test pins
+    the contract by counting unique-vs-total slugs at load time.
+    """
+    index: dict[str, tuple[str, dict]] = {}
+    duplicates: list[tuple[str, str, str]] = []  # (slug, first_niche, second_niche)
+    for niche_id, niche_data in (catalog.get("niches") or {}).items():
+        for product in niche_data.get("products", []):
+            if not product.get("enabled", True):
+                continue
+            name = product.get("name")
+            if not name:
+                continue
+            slug = _product_slug(name)
+            if slug in index:
+                duplicates.append((slug, index[slug][0], niche_id))
+            index[slug] = (niche_id, product)
+    if duplicates:
+        # Log loudly — duplicate slugs mean one product's clicks redirect
+        # to the wrong network/URL. Not a hard error (operator may
+        # genuinely want overlap), but operators should know.
+        for slug, first, second in duplicates:
+            logger.warning(
+                "[Links] Duplicate product slug '%s' across niches '%s' and '%s' — "
+                "second wins in /links/go/ resolution",
+                slug,
+                first,
+                second,
+            )
+    global _product_slug_index
+    _product_slug_index = index
+
+
 def _load_catalog() -> dict:
     """Load affiliate catalog YAML with 5-minute in-memory cache.
 
@@ -201,6 +248,10 @@ def _load_catalog() -> dict:
     (see ``catalog_loader.py`` docstring for the bug history).
     Caching policy + the warn-and-serve-stale fallback stay local
     because they are dashboard-specific.
+
+    Also (re)builds the slug → product reverse-lookup index used by
+    ``_find_product_globally`` so the index can never go stale relative
+    to the catalog it indexes.
     """
     global _catalog_cache, _catalog_cache_ts
     now = time.time()
@@ -211,6 +262,7 @@ def _load_catalog() -> dict:
 
         _catalog_cache = load_catalog(_CATALOG_PATH)
         _catalog_cache_ts = now
+        _rebuild_slug_index(_catalog_cache)
         return _catalog_cache
     except Exception as e:
         logger.warning("[Links] Failed to load affiliate catalog: %s", e)
@@ -264,11 +316,34 @@ def _product_slug(name: str) -> str:
 def _find_product_globally(
     catalog: dict, slug: str, country: str = ""
 ) -> tuple[str, str, dict] | None:
-    """Search all niches for a product matching the slug.
+    """Look up a product by slug across all niches.
 
     Returns (niche_id, network_name, product_dict) or None.
     ``country`` is a 2-letter ISO code used for geo-routing (e.g. ``IN``, ``US``).
+
+    O(1) hash lookup via ``_product_slug_index`` (built in
+    ``_load_catalog()``). Previously was an O(niches × products) linear
+    scan + slugify per click — at ~5 niches × ~50 products per niche
+    that meant ~250 string compares per ``/links/go/<slug>`` redirect.
+    The index lifts that to a single dict lookup.
+
+    ``catalog`` parameter retained for callers that want strict
+    deterministic mode (test fixtures pass a hand-built catalog);
+    when ``catalog`` matches the cached one, we use the cached index,
+    otherwise fall back to the original linear scan against the
+    caller-supplied catalog so tests stay deterministic.
     """
+    # Fast path: caller passed the cached catalog (the production path
+    # via ``_load_catalog()``). Use the prebuilt index.
+    if catalog is _catalog_cache and slug in _product_slug_index:
+        niche_id, product = _product_slug_index[slug]
+        network_name, network_data = _best_network(product.get("networks", {}), country=country)
+        if network_name:
+            return niche_id, network_name, {**product, "_best_network": network_data}
+        return None
+    # Slow path: caller passed a non-cached catalog (e.g. unit-test
+    # fixture with a hand-built dict). Preserve legacy linear-scan
+    # behavior so test contracts stay stable.
     niches = catalog.get("niches", {})
     for niche_id, niche_data in niches.items():
         for product in niche_data.get("products", []):
