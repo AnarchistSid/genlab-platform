@@ -51,9 +51,31 @@ def _char_ngrams(text: str, n: int = 3) -> set[str]:
 
 
 def jaccard_similarity(a: str, b: str, n: int = 3) -> float:
-    """Jaccard similarity between two strings using character n-grams."""
+    """Jaccard similarity between two strings using character n-grams.
+
+    Computes n-grams on every call — fine for one-shot comparisons. For
+    nested-loop callers that compare the same item to many others,
+    prefer :func:`_jaccard_from_ngrams` with precomputed n-gram sets to
+    avoid O(N²) ngram recomputation.
+    """
     ngrams_a = _char_ngrams(a, n)
     ngrams_b = _char_ngrams(b, n)
+    return _jaccard_from_ngrams(ngrams_a, ngrams_b)
+
+
+def _jaccard_from_ngrams(ngrams_a: set[str], ngrams_b: set[str]) -> float:
+    """Jaccard similarity from precomputed n-gram sets.
+
+    Internal helper for hot loops that have already computed n-grams
+    for each side (typically: caller pre-loops over items computing
+    ``_char_ngrams(item)`` once, then the inner pairwise loop calls
+    this). Lifts the dedup-engine Pass-2 inner loop from O(N²)
+    ngram-computations to O(N).
+
+    Both args must be the OUTPUT of :func:`_char_ngrams` (same ``n``
+    parameter, both lowercased). Pure set algebra — no input
+    re-validation.
+    """
     if not ngrams_a or not ngrams_b:
         return 0.0
     intersection = len(ngrams_a & ngrams_b)
@@ -134,15 +156,22 @@ class DedupEngine:
                 self._seen_url_hashes.add(url_hash)
                 after_pass1.append(item)
 
-        # Pass 2: Jaccard 3-gram similarity
+        # Pass 2: Jaccard 3-gram similarity. We precompute n-grams for
+        # the outer-loop item ONCE (used against every seen item in the
+        # inner loop) and store n-grams alongside seen_texts (computed
+        # once when an item is first added). The pre-fix code computed
+        # n-grams on every inner-loop iteration, making the pass do
+        # O(N²) ngram computations when O(N) suffice. See PR #391.
         after_pass2 = []
         seen_texts: list[str] = []
+        seen_ngrams: list[set[str]] = []
         for item in after_pass1:
             text = item.get(self.text_field, "")
+            text_ngrams = _char_ngrams(text)
             matched_against: str | None = None
             best_score = 0.0
-            for seen in seen_texts:
-                score = jaccard_similarity(text, seen)
+            for seen, seen_ng in zip(seen_texts, seen_ngrams, strict=True):
+                score = _jaccard_from_ngrams(text_ngrams, seen_ng)
                 if score >= self.jaccard_threshold and score > best_score:
                     best_score = score
                     matched_against = seen
@@ -158,6 +187,7 @@ class DedupEngine:
                 )
             else:
                 seen_texts.append(text)
+                seen_ngrams.append(text_ngrams)
                 after_pass2.append(item)
 
         # Pass 3: TF-IDF cosine clustering
