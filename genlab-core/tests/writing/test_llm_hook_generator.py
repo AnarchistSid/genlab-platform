@@ -378,3 +378,56 @@ class TestGenerateHookStyleHint:
                         return_style=True,
                     )
         assert result == (None, "revelation")
+
+
+class TestAntiFabricationRulesInSystemPrompt:
+    """PR (2026-06-20) — pin the anti-fabrication clause shipped after
+    a SpliceReel blueprint generated "Does Pixar's Pressure actually fix
+    what broke Toy Story 4?" for the 2025 submarine thriller *Pressure*.
+    Pixar and Toy Story 4 were hallucinated; the LLM had no instruction
+    forbidding it.
+
+    These tests pin the EXACT rule strings into the system prompt so a
+    future refactor can't silently remove them.
+    """
+
+    def _captured_system_prompt(self, niche_id: str = "movies") -> str:
+        mock_cls = _mock_anthropic_success("a valid hook")
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            with patch("anthropic.Anthropic", mock_cls):
+                with patch(
+                    "genlab_core.writing.llm_hook_generator.pick_hook_style",
+                    return_value=None,
+                ):
+                    generate_hook(_make_story(), niche_id)
+        client = mock_cls.return_value
+        return client.messages.create.call_args.kwargs["system"]
+
+    def test_anti_fabrication_header_present(self):
+        """The system prompt must contain the explicit anti-fabrication
+        section header so the constraint is visually prominent to the LLM."""
+        system = self._captured_system_prompt("movies")
+        assert "STRICT ANTI-FABRICATION RULES" in system, (
+            "Anti-fabrication clause missing from hook system prompt — "
+            "regression risk for the SpliceReel Pixar/Toy-Story hallucination."
+        )
+
+    def test_proper_noun_grounding_rule_present(self):
+        """Rule: use only proper nouns from the source story/summary."""
+        system = self._captured_system_prompt("movies")
+        assert "Use ONLY proper nouns that appear in the Story title or Summary" in system
+
+    def test_sequel_invention_rule_present(self):
+        """Rule: do not invent sequel numbers or franchise associations."""
+        system = self._captured_system_prompt("movies")
+        assert "Do NOT invent sequel numbers" in system
+        # The exact "Toy Story 4" hallucination is called out as an example
+        assert "Toy Story 4" in system or "Pixar" in system
+
+    def test_anti_fabrication_present_for_all_5_niches(self):
+        """The clause is niche-agnostic — must appear in every niche's prompt."""
+        for niche_id in ("movies", "gaming", "sports", "anime", "ai_creators"):
+            system = self._captured_system_prompt(niche_id)
+            assert "STRICT ANTI-FABRICATION RULES" in system, (
+                f"niche={niche_id!r} system prompt missing anti-fabrication clause"
+            )
