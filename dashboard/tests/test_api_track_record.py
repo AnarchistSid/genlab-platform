@@ -352,7 +352,6 @@ class TestW3EngagementEnrichment:
         assert bins[0]["avg_reward_48h"] == 0.2667
 
 
-
 class TestTrackRecordAllBatch:
     """PR #394 — /track-record-all returns per-niche dict in ONE HTTP request."""
 
