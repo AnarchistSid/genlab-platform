@@ -24,6 +24,7 @@ from unittest.mock import MagicMock
 from genlab_core.pipeline.stages.push_to_backlog import (
     _get_bandit_arm_boost,
     _get_bandit_arm_n_obs,
+    _load_linucb_arms,
 )
 
 
@@ -94,3 +95,71 @@ class TestPreloadedArmsKwarg:
         mock_client.bandit_arms.all = MagicMock(side_effect=AssertionError("must not be called"))
         assert _get_bandit_arm_boost(mock_client, "gaming", arms={}) == {}
         assert _get_bandit_arm_n_obs(mock_client, "gaming", arms={}) == {}
+
+
+class TestLoadLinucbArmsExtendedKwarg:
+    """PR #400 — _load_linucb_arms accepts preloaded `extended` dict.
+
+    Pre-PR #400 it did its own proxy.all() — that was the 3rd full scan
+    of bandit_arms per PushToBacklog.execute(). With the kwarg, all 3
+    consumers (boost, n_obs, linucb) share one scan.
+    """
+
+    def test_extended_kwarg_avoids_proxy_call(self):
+        """When `extended` is passed, proxy.all() is NOT invoked."""
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all = MagicMock(side_effect=AssertionError("must not be called"))
+        extended = {
+            "style:funny": {"alpha": 5.0, "beta": 3.0, "linucb_state": None},
+            "style:serious": {"alpha": 7.0, "beta": 2.0, "linucb_state": None},
+        }
+        result = _load_linucb_arms(mock_client, "gaming", extended=extended)
+        # Each arm gets a LinUCBArm; with linucb_state=None they're fresh
+        # default-init arms (n_obs = 0).
+        assert set(result.keys()) == {"style:funny", "style:serious"}
+        for arm_id, lucb_arm in result.items():
+            assert lucb_arm.n_obs == 0, f"{arm_id} should have fresh LinUCB state"
+
+    def test_extended_kwarg_with_persisted_state(self):
+        """When `extended` carries a persisted ``linucb_state``, the
+        LinUCBArm is rebuilt from it via ``from_dict`` — no re-parse
+        from JSON, no proxy fetch.
+        """
+        import numpy as np
+        from genlab_core.learning.linucb import CONTEXT_DIM, LinUCBArm
+
+        # Build a real LinUCBArm with some observations, serialize it,
+        # and pass the serialized dict via the extended kwarg.
+        original = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+        original.update(np.array([0.5] * CONTEXT_DIM), reward=0.4)
+        original.update(np.array([0.3] * CONTEXT_DIM), reward=0.7)
+        state_dict = original.to_dict()
+
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all = MagicMock(side_effect=AssertionError("must not be called"))
+        extended = {
+            "style:trained": {"alpha": 3.0, "beta": 1.0, "linucb_state": state_dict},
+        }
+        result = _load_linucb_arms(mock_client, "gaming", extended=extended)
+        assert "style:trained" in result
+        # The restored arm has the same observation count
+        assert result["style:trained"].n_obs == 2
+
+    def test_legacy_no_kwarg_path_still_loads_internally(self):
+        """Pin backward compatibility: when `extended` is not provided,
+        the function still fetches via proxy.all() (legacy path).
+        """
+        mock_client = MagicMock()
+        mock_client.bandit_arms.all.return_value = [
+            {
+                "id": "1",
+                "fields": {
+                    "niche_id": "gaming",
+                    "arm_id": "style:legacy",
+                    "linucb_state": "",  # empty → fresh LinUCBArm
+                },
+            }
+        ]
+        result = _load_linucb_arms(mock_client, "gaming")
+        assert "style:legacy" in result
+        assert mock_client.bandit_arms.all.called  # legacy path WAS used

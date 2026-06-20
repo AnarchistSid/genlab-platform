@@ -536,13 +536,31 @@ def _get_bandit_arm_n_obs(
     return {arm_id: max(0, int(alpha + beta - 2)) for arm_id, (alpha, beta) in arms.items()}
 
 
-def _load_linucb_arms(client, niche_id: str) -> dict:
+def _load_linucb_arms(
+    client,
+    niche_id: str,
+    *,
+    extended: dict[str, dict[str, Any]] | None = None,
+) -> dict:
     """Load persisted LinUCBArm state for each arm in the niche.
 
     Returns a dict mapping arm_id -> LinUCBArm. Returns {} on any error
     so callers degrade to Thompson-only ranking. Cached at module level
     per (niche_id, generation count) so we don't deserialize matrices
     on every story.
+
+    PR #400: ``extended`` kwarg lets the caller pre-fetch the
+    bandit_arms records via ``load_all_arms_extended`` and pass the
+    parsed dict here. Without the kwarg, this function does its OWN
+    ``proxy.all()`` — pre-PR PushToBacklog.execute() therefore made
+    3 separate scans of bandit_arms (one each for boost, n_obs, and
+    LinUCB matrices). With the kwarg, all 3 share a single fetch.
+
+    The ``extended`` dict shape is::
+
+        {arm_id: {"alpha": float, "beta": float, "linucb_state": dict|None}}
+
+    which is exactly what ``load_all_arms_extended`` returns.
     """
     try:
         import json as _json
@@ -551,11 +569,28 @@ def _load_linucb_arms(client, niche_id: str) -> dict:
     except ImportError:
         return {}
 
+    # Fast path: caller pre-loaded the extended records — build LinUCBArms
+    # from the already-parsed linucb_state dicts (no JSON re-parse, no
+    # second proxy.all()).
+    if extended is not None:
+        arms: dict = {}
+        for arm_id, entry in extended.items():
+            state = entry.get("linucb_state")
+            if state is None:
+                arms[arm_id] = LinUCBArm(d=CONTEXT_DIM)
+                continue
+            try:
+                arms[arm_id] = LinUCBArm.from_dict(state)
+            except Exception:
+                arms[arm_id] = LinUCBArm(d=CONTEXT_DIM)
+        return arms
+
+    # Legacy path: standalone fetch when no preload is provided.
     proxy = getattr(client, "bandit_arms", None)
     if proxy is None:
         return {}
 
-    arms: dict = {}
+    arms = {}
     try:
         for item in proxy.all():
             fields = item.get("fields", item)
@@ -912,22 +947,36 @@ class PushToBacklog:
             logger.debug("[PUSH] Could not load existing hooks: %s", e)
         context["existing_hooks"] = existing_hooks
 
-        # PR #399: pre-load bandit arms ONCE for the niche. Both
-        # ``_get_bandit_arm_boost`` and ``_get_bandit_arm_n_obs``
-        # derive their results from the same (alpha, beta) posteriors
-        # — pre-PR they each called ``load_all_arms`` independently,
-        # scanning the bandit_arms table twice per pipeline run.
-        # Pre-loading here means one ``proxy.all()`` round-trip for
-        # the two consumers.
+        # PR #400 (extending PR #399): pre-load EXTENDED bandit-arm
+        # records ONCE for the niche. ``load_all_arms_extended`` returns
+        # ``{arm_id: {alpha, beta, linucb_state}}`` — the union of what
+        # all 3 downstream consumers need. Each gets passed the same
+        # preloaded dict (via different kwargs).
+        #
+        # Pre-PR #399: 3 separate ``proxy.all()`` scans (one each for
+        # boost, n_obs, LinUCB matrices). PR #399 collapsed boost+n_obs
+        # to 1 fetch using ``load_all_arms``. This PR (#400) folds the
+        # 3rd LinUCB fetch into the same scan via
+        # ``load_all_arms_extended``. **1 scan total** instead of 3.
         try:
-            from genlab_core.learning.arm_loader import load_all_arms as _load_all_arms
+            from genlab_core.learning.arm_loader import load_all_arms_extended
 
             _arm_proxy = getattr(client, "bandit_arms", None)
-            preloaded_arms: dict[str, tuple[float, float]] | None = (
-                _load_all_arms(_arm_proxy, niche_id) if _arm_proxy is not None else None
+            preloaded_extended: dict[str, dict[str, Any]] | None = (
+                load_all_arms_extended(_arm_proxy, niche_id) if _arm_proxy is not None else None
             )
         except Exception:
-            preloaded_arms = None
+            preloaded_extended = None
+
+        # Derive the legacy ``{arm_id: (alpha, beta)}`` tuple shape that
+        # ``_get_bandit_arm_boost`` and ``_get_bandit_arm_n_obs`` accept
+        # via their ``arms`` kwarg (PR #399). Trivial transform — no
+        # extra DB hit.
+        preloaded_arms: dict[str, tuple[float, float]] | None = (
+            {aid: (entry["alpha"], entry["beta"]) for aid, entry in preloaded_extended.items()}
+            if preloaded_extended is not None
+            else None
+        )
 
         # Bandit-driven arm boosts: Thompson-sample each arm's posterior
         # and convert the draw into a priority_score multiplier. Falls
@@ -952,10 +1001,9 @@ class PushToBacklog:
         arm_n_obs = _get_bandit_arm_n_obs(client, niche_id, arms=preloaded_arms)
 
         # Load LinUCB matrices for context-aware boost adjustment per
-        # story. Falls back gracefully when bandit_arms have no
-        # linucb_state yet (returns empty arms with n_obs=0 → apply
-        # site short-circuits because of the n_obs>=5 guard).
-        linucb_arms = _load_linucb_arms(client, niche_id)
+        # story. PR #400: shares the ``preloaded_extended`` dict —
+        # no separate ``proxy.all()`` round-trip when preload available.
+        linucb_arms = _load_linucb_arms(client, niche_id, extended=preloaded_extended)
         if linucb_arms:
             with_obs = sum(1 for a in linucb_arms.values() if a.n_obs >= 5)
             logger.info(
