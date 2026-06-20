@@ -372,8 +372,42 @@ def _token_status_to_dict(ts) -> dict:
     return result
 
 
-def _run_native_platform_checks() -> list[dict]:
-    """Use HealthCheckable clients from genlab_core.platforms for social platforms."""
+# 2026-06-21 A2 fix: per-niche token health expansion.
+#
+# Pre-fix this checked platform tokens against the GLOBAL ``META_ACCESS_TOKEN``
+# / ``YOUTUBE_REFRESH_TOKEN`` / etc env vars. Production has per-niche prefixed
+# credentials (CLUTCHWIRE_META_ACCESS_TOKEN, CRITICALRUSH_META_ACCESS_TOKEN,
+# SPLICEREEL_*, FRAMEDRIFT_*, BLACKBOXBRIEF_*) — but the health check only
+# validated the global token. So if e.g. SpliceReel's IG token expired
+# tomorrow, the check would still report "instagram: healthy" because BB's
+# global token IS valid. The expired SpliceReel token would only surface as
+# a silent publish failure days later.
+#
+# The fix iterates ALL 5 niches × ALL HealthCheckable platforms. Per-niche
+# checks pass ``niche_id=`` to the platform client constructor — which then
+# resolves the appropriate prefixed credential via ``resolve_meta_credentials``
+# / ``resolve_youtube_credentials`` / etc. The result list grows from
+# ~5 entries to ~25 entries, each labelled with ``niche_id`` so the dashboard
+# can attribute correctly.
+_DEFAULT_NICHE_IDS = ("ai_creators", "gaming", "sports", "movies", "anime")
+
+
+def _run_native_platform_checks(niche_ids: tuple[str, ...] = _DEFAULT_NICHE_IDS) -> list[dict]:
+    """Use HealthCheckable clients from genlab_core.platforms for social platforms.
+
+    Iterates over (niche × platform) so per-niche prefixed credentials
+    (CLUTCHWIRE_*, CRITICALRUSH_*, etc.) are each validated independently.
+    Pre-2026-06-21 this only ran a single global pass — a silent gap
+    that would let a per-niche token expire without alerting until the
+    actual publish failure days later.
+
+    Args:
+        niche_ids: Tuple of niche IDs to iterate. Default = all 5 prod
+            niches. Pass a subset (or empty tuple) for partial / global-
+            only checks. An empty tuple means "global pass only" —
+            preserves the legacy behavior for callers that genuinely
+            want a single check (e.g., dev-mode quick smoke tests).
+    """
     try:
         from genlab_core.platforms import get_client, list_platforms
         from genlab_core.platforms.protocols import HealthCheckable
@@ -381,25 +415,61 @@ def _run_native_platform_checks() -> list[dict]:
         logger.warning("genlab_core.platforms not importable — skipping native checks: %s", exc)
         return []
 
+    # When niche_ids is empty, fall back to the legacy single-pass call
+    # (no per-niche kwarg). This preserves the pre-fix call shape for
+    # callers/tests that opt out of per-niche checking.
+    iter_niches = niche_ids if niche_ids else ("",)
     results = []
-    for pid in list_platforms():
-        try:
-            client = get_client(pid)
-            if not isinstance(client, HealthCheckable):
-                logger.debug("Platform %s does not implement HealthCheckable — skipping", pid)
-                continue
-            ts = client.check_token_health()
-            results.append(_token_status_to_dict(ts))
-            logger.debug("Native check %s → %s", pid, ts.valid)
-        except Exception as exc:
-            logger.warning("Native health check failed for %s: %s", pid, exc)
-            results.append(
-                {
-                    "platform": pid,
+    for niche_id in iter_niches:
+        for pid in list_platforms():
+            try:
+                # Pass niche_id kwarg when iterating per-niche. The
+                # platform clients (instagram.py, facebook.py, etc.)
+                # accept it and resolve per-niche credentials via
+                # ``resolve_meta_credentials(niche_id)`` etc. With
+                # ``niche_id=""`` (legacy single-pass), they fall back
+                # to global env vars — same as pre-fix.
+                client_kwargs = {"niche_id": niche_id} if niche_id else {}
+                client = get_client(pid, **client_kwargs)
+                if not isinstance(client, HealthCheckable):
+                    logger.debug("Platform %s does not implement HealthCheckable — skipping", pid)
+                    continue
+                ts = client.check_token_health()
+                result = _token_status_to_dict(ts)
+                # Label per-niche results so the dashboard can attribute
+                # per (niche × platform). Legacy single-pass (niche_id="")
+                # gets no label change — preserves the pre-fix dict shape
+                # for test backward compatibility.
+                if niche_id:
+                    # Carry niche_id as a top-level field; also annotate
+                    # the platform label so operators eyeballing log lines
+                    # see "instagram/gaming" instead of just "instagram"
+                    # appearing 5 times.
+                    result["niche_id"] = niche_id
+                    result["platform"] = f"{result['platform']}/{niche_id}"
+                results.append(result)
+                logger.debug(
+                    "Native check %s%s → %s",
+                    pid,
+                    f"/{niche_id}" if niche_id else "",
+                    ts.valid,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Native health check failed for %s%s: %s",
+                    pid,
+                    f"/{niche_id}" if niche_id else "",
+                    exc,
+                )
+                err_platform = f"{pid}/{niche_id}" if niche_id else pid
+                err_result = {
+                    "platform": err_platform,
                     "status": "error",
                     "message": f"Native client check raised: {exc}",
                 }
-            )
+                if niche_id:
+                    err_result["niche_id"] = niche_id
+                results.append(err_result)
 
     return results
 
@@ -409,8 +479,16 @@ def _run_native_platform_checks() -> list[dict]:
 # ══════════════════════════════════════════════════════════════
 
 
-def run_all_checks() -> dict:
-    """Run all platform health checks. Returns summary dict."""
+def run_all_checks(niche_ids: tuple[str, ...] = _DEFAULT_NICHE_IDS) -> dict:
+    """Run all platform health checks. Returns summary dict.
+
+    Args:
+        niche_ids: Tuple of niches to check (default: all 5 prod niches).
+            Each niche's prefixed credentials (CLUTCHWIRE_*,
+            CRITICALRUSH_*, etc.) are validated independently via
+            ``HealthCheckable`` platform clients. Pass ``()`` for the
+            legacy global-only check (preserves pre-2026-06-21 shape).
+    """
     start = time.time()
 
     ai_results = [
@@ -418,8 +496,11 @@ def run_all_checks() -> dict:
         check_openai(),
     ]
 
-    logger.info("Using native HealthCheckable clients for social platform checks")
-    platform_results = _run_native_platform_checks()
+    logger.info(
+        "Using native HealthCheckable clients for social platform checks (niches=%s)",
+        list(niche_ids) if niche_ids else "[global only]",
+    )
+    platform_results = _run_native_platform_checks(niche_ids=niche_ids)
     platform_results.append(check_backlog())
 
     results = ai_results + platform_results
