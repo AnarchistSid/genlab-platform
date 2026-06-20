@@ -243,13 +243,47 @@ def track_record():
         return api_error(error=f"bin_days must be 1..{window_days}", code=400)
 
     try:
+        result = _compute_track_record(niche_id, window_days, bin_days)
+    except _TrackRecordError as exc:
+        return api_error(error=str(exc), code=exc.code)
+    except Exception as exc:
+        logger.exception("track-record failed for %s", niche_id)
+        return api_error(error=f"Track-record query failed: {exc}", code=500)
+    return api_success(data=result)
+
+
+class _TrackRecordError(Exception):
+    """Raised by `_compute_track_record` for caller-facing failures.
+
+    `code` mirrors api_error()'s HTTP code arg so the route handler
+    can surface 503 (no DB), 500 (unexpected DB error), etc. consistently
+    whether called from the single-niche or batch endpoint.
+    """
+
+    def __init__(self, message: str, code: int = 500) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _compute_track_record(niche_id: str, window_days: int, bin_days: int) -> dict:
+    """Compute the per-day (or per-bin) agreement-rate trend for ``niche_id``.
+
+    Extracted from the route handler so both ``/track-record`` (per-niche)
+    and ``/track-record-all`` (batch over 5 niches) can share the binning
+    logic — they only differ in how many niches they loop over.
+
+    Returns the dict the route would have wrapped in api_success(). Raises
+    :class:`_TrackRecordError` for caller-facing failures (DB unreachable
+    etc.) so both call sites surface the same error semantics.
+    """
+    try:
         import os
 
         from psycopg.rows import dict_row
 
         dsn = os.environ.get("DATABASE_URL", "")
         if not dsn:
-            return api_error(error="DATABASE_URL not configured", code=503)
+            raise _TrackRecordError("DATABASE_URL not configured", code=503)
 
         # Bin SQL: floor((NOW() - decided_at) / bin_days) gives the
         # bin index; date_trunc + interval would also work but the
@@ -433,19 +467,98 @@ def track_record():
             else None,
         }
 
-        return api_success(
-            data={
+        return {
+            "niche_id": niche_id,
+            "window_days": window_days,
+            "bin_days": bin_days,
+            "bins": bins,
+            "overall": overall,
+        }
+
+    except _TrackRecordError:
+        raise  # bubble caller-facing failures up to the route handler
+    except Exception as exc:
+        logger.exception("_compute_track_record failed for %s", niche_id)
+        raise _TrackRecordError(f"Track-record query failed: {exc}", code=500) from exc
+
+
+@bp.route("/track-record-all", methods=["GET"])
+def track_record_all():
+    """Batch variant — return track-record for ALL 5 niches in one HTTP request.
+
+    Mission Control's TrackRecordCard previously made 5 parallel HTTP
+    requests every 60s (one per niche). With this endpoint it collapses
+    to 1 request → 5× reduction in dashboard-driven HTTP fan-out.
+
+    Server-side still runs 5 sequential queries (the per-niche binning
+    logic isn't trivially SQL-batchable), but eliminates 4 HTTP round-trips +
+    4 Flask request-dispatch overheads per dashboard poll. Net effect on
+    the user: a single longer response instead of 5 short ones — total
+    user-perceived latency drops modestly, HTTP fan-out drops sharply.
+
+    Query params:
+        window_days (optional, default 30): rolling window (1..90)
+        bin_days    (optional, default 1):  bin size (1..window_days)
+
+    Response shape:
+        {
+          "window_days": 30,
+          "bin_days": 1,
+          "niches": {
+            "ai_creators": {  ...same shape as /track-record... },
+            "gaming":      { ... },
+            ...
+          }
+        }
+    """
+    try:
+        window_days = int(request.args.get("window_days", "30"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    try:
+        bin_days = int(request.args.get("bin_days", "1"))
+    except (TypeError, ValueError):
+        return api_error(error="bin_days must be an integer", code=400)
+    if bin_days < 1 or bin_days > window_days:
+        return api_error(error=f"bin_days must be 1..{window_days}", code=400)
+
+    out: dict[str, dict] = {}
+    for niche_id in _VALID_NICHES:
+        try:
+            out[niche_id] = _compute_track_record(niche_id, window_days, bin_days)
+        except _TrackRecordError as exc:
+            # One niche failing shouldn't black out the whole card.
+            # Surface an empty-shaped result for that niche; the card
+            # renders "no data" for it while other niches still load.
+            logger.warning(
+                "track-record-all: %s failed (%s) — returning empty shape",
+                niche_id,
+                exc,
+            )
+            out[niche_id] = {
                 "niche_id": niche_id,
                 "window_days": window_days,
                 "bin_days": bin_days,
-                "bins": bins,
-                "overall": overall,
+                "bins": [],
+                "overall": {
+                    "sample_count": 0,
+                    "agreement": 0,
+                    "rate": 0.0,
+                    "collected_count": 0,
+                    "avg_reward_48h": None,
+                },
             }
-        )
 
-    except Exception as exc:
-        logger.exception("track-record failed for %s", niche_id)
-        return api_error(error=f"Track-record query failed: {exc}", code=500)
+    return api_success(
+        data={
+            "window_days": window_days,
+            "bin_days": bin_days,
+            "niches": out,
+        }
+    )
 
 
 # ── D3.10: Global kill-switch endpoint ────────────────────────────────

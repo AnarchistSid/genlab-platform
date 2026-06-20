@@ -15,7 +15,7 @@
  * No data path: niches with no calibration reviews in the window show
  * "No reviews in window" — never blank.
  */
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { autoApproval, type TrackRecordBin } from "@/api/client";
 import { getNicheInfo, NICHE_IDS } from "@/niches/registry";
 
@@ -24,19 +24,19 @@ const RATE_GREEN = 0.9;
 const RATE_AMBER = 0.7;
 
 export function TrackRecordCard() {
-  const results = useQueries({
-    queries: NICHE_IDS.map((nicheId) => ({
-      queryKey: ["auto-approval-track-record", nicheId, WINDOW_DAYS],
-      queryFn: () => autoApproval.trackRecord(nicheId, WINDOW_DAYS),
-      // Match calibration card cadence for consistency
-      staleTime: 60_000,
-      refetchInterval: 60_000,
-      retry: false,
-    })),
+  // PR #394: single batch query returning all 5 niches in ONE HTTP request.
+  // Pre-PR used `useQueries` with 5 parallel per-niche fetches every 60s
+  // = 300 round-trips/hr. Now 60/hr. Server-side still runs 5 sequential
+  // queries (per-niche binning isn't trivially SQL-batchable) but the
+  // HTTP fan-out + Flask request-dispatch overhead collapses 5×.
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["auto-approval-track-record-all", WINDOW_DAYS],
+    queryFn: () => autoApproval.trackRecordAll(WINDOW_DAYS),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    retry: false,
   });
-
-  const anyLoading = results.some((r) => r.isLoading);
-  const anyError = results.some((r) => r.isError);
+  const perNiche = data?.niches ?? {};
 
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
@@ -49,27 +49,24 @@ export function TrackRecordCard() {
         </span>
       </div>
 
-      {anyLoading && (
-        <div className="text-xs text-zinc-500">Loading...</div>
-      )}
-      {anyError && (
+      {isLoading && <div className="text-xs text-zinc-500">Loading...</div>}
+      {isError && (
         <div className="text-xs text-rose-400">
-          Failed to load some niches — retrying on next poll.
+          Failed to load — retrying on next poll.
         </div>
       )}
 
       <div className="space-y-2">
-        {NICHE_IDS.map((nicheId, i) => {
+        {NICHE_IDS.map((nicheId) => {
           const niche = getNicheInfo(nicheId);
-          const result = results[i];
-          const data = result.data;
+          const nicheResult = perNiche[nicheId];
           return (
             <NicheRow
               key={nicheId}
               accent={niche.hex}
               label={niche.label}
-              bins={data?.bins ?? []}
-              overall={data?.overall}
+              bins={nicheResult?.bins ?? []}
+              overall={nicheResult?.overall}
             />
           );
         })}

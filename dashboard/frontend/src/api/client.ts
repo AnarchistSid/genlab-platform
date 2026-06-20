@@ -278,6 +278,16 @@ export interface TrackRecordResponse {
 }
 
 /**
+ * Batch response from /auto-approval/track-record-all (PR #394).
+ * Collapses 5 parallel per-niche TrackRecord fetches into one HTTP request.
+ */
+export interface TrackRecordAllResponse {
+  window_days: number;
+  bin_days: number;
+  niches: Record<string, TrackRecordResponse>;
+}
+
+/**
  * Batch response from /auto-approval/calibration-stats-all.
  * Shipped 2026-06-20 to collapse the AutoApprovalCalibrationCard's 5
  * parallel per-niche fetches into one. See PR #392.
@@ -304,6 +314,16 @@ export const autoApproval = {
   trackRecord: (nicheId: string, windowDays = 30, binDays = 1) =>
     get<TrackRecordResponse>("/auto-approval/track-record", {
       niche_id: nicheId,
+      window_days: String(windowDays),
+      bin_days: String(binDays),
+    }),
+  /**
+   * Batch variant — returns all 5 niches' track-record in one HTTP.
+   * Server-side still runs 5 queries (per-niche binning isn't trivially
+   * SQL-batchable) but the HTTP fan-out collapses 5x. See PR #394.
+   */
+  trackRecordAll: (windowDays = 30, binDays = 1) =>
+    get<TrackRecordAllResponse>("/auto-approval/track-record-all", {
       window_days: String(windowDays),
       bin_days: String(binDays),
     }),
