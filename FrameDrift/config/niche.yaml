@@ -75,76 +75,39 @@ video_sourcing:
     velocity_threshold: 80
     min_composite_score: 0.15
 
+# P4 (2026-06-20): opt in to the shared pipeline backbone.
+pipeline_template: backbone
+
 pipeline:
-  stages:
-    # Phase 0: Urgency classification
-    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+  inject:
+    phase1_fetchers_extra:
+      - class: genlab_core.pipeline.stages.fetch_anime_promos.FetchAnimePromos
+        retries: 1
+        retry_delay_seconds: 15
 
-    # Phase 1: Ingestion
-    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
-      retries: 1
-      retry_delay_seconds: 30
-    - class: genlab_core.pipeline.stages.fetch_anime_promos.FetchAnimePromos
-      retries: 1
-      retry_delay_seconds: 15
-    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
-      retries: 1
-      retry_delay_seconds: 15
-    - class: fd_strategies.content_research.AnimeContentResearchStrategy
-      retries: 1
-      retry_delay_seconds: 30
-    - class: fd_strategies.scoring.AnimeScoringStrategy
-    # Early dedup: drop stories whose URL/video_id already has an active
-    # blueprint BEFORE we spend 5+ min downloading + rendering them.
-    - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
-    - class: genlab_core.media.download_top_videos.DownloadTopVideos
-      retries: 1
-      retry_delay_seconds: 30
-    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+    phase1_content_research:
+      - class: fd_strategies.content_research.AnimeContentResearchStrategy
+        retries: 1
+        retry_delay_seconds: 30
+    phase1_scoring:
+      - class: fd_strategies.scoring.AnimeScoringStrategy
 
-    # Phase 2: Content generation
-    - class: fd_strategies.writing.AnimeWritingStrategy
-      retries: 1
-      retry_delay_seconds: 60
-    - class: fd_strategies.hooks.AnimeHookStrategy
+    phase1_relevance_gate: []
 
-    # Phase 3: Quality gates
-    # Phase 4b: Affiliate matching
-    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+    phase2_writing:
+      - class: fd_strategies.writing.AnimeWritingStrategy
+        retries: 1
+        retry_delay_seconds: 60
+    phase2_hooks:
+      - class: fd_strategies.hooks.AnimeHookStrategy
 
-    - class: genlab_core.pipeline.stages.qc_gates.QCGates
-    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+    phase4_visual_render:
+      - class: fd_strategies.visual_render.AnimeVisualRenderStrategy
+        fail_mode: abort
 
-    # Phase 4: Rendering
-    - class: fd_strategies.visual_render.AnimeVisualRenderStrategy
-      # P6 broader adoption (2026-06-19): primary render failure → abort.
-      # Layered-effect stages keep fail_mode=continue.
-      fail_mode: abort
-    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
-      parallel_group: post_render
-    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
-      parallel_group: post_render
-    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
-      # Re-enabled 2026-06-05 after PR #55 wired the engine (the stage was
-      # disabled while the two config-loading bugs blocked it; both fixed
-      # now). Captions render WPM-timed and preserve source audio.
-      enabled: true
-    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+    phase5_platform_adaptation:
+      - class: fd_strategies.platform_adaptation.AnimePlatformAdaptationStrategy
 
-    # Phase 5: Publishing
-    - class: fd_strategies.platform_adaptation.AnimePlatformAdaptationStrategy
-    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
-      retries: 2
-      retry_delay_seconds: 30
-      # P6 adoption (2026-06-19): if PushToBacklog raises after retries
-      # exhausted, abort — downstream FetchInsights/PerformanceLearner
-      # have nothing to fetch if we couldn't persist the blueprint.
-      fail_mode: abort
-
-    # Phase 6: Analytics & Learning
-    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
-    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
-    - class: genlab_core.pipeline.stages.run_report.RunReport
   max_items_per_run: 10
   min_score_threshold: 0.20
   dedup_window_days: 7
