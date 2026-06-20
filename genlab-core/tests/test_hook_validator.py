@@ -256,3 +256,133 @@ class TestHookValidationResult:
         assert r.passed is True
         assert r.failures == []
         assert r.warnings == []
+
+
+class TestLLMErrorResponseDetection:
+    """Pin the 2026-06-21 rule-10 fix — LLM error/refusal response detection.
+
+    Prod symptom (R7 browser verification, 2026-06-20): SpliceReel YouTube
+    short ``QrNDe-egDrg`` shipped with title
+    ``"I need more story details to write an effective hook...."`` — a
+    literal LLM meta-response (asking for clarification instead of
+    producing the requested hook). The 9 form-based rules (TOO_SHORT,
+    MARKDOWN, REDDIT, PUNCT, INCOMPLETE_SENTENCE, URL, EMOJI_SPAM,
+    MIXED_CAPS) all PASS this string because it's syntactically valid:
+    long enough, no markdown, complete sentence, no URL, etc.
+
+    Rule 10 anchors to the START of the string (``re.match``) — minimizes
+    false positives on legitimate content that happens to contain LLM-
+    error keywords mid-sentence (e.g., ``"Why I cannot stop watching this"``
+    starts with "Why", NOT with "I cannot ").
+    """
+
+    def test_exact_prod_symptom_rejected(self, validator):
+        """The headline pin: the exact string published as YouTube title
+        in prod (SpliceReel ``QrNDe-egDrg``, 2026-06-20). Must be flagged
+        as LLM_ERROR_RESPONSE so the YT title path can fall back."""
+        hook = "I need more story details to write an effective hook...."
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures, (
+            "The exact 2026-06-20 prod-leak string MUST trip rule 10. "
+            "Pre-fix, this string passed all 9 form rules and shipped as "
+            "the YouTube video title."
+        )
+        assert not result.passed
+
+    def test_cannot_refusal_detected(self, validator):
+        hook = "I cannot write a hook without more context about the story"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_apologize_response_detected(self, validator):
+        hook = "I apologize, but I can't generate a hook for this story"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_as_an_ai_disclaimer_detected(self, validator):
+        # Comma anchors to the disclaimer phrasing — distinguishes from
+        # legitimate phrases like "As an AI demo lover"
+        hook = "As an AI, I cannot generate misleading hooks"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_without_more_context_detected(self, validator):
+        hook = "Without more context, I cannot write an effective hook"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_unable_to_generate_detected(self, validator):
+        hook = "Unable to generate a hook from the provided text"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_insufficient_information_detected(self, validator):
+        hook = "Insufficient story details to write a compelling hook"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_im_sorry_detected(self, validator):
+        hook = "I'm sorry, but I need more information to proceed"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_legitimate_hook_starting_with_why_i_cannot_passes(self, validator):
+        """**CRITICAL** false-positive guard: legitimate hooks that happen
+        to contain LLM-error keywords MID-sentence must NOT be rejected.
+        Rule 10 is anchored to the START — content like
+        ``"Why I cannot stop watching this trailer"`` (starts with "Why",
+        legitimate hook) MUST pass.
+        """
+        hook = "Why I cannot stop watching this trailer"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE not in result.failures, (
+            "Legitimate hooks containing LLM-keywords MID-sentence must "
+            "NOT trip rule 10. Anchoring at ^ minimizes false positives."
+        )
+
+    def test_legitimate_hook_as_an_ai_without_comma_passes(self, validator):
+        """Pin the AI-disclaimer-vs-legitimate distinction: "As an AI demo
+        lover" is legitimate; only "As an AI," (with comma) is the
+        disclaimer pattern."""
+        hook = "As an AI demo lover here's what blew my mind"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE not in result.failures, (
+            "Legitimate AI-related hooks must pass — only the comma-"
+            "anchored disclaimer pattern (As an AI,) trips rule 10."
+        )
+
+    def test_legitimate_hook_about_need_passes(self, validator):
+        """Hooks that legitimately use 'need' or 'cannot' mid-sentence
+        must pass."""
+        hook = "Players still need a fix for this annoying bug"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE not in result.failures
+
+    def test_case_insensitive_detection(self, validator):
+        """LLM error responses can come in any casing (some LLMs return
+        title-case)."""
+        hook = "I Need More Story Details To Write An Effective Hook"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_leading_whitespace_stripped(self, validator):
+        """Pre-fix the LLM occasionally returned the error string with
+        leading whitespace; the strip() in _check_llm_error_response
+        ensures detection still fires."""
+        hook = "   I need more story details to write an effective hook"
+        result = validator.validate(hook, "youtube")
+        assert HookFailure.LLM_ERROR_RESPONSE in result.failures
+
+    def test_rule_10_independent_of_other_rules(self, validator):
+        """When ONLY rule 10 trips, that's the only failure listed.
+        Pin against accidental coupling with other rules."""
+        # "I cannot generate hooks for this story" — long enough, no
+        # markdown, no URL, no emoji spam, complete sentence — only
+        # trips rule 10.
+        hook = "I cannot generate hooks for this story"
+        result = validator.validate(hook, "youtube")
+        assert result.failures == [HookFailure.LLM_ERROR_RESPONSE], (
+            f"Expected ONLY LLM_ERROR_RESPONSE failure; got {result.failures}. "
+            f"If others fire too, the hook string also trips another rule "
+            f"and needs adjustment to keep this test focused."
+        )
