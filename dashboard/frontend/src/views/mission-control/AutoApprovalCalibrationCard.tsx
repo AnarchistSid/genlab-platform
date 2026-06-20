@@ -15,7 +15,7 @@
  * No data path: when DATABASE_URL is unset on prod or no reviews have
  * happened yet, all rows show "0 samples · waiting" — never a blank card.
  */
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { autoApproval, type CalibrationStats } from "@/api/client";
 import { getNicheInfo, NICHE_IDS } from "@/niches/registry";
 import { ProgressBar } from "@/components/shared/progress-bar";
@@ -24,22 +24,23 @@ const READY_THRESHOLD_RATE = 0.9;
 const READY_THRESHOLD_SAMPLES = 30;
 
 export function AutoApprovalCalibrationCard() {
-  // One query per niche — independent so a slow niche doesn't block others
-  const results = useQueries({
-    queries: NICHE_IDS.map((nicheId) => ({
-      queryKey: ["auto-approval-calibration", nicheId],
-      queryFn: () => autoApproval.calibrationStats(nicheId),
-      // Refresh every 60s — calibration data builds up slowly (~5 ops/day)
-      // so faster polling burns API calls for no signal
-      staleTime: 60_000,
-      refetchInterval: 60_000,
-      retry: false,
-    })),
+  // PR #392: single batch query returning all 5 niches in ONE HTTP +
+  // ONE SQL request. Pre-PR used `useQueries` with 5 parallel per-niche
+  // fetches every 60s = 300 round-trips/hour. Now 60/hour.
+  const { data, isLoading } = useQuery({
+    queryKey: ["auto-approval-calibration-all"],
+    queryFn: () => autoApproval.calibrationStatsAll(),
+    // Refresh every 60s — calibration data builds up slowly (~5 ops/day)
+    // so faster polling burns API calls for no signal
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    retry: false,
   });
 
-  const anyLoading = results.some((r) => r.isLoading);
-  const readyCount = results.filter(
-    (r) => r.data?.ready_for_enforcement === true,
+  const anyLoading = isLoading;
+  const perNiche = data?.niches ?? {};
+  const readyCount = NICHE_IDS.filter(
+    (nicheId) => perNiche[nicheId]?.ready_for_enforcement === true,
   ).length;
 
   return (
@@ -76,7 +77,7 @@ export function AutoApprovalCalibrationCard() {
 
       {/* Per-niche rows */}
       <div className="flex flex-col gap-2">
-        {anyLoading && !results.some((r) => r.data) ? (
+        {anyLoading && !data ? (
           // Initial load — show skeleton instead of empty rows
           <>
             <div
@@ -93,15 +94,15 @@ export function AutoApprovalCalibrationCard() {
             />
           </>
         ) : (
-          NICHE_IDS.map((nicheId, idx) => {
+          NICHE_IDS.map((nicheId) => {
             const info = getNicheInfo(nicheId);
-            const data = results[idx].data;
+            const stats = perNiche[nicheId];
             return (
               <NicheRow
                 key={nicheId}
                 label={info.shortLabel}
                 hex={info.hex}
-                stats={data}
+                stats={stats}
               />
             );
           })

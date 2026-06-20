@@ -328,3 +328,86 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
     except Exception as exc:  # noqa: BLE001
         logger.warning("[calibration] stats query failed for %s: %s", niche_id, exc)
         return empty
+
+
+def stats_all_niches(*, window_days: int = 7) -> dict[str, CalibrationStats]:
+    """Batch variant of :func:`stats` — returns per-niche stats in ONE query.
+
+    The Mission Control dashboard polls calibration stats for all 5 niches
+    every 60s. Without this batch endpoint that's 5 separate HTTP requests
+    + 5 separate SQL queries per poll = 300 round-trips/hour just for the
+    calibration card. With this batch endpoint it collapses to 1 + 1 = 60/hr.
+
+    Uses the same SQL aggregation but GROUP BY niche_id instead of WHERE
+    niche_id = %s. Returns a dict keyed by niche_id. Niches with zero
+    calibration samples are NOT returned by the query — caller should
+    fill empty :class:`CalibrationStats` for missing niches.
+
+    Returns {} on any error (cold start, no DB, table missing) — matches
+    the fail-quiet contract of :func:`stats`. Caller decides how to
+    surface "no data".
+    """
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        return {}
+    try:
+        import psycopg  # noqa: F401 — kept for the except above
+    except ImportError:
+        return {}
+
+    from genlab_core.storage.tenant_context import pg_connect
+
+    try:
+        # Admin-mode RLS — query spans all niches. The SELECT is read-only
+        # aggregation; no per-niche RLS GUC needed.
+        with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        niche_id,
+                        COUNT(*) FILTER (WHERE gate_approved IS NOT NULL) AS sample_count,
+                        COUNT(*) FILTER (
+                            WHERE gate_approved = true
+                              AND operator_action = 'approved'
+                        ) AS true_positives,
+                        COUNT(*) FILTER (
+                            WHERE gate_approved = false
+                              AND operator_action IN ('rejected','revised','skipped')
+                        ) AS true_negatives,
+                        COUNT(*) FILTER (
+                            WHERE gate_approved = true
+                              AND operator_action IN ('rejected','revised','skipped')
+                        ) AS false_positives,
+                        COUNT(*) FILTER (
+                            WHERE gate_approved = false
+                              AND operator_action = 'approved'
+                        ) AS false_negatives
+                    FROM auto_approval_calibration
+                    WHERE decided_at >= NOW() - (%s || ' days')::interval
+                    GROUP BY niche_id
+                    """,
+                    (str(window_days),),
+                )
+                rows = cur.fetchall()
+        result: dict[str, CalibrationStats] = {}
+        for row in rows:
+            niche_id = row[0]
+            sample_count = int(row[1] or 0)
+            tp = int(row[2] or 0)
+            tn = int(row[3] or 0)
+            fp = int(row[4] or 0)
+            fn = int(row[5] or 0)
+            result[niche_id] = CalibrationStats(
+                niche_id=niche_id,
+                sample_count=sample_count,
+                agreement_count=tp + tn,
+                true_positives=tp,
+                true_negatives=tn,
+                false_positives=fp,
+                false_negatives=fn,
+            )
+        return result
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[calibration] stats_all_niches query failed: %s", exc)
+        return {}

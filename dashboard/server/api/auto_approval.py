@@ -102,6 +102,84 @@ def calibration_stats():
     )
 
 
+@bp.route("/calibration-stats-all", methods=["GET"])
+def calibration_stats_all():
+    """Batch variant — return calibration stats for all 5 niches in ONE query.
+
+    Mission Control's AutoApprovalCalibrationCard previously made 5
+    parallel HTTP requests every 60s (one per niche). With this
+    endpoint it makes 1 request → 5× reduction in dashboard-driven HTTP
+    + SQL load for that card.
+
+    Query params:
+        window_days (optional, default 7): rolling window size (1..90)
+
+    Response shape:
+        {
+          "window_days": 7,
+          "niches": {
+            "ai_creators": {  ...same shape as /calibration-stats... },
+            "gaming": { ... },
+            ...
+          }
+        }
+
+    Niches with zero calibration samples in the window get a zero-filled
+    CalibrationStats so the response always has all 5 keys (lets the
+    frontend render every row without per-niche missing-data handling).
+    """
+    try:
+        window_days = int(request.args.get("window_days", "7"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    try:
+        from genlab_core.scheduling.calibration_logger import (
+            CalibrationStats,
+            stats_all_niches,
+        )
+
+        per_niche = stats_all_niches(window_days=window_days)
+    except Exception as exc:
+        logger.exception("calibration-stats-all failed")
+        return api_error(error=f"Stats query failed: {exc}", code=500)
+
+    # Fill missing niches with zeroed stats so the frontend always
+    # has a consistent 5-key response shape.
+    out: dict[str, dict] = {}
+    for niche_id in _VALID_NICHES:
+        s = per_niche.get(
+            niche_id,
+            CalibrationStats(
+                niche_id=niche_id,
+                sample_count=0,
+                agreement_count=0,
+                true_positives=0,
+                true_negatives=0,
+                false_positives=0,
+                false_negatives=0,
+            ),
+        )
+        out[niche_id] = {
+            "niche_id": s.niche_id,
+            "window_days": window_days,
+            "sample_count": s.sample_count,
+            "agreement_count": s.agreement_count,
+            "agreement_rate": round(s.agreement_rate, 3),
+            "confusion_matrix": {
+                "true_positives": s.true_positives,
+                "true_negatives": s.true_negatives,
+                "false_positives": s.false_positives,
+                "false_negatives": s.false_negatives,
+            },
+            "ready_for_enforcement": s.ready_for_enforcement,
+        }
+
+    return api_success(data={"window_days": window_days, "niches": out})
+
+
 # ── W4.4: Track-record endpoint (per-day agreement trend) ─────────────
 #
 # Closes W4.4 from the autonomy plan. ``calibration-stats`` returns a

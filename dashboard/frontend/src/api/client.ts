@@ -277,10 +277,28 @@ export interface TrackRecordResponse {
   };
 }
 
+/**
+ * Batch response from /auto-approval/calibration-stats-all.
+ * Shipped 2026-06-20 to collapse the AutoApprovalCalibrationCard's 5
+ * parallel per-niche fetches into one. See PR #392.
+ */
+export interface CalibrationStatsAllResponse {
+  window_days: number;
+  niches: Record<string, CalibrationStats>;
+}
+
 export const autoApproval = {
   calibrationStats: (nicheId: string, windowDays = 7) =>
     get<CalibrationStats>("/auto-approval/calibration-stats", {
       niche_id: nicheId,
+      window_days: String(windowDays),
+    }),
+  /**
+   * Batch variant — returns all 5 niches' calibration stats in one HTTP +
+   * one SQL query. Used by the Mission Control calibration card.
+   */
+  calibrationStatsAll: (windowDays = 7) =>
+    get<CalibrationStatsAllResponse>("/auto-approval/calibration-stats-all", {
       window_days: String(windowDays),
     }),
   trackRecord: (nicheId: string, windowDays = 30, binDays = 1) =>
