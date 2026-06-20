@@ -34,10 +34,11 @@
  *     the backend / yaml writer with intermediate values
  */
 import { useState } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { autoPublish } from "@/api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { autoPublish, type AutoPublishPolicy } from "@/api/client";
 import { NICHE_IDS, getNicheInfo, type NicheId } from "@/niches/registry";
 
+const QK_ALL = ["config", "auto-publish", "all"] as const;
 const QK = (nicheId: NicheId) => ["config", "auto-publish", nicheId];
 
 // Snap points let the operator hit the runbook's recommended ramp
@@ -46,6 +47,18 @@ const QK = (nicheId: NicheId) => ["config", "auto-publish", nicheId];
 const SNAP_POINTS = [0, 10, 25, 50, 100];
 
 export function RolloutPctSlider() {
+  // PR #393: single batch query for all 5 niches. Pre-PR each NicheRow
+  // had its own useQueries fetch → 5 HTTP requests + 5 file reads per
+  // 60s poll. With the batch endpoint it's 1 + 5 reads (server-side)
+  // and the dashboard-driven HTTP fan-out is eliminated.
+  const { data } = useQuery({
+    queryKey: QK_ALL,
+    queryFn: () => autoPublish.getAll(),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+  const perNiche = data?.niches ?? {};
+
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3">
@@ -65,27 +78,26 @@ export function RolloutPctSlider() {
 
       <div className="space-y-3">
         {NICHE_IDS.map((nicheId) => (
-          <NicheRow key={nicheId} nicheId={nicheId} />
+          <NicheRow
+            key={nicheId}
+            nicheId={nicheId}
+            policy={perNiche[nicheId]}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function NicheRow({ nicheId }: { nicheId: NicheId }) {
+function NicheRow({
+  nicheId,
+  policy,
+}: {
+  nicheId: NicheId;
+  policy: AutoPublishPolicy | undefined;
+}) {
   const qc = useQueryClient();
   const nicheInfo = getNicheInfo(nicheId);
-
-  const results = useQueries({
-    queries: [
-      {
-        queryKey: QK(nicheId),
-        queryFn: () => autoPublish.get(nicheId),
-        staleTime: 60_000,
-      },
-    ],
-  });
-  const policyQuery = results[0];
 
   // Slider is controlled. ``localPct`` mirrors the slider during
   // active drag; when the server value changes (initial load or
@@ -93,8 +105,14 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
   // during render" pattern (guarded by lastSeenServer check). This
   // avoids the ``react-hooks/set-state-in-effect`` cascade the
   // useEffect-based version triggered.
-  const serverPct = policyQuery.data
-    ? Math.round(policyQuery.data.auto_publish.rollout_pct * 100)
+  //
+  // PR #393: ``policy`` now arrives from the parent's batch query
+  // instead of a per-row useQueries fetch. The mutation still
+  // invalidates the per-niche key for consumers that drilldown into
+  // a single niche elsewhere, plus the all-niches batch key so this
+  // slider's grid refreshes after the PATCH lands.
+  const serverPct = policy
+    ? Math.round(policy.rollout_pct * 100)
     : null;
   const [localPct, setLocalPct] = useState<number | null>(null);
   const [lastSeenServer, setLastSeenServer] = useState<number | null>(null);
@@ -116,7 +134,11 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     },
     onSuccess: () => {
       setStatus("saved");
+      // Invalidate both keys: the per-niche key (for any drilldown
+      // consumer) AND the batch key (so this slider's grid sees the
+      // new rollout_pct on the next refetch).
       void qc.invalidateQueries({ queryKey: QK(nicheId) });
+      void qc.invalidateQueries({ queryKey: QK_ALL });
       // Clear the "saved" pill after a couple seconds so the row
       // doesn't permanently show stale confirmation.
       setTimeout(() => setStatus("idle"), 2000);
@@ -129,15 +151,13 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
 
   const handleCommit = () => {
     if (localPct === null) return;
-    if (!policyQuery.data) return;
-    const currentServer = Math.round(
-      policyQuery.data.auto_publish.rollout_pct * 100,
-    );
+    if (!policy) return;
+    const currentServer = Math.round(policy.rollout_pct * 100);
     if (localPct === currentServer) return;  // no-op
     mutation.mutate(localPct);
   };
 
-  const enabled = policyQuery.data?.auto_publish.enabled ?? false;
+  const enabled = policy?.enabled ?? false;
   const displayPct = localPct ?? 0;
 
   return (
@@ -177,7 +197,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
             handleCommit();
           }
         }}
-        disabled={!policyQuery.data || mutation.isPending}
+        disabled={!policy || mutation.isPending}
         aria-valuetext={`${displayPct} percent rollout`}
         aria-label={`${nicheInfo.label} auto-publish rollout percentage`}
         className="w-full accent-primary"

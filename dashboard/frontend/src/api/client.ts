@@ -371,12 +371,26 @@ export interface AutoPublishPolicy {
   rollout_pct: number;        // 0.0..1.0
 }
 
+/**
+ * Batch response from /config/auto-publish-all.
+ * Shipped 2026-06-20 to collapse RolloutPctSlider's 5 parallel
+ * per-niche fetches into one. See PR #393.
+ */
+export interface AutoPublishAllResponse {
+  niches: Record<string, AutoPublishPolicy>;
+}
+
 export const autoPublish = {
   get: (nicheId: string) =>
     get<{ niche_id: string; auto_publish: AutoPublishPolicy }>(
       "/config/auto-publish",
       { niche_id: nicheId },
     ),
+  /**
+   * Batch variant — returns all 5 niches' auto_publish in one HTTP
+   * request. Used by RolloutPctSlider on Mission Control.
+   */
+  getAll: () => get<AutoPublishAllResponse>("/config/auto-publish-all"),
   setRolloutPct: (nicheId: string, rolloutPct: number) =>
     mutate<{ niche_id: string; updated: { rollout_pct: number } }>(
       "PATCH",

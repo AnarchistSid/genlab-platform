@@ -1017,6 +1017,52 @@ def get_auto_publish():
     )
 
 
+_VALID_NICHES = frozenset({"ai_creators", "gaming", "sports", "movies", "anime"})
+
+
+@bp.route("/auto-publish-all", methods=["GET"])
+def get_auto_publish_all():
+    """Batch variant — return auto_publish for ALL 5 niches in one request.
+
+    Mission Control's RolloutPctSlider previously made 5 parallel HTTP
+    requests every 60s (one per niche, each opening + parsing its
+    publishing.yaml). With this endpoint it collapses to 1 request →
+    5× reduction in dashboard-driven HTTP load for that card.
+
+    Per-niche file I/O still happens server-side (one read per niche's
+    publishing.yaml), but the HTTP fan-out is eliminated and the Flask
+    request-handling overhead drops 5×.
+
+    Response shape (always 5 keys; missing publishing.yaml → defaults):
+        {
+          "niches": {
+            "ai_creators": {"enabled": false, "min_confidence": 0.85, ...},
+            "gaming":      { ... },
+            ...
+          }
+        }
+    """
+    out: dict[str, dict] = {}
+    for niche_id in _VALID_NICHES:
+        data, _path = _load_publishing_yaml_rt(niche_id)
+        if data is None:
+            # publishing.yaml not found for this niche — return
+            # AutoApprovalPolicy defaults so the frontend can render the
+            # row without per-niche missing-data branches.
+            block = {}
+        else:
+            block = data.get("auto_publish") or {}
+            if not isinstance(block, dict):
+                block = {}
+        out[niche_id] = {
+            "enabled": bool(block.get("enabled", False)),
+            "min_confidence": float(block.get("min_confidence", 0.85)),
+            "max_approvals_per_pass": int(block.get("max_approvals_per_pass", 3)),
+            "rollout_pct": float(block.get("rollout_pct", 1.0)),
+        }
+    return api_success(data={"niches": out})
+
+
 @bp.route("/auto-publish", methods=["PATCH"])
 def update_auto_publish():
     """Update ONLY the ``rollout_pct`` field of auto_publish.
