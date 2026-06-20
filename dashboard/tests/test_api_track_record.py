@@ -350,3 +350,54 @@ class TestW3EngagementEnrichment:
         # Weekly bin: 12 collected (2+4+6), weighted avg = (0.6+2.0+0.6)/12 = 0.2667
         assert bins[0]["collected_count"] == 12
         assert bins[0]["avg_reward_48h"] == 0.2667
+
+
+class TestTrackRecordAllBatch:
+    """PR #394 — /track-record-all returns per-niche dict in ONE HTTP request."""
+
+    def test_returns_all_5_niches(self, client, monkeypatch):
+        """Batch endpoint always returns all 5 niches in `niches:` dict."""
+        monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/x")
+        # Each per-niche query returns the same canned row set; that's
+        # fine for shape-pinning. The integration test would verify
+        # per-niche WHERE filtering against a real DB.
+        cal = [_row(date(2026, 6, 14), 10, 9)]
+        with _patch_pg(cal):
+            resp = client.get("/api/v1/auto-approval/track-record-all")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert set(data["niches"].keys()) == {
+            "ai_creators",
+            "gaming",
+            "sports",
+            "movies",
+            "anime",
+        }
+        assert data["window_days"] == 30
+        assert data["bin_days"] == 1
+        # Each niche entry has the same shape as /track-record's response.
+        for niche_id, payload in data["niches"].items():
+            assert payload["niche_id"] == niche_id
+            assert "bins" in payload
+            assert "overall" in payload
+            assert payload["overall"]["sample_count"] == 10
+
+    def test_validates_window_days(self, client):
+        resp = client.get("/api/v1/auto-approval/track-record-all?window_days=999")
+        assert resp.status_code == 400
+
+    def test_per_niche_failure_returns_empty_shape_not_500(self, client, monkeypatch):
+        """If ONE niche's query fails, other niches still load (batch endpoint
+        graceful-degrades per-niche). The failed niche gets an empty bins
+        list + zero overall — frontend renders "no data" for that row.
+        """
+        monkeypatch.setenv("DATABASE_URL", "")  # forces _TrackRecordError(503) per niche
+        resp = client.get("/api/v1/auto-approval/track-record-all")
+        # Even with every niche erroring, the batch returns 200 with
+        # empty-shaped entries for each. This is the documented
+        # graceful-degradation contract.
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        for niche_id in ("ai_creators", "gaming", "sports", "movies", "anime"):
+            assert data["niches"][niche_id]["bins"] == []
+            assert data["niches"][niche_id]["overall"]["sample_count"] == 0
