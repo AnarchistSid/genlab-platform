@@ -414,7 +414,9 @@ _BANDIT_BOOST_FLOOR = 0.7
 _BANDIT_BOOST_CEIL = 1.3
 
 
-def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
+def _get_bandit_arm_boost(
+    client, niche_id: str, *, arms: dict[str, tuple[float, float]] | None = None
+) -> dict[str, float]:
     """Thompson-sampled boost multipliers from bandit_arms posteriors.
 
     Draws one Beta(alpha, beta) sample per arm and maps it into the
@@ -433,17 +435,24 @@ def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
 
     Falls back to {} on any error so the caller can degrade to the
     engagement-history boost or neutral multipliers.
+
+    PR #399: ``arms`` kwarg lets the caller pre-load the per-niche
+    bandit arms ONCE and pass to both this function and
+    :func:`_get_bandit_arm_n_obs`. Pre-PR each call re-fetched the
+    bandit_arms table via ``load_all_arms`` — the PushToBacklog stage
+    called both, so the table was scanned twice per pipeline run per
+    niche. With the kwarg, one fetch + two uses.
     """
-    try:
-        from genlab_core.learning.arm_loader import load_all_arms
-    except ImportError:
-        return {}
+    if arms is None:
+        try:
+            from genlab_core.learning.arm_loader import load_all_arms
+        except ImportError:
+            return {}
+        proxy = getattr(client, "bandit_arms", None)
+        if proxy is None:
+            return {}
+        arms = load_all_arms(proxy, niche_id)
 
-    proxy = getattr(client, "bandit_arms", None)
-    if proxy is None:
-        return {}
-
-    arms = load_all_arms(proxy, niche_id)
     if not arms:
         return {}
 
@@ -498,7 +507,9 @@ def _get_bandit_arm_boost(client, niche_id: str) -> dict[str, float]:
 _get_arm_boost = _get_bandit_arm_boost
 
 
-def _get_bandit_arm_n_obs(client, niche_id: str) -> dict[str, int]:
+def _get_bandit_arm_n_obs(
+    client, niche_id: str, *, arms: dict[str, tuple[float, float]] | None = None
+) -> dict[str, int]:
     """Per-arm observation count derived from the Thompson posteriors.
 
     With α=β=1 priors, n_obs = (α-1) + (β-1) = α+β-2. Used by the
@@ -507,15 +518,21 @@ def _get_bandit_arm_n_obs(client, niche_id: str) -> dict[str, int]:
 
     Returns {} on any error so callers can degrade gracefully (the
     force-explore short-circuits when arm_n_obs is empty/None).
+
+    PR #399: ``arms`` kwarg lets the caller pre-load the per-niche
+    bandit arms ONCE and pass to both this function and
+    :func:`_get_bandit_arm_boost`. See that function's docstring for
+    the rationale.
     """
-    try:
-        from genlab_core.learning.arm_loader import load_all_arms
-    except ImportError:
-        return {}
-    proxy = getattr(client, "bandit_arms", None)
-    if proxy is None:
-        return {}
-    arms = load_all_arms(proxy, niche_id)
+    if arms is None:
+        try:
+            from genlab_core.learning.arm_loader import load_all_arms
+        except ImportError:
+            return {}
+        proxy = getattr(client, "bandit_arms", None)
+        if proxy is None:
+            return {}
+        arms = load_all_arms(proxy, niche_id)
     return {arm_id: max(0, int(alpha + beta - 2)) for arm_id, (alpha, beta) in arms.items()}
 
 
@@ -895,11 +912,28 @@ class PushToBacklog:
             logger.debug("[PUSH] Could not load existing hooks: %s", e)
         context["existing_hooks"] = existing_hooks
 
+        # PR #399: pre-load bandit arms ONCE for the niche. Both
+        # ``_get_bandit_arm_boost`` and ``_get_bandit_arm_n_obs``
+        # derive their results from the same (alpha, beta) posteriors
+        # — pre-PR they each called ``load_all_arms`` independently,
+        # scanning the bandit_arms table twice per pipeline run.
+        # Pre-loading here means one ``proxy.all()`` round-trip for
+        # the two consumers.
+        try:
+            from genlab_core.learning.arm_loader import load_all_arms as _load_all_arms
+
+            _arm_proxy = getattr(client, "bandit_arms", None)
+            preloaded_arms: dict[str, tuple[float, float]] | None = (
+                _load_all_arms(_arm_proxy, niche_id) if _arm_proxy is not None else None
+            )
+        except Exception:
+            preloaded_arms = None
+
         # Bandit-driven arm boosts: Thompson-sample each arm's posterior
         # and convert the draw into a priority_score multiplier. Falls
         # back to engagement-history boosts (legacy) when bandit data is
         # unavailable, then to {} (neutral) as the final degradation.
-        arm_boosts = _get_bandit_arm_boost(client, niche_id)
+        arm_boosts = _get_bandit_arm_boost(client, niche_id, arms=preloaded_arms)
         boost_source = "bandit"
         if not arm_boosts:
             arm_boosts = _get_engagement_arm_boost(client, niche_id)
@@ -915,7 +949,7 @@ class PushToBacklog:
         # 2026-06-14: per-arm observation counts feed _classify_arm's
         # ε-greedy force-explore. Empty dict → force-explore short-circuits
         # gracefully (legacy behavior).
-        arm_n_obs = _get_bandit_arm_n_obs(client, niche_id)
+        arm_n_obs = _get_bandit_arm_n_obs(client, niche_id, arms=preloaded_arms)
 
         # Load LinUCB matrices for context-aware boost adjustment per
         # story. Falls back gracefully when bandit_arms have no
