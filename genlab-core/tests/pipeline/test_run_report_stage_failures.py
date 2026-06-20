@@ -159,3 +159,102 @@ class TestStageFailuresPromoteStatus:
         )
         # Either errors or stage_failures triggers "partial"
         assert report["status"] == "partial"
+
+
+class TestZeroBlueprintsSLOMessageAccuracy:
+    """Pin the 2026-06-20 SLO-message-accuracy fix.
+
+    Pre-fix, when a pipeline produced 0 blueprints AND ``len(stories)``
+    at run_report time was 0, the SLO message hardcoded "no stories
+    fetched (total fetch wipeout: WARP/quota/relevance gate?)".
+
+    But ``stories`` here is the POST-VideoGate filtered list (see
+    ``video_gate.py:228`` filter). A sports run that fetched 10
+    stories, scored down to 5, dropped 3 via URL dedup, and lost the
+    remaining 2 at VideoGate would arrive at run_report with
+    ``len(stories) == 0`` — emitting the misleading "fetch wipeout"
+    message and sending operators chasing WARP/quota/relevance when
+    the REAL cause was VideoSourcer failure (Reddit IP block,
+    YouTube search not matching titles, etc.).
+
+    The fix distinguishes by reading ``run_stats["video_gate"]
+    .skipped`` — when >0, stories DID reach VideoGate but their
+    clips weren't available; emit a message that points the operator
+    at VideoSourcer instead.
+    """
+
+    def test_true_fetch_wipeout_keeps_original_message(self):
+        """No stories at all + no video_gate stats → 'fetch wipeout'
+        message stays. Pin backward compat for the pre-existing case
+        where the original SLO message IS accurate."""
+        report = _run(
+            _ctx(
+                blueprints_pushed=0,
+            )
+        )
+        slo_v = report.get("slo_violations", [])
+        assert any("no stories fetched" in v and "total fetch wipeout" in v for v in slo_v), (
+            f"True fetch wipeout (no stories, no video_gate) MUST keep the original "
+            f"message. Got: {slo_v}"
+        )
+
+    def test_video_gate_drops_all_emits_sourcing_message(self):
+        """The exact prod symptom: stories fetched + scored + reached
+        VideoGate, but ALL got dropped for missing clips. The SLO
+        message must point at video sourcing, NOT fetch wipeout.
+        """
+        report = _run(
+            _ctx(
+                blueprints_pushed=0,
+                video_gate={"passed": 0, "skipped": 2},
+            )
+        )
+        slo_v = report.get("slo_violations", [])
+        # Must NOT say "fetch wipeout" — that's the bug
+        assert not any("fetch wipeout" in v for v in slo_v), (
+            f"With video_gate.skipped>0, the SLO message must NOT use the "
+            f"'fetch wipeout' wording — fetch DID succeed. Got: {slo_v}"
+        )
+        # Must mention VideoGate / video sourcing
+        sourcing_msg = [v for v in slo_v if "VideoGate" in v or "sourcing" in v]
+        assert sourcing_msg, f"Must emit a video-sourcing-specific SLO message. Got: {slo_v}"
+        # The count must be in the message (operator wants to see "2 stories")
+        assert "2/2" in sourcing_msg[0]
+
+    def test_partial_video_gate_skip_still_uses_sourcing_message(self):
+        """Mixed case: video_gate passed=1 + skipped=3, but blueprints=0
+        anyway (downstream failure). The dominant cause was VideoGate
+        dropping 3/4, so the sourcing message is still the right pointer.
+        """
+        report = _run(
+            _ctx(
+                blueprints_pushed=0,
+                video_gate={"passed": 1, "skipped": 3},
+            )
+        )
+        slo_v = report.get("slo_violations", [])
+        sourcing_msg = [v for v in slo_v if "VideoGate" in v or "sourcing" in v]
+        assert sourcing_msg
+        # The "3/4" shows BOTH the skipped count and the total at VideoGate
+        assert "3/4" in sourcing_msg[0]
+
+    def test_post_videogate_stories_keeps_existing_message(self):
+        """If ``len(stories) > 0`` at run_report time (some made it
+        past VideoGate), the existing 'from N stories' message wins
+        — that's already informative. Pin the precedence."""
+        report = _run(
+            _ctx(
+                blueprints_pushed=0,
+                video_gate={"passed": 1, "skipped": 2},
+            )
+        )
+        # _ctx with blueprints_pushed=0 sets stories=[] by default
+        # Override here to test the "stories survived" branch
+        ctx_with_survivors = _ctx(blueprints_pushed=0, video_gate={"passed": 1, "skipped": 2})
+        ctx_with_survivors["stories"] = [{"story_id": "a"}]
+        report = _run(ctx_with_survivors)
+        slo_v = report.get("slo_violations", [])
+        # Old "from N stories" message takes precedence
+        assert any("from 1 stories" in v for v in slo_v), (
+            f"When len(stories)>0 at run_report, the existing message wins. Got: {slo_v}"
+        )

@@ -97,13 +97,45 @@ class RunReport:
         # them all, OR fetched nothing at all. The check previously required
         # stories>0, so a TOTAL fetch-wipeout (0 stories, 0 errors) slipped
         # through as "success" and the dashboard showed the niche "healthy".
+        #
+        # 2026-06-20 message-accuracy fix: ``len(stories)`` here is the
+        # POST-VideoGate filtered count (see ``video_gate.py:228`` filter
+        # that strips clipless stories from ``context["stories"]``). A
+        # sports run that fetched 10 stories, scored down to 5, dropped 3
+        # via URL dedup, and lost the remaining 2 at VideoGate would
+        # arrive here with ``len(stories) == 0`` and emit the misleading
+        # "total fetch wipeout: WARP/quota/relevance gate?" message —
+        # sending operators chasing the WRONG cause (the real one was
+        # video-sourcing failure at DownloadTopVideos). Distinguish by
+        # looking at ``run_stats["video_gate"].skipped`` — when >0, we
+        # know stories DID reach VideoGate but their clips weren't
+        # available; that's a sourcing failure, not a fetch wipeout.
         zero_blueprints = blueprints_pushed == 0
         if zero_blueprints:
             downloaded = video_val.get("passed", 0)
+            video_gate_stats = run_stats.get("video_gate", {})
+            video_gate_skipped = video_gate_stats.get("skipped", 0)
+            video_gate_passed = video_gate_stats.get("passed", 0)
             if len(stories) > 0:
                 slo_violations.append(
                     f"Zero blueprints produced from {len(stories)} stories "
                     f"(videos_validated={downloaded})"
+                )
+            elif video_gate_skipped > 0:
+                # Stories fetched + reached VideoGate, but ALL got dropped
+                # for missing clips. Real cause is downstream of fetch —
+                # VideoSourcer tiers (direct_url/youtube/reddit/tmdb) all
+                # failed to find a playable clip for the surviving titles.
+                # Common triggers: Reddit IP-block, YouTube search not
+                # matching the title format, ScoreBat returning empty
+                # embed URLs, etc. Operator should grep VideoSourcer
+                # stats in the run logs, NOT chase WARP/quota/relevance.
+                total_at_video_gate = video_gate_passed + video_gate_skipped
+                slo_violations.append(
+                    f"Zero blueprints produced — VideoGate dropped all "
+                    f"{video_gate_skipped}/{total_at_video_gate} stories for "
+                    f"missing clips (video sourcing failure — check "
+                    f"VideoSourcer tier stats in the run journal)"
                 )
             else:
                 slo_violations.append(
