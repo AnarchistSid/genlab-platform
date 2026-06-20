@@ -22,6 +22,126 @@ import yaml
 # Module-level cache for load_yaml_config — keyed by resolved path.
 _yaml_config_cache: dict[str, dict] = {}
 
+# Shared pipeline backbone (P4, 2026-06-20). Niches that set
+# ``pipeline_template: backbone`` at the top level have their
+# ``pipeline.stages`` expanded by merging this template with the
+# niche's ``pipeline.inject:`` block. See module ``pipeline_template.yaml``
+# for the inject point inventory.
+_PIPELINE_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "config" / "pipeline_template.yaml"
+_pipeline_template_cache: dict[str, dict] | None = None
+
+
+def _load_pipeline_template(name: str) -> dict:
+    """Return the named pipeline template, cached for the process lifetime.
+
+    Currently only ``"backbone"`` is recognised — it resolves to
+    ``genlab-core/config/pipeline_template.yaml``. Unknown names raise
+    ``ValueError`` so a typo in ``pipeline_template:`` surfaces loudly
+    at load time, not at pipeline runtime.
+    """
+    global _pipeline_template_cache
+    if _pipeline_template_cache is None:
+        _pipeline_template_cache = {}
+        if _PIPELINE_TEMPLATE_PATH.exists():
+            with open(_PIPELINE_TEMPLATE_PATH, encoding="utf-8") as f:
+                _pipeline_template_cache["backbone"] = yaml.safe_load(f) or {}
+    if name not in _pipeline_template_cache:
+        raise ValueError(
+            f"Unknown pipeline_template '{name}' — only 'backbone' is currently "
+            f"defined (in {_PIPELINE_TEMPLATE_PATH}). Remove the directive or "
+            f"fix the typo."
+        )
+    return _pipeline_template_cache[name]
+
+
+def merge_pipeline_template(niche_config: dict) -> dict:
+    """Expand ``pipeline_template:`` directive in a niche config.
+
+    When ``niche_config`` has a top-level ``pipeline_template: <name>``
+    key, this function merges that template's ``pipeline.stages`` with
+    the niche's ``pipeline.inject:`` block: every ``- inject: <point>``
+    entry in the template is replaced with the corresponding list from
+    the niche's inject block (empty list when the niche didn't define
+    that inject point — supports optional inject slots).
+
+    Returns ``niche_config`` with ``pipeline.stages`` set to the merged
+    list. The niche's other ``pipeline.*`` keys
+    (``max_items_per_run``, ``dedup_window_days``, etc.) are preserved.
+
+    If ``pipeline_template:`` is absent, returns ``niche_config``
+    unchanged — niches keep their legacy explicit ``pipeline.stages``.
+
+    Raises ``ValueError`` on:
+      * unknown template name (typo guard)
+      * unfilled required inject point (template declares it, niche
+        forgot to supply it AND it isn't in the optional set)
+      * extra inject keys the niche declared that the template doesn't
+        reference (drift guard — silent typo would mean the stage
+        never runs)
+    """
+    template_name = niche_config.get("pipeline_template")
+    if not template_name:
+        return niche_config
+
+    template = _load_pipeline_template(str(template_name))
+    template_stages = (template.get("pipeline") or {}).get("stages") or []
+    niche_inject = (niche_config.get("pipeline") or {}).get("inject") or {}
+
+    # Collect the inject points the template references — these are the
+    # "named slots" the niche can fill. Anything else in inject is an
+    # error (typo or stale config).
+    template_points: list[str] = [
+        entry["inject"]
+        for entry in template_stages
+        if isinstance(entry, dict) and "inject" in entry
+    ]
+    template_point_set = set(template_points)
+
+    # Drift guard: niche declares an inject the template doesn't use.
+    extra = set(niche_inject) - template_point_set
+    if extra:
+        raise ValueError(
+            f"Niche '{niche_config.get('niche_id', '?')}' declares inject points "
+            f"the '{template_name}' template doesn't reference: {sorted(extra)}. "
+            f"Valid points: {sorted(template_point_set)}. Remove the extras or "
+            f"fix the typo."
+        )
+
+    # Optional inject points (template tolerates these being omitted).
+    # Currently every point is optional — niches that don't need a
+    # phase1_relevance_gate or phase1_fetchers_extra just leave it out.
+    # If you want a point to be MANDATORY, list it here and the loader
+    # will raise on missing entries.
+    optional_points = template_point_set  # all-optional for v1
+
+    merged_stages: list[dict] = []
+    for entry in template_stages:
+        if isinstance(entry, dict) and "inject" in entry:
+            point = entry["inject"]
+            if point in niche_inject:
+                injected = niche_inject[point] or []
+                if not isinstance(injected, list):
+                    raise ValueError(
+                        f"Niche '{niche_config.get('niche_id', '?')}' inject "
+                        f"point '{point}' must be a list of stage entries, "
+                        f"got {type(injected).__name__}"
+                    )
+                merged_stages.extend(injected)
+            elif point not in optional_points:
+                raise ValueError(
+                    f"Niche '{niche_config.get('niche_id', '?')}' is missing "
+                    f"required inject point '{point}' for template "
+                    f"'{template_name}'. Add it under pipeline.inject."
+                )
+            # else: optional point omitted — just splice in nothing
+        else:
+            merged_stages.append(entry)
+
+    # Splice merged stages back into the niche config.
+    niche_config.setdefault("pipeline", {})
+    niche_config["pipeline"]["stages"] = merged_stages
+    return niche_config
+
 
 def load_niche_config(niche_id: str, project_root: Path) -> dict:
     """Load a niche's config.
@@ -112,6 +232,11 @@ def load_niche_config(niche_id: str, project_root: Path) -> dict:
         except yaml.YAMLError:
             # Bad YAML in visuals.yaml should NOT break niche loading.
             pass
+
+    # P4: expand ``pipeline_template:`` directive if the niche opts in.
+    # No-op when the directive is absent — niches keep their legacy
+    # explicit ``pipeline.stages`` list. Gaming stays on this path.
+    niche_config = merge_pipeline_template(niche_config)
 
     return niche_config
 

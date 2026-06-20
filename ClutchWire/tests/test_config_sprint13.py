@@ -3,29 +3,39 @@
 from pathlib import Path
 
 import yaml
+from genlab_core.niche_loader import load_niche_config
 
 NICHE_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_DIR = NICHE_ROOT / "config"
 
 
 def _load(name: str) -> dict:
+    """Raw YAML loader for non-niche.yaml files (sources/visuals/templates etc.)"""
     with open(CONFIG_DIR / name) as f:
         return yaml.safe_load(f)
 
 
+def _load_niche() -> dict:
+    """Load niche.yaml via niche_loader so the P4 pipeline_template merge
+    (pipeline.inject → pipeline.stages) runs. See SR test_config_sprint14
+    for the same pattern + rationale.
+    """
+    return load_niche_config("sports", NICHE_ROOT)
+
+
 class TestNichePipelineStages:
     def test_pipeline_stages_not_empty(self):
-        data = _load("niche.yaml")
+        data = _load_niche()
         stages = data["pipeline"]["stages"]
         assert len(stages) >= 6
 
     def test_all_stages_have_class(self):
-        data = _load("niche.yaml")
+        data = _load_niche()
         for stage in data["pipeline"]["stages"]:
             assert "class" in stage
 
     def test_enabled_stages_reference_allowed_packages(self):
-        data = _load("niche.yaml")
+        data = _load_niche()
         enabled = [s for s in data["pipeline"]["stages"] if s.get("enabled", True)]
         allowed_prefixes = ("cw_strategies.", "genlab_core.")
         for stage in enabled:

@@ -54,78 +54,42 @@ video_sourcing:
     velocity_threshold: 400
     min_composite_score: 0.25
 
+# P4 (2026-06-20): opt in to the shared pipeline backbone.
+pipeline_template: backbone
+
 pipeline:
-  stages:
-    # Phase 0: Urgency classification
-    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+  inject:
+    # No extra ingestion fetcher (BB uses YouTube trending + Reddit only).
+    phase1_fetchers_extra: []
 
-    # Phase 1: Ingestion — YouTube trending + RSS
-    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
-      retries: 1
-      retry_delay_seconds: 30
-    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
-      retries: 1
-      retry_delay_seconds: 15
-    - class: bb_strategies.content_research.BBContentResearchStrategy
-      retries: 1
-      retry_delay_seconds: 30
-    - class: bb_strategies.scoring.BBScoringStrategy
-    # Relevance gate: drop stories that don't match AI/tech keywords.
-    # BB's broad source list (MKBHD, Verge, LTT) produces non-AI content
-    # that needs filtering before we spend time downloading + rendering.
-    - class: genlab_core.pipeline.stages.relevance_gate.RelevanceGate
+    phase1_content_research:
+      - class: bb_strategies.content_research.BBContentResearchStrategy
+        retries: 1
+        retry_delay_seconds: 30
+    phase1_scoring:
+      - class: bb_strategies.scoring.BBScoringStrategy
 
-    # Phase 2: Video download + gate
-    # Early dedup: drop stories whose URL/video_id already has an active
-    # blueprint BEFORE we spend 5+ min downloading + rendering them.
-    - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
-    - class: genlab_core.media.download_top_videos.DownloadTopVideos
-      retries: 1
-      retry_delay_seconds: 30
-    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+    # BB-specific: relevance gate drops stories that don't match AI/tech
+    # keywords. BB's broad source list (MKBHD, Verge, LTT) produces
+    # non-AI content that needs filtering before we spend time
+    # downloading + rendering. Other niches don't use this slot.
+    phase1_relevance_gate:
+      - class: genlab_core.pipeline.stages.relevance_gate.RelevanceGate
 
-    # Phase 3: Content generation
-    - class: bb_strategies.writing.BBWritingStrategy
-      retries: 1
-      retry_delay_seconds: 30
-    - class: bb_strategies.hooks.BBHookStrategy
+    phase2_writing:
+      - class: bb_strategies.writing.BBWritingStrategy
+        retries: 1
+        retry_delay_seconds: 30
+    phase2_hooks:
+      - class: bb_strategies.hooks.BBHookStrategy
 
-    # Phase 4: Quality gates
-    # Phase 4b: Affiliate matching
-    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+    phase4_visual_render:
+      - class: bb_strategies.visual_render.BBVisualRenderStrategy
+        fail_mode: abort
 
-    - class: genlab_core.pipeline.stages.qc_gates.QCGates
-    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+    phase5_platform_adaptation:
+      - class: bb_strategies.platform_adaptation.BBPlatformAdaptationStrategy
 
-    # Phase 5: Rendering
-    - class: bb_strategies.visual_render.BBVisualRenderStrategy
-      # P6 broader adoption (2026-06-19): primary render failure → abort.
-      # Downstream RenderTextOverlays / GenerateAudio / RenderWhisperCaptions
-      # / ValidateVideos all depend on a rendered video existing; without it
-      # they noop or fail. Layered-effect stages keep fail_mode=continue (a
-      # missing overlay/caption is acceptable, missing video is not).
-      fail_mode: abort
-    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
-      parallel_group: post_render
-    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
-      parallel_group: post_render
-    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
-    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
-
-    # Phase 6: Publishing
-    - class: bb_strategies.platform_adaptation.BBPlatformAdaptationStrategy
-    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
-      retries: 2
-      retry_delay_seconds: 30
-      # P6 adoption (2026-06-19): if PushToBacklog raises after retries
-      # exhausted, abort — downstream FetchInsights/PerformanceLearner
-      # have nothing to fetch if we couldn't persist the blueprint.
-      fail_mode: abort
-
-    # Phase 7: Analytics & Learning
-    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
-    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
-    - class: genlab_core.pipeline.stages.run_report.RunReport
   max_items_per_run: 10
   min_score_threshold: 0.25
   dedup_window_days: 7  # 14d window leaves 133+ hashes blocking all new fetches

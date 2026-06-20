@@ -1,0 +1,126 @@
+# P4 — Shared pipeline backbone (2026-06-20)
+#
+# This template defines the canonical stage ORDER and the common stages
+# that 4 of 5 Gen Lab niches share (BlackboxBrief / ClutchWire /
+# SpliceReel / FrameDrift). The 5th niche (CriticalRush gaming) keeps
+# its own niche.yaml because its pipeline diverges substantially
+# (custom fetchers + custom strategies under niches.gaming.stages.*).
+#
+# How niches use this
+# ===================
+# A niche.yaml opts in by setting ``pipeline_template: backbone`` at
+# the top level. The niche then declares its niche-specific strategy
+# class paths under ``pipeline.inject:`` — one entry per named inject
+# point below. The loader (``niche_loader.merge_pipeline_template``)
+# expands every ``inject:`` directive in this template with the
+# niche's declared classes, producing the final ``pipeline.stages``
+# list that ``pipeline_runner._load_stages`` consumes unchanged.
+#
+# Adding a shared stage (e.g. a new QC gate) becomes a one-line edit
+# here instead of 4 simultaneous niche.yaml edits — the v1 motivation
+# for this template (see PENDING-AS-OF-2026-06-19-truly-final.md
+# Tier 1, P4).
+#
+# Backward compatibility
+# ======================
+# Niches without ``pipeline_template:`` set keep their existing
+# ``pipeline.stages`` list verbatim — the loader short-circuits when
+# the template directive is absent. Gaming stays on this path.
+#
+# Inject points (named insertion slots — niche fills each)
+# ========================================================
+# - phase1_fetchers_extra      — niche-specific ingestion fetchers
+#                                (e.g. ScoreBat, TMDB, AnimePromos).
+#                                Empty list when the niche has none.
+# - phase1_content_research    — niche's ContentResearchStrategy class
+# - phase1_scoring             — niche's ScoringStrategy class
+# - phase1_relevance_gate      — optional extra filter stage (BB uses
+#                                RelevanceGate; others leave empty)
+# - phase2_writing             — niche's WritingStrategy class
+# - phase2_hooks               — niche's HookStrategy class
+# - phase4_visual_render       — niche's VisualRenderStrategy class
+# - phase5_platform_adaptation — niche's PlatformAdaptationStrategy class
+
+pipeline:
+  stages:
+    # ── Phase 0: Urgency classification ──────────────────────────
+    - class: genlab_core.pipeline.stages.express_lane.ExpressLane
+
+    # ── Phase 1: Ingestion ────────────────────────────────────────
+    - class: genlab_core.media.trending_video_fetcher.FetchTrendingVideos
+      retries: 1
+      retry_delay_seconds: 30
+
+    # Niche-specific extra fetchers (ScoreBat / TMDB / AnimePromos /
+    # whatever — empty when the niche only uses the trending fetcher
+    # + Reddit). The inject list is spliced in at this position.
+    - inject: phase1_fetchers_extra
+
+    - class: genlab_core.pipeline.stages.fetch_reddit_clips.FetchRedditClips
+      retries: 1
+      retry_delay_seconds: 15
+
+    # Niche-specific content research + scoring (always 1 class each).
+    - inject: phase1_content_research
+    - inject: phase1_scoring
+
+    # BB-only: gate stories on relevance to ai_creators topics before
+    # downloading. Other niches' relevance is enforced by their
+    # ScoringStrategy and Reddit subreddit lists, so they leave this
+    # inject empty.
+    - inject: phase1_relevance_gate
+
+    # Common dedup + download + verify-video before spending render time.
+    - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
+    - class: genlab_core.media.download_top_videos.DownloadTopVideos
+      retries: 1
+      retry_delay_seconds: 30
+    - class: genlab_core.pipeline.stages.video_gate.VideoGate
+
+    # ── Phase 2: Content generation ───────────────────────────────
+    - inject: phase2_writing
+    - inject: phase2_hooks
+
+    # ── Phase 4b: Affiliate matching ──────────────────────────────
+    # (Numbered "4b" historically because it precedes QC but is
+    # logically a Phase 4 concern. Keeping the historical naming.)
+    - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
+
+    # ── Phase 3: Quality gates ────────────────────────────────────
+    - class: genlab_core.pipeline.stages.qc_gates.QCGates
+    - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
+
+    # ── Phase 4: Rendering ────────────────────────────────────────
+    # Primary render — niches that want fail-fast on a missing video
+    # should set ``fail_mode: abort`` on their visual_render inject
+    # entry (per-niche operator judgment, P6 broader adoption).
+    - inject: phase4_visual_render
+
+    # Layered post-render effects — these keep fail_mode=continue
+    # (a missing overlay is acceptable, missing primary video is not).
+    - class: genlab_core.pipeline.stages.render_text_overlays.RenderTextOverlays
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.generate_audio.GenerateAudio
+      parallel_group: post_render
+    - class: genlab_core.pipeline.stages.render_whisper_captions.RenderWhisperCaptions
+      # Re-enabled 2026-06-05 after PR #55 wired the engine. Niches
+      # can override the per-stage ``enabled`` flag in their inject if
+      # they need to disable captions specifically (e.g. anime which
+      # ships subtitled clips).
+      enabled: true
+    - class: genlab_core.pipeline.stages.validate_videos.ValidateVideos
+
+    # ── Phase 5: Publishing ───────────────────────────────────────
+    - inject: phase5_platform_adaptation
+    - class: genlab_core.pipeline.stages.push_to_backlog.PushToBacklog
+      retries: 2
+      retry_delay_seconds: 30
+      # If PushToBacklog raises after retries exhausted, abort —
+      # downstream FetchInsights/PerformanceLearner have nothing to
+      # fetch if we couldn't persist the blueprint (P6, 2026-06-19).
+      fail_mode: abort
+
+    # ── Phase 6: Analytics & Learning ─────────────────────────────
+    - class: genlab_core.pipeline.stages.fetch_insights.FetchInsights
+    - class: genlab_core.pipeline.stages.performance_learner.PerformanceLearner
+    - class: genlab_core.pipeline.stages.run_report.RunReport
