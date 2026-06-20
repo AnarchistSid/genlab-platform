@@ -347,6 +347,25 @@ def generate_hook(
         "- Reference something SPECIFIC from the story (a name, team, title, event)\n"
         "- Create curiosity or emotional reaction\n"
         "- Contain at least one proper noun from the story\n\n"
+        # CRITICAL anti-fabrication rules (added 2026-06-20 after a SpliceReel
+        # blueprint titled "Does Pixar's Pressure actually fix what broke
+        # Toy Story 4?" shipped for the 2025 submarine thriller *Pressure*
+        # — pure hallucination, Pixar/Toy Story 4 nowhere in the source
+        # story). The hook MUST be grounded in what's actually in the story.
+        "STRICT ANTI-FABRICATION RULES (the hook ships to thousands of viewers — "
+        "fabrications make the brand look untrustworthy and ruin engagement):\n"
+        "- Use ONLY proper nouns that appear in the Story title or Summary "
+        "below. Do NOT introduce other movies, studios, directors, franchises, "
+        "team names, players, games, or AI tools that aren't named there.\n"
+        "- Do NOT invent sequel numbers (e.g. 'Pressure 2', 'Toy Story 4') "
+        "or franchise associations (e.g. 'Pixar's X' when Pixar isn't in "
+        "the story).\n"
+        "- Do NOT compare to other named works unless that comparison "
+        "appears in the source Story or Summary.\n"
+        "- Do NOT add factual claims (records broken, statistics, prizes) "
+        "that aren't present in the source text.\n"
+        "- When unsure whether a fact is in the source, OMIT it — a vaguer "
+        "hook grounded in the source beats a punchy one that fabricates.\n\n"
         f'GOOD example: "{style["example_good"]}"\n'
         f'BAD example: "{style["example_bad"]}"\n\n'
         "BANNED phrases (never use these or variations):\n"
