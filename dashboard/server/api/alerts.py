@@ -91,29 +91,29 @@ def publishing_alerts():
             if stale > 0:
                 warning.append({"type": "stale_visual_ready", "count": stale, "age": ">7 days"})
 
-            # INFO: YouTube quota
-            yt_today = conn.execute(
-                "SELECT COUNT(*) as cnt FROM publishing_analytics "
-                "WHERE platform = 'youtube' AND status = 'SUCCESS' "
-                "AND created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
-            ).fetchone()["cnt"]
-            info.append(
-                {"type": "youtube_quota", "uploads_today": yt_today, "daily_limit": "~6 uploads"}
-            )
-
-            # INFO: Today's publishing summary
-            today = conn.execute(
+            # INFO: YouTube quota + today's publishing summary — collapsed
+            # from 2 separate queries on publishing_analytics into 1 with
+            # FILTER clauses. Both shared the same CURRENT_DATE window, so
+            # the outer WHERE constrains the index scan to today's rows
+            # and the 3 FILTER clauses bucket them into the metrics we
+            # surface. See PR #398.
+            today_metrics = conn.execute(
                 "SELECT "
                 "  COUNT(*) FILTER (WHERE status='SUCCESS') as ok, "
-                "  COUNT(*) FILTER (WHERE status='FAILED') as fail "
+                "  COUNT(*) FILTER (WHERE status='FAILED') as fail, "
+                "  COUNT(*) FILTER (WHERE platform='youtube' AND status='SUCCESS') as yt_today "
                 "FROM publishing_analytics "
                 "WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'"
             ).fetchone()
+            yt_today = today_metrics["yt_today"] or 0
+            info.append(
+                {"type": "youtube_quota", "uploads_today": yt_today, "daily_limit": "~6 uploads"}
+            )
             info.append(
                 {
                     "type": "today_summary",
-                    "published": today["ok"] or 0,
-                    "failed": today["fail"] or 0,
+                    "published": today_metrics["ok"] or 0,
+                    "failed": today_metrics["fail"] or 0,
                 }
             )
 
