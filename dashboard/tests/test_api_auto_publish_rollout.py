@@ -110,6 +110,66 @@ class TestGetAutoPublish:
             resp = client.get("/api/v1/config/auto-publish?niche_id=ghost")
         assert resp.status_code == 404
 
+    def test_batch_endpoint_returns_all_5_niches(self, client, fake_publishing_path):
+        """PR #393: /auto-publish-all batches all 5 niches into one response.
+
+        Mission Control's RolloutPctSlider polls this every 60s — pre-PR
+        it made 5 parallel requests, now 1. Pins the contract that the
+        response ALWAYS has all 5 niche keys (zero-filled defaults when
+        publishing.yaml missing for a niche).
+        """
+        with _patch_resolver(fake_publishing_path):
+            resp = client.get("/api/v1/config/auto-publish-all")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        # Always all 5 niches in the response
+        assert set(data["niches"].keys()) == {
+            "ai_creators",
+            "gaming",
+            "sports",
+            "movies",
+            "anime",
+        }
+        # Each entry has the 4 expected fields with fixture values (all
+        # niches resolve to the same fake publishing.yaml in this test)
+        for niche_id, block in data["niches"].items():
+            assert block == {
+                "enabled": False,
+                "min_confidence": 0.85,
+                "max_approvals_per_pass": 3,
+                "rollout_pct": 0.5,
+            }, f"niche {niche_id} block drifted: {block}"
+
+    def test_batch_endpoint_fills_defaults_for_missing_niches(self, client):
+        """When publishing.yaml resolution returns None for a niche, the
+        batch endpoint substitutes AutoApprovalPolicy defaults so the
+        frontend doesn't have to handle missing keys per niche.
+        """
+        # Resolver returns None for every niche → every entry should be
+        # the defaults dict.
+        with patch(
+            "server.api.config_routes._resolve_publishing_yaml",
+            return_value=(None, None),
+        ):
+            resp = client.get("/api/v1/config/auto-publish-all")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert set(data["niches"].keys()) == {
+            "ai_creators",
+            "gaming",
+            "sports",
+            "movies",
+            "anime",
+        }
+        defaults = {
+            "enabled": False,
+            "min_confidence": 0.85,
+            "max_approvals_per_pass": 3,
+            "rollout_pct": 1.0,
+        }
+        for niche_id, block in data["niches"].items():
+            assert block == defaults, f"niche {niche_id} did not get defaults"
+
     def test_missing_block_surfaces_defaults(self, client, tmp_path):
         """publishing.yaml exists but has no auto_publish block — GET
         returns the default values matching auto_approver's policy
