@@ -754,17 +754,25 @@ class VideoSourcer:
                 # web tier that's IP-restricted).
                 ctype = resp.headers.get("Content-Type", "")
                 if "json" not in ctype.lower():
-                    logger.warning(
-                        "Reddit search returned non-JSON for r/%s "
-                        "(auth=%s, Content-Type=%s) — likely IP-blocked "
-                        "by web tier anti-scraping (e.g. HTML 'Blocked' "
-                        "page). Provision REDDIT_CLIENT_ID + "
-                        "REDDIT_CLIENT_SECRET to switch to OAuth via "
-                        "oauth.reddit.com (separate from blocked web tier).",
+                    # 2026-06-21 RSS fallback: when JSON path is IP-blocked
+                    # (returns HTML), try the public Atom RSS endpoint
+                    # before giving up. RSS works from data-center IPs
+                    # that web-tier-search-JSON refuses. The Reddit
+                    # Developer Program approval gate makes OAuth a
+                    # multi-day external dependency, so this fallback is
+                    # the only same-day fix for sourcing failures.
+                    logger.info(
+                        "Reddit search r/%s returned non-JSON (auth=%s, "
+                        "Content-Type=%s) — falling back to public RSS",
                         sub,
                         auth_mode,
                         ctype or "<missing>",
                     )
+                    rss_results = self._search_reddit_rss_fallback(query, sub)
+                    if rss_results:
+                        results.extend(rss_results)
+                        if len(results) >= self.max_results:
+                            break
                     continue
                 data = resp.json()
 
@@ -801,6 +809,84 @@ class VideoSourcer:
                 continue
 
         return results
+
+    def _search_reddit_rss_fallback(self, query: str, sub: str) -> list[VideoSearchResult]:
+        """RSS fallback when the JSON search path is IP-blocked (2026-06-21).
+
+        Pulls the subreddit's top RSS feed (which works from data-center
+        IPs that web-tier search-JSON refuses), parses the Atom XML,
+        keyword-filters titles against the query, and returns matches in
+        ``VideoSearchResult`` shape.
+
+        RSS doesn't support server-side search — we fetch the top N posts
+        of the day and filter client-side. For sports/gaming this works
+        well: the top RSS posts are usually trending video clips that
+        partially match common queries (team names, game names).
+        """
+        try:
+            # Late import — keeps video_sourcer's import surface narrow
+            # (the RSS parser lives in fetch_reddit_clips.py).
+            from genlab_core.media.fetch_reddit_clips import fetch_subreddit_via_rss
+        except ImportError as exc:
+            logger.debug("RSS fallback unavailable (import failed): %s", exc)
+            return []
+
+        try:
+            stories = fetch_subreddit_via_rss(
+                subreddit=sub,
+                niche_id=self.niche_id,
+                time_window="day",
+                limit=self.max_results,
+            )
+        except Exception as exc:
+            logger.debug("Reddit RSS fallback raised for r/%s: %s", sub, exc)
+            return []
+
+        if not stories:
+            return []
+
+        # Keyword filter: only return RSS stories whose titles share at
+        # least one significant word (>3 chars, lowercased) with the
+        # query. Without this filter we'd return arbitrary trending
+        # posts unrelated to the search.
+        query_words = {w.lower() for w in (query or "").split() if len(w) > 3}
+        matches: list[VideoSearchResult] = []
+        for story in stories:
+            title = story.get("title", "")
+            title_words = {w.lower().strip(".,!?") for w in title.split() if len(w) > 3}
+            if query_words and not (query_words & title_words):
+                continue
+            published_at = None
+            pub_str = story.get("published_at", "")
+            if pub_str:
+                try:
+                    published_at = datetime.fromisoformat(pub_str)
+                except (ValueError, TypeError):
+                    pass
+            matches.append(
+                VideoSearchResult(
+                    url=story.get("source_url", ""),
+                    title=title,
+                    view_count=int(story.get("reddit_score", 0)),
+                    like_count=int(story.get("reddit_score", 0)),
+                    published_at=published_at,
+                    channel_name=story.get("channel_name", f"r/{sub}"),
+                    thumbnail_url=story.get("thumbnail_url", ""),
+                    backend="reddit",
+                )
+            )
+            if len(matches) >= self.max_results:
+                break
+
+        if matches:
+            logger.info(
+                "Reddit RSS fallback yielded %d/%d matches for r/%s query=%r",
+                len(matches),
+                len(stories),
+                sub,
+                query,
+            )
+        return matches
 
     # ------------------------------------------------------------------
     # Level 4 — TMDB trailers (movies niche only)

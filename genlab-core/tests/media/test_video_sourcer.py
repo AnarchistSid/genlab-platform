@@ -597,35 +597,42 @@ class TestRedditContentTypeGuard:
         )
 
         with patch("requests.get", return_value=mock_resp):
-            with caplog.at_level(logging.WARNING):
+            # Capture both INFO + WARNING — the 2026-06-21 RSS pivot
+            # changed the JSON-non-JSON log level from warning to info
+            # (fallback is informational, not a failure signal). The
+            # WARNING about IP block now comes from the RSS path inside
+            # fetch_reddit_clips.py when RSS ALSO returns HTML.
+            with caplog.at_level(logging.INFO):
                 results = sourcer._search_reddit("Koln Bayer Leverkusen")
 
-        assert results == [], "Empty result — function continued past the blocked subreddit"
+        assert results == [], (
+            "Empty result — both JSON path AND RSS fallback return [] when "
+            "the mocked endpoint serves HTML for all calls"
+        )
 
-        # The warning must contain the key debugging signals
-        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        guard_warnings = [w for w in warnings if "non-JSON" in w]
-        assert guard_warnings, (
-            "Must log the non-JSON Content-Type warning so operators "
-            "can recognize the IP-block pattern"
+        # The PR #405 semantic (operator sees a non-JSON / IP-block signal)
+        # is preserved across both log levels. After 2026-06-21:
+        #   * JSON path: INFO log "Reddit search r/X returned non-JSON ...
+        #     falling back to public RSS" (level changed because fallback
+        #     is informational, not a failure)
+        #   * RSS fallback path: WARNING log "[reddit-rss] r/X returned
+        #     non-XML Content-Type=text/html — likely web-tier block page"
+        #     (where the operator-visible IP-block signal now lives)
+        all_messages = [r.message for r in caplog.records]
+        non_json_signal = [m for m in all_messages if "non-JSON" in m]
+        rss_block_signal = [m for m in all_messages if "[reddit-rss]" in m and "non-XML" in m]
+        assert non_json_signal, (
+            "JSON path must log the non-JSON signal when Content-Type is HTML "
+            "(now at INFO level — fallback context)"
         )
-        first = guard_warnings[0]
-        assert "IP-blocked" in first
-        assert "REDDIT_CLIENT_ID" in first, (
-            "Warning must include the actionable env-var name so operators "
-            "know exactly what to provision"
+        assert rss_block_signal, (
+            "RSS path must log its own IP-block signal when both JSON and RSS "
+            "return HTML — operator sees the actionable pattern"
         )
-        # NOTE: using ``.count(...) >= 1`` instead of ``in`` to side-step
-        # CodeQL's ``py/incomplete-url-substring-sanitization`` heuristic,
-        # which (correctly, in production code) flags ``"trusted.com" in
-        # user_input`` allowlist patterns. Here the string is a literal
-        # substring check on a log message — not URL input validation —
-        # but CodeQL can't distinguish that context. The ``.count`` API
-        # carries the same semantic without matching the heuristic.
-        oauth_phrase = "oauth.reddit.com"
-        assert first.count(oauth_phrase) >= 1, (
-            "Warning must explain WHY OAuth bypasses the block — the "
-            "host is different (oauth.reddit.com vs www.reddit.com)"
+        # The JSON-path INFO log mentions falling back to RSS
+        first_signal = non_json_signal[0]
+        assert "falling back to public RSS" in first_signal, (
+            f"JSON-path INFO log must point operator at the fallback. Got: {first_signal!r}"
         )
 
     def test_json_response_proceeds_normally(self, monkeypatch):
@@ -678,18 +685,25 @@ class TestRedditContentTypeGuard:
         mock_resp.json.side_effect = AssertionError("must not be called when type missing")
 
         with patch("requests.get", return_value=mock_resp):
-            with caplog.at_level(logging.WARNING):
+            # 2026-06-21 RSS pivot: log level moved from WARNING (JSON path)
+            # to INFO + the actionable IP-block WARNING now lives in the
+            # RSS fallback path. Capture both to verify the operator-
+            # visible "<missing>" attribution still fires.
+            with caplog.at_level(logging.INFO):
                 results = sourcer._search_reddit("Atletico Madrid")
 
         assert results == []
-        # The log line surfaces the missing Content-Type value
-        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        guard_warnings = [w for w in warnings if "non-JSON" in w]
-        assert guard_warnings
-        assert "<missing>" in guard_warnings[0], (
-            "Empty Content-Type should be surfaced as '<missing>' in "
-            "the log so operators can distinguish 'server returned no "
-            "type' from 'server returned text/html'"
+        # The <missing> attribution now appears in the RSS fallback's
+        # WARNING (more actionable — RSS is the new last line of defense
+        # before we give up on Reddit entirely).
+        all_messages = [r.message for r in caplog.records]
+        missing_attribution = [m for m in all_messages if "<missing>" in m]
+        assert missing_attribution, (
+            "Empty Content-Type must surface as '<missing>' SOMEWHERE in "
+            "the log chain so operators can distinguish 'server returned no "
+            "type' from 'server returned text/html'. After 2026-06-21 this "
+            "attribution lives in the RSS-fallback WARNING (one per "
+            "subreddit) rather than the JSON-path WARNING."
         )
 
     def test_content_type_with_charset_suffix_still_recognized(self, monkeypatch):

@@ -14,14 +14,27 @@ its upvote signal is a pre-screened engagement proxy we get for free.
 Returns story dicts compatible with the pipeline context (same shape
 ``TrendingVideoFetcher.to_story()`` produces), so downstream stages
 (scoring, writing, hooks, render) consume them without changes.
+
+2026-06-21 RSS pivot: Reddit's JSON endpoints became unreliable from
+data-center IPs (Hetzner) — they intermittently 429 or return HTML
+"Blocked" pages (the Reddit web tier anti-scraping). At the same time,
+the OAuth path is now gated behind a Reddit Developer Program approval
+that takes days-to-weeks. Public Atom RSS endpoints (e.g.
+``/r/<sub>/top/.rss``) still work from the same IPs without auth —
+just with stricter per-IP rate limits (~1 RPM per subreddit). This
+module now tries RSS FIRST and falls back to JSON only when RSS is
+unavailable or fails. The story-dict shape is preserved across both
+paths so downstream stages are unaffected.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime
 from typing import Any
+from xml.etree import ElementTree as ET
 
 import requests
 
@@ -54,6 +67,288 @@ _REDDIT_TIMEOUT = 15  # seconds
 # competes fairly without dominating). A rough calibration, not ground truth —
 # tune here if Reddit over/under-represents in the selected posts.
 _UPVOTE_VIEW_EQUIVALENCE: float = get_tuning_config().reddit_fetch.upvote_view_equivalence
+
+
+# ─────────────────────────────────────────────────────────────────────
+# RSS path (2026-06-21 pivot)
+#
+# When Reddit's JSON endpoints fail (429 / HTML block page from data-
+# center IPs), we fall back to the Atom RSS feeds at
+# ``/r/<sub>/top/.rss?t=day``. Same data, different shape; we extract
+# title, native v.redd.it / yt / twitch link, post_id, and synthesize
+# score signals from feed position (Reddit already ranks RSS entries).
+# ─────────────────────────────────────────────────────────────────────
+
+_ATOM_NS = "{http://www.w3.org/2005/Atom}"
+
+# Reddit RSS entry content is HTML-escaped table with the post media link
+# wrapped in <a href="https://v.redd.it/..."> (native video) OR external
+# host links (youtube/twitch/streamable). Extract that URL from the
+# entry's <content type="html"> body via regex (parsing escaped HTML
+# inside Atom is fragile + slow).
+_RSS_VIDEO_HREF_RE = re.compile(
+    r'href=(?:"|&quot;)('
+    r"https?://(?:"
+    r"v\.redd\.it/[\w]+"  # native Reddit video
+    r"|i\.redd\.it/[\w.]+\.(?:gif|gifv|mp4|webm)"  # native Reddit gif/mp4
+    r"|(?:www\.)?youtube\.com/watch\?v=[\w-]+"  # YT canonical
+    r"|youtu\.be/[\w-]+"  # YT short
+    r"|(?:www\.)?twitch\.tv/[\w/]+"  # Twitch
+    r"|clips\.twitch\.tv/[\w-]+"
+    r"|streamable\.com/[\w]+"
+    r")"
+    r"[^\s\"&]*"  # query string / fragments
+    r")",
+    re.IGNORECASE,
+)
+
+# Pre-compute Reddit post id regex — Reddit Atom <id>t3_xxxxxxx</id>
+_T3_ID_RE = re.compile(r"t3_([a-z0-9]{5,12})", re.IGNORECASE)
+
+
+def _parse_atom_feed(xml_text: str) -> list[dict[str, Any]]:
+    """Parse Reddit Atom RSS feed into a list of normalized entry dicts.
+
+    Returns one dict per ``<entry>`` with these keys:
+      * ``title`` (str) — entry title text
+      * ``video_url`` (str|None) — extracted v.redd.it / yt / twitch URL
+        from the entry's HTML content; None when no recognised video host
+      * ``post_id`` (str) — Reddit post id (without ``t3_`` prefix)
+      * ``permalink`` (str) — comments URL for the post
+      * ``published_at`` (datetime|None) — UTC timestamp from <published>
+      * ``position`` (int) — 0-based index in the feed (used as a fallback
+        ranking signal since RSS doesn't expose upvote counts)
+      * ``thumbnail_url`` (str) — first <img src> in the content (best-
+        effort; Reddit RSS doesn't have a dedicated media:thumbnail)
+    """
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        logger.warning("[reddit-rss] Atom parse failed: %s", exc)
+        return []
+
+    entries = []
+    for position, entry_el in enumerate(root.findall(f"{_ATOM_NS}entry")):
+        title_el = entry_el.find(f"{_ATOM_NS}title")
+        id_el = entry_el.find(f"{_ATOM_NS}id")
+        published_el = entry_el.find(f"{_ATOM_NS}published")
+        content_el = entry_el.find(f"{_ATOM_NS}content")
+        # The comments-page link (Reddit puts the comments URL as the
+        # first <link rel="alternate">)
+        link_el = entry_el.find(f"{_ATOM_NS}link")
+
+        title = (title_el.text or "").strip() if title_el is not None else ""
+        if not title:
+            continue
+
+        # Extract Reddit post id from <id>t3_xxxxx</id>
+        id_text = (id_el.text or "") if id_el is not None else ""
+        m = _T3_ID_RE.search(id_text)
+        post_id = m.group(1) if m else ""
+
+        permalink = link_el.get("href", "") if link_el is not None else ""
+
+        published_at = None
+        if published_el is not None and published_el.text:
+            try:
+                # Atom published is RFC 3339 — Python 3.11+ handles 'Z' natively
+                ts = published_el.text.strip()
+                if ts.endswith("Z"):
+                    ts = ts[:-1] + "+00:00"
+                published_at = datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
+                pass
+
+        # Extract first matched video URL from the HTML-escaped content
+        content_html = (content_el.text or "") if content_el is not None else ""
+        video_url = ""
+        thumbnail_url = ""
+        if content_html:
+            vm = _RSS_VIDEO_HREF_RE.search(content_html)
+            if vm:
+                video_url = vm.group(1)
+            tm = re.search(
+                r'<img\s+src=(?:"|&quot;)(https?://[^\s"&]+)', content_html, re.IGNORECASE
+            )
+            if tm:
+                thumbnail_url = tm.group(1)
+
+        entries.append(
+            {
+                "title": title,
+                "video_url": video_url or None,
+                "post_id": post_id,
+                "permalink": permalink,
+                "published_at": published_at,
+                "position": position,
+                "thumbnail_url": thumbnail_url,
+            }
+        )
+
+    return entries
+
+
+def _normalise_rss_entry(
+    entry: dict, niche_id: str, subreddit: str, total_entries: int
+) -> dict[str, Any] | None:
+    """Convert a parsed RSS entry into a pipeline-compatible story dict.
+
+    Matches the shape produced by ``_normalise_post`` so downstream stages
+    don't need a separate code path. Key differences vs JSON:
+
+    * **Score synthesised from position** (RSS doesn't expose upvote
+      count). Top entry gets ``_RSS_TOP_SCORE_SYNTH``; each subsequent
+      position drops by ``_RSS_SCORE_DECAY``. Bottom-of-feed entries
+      still clear the ``score >= 100`` floor so the listing-fallback
+      isn't required.
+    * ``reddit_score`` / ``reddit_num_comments`` / ``reddit_upvote_ratio``
+      are set to the synthesised score / 0 / 0.5 (neutral defaults).
+    * No ``video_id`` for Reddit-hosted videos (RSS doesn't expose the
+      internal Reddit id); we use the post_id instead.
+    """
+    if not entry.get("video_url") or not entry.get("title"):
+        return None
+
+    # Score synth: rank 0 → 1000, rank 9 → 100, rank 24 → 100 (floor)
+    # The decay is chosen so the natural ``score >= 100`` filter in
+    # _normalise_post still passes for the top ~20 positions.
+    synth_score = max(100, _RSS_TOP_SCORE_SYNTH - entry["position"] * _RSS_SCORE_DECAY)
+
+    published_at = entry.get("published_at") or datetime.now(UTC)
+    now = datetime.now(UTC)
+    age_hours = max(0.1, (now - published_at).total_seconds() / 3600)
+    view_velocity = (synth_score * _UPVOTE_VIEW_EQUIVALENCE) / age_hours
+
+    from genlab_core.cache.stable_ids import generate_story_id
+
+    url = entry["video_url"]
+    story_id = generate_story_id(url, published_at.isoformat())
+
+    return {
+        "story_id": story_id,
+        "title": entry["title"],
+        "source": f"reddit:{subreddit}",
+        "source_url": url,
+        "canonical_url": url,
+        "published_date": published_at.isoformat(),
+        "published_at": published_at.isoformat(),
+        "fetched_at": now.isoformat(),
+        "summary": entry.get("permalink", ""),
+        "channel_name": f"r/{subreddit}",
+        "view_count": int(synth_score * _UPVOTE_VIEW_EQUIVALENCE),
+        "view_velocity": round(view_velocity, 1),
+        "duration_seconds": 0,  # RSS doesn't expose duration
+        "thumbnail_url": entry.get("thumbnail_url") or "",
+        "tags": [subreddit, niche_id],
+        "niche_id": niche_id,
+        "video_source": "reddit",
+        "video_id": entry.get("post_id", ""),
+        "is_official_channel": False,
+        # Lower mention_count than the JSON path because we can't see
+        # comment counts on RSS — the JSON code uses comments as a
+        # mention-amplification signal.
+        "source_mention_count": max(1, min(5, synth_score // 1000)),
+        "_trending_video": True,
+        # Reddit-specific signals — neutral defaults for the RSS path
+        # since the data isn't in the feed.
+        "reddit_score": synth_score,
+        "reddit_num_comments": 0,
+        "reddit_upvote_ratio": 0.5,
+        # Trace which path produced this story — useful for ops attribution
+        # if RSS-derived stories systematically over- or under-perform.
+        "_reddit_source_path": "rss",
+        "_rss_position": entry["position"],
+    }
+
+
+# Score synthesis tuning for RSS path. Chosen so the top ~20 positions
+# all pass the ``score >= 100`` filter in ``_normalise_post`` while
+# preserving relative rank ordering across the feed.
+_RSS_TOP_SCORE_SYNTH = 1000
+_RSS_SCORE_DECAY = 36
+
+
+def fetch_subreddit_via_rss(
+    subreddit: str,
+    niche_id: str,
+    time_window: str = "day",
+    limit: int = 25,
+    timeout: int = _REDDIT_TIMEOUT,
+) -> list[dict]:
+    """Fetch posts from one subreddit via the public Atom RSS endpoint.
+
+    No auth, no API key — works from data-center IPs that get blocked
+    on the JSON path. Atom RSS rate limits at ~1 RPM per subreddit per
+    IP; callers should space out their requests accordingly.
+
+    Returns the same story-dict shape as ``fetch_subreddit`` (the JSON
+    path). Empty list on any error (fail-soft).
+    """
+    url = f"https://www.reddit.com/r/{subreddit}/top/.rss"
+    params = {"t": time_window, "limit": limit}
+    # Browser-like UA — RSS endpoint allows the GenLab UA too, but
+    # browser UA matches what worked in our 2026-06-21 verification.
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        resp = requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=timeout,
+            proxies=_REDDIT_PROXIES,
+        )
+        if resp.status_code == 429:
+            logger.warning(
+                "[reddit-rss] r/%s rate-limited (429) — RSS path skipped this run",
+                subreddit,
+            )
+            return []
+        if resp.status_code != 200:
+            logger.warning(
+                "[reddit-rss] r/%s returned HTTP %d — falling through to JSON path",
+                subreddit,
+                resp.status_code,
+            )
+            return []
+        # 2026-06-20 lesson (PR #405): Reddit serves HTML "Blocked" pages
+        # with HTTP 200 to data-center IPs. Content-Type check is the
+        # ground truth — Atom RSS is ``application/atom+xml``, never
+        # ``text/html``.
+        ctype = resp.headers.get("Content-Type", "")
+        if "xml" not in ctype.lower() and "atom" not in ctype.lower():
+            logger.warning(
+                "[reddit-rss] r/%s returned non-XML Content-Type=%s — "
+                "likely web-tier block page; falling through to JSON path",
+                subreddit,
+                ctype or "<missing>",
+            )
+            return []
+    except Exception as exc:
+        logger.warning("[reddit-rss] r/%s fetch failed: %s", subreddit, exc)
+        return []
+
+    entries = _parse_atom_feed(resp.text)
+    stories = []
+    for entry in entries:
+        story = _normalise_rss_entry(entry, niche_id, subreddit, len(entries))
+        if story:
+            stories.append(story)
+
+    logger.info(
+        "[reddit-rss] r/%s yielded %d/%d video stories via RSS (window=%s)",
+        subreddit,
+        len(stories),
+        len(entries),
+        time_window,
+    )
+    return stories
 
 
 def _is_video_post(post: dict) -> tuple[bool, str]:
@@ -214,6 +509,31 @@ def fetch_subreddit(
     """
     if listing not in ("top", "hot", "new"):
         listing = "top"
+
+    # 2026-06-21 RSS-first pivot: Reddit's JSON endpoints became
+    # unreliable from data-center IPs (Hetzner). Try the RSS path first
+    # because that's what verified-works from the prod IP — only fall
+    # through to JSON when RSS returns nothing or errors. Skipping
+    # listings other than "top" because RSS only exposes the "top"
+    # variant per (subreddit, time_window).
+    if listing == "top":
+        rss_stories = fetch_subreddit_via_rss(
+            subreddit=subreddit,
+            niche_id=niche_id,
+            time_window=time_window,
+            limit=limit,
+            timeout=timeout,
+        )
+        if rss_stories:
+            return rss_stories
+        # RSS yielded nothing or rate-limited — fall through to JSON
+        # path (preserves pre-pivot behaviour for operators with
+        # working JSON access, e.g. dev machines not blocked from
+        # reddit.com).
+        logger.info(
+            "[reddit] r/%s RSS path empty/blocked — falling through to JSON",
+            subreddit,
+        )
 
     url = f"https://www.reddit.com/r/{subreddit}/{listing}.json"
     params: dict[str, Any] = {"limit": limit, "raw_json": 1}
