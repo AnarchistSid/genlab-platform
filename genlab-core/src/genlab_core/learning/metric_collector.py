@@ -569,7 +569,19 @@ def collect_metrics(
             return 0
 
     store = PendingFeedbackStore(backlog_client)
-    shaper = RewardShaper()
+    # Defer shaper construction to inside the per-task loop. RewardShaper
+    # holds ``niche_id`` and ``percentile_targets_fn`` at construction time
+    # (see reward_shaper.py:206-211), not at compute time. ``collect_metrics``
+    # processes tasks across multiple niches, so a single shared shaper
+    # cannot carry a per-task niche_id. Pre-fix (2026-06-13 ca7be9f added
+    # the percentile lookup but the prod caller continued to use
+    # ``RewardShaper()`` with no args) this produced a silent regression:
+    # the percentile-relative target lookup never fired because the
+    # ``self._percentile_targets_fn is None or not self._niche_id`` guard
+    # at ``reward_shaper.py:344`` short-circuited to the hardcoded
+    # fallback. Result: top-arm avg_reward stuck near 0.08, bandit
+    # effectively unable to learn niche-specific signal.
+    from genlab_core.learning.percentile_targets import get_percentile_target
 
     pending = store.get_pending(niche_id=niche_id)
     if not pending:
@@ -590,10 +602,25 @@ def collect_metrics(
             if store.next_collection_window(task_record, now=now) is None:
                 not_due += 1
                 continue
+            # Per-task shaper activates the percentile_targets_fn path
+            # (ca7be9f). niche_id comes from the task — different tasks
+            # may belong to different niches in a single collect_metrics
+            # call (niche_id arg to collect_metrics is an optional filter,
+            # not a hard partition). channel_metrics_fn is omitted
+            # intentionally — the existing reward_shaper.py:175 helper
+            # picks it up via the legacy ``get_channel_metrics`` import
+            # when used standalone; this path uses RewardShaper inside
+            # the per-task loop and channel_metrics is per-platform,
+            # not per-niche, so the helper resolves correctly via the
+            # platform argument at compute time.
+            task_shaper = RewardShaper(
+                percentile_targets_fn=get_percentile_target,
+                niche_id=task_record.niche_id,
+            )
             if process_pending_task(
                 task_record,
                 store,
-                shaper,
+                task_shaper,
                 now=now,
                 bandit_updater=bandit_updater,
                 backlog_client=backlog_client,
