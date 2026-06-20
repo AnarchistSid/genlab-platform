@@ -88,8 +88,6 @@ class TestSummaryShape:
                 ("gaming", 4.56, 3.20, 1.36, 0.0, 0.0, 0.0, 0.0, 7, 0.6514),
                 ("ai_creators", 2.10, 1.80, 0.30, 0.0, 0.0, 0.0, 0.0, 5, 0.42),
             ]
-            # Total query result (returns a single (sum,) tuple)
-            mock_cur.fetchone.return_value = (6.66,)
             mock_conn = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cur
             mock_conn.__enter__.return_value = mock_conn
@@ -98,6 +96,9 @@ class TestSummaryShape:
             resp = client.get("/api/v1/costs/summary?days=7")
             assert resp.status_code == 200
             data = resp.get_json()["data"]
+            # PR #397: grand_total is derived from rows (4.56 + 2.10 = 6.66),
+            # NOT from a second SQL query. The rounding matches the SQL
+            # ROUND(SUM(total_usd)::numeric, 4) policy used pre-PR.
             assert data["total_usd"] == 6.66
             assert len(data["rows"]) == 2
             gaming = next(r for r in data["rows"] if r["niche_id"] == "gaming")
@@ -105,6 +106,52 @@ class TestSummaryShape:
             assert gaming["llm_usd"] == 3.20
             assert gaming["run_count"] == 7
             assert gaming["avg_per_run_usd"] == 0.6514
+
+    def test_grand_total_derived_from_rows_not_separate_query(self, client, monkeypatch):
+        """PR #397: pin that /summary runs EXACTLY ONE query.
+
+        Pre-PR ran 2 queries: per-niche GROUP BY + a separate
+        `SELECT SUM(total_usd)` for the headline grand-total. The
+        grand-total is now derived in Python as `sum(row.total_usd)`
+        over the per-niche rows — eliminating the second index scan +
+        round-trip.
+
+        If a future refactor re-introduces the separate grand-total
+        query, this counter catches it.
+        """
+        monkeypatch.setenv("DATABASE_URL", "postgresql://fake")
+        with patch("psycopg.connect") as mock_connect:
+            mock_cur = MagicMock()
+            # 3 niche rows — grand total should be 1.10 + 2.20 + 3.30 = 6.60
+            mock_cur.fetchall.return_value = [
+                ("gaming", 1.10, 1.00, 0.10, 0.0, 0.0, 0.0, 0.0, 2, 0.55),
+                ("ai_creators", 2.20, 2.00, 0.20, 0.0, 0.0, 0.0, 0.0, 4, 0.55),
+                ("sports", 3.30, 3.00, 0.30, 0.0, 0.0, 0.0, 0.0, 6, 0.55),
+            ]
+            mock_conn = MagicMock()
+            mock_conn.cursor.return_value.__enter__.return_value = mock_cur
+            mock_conn.__enter__.return_value = mock_conn
+            mock_connect.return_value = mock_conn
+
+            resp = client.get("/api/v1/costs/summary?days=7")
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            # Grand total derived from rows: 1.10 + 2.20 + 3.30 = 6.60
+            assert data["total_usd"] == 6.60
+            # Algorithmic invariant: only ONE SELECT query against
+            # pipeline_run_costs, not 2. Pin against the per-niche-query
+            # + grand-total-query anti-pattern this PR removed.
+            # (pg_connect adds an extra `SET app.niche_id = %s` call —
+            # filter the assertion to costs-table SELECTs only.)
+            costs_selects = [
+                c
+                for c in mock_cur.execute.call_args_list
+                if "pipeline_run_costs" in (c.args[0] if c.args else "")
+            ]
+            assert len(costs_selects) == 1, (
+                f"Expected exactly 1 SELECT on pipeline_run_costs (post-PR #397), "
+                f"got {len(costs_selects)} — separate grand-total query regression?"
+            )
 
 
 # ── /by-niche/<id> endpoint ──────────────────────────────────────────────
