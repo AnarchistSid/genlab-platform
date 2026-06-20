@@ -37,21 +37,23 @@ def revenue_summary():
         with pg_connect(
             dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
         ) as conn:
-            # Total clicks per window
-            clicks_today = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM affiliate_clicks "
-                "WHERE created_at >= NOW() - INTERVAL '1 day'"
-            ).fetchone()["cnt"]
-
-            clicks_7d = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM affiliate_clicks "
-                "WHERE created_at >= NOW() - INTERVAL '7 days'"
-            ).fetchone()["cnt"]
-
-            clicks_30d = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM affiliate_clicks "
+            # Total clicks per window — collapsed from 3 separate COUNT
+            # queries into ONE using COUNT(*) FILTER (WHERE ...). The
+            # outer WHERE constrains the index scan to the 30d range;
+            # each FILTER clause buckets matching rows into a window.
+            # 3× fewer round-trips to Postgres + 3× fewer index scans.
+            # See PR #395.
+            counts = conn.execute(
+                "SELECT "
+                "  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '1 day') AS clicks_today, "
+                "  COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS clicks_7d, "
+                "  COUNT(*) AS clicks_30d "
+                "FROM affiliate_clicks "
                 "WHERE created_at >= NOW() - INTERVAL '30 days'"
-            ).fetchone()["cnt"]
+            ).fetchone()
+            clicks_today = counts["clicks_today"]
+            clicks_7d = counts["clicks_7d"]
+            clicks_30d = counts["clicks_30d"]
 
             # Clicks by product (last 30d)
             by_product_rows = conn.execute(
