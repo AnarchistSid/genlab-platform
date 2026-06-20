@@ -114,16 +114,12 @@ def summary():
                     (str(days),),
                 )
                 rows = cur.fetchall()
-                # Aggregate total across all niches for the headline pill
-                cur.execute(
-                    """
-                    SELECT COALESCE(ROUND(SUM(total_usd)::numeric, 4), 0)
-                    FROM pipeline_run_costs
-                    WHERE completed_at >= NOW() - (%s || ' days')::interval
-                    """,
-                    (str(days),),
-                )
-                grand_total = cur.fetchone()[0]
+                # PR #397: previously ran a separate `SELECT SUM(total_usd)`
+                # query for the headline grand-total. Now derive it from
+                # the per-niche rows we just fetched — Python ``sum`` over
+                # ≤5 numbers vs a second index scan + round-trip to Postgres.
+                # The 4-decimal rounding matches the SQL ROUND policy so
+                # the response shape is byte-identical.
     except Exception as exc:
         logger.exception("costs/summary query failed")
         return api_error(error=f"Query failed: {exc}", code=500)
@@ -145,10 +141,14 @@ def summary():
             }
         )
 
+    # PR #397: grand_total is the sum of per-niche totals (5 numbers, ~5
+    # niches), computed in Python instead of via a separate SQL query.
+    grand_total = round(sum(r["total_usd"] for r in rows_out), 4)
+
     return api_success(
         data={
             "window_days": days,
-            "total_usd": float(grand_total or 0),
+            "total_usd": float(grand_total),
             "rows": rows_out,
         }
     )
