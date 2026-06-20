@@ -90,3 +90,121 @@ class TestRelevanceFilter:
         rf = self._make_filter()
         kept = rf.filter([])
         assert kept == []
+
+
+class TestSummaryFallback:
+    """Pin the description-or-summary fallback in RelevanceFilter.filter().
+
+    Pre-fix (2026-06-20): ``filter()`` read ``v.get("description", "")``
+    only, which silently returned ``""`` for BlackboxBrief stories where
+    the legacy-bridge code at ``bb_strategies/content_research.py:103``
+    populates ``summary`` instead of ``description``. The bridge predates
+    the genlab-core unification — BB's RSS pipeline names the secondary
+    text ``summary`` (matching feedparser's convention), while
+    ``RelevanceFilter`` named it ``description`` (matching YouTube API).
+
+    Result: BB stories were scored on the title alone. Negative-keyword
+    matches in the article body were invisible to the filter, letting
+    off-niche content (sports / paint timelapses / anime episodes) pass
+    when their titles happened to be generic.
+
+    Fix: prefer ``description``, fall back to ``summary`` so that neither
+    producer is forced to rename its data shape.
+    """
+
+    def _make_filter(self):
+        config = {
+            "positive_keywords": ["ai", "claude", "gpt"],
+            "negative_keywords": ["gym", "paint"],
+            "relevance_threshold": 0.3,
+        }
+        return RelevanceFilter("ai_creators", config)
+
+    def test_summary_field_consulted_when_description_missing(self):
+        """A BB-shaped story (``summary`` set, no ``description``) gets its
+        secondary text read by the filter — so negative keywords in the
+        body trigger the hard-reject path."""
+        rf = self._make_filter()
+        bb_story = {
+            "title": "Bored Sunday morning ideas",  # generic, no AI marker
+            "summary": "Hit the gym, did some bench press, then took a walk.",
+            # Note: no "description" key at all — matches BB bridge shape
+        }
+        kept = rf.filter([bb_story])
+        # "gym" in summary triggers negative-keyword hard reject -> score=0.0
+        # -> below 0.3 threshold -> story is rejected
+        assert kept == [], (
+            "Pre-fix this would have passed: title scored alone, score=0.0 "
+            "(no AI keyword) but description=\"\" never saw 'gym' so the "
+            "behavior was a false-clean. With fallback, summary IS read, "
+            "'gym' triggers hard reject, story is correctly rejected."
+        )
+
+    def test_summary_positive_keywords_also_count(self):
+        """Symmetric to negative: positive keywords in the summary also
+        contribute to scoring, not just the title."""
+        rf = self._make_filter()
+        bb_story = {
+            "title": "Cool new tool",  # generic title, no AI marker
+            "summary": "Anthropic released Claude 4.7 with new agentic features.",
+        }
+        kept = rf.filter([bb_story])
+        # "claude" in summary brings score up past 0.3 -> kept
+        assert len(kept) == 1
+        assert kept[0]["relevance_score"] >= 0.3
+
+    def test_description_takes_precedence_when_both_present(self):
+        """When both ``description`` and ``summary`` exist, ``description``
+        wins. The fallback never overrides an explicit description."""
+        rf = self._make_filter()
+        candidate = {
+            "title": "Tool review",
+            "description": "Anthropic Claude review",  # AI keyword here
+            "summary": "Gym workout for beginners",  # negative keyword here
+        }
+        kept = rf.filter([candidate])
+        # description wins -> "claude" matched, "gym" never consulted
+        assert len(kept) == 1, (
+            "description has precedence — if summary were also scanned the "
+            "'gym' negative would have rejected, but pre-existing YouTube "
+            "candidates (which set ``description``, not ``summary``) must "
+            "keep working exactly as before."
+        )
+
+    def test_youtube_shaped_candidate_unchanged_behavior(self):
+        """A YouTube-shaped candidate (``description`` set, no ``summary``)
+        continues to score exactly as it did before the fix — regression
+        guard for the non-BB producers."""
+        rf = self._make_filter()
+        yt_candidate = {
+            "title": "Claude 4.7 demo",
+            "description": "AI agentic coding demo with Claude.",
+        }
+        kept = rf.filter([yt_candidate])
+        assert len(kept) == 1
+        assert kept[0]["relevance_score"] >= 0.3
+
+    def test_empty_summary_and_description_falls_back_to_empty_string(self):
+        """When neither ``description`` nor ``summary`` are set, the
+        secondary text is empty string — no AttributeError, no None
+        leaking into ``score()``."""
+        rf = self._make_filter()
+        bare_candidate = {"title": "Claude 4.7 just dropped"}
+        kept = rf.filter([bare_candidate])
+        # Title has "claude" -> scores above threshold -> kept
+        assert len(kept) == 1
+
+    def test_summary_is_none_handled_without_typeerror(self):
+        """``v.get("summary", "")`` returns ``None`` when summary IS the
+        key but the value is None. The ``or`` chain handles that — no
+        ``TypeError: argument of type 'NoneType' is not iterable``."""
+        rf = self._make_filter()
+        weird_candidate = {
+            "title": "Claude 4.7 review",
+            "description": None,
+            "summary": None,
+        }
+        # Must not raise
+        kept = rf.filter([weird_candidate])
+        # Title has "claude" -> scores above threshold -> kept
+        assert len(kept) == 1
