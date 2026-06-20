@@ -535,3 +535,175 @@ class TestRedditCookieAuth:
         # After reload, _REDDIT_COOKIE_PATH should match the env var
         assert video_sourcer._REDDIT_COOKIE_PATH == str(custom)
         assert video_sourcer._reddit_cookie_jar() is not None
+
+
+# ── Reddit Content-Type guard (2026-06-20 defense-in-depth) ───
+#
+# Pre-fix, _search_reddit checked only HTTP status code. Reddit's
+# anti-scraping web tier responds with HTTP 200 + HTML "Blocked"
+# body for data-center IPs (Hetzner, etc.) — so status-code-only
+# checks passed, ``resp.json()`` then raised JSONDecodeError, the
+# outer ``except Exception`` swallowed it, and operators saw
+# only ``reddit=0`` in stats with no clear cause.
+#
+# The fix adds a Content-Type check between the status code check
+# and ``resp.json()`` call. Non-JSON responses log a clear
+# "likely IP-blocked" warning with the action item (provision
+# REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET to use oauth.reddit.com
+# which is a different host not affected by web-tier IP blocks).
+#
+# This doesn't fix the underlying IP block — it just makes the
+# failure mode loud + actionable instead of silent.
+
+
+class TestRedditContentTypeGuard:
+    """Pin the Content-Type check that distinguishes a real JSON
+    response from an HTML "Blocked" page Reddit serves to data-center
+    IPs (returns 200 status, HTML body, masks IP-block as silent
+    JSONDecodeError pre-fix).
+    """
+
+    def _make_sourcer(self, monkeypatch):
+        """Helper: build a sports-niche VideoSourcer with anon auth path."""
+        from genlab_core.media import video_sourcer
+
+        # Force the anon path (no token, no cookies)
+        monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
+        monkeypatch.setattr(video_sourcer, "_reddit_app_token", lambda: None)
+        monkeypatch.setattr(video_sourcer, "_reddit_cookie_jar", lambda: None)
+        return VideoSourcer(niche_id="sports", max_results_per_backend=3)
+
+    def test_html_response_returns_empty_does_not_call_json(self, monkeypatch, caplog):
+        """The exact prod symptom from 2026-06-20: Reddit returns
+        ``HTTP 200`` with body ``<!doctype html>...<title>Blocked</title>...``.
+        ``resp.json()`` MUST NOT be called (it would raise
+        ``JSONDecodeError`` and be swallowed silently). The function
+        must continue cleanly to the next subreddit.
+        """
+        import logging
+
+
+        sourcer = self._make_sourcer(monkeypatch)
+
+        # Mock the HTML "Blocked" response Reddit serves to Hetzner
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"Content-Type": "text/html; charset=UTF-8"}
+        # Calling .json() on the mock would NOT raise (returns MagicMock())
+        # in unit-test land, but the guard MUST prevent the call entirely.
+        # We use a side_effect to fail the test if .json() is invoked.
+        mock_resp.json.side_effect = AssertionError(
+            "resp.json() must NOT be called when Content-Type is text/html"
+        )
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                results = sourcer._search_reddit("Koln Bayer Leverkusen")
+
+        assert results == [], "Empty result — function continued past the blocked subreddit"
+
+        # The warning must contain the key debugging signals
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        guard_warnings = [w for w in warnings if "non-JSON" in w]
+        assert guard_warnings, (
+            "Must log the non-JSON Content-Type warning so operators "
+            "can recognize the IP-block pattern"
+        )
+        first = guard_warnings[0]
+        assert "IP-blocked" in first
+        assert "REDDIT_CLIENT_ID" in first, (
+            "Warning must include the actionable env-var name so operators "
+            "know exactly what to provision"
+        )
+        assert "oauth.reddit.com" in first, (
+            "Warning must explain WHY OAuth bypasses the block — the "
+            "host is different (oauth.reddit.com vs www.reddit.com)"
+        )
+
+    def test_json_response_proceeds_normally(self, monkeypatch):
+        """When Content-Type IS application/json, the guard passes
+        through and ``resp.json()`` is called as before. Backward
+        compat: this is the happy path that existed pre-fix.
+        """
+
+        sourcer = self._make_sourcer(monkeypatch)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {"Content-Type": "application/json; charset=UTF-8"}
+        mock_resp.json.return_value = {
+            "data": {
+                "children": [
+                    {
+                        "data": {
+                            "title": "Koln 2-1 Bayer Leverkusen — full match highlights",
+                            "is_video": True,
+                            "permalink": "/r/soccer/abc",
+                            "url": "https://v.redd.it/abc",
+                            "score": 1000,
+                            "ups": 950,
+                        }
+                    }
+                ]
+            }
+        }
+
+        with patch("requests.get", return_value=mock_resp):
+            results = sourcer._search_reddit("Koln Bayer Leverkusen")
+
+        # Got at least one result back from the mocked JSON
+        assert len(results) >= 1
+        assert mock_resp.json.called
+
+    def test_missing_content_type_treated_as_non_json(self, monkeypatch, caplog):
+        """If ``Content-Type`` is missing entirely (server bug or
+        proxy stripped it), behave like non-JSON — safer to skip than
+        risk calling ``resp.json()`` on opaque bytes.
+        """
+        import logging
+
+
+        sourcer = self._make_sourcer(monkeypatch)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.headers = {}  # No Content-Type at all
+        mock_resp.json.side_effect = AssertionError("must not be called when type missing")
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                results = sourcer._search_reddit("Atletico Madrid")
+
+        assert results == []
+        # The log line surfaces the missing Content-Type value
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        guard_warnings = [w for w in warnings if "non-JSON" in w]
+        assert guard_warnings
+        assert "<missing>" in guard_warnings[0], (
+            "Empty Content-Type should be surfaced as '<missing>' in "
+            "the log so operators can distinguish 'server returned no "
+            "type' from 'server returned text/html'"
+        )
+
+    def test_content_type_with_charset_suffix_still_recognized(self, monkeypatch):
+        """``application/json; charset=UTF-8`` (with charset suffix)
+        is still JSON — the substring check ``"json" in ctype.lower()``
+        must handle it. Pinned because a stricter equality check would
+        regress this case.
+        """
+
+        sourcer = self._make_sourcer(monkeypatch)
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        # Note the charset suffix — common in real responses
+        mock_resp.headers = {"Content-Type": "application/json; charset=UTF-8"}
+        mock_resp.json.return_value = {"data": {"children": []}}
+
+        with patch("requests.get", return_value=mock_resp):
+            results = sourcer._search_reddit("test query")
+
+        # Reached resp.json() successfully → no AssertionError raised
+        assert mock_resp.json.called
+        assert results == []  # No children in mock response

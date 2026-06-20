@@ -737,6 +737,35 @@ class VideoSourcer:
                         auth_mode,
                     )
                     continue
+                # Content-Type guard (2026-06-20 fix). Reddit serves an
+                # HTML "Blocked" page (NOT a 4xx) for data-center IPs
+                # (Hetzner, etc.) when anti-scraping fires. Status-code-
+                # only checks miss this: ``resp.json()`` below then
+                # raises ``JSONDecodeError``, caught silently by the
+                # outer ``except Exception`` → operator sees ``reddit=0``
+                # in stats with no clear cause.
+                #
+                # The real signal is the Content-Type: a blocked
+                # response is ``text/html`` instead of
+                # ``application/json``. Surfacing this explicitly tells
+                # the operator the cookie/web path is IP-blocked and to
+                # provision ``REDDIT_CLIENT_ID`` + ``REDDIT_CLIENT_SECRET``
+                # (OAuth uses ``oauth.reddit.com`` — separate from the
+                # web tier that's IP-restricted).
+                ctype = resp.headers.get("Content-Type", "")
+                if "json" not in ctype.lower():
+                    logger.warning(
+                        "Reddit search returned non-JSON for r/%s "
+                        "(auth=%s, Content-Type=%s) — likely IP-blocked "
+                        "by web tier anti-scraping (e.g. HTML 'Blocked' "
+                        "page). Provision REDDIT_CLIENT_ID + "
+                        "REDDIT_CLIENT_SECRET to switch to OAuth via "
+                        "oauth.reddit.com (separate from blocked web tier).",
+                        sub,
+                        auth_mode,
+                        ctype or "<missing>",
+                    )
+                    continue
                 data = resp.json()
 
                 for child in data.get("data", {}).get("children", []):
