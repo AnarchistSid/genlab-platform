@@ -92,6 +92,12 @@ class TestFullReplyPipeline:
         # numeric score so the auto/review/discard router compares a real float.
         mock_gate.check_outbound.return_value = mock_result
 
+        # 2026-06-21: comment_processor reads
+        # ``engine.persona.reply_constraints.max_length_chars`` to trim
+        # the bot-disclosure suffix. Without configuring it the chained
+        # MagicMock returns a non-int and ``_append_bot_disclosure``
+        # raises TypeError on the ``len(text) + ... > max_len`` compare.
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         # Persona engine: return a reply
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for watching!"
 
@@ -165,6 +171,7 @@ class TestFullReplyPipeline:
         # router only auto-posts known-safe acknowledgments). "Thanks..."
         # matches; an arbitrary phrase would route to review and never
         # reach post_reply.
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for the thread!"
 
         mock_client = MagicMock(spec=Engageable)
