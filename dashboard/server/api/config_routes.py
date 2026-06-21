@@ -4,10 +4,10 @@ import json
 import logging
 from pathlib import Path
 
-import yaml
 from flask import Blueprint, request
 
 from server.core.responses import api_error, api_not_found, api_success
+from server.core.yaml_cache import load_yaml_cached
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("config_api", __name__, url_prefix="/api/v1/config")
@@ -22,11 +22,15 @@ PROJECT_ROOT = _DASHBOARD_ROOT
 
 
 def _niche_registry() -> list[dict]:
-    """Load niche registry once per request (cheap YAML read)."""
-    if not _REGISTRY_PATH.exists():
-        return []
-    with open(_REGISTRY_PATH) as f:
-        data = yaml.safe_load(f) or {}
+    """Load the niche registry, mtime-cached.
+
+    Pre-2026-06-21 this re-read + parsed the YAML on every call. With
+    ``_config_dir_for_niche`` calling this *inside* the per-niche loop
+    in ``_load_yaml`` (line 56), that meant up to 2 YAML disk reads per
+    config endpoint call without a niche_id. The mtime cache turns
+    every steady-state call into a single ``stat()`` (microseconds).
+    """
+    data = load_yaml_cached(_REGISTRY_PATH) or {}
     return data.get("niches", [])
 
 
@@ -57,15 +61,12 @@ def _load_yaml(filename, niche_id: str | None = None):
         config_dir = _config_dir_for_niche(nid)
         if config_dir:
             path = config_dir / filename
-            if path.exists():
-                with open(path) as f:
-                    return yaml.safe_load(f)
+            data = load_yaml_cached(path)
+            if data is not None:
+                return data
     # Fallback: try genlab-core shared config
     fallback = _GENLAB_ROOT / "genlab-core" / "config" / filename
-    if fallback.exists():
-        with open(fallback) as f:
-            return yaml.safe_load(f)
-    return None
+    return load_yaml_cached(fallback)
 
 
 @bp.route("/sources", methods=["GET"])

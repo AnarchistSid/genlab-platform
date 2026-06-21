@@ -117,11 +117,17 @@ def publishing_alerts():
                 }
             )
 
-        # WARNING: Placeholder URLs (example.com) in affiliate catalog
+        # WARNING: Placeholder URLs (example.com) in affiliate catalog.
+        # 2026-06-21 (perf): both YAMLs go through the mtime-keyed cache
+        # in ``server.core.yaml_cache`` — disk I/O eliminated on the
+        # 99% steady-state case (alerting.yaml + affiliate_catalog.yaml
+        # rarely change). Was a guaranteed 1-2 disk reads + YAML parses
+        # per alerts endpoint call; this endpoint is polled by Mission
+        # Control on the same 60s cadence as the overview endpoint.
         try:
             from pathlib import Path
 
-            import yaml
+            from server.core.yaml_cache import load_yaml_cached
 
             _catalog_path = (
                 Path(__file__).resolve().parent.parent.parent.parent
@@ -129,24 +135,19 @@ def publishing_alerts():
                 / "config"
                 / "affiliate_catalog.yaml"
             )
-            # Load alerting config to check if placeholder_url_alert is enabled
             _alerting_path = (
                 Path(__file__).resolve().parent.parent.parent.parent
                 / "genlab-core"
                 / "config"
                 / "alerting.yaml"
             )
-            placeholder_alert_enabled = False
-            if _alerting_path.exists():
-                with open(_alerting_path, encoding="utf-8") as af:
-                    alerting_cfg = yaml.safe_load(af) or {}
-                placeholder_alert_enabled = alerting_cfg.get("affiliate", {}).get(
-                    "placeholder_url_alert", False
-                )
+            alerting_cfg = load_yaml_cached(_alerting_path) or {}
+            placeholder_alert_enabled = alerting_cfg.get("affiliate", {}).get(
+                "placeholder_url_alert", False
+            )
 
-            if placeholder_alert_enabled and _catalog_path.exists():
-                with open(_catalog_path, encoding="utf-8") as cf:
-                    catalog = yaml.safe_load(cf) or {}
+            if placeholder_alert_enabled:
+                catalog = load_yaml_cached(_catalog_path) or {}
                 placeholder_count = 0
                 placeholder_products = []
                 for _niche_id, niche_data in catalog.get("niches", {}).items():
