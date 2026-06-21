@@ -251,8 +251,17 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
                 from genlab_core.engagement.token_health import emit_token_expiry_alert
 
                 emit_token_expiry_alert("x_twitter", niche_id, str(unauth))
-            except Exception:
-                pass
+            except Exception as alert_exc:
+                # Silent-swallow audit (2026-06-21): downgrade to debug
+                # with exc trace. Alert emission is allowed to fail
+                # (operator runbook says swallow), but operators
+                # debugging "why didn't we get a token-expiry alert?"
+                # need at least a debug-level signal to grep for.
+                logger.debug(
+                    "[POLLER] x_twitter token-expiry alert emission failed for %s: %s",
+                    niche_id,
+                    alert_exc,
+                )
             return []
         except tweepy.Forbidden:
             logger.warning(
@@ -337,8 +346,16 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
             )
             if me_resp.ok:
                 own_username = me_resp.json().get("username", "")
-        except Exception:
-            pass  # fall back to empty — self-replies won't be filtered
+        except Exception as me_exc:
+            # Silent-swallow audit (2026-06-21): preserve fallback
+            # semantics (own_username stays "") but emit debug trace
+            # so operators investigating "why are self-replies leaking"
+            # have a signal to grep for.
+            logger.debug(
+                "[POLLER] threads /me fetch failed for %s (self-reply filter degraded): %s",
+                niche_id,
+                me_exc,
+            )
 
         # Step 1: Fetch recent posts
         media_resp = _requests.get(
@@ -416,8 +433,16 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
             error_body = getattr(getattr(e, "response", None), "text", "") or str(e)
             if is_oauth_expiry(error_body):
                 emit_token_expiry_alert("threads", niche_id, error_body)
-        except Exception:
-            pass  # alert emission must never crash the poll loop
+        except Exception as alert_exc:
+            # Silent-swallow audit (2026-06-21): preserve "alert emission
+            # never crashes the poll loop" semantics but emit a debug
+            # trace so operators investigating missing token-expiry
+            # alerts have at least one signal to grep for.
+            logger.debug(
+                "[POLLER] threads token-expiry alert emission failed for %s: %s",
+                niche_id,
+                alert_exc,
+            )
 
         logger.warning("[POLLER] Threads poll failed for %s: %s", niche_id, _scrub_token(e))
         return []
@@ -471,8 +496,15 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
 
                 if is_oauth_expiry(posts_resp.text):
                     emit_token_expiry_alert("facebook", niche_id, posts_resp.text)
-            except Exception:
-                pass
+            except Exception as alert_exc:
+                # Silent-swallow audit (2026-06-21): debug trace for
+                # operators investigating missing facebook token-expiry
+                # alerts (preserve crash-safety, add observability).
+                logger.debug(
+                    "[POLLER] facebook token-expiry alert emission failed for %s: %s",
+                    niche_id,
+                    alert_exc,
+                )
             return []
         posts_resp.raise_for_status()
         post_ids = [item["id"] for item in posts_resp.json().get("data", [])]
