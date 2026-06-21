@@ -180,6 +180,100 @@ def calibration_stats_all():
     return api_success(data={"window_days": window_days, "niches": out})
 
 
+# ── Lever B: Per-rejection-reason breakdown ─────────────────────────
+#
+# Operator clicks 1 of 6 categorical rejection reasons on every reject:
+# ``weak_hook``, ``too_generic``, ``unsupported_claim``, ``bad_fit``,
+# ``too_long``, ``low_value`` (plus the default-label fallbacks
+# ``rejected_in_review`` / ``needs_revision``). Pre-Lever-B these were
+# stored on ``blueprints.feedback_issue`` but never surfaced for
+# analysis — no endpoint read them.
+#
+# This endpoint groups operator-rejected calibration rows by category
+# and reports gate-agreement counts per group. The actionable signal:
+# "of the times the operator rejected with reason X, how often did the
+# gate already say no?" lets operators see WHICH gate signals to tune.
+# E.g. a high "gate disagreed" count on weak_hook rejections means the
+# gate's existing hook check is too lenient.
+
+
+@bp.route("/rejection-breakdown", methods=["GET"])
+def rejection_breakdown():
+    """Per-rejection-reason breakdown of operator-rejected blueprints.
+
+    Query params:
+        niche_id (required): one of the 5 supported niches
+        window_days (optional, default 30): rolling window size (1..90)
+
+    Response:
+        {
+          "niche_id": "gaming",
+          "window_days": 30,
+          "categories": [
+            {
+              "feedback_category": "weak_hook",
+              "count": 24,
+              "gate_agreed": 4,
+              "gate_disagreed": 20,
+              "gate_disagreement_rate": 0.833
+            },
+            { "feedback_category": "too_generic", ... },
+            ...
+          ]
+        }
+
+    Empty ``categories`` list means no rejections-with-category in the
+    window — either cold start (Lever B just shipped, no operator clicks
+    yet had the field populated) OR a healthy niche with low reject
+    volume. Frontend should render "no data yet" rather than an error.
+    """
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if not niche_id:
+        return api_error(error="niche_id query param required", code=400)
+    if niche_id not in _VALID_NICHES:
+        return api_error(
+            error=f"niche_id must be one of {sorted(_VALID_NICHES)}",
+            code=400,
+        )
+
+    try:
+        window_days = int(request.args.get("window_days", "30"))
+    except (TypeError, ValueError):
+        return api_error(error="window_days must be an integer", code=400)
+    if window_days < 1 or window_days > 90:
+        return api_error(error="window_days must be 1..90", code=400)
+
+    try:
+        from genlab_core.scheduling.calibration_logger import breakdown_by_category
+
+        entries = breakdown_by_category(niche_id=niche_id, window_days=window_days)
+    except Exception as exc:
+        logger.exception("rejection-breakdown failed for %s", niche_id)
+        return api_error(error=f"Breakdown query failed: {exc}", code=500)
+
+    return api_success(
+        data={
+            "niche_id": niche_id,
+            "window_days": window_days,
+            "categories": [
+                {
+                    "feedback_category": e.feedback_category,
+                    "count": e.count,
+                    "gate_agreed": e.gate_agreed,
+                    "gate_disagreed": e.gate_disagreed,
+                    # Rate of operator-vs-gate disagreement WITHIN this
+                    # category. Computed server-side so the frontend
+                    # gets a stable, rounded value.
+                    "gate_disagreement_rate": (
+                        round(e.gate_disagreed / e.count, 3) if e.count > 0 else 0.0
+                    ),
+                }
+                for e in entries
+            ],
+        }
+    )
+
+
 # ── W4.4: Track-record endpoint (per-day agreement trend) ─────────────
 #
 # Closes W4.4 from the autonomy plan. ``calibration-stats`` returns a
