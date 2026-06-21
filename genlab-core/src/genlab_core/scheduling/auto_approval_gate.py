@@ -285,13 +285,37 @@ def evaluate(
 
     # ── Final decision ────────────────────────────────────────────────
     approved = len(failed) == 0
-    return AutoApprovalDecision(
+    decision = AutoApprovalDecision(
         approved=approved,
         confidence=round(confidence, 3),
         passed_checks=passed,
         failed_checks=failed,
         reasons=reasons,
     )
+
+    # ── Lever C (2026-06-21): LLM-as-judge on borderline cases ────────
+    # When the gate's confidence is borderline (0.3..0.7), the 5 binary
+    # heuristics aren't capturing enough signal to make a clear call.
+    # Ask Claude Haiku to reason about the blueprint with the gate's
+    # signals as context — the LLM verdict can override the rule-based
+    # decision (with audit trail in the reasons list).
+    #
+    # Opt-in via GENLAB_LLM_JUDGE_ENABLED=1 env for safe shadow rollout.
+    # Default disabled = same behavior as pre-Lever-C (rule-based only).
+    # Cost: ~$0.0002 per borderline blueprint × ~1/niche/day × 5 niches
+    # = ~$1/year at most-permissive activation.
+    try:
+        if 0.3 <= confidence <= 0.7:
+            judged = _llm_judge_borderline(blueprint, decision)
+            if judged is not None:
+                decision = judged
+    except Exception as exc:
+        # LLM judge MUST NEVER block the gate — fall through to the
+        # rule-based decision silently. Logged at debug so a flaky
+        # judge doesn't drown the logs.
+        logger.debug("[gate] LLM judge raised (using rule-based decision): %s", exc)
+
+    return decision
 
 
 def _to_float(value) -> float | None:
@@ -305,4 +329,165 @@ def _to_float(value) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
+        return None
+
+
+# ────────────────────────────────────────────────────────────────────
+# Lever C (2026-06-21): LLM-as-judge on borderline gate decisions
+# ────────────────────────────────────────────────────────────────────
+
+
+_LLM_JUDGE_SYSTEM_PROMPT = """You evaluate whether a content blueprint should be auto-approved for publishing.
+
+You see the rule-based gate's signals — which numeric checks passed/failed, and the gate's confidence (0..1).
+You're asked to reason about the BORDERLINE cases the rule-based gate is least sure about.
+
+A blueprint should be APPROVED when:
+- It has a video clip and a hook
+- The hook is grounded in the source story (not a generic template, not hallucinated)
+- The content is on-niche and brand-safe
+- The quality signals (composite_score, virality_score) are reasonable for the niche
+
+A blueprint should be REJECTED when:
+- The hook is generic / weak / hallucinated
+- The content is off-niche or low-quality
+- The quality signals strongly suggest the post will underperform
+- There's a brand-safety or content-policy concern
+
+Respond with ONLY a JSON object:
+{"approved": true|false, "reason": "<one short phrase explaining your verdict>"}
+"""
+
+
+def _llm_judge_borderline(
+    blueprint: dict,
+    rule_decision: AutoApprovalDecision,
+) -> AutoApprovalDecision | None:
+    """Ask Claude Haiku to reason about a borderline gate decision.
+
+    Returns:
+        - An updated AutoApprovalDecision when the LLM judge fires
+          (with the judge's verdict + audit-trail entry in the reasons list)
+        - None when the judge is disabled OR fails — caller uses the
+          rule-based decision unchanged
+
+    Opt-in via ``GENLAB_LLM_JUDGE_ENABLED=1`` env var. Default disabled
+    so the mechanism can ship + be tested in shadow mode before being
+    activated in production. Once shadow data shows the judge improves
+    operator-gate agreement without false positives, flip the env var
+    per-niche (initially) then globally.
+
+    Why this is a separate function (not inlined in evaluate()):
+    - Cleanly testable in isolation (no need to build the full
+      rule-based decision flow)
+    - Single place to wrap the LLM API call + JSON parsing
+    - Easy to extend later with niche-specific judge prompts
+    - Mirror of Lever K's ``_critique_hook_grounded`` design
+
+    The judge sees:
+    - hook_text
+    - niche_id
+    - rule-based gate signals (passed_checks, failed_checks, confidence)
+    - composite_score + virality_score from extra
+
+    The judge does NOT see:
+    - The full video file (G1/G2 will add that)
+    - Calibration data from past operator decisions on similar blueprints
+      (a future iteration could RAG-retrieve them)
+
+    Cost: ~1 Haiku call per borderline blueprint (~$0.0002). Only fires
+    on ~10% of blueprints (the borderline ones), so the steady-state
+    cost is dominated by happy-path runs that skip the judge entirely.
+    """
+    import os
+
+    if os.environ.get("GENLAB_LLM_JUDGE_ENABLED", "0") != "1":
+        return None
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    try:
+        niche_id = (blueprint.get("niche_id") or "unknown").strip()
+        hook = (blueprint.get("hook_text") or "")[:200]
+        extra = blueprint.get("extra") if isinstance(blueprint.get("extra"), dict) else {}
+        composite = extra.get("composite_score")
+        virality = extra.get("virality_score")
+
+        signals = (
+            f"Niche: {niche_id}\n"
+            f"Hook: {hook!r}\n"
+            f"Composite score: {composite}\n"
+            f"Virality score: {virality}\n"
+            f"Rule-based gate signals — passed: {rule_decision.passed_checks}, "
+            f"failed: {rule_decision.failed_checks}\n"
+            f"Rule-based confidence: {rule_decision.confidence:.2f}\n"
+        )
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            temperature=0.0,  # Deterministic verdict for the same inputs
+            system=_LLM_JUDGE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": signals}],
+        )
+
+        # Cost tracking — match the pattern used elsewhere
+        try:
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", response)
+        except Exception:
+            pass  # Cost tracking failures MUST NOT block the judge
+
+        raw = response.content[0].text.strip() if response.content else ""
+        if raw.startswith("```"):
+            raw = raw.strip("`").strip()
+            if raw.startswith("json"):
+                raw = raw[4:].strip()
+
+        import json as _json
+
+        parsed = _json.loads(raw)
+        llm_approved = bool(parsed.get("approved", rule_decision.approved))
+        llm_reason = str(parsed.get("reason", "")).strip()[:200] or "no_reason"
+
+        # Audit-trail entry in the reasons list — operators can grep
+        # for "[LLM judge]" in dashboard previews to see where the
+        # judge overrode the rule-based decision.
+        marker = "OVERRIDE" if llm_approved != rule_decision.approved else "AGREE"
+        audit_entry = f"[LLM judge {marker}] {llm_reason}"
+
+        logger.info(
+            "[gate] LLM judge fired for niche=%s rule_decision=%s rule_conf=%.2f "
+            "llm_decision=%s reason=%s",
+            niche_id,
+            rule_decision.approved,
+            rule_decision.confidence,
+            llm_approved,
+            llm_reason,
+        )
+
+        return AutoApprovalDecision(
+            approved=llm_approved,
+            # Bump confidence to 0.85 when LLM agrees, 0.7 when it
+            # overrides — the LLM verdict on borderline cases is
+            # higher-confidence than the rule-based 0.3..0.7 range.
+            confidence=0.85 if llm_approved == rule_decision.approved else 0.7,
+            passed_checks=rule_decision.passed_checks,
+            failed_checks=rule_decision.failed_checks,
+            reasons=[*rule_decision.reasons, audit_entry],
+        )
+    except Exception as exc:
+        # Any failure (API error, JSON parse, etc.) → return None so
+        # the caller uses the unchanged rule-based decision. Logged
+        # at debug so a flaky judge doesn't drown logs.
+        logger.debug("[gate] LLM judge failed (using rule-based): %s", exc)
         return None
