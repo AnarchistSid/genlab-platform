@@ -875,6 +875,18 @@ def _execute_review_action(
 
     client = get_sync_client()
 
+    # 2026-06-21 (perf): fetch blueprint ONCE up-front; both the approve-branch
+    # slot calc and the calibration block (below) need the same record. The
+    # prior code re-fetched in the calibration block with a "Simpler to reload"
+    # comment — saves one SharePoint round-trip per operator click on the hot
+    # review path (~150-300ms). Best-effort: if this fails, slot calc falls
+    # back to niche_id="" and calibration re-fetches as before.
+    bp_data: dict[str, Any] | None
+    try:
+        bp_data = client.blueprints.get(record_id)
+    except Exception:
+        bp_data = None
+
     if action == "approved":
         # Always find the next available slot for this niche — even if the
         # pipeline already set a tentative scheduled_for.  Multiple approvals
@@ -883,11 +895,8 @@ def _execute_review_action(
         from server.core.publishing_queue import _next_available_slot
 
         niche_id = ""
-        try:
-            bp_data = client.blueprints.get(record_id)
+        if bp_data is not None:
             niche_id = (bp_data.get("fields", {}).get("niche_id") or "").strip()
-        except Exception:
-            pass
         next_slot = _next_available_slot(niche_id=niche_id, exclude_record_id=record_id)
         if next_slot:
             update_fields["scheduled_for"] = next_slot
@@ -934,10 +943,11 @@ def _execute_review_action(
         from genlab_core.scheduling import calibration_logger
         from genlab_core.scheduling.auto_approval_gate import evaluate as _gate_evaluate
 
-        # Re-fetch blueprint to get the shape evaluate() expects. We
-        # already loaded `bp_data` for the niche_id lookup in the
-        # "approved" branch, but it's scoped there. Simpler to reload.
-        _bp = client.blueprints.get(record_id)
+        # Reuse the up-front fetch (see hoist above). Falls back to a fresh
+        # fetch only if the up-front one failed, preserving prior behavior on
+        # the unhappy path. Eliminates the second SharePoint round-trip on
+        # every approve/reject/revise/skip click.
+        _bp = bp_data if bp_data is not None else client.blueprints.get(record_id)
         _fields = _bp.get("fields", {}) if isinstance(_bp, dict) else {}
         _flat = {"id": _bp.get("id"), **_fields}
         _niche = (_flat.get("niche_id") or "").strip()

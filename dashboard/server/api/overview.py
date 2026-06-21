@@ -289,6 +289,16 @@ def _build_overview() -> dict:
                 ),
                 max_records=200,
             )
+            # 2026-06-21 (perf): build an O(1) niche-id set once, then test
+            # membership instead of scanning today_records on every pub_analytics
+            # record. Was O(N×M) — outer pub_analytics (200 max) × inner
+            # today_records (500 max) = up to 100K iterations per overview
+            # call, polled every 60s by Mission Control. The duplicate
+            # nested-loop in the datetime + string branches both collapse
+            # into the same set lookup.
+            niche_ids_today: set[str] = {
+                _bp_niche_overview(r.get("fields", {})) for r in today_records
+            }
             for pa in pub_analytics:
                 pa_fields = pa.get("fields", {})
                 pa_created = pa_fields.get("created_at") or pa_fields.get("published_at")
@@ -296,32 +306,20 @@ def _build_overview() -> dict:
                     if pa_created >= today_start_utc:
                         # Count this as a today publish
                         n = pa_fields.get("niche_id", "")
-                        if n:
-                            found = False
-                            for r in today_records:
-                                if _bp_niche_overview(r.get("fields", {})) == n:
-                                    found = True
-                                    break
-                            if not found:
-                                # Create a synthetic record so the niche gets counted
-                                today_records.append(
-                                    {"fields": {"niche_id": n, "status": "PUBLISHED"}}
-                                )
+                        if n and n not in niche_ids_today:
+                            # Create a synthetic record so the niche gets counted
+                            today_records.append({"fields": {"niche_id": n, "status": "PUBLISHED"}})
+                            niche_ids_today.add(n)
                 elif isinstance(pa_created, str) and pa_created:
                     try:
                         dt = datetime.fromisoformat(pa_created.replace("Z", "+00:00"))
                         if dt >= today_start_utc:
                             n = pa_fields.get("niche_id", "")
-                            if n:
-                                found = False
-                                for r in today_records:
-                                    if _bp_niche_overview(r.get("fields", {})) == n:
-                                        found = True
-                                        break
-                                if not found:
-                                    today_records.append(
-                                        {"fields": {"niche_id": n, "status": "PUBLISHED"}}
-                                    )
+                            if n and n not in niche_ids_today:
+                                today_records.append(
+                                    {"fields": {"niche_id": n, "status": "PUBLISHED"}}
+                                )
+                                niche_ids_today.add(n)
                     except ValueError:
                         pass
         except Exception as e:
