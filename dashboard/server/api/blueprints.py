@@ -509,20 +509,79 @@ def review_queue():
             return api_success(data=cached["data"])
         return api_error(error="Failed to fetch review queue", code=502)
 
-    # Sort by priority_score descending
-    def _priority(r):
-        try:
-            return float(r.get("fields", {}).get("priority_score", 0) or 0)
-        except (ValueError, TypeError):
-            return 0.0
+    # ── Sort: active-learning queue (Lever F, 2026-06-21) ──────────────
+    # Pre-Lever-F: sorted by priority_score desc only. Pure FIFO of
+    # highest-engagement candidates. Operator clicks were wasted on
+    # easy cases (gate confidence 0.95, obviously approve) while
+    # borderline cases (where the operator's labelling decision is most
+    # informative for calibration) sat at the bottom of the queue.
+    #
+    # Now: primary sort by ``abs(gate_confidence - 0.5)`` ASCENDING
+    # so cases closest to the decision boundary surface first.
+    # Secondary tiebreak by ``-priority_score`` so within the same
+    # uncertainty band the most engagement-likely candidates show first.
+    # This is uncertainty sampling — a single uncertain label is worth
+    # ~10 certain ones for calibration convergence speed.
+    #
+    # ``run_gate_check()`` is a pure function (no DB calls; the override
+    # lookup is mtime-cached via gate_tuner). Computing it inline for
+    # ~50 blueprints adds <100ms to a queue call that already does
+    # I/O for blueprint fetching.
+    from genlab_core.scheduling.auto_approval_gate import (
+        evaluate as run_gate_check,
+    )
 
-    records.sort(key=_priority, reverse=True)
+    # Cache per-record confidence + priority so we don't recompute
+    # during item construction below.
+    record_metrics: dict[str, tuple[float, float]] = {}
+
+    def _compute_metrics(r):
+        rid = str(r.get("id", ""))
+        if rid in record_metrics:
+            return record_metrics[rid]
+        fields = r.get("fields", {})
+        try:
+            priority = float(fields.get("priority_score", 0) or 0)
+        except (ValueError, TypeError):
+            priority = 0.0
+        # Build the dict shape the gate expects — flatten the SharePoint
+        # ``fields`` into the top-level dict and pass ``extra`` through.
+        bp = {"id": rid, **fields}
+        try:
+            decision = run_gate_check(bp)
+            confidence = float(decision.confidence)
+        except Exception as exc:
+            # On any evaluation failure, treat as borderline (0.5) so the
+            # blueprint is still surfaced for operator review — never lose
+            # a blueprint just because the gate evaluator crashed on it.
+            logger.debug("[review_queue] gate check failed for %s: %s", rid, exc)
+            confidence = 0.5
+        record_metrics[rid] = (confidence, priority)
+        return confidence, priority
+
+    def _sort_key(r):
+        confidence, priority = _compute_metrics(r)
+        # Primary ascending: closer to 0.5 (most uncertain) first.
+        # Secondary descending priority: within an uncertainty band,
+        # show the highest-engagement candidate first.
+        return (abs(confidence - 0.5), -priority)
+
+    records.sort(key=_sort_key)
     records = records[:limit]
 
     # Batch-prefetch story thumbnails to avoid N+1 per-blueprint lookups
     _prefetch_story_thumbnails(records)
 
-    items = [_transform_media({"id": r["id"], **r.get("fields", {})}) for r in records]
+    # Surface gate confidence + sort metrics so the frontend can show
+    # operators WHY a blueprint is at this queue position (e.g. a
+    # "borderline" badge for items near confidence 0.5).
+    items = []
+    for r in records:
+        confidence, _ = _compute_metrics(r)
+        item = _transform_media({"id": r["id"], **r.get("fields", {})})
+        item["auto_approval_confidence"] = round(confidence, 3)
+        item["queue_boundary_distance"] = round(abs(confidence - 0.5), 3)
+        items.append(item)
 
     # Fallback: when no pending items, return last 5 published items
     fallback = False
@@ -535,7 +594,18 @@ def review_queue():
                     for r in published
                     if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
                 ]
-            published.sort(key=_priority, reverse=True)
+
+            # For the published-fallback view (operators are just looking
+            # at past content, not labelling for calibration), the
+            # active-learning sort doesn't apply. Use the original
+            # priority_score desc sort.
+            def _priority_only(r):
+                try:
+                    return float(r.get("fields", {}).get("priority_score", 0) or 0)
+                except (ValueError, TypeError):
+                    return 0.0
+
+            published.sort(key=_priority_only, reverse=True)
             _prefetch_story_thumbnails(published[:5])
             items = [
                 _transform_media({"id": r["id"], **r.get("fields", {})}) for r in published[:5]
