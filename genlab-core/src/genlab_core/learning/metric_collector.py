@@ -817,6 +817,10 @@ def _default_bandit_updater(
                 beta=beta,
                 linucb_state=linucb_state_dict,
                 n_plays=n_plays,
+                # Indexed (niche_id, arm_id) lookup instead of full-table
+                # scan (perf fix 2026-06-21). Was N+1 scans per reward
+                # window; now N index probes.
+                niche_id=niche_id,
             )
             updated.append(item_arm)
             logger.info(

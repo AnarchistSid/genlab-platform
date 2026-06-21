@@ -585,7 +585,11 @@ class TestArmLoaderLinUCBIntegration:
         saved_fields = {}
 
         class MockProxy:
-            def all(self):
+            # 2026-06-21: save_arm now calls proxy.all(formula=..., max_records=1)
+            # for an indexed lookup instead of a full scan. Accept **kwargs so
+            # this minimal mock keeps matching the production proxy interface
+            # (GraphTableProxy + PostgresTableProxy both accept these kwargs).
+            def all(self, *args, **kwargs):
                 return []
 
             def create(self, fields):
