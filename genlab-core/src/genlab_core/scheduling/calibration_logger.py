@@ -94,6 +94,7 @@ def log(
     operator_action: str,
     decided_at: datetime | None = None,
     action_taken_source: str | None = None,
+    review_duration_ms: int | None = None,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 
@@ -116,6 +117,15 @@ def log(
             confusion matrix as gate-vs-gate. Pass ``None`` (default)
             when the caller doesn't know the source — preserves the
             pre-S1 behavior for callers that haven't been wired yet.
+        review_duration_ms: How long the operator spent on this review
+            (frontend captures ``submitTime - loadTime`` in milliseconds).
+            Lever E2 (2026-06-21) added this signal so we can
+            distinguish fast confident decisions from slow ambiguous
+            ones. Pass ``None`` when not known — column accepts NULL
+            and downstream aggregations filter via
+            ``WHERE review_duration_ms IS NOT NULL``. Negative values
+            and absurdly-large values (>1 hour) are clamped to NULL
+            to defend against clock-skew + tab-left-open noise.
     """
     if not blueprint_id or not niche_id:
         logger.warning(
@@ -168,6 +178,23 @@ def log(
     passed = json.dumps(decision.passed_checks) if decision is not None else "[]"
     failed = json.dumps(decision.failed_checks) if decision is not None else "[]"
 
+    # Lever E2 (2026-06-21): clamp the dwell-time signal. Defend against:
+    # - Negative values from clock skew or buggy frontend instrumentation
+    # - Absurdly-large values from "tab left open overnight" (>1 hour
+    #   = 3,600,000 ms is the cutoff — operator left mid-review)
+    # NULL is the natural cold-start value for rows from callers that
+    # haven't been wired yet (backfill, dashboards without frontend
+    # instrumentation).
+    clean_duration_ms: int | None
+    if review_duration_ms is None:
+        clean_duration_ms = None
+    else:
+        try:
+            n = int(review_duration_ms)
+            clean_duration_ms = n if 0 <= n <= 3_600_000 else None
+        except (TypeError, ValueError):
+            clean_duration_ms = None
+
     try:
         with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
@@ -189,29 +216,7 @@ def log(
                             (blueprint_id, niche_id,
                              gate_approved, gate_confidence,
                              gate_passed_checks, gate_failed_checks,
-                             operator_action)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
-                        ON CONFLICT DO NOTHING
-                        """,
-                        (
-                            str(blueprint_id),
-                            str(niche_id),
-                            gate_approved,
-                            gate_confidence,
-                            passed,
-                            failed,
-                            operator_action,
-                        ),
-                    )
-                else:
-                    # Backfill path — same ON CONFLICT guard.
-                    cur.execute(
-                        """
-                        INSERT INTO auto_approval_calibration
-                            (blueprint_id, niche_id,
-                             gate_approved, gate_confidence,
-                             gate_passed_checks, gate_failed_checks,
-                             operator_action, decided_at)
+                             operator_action, review_duration_ms)
                         VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
                         ON CONFLICT DO NOTHING
                         """,
@@ -223,7 +228,32 @@ def log(
                             passed,
                             failed,
                             operator_action,
+                            clean_duration_ms,
+                        ),
+                    )
+                else:
+                    # Backfill path — same ON CONFLICT guard.
+                    cur.execute(
+                        """
+                        INSERT INTO auto_approval_calibration
+                            (blueprint_id, niche_id,
+                             gate_approved, gate_confidence,
+                             gate_passed_checks, gate_failed_checks,
+                             operator_action, decided_at,
+                             review_duration_ms)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (
+                            str(blueprint_id),
+                            str(niche_id),
+                            gate_approved,
+                            gate_confidence,
+                            passed,
+                            failed,
+                            operator_action,
                             decided_at,
+                            clean_duration_ms,
                         ),
                     )
             conn.commit()

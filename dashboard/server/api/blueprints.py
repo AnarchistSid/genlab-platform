@@ -652,6 +652,15 @@ def review_action(record_id):
     try:
         from server.review_server import _execute_review_action
 
+        # Lever E2 (2026-06-21): extract review_duration_ms from POST body
+        # if the frontend captured it. Calibration logger downstream
+        # clamps invalid values (negative / >1hr) to NULL.
+        _raw_duration = data.get("review_duration_ms")
+        try:
+            review_duration_ms = int(_raw_duration) if _raw_duration is not None else None
+        except (TypeError, ValueError):
+            review_duration_ms = None
+
         _execute_review_action(
             record_id,
             action_taken,
@@ -659,6 +668,7 @@ def review_action(record_id):
             feedback_issue=data.get("issue", ""),
             feedback_notes=data.get("notes", ""),
             feedback_fix=data.get("fix", ""),
+            review_duration_ms=review_duration_ms,
         )
 
         # Store editorial metadata for approved blueprints (YouTube AI policy compliance)
@@ -985,6 +995,15 @@ def review_blueprint(record_id):
     try:
         from server.review_server import _execute_review_action
 
+        # Lever E2 (2026-06-21): extract review_duration_ms from POST body
+        # if the frontend captured it. Calibration logger downstream
+        # clamps invalid values (negative / >1hr) to NULL.
+        _raw_duration = data.get("review_duration_ms")
+        try:
+            review_duration_ms = int(_raw_duration) if _raw_duration is not None else None
+        except (TypeError, ValueError):
+            review_duration_ms = None
+
         _execute_review_action(
             record_id,
             action_taken,
@@ -992,6 +1011,7 @@ def review_blueprint(record_id):
             feedback_issue=data.get("issue", ""),
             feedback_notes=data.get("notes", ""),
             feedback_fix=data.get("fix", ""),
+            review_duration_ms=review_duration_ms,
         )
         logger.info("Review action '%s' persisted for blueprint %s", action_taken, record_id)
         return api_success(data={"status": "ok", "action": action_taken, "record_id": record_id})
