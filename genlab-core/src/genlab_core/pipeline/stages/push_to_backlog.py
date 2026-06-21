@@ -695,6 +695,8 @@ def _classify_arm(
     linucb_arms: dict | None = None,
     context=None,
     _random_control_rng=None,
+    active_experiment=None,
+    experiment_assignment_id: str = "",
 ) -> str:
     """Classify content into a bandit arm_id.
 
@@ -747,8 +749,49 @@ def _classify_arm(
     randomize over). ``_random_control_rng`` is a ``random.Random``
     instance injectable by tests for deterministic verification;
     production callers pass nothing → fresh Random per invocation.
+
+    2026-06-21 Active experiment override (Lever I3 wiring, opt-in)
+    --------------------------------------------------------------
+    When ``active_experiment`` AND ``experiment_assignment_id`` are
+    provided AND ``GENLAB_EXPERIMENTATION_ENABLED=1``, the registered
+    experiment's deterministic assignment OVERRIDES everything below.
+    The assigned arm is returned immediately — before force-explore,
+    keyword matching, LinUCB tie-break, or random control. This is the
+    "operator-deliberate" override: a registered experiment with
+    pre-declared allocation always wins because operators want
+    statistical signal on a specific hypothesis. Falls through to the
+    rest of the chain when ``assign_to_experiment`` returns None
+    (inactive experiment, invalid allocation, etc.).
     """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
+
+    # Active experiment override (Lever I3 wiring) — runs FIRST so a
+    # registered hypothesis always gets its sample regardless of what
+    # the bandit / keyword classifier would have picked. Opt-in: env
+    # flag must be set AND caller must pass both active_experiment +
+    # a stable assignment_id for deterministic-by-blueprint bucket
+    # placement.
+    if active_experiment is not None and experiment_assignment_id:
+        try:
+            from genlab_core.learning import experimentation
+
+            if experimentation.is_enabled():
+                sel = experimentation.assign_to_experiment(
+                    experiment_assignment_id, active_experiment
+                )
+                if sel is not None:
+                    logger.info(
+                        "[classify_arm] active experiment %s assigned id=%s -> %s",
+                        active_experiment.experiment_id,
+                        experiment_assignment_id,
+                        sel.arm_id,
+                    )
+                    return sel.arm_id
+        except Exception as exc:  # noqa: BLE001 — fail-open to bandit chain
+            logger.debug(
+                "[classify_arm] experiment assignment error, falling through: %s",
+                exc,
+            )
 
     # ε-greedy force-explore — runs BEFORE keyword matching so it
     # actually escapes the keyword set (the bug we're fixing: keyword
@@ -1081,6 +1124,32 @@ class PushToBacklog:
                 len(linucb_arms),
                 with_obs,
             )
+
+        # Load active experiment for this niche (Lever I3 wiring).
+        # Reads config/experiments.yaml ONCE per run (fail-quiet on
+        # missing file → no experiments, bandit runs legacy path).
+        # Per-story we just pick from the pre-loaded list.
+        active_experiment = None
+        try:
+            from genlab_core.learning.experiment_registry import (
+                find_active_experiment,
+                load_experiments_from_yaml,
+            )
+            from genlab_core.settings import _PROJECT_ROOT
+
+            experiments_yaml = _PROJECT_ROOT / "genlab-core" / "config" / "experiments.yaml"
+            all_experiments = load_experiments_from_yaml(experiments_yaml)
+            active_experiment = find_active_experiment(niche_id, all_experiments)
+            if active_experiment is not None:
+                logger.info(
+                    "[PUSH] Active experiment for niche=%s: %s (arms=%s)",
+                    niche_id,
+                    active_experiment.experiment_id,
+                    active_experiment.arms,
+                )
+        except Exception as exc:  # noqa: BLE001 — fail-open to no experiment
+            logger.debug("[PUSH] experiment registry load failed: %s", exc)
+            active_experiment = None
 
         # Load content_memory hashes + active-blueprint URLs for cross-run dedup.
         #
@@ -1481,6 +1550,12 @@ class PushToBacklog:
                         exc,
                     )
 
+            # Lever I3 wiring: pass active experiment + stable
+            # assignment_id (candidate_id from line ~1545 above) to
+            # `_classify_arm`. The classifier returns the experiment-
+            # assigned arm BEFORE force-explore/keyword/LinUCB when an
+            # experiment is registered + active. None active → bandit
+            # chain runs normally.
             arm_id = _classify_arm(
                 niche_id,
                 story,
@@ -1489,6 +1564,8 @@ class PushToBacklog:
                 arm_n_obs=arm_n_obs,
                 linucb_arms=linucb_arms,
                 context=linucb_context,
+                active_experiment=active_experiment,
+                experiment_assignment_id=candidate_id,
             )
 
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
