@@ -120,8 +120,47 @@ def scaffold_niche(
             f.write_text(content)
 
     logger.info("Scaffolded niche '%s' at %s", niche_id, output_dir)
+
+    # Lever D3 (2026-06-21): apply Kveton 2021 cross-niche warm-start
+    # priors if the new niche has a TRANSFER_MATRIX entry. Best-effort —
+    # a failure here MUST NOT fail the scaffold. The operator can re-run
+    # via ``python -m genlab_core.learning.meta_prior --target-niche X``
+    # if the source niche needs more data first.
+    warm_start_outcome = ""
+    try:
+        from genlab_core.learning.meta_prior import (
+            TRANSFER_MATRIX,
+            bootstrap_niche_warm_start,
+        )
+
+        if niche_id in TRANSFER_MATRIX:
+            results = bootstrap_niche_warm_start(niche_id)
+            if results:
+                updated = sum(1 for v in results.values() if v == "updated")
+                source = next(iter(TRANSFER_MATRIX[niche_id]))
+                warm_start_outcome = (
+                    f"  ✓ Warm-started {updated} arms from {source!r} via meta_prior\n"
+                )
+            else:
+                source = next(iter(TRANSFER_MATRIX[niche_id]))
+                warm_start_outcome = (
+                    f"  ⚠ Warm-start skipped (source {source!r} may have no arms yet).\n"
+                    f"    Re-run later: python -m genlab_core.learning.meta_prior "
+                    f"--target-niche {niche_id}\n"
+                )
+        else:
+            warm_start_outcome = (
+                f"  ℹ No TRANSFER_MATRIX entry for {niche_id!r} — cold-start with Beta(1, 1).\n"
+                f"    Add a mapping to meta_prior.TRANSFER_MATRIX if you want cross-niche transfer.\n"
+            )
+    except Exception as exc:
+        logger.warning("Warm-start bootstrap failed (non-fatal): %s", exc)
+        warm_start_outcome = f"  ⚠ Warm-start bootstrap failed (non-fatal): {exc}\n"
+
     print(f"\nNiche '{niche_id}' scaffolded at {output_dir}")
-    print("\nNext steps:")
+    if warm_start_outcome:
+        print(warm_start_outcome)
+    print("Next steps:")
     print(f"  1. Add to pipeline_runner.NICHE_ROOTS: '{niche_id}': '{output_dir}'")
     print("  2. Add to dashboard/configs/niches_registry.yaml")
     print(f"  3. Add platform credentials to .env ({brand_clean.upper()}_* vars)")
