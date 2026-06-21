@@ -95,6 +95,7 @@ def log(
     decided_at: datetime | None = None,
     action_taken_source: str | None = None,
     review_duration_ms: int | None = None,
+    feedback_category: str | None = None,
 ) -> bool:
     """Write one calibration row. Best-effort, never raises.
 
@@ -126,6 +127,18 @@ def log(
             ``WHERE review_duration_ms IS NOT NULL``. Negative values
             and absurdly-large values (>1 hour) are clamped to NULL
             to defend against clock-skew + tab-left-open noise.
+        feedback_category: One of the 6 operator rejection reasons
+            (``weak_hook``, ``too_generic``, ``unsupported_claim``,
+            ``bad_fit``, ``too_long``, ``low_value``) — or the
+            default-label fallback (``rejected_in_review``,
+            ``needs_revision``). Lever B (2026-06-21) added this signal
+            so the breakdown endpoint can group rejections by reason.
+            Pass ``None`` for approved/skipped actions (no reason to
+            record) or for pre-Lever-B callers that haven't been wired.
+            Categories are NOT whitelisted here — the column is free-
+            form TEXT so future categories can land without a writer
+            change; the breakdown endpoint groups whatever values it
+            finds.
     """
     if not blueprint_id or not niche_id:
         logger.warning(
@@ -195,6 +208,21 @@ def log(
         except (TypeError, ValueError):
             clean_duration_ms = None
 
+    # Lever B (2026-06-21): normalize feedback_category. Strip + bound
+    # to a reasonable length so a runaway frontend (e.g. free-text
+    # leaking into the categorical field) can't write multi-KB values
+    # to the indexed column. Empty strings become NULL so the index
+    # only covers actual categorical values.
+    clean_feedback_category: str | None
+    if feedback_category is None:
+        clean_feedback_category = None
+    else:
+        try:
+            normalised = str(feedback_category).strip()
+            clean_feedback_category = normalised[:64] if normalised else None
+        except Exception:
+            clean_feedback_category = None
+
     try:
         with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
@@ -216,8 +244,9 @@ def log(
                             (blueprint_id, niche_id,
                              gate_approved, gate_confidence,
                              gate_passed_checks, gate_failed_checks,
-                             operator_action, review_duration_ms)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s)
+                             operator_action, review_duration_ms,
+                             feedback_category)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                         """,
                         (
@@ -229,6 +258,7 @@ def log(
                             failed,
                             operator_action,
                             clean_duration_ms,
+                            clean_feedback_category,
                         ),
                     )
                 else:
@@ -240,8 +270,8 @@ def log(
                              gate_approved, gate_confidence,
                              gate_passed_checks, gate_failed_checks,
                              operator_action, decided_at,
-                             review_duration_ms)
-                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s)
+                             review_duration_ms, feedback_category)
+                        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s)
                         ON CONFLICT DO NOTHING
                         """,
                         (
@@ -254,6 +284,7 @@ def log(
                             operator_action,
                             decided_at,
                             clean_duration_ms,
+                            clean_feedback_category,
                         ),
                     )
             conn.commit()
@@ -358,6 +389,105 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
     except Exception as exc:  # noqa: BLE001
         logger.warning("[calibration] stats query failed for %s: %s", niche_id, exc)
         return empty
+
+
+@dataclass(frozen=True)
+class CategoryBreakdownEntry:
+    """One row of the per-rejection-reason breakdown.
+
+    Lever B (2026-06-21): exposes the categorical signal that's been
+    captured on ``blueprints.feedback_issue`` for months but never
+    surfaced for analysis. Each entry pairs the operator's chosen
+    reason with the gate's verdict so the dashboard can answer:
+    "of the times the operator rejected with reason X, how often did
+    the gate already say no?" — useful for tuning gate signals at the
+    per-reason level (Lever B's downstream consumer).
+    """
+
+    feedback_category: str
+    count: int  # total rejections with this category
+    gate_agreed: int  # gate also said reject (TN at this category)
+    gate_disagreed: int  # gate said approve (FP at this category)
+
+
+def breakdown_by_category(
+    *,
+    niche_id: str,
+    window_days: int = 30,
+) -> list[CategoryBreakdownEntry]:
+    """Per-rejection-reason breakdown of operator-rejected calibration rows.
+
+    Lever B (2026-06-21). Reads rows where ``feedback_category IS NOT NULL``
+    and groups them by category, computing gate-agreement counts per
+    category. Returns an empty list when no DB / no data / DB error
+    (matches the fail-quiet contract of :func:`stats`).
+
+    Results are sorted by ``count`` descending so the dashboard can
+    show the dominant rejection reasons first.
+
+    A typical response shape:
+
+        [
+            CategoryBreakdownEntry(
+                feedback_category="weak_hook",
+                count=24,
+                gate_agreed=4,   # gate also rejected
+                gate_disagreed=20,  # gate approved but operator overrode
+            ),
+            CategoryBreakdownEntry(
+                feedback_category="off_niche",
+                count=12, ...
+            ),
+        ]
+
+    The 20-vs-4 split in the example tells operators: "the gate is
+    too permissive on hooks — 83% of weak_hook rejections were gate
+    false-positives". This is the actionable signal Lever B unlocks.
+    """
+    if not niche_id:
+        return []
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        return []
+    try:
+        import psycopg  # noqa: F401
+    except ImportError:
+        return []
+
+    from genlab_core.storage.tenant_context import pg_connect
+
+    try:
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        feedback_category,
+                        COUNT(*) AS total,
+                        COUNT(*) FILTER (WHERE gate_approved = false) AS gate_agreed,
+                        COUNT(*) FILTER (WHERE gate_approved = true) AS gate_disagreed
+                    FROM auto_approval_calibration
+                    WHERE niche_id = %s
+                      AND feedback_category IS NOT NULL
+                      AND decided_at >= NOW() - (%s || ' days')::interval
+                    GROUP BY feedback_category
+                    ORDER BY total DESC
+                    """,
+                    (niche_id, str(window_days)),
+                )
+                rows = cur.fetchall() or []
+                return [
+                    CategoryBreakdownEntry(
+                        feedback_category=str(r[0]),
+                        count=int(r[1] or 0),
+                        gate_agreed=int(r[2] or 0),
+                        gate_disagreed=int(r[3] or 0),
+                    )
+                    for r in rows
+                ]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[calibration] breakdown_by_category query failed for %s: %s", niche_id, exc)
+        return []
 
 
 def stats_all_niches(*, window_days: int = 7) -> dict[str, CalibrationStats]:

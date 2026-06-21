@@ -980,6 +980,17 @@ def _execute_review_action(
         # the operator isn't making a fresh decision, just correcting
         # a prior auto-approval.
         _action_source = (_flat.get("action_taken_source") or "").strip() or None
+        # Lever B (2026-06-21): forward the operator's chosen rejection
+        # reason to the calibration row so the breakdown endpoint can
+        # group by category. Only meaningful for rejected/revised actions
+        # — approved/skipped pass None (no category). Fallback labels
+        # (rejected_in_review / needs_revision) are also recorded so
+        # the dashboard can distinguish "operator clicked reject but
+        # didn't pick a reason" from real categorical signal.
+        _category: str | None = None
+        if action in ("rejected", "revised") and feedback_issue:
+            _category = str(feedback_issue).strip() or None
+
         calibration_logger.log(
             blueprint_id=record_id,
             niche_id=_niche,
@@ -992,6 +1003,7 @@ def _execute_review_action(
             # carries review_duration_ms and it threads through to the
             # calibration row. None → column stays NULL (cold-start safe).
             review_duration_ms=review_duration_ms,
+            feedback_category=_category,
         )
     except Exception as _cal_exc:  # noqa: BLE001 — never block review
         logger.debug("[calibration] skipped (non-fatal): %s", _cal_exc)
