@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 class PersonaEngine:
     """Generate replies matching a niche persona."""
 
+    @property
+    def persona(self) -> NichePersona:
+        """Public accessor for the persona — used by the engagement worker
+        to derive downstream limits like ``reply_constraints.max_length_chars``
+        without poking the private ``_persona`` attribute."""
+        return self._persona
+
     def __init__(
         self,
         persona: NichePersona,
@@ -27,6 +34,13 @@ class PersonaEngine:
         self._persona = persona
         self._toxicity_gate = toxicity_gate
         self._client = None  # Lazy-initialized Anthropic client
+        # 2026-06-21 (perf): build the system prompt ONCE per engine instance.
+        # Was rebuilt on every ``generate_reply`` call even though it's a pure
+        # function of ``persona`` (~200 tokens of string concatenation). At the
+        # caller's cache layer (one PersonaEngine per niche) this means every
+        # niche pays the prompt-build cost exactly once for its worker lifetime
+        # instead of once per reply.
+        self._system_prompt = self._build_system_prompt()
 
     def _build_system_prompt(self) -> str:
         p = self._persona
@@ -85,7 +99,8 @@ class PersonaEngine:
 
             self._client = anthropic.Anthropic()
         client = self._client
-        system = self._build_system_prompt()
+        # Reuse the system prompt cached in ``__init__`` (see comment there).
+        system = self._system_prompt
 
         user_content = f'Comment on {platform}:\n"{comment}"'
         if post_context:

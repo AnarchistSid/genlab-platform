@@ -135,6 +135,30 @@ _rate_limiter = EngagementRateLimiter(RATE_CAPS)
 _toxicity_gate = ToxicityGate()
 
 
+# 2026-06-21 (perf): cache PersonaEngine per niche_id. Was rebuilt on every
+# reply — ``_load_persona`` re-read + parsed the persona YAML on each call,
+# and ``PersonaEngine.__init__`` rebuilt the (deterministic) system prompt.
+# On the hot engagement-worker path (multiple replies/min per platform) this
+# was wasted disk + CPU. Same singleton pattern as ``_toxicity_gate`` above;
+# safe under Dramatiq concurrency for the same reason (the dict-set race is
+# benign: worst case is two replies for the same niche each build a fresh
+# engine, one wins and the other is GC'd — no corruption, no data loss).
+_persona_engine_cache: dict[str, PersonaEngine] = {}
+
+
+def _get_persona_engine(niche_id: str) -> PersonaEngine:
+    """Return a cached PersonaEngine for the niche, building on first request.
+
+    Tests that need a clean slate can ``_persona_engine_cache.clear()``.
+    """
+    engine = _persona_engine_cache.get(niche_id)
+    if engine is None:
+        persona = _load_persona(niche_id)
+        engine = PersonaEngine(persona=persona, toxicity_gate=_toxicity_gate)
+        _persona_engine_cache[niche_id] = engine
+    return engine
+
+
 _backlog_client_singleton = None
 
 
@@ -565,8 +589,10 @@ def process_reply_event(event: dict) -> None:
         )
 
     # 5. Generate reply
-    persona = _load_persona(niche_id)
-    engine = PersonaEngine(persona=persona, toxicity_gate=_toxicity_gate)
+    # Cached per niche_id at module level — see ``_get_persona_engine`` for the
+    # perf rationale (was per-reply persona YAML reload + system-prompt rebuild).
+    engine = _get_persona_engine(niche_id)
+    persona = engine.persona  # downstream uses persona.reply_constraints below
     reply = engine.generate_reply(
         comment=comment_text,
         platform=platform,
