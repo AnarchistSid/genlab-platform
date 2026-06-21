@@ -137,16 +137,35 @@ class BaseHookStrategy(HookStrategy):
                 self._niche_id,
                 used_hooks,
                 return_style=True,
+                return_classifier_score=True,
             )
-            # return_style=True yields (hook, style) — None style means
-            # cold-start / no bandit influence, which we don't record.
+            # return_classifier_score=True yields (hook, style, clf_score).
+            # We tolerate older 2-tuple + plain-str returns for any test/mock
+            # that hasn't been updated — keeps the strategy backward-compat.
+            llm_hook: str | None
+            hook_style: str | None = None
+            clf_score: float | None = None
             if isinstance(result, tuple):
-                llm_hook, hook_style = result
-            else:  # Defensive: older mock or stub returning plain str
-                llm_hook, hook_style = result, None
+                if len(result) == 3:
+                    llm_hook, hook_style, clf_score = result
+                elif len(result) == 2:
+                    llm_hook, hook_style = result
+                else:
+                    llm_hook = result[0] if result else None
+            else:  # Defensive: stub returning plain str
+                llm_hook = result
             if llm_hook and not self._is_banned(llm_hook):
                 if hook_style:
                     story["hook_style"] = hook_style
+                # Lever D1 (2026-06-21): persist the HookClassifier's
+                # winning-hook score on the story dict so downstream
+                # stages (push_to_backlog + bandit reward) can use it
+                # as a learning signal. Pre-D1 this was computed and
+                # discarded inside generate_hook's local scope. None
+                # is a valid value (single-candidate / classifier
+                # failure paths) — downstream must tolerate it.
+                if clf_score is not None:
+                    story["hook_classifier_score"] = clf_score
                 return llm_hook
         except ImportError:
             pass

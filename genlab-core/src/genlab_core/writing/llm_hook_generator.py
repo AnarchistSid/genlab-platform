@@ -288,7 +288,8 @@ def generate_hook(
     niche_id: str,
     used_hooks: set[str] | None = None,
     return_style: bool = False,
-) -> str | None | tuple[str | None, str | None]:
+    return_classifier_score: bool = False,
+) -> str | None | tuple[str | None, str | None] | tuple[str | None, str | None, float | None]:
     """Generate a story-specific hook via Claude Haiku.
 
     Returns None if:
@@ -303,15 +304,34 @@ def generate_hook(
             is None when no bandit influence was applied (cold-start,
             no arms, error). Default False preserves the legacy
             ``str | None`` return for existing callers.
+        return_classifier_score: When True (requires ``return_style=True``),
+            returns ``(hook, style_name, classifier_score)``. The score
+            is the HookClassifier's probability for the winning candidate
+            (0.0..1.0, where 0.5 = neutral, >0.5 = predicted to perform
+            well). Returns ``None`` for the score when:
+              - only one candidate generated (no classifier ranking)
+              - classifier load/scoring failed (caught + fallback path)
+              - generation failed before classifier was reached
+            Default False preserves the legacy return shape.
+
+    2026-06-21 (Lever D1): added classifier-score return path. Pre-D1
+    the HookClassifier's predict_proba result was computed for ranking
+    candidates but discarded as soon as the winner was picked. The
+    score is a learned signal worth keeping — downstream stages and
+    the bandit context can use it as an additional feature.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        if return_classifier_score and return_style:
+            return (None, None, None)
         return (None, None) if return_style else None
 
     try:
         import anthropic
     except ImportError:
         logger.debug("anthropic not installed — skipping LLM hook generation")
+        if return_classifier_score and return_style:
+            return (None, None, None)
         return (None, None) if return_style else None
 
     style = NICHE_STYLE.get(niche_id, NICHE_STYLE["gaming"])
@@ -442,6 +462,12 @@ def generate_hook(
     # uses the per-niche models trained by genlab-core/scripts/
     # train_hook_classifier.py — see 2026-05-21 hook_training_data ID
     # bridge fix, which was the prerequisite for these models to exist.
+    # Track the classifier score of the winning hook so callers can
+    # consume it as a learning signal (Lever D1, 2026-06-21). Pre-D1
+    # the score was computed for ranking but discarded with the
+    # ``scored`` list scope. None means: no classifier ranking happened
+    # (single candidate / classifier load failed / fallback path).
+    best_clf_score: float | None = None
     if len(candidates) == 1:
         best = candidates[0]
     else:
@@ -480,15 +506,17 @@ def generate_hook(
                 scored.append((h, final, clf_score))
             scored.sort(key=lambda x: x[1], reverse=True)
             best = scored[0][0]
+            best_clf_score = float(scored[0][2])  # Lever D1: capture the winning hook's score
             logger.debug(
                 "[%s] Hook ranked %d candidates with classifier (clf_score of best=%.3f)",
                 niche_id,
                 len(scored),
-                scored[0][2],
+                best_clf_score,
             )
         except Exception as exc:
             logger.debug("[%s] Classifier-aware scoring failed: %s", niche_id, exc)
             best = candidates[0]
+            # best_clf_score stays None — signals to caller that no classifier signal available
 
     logger.info(
         "[%s] LLM hook: %s (style=%s)",
@@ -496,6 +524,8 @@ def generate_hook(
         best,
         chosen_style or "none",
     )
+    if return_classifier_score and return_style:
+        return (best, chosen_style, best_clf_score)
     if return_style:
         return (best, chosen_style)
     return best
