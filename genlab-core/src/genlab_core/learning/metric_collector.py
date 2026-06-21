@@ -202,6 +202,54 @@ def _invalidate_channel_metrics_cache_for_tests() -> None:
     _CHANNEL_METRICS_CACHE.clear()
 
 
+# 2026-06-21 (Lever D2): process-local counter for LinUCB context
+# degradation events. The contextual bandit silently falls back to
+# Thompson Sampling when ``bandit_context["linucb_context"]`` is
+# missing or has the wrong shape — pre-Lever-D2 this was invisible
+# across 5 niches × ~18 arms, so a single mis-built context vector
+# could disable contextual updates indefinitely without any signal.
+#
+# This counter is incremented from ``_default_bandit_updater`` on every
+# fall-through; ``get_linucb_degradation_stats()`` exposes it for ops
+# dashboards and ad-hoc visibility queries. The keys are
+# ``(niche_id, reason)`` tuples where reason is one of:
+#   - "no_context_provided" — caller didn't pass bandit_context at all
+#     (legitimate for legacy blueprints + cold-start; counts silently)
+#   - "context_shape_mismatch" — context vector wrong dimensionality
+#     (likely a producer bug; also WARN-logged)
+#   - "context_build_exception" — context construction raised
+#     (likely a feature-extraction bug; also WARN-logged)
+_linucb_context_degradation: dict[tuple[str, str], int] = {}
+
+
+def _record_linucb_degradation(niche_id: str, reason: str) -> None:
+    """Increment the (niche_id, reason) counter. Safe under Dramatiq
+    concurrency — dict-set race is benign (worst case: one increment
+    lost). Same single-process tolerance model as ``_toxicity_gate``."""
+    key = (niche_id or "<unknown>", reason)
+    _linucb_context_degradation[key] = _linucb_context_degradation.get(key, 0) + 1
+
+
+def get_linucb_degradation_stats() -> dict[tuple[str, str], int]:
+    """Return a snapshot of per-(niche_id, reason) LinUCB degradation
+    counts. Read-only copy — external mutation does not affect the
+    internal counter.
+
+    Use from ops scripts, dashboard health endpoints, or alerting
+    cron jobs to detect when contextual updates are being skipped
+    invisibly. A non-zero ``context_shape_mismatch`` count for any
+    niche is a producer-bug signal; persistent high
+    ``no_context_provided`` counts suggest a caller missing the
+    ``bandit_context`` parameter."""
+    return dict(_linucb_context_degradation)
+
+
+def _reset_linucb_degradation_for_tests() -> None:
+    """Test hook: clear the counter between tests so cross-test pollution
+    doesn't affect assertions."""
+    _linucb_context_degradation.clear()
+
+
 def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     """Return channel-level metrics from the monetisationprogress table.
 
@@ -741,14 +789,46 @@ def _default_bandit_updater(
                 target_arms.update(a for a in extra if isinstance(a, str) and a)
 
         # Pre-load linucb context once (shared across primary update).
+        # 2026-06-21 (Lever D2): instrument the silent-degradation path
+        # surfaced in the autonomy audit. Pre-Lever-D2, when bandit_context
+        # was missing OR the context vector's shape didn't match CONTEXT_DIM,
+        # ``linucb_ctx_array`` silently stayed None and LinUCB updates were
+        # skipped for that arm. No log, no metric — invisible degradation
+        # across 5 niches × ~18 arms. The fix categorizes each fall-through
+        # path and bumps a process-local counter that ``get_linucb_degradation_stats()``
+        # exposes for ops visibility. Shape mismatches + exceptions also
+        # emit WARNING; the legitimate "no context provided" case (legacy
+        # blueprints, cold-start paths) counts silently — operators can
+        # still query the counter to see how often it fires.
         linucb_ctx_array: np.ndarray | None = None
         if bandit_context and "linucb_context" in bandit_context:
             try:
                 ctx_list = bandit_context["linucb_context"]
                 if len(ctx_list) == CONTEXT_DIM:
                     linucb_ctx_array = np.array(ctx_list, dtype=np.float64)
-            except Exception:
+                else:
+                    _record_linucb_degradation(niche_id, "context_shape_mismatch")
+                    logger.warning(
+                        "[bandit_updater] LinUCB context shape mismatch for niche=%s: "
+                        "got %d-dim, expected %d-dim — degrading to Thompson Sampling",
+                        niche_id,
+                        len(ctx_list) if hasattr(ctx_list, "__len__") else -1,
+                        CONTEXT_DIM,
+                    )
+            except Exception as exc:
+                _record_linucb_degradation(niche_id, "context_build_exception")
+                logger.warning(
+                    "[bandit_updater] LinUCB context build failed for niche=%s: %s "
+                    "— degrading to Thompson Sampling",
+                    niche_id,
+                    exc,
+                )
                 linucb_ctx_array = None
+        else:
+            # Legitimate "no context provided" path (legacy blueprints,
+            # cold-start, callers that don't pass bandit_context yet).
+            # Silently count for ops visibility — no log spam.
+            _record_linucb_degradation(niche_id, "no_context_provided")
 
         existing = proxy.all()
         updated: list[str] = []
