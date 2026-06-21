@@ -14,6 +14,7 @@ Bandit-driven style hint (2026-05-17):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -513,6 +514,28 @@ def generate_hook(
                 len(scored),
                 best_clf_score,
             )
+            # Lever K (2026-06-21): hook self-critique. After best-of-N
+            # selection, ask an LLM "is this hook grounded in the story?"
+            # If the critic says no AND we have a second candidate, fall
+            # back to #2. Opt-in via env (GENLAB_HOOK_CRITIC_ENABLED=1)
+            # for safe shadow rollout. Generalizes PR #411's regex-only
+            # LLM-error detection — catches the broader class of
+            # "hallucinated entity / unsupported claim" failures.
+            try:
+                grounded, critique_reason = _critique_hook_grounded(best, story, niche_id)
+                if not grounded and len(scored) > 1:
+                    logger.warning(
+                        "[%s] Hook critic rejected #1 (%s) — falling back to #2",
+                        niche_id,
+                        critique_reason,
+                    )
+                    best = scored[1][0]
+                    best_clf_score = float(scored[1][2])
+            except Exception as critic_exc:
+                # The critic MUST NEVER block hook generation — log + use
+                # the original best. Pre-Lever-K behavior preserved on
+                # critic infra failure.
+                logger.debug("[%s] Hook critic failed (non-fatal): %s", niche_id, critic_exc)
         except Exception as exc:
             logger.debug("[%s] Classifier-aware scoring failed: %s", niche_id, exc)
             best = candidates[0]
@@ -529,6 +552,119 @@ def generate_hook(
     if return_style:
         return (best, chosen_style)
     return best
+
+
+# ────────────────────────────────────────────────────────────────────
+# Lever K (2026-06-21): hook self-critique
+# ────────────────────────────────────────────────────────────────────
+
+
+_HOOK_CRITIC_SYSTEM_PROMPT = """You evaluate whether a generated hook is grounded in the source story.
+
+A hook is GROUNDED when:
+- Every proper noun in the hook appears in the source title or summary
+- Every factual claim is supported by the source
+- The hook describes the actual story, not a fabricated/hallucinated one
+
+A hook is NOT grounded when:
+- It introduces entities (people, products, places) not in the source
+- It makes claims the source doesn't support
+- It's a generic meta-response ("I need more story details...")
+- It's about a different topic than the source
+
+Respond with ONLY a JSON object: {"grounded": true|false, "reason": "<one short phrase>"}
+"""
+
+
+def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool, str]:
+    """Lever K: ask Claude Haiku if the hook is grounded in the story.
+
+    Returns (grounded, reason). On any failure → (True, "critique_failed") —
+    failing OPEN preserves the pre-Lever-K behavior when the critic infra
+    is unavailable (no API key, network error, JSON parse error).
+
+    Opt-in via ``GENLAB_HOOK_CRITIC_ENABLED=1`` env var. Default disabled
+    so the mechanism can ship + be tested in shadow mode before being
+    activated in production. Once shadow data shows the critic catches
+    real failures without false positives, flip the env var per-niche.
+
+    Cost: ~1 extra Haiku call per hook generation when enabled (~$0.0002
+    per blueprint × ~5 blueprints/day × 5 niches = ~$0.005/day at the
+    most-permissive activation).
+    """
+    if os.environ.get("GENLAB_HOOK_CRITIC_ENABLED", "0") != "1":
+        return (True, "critic_disabled")
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return (True, "no_api_key")
+
+    try:
+        import anthropic
+    except ImportError:
+        return (True, "anthropic_not_installed")
+
+    try:
+        title = (story.get("title") or "")[:300]
+        summary = (story.get("summary") or "")[:500]
+        user = f"Source title: {title}\nSource summary: {summary}\n\nHook to evaluate: {hook}"
+
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            temperature=0.0,  # Deterministic — same hook+story → same verdict
+            system=_HOOK_CRITIC_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user}],
+        )
+
+        # Cost tracking — match the pattern in other LLM call sites
+        try:
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", response)
+        except Exception:
+            pass  # Cost tracking failures must NEVER block the critic
+
+    except Exception as exc:
+        # API error, network error, etc. — fail open BEFORE we've even
+        # got a response to parse. Pre-Lever-K behavior preserved.
+        logger.debug("[%s] Hook critic API call failed: %s", niche_id, exc)
+        return (True, "critique_failed")
+
+    # Parse the response separately so JSON errors are distinguishable
+    # from API errors. Both fail open, but the reason string lets
+    # operators tell whether the critic is broken (api) vs misbehaving
+    # (returning malformed JSON).
+    try:
+        raw = response.content[0].text.strip() if response.content else ""
+
+        # Be tolerant of LLM wrapping the JSON in code fences.
+        if raw.startswith("```"):
+            raw = raw.strip("`").strip()
+            if raw.startswith("json"):
+                raw = raw[4:].strip()
+
+        parsed = json.loads(raw)
+        grounded = bool(parsed.get("grounded", True))
+        reason = str(parsed.get("reason", "")).strip()[:80] or "no_reason"
+        logger.info(
+            "[%s] Hook critic: grounded=%s reason=%s hook=%s",
+            niche_id,
+            grounded,
+            reason,
+            hook[:60],
+        )
+        return (grounded, reason)
+    except (json.JSONDecodeError, KeyError, AttributeError, IndexError) as exc:
+        # Malformed LLM response — fail open. Logged at debug so a
+        # flaky critic doesn't drown the logs.
+        logger.debug("[%s] Hook critic returned malformed response: %s", niche_id, exc)
+        return (True, "critique_malformed")
+    except Exception as exc:
+        # Catch-all for anything else (very rare). Fail open.
+        logger.debug("[%s] Hook critic post-call exception: %s", niche_id, exc)
+        return (True, "critique_failed")
 
 
 def generate_platform_hooks(
