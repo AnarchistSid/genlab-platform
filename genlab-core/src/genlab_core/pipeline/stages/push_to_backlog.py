@@ -694,6 +694,7 @@ def _classify_arm(
     _rng=None,
     linucb_arms: dict | None = None,
     context=None,
+    _random_control_rng=None,
 ) -> str:
     """Classify content into a bandit arm_id.
 
@@ -733,6 +734,19 @@ def _classify_arm(
     highest UCB score given the story's context vector. When the picker
     returns None (any matched arm cold-started), falls back to today's
     Thompson-boost logic. Default (env unset) → legacy Thompson path.
+
+    2026-06-21 Random-control wrap (Lever I1 wiring, opt-in)
+    --------------------------------------------------------
+    When ``GENLAB_EXPERIMENTATION_ENABLED=1`` AND the multi-match tie-
+    break ran (i.e. we computed a ``bandit_pick``), wrap the final pick
+    with ``experimentation.select_arm_with_random_control``. With
+    probability ``epsilon`` (default 5%) the function returns a random
+    pick from ``matches`` instead of the bandit pick — generates clean
+    counterfactual data without hurting baseline performance. Single-
+    match and no-match paths bypass random control (nothing to
+    randomize over). ``_random_control_rng`` is a ``random.Random``
+    instance injectable by tests for deterministic verification;
+    production callers pass nothing → fresh Random per invocation.
     """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
 
@@ -755,6 +769,11 @@ def _classify_arm(
     if len(matches) == 1:
         return matches[0]
 
+    # Compute the bandit pick. The three-path structure (LinUCB →
+    # Thompson → first-match) converges to a single ``bandit_pick``
+    # variable so the I1 random-control wrap below has one input.
+    bandit_pick: str | None = None
+
     # LinUCB-driven tie-break first (Lever I2 wiring). Opt-in: env
     # flag must be set AND caller must pass both linucb_arms + context.
     # Returns None on cold-start (any matched arm under-observed) → we
@@ -764,21 +783,45 @@ def _classify_arm(
             from genlab_core.learning import linucb_picker
 
             if linucb_picker.is_enabled():
-                linucb_pick = linucb_picker.pick_best_arm(matches, context, linucb_arms)
-                if linucb_pick is not None:
-                    return linucb_pick
+                bandit_pick = linucb_picker.pick_best_arm(matches, context, linucb_arms)
         except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
             logger.debug("[classify_arm] LinUCB picker error, falling back: %s", exc)
+            bandit_pick = None
 
-    # Thompson-boost tie-break (today's logic). Falls back to the first
-    # match if no boost data is available for the matched arms.
-    if not arm_boosts:
-        return matches[0]
-    best = max(
-        matches,
-        key=lambda a: arm_boosts.get(a, 1.0),
-    )
-    return best
+    # Thompson-boost tie-break (today's logic) when LinUCB didn't run
+    # or returned None (cold-start). Falls back to the first match if
+    # no boost data is available for the matched arms.
+    if bandit_pick is None:
+        if not arm_boosts:
+            bandit_pick = matches[0]
+        else:
+            bandit_pick = max(matches, key=lambda a: arm_boosts.get(a, 1.0))
+
+    # Random-control wrap (Lever I1 wiring). With probability epsilon
+    # (default 5%) override the bandit pick with a uniform-random pick
+    # from ``matches`` — generates counterfactual data so the bandit
+    # eventually learns whether arm B would have worked when arm A
+    # was always chosen. Opt-in via GENLAB_EXPERIMENTATION_ENABLED=1.
+    try:
+        from genlab_core.learning import experimentation
+
+        if experimentation.is_enabled():
+            sel = experimentation.select_arm_with_random_control(
+                bandit_pick=bandit_pick,
+                all_arms=matches,
+                rng=_random_control_rng,
+            )
+            if sel.selection_mode == experimentation.SELECTION_MODE_RANDOM_CONTROL:
+                logger.info(
+                    "[classify_arm] random control overrode bandit pick %s -> %s",
+                    bandit_pick,
+                    sel.arm_id,
+                )
+            return sel.arm_id
+    except Exception as exc:  # noqa: BLE001 — fail-open to bandit pick
+        logger.debug("[classify_arm] experimentation wrap error, using bandit pick: %s", exc)
+
+    return bandit_pick
 
 
 def _maybe_force_explore_style_arm(
