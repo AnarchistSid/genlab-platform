@@ -692,6 +692,8 @@ def _classify_arm(
     arm_boosts: dict[str, float] | None = None,
     arm_n_obs: dict[str, int] | None = None,
     _rng=None,
+    linucb_arms: dict | None = None,
+    context=None,
 ) -> str:
     """Classify content into a bandit arm_id.
 
@@ -722,6 +724,15 @@ def _classify_arm(
 
     ``_rng`` is the random-number source (defaults to ``random.random``);
     tests inject a deterministic value to pin the ε-greedy decision.
+
+    2026-06-21 LinUCB-driven tie-break (Lever I2 wiring, opt-in)
+    ------------------------------------------------------------
+    When ``linucb_arms`` AND ``context`` are both provided AND
+    ``GENLAB_LINUCB_PICK_ENABLED=1``, the multi-match tie-break tries
+    ``linucb_picker.pick_best_arm`` FIRST — picks the arm with the
+    highest UCB score given the story's context vector. When the picker
+    returns None (any matched arm cold-started), falls back to today's
+    Thompson-boost logic. Default (env unset) → legacy Thompson path.
     """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
 
@@ -741,12 +752,28 @@ def _classify_arm(
 
     if not matches:
         return _NICHE_ARM_DEFAULTS.get(niche_id, "default")
-    if len(matches) == 1 or not arm_boosts:
+    if len(matches) == 1:
         return matches[0]
 
-    # Multiple arms eligible — pick the one with the highest current
-    # Thompson-sampled boost. Falls back to the first match if no
-    # boost data is available for the matched arms.
+    # LinUCB-driven tie-break first (Lever I2 wiring). Opt-in: env
+    # flag must be set AND caller must pass both linucb_arms + context.
+    # Returns None on cold-start (any matched arm under-observed) → we
+    # fall through to the Thompson-boost path below.
+    if linucb_arms and context is not None:
+        try:
+            from genlab_core.learning import linucb_picker
+
+            if linucb_picker.is_enabled():
+                linucb_pick = linucb_picker.pick_best_arm(matches, context, linucb_arms)
+                if linucb_pick is not None:
+                    return linucb_pick
+        except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
+            logger.debug("[classify_arm] LinUCB picker error, falling back: %s", exc)
+
+    # Thompson-boost tie-break (today's logic). Falls back to the first
+    # match if no boost data is available for the matched arms.
+    if not arm_boosts:
+        return matches[0]
     best = max(
         matches,
         key=lambda a: arm_boosts.get(a, 1.0),
@@ -1392,12 +1419,33 @@ class PushToBacklog:
             # arm_n_obs feeds the 2026-06-14 ε-greedy force-explore branch
             # so niches with under-explored style:* arms (sports/movies/anime)
             # occasionally pick an unobserved style instead of the default.
+            #
+            # 2026-06-21 (Lever I2 wiring): when GENLAB_LINUCB_PICK_ENABLED=1
+            # the multi-match tie-break tries LinUCB-driven scoring first.
+            # Building the context vector once per story (12-dim) costs <1ms
+            # vs the SharePoint round-trip, and short-circuits to None on
+            # any build failure so the classifier degrades to Thompson safely.
+            linucb_context = None
+            if linucb_arms:
+                try:
+                    from genlab_core.learning.linucb import build_content_context
+
+                    linucb_context = build_content_context(story, niche_id)
+                except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
+                    logger.debug(
+                        "[PUSH] LinUCB context build failed for %s: %s",
+                        story.get("title", "<no-title>"),
+                        exc,
+                    )
+
             arm_id = _classify_arm(
                 niche_id,
                 story,
                 content,
                 arm_boosts=arm_boosts,
                 arm_n_obs=arm_n_obs,
+                linucb_arms=linucb_arms,
+                context=linucb_context,
             )
 
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
