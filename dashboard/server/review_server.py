@@ -854,6 +854,7 @@ def _execute_review_action(
     feedback_issue: str = "",
     feedback_notes: str = "",
     feedback_fix: str = "",
+    review_duration_ms: int | None = None,
 ) -> dict[str, Any]:
     """Shared review logic: persist a review decision to backlog.
 
@@ -985,6 +986,12 @@ def _execute_review_action(
             decision=_decision,
             operator_action=action,
             action_taken_source=_action_source,
+            # Lever E2 (2026-06-21): pass dwell time when the caller
+            # captured it (frontend instrumentation). Pre-E2 every
+            # caller passed None implicitly; new frontend POST body
+            # carries review_duration_ms and it threads through to the
+            # calibration row. None → column stays NULL (cold-start safe).
+            review_duration_ms=review_duration_ms,
         )
     except Exception as _cal_exc:  # noqa: BLE001 — never block review
         logger.debug("[calibration] skipped (non-fatal): %s", _cal_exc)
