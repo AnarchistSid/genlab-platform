@@ -7,6 +7,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_persona_engine_cache():
+    """2026-06-21: ``_get_persona_engine`` caches PersonaEngine per niche
+    at module level (perf fix). Tests that ``@patch`` PersonaEngine and
+    expect the patch to take effect must start with an empty cache —
+    otherwise a stale entry from a prior test (or earlier import) wins.
+    Mirrors the autouse fixture in ``test_comment_processor_persona_engine_cache.py``."""
+    from genlab_core.engagement import comment_processor as cp
+
+    cp._persona_engine_cache.clear()
+    yield
+    cp._persona_engine_cache.clear()
+
+
 @pytest.fixture
 def agent_root(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENT_ROOT", str(tmp_path))
@@ -158,6 +172,12 @@ class TestIdempotencyOnFailure:
         mock_result.is_toxic = False
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
 
+        # 2026-06-21 (PR #4xx): comment_processor now reads
+        # ``engine.persona.reply_constraints.max_length_chars`` to trim the
+        # bot-disclosure suffix (lines 652, 672). Without configuring it
+        # the chained MagicMock returns a non-int and ``_append_bot_disclosure``
+        # raises TypeError on the ``len(text) + ... > max_len`` comparison.
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         mock_engine_cls.return_value.generate_reply.return_value = "Test reply"
 
         with patch("genlab_core.engagement.comment_processor._post_reply", return_value=False):
@@ -210,6 +230,7 @@ class TestIdempotencyOnFailure:
         mock_outbound.is_toxic = False
         mock_gate_cls.return_value.check_outbound.return_value = mock_outbound
 
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you liked it"
 
         # Replace the module-level singleton with the mocked instance, so
@@ -254,6 +275,7 @@ class TestBacklogClientWiring:
         mock_result.is_toxic = False
         mock_result.max_score = 0.02
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks! Glad you enjoyed it"
 
         mock_bl = MagicMock()
@@ -301,6 +323,7 @@ class TestBacklogClientWiring:
         mock_result.is_toxic = False
         mock_result.max_score = 0.02
         mock_gate_cls.return_value.check_inbound.return_value = mock_result
+        mock_engine_cls.return_value.persona.reply_constraints.max_length_chars = 280
         mock_engine_cls.return_value.generate_reply.return_value = "Thanks for the feedback!"
 
         mock_bl = MagicMock()
