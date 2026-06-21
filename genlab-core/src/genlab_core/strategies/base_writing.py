@@ -445,10 +445,15 @@ class BaseWritingStrategy(WritingStrategy):
         llm_client = None
         extra_instructions = ""
         if use_llm:
-            from genlab_core.cost.model_router import get_model
+            # 2026-06-21 (Lever H): switched from get_model() to
+            # get_model_with_budget() so the router cascades to cheaper
+            # models when the run's CostAccumulator says we're past the
+            # 10%/25% budget thresholds. Pre-H this was a hardcoded
+            # budget_ratio=0.0 and the cascade was dead code.
+            from genlab_core.cost.model_router import get_model_with_budget
             from genlab_core.writing.llm_client import AnthropicLLMClient
 
-            model = get_model(self._model_route_key())
+            model = get_model_with_budget(self._model_route_key())
             llm_client = AnthropicLLMClient(api_key=api_key, model=model)
             extra_instructions = _build_extra_instructions(self._writing_cfg or {})
             logger.info("[%s] Using LLM writing with model=%s", self._niche_id, model)

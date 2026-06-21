@@ -56,3 +56,51 @@ def get_model(task_type: str, budget_ratio: float = 0.0) -> str:
         return cfg.get("budget_fallbacks", {}).get("expensive_to_mid", default)
 
     return cfg.get("task_routing", {}).get(task_type, default)
+
+
+def get_model_with_budget(task_type: str) -> str:
+    """Same as ``get_model()`` but auto-computes ``budget_ratio`` from
+    the process-local ``CostAccumulator``. Self-regulating cost: as
+    a run consumes more of its per-run budget, the router automatically
+    cascades from expensive → mid → cheapest models for remaining stages.
+
+    2026-06-21 (Lever H): pre-Lever-H every caller used ``get_model()``
+    with the default ``budget_ratio=0.0``, so the existing budget-fallback
+    cascade in this module was dead code. Callers that want the cascade
+    should switch to this helper; the underlying ``get_model()`` remains
+    available for tests / one-off scripts that want explicit control.
+
+    Behavior when no accumulator is active (tests, ad-hoc scripts, CI):
+    falls through to ``get_model(task_type, 0.0)`` — preserves pre-H
+    routing exactly. Any exception in the accumulator path is caught
+    + logged at debug; the gate MUST NEVER block model selection.
+    """
+    try:
+        from genlab_core.intelligence.cost_accumulator import get_accumulator
+
+        acc = get_accumulator()
+        if acc is None:
+            return get_model(task_type, 0.0)
+
+        budget = float(getattr(acc, "_budget_usd", 0.0) or 0.0)
+        if budget <= 0:
+            return get_model(task_type, 0.0)
+
+        spent = float(getattr(acc, "total_usd", 0.0) or 0.0)
+        ratio = min(1.0, spent / budget)
+        log.debug(
+            "[model_router] budget_ratio=%.3f (spent=$%.4f / budget=$%.2f) task=%s",
+            ratio,
+            spent,
+            budget,
+            task_type,
+        )
+        return get_model(task_type, ratio)
+    except Exception as exc:
+        # NEVER block model selection on cost-tracking failure — fall
+        # through to the safest path (no fallback, get the task's
+        # configured model). The exception is logged at debug because
+        # this is non-essential plumbing, not a failure operators need
+        # to action on a per-call basis.
+        log.debug("[model_router] budget-aware lookup failed: %s — using defaults", exc)
+        return get_model(task_type, 0.0)
