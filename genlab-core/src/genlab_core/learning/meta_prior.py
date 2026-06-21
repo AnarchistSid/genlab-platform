@@ -102,7 +102,9 @@ def apply_warm_start(
         ct = parts[0] if len(parts) > 0 else ""
         pl = parts[1] if len(parts) > 1 else ""
 
-        save_arm(target_proxy, arm_id, new_alpha, new_beta, ct, pl)
+        # Pass niche_id so the upsert lookup uses the composite
+        # UNIQUE(niche_id, arm_id) index (perf fix 2026-06-21).
+        save_arm(target_proxy, arm_id, new_alpha, new_beta, ct, pl, niche_id=target_niche)
         results[arm_id] = "updated"
 
     updated_count = sum(1 for v in results.values() if v == "updated")
