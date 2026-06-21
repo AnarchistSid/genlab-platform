@@ -118,3 +118,109 @@ def apply_warm_start(
         confidence,
     )
     return results
+
+
+def bootstrap_niche_warm_start(
+    niche_id: str,
+    *,
+    dry_run: bool = False,
+) -> dict[str, str]:
+    """Apply Kveton 2021 warm-start priors to a newly-scaffolded niche.
+
+    Auto-discovers the source niche from ``TRANSFER_MATRIX``, loads its
+    arm posteriors via ``BacklogClient``, and calls ``apply_warm_start``.
+    Designed for the niche-scaffolding flow (Lever D3): when a new
+    niche spins up it gets free priors instead of starting cold from
+    Beta(1, 1) on every arm.
+
+    Returns the same per-arm result map as ``apply_warm_start``, or an
+    empty dict when:
+      - ``niche_id`` has no TRANSFER_MATRIX entry (e.g. a brand-new
+        unrelated niche the operator scaffolded — they can extend the
+        matrix manually if they want transfer)
+      - BacklogClient fails to construct (PG unavailable, etc.)
+      - Source niche has no arms yet (nothing to transfer)
+
+    This is best-effort by design: a missing or failed warm-start
+    MUST NOT fail niche scaffolding. The operator can re-run via
+    ``python -m genlab_core.learning.meta_prior --target-niche X``
+    once the source niche has accumulated data.
+
+    Pre-Lever-D3 the ``apply_warm_start`` function existed but had
+    zero production callers — Kveton 2021 transfer math sat dormant.
+    """
+    if niche_id not in TRANSFER_MATRIX:
+        logger.info(
+            "[meta_prior] no transfer mapping for niche %r — skipping warm-start "
+            "(extend TRANSFER_MATRIX if you want this niche to inherit priors)",
+            niche_id,
+        )
+        return {}
+
+    try:
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.arm_loader import load_all_arms
+
+        client = BacklogClient()
+        proxy = getattr(client, "bandit_arms", None)
+        if proxy is None:
+            logger.warning("[meta_prior] no bandit_arms proxy on client — skipping warm-start")
+            return {}
+
+        # The TRANSFER_MATRIX entry is {source_niche: confidence}; we
+        # only support 1 source per target in this iteration (Kveton's
+        # original method supports multi-source but our matrix is sparse).
+        source_niche = next(iter(TRANSFER_MATRIX[niche_id]))
+        source_arms = load_all_arms(proxy, source_niche)
+        if not source_arms:
+            logger.info(
+                "[meta_prior] source niche %r has no arms yet — nothing to transfer to %r",
+                source_niche,
+                niche_id,
+            )
+            return {}
+
+        return apply_warm_start(
+            target_niche=niche_id,
+            source_arms=source_arms,
+            target_proxy=proxy,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        # Best-effort: never fail the caller (scaffold_niche) on a
+        # transfer-math failure. Log + return empty so the operator
+        # sees what happened and can re-run manually.
+        logger.warning(
+            "[meta_prior] warm-start bootstrap failed for %r: %s (manual re-run available)",
+            niche_id,
+            exc,
+        )
+        return {}
+
+
+if __name__ == "__main__":
+    # Lever D3 (2026-06-21): ops CLI entrypoint. Lets operators re-run
+    # warm-start after the source niche has accumulated more data, or
+    # bootstrap a previously-scaffolded niche that pre-dated this wire.
+    #
+    # Usage:
+    #   uv run python -m genlab_core.learning.meta_prior --target-niche sports
+    #   uv run python -m genlab_core.learning.meta_prior --target-niche sports --dry-run
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Apply Kveton 2021 warm-start priors to a niche.")
+    parser.add_argument("--target-niche", required=True, help="Niche to warm-start (e.g. sports)")
+    parser.add_argument("--dry-run", action="store_true", help="Compute priors without writing")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    results = bootstrap_niche_warm_start(args.target_niche, dry_run=args.dry_run)
+    if not results:
+        print(f"No warm-start applied for {args.target_niche!r} — see log for reason.")
+    else:
+        print(f"\nWarm-start results for {args.target_niche!r}:")
+        for arm, outcome in results.items():
+            print(f"  {arm}: {outcome}")
