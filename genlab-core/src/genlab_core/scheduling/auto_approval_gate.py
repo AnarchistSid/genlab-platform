@@ -106,8 +106,8 @@ class AutoApprovalDecision:
 def evaluate(
     blueprint: dict,
     *,
-    min_composite_score: float = _DEFAULT_MIN_COMPOSITE_SCORE,
-    min_virality_score: float = _DEFAULT_MIN_VIRALITY_SCORE,
+    min_composite_score: float | None = None,
+    min_virality_score: float | None = None,
     require_video: bool = _DEFAULT_REQUIRE_VIDEO,
     require_hook_text: bool = _DEFAULT_REQUIRE_HOOK_TEXT,
     require_qc_pass: bool = _DEFAULT_REQUIRE_QC_PASS,
@@ -124,10 +124,44 @@ def evaluate(
     virality scoring) can still be evaluated. The trade-off: missing
     fields reduce ``confidence`` without flipping ``approved`` to False
     unless the operator has explicitly required that field.
+
+    2026-06-21 (Lever A): when ``min_composite_score`` / ``min_virality_score``
+    is None (the default), the gate resolves thresholds via:
+        (1) per-niche override from ``gate_tuner.get_overrides_for_niche()``
+        (2) the module-level ``_DEFAULT_*`` constants on miss
+    Explicit kwargs override both — preserves operator-CLI / test injection
+    while letting the calibration feedback loop adapt thresholds per niche.
     """
     extra = blueprint.get("extra") or {}
     if not isinstance(extra, dict):
         extra = {}
+
+    # ── Resolve thresholds: explicit kwarg > niche override > default ──
+    # Lazy import: gate_tuner imports calibration_logger which imports psycopg.
+    # The gate is in many import paths that shouldn't require DB libs.
+    if min_composite_score is None or min_virality_score is None:
+        try:
+            from genlab_core.learning.gate_tuner import get_overrides_for_niche
+
+            niche_id = (blueprint.get("niche_id") or "").strip()
+            override_composite, override_virality = get_overrides_for_niche(niche_id)
+        except Exception as exc:
+            # The override system MUST NEVER block evaluation. Fall back
+            # to defaults silently — the gate continues to work exactly
+            # as it did pre-Lever-A.
+            logger.debug("[gate] override lookup failed (%s); using defaults", exc)
+            override_composite, override_virality = None, None
+
+        if min_composite_score is None:
+            min_composite_score = (
+                override_composite
+                if override_composite is not None
+                else _DEFAULT_MIN_COMPOSITE_SCORE
+            )
+        if min_virality_score is None:
+            min_virality_score = (
+                override_virality if override_virality is not None else _DEFAULT_MIN_VIRALITY_SCORE
+            )
 
     passed: list[str] = []
     failed: list[str] = []
