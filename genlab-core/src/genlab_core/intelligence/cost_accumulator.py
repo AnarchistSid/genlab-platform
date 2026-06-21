@@ -202,5 +202,16 @@ def record_anthropic_usage(model: str, response: Any) -> None:
             input_tokens=getattr(usage, "input_tokens", 0) or 0,
             output_tokens=getattr(usage, "output_tokens", 0) or 0,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        # Silent-swallow audit (2026-06-21): pre-fix this was
+        # ``except Exception: pass``. When cost-tracking infrastructure
+        # broke (e.g. accumulator stopped accepting writes, contextvars
+        # bug), operators got ZERO signal — runs spent budget invisibly
+        # while the daily-cost dashboard reported $0. Now emits WARNING
+        # so the failure is at least visible in logs + observability
+        # tools can alert on cost-tracker outages.
+        logger.warning(
+            "[cost_accumulator] failed to record_llm for model=%s (cost tracking degraded): %s",
+            model,
+            exc,
+        )

@@ -314,8 +314,22 @@ class RunReport:
                 entity_type="pipeline_run",
                 niche_id=niche_id,
             )
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            # Silent-swallow audit (2026-06-21): pre-fix this was
+            # ``pass # non-fatal``. When the dashboard_events push path
+            # broke (e.g. Postgres down, schema drift, observability
+            # daemon down), Mission Control's pipeline timeline silently
+            # stopped updating — operators saw a stale "last ran X hours
+            # ago" indicator while pipelines were actually completing
+            # successfully. Now emits WARNING so the visibility outage
+            # is visible in logs + can be alerted on.
+            logger.warning(
+                "[RunReport] dashboard_events.push_event failed for %s run %s "
+                "(timeline UI will miss this run): %s",
+                niche_id,
+                run_id,
+                exc,
+            )
 
         return context
 
