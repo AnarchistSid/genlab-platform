@@ -460,6 +460,50 @@ def run_publish(
     except Exception:
         pass  # non-fatal
 
+    # 2026-06-22 — EVENT_PUBLISH episodic emit. Distinct from
+    # dashboard_events above:
+    # - dashboard_events: operator-facing Mission Control feed
+    # - episodic_events: learning-facing cross-run analytics + RAG +
+    #   weekly scratchpad reflection (the Sunday Opus job reads these)
+    #
+    # Closes one of the 4 dormant EVENT_* types identified by the
+    # 2026-06-22 audit (BANDIT_PICK + POST_BOMBED + REWARD_WINDOW_CLOSED
+    # + OPERATOR_REVIEW + OPERATOR_EDIT already wired; PUBLISH was the
+    # next-most-impactful missing producer). Without this emit, the
+    # scratchpad's "what published this week" question gets no answer
+    # and the cross-run publishing-velocity signal is lost.
+    #
+    # Fires only on any_success — failures already have their own
+    # dashboard_event (publish_failure) and the metric_collector
+    # emits POST_BOMBED downstream when reward at 48h is near zero.
+    # An EVENT_PUBLISH_FAILED could be added later if needed; today
+    # the gap is the SUCCESSFUL path being un-recorded.
+    if any_success:
+        try:
+            from genlab_core.learning.episodic_memory import EVENT_PUBLISH, record_event
+
+            success_platforms = [p for p, s in platform_status.items() if s == "PUBLISHED"]
+            hook_snippet = (
+                fields.get("hook_text") or fields.get("hook") or fields.get("title") or ""
+            )[:200]
+            record_event(
+                event_type=EVENT_PUBLISH,
+                niche_id=niche_id,
+                blueprint_id=record_id,
+                payload={
+                    "platforms": success_platforms,
+                    "platform_count": len(success_platforms),
+                    "attempt_count": attempt_count,
+                    "hook_snippet": hook_snippet,
+                    "had_partial_failures": bool(
+                        _terminal_failed_platforms(platform_status)
+                        or _transient_failed_platforms(platform_status)
+                    ),
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — episodic emit must never block publish
+            logger.debug("[publish_all_platforms] EVENT_PUBLISH emit skipped: %s", exc)
+
     # 8. Register PendingFeedback, extracted in refactor-#9 PR 6d/N to
     # publishing/feedback_registration.py.
     if any_success:
