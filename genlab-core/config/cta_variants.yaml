@@ -1,26 +1,38 @@
 # CTA variant definitions for A/B testing via Thompson Sampling.
 # Each platform has multiple variants. The bandit learns which converts best.
 #
-# IG variants migrated 2026-05-18: all "link in bio" templates replaced with
-# "link in 1st comment" because affiliate_matcher.py:469 already noted bio
-# links have near-zero CTR.  The old IG variants are kept disabled below as
-# a record of what was tried — the bandit state file may still reference
-# their arm_ids until it gets rebuilt.
+# 2026-06-22 IG pivot: "1st comment" templates are dead promises — IG's
+# `instagram.py` has `post_reply` (for engagement) but the PUBLISH flow
+# never calls `post_comment`, so every "1st comment" CTA points nowhere.
+# All 4 IG variants now use "link in bio" matching the 2026-06-19 hardcoded
+# fix at `monetization/cta_engine.py:281`. Arm IDs preserved so bandit
+# state (`bandit_arms` table) survives the swap; templates updated.
+#
+# History: 2026-05-18 migration replaced "link in bio" with
+# "link in 1st comment" on assumption that 1st-comment delivery worked.
+# It never did. 2026-06-19 PR pivoted the hardcoded fallback but missed
+# the bandit YAML (this file) — captions still said "(1st comment)" in
+# prod because the bandit pick overwrote the fixed fallback. This is
+# the YAML-side companion to that pivot.
+#
+# Threads variants left unchanged: `base_platform_adaptation.py:133`
+# wires `result.first_comment → tw["first_reply"]` so threads's
+# "first reply" CTA IS delivered.
 
 platforms:
   instagram:
     variants:
       - arm_id: ig_first_comment
-        template: "{product_name} — link in 1st comment"
+        template: "{product_name} — link in bio"
         emoji: "🔗"
       - arm_id: ig_get_yours_v2
-        template: "Get yours — link in 1st comment"
+        template: "Get yours — link in bio"
         emoji: "🔗"
       - arm_id: ig_best_deal_v2
-        template: "Best deal on {product_name} — 1st comment"
+        template: "Best deal on {product_name} — link in bio"
         emoji: "🔥"
       - arm_id: ig_we_use_v2
-        template: "Top pick for {product_name} — 1st comment"
+        template: "Top pick for {product_name} — link in bio"
         emoji: "💯"
 
   youtube:
