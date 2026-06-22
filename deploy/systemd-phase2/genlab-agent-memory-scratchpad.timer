@@ -1,0 +1,22 @@
+[Unit]
+Description=GenLab Agent Memory Scratchpad Timer (weekly Sunday)
+
+[Timer]
+# Sunday 02:00 UTC = 07:30 IST.
+#
+# Order in the Sunday job stack:
+#   01:00 UTC — gate-tuner (calibration → thresholds)
+#   02:00 UTC — this scratchpad (episodic → markdown)
+#   04:00 UTC — preference-collector (engagement → pairs)
+#   05:30 UTC — dpo-export (pairs → JSONL)
+#
+# The scratchpad runs early so the Monday-morning hook generations
+# (~08:00 IST) read the fresh markdown.
+OnCalendar=Sun *-*-* 02:00:00 UTC
+# Catch up on missed fires after reboot — generator is idempotent
+# (writes a fresh markdown each run), so missed Sundays catch up
+# without corruption.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
