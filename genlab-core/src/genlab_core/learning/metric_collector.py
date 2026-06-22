@@ -277,6 +277,109 @@ def _get_reward_bomb_threshold(niche_id: str) -> float:
     return _NICHE_REWARD_BOMB_THRESHOLD.get(niche_id, _DEFAULT_REWARD_BOMB_THRESHOLD)
 
 
+def _fetch_rca_context(niche_id: str, blueprint_id: str) -> tuple[float, list[dict], dict]:
+    """Look up niche baseline + top-5 winners + bombed-post fields.
+
+    Pure-read helper used by the Lever O full wire (analyze_post
+    invocation). Returns ``(baseline_rate, winners, bombed_post)``;
+    any field defaults to a safe empty value on lookup failure so the
+    caller can still invoke ``analyze_post`` with partial context.
+
+    Three queries against one pool connection:
+    1. Baseline: average reward_48h for the niche over the last 30 days
+       (excludes nulls; minimum 5 samples to avoid spurious baselines)
+    2. Winners: top-5 reward_48h posts in the niche over the last 14
+       days, joined with blueprints for hook + title
+    3. Bombed post fields: hook_text + title + published_at from the
+       blueprints row matching this blueprint_id
+    """
+    pool = _get_pg_pool()
+    if pool is None:
+        return 0.0, [], {}
+
+    baseline_rate = 0.0
+    winners: list[dict] = []
+    bombed_post: dict = {}
+
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                # Niche baseline — average over recent reward_48h values
+                cur.execute(
+                    """
+                    SELECT AVG(reward_48h)::float
+                    FROM pending_feedback
+                    WHERE niche_id = %s
+                      AND reward_48h IS NOT NULL
+                      AND collected_at > NOW() - INTERVAL '30 days'
+                    """,
+                    (niche_id,),
+                )
+                row = cur.fetchone()
+                if row and row[0] is not None:
+                    baseline_rate = float(row[0])
+
+                # Top-5 winners with their hook + title from blueprints.
+                # LEFT JOIN so a missing blueprint row doesn't drop the
+                # winner; we just send empty hook/title to the LLM.
+                cur.execute(
+                    """
+                    SELECT p.reward_48h, COALESCE(b.hook_text, ''),
+                           COALESCE(b.title, '')
+                    FROM pending_feedback p
+                    LEFT JOIN blueprints b ON p.blueprint_id::text = b.id::text
+                    WHERE p.niche_id = %s
+                      AND p.reward_48h IS NOT NULL
+                      AND p.collected_at > NOW() - INTERVAL '14 days'
+                    ORDER BY p.reward_48h DESC
+                    LIMIT 5
+                    """,
+                    (niche_id,),
+                )
+                for reward, hook_text, title in cur.fetchall():
+                    winners.append(
+                        {
+                            "engagement_rate": float(reward),
+                            "hook_text": hook_text,
+                            "title": title,
+                        }
+                    )
+
+                # Bombed post fields — best-effort match by blueprint_id.
+                # Tries blueprints.id first; falls back to nothing if
+                # the cast or join fails.
+                try:
+                    cur.execute(
+                        """
+                        SELECT COALESCE(hook_text, ''), COALESCE(title, ''),
+                               COALESCE(published_at::text, '')
+                        FROM blueprints
+                        WHERE id::text = %s
+                        LIMIT 1
+                        """,
+                        (blueprint_id,),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        bombed_post = {
+                            "blueprint_id": blueprint_id,
+                            "niche_id": niche_id,
+                            "hook_text": row[0],
+                            "title": row[1],
+                            "published_at": row[2],
+                        }
+                except Exception as exc:  # noqa: BLE001 — fail-quiet
+                    logger.debug(
+                        "[post_rca] bombed-post lookup failed for %s: %s",
+                        blueprint_id,
+                        exc,
+                    )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug("[post_rca] context lookup failed: %s", exc)
+
+    return baseline_rate, winners, bombed_post
+
+
 def _check_post_bomb_signal(
     *,
     niche_id: str,
@@ -284,23 +387,24 @@ def _check_post_bomb_signal(
     platform: str,
     reward_48h: float,
 ) -> bool:
-    """Detect post-bomb signal at the 48h reward window.
+    """Detect post-bomb signal at the 48h reward window + invoke RCA.
 
     Returns True when:
     - ``GENLAB_POST_RCA_ENABLED=1`` (opt-in)
     - ``is_underperforming(reward_48h, niche_threshold)`` fires
       (post fell ≥30% below the per-niche shaped-reward threshold)
 
-    Emits a WARN log on every detected bomb — operators grep these
-    to count bomb rate per niche per week. The full LLM RCA call
-    (``post_rca.analyze_post``) is deferred to a future PR that has
-    the per-niche winners + bombed-post-field lookup helpers built.
+    Emits a WARN log on every detected bomb (operator grep target) AND
+    invokes ``post_rca.analyze_post`` to get an LLM RCA verdict, logged
+    at INFO with the cause/confidence/recommendation. The LLM
+    invocation is best-effort — failures don't downgrade the bomb
+    detection itself.
 
     Fail-quiet on any import or runtime error so this NEVER blocks
     the bandit update path that runs immediately after.
     """
     try:
-        from genlab_core.learning.post_rca import is_underperforming
+        from genlab_core.learning.post_rca import analyze_post, is_underperforming
     except ImportError:
         return False
 
@@ -327,6 +431,41 @@ def _check_post_bomb_signal(
         threshold,
         miss_pct,
     )
+
+    # Full RCA invocation (Lever O full wire). Fetches niche baseline
+    # + winners + bombed-post fields, then calls analyze_post for the
+    # LLM verdict. Best-effort — RCA failure NEVER downgrades the
+    # bomb detection itself.
+    try:
+        baseline_rate, winners, bombed_post = _fetch_rca_context(niche_id, blueprint_id)
+
+        # Augment bombed_post with the live reward signal so the LLM
+        # has full context. _fetch_rca_context fills hook/title/etc;
+        # we add platform + reward_48h on top.
+        if not bombed_post:
+            bombed_post = {"blueprint_id": blueprint_id, "niche_id": niche_id}
+        bombed_post["platform"] = platform
+        bombed_post["engagement_rate"] = reward_48h
+
+        # If baseline is 0 (no recent samples), fall back to the
+        # per-niche threshold which is itself a calibrated baseline
+        # approximation. analyze_post handles low-baseline gracefully.
+        baseline = baseline_rate if baseline_rate > 0 else threshold
+
+        rca = analyze_post(bombed_post, winners, baseline)
+        if rca is not None:
+            logger.info(
+                "[post_rca] RCA verdict: niche=%s bp=%s cause=%s conf=%.2f rec=%s reason=%s",
+                niche_id,
+                blueprint_id,
+                rca.likely_cause,
+                rca.confidence,
+                rca.recommendation[:80],
+                rca.reasoning[:120],
+            )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug("[post_rca] analyze_post invocation failed: %s", exc)
+
     return True
 
 
