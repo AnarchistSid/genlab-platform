@@ -274,9 +274,39 @@ def _best_network(networks: dict, country: str = "") -> tuple[str, dict]:
 
     Geo-routing: if the visitor is from India, prefer ``amazon`` over ``amazon_us``.
     For all other countries, prefer ``amazon_us`` over ``amazon`` (India-only networks
-    like earnkaro/cuelinks are skipped for non-Indian visitors).
+    like earnkaro are skipped for non-Indian visitors).
+
+    2026-06-22 audit fixes:
+
+    1. **cuelinks PERMANENTLY skipped.** Per the 2026-06-14 audit
+       recorded in ``geo_link_resolver.py``, cuelinks redirects earn
+       ₹0/click because cuelinks doesn't inject Amazon Associates
+       tags — it just relays whatever URL is in the inner ``url=``
+       param, and our catalog entries lacked the tag. The pipeline-
+       side resolver was updated then; THIS dashboard-side selector
+       was a separate code path that kept picking cuelinks via raw
+       commission_pct ranking (7.0% > amazon's 3.0%). Now matches
+       the audit decision unconditionally.
+
+    2. **Default country=""** → treated as ``IN`` instead of "neither".
+       The operator runs Indian niches with IN-skewed audience.
+       Cloudflare's ``CF-IPCountry`` header isn't always reaching the
+       Flask handler (Caddy/CF passthrough gaps), so the default was
+       silently dropping all those visitors to amazon_us (US tag on
+       amazon.com) — which Indian Amazon strips when it geo-redirects
+       them back to amazon.in. Net effect: ₹0 commission on those
+       clicks. Defaulting to IN gives them the IN tag instead, which
+       amazon.in honors. Operators with US-skewed audiences can set
+       ``GENLAB_DEFAULT_AFFILIATE_GEO=US`` env to override.
     """
-    is_india = country.upper() == "IN"  # only route to India networks for confirmed IN visitors
+    import os
+
+    # Resolve effective geo: explicit country wins, else env default, else IN
+    resolved = country.upper() if country else ""
+    if not resolved:
+        resolved = os.environ.get("GENLAB_DEFAULT_AFFILIATE_GEO", "IN").upper()
+    is_india = resolved == "IN"
+
     best_name = ""
     best_data: dict = {}
     best_pct = -1.0
@@ -285,8 +315,14 @@ def _best_network(networks: dict, country: str = "") -> tuple[str, dict]:
         # Skip placeholder URLs that haven't been replaced with real affiliate links
         if not url or "example.com" in url:
             continue
+        # 2026-06-22: cuelinks earns ₹0/click per audit. Skip
+        # unconditionally regardless of geo. Catalog cleanup PR
+        # (separate) also removed cuelinks entries from all products,
+        # but this guard catches any future re-add.
+        if name == "cuelinks":
+            continue
         # Geo-routing: skip India-only networks for non-Indian visitors
-        if not is_india and name in ("amazon", "earnkaro", "cuelinks"):
+        if not is_india and name in ("amazon", "earnkaro"):
             continue
         # Geo-routing: skip US network for Indian visitors (prefer local networks)
         if is_india and name == "amazon_us":
@@ -296,9 +332,12 @@ def _best_network(networks: dict, country: str = "") -> tuple[str, dict]:
             best_pct = pct
             best_name = name
             best_data = data
-    # Fallback: if no network matched after geo-filtering, pick any real link
+    # Fallback: if no network matched after geo-filtering, pick any
+    # real link EXCEPT cuelinks (which earns ₹0).
     if not best_name:
         for name, data in networks.items():
+            if name == "cuelinks":
+                continue
             url = data.get("url", "")
             if url and "example.com" not in url:
                 return name, data
