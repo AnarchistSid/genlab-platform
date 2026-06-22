@@ -796,6 +796,34 @@ def process_pending_task(
                 record_event,
             )
 
+            # 2026-06-22 — augment payload with lifecycle velocity
+            # classification (activates the previously-dormant
+            # analyze_velocity function from intelligence/lifecycle_tracker.py).
+            # The 48h window has BOTH 6h + 48h snapshots, so velocity
+            # math has the inputs it needs. Classification (viral /
+            # steady / flat / bombing) goes into the same episodic
+            # event so future RCA queries can answer "what % of
+            # 'bombing'-classified posts had operator-flagged weak
+            # hooks?" without joining 3 tables.
+            #
+            # Fail-OPEN: if analyze_velocity errors or returns None
+            # (insufficient snapshots), the payload just lacks the
+            # velocity keys — readers tolerate missing fields.
+            velocity_data: dict = {}
+            try:
+                from genlab_core.intelligence.lifecycle_tracker import analyze_velocity
+
+                velocity_result = analyze_velocity(task_record.platform_post_id)
+                if velocity_result:
+                    velocity_data = {
+                        "velocity_class": velocity_result.get("velocity"),
+                        "velocity_growth_rate": velocity_result.get("growth_rate"),
+                        "velocity_6h_reach": velocity_result.get("6h_reach"),
+                        "velocity_48h_reach": velocity_result.get("48h_reach"),
+                    }
+            except Exception as exc:  # noqa: BLE001 — augmentation only
+                logger.debug("[metric_collector] velocity analysis skipped: %s", exc)
+
             record_event(
                 event_type=EVENT_REWARD_WINDOW_CLOSED,
                 niche_id=task_record.niche_id,
@@ -805,6 +833,7 @@ def process_pending_task(
                     "platform_post_id": task_record.platform_post_id,
                     "reward_48h": reward_48h,
                     "bandit_arm": task_record.bandit_arm or "",
+                    **velocity_data,
                 },
             )
         except Exception as exc:  # noqa: BLE001 — fail-open
