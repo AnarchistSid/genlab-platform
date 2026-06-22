@@ -482,6 +482,20 @@ class TrendingVideoFetcher:
             results.append(video)
 
         results.sort(key=lambda v: v.view_velocity, reverse=True)
+
+        # 2026-06-22 — opt-in LLM-judge re-ranking for niche fit. When
+        # GENLAB_VIDEO_NICHE_FIT_ENABLED=1, Haiku re-ranks the top-20
+        # velocity-sorted candidates by niche-fit advice (per-niche
+        # brief in niche_fit_ranker._NICHE_FIT_BRIEF). Fail-OPEN on
+        # any LLM error → falls back to the velocity-only order.
+        # See genlab_core.media.niche_fit_ranker for the full docs.
+        try:
+            from genlab_core.media.niche_fit_ranker import rerank_for_niche_fit
+
+            results = rerank_for_niche_fit(results, niche_id)
+        except Exception as exc:  # noqa: BLE001 — re-ranking is augmentation
+            logger.debug("[%s] niche-fit re-ranking skipped: %s", niche_id, exc)
+
         with _QUOTA_LOCK:
             quota_snapshot = QUOTA_TRACKER["units_used"]
         logger.info(
