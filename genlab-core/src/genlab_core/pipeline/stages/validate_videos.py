@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,72 @@ from genlab_core.media.video_validator import check_vmaf
 from genlab_core.pipeline.stage_context import StageContext
 
 logger = logging.getLogger(__name__)
+
+
+# Lever G3 wire (2026-06-22): post-render frame-ensemble vision QC.
+# Opt-in via GENLAB_RENDER_QC_ENABLED=1. See _run_render_qc docstring
+# for the full contract. Defined here at module top so the validation
+# class below can call it without circular-import concerns.
+def _run_render_qc(media: dict, story: dict, video_path: str) -> None:
+    """Lever G3 wire helper: invoke render_qc + stash result on media.
+
+    Opt-in via ``GENLAB_RENDER_QC_ENABLED=1``. When disabled, this is a
+    no-op (zero overhead because ``render_qc.qc_render`` itself
+    short-circuits on the env flag — we duplicate the check here to
+    avoid the import cost in the hot path when disabled).
+
+    The result lands under ``media["video_validation"]["render_qc"]``
+    with the structured ``RenderQCReport`` fields. Fail-open: any
+    ``qc_render`` failure means no record is added (caller proceeds).
+
+    Pure side-effect mutation of ``media`` dict. Returns None.
+    """
+    if os.environ.get("GENLAB_RENDER_QC_ENABLED", "0") != "1":
+        return
+
+    try:
+        from genlab_core.media.render_qc import qc_render
+    except ImportError:
+        return
+
+    blueprint_id = str(story.get("blueprint_id") or story.get("candidate_id") or "")
+    hook_text = str(story.get("hook") or story.get("title") or "")
+    niche_id = str(story.get("niche_id") or "")
+
+    report = qc_render(
+        video_path,
+        blueprint_id=blueprint_id,
+        hook_text=hook_text,
+        niche_id=niche_id,
+    )
+    if report is None:
+        # qc_render fail-opened (disabled, no API key, ffmpeg missing,
+        # judges all returned None, etc.) — no record added
+        return
+
+    # Stash structured report onto media for dashboard + downstream
+    # consumers. We KEEP this separate from video_validation.valid so a
+    # bad render_qc verdict (publishable=False) does NOT block publish
+    # in this PR — surfacing the signal is step 1; gating publication
+    # on it is a follow-up PR after operators calibrate the threshold.
+    validation = media.setdefault("video_validation", {})
+    validation["render_qc"] = {
+        "frames_judged": report.frames_judged,
+        "min_quality_score": report.min_quality_score,
+        "avg_quality_score": report.avg_quality_score,
+        "unique_issues": list(report.unique_issues),
+        "publishable": report.publishable,
+        "recommendation": report.recommendation,
+    }
+    logger.info(
+        "[validate_videos] render_qc bp=%s min=%.1f avg=%.1f issues=%s rec=%s",
+        blueprint_id,
+        report.min_quality_score,
+        report.avg_quality_score,
+        ",".join(report.unique_issues) or "none",
+        report.recommendation,
+    )
+
 
 # Default CRF used for initial encode (matches PLATFORM_SPECS instagram default)
 _DEFAULT_CRF = 15
@@ -111,6 +178,19 @@ class ValidateVideos:
                 issues = self._check(probe)
 
                 if not issues:
+                    # Lever G3 wire (2026-06-22): post-render frame-ensemble
+                    # vision QC. Opt-in via GENLAB_RENDER_QC_ENABLED=1.
+                    # Internally calls G2's judge_frame on 3 frames (start/
+                    # middle/end). Result is recorded under
+                    # media["video_validation"]["render_qc"] for the
+                    # dashboard + future LLM-judge layer to consume.
+                    # Fail-quiet — any error here NEVER blocks publication,
+                    # which is the existing behavior of this stage.
+                    try:
+                        _run_render_qc(media, story, video_path)
+                    except Exception as exc:  # noqa: BLE001 — fail-open
+                        logger.debug("[validate_videos] render_qc error: %s", exc)
+
                     # Spec checks passed — now run VMAF gate if enabled
                     if run_vmaf:
                         vmaf_result, skip_reason = self._run_vmaf_gate(media, video_path)
