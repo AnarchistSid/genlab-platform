@@ -922,6 +922,10 @@ def auto_approval_preview(record_id):
             "composite_score": blueprint_dict.get("composite_score"),
             "virality_score": blueprint_dict.get("virality_score"),
             "validation_status": blueprint_dict.get("validation_status"),
+            # Loop 2 close (2026-06-22): forward hook classifier score so
+            # the gate's 6th soft check can read it. Cold-start tolerant
+            # — missing field treated as "unknown" not "fail".
+            "hook_classifier_score": blueprint_dict.get("hook_classifier_score"),
         }
 
     try:
