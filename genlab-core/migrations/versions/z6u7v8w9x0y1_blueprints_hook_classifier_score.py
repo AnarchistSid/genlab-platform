@@ -46,10 +46,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TABLE blueprints "
-        "ADD COLUMN IF NOT EXISTS hook_classifier_score FLOAT NULL"
-    )
+    op.execute("ALTER TABLE blueprints ADD COLUMN IF NOT EXISTS hook_classifier_score FLOAT NULL")
 
 
 def downgrade() -> None:
