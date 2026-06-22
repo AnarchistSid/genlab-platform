@@ -1,0 +1,18 @@
+[Unit]
+Description=GenLab Permission Drift Auto-Repair Timer
+
+[Timer]
+# Every 15 min. Permission drift typically happens during deploys
+# (operator running `git pull` as root accidentally) or during
+# `uv pip install` runs. 15-min cadence catches drift within a
+# reasonable operator-attendance window without burning compute.
+#
+# The repair script is idempotent + read-only when nothing needs
+# fixing (just runs a find query), so frequent timer fires are cheap.
+OnCalendar=*-*-* *:00,15,30,45:00
+# Catch up on missed fires after reboot — repair is idempotent and
+# a missed cycle just means slower recovery.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

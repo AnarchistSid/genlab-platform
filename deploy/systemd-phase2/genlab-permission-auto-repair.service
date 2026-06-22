@@ -1,0 +1,36 @@
+[Unit]
+Description=GenLab Permission Drift Auto-Repair (root)
+After=network-online.target postgresql.service
+
+# Surface unit failures to the dashboard CriticalAlertsBanner
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+# Runs as ROOT — repair_permissions.sh chowns files back to
+# genlab:genlab, which requires root capability. This is the only
+# genlab-* unit that runs as root by design.
+#
+# Why a separate root-run service (not sudoers on the genlab user):
+# granting passwordless sudo on repair_permissions.sh would introduce
+# a privilege-escalation surface that's harder to audit than a single
+# root-owned periodic service. The service is small (~150 LOC), the
+# repair script is already audited + idempotent, and the failure
+# modes are loud (alerts stay unresolved → operator sees them).
+User=root
+Group=root
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/root
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/auto_repair_permissions.py
+TimeoutSec=400
+# Exit codes:
+#   0 = no drift OR repair succeeded OR auto-repair env-disabled
+#   1 = pre-flight failure (DB connect) — real signal, OnFailure fires
+#   2 = repair_permissions.sh --apply failed — alerts stay unresolved,
+#       operator sees them in dashboard; treated as soft failure
+SuccessExitStatus=0 2
+
+[Install]
+WantedBy=multi-user.target
