@@ -201,6 +201,14 @@ class LocalStageRunner:
                 last_error = e
                 elapsed = time.monotonic() - t0
                 if attempt < self._max_retries:
+                    # 2026-06-22 observability fix: include exc_info=True so
+                    # the retry-warning gets the full traceback. Without it,
+                    # bugs that recover on retry (transient API errors etc.)
+                    # were invisible to operators — the journal showed only
+                    # the exception's __str__, not where it fired. The
+                    # VideoGate NoneType crash of 2026-06-22 09:32 IST took
+                    # this audit to diagnose because the log line gave no
+                    # line number.
                     logger.warning(
                         "[Pipeline] Stage %s failed (attempt %d/%d, %.1fs): %s — will retry",
                         stage_name,
@@ -208,6 +216,7 @@ class LocalStageRunner:
                         1 + self._max_retries,
                         elapsed,
                         e,
+                        exc_info=True,
                     )
                     continue
                 # Final attempt failed. fail_mode controls whether this
@@ -216,6 +225,12 @@ class LocalStageRunner:
                 # continues.
                 is_fatal = self._fail_mode == "abort"
                 pipeline_ctx.record_error(stage_name, e, fatal=is_fatal)
+                # 2026-06-22 observability fix: exc_info=True attaches the
+                # full traceback to the ERROR log. Pre-fix, operators saw
+                # only ``'NoneType' object is not subscriptable`` with no
+                # file/line/frame — impossible to diagnose without locally
+                # reproducing. This is the smallest possible change with
+                # the largest possible payoff for prod debugging.
                 logger.error(
                     "[Pipeline] Stage %s failed after %d attempt(s) (%.1fs): %s%s",
                     stage_name,
@@ -223,6 +238,7 @@ class LocalStageRunner:
                     elapsed,
                     e,
                     " — aborting pipeline (fail_mode=abort)" if is_fatal else "",
+                    exc_info=True,
                 )
                 if self._metrics is not None:
                     self._metrics.record_stage(
@@ -356,12 +372,17 @@ class SandboxAwareStageRunner:
             # P6: honor fail_mode like LocalStageRunner does.
             is_fatal = self._fail_mode == "abort"
             pipeline_ctx.record_error(stage_name, e, fatal=is_fatal)
+            # 2026-06-22 observability fix: match LocalStageRunner's
+            # exc_info=True so sandboxed-runner failures also produce
+            # diagnosable tracebacks. Without this, the two runners
+            # had different debug surfaces — a confusing operator gap.
             logger.error(
                 "[Pipeline] Stage %s failed after %.1fs (sandboxed): %s%s",
                 stage_name,
                 elapsed,
                 e,
                 " — aborting pipeline (fail_mode=abort)" if is_fatal else "",
+                exc_info=True,
             )
             if self._metrics is not None:
                 self._metrics.record_stage(
