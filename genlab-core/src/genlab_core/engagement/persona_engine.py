@@ -148,3 +148,103 @@ class PersonaEngine:
 
         logger.warning("[PERSONA] All %d reply attempts failed toxicity gate", max_retries + 1)
         return None
+
+    def validate_reply(
+        self,
+        comment: str,
+        reply: str,
+        platform: str,
+        post_context: str = "",
+    ) -> tuple[float, str]:
+        """LLM-as-judge: score a generated reply on on-topic + on-voice + engaging.
+
+        Returns ``(score, reason)`` where:
+        - ``score`` ∈ [0.0, 1.0]. 0.0 = bad reply, 1.0 = great. Mid-range
+          (0.5-0.7) = borderline.
+        - ``reason`` is a one-line explanation suitable for audit logs.
+
+        The 2026-06-22 autonomy audit found that auto-replies are the
+        last-mile of unattended operation but were never self-validated.
+        ``generate_reply`` checks only toxicity; semantic mismatches
+        (off-topic, wrong tone, generic) flowed straight to the platform.
+        One bad auto-reply can damage channel reputation; this judge
+        catches them before they post.
+
+        Cost: one Haiku call per validation (~80 tokens system + 80
+        user + 60 output = ~$0.0002 per call). Budget impact: 5 niches ×
+        10 auto-candidate replies/day = ~$0.01/day total at full
+        coverage.
+
+        Failure modes:
+        - Anthropic circuit open: return (1.0, "judge_unavailable") —
+          fail-OPEN so the engagement system keeps moving. The
+          conservative alternative (fail-closed at 0.0) would freeze
+          all auto-replies on a transient API outage.
+        - Parse failure: return (0.5, "judge_parse_error") — neutral
+          mid-range routes the reply to review queue (per
+          ``classify_reply_action`` rules).
+        - Genuine "this reply is bad": low score, descriptive reason.
+        """
+        if self._client is None:
+            import anthropic
+
+            self._client = anthropic.Anthropic()
+        client = self._client
+
+        system = (
+            "You are a strict quality judge for social-media replies. "
+            "Score the reply 0-100 on three dimensions:\n"
+            "1. on-topic: does the reply directly address the comment?\n"
+            "2. on-voice: does the reply match the niche persona?\n"
+            "3. engaging: would a viewer want to interact further?\n\n"
+            "Output ONLY a single line: SCORE: NN | REASON: <one sentence>\n"
+            "Score 80-100 = ship it. 50-79 = borderline (route to human). "
+            "Below 50 = bad reply (discard)."
+        )
+        user_content = (
+            f"Platform: {platform}\n"
+            f'Comment: "{comment}"\n'
+            f"Post context: {post_context or '(none)'}\n"
+            f'Generated reply: "{reply}"'
+        )
+
+        try:
+
+            def _llm_call():
+                return client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=80,
+                    system=system,
+                    messages=[{"role": "user", "content": user_content}],
+                )
+
+            resp = ANTHROPIC_CB.call(_llm_call)
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", resp)
+            raw = resp.content[0].text.strip()
+
+            # Parse "SCORE: NN | REASON: ..." format. Tolerant of LLM
+            # variation — match the first integer in the response as
+            # the score.
+            import re as _re
+
+            m = _re.search(r"SCORE:\s*(-?\d{1,3})", raw, _re.IGNORECASE)
+            if not m:
+                logger.warning(
+                    "[PERSONA-JUDGE] could not parse score from reply: %r",
+                    raw[:120],
+                )
+                return 0.5, "judge_parse_error"
+            score_int = max(0, min(100, int(m.group(1))))
+            score = score_int / 100.0
+            reason_match = _re.search(r"REASON:\s*(.+)$", raw, _re.IGNORECASE)
+            reason = reason_match.group(1).strip()[:200] if reason_match else f"score={score_int}"
+            return score, reason
+        except CircuitOpenError:
+            # Fail-OPEN: don't freeze all auto-replies on transient API outage.
+            logger.warning("[PERSONA-JUDGE] Anthropic circuit open — passing through")
+            return 1.0, "judge_unavailable"
+        except Exception as exc:  # noqa: BLE001 — fail-safe to neutral
+            logger.warning("[PERSONA-JUDGE] validation raised: %s", exc)
+            return 0.5, "judge_exception"

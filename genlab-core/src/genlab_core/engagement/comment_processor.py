@@ -17,6 +17,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -622,6 +623,45 @@ def process_reply_event(event: dict) -> None:
     # auto-post a toxic generated reply (and a spicy-but-clean reply to a
     # borderline comment could be needlessly discarded). Score the reply itself.
     outbound_tox = _toxicity_gate.check_outbound(reply).max_score
+
+    # 2026-06-22 Lever — LLM-as-judge on reply quality (opt-in via
+    # GENLAB_REPLY_CRITIC_ENABLED=1). Toxicity catches HARMFUL replies;
+    # this judge catches OFF-TOPIC + WRONG-VOICE + GENERIC replies that
+    # are clean but bad for the channel. When the judge scores below
+    # 0.85, we downgrade `confidence` so the existing
+    # `classify_reply_action` routes the reply to review queue instead
+    # of auto-posting. Default off for safe shadow rollout per the
+    # established opt-in pattern (Levers C, K).
+    judge_reason = ""
+    if os.environ.get("GENLAB_REPLY_CRITIC_ENABLED", "0") == "1":
+        try:
+            judge_score, judge_reason = engine.validate_reply(
+                comment=comment_text,
+                reply=reply,
+                platform=platform,
+                post_context=post_context,
+            )
+            # Multiplicative downgrade: if judge says 0.5, halve
+            # confidence. Threshold 0.85 in classify_reply_action means
+            # judge < 0.85 reliably forces routing to review.
+            confidence = min(confidence, judge_score)
+            logger.info(
+                "Engagement: reply-critic judged %s → score=%.2f reason=%r "
+                "(downgraded confidence to %.2f)",
+                comment_id,
+                judge_score,
+                judge_reason[:60],
+                confidence,
+            )
+        except Exception as exc:  # noqa: BLE001 — never block on critic
+            # Critic failure must NOT halt the engagement pipeline.
+            # Log and continue with the heuristic confidence.
+            logger.warning(
+                "Engagement: reply-critic raised for %s (using heuristic confidence): %s",
+                comment_id,
+                exc,
+            )
+
     action = classify_reply_action(reply_text=reply, confidence=confidence, toxicity=outbound_tox)
     logger.info(
         "Engagement: classify %s → %s (confidence=%.2f, inbound_tox=%.2f, "
