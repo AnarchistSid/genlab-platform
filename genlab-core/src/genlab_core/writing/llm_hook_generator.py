@@ -410,6 +410,23 @@ def generate_hook(
             f"\n\nTOP PERFORMING HOOKS (match this energy and specificity):\n{examples_text}\n"
         )
 
+    # 2026-06-22 episodic RAG — surface recent operator rejection
+    # patterns. PR #461 wires operator_review events with
+    # feedback_issue (weak_hook, too_generic, etc.); this RAG layer
+    # queries that signal and injects a "avoid these patterns" block
+    # into the prompt. Fail-OPEN: empty string when no data / DB
+    # error / no rejections in window — the prompt is unchanged in
+    # those cases so this can ship even before episodic_events
+    # accumulates per-niche data.
+    try:
+        from genlab_core.learning.rejection_rag import get_recent_rejection_context
+
+        rag_context = get_recent_rejection_context(niche_id)
+        if rag_context:
+            system += "\n\n" + rag_context + "\n"
+    except Exception as exc:  # noqa: BLE001 — RAG is augmentation only
+        logger.debug("[%s] rejection RAG failed (continuing without): %s", niche_id, exc)
+
     user = f"Story: {title}\nSummary: {summary}" + used_text
 
     # Generate 3 candidates and pick the best
