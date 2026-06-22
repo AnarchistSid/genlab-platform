@@ -125,17 +125,28 @@ class ElevenLabsTTS:
             from elevenlabs import VoiceSettings, save
             from elevenlabs.client import ElevenLabs
 
+            # 2026-06-22 SDK migration: the ``elevenlabs`` client's old
+            # top-level ``.generate(...)`` was removed; the new API is
+            # ``client.text_to_speech.convert(voice_id=..., model_id=...,
+            # text=..., voice_settings=..., output_format=...)``. Param
+            # names renamed: ``voice`` → ``voice_id``, ``model`` →
+            # ``model_id``. Returns an ``Iterator[bytes]`` which ``save``
+            # still accepts unchanged. Until this migration, every
+            # pipeline silently fell through to the OpenAI/Edge-TTS/gTTS
+            # fallback cascade — operators never heard ElevenLabs-quality
+            # audio because the SDK call AttributeError'd before reaching
+            # the API.
             client = ElevenLabs(api_key=self._api_key)
-            audio = client.generate(
+            audio = client.text_to_speech.convert(
+                voice_id=self.voice_id,
                 text=text,
-                voice=self.voice_id,
                 voice_settings=VoiceSettings(
                     stability=self.stability,
                     similarity_boost=self.similarity_boost,
                     style=self.style,
                     use_speaker_boost=True,
                 ),
-                model=self.model,
+                model_id=self.model,
                 output_format=self.output_format,
             )
             save(audio, str(output_path))
