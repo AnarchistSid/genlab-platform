@@ -50,14 +50,21 @@ REPAIR_SCRIPT = "/opt/genlab/scripts/repair_permissions.sh"
 
 
 def _connect():
-    """Open a Postgres connection using the same tenant-context helper
-    the notifier uses. Centralizes the SET app.niche_id pattern."""
-    import psycopg
+    """Open a Postgres connection via pg_connect (sets app.niche_id GUC).
+
+    Uses ``niche_id="all"`` because permission-drift alerts are
+    cross-niche (the alert table itself is global-scope) and this
+    script's queries don't filter by niche. SR-A/C/D enforces all
+    psycopg connections route through pg_connect to maintain the
+    tenant-context contract — raw psycopg.connect fails the
+    architectural lint.
+    """
+    from genlab_core.storage.tenant_context import pg_connect
 
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(dsn, connect_timeout=10)
+    return pg_connect(dsn, connect_timeout=10, niche_id="all")
 
 
 def fetch_unresolved_drift_alerts(conn, *, lookback_hours: int = 24) -> list[dict]:
