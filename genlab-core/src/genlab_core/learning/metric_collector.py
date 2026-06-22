@@ -736,6 +736,40 @@ def process_pending_task(
             task_record.collection_status = "early_stopped"
             task_record.reward_48h = 0.0
             store.update_window(task_record, window, reward_48h=0.0)
+
+            # 2026-06-22 Loop 10 close: capture the early-stop event in
+            # episodic memory BEFORE returning. Previously the reward
+            # window emit at line ~765 was unreachable because the
+            # 6h-floor branch returned True here and the 48h window
+            # never ran. The audit found this was the dominant reason
+            # `reward_window_closed` emits were ~zero on prod despite
+            # active publishing. Treating early-stop as a distinct
+            # event (early_stopped=True, reward_48h=0.0) preserves the
+            # learning signal: a post that bombed at 6h is just as
+            # interesting for downstream RCA as one that completed.
+            try:
+                from genlab_core.learning.episodic_memory import (
+                    EVENT_REWARD_WINDOW_CLOSED,
+                    record_event,
+                )
+
+                record_event(
+                    event_type=EVENT_REWARD_WINDOW_CLOSED,
+                    niche_id=task_record.niche_id,
+                    blueprint_id=task_record.content_id,
+                    payload={
+                        "platform": task_record.platform,
+                        "platform_post_id": task_record.platform_post_id,
+                        "reward_48h": 0.0,
+                        "bandit_arm": task_record.bandit_arm or "",
+                        "early_stopped": True,
+                        "views_6h": views_6h,
+                        "floor": floor,
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001 — fail-open
+                logger.debug("[metric_collector] early-stop episodic emit failed: %s", exc)
+
             return True
 
     reward_48h: float | None = None
