@@ -1188,9 +1188,18 @@ class FetchTrendingVideos(FetcherStage):
                     )
                     conn.commit()
 
-                    # Convert to story dict format
+                    # Convert to story dict format.
+                    # 2026-06-22 fix: row["published_at"] is a datetime
+                    # (TIMESTAMPTZ column) but StoryCandidate.published_at
+                    # is typed ``str``. Pydantic v2 strict mode rejects
+                    # the type mismatch, which broke FetchTrendingVideos
+                    # for every gaming run between content_pool routing
+                    # going live + this fix. Convert to ISO-8601 here so
+                    # the downstream merge_stories validation passes.
                     stories = []
                     for row in rows:
+                        published_at = row["published_at"]
+                        published_at_iso = published_at.isoformat() if published_at else ""
                         stories.append(
                             {
                                 "title": row["title"],
@@ -1198,7 +1207,7 @@ class FetchTrendingVideos(FetcherStage):
                                 "video_url": row["video_url"] or "",
                                 "video_id": row["video_id"] or "",
                                 "description": row["summary"] or "",
-                                "published_at": row["published_at"],
+                                "published_at": published_at_iso,
                                 "duration_seconds": row["duration_seconds"] or 0,
                                 "view_count": row["view_count"] or 0,
                                 "view_velocity": row["view_velocity"] or 0,
