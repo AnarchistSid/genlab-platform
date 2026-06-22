@@ -1196,8 +1196,29 @@ class FetchTrendingVideos(FetcherStage):
                     # for every gaming run between content_pool routing
                     # going live + this fix. Convert to ISO-8601 here so
                     # the downstream merge_stories validation passes.
+                    #
+                    # 2026-06-22 second fix: ``content_pool`` schema (see
+                    # migration ``k1f2g3h4i5j6_adopt_content_pool_*``)
+                    # declares ``title``, ``source_url`` as nullable
+                    # ``TEXT``, but StoryCandidate requires non-None
+                    # strings for both. ANY content_pool row with NULL
+                    # title/source_url would crash the whole stage with
+                    # the same Pydantic ``string_type`` error as the
+                    # datetime bug. Skip such rows with a WARN instead
+                    # of dragging the entire stage down with one bad row.
                     stories = []
+                    skipped_invalid = 0
                     for row in rows:
+                        if not row.get("title") or not row.get("source_url"):
+                            skipped_invalid += 1
+                            logger.warning(
+                                "[FetchTrending:%s] content_pool row %s missing "
+                                "required title or source_url — skipping (would "
+                                "crash StoryCandidate validation)",
+                                niche_id,
+                                row.get("id", "<no_id>"),
+                            )
+                            continue
                         published_at = row["published_at"]
                         published_at_iso = published_at.isoformat() if published_at else ""
                         stories.append(
@@ -1216,6 +1237,13 @@ class FetchTrendingVideos(FetcherStage):
                                 "thumbnail_url": row["thumbnail_url"] or "",
                                 "_pool_id": str(row["id"]),
                             }
+                        )
+                    if skipped_invalid:
+                        logger.warning(
+                            "[FetchTrending:%s] skipped %d content_pool rows "
+                            "with NULL title/source_url",
+                            niche_id,
+                            skipped_invalid,
                         )
 
                     logger.info(
