@@ -1288,12 +1288,86 @@ def update_content(record_id):
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return api_error(error="No valid fields to update")
+
+    # 2026-06-22 — capture BEFORE values so we can compute the edit diff
+    # AFTER a successful update + emit EVENT_OPERATOR_EDIT to episodic
+    # memory. Operator edits are the strongest taste signal in the
+    # system (PR #468's DPO pipeline turns engagement deltas into
+    # preference pairs; operator edits add the proactive layer —
+    # the operator REWROTE this hook, here's how). Fail-OPEN on every
+    # diff/emit step: the operator's edit MUST always succeed even if
+    # episodic tracking has a hiccup.
+    before_values: dict[str, str] = {}
+    try:
+        existing = _get_client().blueprints.get(record_id)
+        fields = (existing.get("fields") or {}) if isinstance(existing, dict) else {}
+        for field_name in updates:
+            before_values[field_name] = str(fields.get(field_name) or "")
+    except Exception as exc:  # noqa: BLE001 — diff is augmentation
+        logger.debug("[blueprints] could not fetch before-values for edit diff: %s", exc)
+
     try:
         _get_client().blueprints.update(record_id, updates)
-        return api_success(data={"status": "ok", "updated_fields": list(updates.keys())})
     except Exception as e:
         logger.error("Blueprint content update failed: %s", e, exc_info=True)
         return api_error(error="Failed to update blueprint", code=500)
+
+    # Emit one episodic event per actually-changed field. Use the
+    # edit_diff primitives (genlab_core/learning/edit_diff.py) for
+    # operation classification + distance ratio so the payload shape
+    # matches what future DPO consumers expect.
+    try:
+        from genlab_core.learning.edit_diff import (
+            OPERATION_UNCHANGED,
+            classify_edit,
+            compute_edit_distance_ratio,
+        )
+        from genlab_core.learning.episodic_memory import EVENT_OPERATOR_EDIT, record_event
+
+        # Niche resolution — best-effort from the just-fetched record
+        niche_id = ""
+        try:
+            existing = _get_client().blueprints.get(record_id)
+            niche_id = str(
+                ((existing.get("fields") or {}).get("niche_id") or "")
+                if isinstance(existing, dict)
+                else ""
+            )
+        except Exception:  # noqa: BLE001 — niche_id is augmentation
+            pass
+
+        for field_name, after_value in updates.items():
+            before = before_values.get(field_name, "")
+            after_str = str(after_value or "")
+            operation = classify_edit(before, after_str)
+            if operation == OPERATION_UNCHANGED:
+                # No actual change (operator clicked save without
+                # editing). Skip — emitting unchanged events would
+                # pollute the episodic stream.
+                continue
+            ratio = compute_edit_distance_ratio(before, after_str)
+            record_event(
+                event_type=EVENT_OPERATOR_EDIT,
+                niche_id=niche_id,
+                blueprint_id=record_id,
+                payload={
+                    "field": field_name,
+                    "operation": operation,
+                    "edit_distance_ratio": round(ratio, 3),
+                    "before_chars": len(before),
+                    "after_chars": len(after_str),
+                    "char_delta": len(after_str) - len(before),
+                    # Store the actual before/after text for DPO + RAG
+                    # consumers. Truncated at 2KB per field to bound
+                    # payload size.
+                    "before": before[:2048],
+                    "after": after_str[:2048],
+                },
+            )
+    except Exception as exc:  # noqa: BLE001 — episodic emit must never block edit
+        logger.debug("[blueprints] operator_edit episodic emit skipped: %s", exc)
+
+    return api_success(data={"status": "ok", "updated_fields": list(updates.keys())})
 
 
 # ── Health check ──────────────────────────────────────────────────
