@@ -1784,6 +1784,12 @@ class PushToBacklog:
                         "relevance_score",
                         "composite_score",
                         "score",
+                        # 2026-06-22 Loop 2 close: forward hook classifier
+                        # score from base_hooks.py (Lever D1, PR #420) so
+                        # auto_approval_gate can read it. Without this copy
+                        # the score was set on story dict but discarded at
+                        # the blueprint boundary — zero downstream readers.
+                        "hook_classifier_score",
                     ):
                         if story.get(ctx_key) is not None:
                             fields[ctx_key] = story[ctx_key]
@@ -1964,6 +1970,9 @@ class PushToBacklog:
                                     "composite_score": fields.get("composite_score"),
                                     "virality_score": fields.get("virality_score"),
                                     "validation_status": fields.get("validation_status"),
+                                    # Loop 2 close (2026-06-22) — see same-name
+                                    # comment in ctx_key copy block above.
+                                    "hook_classifier_score": fields.get("hook_classifier_score"),
                                 },
                             }
                             _decision = _aag_evaluate(_synth)

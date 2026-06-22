@@ -277,6 +277,45 @@ def evaluate(
         )
         confidences.append(virality / min_virality_score * 0.5)
 
+    # ── 6. Hook classifier score (soft signal) ────────────────────────
+    # 2026-06-22 Loop 2 close: Lever D1 (PR #420) activated the XGBoost
+    # hook classifier in BaseHookStrategy — every hook now gets a
+    # [0,1] predicted-engagement score. PR #420 set the score on the
+    # story dict but no consumer read it. This 6th check turns the
+    # score into a SOFT signal feeding the gate's confidence aggregate:
+    #
+    #   - missing: cold-start tolerant — NO contribution to confidence
+    #     aggregate (preserves pre-Lever-D1 confidence math). Many
+    #     in-flight blueprints predate the wire; their confidence
+    #     scores must remain unchanged so historical thresholds still
+    #     apply identically.
+    #   - >= 0.5: passing — score contributes positively to confidence
+    #   - < 0.5: still passing (not a hard reject — score is noisy)
+    #     but contributes the raw score as confidence (low score drags
+    #     the average toward reject without forcing failed_checks).
+    #
+    # Intentional design: NEVER fails the gate on its own — the
+    # classifier is high-recall, low-precision and a hard reject
+    # would over-suppress good hooks the model under-rates. The
+    # signal flows through the confidence aggregate where it
+    # competes with composite + virality.
+    hook_clf = _to_float(extra.get("hook_classifier_score"))
+    if hook_clf is None:
+        reasons.append("hook_classifier_score missing (no contribution)")
+        # Intentionally NO append to confidences — see docstring above.
+    else:
+        clamped = max(0.0, min(1.0, hook_clf))
+        if clamped >= 0.5:
+            passed.append("hook_classifier_score")
+            reasons.append(f"hook_classifier_score={clamped:.2f} ≥ 0.50 (predicted strong)")
+        else:
+            # NOT added to failed_checks — soft signal only. The low
+            # score just drags the confidence average.
+            reasons.append(
+                f"hook_classifier_score={clamped:.2f} < 0.50 (predicted weak, soft signal)"
+            )
+        confidences.append(clamped)
+
     # ── Aggregate confidence ──────────────────────────────────────────
     # Average across the per-score confidences. Empty list means no
     # numeric signals were available — fall back to 0.5 (neutral prior).
