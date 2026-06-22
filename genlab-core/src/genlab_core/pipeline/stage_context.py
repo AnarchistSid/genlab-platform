@@ -78,6 +78,11 @@ class StageContext(TypedDict, total=False):
     run_stats: dict[str, Any]
     feature_flags: dict[str, bool]
     niche_config: dict[str, Any]
+    # 2026-06-22 — working memory for within-run cross-stage
+    # coordination. See ``genlab_core/pipeline/reasoning_trace.py``
+    # for the append_trace helper. List of
+    # {stage, decision, confidence, reasons, entity_id, metadata}.
+    reasoning_trace: list[dict[str, Any]]
 
     # ── Populated by specific stages (each stage that uses one is
     #    responsible for setting it on the way through) ──────────────

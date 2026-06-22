@@ -237,4 +237,29 @@ class VideoGate:
             "passed": passed,
             "skipped": skipped,
         }
+
+        # 2026-06-22 — working memory trace. Emit a stage-summary
+        # entry so downstream stages (composer + push_to_backlog +
+        # auto_approval_gate) can detect "video gate dropped most
+        # stories this run" and adjust their own confidence. A high
+        # drop rate is a soft warning even when the surviving stories
+        # individually pass the gate.
+        from genlab_core.pipeline.reasoning_trace import append_trace
+
+        total = passed + skipped
+        drop_rate = (skipped / total) if total > 0 else 0.0
+        confidence = max(0.0, 1.0 - drop_rate)  # 100% drop = 0 conf
+        decision = "warning" if drop_rate >= 0.5 else "info"
+        append_trace(
+            context,
+            stage="VideoGate",
+            decision=decision,
+            confidence=confidence,
+            reasons=[f"passed={passed}, skipped={skipped}, drop_rate={drop_rate:.0%}"],
+            metadata={
+                "passed": passed,
+                "skipped": skipped,
+                "drop_rate": round(drop_rate, 3),
+            },
+        )
         return context
