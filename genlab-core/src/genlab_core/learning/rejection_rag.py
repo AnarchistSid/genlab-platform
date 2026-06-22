@@ -110,20 +110,15 @@ def get_recent_rejection_context(
         return ""
 
     try:
-        import psycopg
+        from genlab_core.storage.tenant_context import pg_connect
 
         dsn = os.environ["DATABASE_URL"]
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        # pg_connect sets `app.niche_id` GUC automatically + satisfies
+        # SR-A/C/D (raw psycopg.connect fails the architectural lint).
+        # episodic_events lives behind RLS keyed on app.niche_id, so
+        # passing niche_id here is what makes the SELECT visible.
+        with pg_connect(dsn, connect_timeout=5, niche_id=niche_id) as conn:
             with conn.cursor() as cur:
-                # SET RLS niche context — episodic_events lives behind
-                # the same RLS as the rest of the per-tenant tables;
-                # the RAG query is read-only but still needs the
-                # session var set so the policy permits the SELECT.
-                # See genlab_core.storage.tenant_context.pg_connect
-                # for the full pattern; this module deliberately
-                # connects directly (no pool, single-query) to keep
-                # the dependency surface minimal.
-                cur.execute("SET app.niche_id TO %s", (niche_id,))
                 cur.execute(
                     """
                     SELECT
@@ -140,7 +135,7 @@ def get_recent_rejection_context(
                     ORDER BY n DESC
                     LIMIT %s
                     """,
-                    (niche_id, window_days, max_categories),
+                    (niche_id, window_days, max_categories),  # noqa: E501
                 )
                 rows = cur.fetchall()
     except Exception as exc:  # noqa: BLE001 — RAG is augmentation only
