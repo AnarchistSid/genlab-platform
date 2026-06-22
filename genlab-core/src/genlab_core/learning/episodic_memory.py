@@ -454,6 +454,94 @@ class PostgresBackend:
             return []
 
 
+# ─── Module-level emit helper (callable from any code path) ──────────
+#
+# Pattern: emit sites do ``record_event(event_type=..., niche_id=...,
+# blueprint_id=..., payload=...)`` and don't think about backend
+# construction. The helper lazy-instantiates a module-level
+# PostgresBackend on first call + reuses it for the process lifetime.
+#
+# Fail-quiet contract preserved: any storage / pool / network error
+# is absorbed by PostgresBackend.record itself. The helper adds an
+# extra catch around the helper-side logic (event construction, etc.)
+# so a caller-side bug NEVER blocks the agent's main work.
+#
+# When DATABASE_URL is unset (local dev, tests without Postgres), the
+# backend's pool init fails fast + record() no-ops. No env flag needed
+# — the DATABASE_URL presence IS the natural on/off switch.
+
+_DEFAULT_BACKEND: Any = None
+
+
+def _get_default_backend() -> Any:
+    """Return the lazy-init module-level PostgresBackend, or None.
+
+    Returns None only if PostgresBackend import itself fails. Otherwise
+    a backend instance — even one whose pool init will fail at first
+    use (DATABASE_URL unset) — because that backend handles its own
+    no-op contract.
+    """
+    global _DEFAULT_BACKEND
+    if _DEFAULT_BACKEND is None:
+        try:
+            _DEFAULT_BACKEND = PostgresBackend()
+        except Exception:  # noqa: BLE001 — never block on init
+            return None
+    return _DEFAULT_BACKEND
+
+
+def record_event(
+    *,
+    event_type: str,
+    niche_id: str,
+    blueprint_id: str = "",
+    payload: dict[str, Any] | None = None,
+    when: datetime | None = None,
+) -> None:
+    """Module-level emit helper. Fire-and-forget; never blocks caller.
+
+    Builds an EpisodicEvent + records via the shared default backend.
+    Any exception (event construction, backend lookup, storage error)
+    is caught and logged at debug. Returns None always.
+
+    Typical usage::
+
+        from genlab_core.learning.episodic_memory import (
+            EVENT_POST_BOMBED, record_event,
+        )
+        record_event(
+            event_type=EVENT_POST_BOMBED,
+            niche_id=niche_id,
+            blueprint_id=blueprint_id,
+            payload={"reward_48h": reward, "threshold": threshold},
+        )
+
+    No env flag — when DATABASE_URL is unset, PostgresBackend silently
+    no-ops, so this helper degrades correctly for local dev / tests.
+    """
+    try:
+        backend = _get_default_backend()
+        if backend is None:
+            return
+        event = new_event(
+            event_type=event_type,
+            niche_id=niche_id,
+            blueprint_id=blueprint_id,
+            payload=payload,
+            when=when,
+        )
+        backend.record(event)
+    except Exception as exc:  # noqa: BLE001 — fire-and-forget
+        logger.debug("[episodic_memory] record_event helper error: %s", exc)
+
+
+def _reset_default_backend_for_tests() -> None:
+    """Test hook: clear the cached default backend so monkeypatched
+    PostgresBackend mocks take effect."""
+    global _DEFAULT_BACKEND
+    _DEFAULT_BACKEND = None
+
+
 if __name__ == "__main__":
     import argparse
 
