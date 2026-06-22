@@ -73,8 +73,20 @@ export function useFocusReviewQueue() {
   };
 
   const reviewMutation = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { action: string; issue?: string; notes?: string } }) =>
-      blueprints.reviewAction(id, body),
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      // 2026-06-22 Loop 7 close: review_duration_ms is the operator's
+      // dwell time (submitTime - loadTime), required so the backend can
+      // record it on auto_approval_calibration. PR #423 shipped the
+      // backend column + reader on 2026-06-21 but the frontend never
+      // wired the field — prod probe found 0/203 calibration rows had
+      // dwell time populated. Required (not optional) so the wire is
+      // unmissable in PRs that touch this call site.
+      body: { action: string; issue?: string; notes?: string; review_duration_ms: number };
+    }) => blueprints.reviewAction(id, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.blueprints.all() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.crossNiche.all() });
