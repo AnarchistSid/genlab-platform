@@ -364,6 +364,36 @@ class AffiliateMatch:
             }
             return context
 
+        # 2026-06-22 audit fix: per-niche affiliate disable. The audit
+        # found that 4 of 5 niches (gaming/sports/anime/ai_creators)
+        # had 12-19x worse affiliate click-through than movies because
+        # of viewer-intent mismatch (Ronaldo trailer → Fitness Tracker
+        # was a real produced reel). Until each niche has a per-reel-
+        # specific catalog, operators can disable affiliate matching
+        # entirely for poor-fit niches via:
+        #   niches:
+        #     gaming:
+        #       affiliate_enabled: false
+        #       products: [...]
+        # Default ``true`` preserves backward compat. False → stage
+        # short-circuits with skipped=len(stories) and no affiliate
+        # fields written to any story.
+        niche_cfg = (catalog.get("niches") or {}).get(niche_id) or {}
+        if niche_cfg.get("affiliate_enabled", True) is False:
+            logger.info(
+                "[AffiliateMatch] niche=%s has affiliate_enabled=false — "
+                "skipping affiliate matching for all %d stories",
+                niche_id,
+                len(stories),
+            )
+            context.setdefault("run_stats", {})["affiliate"] = {
+                "matched": 0,
+                "skipped": len(stories),
+                "cap_enforced": 0,
+                "disabled_by_niche": True,
+            }
+            return context
+
         # Load seasonal config once for the whole run
         try:
             seasonal_config = load_seasonal_config(self._seasonal_config_path)
