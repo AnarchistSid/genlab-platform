@@ -1,0 +1,38 @@
+[Unit]
+Description=GenLab Agent Memory Scratchpad — weekly Opus reflection
+After=network-online.target postgresql.service
+
+# Surface unit failures to the dashboard CriticalAlertsBanner
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-22 — weekly cross-run reflection. Reads past 7 days of
+# episodic_events + asks Opus 4.7 (1M context) to identify patterns +
+# write actionable markdown to /opt/genlab/.tmp/agent_memory.md.
+#
+# The hook generator + (future) gate judge prepend this markdown to
+# their system prompts so each new generation has "what we learned
+# this week" context.
+#
+# Cost: 1 Opus call per week × ~\$0.50/call = ~\$2/month. Worth the
+# spend — this is the only Gen Lab decision surface that genuinely
+# benefits from Opus's full reasoning + 1M context.
+#
+# Schedule rationale (see .timer): runs Sunday 02:00 UTC, BEFORE the
+# preference-collector (04:00 UTC) and dpo-export (05:30 UTC) +
+# AFTER the gate-tuner (01:00 UTC). The hook generator's next
+# Monday-morning fire reads the freshly-generated scratchpad.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.learning.scratchpad
+TimeoutSec=600
+# Always exits 0 (fallback markdown is a valid output); no
+# SuccessExitStatus override needed.
+
+[Install]
+WantedBy=multi-user.target

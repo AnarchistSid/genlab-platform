@@ -359,6 +359,22 @@ def generate_hook(
             + "\n".join(f"  - {h}" for h in list(used_hooks)[-15:])
         )
 
+    # 2026-06-22 — agent-memory scratchpad. Weekly Opus reflection
+    # over the past 7 days of episodic_events writes actionable
+    # markdown to .tmp/agent_memory.md. We prepend it to the system
+    # prompt so the LLM has "what we learned this week" context
+    # before applying the principles below. Fail-OPEN: missing file
+    # = empty string = no prepend, hook generation proceeds as before.
+    try:
+        from genlab_core.learning.scratchpad import read_scratchpad
+
+        scratchpad = read_scratchpad()
+    except Exception:  # noqa: BLE001 — scratchpad is augmentation
+        scratchpad = ""
+    scratchpad_block = (
+        f"## Recent learnings (scratchpad)\n\n{scratchpad}\n\n---\n\n" if scratchpad else ""
+    )
+
     # 2026-06-22 — Constitutional AI principles. Five explicit rules
     # the LLM self-verifies against during generation. Per Anthropic's
     # Constitutional AI paper (Bai et al. 2023), an explicit principle
@@ -394,6 +410,7 @@ def generate_hook(
         f"You write viral hooks for {style['account']}, a short-form video brand.\n"
         f"Voice: {style['voice']}\n"
         f"Audience: {style['audience']}\n\n"
+        + scratchpad_block
         + constitution
         + "A hook is the text overlay on a trending video reel. It must:\n"
         "- Be 20-60 characters (aim for 40-50)\n"
