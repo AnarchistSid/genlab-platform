@@ -475,6 +475,21 @@ export function FocusMode() {
     feedbackOpenRef.current = feedbackAction !== null;
   }, [feedbackAction]);
 
+  // 2026-06-22 Loop 7 (dwell time) — stamp the moment the operator
+  // first SEES the current blueprint. Reset every time the displayed
+  // blueprint changes so dwell time always reflects time spent on the
+  // currently-visible item, not time since the page first loaded.
+  // Backend (calibration_logger.py:194-209) clamps values outside
+  // [0, 3_600_000] ms to NULL so we don't need to guard tab-switch /
+  // long-idle cases here — the worst that happens is the row writes
+  // NULL for dwell_ms, which is the cold-start no-signal value.
+  const loadTimeRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentItem?.id) {
+      loadTimeRef.current = Date.now();
+    }
+  }, [currentItem?.id]);
+
   // Resolve niche-specific DetailView. Note: ``DetailView`` here SELECTS
   // an existing top-level component from the niche registry — it does
   // NOT define a new component (which is what react-hooks/static-components
@@ -494,7 +509,20 @@ export function FocusMode() {
       // off the item. Guarding the single chokepoint covers every entry point.
       if (reviewMutation.isPending) return;
 
-      const body: { action: string; issue?: string; notes?: string } = { action };
+      // 2026-06-22 Loop 7 close — compute dwell time from the load
+      // stamp. If loadTimeRef somehow lost its value (race with effect
+      // mount), fall back to 0 so the row records 0 rather than a
+      // negative or absurd value. Math.max guards clock skew.
+      const submitTime = Date.now();
+      const loadTime = loadTimeRef.current ?? submitTime;
+      const review_duration_ms = Math.max(0, submitTime - loadTime);
+
+      const body: {
+        action: string;
+        issue?: string;
+        notes?: string;
+        review_duration_ms: number;
+      } = { action, review_duration_ms };
       if (issue) body.issue = issue;
       if (notes?.trim()) body.notes = notes.trim();
 
