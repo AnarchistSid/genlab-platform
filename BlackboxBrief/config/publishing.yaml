@@ -44,7 +44,33 @@
 #                       → disables for ALL niches; operator panic button
 
 auto_publish:
-  enabled: false
+  # 2026-06-22 DRAFT PR — ready-to-flip state for ai_creators AUTO #2
+  # enforcement. This PR is held in GitHub Draft state until the
+  # calibration data justifies the flip (per the prerequisites
+  # documented above). The Draft state is the safety knob: merging
+  # the PR does the flip, so the PR cannot be merged accidentally.
+  #
+  # Prerequisites to mark Ready-for-Review (NOT to merge):
+  #   1. /api/v1/auto-approval/calibration-stats?niche_id=ai_creators
+  #      returns sample_count ≥ 25 (best: ≥30) AND agreement_rate ≥ 0.90
+  #   2. gate_tuner has run at least once since 2026-06-22
+  #      (/opt/genlab/.tmp/gate_overrides.json modified-time after deploy)
+  #   3. Operator has reviewed last 5 ai_creators blueprints and the
+  #      gate's verdict matched theirs on all 5 (sanity spot-check)
+  #
+  # The ramp ladder (rollout_pct values per week):
+  #   Week 1 (this PR): 0.1   → ~10% of qualifying blueprints auto-approve
+  #   Week 2 PR:        0.25  → 25% if confusion matrix still holds
+  #   Week 3 PR:        0.5   → 50%
+  #   Week 4 PR:        1.0   → full traffic
+  # NEVER skip steps in this ladder. Each week's PR validates the prior.
+  #
+  # Kill switches if auto-approvals turn bad after merge:
+  #   - rollout_pct: 0.0  → blocks all for this niche (revert PR)
+  #   - enabled: false    → soft disable (revert PR)
+  #   - GENLAB_AUTO_APPROVE_DISABLED=1 in /opt/genlab/.env → global kill
+  #   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
+  enabled: true
   min_confidence: 0.85
   max_approvals_per_pass: 3
-  # rollout_pct: 1.0  # W4.3, default — uncomment + ramp when enabling
+  rollout_pct: 0.1  # Week 1 conservative; next PR ramps to 0.25
