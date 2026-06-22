@@ -1,0 +1,44 @@
+[Unit]
+Description=GenLab Gate Tuner — nightly auto-approval threshold tuning
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-22 — closes the calibration feedback loop (Lever A, PR #417).
+#
+# Background: PR #417 shipped `genlab_core.learning.gate_tuner` which
+# reads the per-niche confusion matrix from `auto_approval_calibration`
+# (filled by every operator review action) and computes new gate
+# threshold overrides (composite_score + virality_score) using small
+# ±0.02 steps. The output writes to `.tmp/gate_overrides.json` which
+# `auto_approval_gate.evaluate()` reads on every blueprint preview.
+#
+# Without this timer, the tuner was CLI-only — calibration data
+# accumulated forever but the gate's thresholds never self-corrected.
+# As of 2026-06-22 audit: `/opt/genlab/.tmp/gate_overrides.json` did
+# NOT exist on prod, confirming the tuner had never run in production
+# despite calibration data flowing since 2026-06-13.
+#
+# Schedule rationale (see .timer file): runs at 01:00 UTC nightly —
+# BEFORE the 06:00 UTC auto-approver first-fire and BEFORE the
+# 06:30 UTC publish window. Fresh thresholds available at start of
+# operator's IST day (06:30 IST = 01:00 UTC).
+#
+# Safety knobs (ALL of these protect against runaway tuning):
+#   1. The tuner refuses to act on niches with <30 samples (cold-start)
+#   2. Step size capped at ±0.02 per run (convergence not jumps)
+#   3. Output is fail-open: missing JSON → evaluate() uses defaults
+#   4. JSON write is atomic (temp file + rename) to prevent corruption
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.learning.gate_tuner
+TimeoutSec=300
+# Single-shot — no restart-on-failure. If the tuner crashes, the
+# next nightly fire will catch up.
+
+[Install]
+WantedBy=multi-user.target
