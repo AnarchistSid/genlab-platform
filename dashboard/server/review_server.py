@@ -1051,6 +1051,42 @@ def _execute_review_action(
     except Exception as _ev_exc:  # noqa: BLE001 — never block review
         logger.debug("[dashboard-events] skipped (non-fatal): %s", _ev_exc)
 
+    # 2026-06-22 Loop 10 close: emit operator_review to episodic_events.
+    # Distinct from dashboard_events above — the episodic stream feeds
+    # long-running learning systems (RCA, prompt tuning, calibration)
+    # that need a uniform per-niche event log. dashboard_events is
+    # operator-facing notifications (Mission Control feed); this is
+    # learning-facing structured signal. Both fire on every review.
+    #
+    # Payload includes the categorical reason + dwell time so the same
+    # row that calibration captures is reachable from the episodic
+    # cross-niche queries (find "operators reject weak_hook fast across
+    # all niches" without joining 3 tables).
+    #
+    # Best-effort + fail-open via record_event's own try/except.
+    try:
+        from genlab_core.learning.episodic_memory import (
+            EVENT_OPERATOR_REVIEW,
+            record_event,
+        )
+
+        record_event(
+            event_type=EVENT_OPERATOR_REVIEW,
+            niche_id=_niche if "_niche" in locals() else "",
+            blueprint_id=record_id,
+            payload={
+                "action": action,
+                "feedback_issue": feedback_issue or "",
+                "review_duration_ms": review_duration_ms,
+                "gate_approved": bool(_decision.approved) if "_decision" in locals() else None,
+                "gate_confidence": (
+                    float(_decision.confidence) if "_decision" in locals() else None
+                ),
+            },
+        )
+    except Exception as _ep_exc:  # noqa: BLE001 — never block review
+        logger.debug("[episodic] operator_review emit skipped (non-fatal): %s", _ep_exc)
+
     return update_fields
 
 
