@@ -238,28 +238,46 @@ class VideoGate:
             "skipped": skipped,
         }
 
-        # 2026-06-22 — working memory trace. Emit a stage-summary
-        # entry so downstream stages (composer + push_to_backlog +
-        # auto_approval_gate) can detect "video gate dropped most
-        # stories this run" and adjust their own confidence. A high
-        # drop rate is a soft warning even when the surviving stories
-        # individually pass the gate.
+        # 2026-06-22 — VideoGate writes to BOTH sinks (sibling PRs
+        # landed together as Month-1 Week-1 trio). They serve different
+        # timelines + consumers:
+        #
+        # 1. reasoning_trace (in-memory, within-run) → consumed
+        #    immediately by next stage / auto_approval_gate
+        # 2. decision_traces (on-disk JSONL, within-run audit log) →
+        #    consumed by debug + offline analysis. Operators query via:
+        #    cat <run_dir>/decision_traces.jsonl | jq '.stage=="VideoGate"'
+        #
+        # Both record the SAME logical decision; the dual-write is
+        # intentional. Same shape (stage, decision, confidence, reasons,
+        # metadata) so consumers don't have to translate.
+        from genlab_core.observability.decision_trace import record_decision
         from genlab_core.pipeline.reasoning_trace import append_trace
 
         total = passed + skipped
         drop_rate = (skipped / total) if total > 0 else 0.0
         confidence = max(0.0, 1.0 - drop_rate)  # 100% drop = 0 conf
         decision = "warning" if drop_rate >= 0.5 else "info"
+        reasons_line = f"passed={passed}, skipped={skipped}, drop_rate={drop_rate:.0%}"
+        metadata = {
+            "passed": passed,
+            "skipped": skipped,
+            "drop_rate": round(drop_rate, 3),
+        }
         append_trace(
             context,
             stage="VideoGate",
             decision=decision,
             confidence=confidence,
-            reasons=[f"passed={passed}, skipped={skipped}, drop_rate={drop_rate:.0%}"],
-            metadata={
-                "passed": passed,
-                "skipped": skipped,
-                "drop_rate": round(drop_rate, 3),
-            },
+            reasons=[reasons_line],
+            metadata=metadata,
+        )
+        record_decision(
+            context,
+            stage="VideoGate",
+            decision=decision,
+            reason=reasons_line,
+            confidence=confidence,
+            metadata=metadata,
         )
         return context
