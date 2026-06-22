@@ -250,6 +250,86 @@ def _reset_linucb_degradation_for_tests() -> None:
     _linucb_context_degradation.clear()
 
 
+# Lever O wire (2026-06-22): per-niche bomb threshold for the
+# underperformance trigger. These are SHAPED-reward values (post-
+# RewardShaper), not raw engagement rates — calibrated from observed
+# avg_reward across the 5 niches. ``is_underperforming(reward, threshold)``
+# fires when reward falls ≥30% below threshold (e.g. gaming threshold
+# 0.10 → bomb signal when reward_48h < 0.07). Tunable per-niche when
+# operators see real bomb-rate telemetry; future PR makes these YAML-
+# driven config.
+_NICHE_REWARD_BOMB_THRESHOLD: dict[str, float] = {
+    "gaming": 0.10,
+    "sports": 0.08,
+    "movies": 0.06,
+    "anime": 0.12,
+    "ai_creators": 0.06,
+}
+_DEFAULT_REWARD_BOMB_THRESHOLD: float = 0.05
+
+
+def _get_reward_bomb_threshold(niche_id: str) -> float:
+    """Return the per-niche bomb threshold or the default fallback.
+
+    Pure function. Centralizes the lookup so test fixtures + future
+    YAML loader can override one place.
+    """
+    return _NICHE_REWARD_BOMB_THRESHOLD.get(niche_id, _DEFAULT_REWARD_BOMB_THRESHOLD)
+
+
+def _check_post_bomb_signal(
+    *,
+    niche_id: str,
+    blueprint_id: str,
+    platform: str,
+    reward_48h: float,
+) -> bool:
+    """Detect post-bomb signal at the 48h reward window.
+
+    Returns True when:
+    - ``GENLAB_POST_RCA_ENABLED=1`` (opt-in)
+    - ``is_underperforming(reward_48h, niche_threshold)`` fires
+      (post fell ≥30% below the per-niche shaped-reward threshold)
+
+    Emits a WARN log on every detected bomb — operators grep these
+    to count bomb rate per niche per week. The full LLM RCA call
+    (``post_rca.analyze_post``) is deferred to a future PR that has
+    the per-niche winners + bombed-post-field lookup helpers built.
+
+    Fail-quiet on any import or runtime error so this NEVER blocks
+    the bandit update path that runs immediately after.
+    """
+    try:
+        from genlab_core.learning.post_rca import is_underperforming
+    except ImportError:
+        return False
+
+    # Opt-in env flag check. post_rca.analyze_post has the same check
+    # inline (for direct callers), but we duplicate it here so we don't
+    # even pay the is_underperforming computation when disabled.
+    import os
+
+    if os.environ.get("GENLAB_POST_RCA_ENABLED", "0") != "1":
+        return False
+
+    threshold = _get_reward_bomb_threshold(niche_id)
+    if not is_underperforming(reward_48h, threshold):
+        return False
+
+    miss_pct = ((threshold - reward_48h) / threshold) * 100 if threshold > 0 else 0
+    logger.warning(
+        "[post_rca] bomb signal: niche=%s bp=%s platform=%s reward_48h=%.3f "
+        "(threshold=%.3f, %.0f%% below)",
+        niche_id,
+        blueprint_id,
+        platform,
+        reward_48h,
+        threshold,
+        miss_pct,
+    )
+    return True
+
+
 def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
     """Return channel-level metrics from the monetisationprogress table.
 
@@ -511,6 +591,24 @@ def process_pending_task(
             task_record.platform_post_id,
             reward_48h,
         )
+
+        # Lever O wire (2026-06-22): underperformance detection. When
+        # ``GENLAB_POST_RCA_ENABLED=1``, check if the 48h reward fell
+        # ≥30% below the per-niche bomb threshold and emit a WARN log
+        # operators can grep for. The full ``analyze_post`` LLM call
+        # is gated on having per-niche winners + baseline lookups
+        # (separate PR) — for now THIS wire ships the trigger detection
+        # so operators get visibility into bomb rate per niche per run.
+        # Fail-open: any error here NEVER blocks the bandit update.
+        try:
+            _check_post_bomb_signal(
+                niche_id=task_record.niche_id,
+                blueprint_id=task_record.content_id,
+                platform=task_record.platform,
+                reward_48h=reward_48h,
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.debug("[metric_collector] post-bomb check failed: %s", exc)
 
         # Update content bandit with the 48h reward signal.
         # The arm name is the niche-specific classified arm (e.g.
