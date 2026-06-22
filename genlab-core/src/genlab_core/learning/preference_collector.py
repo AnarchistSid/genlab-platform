@@ -228,3 +228,26 @@ def collect_weekly_pairs(window_days: int = DEFAULT_WINDOW_DAYS) -> int:
     except Exception as exc:
         logger.exception("[preference] Collection failed: %s", exc)
         return 0
+
+
+def main() -> int:
+    """CLI entry: ``python -m genlab_core.learning.preference_collector``.
+
+    Replaces the older inline -c invocation in the systemd service
+    unit. The 2026-06-22 review found the -c shape was fragile
+    (quoting issues + no clean way to pass args). The module-level
+    CLI is the canonical entry; systemd unit invokes via -m.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
+    pairs = collect_weekly_pairs()
+    print(f"Preference collector: {pairs} pairs created")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys as _sys
+
+    _sys.exit(main())
