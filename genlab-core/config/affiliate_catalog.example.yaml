@@ -2,7 +2,6 @@ settings:
   max_affiliate_posts_per_day: 3
   default_network_priority:
   - earnkaro
-  - cuelinks
   - amazon_us
   - amazon
   disclosure_text:
@@ -56,9 +55,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0DJHG2VVS?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CY5QW186%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61SUj2aKoEL._SL1500_.jpg
       price_inr: 49990
       coupons:
@@ -66,7 +62,6 @@ niches:
         discount: 10% off
         valid_until: '2026-12-31'
     - name: Xbox Game Pass Ultimate
-      evergreen_default: true
       keywords:
       - xbox
       - game pass
@@ -99,9 +94,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B07TFP7JFH?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 2.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GHJZ9QSN%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81yGTbk4cJL._SL1500_.jpg
       price_inr: 699
     - name: Razer Gaming Headset
@@ -127,9 +119,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B086PKMZ21?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0D78XSMSM%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61CGHv6kmWL._SL1000_.jpg
       price_inr: 5999
     - name: Gaming Monitor 4K
@@ -182,9 +171,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FVXRZJ12?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVXRZJ12%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71i1brfkBbL._AC_SL1500_.jpg
       price_inr: 15000
     - name: Steam Deck
@@ -251,9 +237,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B086PJKVVT?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB086PJKVVT%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/51z74wV2iHL._AC_SL1500_.jpg
       price_inr: 4999
     - name: Webcam for Streaming
@@ -277,9 +260,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B01LXCDPPK?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LXCDPPK%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61lsdoyu1yL._AC_SL1500_.jpg
       price_inr: 7999
     - name: Capture Card
@@ -305,9 +285,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FFTFYGLV?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FFTFYGLV%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/51n-AAn1UBL._AC_SL1500_.jpg
       price_inr: 12999
   sports:
@@ -382,9 +359,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0C8THZHJ5?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GKY7N6VY%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71x0olWMkdL._AC_SX342_SY445_QL70_ML2_.jpg
       price_inr: 7995
       coupons:
@@ -409,7 +383,6 @@ niches:
       image_url: https://example.com/images/fancode.jpg
       price_inr: 999
     - name: Fitness Tracker
-      evergreen_default: true
       keywords:
       - fitness tracker
       - smartwatch
@@ -435,9 +408,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FVGBMH9B?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FVGBMH9B%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61SoFSyvIsL._AC_SL1000_.jpg
       price_inr: 3999
     - name: Protein Supplement
@@ -473,9 +443,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B01LP0V4JY?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB01LP0V4JY%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/7153xLfdwAL._AC_SL1500_.jpg
       price_inr: 1499
     - name: Cricket Bat
@@ -557,9 +524,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0CG6NR413?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0CG6NR413%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61A4yOWzGBL._AC_SL1500_.jpg
       price_inr: 15999
     - name: Gym Bag
@@ -578,9 +542,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FBR9ML3P?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FBR9ML3P%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81eu29zjzpL._AC_SL1500_.jpg
       price_inr: 1999
   movies:
@@ -602,7 +563,6 @@ niches:
       image_url: https://m.media-amazon.com/images/I/51BU2adIfsL._SL1500_.jpg
       price_inr: 649
     - name: Amazon Prime Video
-      evergreen_default: true
       keywords:
       - prime video
       - amazon prime
@@ -660,9 +620,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FHBKCSNB?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DV3R2QM6%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61DUO0NqyyL._SL1000_.jpg
       price_inr: 24999
       coupons:
@@ -691,9 +648,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0F832HNG4?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F832HNG4%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71lu-a3Ld0L._AC_SL1500_.jpg
       price_inr: 45000
     - name: Streaming Stick
@@ -719,9 +673,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B09BKCDXZC?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09BKCDXZC%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81xr+BrYBwL._AC_SL1500_.jpg
       price_inr: 3999
     - name: Wireless Earbuds
@@ -741,9 +692,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FHWGB7FW?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FHWGB7FW%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71sWRy5QxIL._AC_SL1500_.jpg
       price_inr: 7999
     - name: Smart TV 55 inch
@@ -763,9 +711,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0DW3YPBL1?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DW3YPBL1%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81-jxVhtlrL._AC_SL1500_.jpg
       price_inr: 35000
     - name: Blu-ray Player
@@ -785,9 +730,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0G29HRZYF?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G29HRZYF%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/51KlkOmTEvL._AC_SL1500_.jpg
       price_inr: 15000
     - name: Popcorn Maker
@@ -805,9 +747,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0DRCZQYHW?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DRCZQYHW%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61PvUFOLVoL._AC_SL1500_.jpg
       price_inr: 1999
     - name: JioHotstar
@@ -863,13 +802,9 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/1421560747?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1569319014%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/91NxYvUNf6L._SL1500_.jpg
       price_inr: 4999
     - name: Anime Figure Collection
-      evergreen_default: true
       keywords:
       - figure
       - figurine
@@ -927,9 +862,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FPBJX1R6?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DBFCVNC3%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/6124DoY4M+L._SL1200_.jpg
       price_inr: 2499
     - name: Drawing Tablet
@@ -951,9 +883,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B009EOLFA2?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB009EOLFA2%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/51HGkqKcR-L._AC_SL1500_.jpg
       price_inr: 8999
     - name: Anime Hoodie
@@ -978,9 +907,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0F9N5B6Z9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0F9N5B6Z9%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71HKfMVhQ3L._AC_SL1500_.jpg
       price_inr: 1999
     - name: Manga Subscription Box
@@ -1019,9 +945,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0FRXPCN9G?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0FRXPCN9G%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/810d9tRiOFL._AC_SL1500_.jpg
       price_inr: 999
     - name: Cosplay Accessories
@@ -1059,9 +982,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/1646092724?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2F1646092724%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/916EuMaqYNL._SL1500_.jpg
       price_inr: 3499
     - name: Funko Pop Anime
@@ -1080,9 +1000,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B09HN5JFW9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.5
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB09HN5JFW9%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61uhh0jZIQL._AC_SL1300_.jpg
       price_inr: 999
   ai_creators:
@@ -1148,9 +1065,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0BHD9TS9Q?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BHD9TS9Q%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81SmwFXiirL._SL1500_.jpg
       price_inr: 159900
     - name: AI Microphone
@@ -1175,9 +1089,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0BXPFNNF9?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0BXPFNNF9%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71QclY4ig4L._AC_SL1500_.jpg
       price_inr: 5999
     - name: Ring Light
@@ -1196,9 +1107,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0DCSHSSFF?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DCSHSSFF%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61FeV2kuB7L._AC_SL1500_.jpg
       price_inr: 2499
     - name: Green Screen
@@ -1216,9 +1124,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0G58979LS?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0G58979LS%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/61i5eTZnhtL._AC_SL1500_.jpg
       price_inr: 1999
     - name: Coding Keyboard
@@ -1245,9 +1150,6 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0DF7Y1NZD?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0DF7Y1NZD%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81s5PDK7OBL._AC_SL1500_.jpg
       price_inr: 8999
     - name: AI Course Bundle
@@ -1297,13 +1199,9 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B095GG31KX?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 3.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB095GG31KX%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/71k5N-RKVgL._AC_SL1500_.jpg
       price_inr: 12999
     - name: Claude Pro Subscription
-      evergreen_default: true
       keywords:
       - claude
       - anthropic
@@ -1319,8 +1217,5 @@ niches:
         amazon_us:
           url: https://www.amazon.com/dp/B0GSRSRYSH?tag=${AMAZON_US_AFFILIATE_TAG}
           commission_pct: 4.0
-        cuelinks:
-          url: https://linksredirect.com/?cid=${CUELINKS_PUBLISHER_ID}&source=linkkit&url=https%3A%2F%2Fwww.amazon.in%2Fdp%2FB0GSRSRYSH%3Ftag%3D%24%7BAMAZON_IN_AFFILIATE_TAG%7D
-          commission_pct: 7.0
       image_url: https://m.media-amazon.com/images/I/81MCJnvo2KL._SL1500_.jpg
       price_inr: 1680
