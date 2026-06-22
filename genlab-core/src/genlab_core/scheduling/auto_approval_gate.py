@@ -479,12 +479,36 @@ def _llm_judge_borderline(
         from genlab_core.cost.decision_router import route_decision
 
         model = route_decision("gate_judge", confidence=rule_decision.confidence)
+
+        # 2026-06-22 — scratchpad context. The weekly Opus reflection
+        # (PR #474) synthesizes 7 days of operator reviews + edits +
+        # bombed posts into actionable markdown. Prepending it to the
+        # judge's system prompt gives borderline-confidence decisions
+        # the same "what we learned this week" context the hook
+        # generator has. Fail-OPEN: missing scratchpad = empty string
+        # = no prepend, judge proceeds with stock prompt.
+        try:
+            from genlab_core.learning.scratchpad import read_scratchpad
+
+            scratchpad = read_scratchpad()
+        except Exception:  # noqa: BLE001 — scratchpad is augmentation
+            scratchpad = ""
+        if scratchpad:
+            judge_system = (
+                "## Recent learnings (scratchpad)\n\n"
+                + scratchpad
+                + "\n\n---\n\n"
+                + _LLM_JUDGE_SYSTEM_PROMPT
+            )
+        else:
+            judge_system = _LLM_JUDGE_SYSTEM_PROMPT
+
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model=model,
             max_tokens=80,
             temperature=0.0,  # Deterministic verdict for the same inputs
-            system=_LLM_JUDGE_SYSTEM_PROMPT,
+            system=judge_system,
             messages=[{"role": "user", "content": signals}],
         )
 
