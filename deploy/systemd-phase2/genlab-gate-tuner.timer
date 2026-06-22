@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Gate Tuner Timer — nightly threshold adaptation
+
+[Timer]
+# 01:00 UTC = 06:30 IST = before operator's morning + before the
+# 06:00 UTC auto-approver first-fire + before the 06:30 UTC publish
+# window. Fresh thresholds applied at start of each day's
+# decision-making.
+OnCalendar=*-*-* 01:00:00 UTC
+# Catch up on missed fires after reboot — tuner is idempotent and
+# a missed night just means one day of unchanged thresholds.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
