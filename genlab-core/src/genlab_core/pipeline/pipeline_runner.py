@@ -310,6 +310,15 @@ class GenericPipelineRunner:
                 "run_stats": ctx.run_stats,
                 "feature_flags": ctx.feature_flags,
                 "niche_config": ctx.niche_config,
+                # 2026-06-22 — working memory for within-run cross-
+                # stage coordination. Stages append via
+                # ``reasoning_trace.append_trace(context, ...)``;
+                # downstream consumers (auto_approval_gate at push
+                # time) read via ``get_warnings`` /
+                # ``has_low_confidence_decision``. Empty list by
+                # default so stages can safely .append without
+                # coordinating initialization.
+                "reasoning_trace": [],
             }
 
             # R-66: instantiate the metrics collector and thread it into the
