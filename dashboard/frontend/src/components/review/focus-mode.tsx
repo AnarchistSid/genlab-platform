@@ -418,8 +418,17 @@ function FeedbackForm({
         {config.label} — Add feedback
       </p>
 
+      {/* 2026-06-22 Loop 8 close — feedback_category is now REQUIRED
+          for Reject/Revise so calibration_logger captures the operator's
+          categorical reason every time. Backend (PR #424) has been
+          collecting the field since 2026-06-21 but 0 rows were
+          populated on prod because the dropdown was skippable. The
+          asterisk + disabled-Confirm enforce a meaningful choice. */}
+      <label className="mb-1 block text-xs font-medium text-text-secondary">
+        Why? <span className="text-red-400">*</span>
+      </label>
       <Select value={issue} onValueChange={(val) => setIssue(val as IssueValue)}>
-        <SelectTrigger size="sm" className="w-full">
+        <SelectTrigger size="sm" className="w-full" aria-required="true">
           <SelectValue placeholder="Select an issue..." />
         </SelectTrigger>
         <SelectContent>
@@ -446,9 +455,10 @@ function FeedbackForm({
         <Button
           size="sm"
           onClick={() => onSubmit(issue, notes)}
-          disabled={isPending}
+          disabled={isPending || !issue}
           className="text-white"
           style={{ background: config.colorVar }}
+          title={!issue ? "Select an issue above to enable" : undefined}
         >
           {isPending && <Loader2 className="size-3.5 animate-spin" />}
           Confirm {config.label}

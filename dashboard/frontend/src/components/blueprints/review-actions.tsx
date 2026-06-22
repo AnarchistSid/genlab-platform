@@ -146,11 +146,19 @@ export function ReviewActions({ blueprintId, onComplete }: ReviewActionsProps) {
       {/* Feedback form (shown for reject/revise) */}
       {pendingAction && ACTION_CONFIG[pendingAction].needsFeedback && (
         <div className="space-y-2 rounded-lg border border-bg-hover bg-bg-surface p-3">
+          {/* 2026-06-22 Loop 8 close — issue is REQUIRED so the
+              backend's auto_approval_calibration.feedback_category
+              column actually fills (was 0 rows on prod despite PR
+              #424 shipping backend the day before). The asterisk +
+              disabled-Confirm enforce a categorical choice. */}
+          <label className="mb-1 block text-xs font-medium text-text-secondary">
+            Why? <span className="text-red-400">*</span>
+          </label>
           <Select
             value={issue}
             onValueChange={(val) => setIssue(val as IssueValue)}
           >
-            <SelectTrigger size="sm" className="w-full">
+            <SelectTrigger size="sm" className="w-full" aria-required="true">
               <SelectValue placeholder="Select an issue..." />
             </SelectTrigger>
             <SelectContent>
@@ -181,8 +189,9 @@ export function ReviewActions({ blueprintId, onComplete }: ReviewActionsProps) {
             <Button
               size="xs"
               onClick={() => handleAction(pendingAction)}
-              disabled={reviewMutation.isPending}
+              disabled={reviewMutation.isPending || !issue}
               className={ACTION_CONFIG[pendingAction].className}
+              title={!issue ? "Select an issue above to enable" : undefined}
             >
               {reviewMutation.isPending ? (
                 <Loader2 className="size-3 animate-spin" />
