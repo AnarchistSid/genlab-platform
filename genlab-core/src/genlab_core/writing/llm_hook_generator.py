@@ -359,11 +359,43 @@ def generate_hook(
             + "\n".join(f"  - {h}" for h in list(used_hooks)[-15:])
         )
 
+    # 2026-06-22 — Constitutional AI principles. Five explicit rules
+    # the LLM self-verifies against during generation. Per Anthropic's
+    # Constitutional AI paper (Bai et al. 2023), an explicit principle
+    # block at the top of the system prompt reduces violations vs.
+    # principles only in scattered constraints below. The principles
+    # consolidate what was already implied by ANTI-FABRICATION + BANNED
+    # phrases + length rules into a single visible contract.
+    #
+    # No new LLM call — these are added context to the existing
+    # hook-generation call. Cost delta: ~5% prompt tokens, negligible.
+    # Compounds with Lever K (hook critic) which is a SEPARATE LLM call
+    # AFTER generation; this is INSIDE the generation prompt.
+    constitution = (
+        "CONSTITUTION (self-verify your hook against these 5 principles "
+        "before answering — if any are violated, rewrite):\n"
+        "1. GROUNDED: every proper noun in the hook appears in the "
+        "Story title or Summary. No invented names, sequels, studios, "
+        "or franchise associations.\n"
+        "2. SPECIFIC: the hook references something concrete from the "
+        "story (a name, score, date, or unique detail). Generic claims "
+        '("amazing", "incredible") without specifics fail.\n'
+        "3. ON-NICHE: the hook uses vocabulary your audience expects "
+        f"({style['audience']}). Cross-niche jargon (sports terms in "
+        "anime hooks, gaming slang in news hooks) breaks trust.\n"
+        "4. ANSWERABLE (if question): if you ask a question, the video "
+        "must contain the answer. Rhetorical questions that promise "
+        "nothing are bait. Skip them.\n"
+        "5. DEFENSIBLE (if claim): if you make a claim ('first', 'best', "
+        "'never'), the video must support it. Unsupported superlatives "
+        "are content debt.\n\n"
+    )
     system = (
         f"You write viral hooks for {style['account']}, a short-form video brand.\n"
         f"Voice: {style['voice']}\n"
         f"Audience: {style['audience']}\n\n"
-        "A hook is the text overlay on a trending video reel. It must:\n"
+        + constitution
+        + "A hook is the text overlay on a trending video reel. It must:\n"
         "- Be 20-60 characters (aim for 40-50)\n"
         "- Reference something SPECIFIC from the story (a name, team, title, event)\n"
         "- Create curiosity or emotional reaction\n"
