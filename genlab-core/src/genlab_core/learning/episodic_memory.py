@@ -50,6 +50,7 @@ Run via:
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Final, Protocol, runtime_checkable
@@ -280,8 +281,9 @@ def summarize_events(events: list[EpisodicEvent]) -> dict[str, Any]:
 class InMemoryBackend:
     """Test-only backend — keeps events in a Python list.
 
-    NOT for production. Concrete production backend (Postgres-backed)
-    is a follow-up PR with the ``episodic_events`` table migration.
+    NOT for production. The production backend (PostgresBackend below)
+    persists durably via the ``episodic_events`` table (migration
+    ``y5t6u7v8w9x0``).
 
     Implements the ``EpisodicBackend`` Protocol so callers can swap
     backends without touching call sites. The Protocol is verified
@@ -299,6 +301,157 @@ class InMemoryBackend:
 
     def __len__(self) -> int:
         return len(self._events)
+
+
+# Module-level Postgres pool for the backend. Lazy-init pattern mirrors
+# ``metric_collector._get_pg_pool`` so two modules share connection-
+# count budget within one process.
+_PG_POOL: Any = None  # None=uninit, False=tried+unavailable, else ConnectionPool
+
+
+def _get_pg_pool() -> Any:
+    """Lazy-init a module-level Postgres ConnectionPool for episodic
+    events. Returns None when DATABASE_URL is unset or pool creation
+    failed — backend falls back to no-op so missing-Postgres envs
+    (tests, dev, SharePoint-only legacy) still work.
+    """
+    global _PG_POOL
+    if _PG_POOL is False:
+        return None
+    if _PG_POOL is not None:
+        return _PG_POOL
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if not db_url:
+        _PG_POOL = False
+        return None
+    try:
+        from psycopg_pool import ConnectionPool
+
+        _PG_POOL = ConnectionPool(
+            db_url,
+            min_size=1,
+            max_size=4,
+            open=True,
+        )
+        return _PG_POOL
+    except Exception as exc:  # noqa: BLE001 — defensive on dep-missing
+        logger.debug("[episodic_memory] pool init failed: %s", exc)
+        _PG_POOL = False
+        return None
+
+
+class PostgresBackend:
+    """Production backend for episodic events.
+
+    Persists to the ``episodic_events`` table (migration
+    ``y5t6u7v8w9x0``). Satisfies the ``EpisodicBackend`` Protocol via
+    duck typing.
+
+    Fail-quiet contract: if Postgres is unavailable (no DATABASE_URL,
+    pool init failed, query failed mid-call), ``record`` silently
+    no-ops and ``query`` returns ``[]``. The agent's emit calls never
+    block on storage hiccups.
+
+    Thread-safe via the shared module-level ConnectionPool. Caller
+    instantiation is cheap — no per-instance state beyond the
+    optional ``niche_id`` for RLS tenant context.
+    """
+
+    def __init__(self, niche_id: str = "") -> None:
+        # niche_id reserved for future RLS scope; harmless when unset
+        # because filter_events still receives full DSN-level view
+        self._niche_id = niche_id
+
+    def record(self, event: EpisodicEvent) -> None:
+        """Insert one event. Fail-quiet on any storage error."""
+        pool = _get_pg_pool()
+        if pool is None:
+            return
+        try:
+            import json as _json
+
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO episodic_events
+                            (event_type, niche_id, blueprint_id,
+                             "timestamp", payload)
+                        VALUES (%s, %s, %s, %s, %s::jsonb)
+                        """,
+                        (
+                            event.event_type,
+                            event.niche_id,
+                            event.blueprint_id or None,
+                            event.timestamp,
+                            _json.dumps(event.payload or {}),
+                        ),
+                    )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.debug("[episodic_memory] record failed: %s", exc)
+
+    def query(self, **filters: Any) -> list[EpisodicEvent]:
+        """Query events from Postgres + apply filter_events semantics.
+
+        Hot path: dashboards reading "last N events for niche X". Pulls
+        a reasonable upper bound from Postgres, then delegates to
+        ``filter_events`` for the in-process filter logic — keeps the
+        SQL simple + reuses the well-tested pure-function filter.
+
+        Returns ``[]`` on any storage failure.
+        """
+        pool = _get_pg_pool()
+        if pool is None:
+            return []
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Pull recent rows. Niche filter pushed to SQL when
+                    # provided; date filters intentionally NOT pushed
+                    # so filter_events stays the single source of
+                    # filter truth (no SQL/Python skew).
+                    niche_id = filters.get("niche_id")
+                    if niche_id is not None:
+                        cur.execute(
+                            """
+                            SELECT event_type, niche_id, blueprint_id,
+                                   "timestamp", payload
+                            FROM episodic_events
+                            WHERE niche_id = %s
+                            ORDER BY "timestamp" DESC
+                            LIMIT 5000
+                            """,
+                            (niche_id,),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            SELECT event_type, niche_id, blueprint_id,
+                                   "timestamp", payload
+                            FROM episodic_events
+                            ORDER BY "timestamp" DESC
+                            LIMIT 5000
+                            """
+                        )
+                    rows = cur.fetchall()
+
+            events = [
+                EpisodicEvent(
+                    event_type=str(r[0]),
+                    niche_id=str(r[1]),
+                    blueprint_id=str(r[2] or ""),
+                    timestamp=(r[3].isoformat() if hasattr(r[3], "isoformat") else str(r[3])),
+                    payload=dict(r[4]) if isinstance(r[4], dict) else {},
+                )
+                for r in rows
+            ]
+            # Apply the rest of the filters (event_type / since / until /
+            # limit) via the pure-function filter for consistency with
+            # InMemoryBackend.
+            return filter_events(events, **filters)
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.debug("[episodic_memory] query failed: %s", exc)
+            return []
 
 
 if __name__ == "__main__":
