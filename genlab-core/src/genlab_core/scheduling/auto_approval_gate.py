@@ -469,9 +469,19 @@ def _llm_judge_borderline(
             f"Rule-based confidence: {rule_decision.confidence:.2f}\n"
         )
 
+        # 2026-06-22 — route via DecisionRouter so borderline-confidence
+        # decisions (0.4-0.6 band) escalate from Haiku to Sonnet
+        # automatically. This is the highest-stakes LLM call in the
+        # pipeline (the gate's verdict ships content); the extra
+        # reasoning capacity is worth the ~15x cost on the ~20% of
+        # blueprints that actually need it. Decisions outside the
+        # escalation band stay on Haiku (most of the volume).
+        from genlab_core.cost.decision_router import route_decision
+
+        model = route_decision("gate_judge", confidence=rule_decision.confidence)
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=model,
             max_tokens=80,
             temperature=0.0,  # Deterministic verdict for the same inputs
             system=_LLM_JUDGE_SYSTEM_PROMPT,
@@ -482,7 +492,7 @@ def _llm_judge_borderline(
         try:
             from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
 
-            record_anthropic_usage("claude-haiku-4-5-20251001", response)
+            record_anthropic_usage(model, response)
         except Exception:
             pass  # Cost tracking failures MUST NOT block the judge
 
