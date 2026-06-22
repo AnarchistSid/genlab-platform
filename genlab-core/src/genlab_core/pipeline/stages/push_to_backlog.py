@@ -1568,6 +1568,30 @@ class PushToBacklog:
                 experiment_assignment_id=candidate_id,
             )
 
+            # Lever R1 emit (2026-06-22): record the bandit pick for
+            # future episodic-memory queries. Captures the niche + the
+            # pre-blueprint candidate_id + the chosen arm so a later
+            # LLM-as-judge can answer "show me the last week of gaming
+            # arm picks". Fire-and-forget — no-op without DATABASE_URL.
+            try:
+                from genlab_core.learning.episodic_memory import (
+                    EVENT_BANDIT_PICK,
+                    record_event,
+                )
+
+                record_event(
+                    event_type=EVENT_BANDIT_PICK,
+                    niche_id=niche_id,
+                    blueprint_id=candidate_id,
+                    payload={
+                        "arm_id": arm_id,
+                        "experiment_active": bool(active_experiment),
+                        "linucb_enabled": linucb_arms is not None and linucb_context is not None,
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001 — fail-open
+                logger.debug("[PUSH] episodic bandit_pick emit failed: %s", exc)
+
             # Cross-run hook dedup: exact + fuzzy (Jaccard similarity > 0.6)
             if hook:
                 hook_lower = hook.strip().lower()

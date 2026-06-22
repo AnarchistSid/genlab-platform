@@ -432,6 +432,28 @@ def _check_post_bomb_signal(
         miss_pct,
     )
 
+    # Lever R1 emit: record the bomb event for future episodic-memory
+    # queries ("show me last week's bombs in gaming"). Fire-and-forget.
+    try:
+        from genlab_core.learning.episodic_memory import (
+            EVENT_POST_BOMBED,
+            record_event,
+        )
+
+        record_event(
+            event_type=EVENT_POST_BOMBED,
+            niche_id=niche_id,
+            blueprint_id=blueprint_id,
+            payload={
+                "platform": platform,
+                "reward_48h": reward_48h,
+                "threshold": threshold,
+                "miss_pct": round(miss_pct, 1),
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug("[post_rca] episodic emit failed: %s", exc)
+
     # Full RCA invocation (Lever O full wire). Fetches niche baseline
     # + winners + bombed-post fields, then calls analyze_post for the
     # LLM verdict. Best-effort — RCA failure NEVER downgrades the
@@ -730,6 +752,29 @@ def process_pending_task(
             task_record.platform_post_id,
             reward_48h,
         )
+
+        # Lever R1 emit (2026-06-22): record that the 48h reward window
+        # finalized for this post. Fire-and-forget — fails silently
+        # when DATABASE_URL is unset (e.g. tests, SharePoint-only mode).
+        try:
+            from genlab_core.learning.episodic_memory import (
+                EVENT_REWARD_WINDOW_CLOSED,
+                record_event,
+            )
+
+            record_event(
+                event_type=EVENT_REWARD_WINDOW_CLOSED,
+                niche_id=task_record.niche_id,
+                blueprint_id=task_record.content_id,
+                payload={
+                    "platform": task_record.platform,
+                    "platform_post_id": task_record.platform_post_id,
+                    "reward_48h": reward_48h,
+                    "bandit_arm": task_record.bandit_arm or "",
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.debug("[metric_collector] episodic emit failed: %s", exc)
 
         # Lever O wire (2026-06-22): underperformance detection. When
         # ``GENLAB_POST_RCA_ENABLED=1``, check if the 48h reward fell
