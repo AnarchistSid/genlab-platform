@@ -1,0 +1,29 @@
+[Unit]
+Description=GenLab DPO Preference-Pair Export (JSONL for fine-tune training)
+After=network-online.target genlab-preference-collector.service
+
+# Surface unit failures to dashboard CriticalAlertsBanner
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-22 — exports preference_data rows where used_in_training=false
+# to a daily JSONL file at $GENLAB_PROJECT_ROOT/.tmp/dpo/.
+#
+# The pairs are populated weekly by genlab-preference-collector.timer
+# (Sundays 09:30 IST); this exporter fires Sundays 11:00 IST so it
+# runs ~1.5h AFTER the collector commits new rows.
+#
+# Output is consumed by future fine-tune infra (not yet shipped):
+# read JSONL → DPO train Haiku → canary eval → promote.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.learning.dpo_export
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target

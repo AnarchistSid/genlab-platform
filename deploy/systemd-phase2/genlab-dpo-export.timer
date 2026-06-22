@@ -1,0 +1,16 @@
+[Unit]
+Description=GenLab DPO Export Timer (weekly, after preference-collector)
+
+[Timer]
+# Sunday 11:00 IST = 05:30 UTC. The sibling preference-collector
+# fires at 09:30 IST = 04:00 UTC; the 1.5h offset gives the collector
+# enough time to commit + ensures the exporter sees the freshly-
+# populated rows in the same Sunday's run.
+OnCalendar=Sun *-*-* 05:30:00 UTC
+# Catch up on missed fires after reboot — exporter is idempotent
+# (used_in_training flag prevents re-export) so missed runs catch up
+# without duplication.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
