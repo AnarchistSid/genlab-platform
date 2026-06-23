@@ -271,6 +271,28 @@ def test_all_4_templatized_niches_produce_24_stage_pipeline(
         == "abort"
     )
 
+    # PR #503 (2026-06-23): filter/gate/mutator stages also abort.
+    # VideoGate sets ``_skip_llm`` on clipless stories AND drops them
+    # from ``context["stories"]``; PreDownloadDedup drops dedup-rejected
+    # stories; QCGates filters on validation. A mid-loop crash with the
+    # default ``fail_mode=continue`` would leave the unset flags / partial
+    # drops to silently fail open. The 2026-06-23 outage (PR #499) was
+    # exactly this shape — VideoGate crashed on ``story_id=None``, no
+    # _skip_llm was set, render burned 6 min producing 0 blueprints.
+    assert by_cls["genlab_core.pipeline.stages.video_gate.VideoGate"].get("fail_mode") == "abort", (
+        f"{niche_id} VideoGate must fail_mode=abort (PR #503 — prevents silent partial gate failures)"
+    )
+    assert by_cls["genlab_core.pipeline.stages.qc_gates.QCGates"].get("fail_mode") == "abort", (
+        f"{niche_id} QCGates must fail_mode=abort (PR #503 — same reasoning as VideoGate)"
+    )
+    assert (
+        by_cls["genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup"].get("fail_mode")
+        == "abort"
+    ), (
+        f"{niche_id} PreDownloadDedup must fail_mode=abort "
+        "(PR #503 — drops dedup-rejected stories; partial drop on crash is unsafe)"
+    )
+
 
 def test_clutchwire_real_niche_yaml_matches_pre_p4_stages() -> None:
     """The real ClutchWire niche.yaml (migrated to use the template) must
@@ -325,4 +347,37 @@ def test_clutchwire_real_niche_yaml_matches_pre_p4_stages() -> None:
             "parallel_group"
         )
         == "post_render"
+    )
+
+
+def test_gaming_explicit_pipeline_has_filter_gate_fail_mode_abort() -> None:
+    """Gaming has its own explicit pipeline (not template-merged) — pin
+    fail_mode=abort on VideoGate + QCGates separately.
+
+    PR #503 (2026-06-23) follow-up to the 2026-06-23 outage: the same
+    silent-partial-failure prevention reasoning applies to gaming, but
+    its niche.yaml is structurally distinct from the other 4 niches
+    (CriticalRush owns its pipeline runner). PreDownloadDedup is
+    deliberately EXCLUDED from gaming (see niche.yaml:85 — gaming's
+    recurring game-page URLs would block all clips); the URL-dedup TTL
+    work (PR #500 + #501) replaced the need for the pre-download check.
+    """
+    import yaml
+
+    cfg = yaml.safe_load(
+        (
+            Path(__file__).resolve().parents[2] / "CriticalRush/niches/gaming/config/niche.yaml"
+        ).read_text()
+    )
+    by_cls = {s["class"]: s for s in cfg["pipeline"]["stages"]}
+    assert by_cls["genlab_core.pipeline.stages.video_gate.VideoGate"].get("fail_mode") == "abort", (
+        "gaming VideoGate must fail_mode=abort (PR #503)"
+    )
+    assert by_cls["genlab_core.pipeline.stages.qc_gates.QCGates"].get("fail_mode") == "abort", (
+        "gaming QCGates must fail_mode=abort (PR #503)"
+    )
+    # Gaming does NOT use PreDownloadDedup — pin that this design
+    # decision persists (niche.yaml:85 explains why).
+    assert "genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup" not in by_cls, (
+        "gaming must NOT use PreDownloadDedup — see niche.yaml:85"
     )

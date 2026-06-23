@@ -95,6 +95,15 @@ pipeline:
       retry_delay_seconds: 15
     - class: niches.gaming.stages.score_gaming_clips.ScoreGamingClips
     - class: genlab_core.pipeline.stages.video_gate.VideoGate
+      # 2026-06-23 (PR #503): VideoGate's job is to MUTATE downstream
+      # state (sets ``_skip_llm`` on clipless stories + drops them from
+      # the active list). The 2026-06-23 outage was VideoGate crashing
+      # on ``story_id=None`` mid-loop with fail_mode=continue — the
+      # unset _skip_llm flag let clipless stories flow to render, which
+      # burned 6 minutes producing 0 blueprints. Abort surfaces the
+      # crash directly. Same reasoning is encoded in the shared
+      # pipeline_template.yaml for the other 4 niches.
+      fail_mode: abort
 
     # Phase 2: Content generation (migrated to shared path — Sprint 69)
     - class: niches.gaming.stages.gaming_writing.GamingWritingStrategy
@@ -108,6 +117,11 @@ pipeline:
 
     # Phase 3: Quality gates
     - class: genlab_core.pipeline.stages.qc_gates.QCGates
+      # 2026-06-23 (PR #503): same filter-stage abort reasoning as
+      # VideoGate above — QC failures should surface, not silently let
+      # unvalidated stories through to render. Matches the shared
+      # pipeline_template.yaml for the other 4 niches.
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
 
     # Phase 4: Rendering
