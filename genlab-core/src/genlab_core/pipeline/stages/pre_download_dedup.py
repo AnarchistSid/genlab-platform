@@ -61,13 +61,16 @@ def _is_within_url_ttl(bp: dict, cutoff: datetime | None) -> bool:
     contributing to the dedup set, letting today's "Overwatch" run
     re-publish if the last "Overwatch" was >cutoff days ago.
 
-    Missing or unparseable dates → keep in dedup set (conservative —
-    don't risk re-publishing unknown-age content).
+    ``created_at`` lookup order: top-level key (Postgres backend since
+    2026-06-23 PR #501) → fields dict (legacy JSON backend + test
+    fixtures). Missing or unparseable dates → keep in dedup set
+    (conservative — don't risk re-publishing unknown-age content).
     """
     if cutoff is None:
         return True
-    fields = bp.get("fields", bp)
-    created = fields.get("created_at")
+    created = bp.get("created_at")
+    if not created:
+        created = bp.get("fields", bp).get("created_at")
     if not created:
         return True
     if isinstance(created, str):
