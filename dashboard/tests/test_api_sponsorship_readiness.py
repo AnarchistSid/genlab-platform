@@ -44,6 +44,23 @@ def _reset_cache(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _stub_transition_detector(monkeypatch):
+    """PR II: readiness endpoint now calls record_tier_transitions
+    (which opens a real Postgres connection). Stub to no-op so tests
+    don't pay the 5s connect_timeout per invocation. Individual
+    transition-detection tests can override via re-patching."""
+    monkeypatch.setattr(
+        "server.core.tier_transition_detector.record_tier_transitions",
+        lambda *a, **kw: [],
+    )
+    monkeypatch.setattr(
+        "server.core.tier_transition_detector.fetch_recent_transitions",
+        lambda **kw: [],
+    )
+    yield
+
+
 @pytest.fixture
 def client():
     app.config["TESTING"] = True

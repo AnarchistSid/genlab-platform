@@ -43,7 +43,7 @@ import logging
 import time as _time
 from typing import Any
 
-from flask import Blueprint
+from flask import Blueprint, request
 
 from server.core.monetisation_progress_pg import fetch_progress as _pg_fetch_progress
 from server.core.responses import api_error, api_success
@@ -235,4 +235,83 @@ def sponsorship_readiness():
             "platforms": platforms_summary,
         }
 
+    # PR II (2026-06-23): tier-transition detection happens here as a
+    # write-side side-effect — when the readiness endpoint runs (every
+    # 60s from the dashboard), compute current tier per niche and
+    # compare to the last-known tier from tier_history. New transitions
+    # get appended; existing tiers are no-ops. Fully fail-OPEN: any
+    # error in detection doesn't change the readiness response.
+    #
+    # The READ side is a separate endpoint
+    # (``/api/v1/sponsorship/recent-transitions``) so this response's
+    # back-compat shape is preserved. Frontend SponsorshipReadinessCard
+    # gets its tier badges from this endpoint and its "recent activity"
+    # surface from the sibling endpoint — separation of concerns.
+    try:
+        from server.core.tier_transition_detector import record_tier_transitions
+
+        record_tier_transitions(
+            {
+                nid: {
+                    "tier": data["tier"],
+                    "nearest_threshold_days": data["nearest_threshold_days"],
+                }
+                for nid, data in out.items()
+            }
+        )
+    except Exception as exc:
+        logger.debug("[sponsorship_readiness] transition detection failed: %s", exc)
+
     return api_success(data=out)
+
+
+@bp.route("/recent-transitions")
+def recent_transitions():
+    """Return recent tier transitions for the dashboard's surface.
+
+    Query params:
+        window_hours: int, default 24
+
+    Response::
+
+        {
+          "window_hours": 24,
+          "transitions": [
+            {
+              "niche_id": "ai_creators",
+              "tier": "eligible_now",
+              "prev_tier": "within_2_months",
+              "nearest_threshold_days": 0,
+              "observed_at": "2026-06-23T10:42:00+00:00"
+            },
+            ...  // ordered DESC by observed_at, max 100
+          ]
+        }
+
+    Always returns 200 — empty transitions list when no recent
+    activity OR when the underlying read fails (cold-start / DSN
+    unset / pg error). Read failures debug-log; never surface as
+    a 500 because this endpoint is a passive dashboard surface,
+    not a critical write path.
+    """
+    try:
+        window_hours = int(request.args.get("window_hours") or "24")
+    except (TypeError, ValueError):
+        window_hours = 24
+    # Clamp to a sensible range
+    window_hours = max(1, min(window_hours, 168))  # 1 hour .. 7 days
+
+    try:
+        from server.core.tier_transition_detector import fetch_recent_transitions
+
+        transitions = fetch_recent_transitions(window_hours=window_hours)
+    except Exception as exc:
+        logger.debug("[recent_transitions] read failed: %s", exc)
+        transitions = []
+
+    return api_success(
+        data={
+            "window_hours": window_hours,
+            "transitions": transitions,
+        }
+    )
