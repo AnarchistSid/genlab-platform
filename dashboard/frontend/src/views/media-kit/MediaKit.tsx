@@ -289,7 +289,34 @@ function TopPostRow({ post }: { post: MediaKitTopPost }) {
       })
     : "";
   return (
-    <li className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+    <li className="flex items-center gap-3 border-b border-slate-100 pb-2">
+      {/* PR GG: YouTube thumbnails. Other platforms render a small
+          colored placeholder square so the row layout stays
+          consistent (asymmetric thumbnail availability but
+          symmetric layout). */}
+      {post.thumbnail_url ? (
+        <a
+          href={post.post_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0"
+          title={`Open this ${post.platform} post in a new tab`}
+        >
+          <img
+            src={post.thumbnail_url}
+            alt={`${post.platform} post thumbnail`}
+            className="w-20 h-12 object-cover rounded border border-slate-200"
+            loading="lazy"
+          />
+        </a>
+      ) : (
+        <div
+          className="shrink-0 w-20 h-12 rounded border border-slate-200 bg-slate-100 flex items-center justify-center text-[10px] uppercase text-slate-500 font-medium"
+          title={`No thumbnail derivable for ${post.platform}`}
+        >
+          {post.platform}
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <a
           href={post.post_url}
@@ -301,11 +328,11 @@ function TopPostRow({ post }: { post: MediaKitTopPost }) {
           {post.platform}
         </a>
         <span className="text-slate-500 text-xs ml-2">{date}</span>
-      </div>
-      <div className="flex gap-3 text-xs text-slate-600 font-mono">
-        <span title="Views">{formatNumber(post.views)} views</span>
-        <span title="Likes">{formatNumber(post.likes)} likes</span>
-        <span title="Comments">{formatNumber(post.comments)} comments</span>
+        <div className="flex gap-3 text-xs text-slate-600 font-mono mt-0.5">
+          <span title="Views">{formatNumber(post.views)} views</span>
+          <span title="Likes">{formatNumber(post.likes)} likes</span>
+          <span title="Comments">{formatNumber(post.comments)} comments</span>
+        </div>
       </div>
     </li>
   );

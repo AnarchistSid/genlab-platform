@@ -80,6 +80,32 @@ _NICHE_HANDLES_TIKTOK: dict[str, str] = {
 }
 
 
+def _derive_thumbnail_url(platform: str, post_id: str) -> str | None:
+    """Return a stable public thumbnail URL for (platform, post_id), or None.
+
+    PR GG (2026-06-23): only YouTube has a thumbnail URL derivable
+    from ``post_id`` alone — ``i.ytimg.com/vi/{video_id}/maxresdefault.jpg``
+    is YouTube's documented thumbnail-by-id pattern. FB/IG/Threads/
+    TikTok/X all need Graph API or platform-specific lookups, so
+    they return None and the frontend falls back to its text-row
+    rendering for those platforms.
+
+    Asymmetric coverage is intentional — YT-only thumbnails deliver
+    80% of the visual-prequalification value at 5% of the effort
+    vs building per-platform thumbnail fetchers.
+    """
+    if not post_id:
+        return None
+    # Strip the PR #486 W3.2 ``{platform}:{id}`` prefix if present.
+    if ":" in post_id:
+        post_id = post_id.split(":", 1)[1]
+    if not post_id:
+        return None
+    if platform == "youtube":
+        return f"https://i.ytimg.com/vi/{post_id}/maxresdefault.jpg"
+    return None
+
+
 def _derive_post_url(platform: str, post_id: str, niche_id: str | None = None) -> str | None:
     """Return the public URL for a (platform, post_id) pair, or None.
 
@@ -198,6 +224,10 @@ def fetch_top_posts(
                 "platform": platform,
                 "post_id": post_id,
                 "post_url": url,
+                # PR GG: thumbnail_url is None for non-YT platforms
+                # (Graph API required). Frontend renders thumbnail when
+                # present, text-row fallback when None.
+                "thumbnail_url": _derive_thumbnail_url(platform, post_id or ""),
                 "published_at": published_at.isoformat() if published_at else None,
                 "views": int(views or 0),
                 "likes": int(likes or 0),

@@ -603,6 +603,64 @@ class TestTopPostsURLDerivation:
         assert _derive_post_url("youtube", "youtube:") is None
 
 
+class TestThumbnailURLDerivation:
+    """PR GG (2026-06-23): YouTube thumbnail URLs derivable from
+    post_id alone. Other platforms return None — frontend uses a
+    text-row fallback."""
+
+    def test_youtube_thumbnail_url_shape(self):
+        from server.core.top_posts_pg import _derive_thumbnail_url
+
+        url = _derive_thumbnail_url("youtube", "dQw4w9WgXcQ")
+        assert url == "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+
+    def test_youtube_thumbnail_strips_platform_prefix(self):
+        """Pin: PR #486 W3.2 ``{platform}:{id}`` prefix is stripped
+        before building the thumbnail URL — same hygiene as
+        _derive_post_url."""
+        from server.core.top_posts_pg import _derive_thumbnail_url
+
+        url = _derive_thumbnail_url("youtube", "youtube:dQw4w9WgXcQ")
+        assert url == "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+
+    @pytest.mark.parametrize(
+        "platform", ["facebook", "x_twitter", "twitter", "threads", "tiktok", "instagram"]
+    )
+    def test_non_youtube_thumbnail_returns_none(self, platform):
+        """Pin: all non-YT platforms return None for thumbnail (Graph
+        API required). Frontend handles None with a text-row fallback."""
+        from server.core.top_posts_pg import _derive_thumbnail_url
+
+        assert _derive_thumbnail_url(platform, "any_post_id") is None
+
+    def test_empty_post_id_returns_none(self):
+        from server.core.top_posts_pg import _derive_thumbnail_url
+
+        assert _derive_thumbnail_url("youtube", "") is None
+        assert _derive_thumbnail_url("youtube", "youtube:") is None
+
+
+class TestThumbnailSourceWire:
+    """PR GG (2026-06-23) — source-level pin that fetch_top_posts'
+    output dict includes the thumbnail_url field. Defends against
+    accidental field removal during future refactors."""
+
+    def test_thumbnail_url_field_in_fetch_top_posts_source(self):
+        """Pin: the fetch_top_posts response-builder includes
+        ``thumbnail_url`` in the dict. Source-level check rather
+        than runtime because the runtime path requires a Postgres
+        connection — the field-present invariant is structural."""
+        from pathlib import Path
+
+        src = (
+            Path(__file__).resolve().parents[1] / "server" / "core" / "top_posts_pg.py"
+        ).read_text()
+        # The response dict literal includes the field
+        assert '"thumbnail_url"' in src
+        # And it's populated by _derive_thumbnail_url, not hardcoded
+        assert "_derive_thumbnail_url(platform" in src
+
+
 class TestRouteCollision:
     """The portfolio route is ``/_all``. Flask routes static segments
     BEFORE dynamic ones, so ``/_all`` should match the portfolio

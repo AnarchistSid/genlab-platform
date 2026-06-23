@@ -303,9 +303,14 @@ export interface MediaKitAudienceEntry {
 export interface MediaKitTopPost {
   platform: string;
   post_id: string;
-  /** Stable public URL. Only platforms with derivable URLs (YT, FB,
-   * X at v1) appear here. */
+  /** Stable public URL. Platforms with derivable URLs: YT, FB, X,
+   * Threads, TikTok (PR #493). IG deferred to v2. */
   post_url: string;
+  /** PR GG (2026-06-23) — thumbnail URL when derivable from post_id
+   * alone. YT only at v1 (i.ytimg.com/vi/{id}/maxresdefault.jpg).
+   * Frontend renders thumbnail when present, text-row fallback
+   * when null. Other platforms need Graph API calls — deferred. */
+  thumbnail_url: string | null;
   /** ISO-8601 UTC. */
   published_at: string | null;
   views: number;
