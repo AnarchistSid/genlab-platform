@@ -256,6 +256,28 @@ export interface SponsorshipNicheReadiness {
 
 export type SponsorshipReadinessData = Record<string, SponsorshipNicheReadiness>;
 
+// ── Tier Transitions (PR #496 + PR JJ frontend, 2026-06-23) ────
+// Recent tier-change events for the SponsorshipReadinessCard's
+// "Recent activity" footer. Backend (PR #496) writes on every
+// /readiness fetch; frontend polls /recent-transitions to surface.
+
+export interface RecentTierTransition {
+  niche_id: string;
+  /** New tier the niche transitioned TO. */
+  tier: SponsorshipTier;
+  /** Prior tier; null for first-ever record for this niche. */
+  prev_tier: SponsorshipTier | null;
+  nearest_threshold_days: number | null;
+  /** ISO-8601 UTC of the transition. */
+  observed_at: string | null;
+}
+
+export interface RecentTransitionsResponse {
+  window_hours: number;
+  /** Ordered DESC by observed_at, max 100. */
+  transitions: RecentTierTransition[];
+}
+
 // ── Bandit Hour Posteriors ─────────────────────────────────
 // PR BB (2026-06-23) — Mission Control hour-heatmap card. Operator
 // feedback loop for PR #487's optimal-time bandit foundation.

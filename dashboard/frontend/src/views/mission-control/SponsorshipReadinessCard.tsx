@@ -28,9 +28,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { outreach, sponsorship } from "@/api/client";
+import { outreach, sponsorship, transitions } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
 import type {
+  RecentTierTransition,
   SponsorshipNicheReadiness,
   SponsorshipPrimaryMetric,
   SponsorshipTier,
@@ -151,6 +152,14 @@ export function SponsorshipReadinessCard() {
         )}
       </div>
 
+      {/* PR JJ (2026-06-23): Phase 2 of #496 — recent tier-transition
+          activity. Backend (PR #496) writes on every /readiness fetch
+          (every 60s); this section polls /recent-transitions and
+          surfaces the most-recent transitions inline. Operator
+          sees "gaming → eligible_now 3 hours ago" without having to
+          query manually. */}
+      <RecentTransitionsSection />
+
       {/* PR X (2026-06-23): portfolio link closes the discoverability
           gap — PRs #482/#483 shipped /media-kit routes with no nav
           entry from the dashboard. Footer link opens the all-5-niches
@@ -172,6 +181,116 @@ export function SponsorshipReadinessCard() {
       </div>
     </div>
   );
+}
+
+/**
+ * PR JJ (2026-06-23) — Phase 2 of #496. Recent tier transitions
+ * surfaced as a compact "Recent activity" section. Polls every 60s
+ * matching the rest of the card's cadence.
+ *
+ * Empty state: no transitions in window → renders NOTHING (not even
+ * the section header). Avoids cluttering the card with "no recent
+ * activity" placeholder text for the common case where tiers are
+ * stable. The section only appears when there's signal to show.
+ */
+function RecentTransitionsSection() {
+  const { data } = useQuery({
+    queryKey: queryKeys.sponsorship.recentTransitions(24),
+    queryFn: () => transitions.recent(24),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
+  const items = data?.transitions ?? [];
+  if (items.length === 0) return null;
+
+  // Cap to top 3 — anything more would compete with the per-niche
+  // rows for visual attention. If operator wants the full log,
+  // they can query the API directly.
+  const top = items.slice(0, 3);
+
+  return (
+    <div className="mt-3 pt-2 border-t border-text-muted/10">
+      <div className="text-[10px] uppercase tracking-wide text-text-muted mb-1.5">
+        Recent activity (24h)
+      </div>
+      <ul className="space-y-1">
+        {top.map((t, idx) => (
+          <TransitionRow
+            key={`${t.niche_id}-${t.observed_at ?? idx}`}
+            transition={t}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const TRANSITION_TIER_LABEL: Record<SponsorshipTier, string> = {
+  eligible_now: "ready",
+  within_2_months: "≤2 mo",
+  within_6_months: "≤6 mo",
+  tracking: "tracking",
+};
+
+const TRANSITION_TIER_TONE: Record<SponsorshipTier, string> = {
+  eligible_now: "text-success",
+  within_2_months: "text-warning",
+  within_6_months: "text-info",
+  tracking: "text-text-muted",
+};
+
+function TransitionRow({ transition }: { transition: RecentTierTransition }) {
+  const info = getNicheInfo(transition.niche_id as NicheId);
+  const ago = formatRelativeTime(transition.observed_at);
+  const arrow = transition.prev_tier ? (
+    <>
+      <span className={TRANSITION_TIER_TONE[transition.prev_tier]}>
+        {TRANSITION_TIER_LABEL[transition.prev_tier]}
+      </span>
+      <span className="text-text-muted mx-0.5">→</span>
+    </>
+  ) : null;
+  return (
+    <li className="flex items-center gap-2 text-[11px]">
+      <span
+        className="size-1.5 rounded-full shrink-0"
+        style={{ background: info.hex }}
+        aria-hidden
+      />
+      <span className="text-text-secondary shrink-0" style={{ width: 40 }}>
+        {info.shortLabel}
+      </span>
+      <span className="flex-1 min-w-0 font-mono text-[10px]">
+        {arrow}
+        <span className={TRANSITION_TIER_TONE[transition.tier]}>
+          {TRANSITION_TIER_LABEL[transition.tier]}
+        </span>
+      </span>
+      <span className="text-text-muted shrink-0 text-[10px]">{ago}</span>
+    </li>
+  );
+}
+
+/** "5m ago", "2h ago", "3d ago", or empty string for null/invalid. */
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    const t = d.getTime();
+    if (Number.isNaN(t)) return "";
+    const diffMs = Date.now() - t;
+    const diffMin = Math.floor(diffMs / 60_000);
+    if (diffMin < 1) return "now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffH = Math.floor(diffMin / 60);
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    return `${diffD}d ago`;
+  } catch {
+    return "";
+  }
 }
 
 /**
