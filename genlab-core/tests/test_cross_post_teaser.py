@@ -418,6 +418,175 @@ class TestNoCredsSkip:
         client_constructor.assert_not_called()
 
 
+# ──────────────────────────────────────────────────────────────
+# PR Y (2026-06-23) — Facebook → X route
+# ──────────────────────────────────────────────────────────────
+
+
+class TestFacebookRoute:
+    """Pins for the FB → X route (PR Y).
+
+    Same X-posting code as YT → X but a different source-platform
+    filter + different config-flag (facebook_to_x.enabled). FB
+    PublishResult already carries a stable post_url
+    (https://www.facebook.com/<post_id>) so no URL inference is
+    needed.
+    """
+
+    def _setup_x_client(self, monkeypatch):
+        fake_client = MagicMock()
+        fake_client._post_single_tweet = MagicMock(return_value="fb_tweet_main")
+        fake_client.post_reply = MagicMock(return_value=True)
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser.XTwitterClient",
+            lambda **kw: fake_client,
+        )
+        return fake_client
+
+    def test_facebook_source_fires_when_enabled(self, monkeypatch):
+        """Pin: source_platform='facebook' + facebook_to_x.enabled →
+        teaser fires. The defining pin for the new route — without it
+        the FB wire is dead even if config flips on."""
+        fake_x = self._setup_x_client(monkeypatch)
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser._is_cross_post_enabled",
+            lambda niche_id, route="facebook_to_x": route == "facebook_to_x",
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser.resolve_twitter_credentials",
+            lambda niche_id: {"api_key": "k"},
+        )
+
+        from genlab_core.publishing.cross_post_teaser import post_cross_teaser
+
+        post_cross_teaser(
+            source_platform="facebook",
+            post_id="fb_post_123",
+            post_url="https://www.facebook.com/fb_post_123",
+            fields=_FIELDS_WITH_HOOK,
+            niche_id="sports",
+        )
+
+        fake_x._post_single_tweet.assert_called_once()
+        fake_x.post_reply.assert_called_once()
+
+    def test_facebook_uses_facebook_to_x_route_key(self, monkeypatch):
+        """Pin: FB source consults the facebook_to_x route key, NOT
+        youtube_to_x. Without this the new route would silently re-use
+        YT's config — operator's YT flag would also activate FB."""
+        observed_routes: list[str] = []
+
+        def fake_enabled(niche_id, route="youtube_to_x"):
+            observed_routes.append(route)
+            return False  # block — we just want to observe the route arg
+
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser._is_cross_post_enabled",
+            fake_enabled,
+        )
+
+        from genlab_core.publishing.cross_post_teaser import post_cross_teaser
+
+        post_cross_teaser(
+            source_platform="facebook",
+            post_id="fb_post_123",
+            post_url="https://www.facebook.com/fb_post_123",
+            fields=_FIELDS_WITH_HOOK,
+            niche_id="sports",
+        )
+
+        assert observed_routes == ["facebook_to_x"]
+
+    def test_facebook_reply_uses_facebook_cta(self, monkeypatch):
+        """Pin: FB route uses 'Watch on Facebook' CTA, NOT YT's 'Full
+        video' CTA. The teaser reads naturally for the FB context —
+        operator-credibility detail."""
+        fake_x = self._setup_x_client(monkeypatch)
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser._is_cross_post_enabled",
+            lambda niche_id, route="facebook_to_x": True,
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser.resolve_twitter_credentials",
+            lambda niche_id: {"api_key": "k"},
+        )
+
+        from genlab_core.publishing.cross_post_teaser import post_cross_teaser
+
+        post_cross_teaser(
+            source_platform="facebook",
+            post_id="fb_post_123",
+            post_url="https://www.facebook.com/fb_post_123",
+            fields=_FIELDS_WITH_HOOK,
+            niche_id="sports",
+        )
+
+        reply_text = fake_x.post_reply.call_args[0][1]
+        assert "Watch on Facebook" in reply_text
+        assert "Full video" not in reply_text
+        # Still UTM-tagged (route-agnostic attribution invariant)
+        assert "utm_source=x_teaser" in reply_text
+
+    def test_unsupported_source_short_circuits_before_config_read(self, monkeypatch):
+        """Pin: source platforms not in _SOURCE_ROUTES (e.g. instagram,
+        threads, tiktok, x) early-return BEFORE touching the config
+        reader. Keeps the per-publish callsite cheap for sources we
+        don't cross-post from."""
+        config_calls: list[str] = []
+
+        def fake_enabled(niche_id, route="youtube_to_x"):
+            config_calls.append(route)
+            return True
+
+        monkeypatch.setattr(
+            "genlab_core.publishing.cross_post_teaser._is_cross_post_enabled",
+            fake_enabled,
+        )
+
+        from genlab_core.publishing.cross_post_teaser import post_cross_teaser
+
+        # instagram is not in _SOURCE_ROUTES → no-op without consulting
+        # any config
+        post_cross_teaser(
+            source_platform="instagram",
+            post_id="ig_post_123",
+            post_url="https://www.instagram.com/p/abc",
+            fields=_FIELDS_WITH_HOOK,
+            niche_id="sports",
+        )
+
+        assert config_calls == []
+
+
+class TestSourceRoutesDispatch:
+    """Source-level pin: _SOURCE_ROUTES dispatch table is structurally
+    present + has the expected route keys + CTAs. Defends against
+    accidental removal of a route entry."""
+
+    def test_youtube_route_entry_present(self):
+        from genlab_core.publishing.cross_post_teaser import _SOURCE_ROUTES
+
+        assert "youtube" in _SOURCE_ROUTES
+        assert _SOURCE_ROUTES["youtube"]["route"] == "youtube_to_x"
+        assert "video" in _SOURCE_ROUTES["youtube"]["cta"].lower()
+
+    def test_facebook_route_entry_present(self):
+        from genlab_core.publishing.cross_post_teaser import _SOURCE_ROUTES
+
+        assert "facebook" in _SOURCE_ROUTES
+        assert _SOURCE_ROUTES["facebook"]["route"] == "facebook_to_x"
+        assert "facebook" in _SOURCE_ROUTES["facebook"]["cta"].lower()
+
+    def test_only_yt_and_fb_supported_for_now(self):
+        """Pin: only YT + FB ship as source routes for now. IG / X /
+        Threads / TikTok need separate URL-inference work before they
+        can join the dispatch. Future routes should add this pin's
+        expected set rather than remove the assertion."""
+        from genlab_core.publishing.cross_post_teaser import _SOURCE_ROUTES
+
+        assert set(_SOURCE_ROUTES.keys()) == {"youtube", "facebook"}
+
+
 class TestSourceWire:
     """Source-level pins — defend against the silent-no-op delete
     pattern where someone removes the wire and the runtime tests
