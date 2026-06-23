@@ -670,6 +670,34 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
     except ImportError:
         return (True, "anthropic_not_installed")
 
+    # 2026-06-23 — scratchpad context. The weekly Opus reflection
+    # (PR #474) synthesizes 7 days of operator reviews + edits +
+    # bombed posts. The hook critic is the FOURTH high-stakes LLM
+    # judge consumer (after hook generator PR #471/#474, gate judge
+    # PR #476, reply critic PR #477). It evaluates *generated* hooks
+    # — exactly where last-week's "operator rejected for too_generic"
+    # lessons should sharpen verdicts.
+    #
+    # Same fail-OPEN prepend pattern as the other three consumers:
+    # missing scratchpad → empty string → no prepend → exact
+    # backwards-compat with pre-scratchpad critic behavior. Failure
+    # to read the scratchpad MUST NOT break the critic (which itself
+    # already fails-OPEN at the outer except).
+    try:
+        from genlab_core.learning.scratchpad import read_scratchpad
+
+        scratchpad = read_scratchpad()
+    except Exception:  # noqa: BLE001 — scratchpad is augmentation
+        scratchpad = ""
+    critic_system = (
+        "## Recent learnings (scratchpad)\n\n"
+        + scratchpad
+        + "\n\n---\n\n"
+        + _HOOK_CRITIC_SYSTEM_PROMPT
+        if scratchpad
+        else _HOOK_CRITIC_SYSTEM_PROMPT
+    )
+
     try:
         title = (story.get("title") or "")[:300]
         summary = (story.get("summary") or "")[:500]
@@ -680,7 +708,7 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
             model="claude-haiku-4-5-20251001",
             max_tokens=80,
             temperature=0.0,  # Deterministic — same hook+story → same verdict
-            system=_HOOK_CRITIC_SYSTEM_PROMPT,
+            system=critic_system,
             messages=[{"role": "user", "content": user}],
         )
 
