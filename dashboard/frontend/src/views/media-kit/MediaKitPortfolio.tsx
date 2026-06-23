@@ -23,6 +23,7 @@ import type {
   MediaKitAudienceEntry,
   MediaKitPortfolioData,
   MediaKitPortfolioNiche,
+  MediaKitTopPost,
   SponsorshipTier,
 } from "@/api/types";
 import { getNiche, type NicheId } from "@/niches/registry";
@@ -207,6 +208,22 @@ function NicheSection({ niche }: { niche: MediaKitPortfolioNiche }) {
           </table>
         )}
 
+        {/* PR CC: top posts inside each portfolio section. Brands
+            scrolling the portfolio can click into actual content per
+            niche without navigating to platforms manually. Compact
+            layout — 3 lines max per niche to keep the printable
+            document section-per-niche scannable. */}
+        {niche.top_posts.length > 0 && (
+          <ul className="mt-3 space-y-1 text-xs">
+            {niche.top_posts.map((post) => (
+              <PortfolioTopPostRow
+                key={`${post.platform}-${post.post_id}`}
+                post={post}
+              />
+            ))}
+          </ul>
+        )}
+
         {niche.tier !== "eligible_now" && niche.nearest_threshold_days !== null && (
           <p className="mt-3 text-xs text-slate-600">
             Closest unmet threshold:{" "}
@@ -217,6 +234,31 @@ function NicheSection({ niche }: { niche: MediaKitPortfolioNiche }) {
         )}
       </div>
     </section>
+  );
+}
+
+function PortfolioTopPostRow({ post }: { post: MediaKitTopPost }) {
+  const date = post.published_at
+    ? new Date(post.published_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "";
+  return (
+    <li className="flex items-center justify-between gap-2 text-slate-600">
+      <a
+        href={post.post_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:underline capitalize text-slate-700"
+      >
+        {post.platform}
+        {date && <span className="text-slate-400 ml-1">· {date}</span>}
+      </a>
+      <span className="font-mono text-slate-500">
+        {formatNumber(post.views)} views
+      </span>
+    </li>
   );
 }
 

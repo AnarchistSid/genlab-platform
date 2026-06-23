@@ -41,6 +41,19 @@ def _reset_sponsorship_cache(monkeypatch):
     yield
 
 
+@pytest.fixture(autouse=True)
+def _stub_top_posts(monkeypatch):
+    """PR CC: media_kit calls top_posts_pg.fetch_top_posts which opens
+    a real Postgres connection. Stub to [] by default so tests don't
+    pay the 5s connect_timeout per test invocation. Individual tests
+    can override to assert top_posts behavior by re-patching."""
+    monkeypatch.setattr(
+        "server.core.top_posts_pg.fetch_top_posts",
+        lambda niche_id, **kw: [],
+    )
+    yield
+
+
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
@@ -413,6 +426,150 @@ class TestPortfolioEndpoint:
         infra error returns 500, NOT a silent-200 with empty data."""
         resp = client.get("/api/v1/media-kit/_all")
         assert resp.status_code == 500
+
+
+# ───────────────────────────────────────────────────────────────
+# PR CC (2026-06-23) — top-post embed in media kit
+# ───────────────────────────────────────────────────────────────
+
+_TOP_POSTS_FIXTURE = [
+    {
+        "platform": "youtube",
+        "post_id": "abc123",
+        "post_url": "https://youtube.com/shorts/abc123",
+        "published_at": "2026-06-20T14:00:00+00:00",
+        "views": 12500,
+        "likes": 850,
+        "comments": 42,
+        "score": 12500 + 850 * 5 + 42 * 10,
+    },
+    {
+        "platform": "facebook",
+        "post_id": "fb_456",
+        "post_url": "https://www.facebook.com/fb_456",
+        "published_at": "2026-06-18T09:00:00+00:00",
+        "views": 6000,
+        "likes": 400,
+        "comments": 20,
+        "score": 6000 + 400 * 5 + 20 * 10,
+    },
+]
+
+
+class TestTopPostsEmbed:
+    """Pins for PR CC — top-posts embed in media kit response."""
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_AI_CREATORS_FULL,
+    )
+    def test_top_posts_present_in_response(self, _mock, client, monkeypatch):
+        """Pin: per-niche kit response carries a ``top_posts`` array.
+        Default-fixture returns [] (empty) — that's a valid shape
+        the frontend renders as 'no data yet' rather than missing
+        section entirely."""
+        resp = client.get("/api/v1/media-kit/ai_creators")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        assert "top_posts" in data
+        assert isinstance(data["top_posts"], list)
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_AI_CREATORS_FULL,
+    )
+    def test_top_posts_populated_when_fetcher_returns_data(self, _mock, client, monkeypatch):
+        """Pin: when fetch_top_posts returns rows, those rows appear in
+        the response's top_posts array — full passthrough with all
+        fields preserved (platform, post_url, score, etc.)."""
+        monkeypatch.setattr(
+            "server.core.top_posts_pg.fetch_top_posts",
+            lambda niche_id, **kw: list(_TOP_POSTS_FIXTURE),
+        )
+        resp = client.get("/api/v1/media-kit/ai_creators")
+        data = json.loads(resp.data)["data"]
+        assert len(data["top_posts"]) == 2
+        # First entry — full field passthrough
+        first = data["top_posts"][0]
+        assert first["platform"] == "youtube"
+        assert first["post_url"] == "https://youtube.com/shorts/abc123"
+        assert first["views"] == 12500
+        assert "score" in first
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_AI_CREATORS_FULL,
+    )
+    def test_top_posts_fetch_exception_is_non_blocking(self, _mock, client, monkeypatch):
+        """Pin: fetch_top_posts raising mid-call DOES NOT block the
+        rest of the kit. top_posts becomes [] but tier + audience +
+        monetised_platforms all still render. Top-posts is a kit-
+        quality enhancement, not a kit-blocker."""
+
+        def boom(niche_id, **kw):
+            raise RuntimeError("simulated pg outage")
+
+        monkeypatch.setattr("server.core.top_posts_pg.fetch_top_posts", boom)
+        resp = client.get("/api/v1/media-kit/ai_creators")
+        # Still 200 — kit renders the rest of the data
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        assert data["top_posts"] == []
+        # Tier + audience still present (non-blocking failure)
+        assert data["tier"] == "eligible_now"
+        assert len(data["audience"]) > 0
+
+
+class TestTopPostsURLDerivation:
+    """Pins for the per-platform URL-derivation helper. Critical
+    invariant — wrong URL shape would publish dead links in the kit."""
+
+    def test_youtube_url_shape(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("youtube", "abc123") == "https://youtube.com/shorts/abc123"
+
+    def test_facebook_url_shape(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("facebook", "fb_post_123") == "https://www.facebook.com/fb_post_123"
+
+    def test_twitter_url_shape(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("x_twitter", "1234") == "https://twitter.com/i/web/status/1234"
+
+    def test_instagram_returns_none_v1(self):
+        """Pin: IG requires shortcode (not post_id) — return None at v1
+        so the kit doesn't render dead links. Deferred to v2."""
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("instagram", "1234567890") is None
+
+    def test_threads_returns_none_v1(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("threads", "anything") is None
+
+    def test_tiktok_returns_none_v1(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("tiktok", "anything") is None
+
+    def test_prefixed_post_id_strips_platform_prefix(self):
+        """Pin: PR #486 W3.2 normalised some post_ids to
+        ``{platform}:{id}`` shape. _derive_post_url strips the prefix
+        before building the URL — otherwise we'd produce
+        ``https://youtube.com/shorts/youtube:abc123`` (broken)."""
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("youtube", "youtube:abc123") == "https://youtube.com/shorts/abc123"
+
+    def test_empty_post_id_returns_none(self):
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("youtube", "") is None
+        assert _derive_post_url("youtube", "youtube:") is None
 
 
 class TestRouteCollision:
