@@ -22,6 +22,7 @@ import type {
   MonetisationProgressData,
   OutreachTemplate,
   PortfolioOutreachTemplate,
+  RecentTransitionsResponse,
   SponsorshipReadinessData,
   YouTubeDemographics,
   AnalyticsOverviewResponse,
@@ -722,6 +723,30 @@ export const bandit = {
         return envelope.data;
       }
       return d as BanditHourPosteriors;
+    }),
+};
+
+// PR JJ (2026-06-23) — Phase 2 of PR #496. Reads recent tier
+// transitions for the SponsorshipReadinessCard's "Recent activity"
+// footer. Backend writes on every /readiness fetch (every 60s);
+// this client polls /recent-transitions to surface them.
+export const transitions = {
+  recent: (windowHours = 24) =>
+    get<RecentTransitionsResponse | { data: RecentTransitionsResponse }>(
+      "/sponsorship/recent-transitions",
+      { window_hours: String(windowHours) },
+    ).then((d): RecentTransitionsResponse => {
+      const envelope = d as { data?: RecentTransitionsResponse };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as RecentTransitionsResponse;
     }),
 };
 

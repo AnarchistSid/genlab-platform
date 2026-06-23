@@ -92,6 +92,8 @@ export const queryKeys = {
   },
   sponsorship: {
     readiness: () => ["sponsorship", "readiness"] as const,
+    recentTransitions: (windowHours: number) =>
+      ["sponsorship", "recent-transitions", windowHours] as const,
   },
   mediaKit: {
     get: (nicheId: string) => ["media-kit", nicheId] as const,
