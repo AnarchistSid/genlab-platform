@@ -24,9 +24,11 @@
  * fired yet), each niche row still renders with "no data yet" rather
  * than a blank card — same defensive pattern as the calibration card.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
-import { sponsorship } from "@/api/client";
+import { outreach, sponsorship } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
 import type {
   SponsorshipNicheReadiness,
@@ -34,7 +36,7 @@ import type {
   SponsorshipTier,
 } from "@/api/types";
 import { ProgressBar } from "@/components/shared/progress-bar";
-import { getNicheInfo, NICHE_IDS } from "@/niches/registry";
+import { getNicheInfo, NICHE_IDS, type NicheId } from "@/niches/registry";
 
 const TIER_LABEL: Record<SponsorshipTier, string> = {
   eligible_now: "Pitch now",
@@ -139,6 +141,7 @@ export function SponsorshipReadinessCard() {
               return (
                 <NicheRow
                   key={nicheId}
+                  nicheId={nicheId}
                   label={info.shortLabel}
                   hex={info.hex}
                   readiness={perNiche[nicheId]}
@@ -152,12 +155,15 @@ export function SponsorshipReadinessCard() {
 }
 
 interface NicheRowProps {
+  /** Stable niche identifier (used by the Copy-pitch fetch + the
+   * media-kit URL). */
+  nicheId: NicheId;
   label: string;
   hex: string;
   readiness: SponsorshipNicheReadiness | undefined;
 }
 
-function NicheRow({ label, hex, readiness }: NicheRowProps) {
+function NicheRow({ nicheId, label, hex, readiness }: NicheRowProps) {
   // No data yet → muted row with "—" placeholders. Same defensive
   // shape as AutoApprovalCalibrationCard's NicheRow.
   if (!readiness) {
@@ -259,7 +265,62 @@ function NicheRow({ label, hex, readiness }: NicheRowProps) {
       >
         {TIER_LABEL[tier]}
       </span>
+
+      {/* PR W: Copy pitch action — generates outreach template +
+          writes body to clipboard. The single button is the entire
+          new operator-leverage surface from this row. */}
+      <CopyPitchButton nicheId={nicheId} />
     </div>
+  );
+}
+
+/**
+ * Fetches the outreach template on click and writes the body to the
+ * clipboard. Lazy fetch (only fires when operator clicks) so we don't
+ * burn an HTTP call per niche row at card mount.
+ *
+ * Feedback: toast on success / failure. Disabled state during the
+ * fetch so the operator doesn't double-click and get two
+ * notifications.
+ */
+function CopyPitchButton({ nicheId }: { nicheId: NicheId }) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const tpl = await outreach.template(nicheId);
+      const text = `Subject: ${tpl.subject}\n\n${tpl.body}`;
+      // Modern Clipboard API. Fails silently on insecure contexts
+      // (HTTP without localhost) — we catch + toast in that case.
+      await navigator.clipboard.writeText(text);
+      toast.success("Pitch copied — paste into email/Slack");
+    } catch (err) {
+      // Common failure: clipboard denied permission, or fetch failed.
+      // Surface a single non-blocking toast; operator can retry.
+      toast.error(
+        err instanceof Error
+          ? `Copy failed: ${err.message}`
+          : "Copy failed — try again",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      className="text-[10px] px-1.5 py-0.5 rounded border border-text-muted/30 text-text-secondary hover:bg-text-muted/10 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+      title="Generate outreach pitch and copy to clipboard"
+      style={{ minWidth: 44 }}
+    >
+      {busy ? "…" : "Copy"}
+    </button>
   );
 }
 

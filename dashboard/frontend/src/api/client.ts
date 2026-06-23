@@ -19,6 +19,7 @@ import type {
   MediaKitData,
   MediaKitPortfolioData,
   MonetisationProgressData,
+  OutreachTemplate,
   SponsorshipReadinessData,
   YouTubeDemographics,
   AnalyticsOverviewResponse,
@@ -653,6 +654,30 @@ export const monetisation = {
         return envelope.data;
       }
       return d as MonetisationProgressData;
+    }),
+};
+
+// PR W (2026-06-23) — Outreach template generator client.
+// Used by the SponsorshipReadinessCard's "Copy pitch" button. Server
+// produces tier-aware subject + body + media-kit-url for one niche;
+// the frontend writes body to clipboard and toasts confirmation.
+export const outreach = {
+  template: (nicheId: string) =>
+    get<OutreachTemplate | { data: OutreachTemplate }>(
+      "/sponsorship/outreach-template",
+      { niche: nicheId },
+    ).then((d): OutreachTemplate => {
+      const envelope = d as { data?: OutreachTemplate };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as OutreachTemplate;
     }),
 };
 

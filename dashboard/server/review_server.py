@@ -531,6 +531,7 @@ from server.api.media_kit import bp as media_kit_bp
 from server.api.metrics import bp as metrics_bp
 from server.api.monetisation import bp as monetisation_bp
 from server.api.niches import bp as niches_bp
+from server.api.outreach_template import bp as outreach_template_bp
 from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
@@ -573,6 +574,7 @@ app.register_blueprint(youtube_quota_bp)
 app.register_blueprint(monetisation_bp)
 app.register_blueprint(sponsorship_bp)
 app.register_blueprint(media_kit_bp)
+app.register_blueprint(outreach_template_bp)
 app.register_blueprint(scheduler_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(links_bp)
