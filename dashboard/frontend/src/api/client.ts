@@ -17,6 +17,7 @@ import type {
   ViralityBreakdownData,
   MonetizationDataEnvelope,
   MonetisationProgressData,
+  SponsorshipReadinessData,
   YouTubeDemographics,
   AnalyticsOverviewResponse,
   QueueItem,
@@ -650,6 +651,33 @@ export const monetisation = {
         return envelope.data;
       }
       return d as MonetisationProgressData;
+    }),
+};
+
+// PR T (2026-06-23) — Sponsorship Readiness API client.
+// Reads /api/v1/sponsorship/readiness which decorates the underlying
+// monetisationprogress data with per-niche tiers and primary-metric
+// summaries. The Mission Control SponsorshipReadinessCard polls this
+// every 60s via the use-sponsorship-readiness hook.
+export const sponsorship = {
+  readiness: () =>
+    get<SponsorshipReadinessData | { data: SponsorshipReadinessData }>(
+      "/sponsorship/readiness",
+    ).then((d): SponsorshipReadinessData => {
+      // Same envelope-unwrap pattern as monetisation.progress — server
+      // returns {data: {...}} from api_success but some callers also
+      // accept the direct shape; tolerate either.
+      const envelope = d as { data?: SponsorshipReadinessData };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as SponsorshipReadinessData;
     }),
 };
 

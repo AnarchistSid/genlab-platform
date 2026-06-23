@@ -28,6 +28,7 @@ import { TrendRadar } from "./TrendRadar";
 import { ContentQuality } from "./ContentQuality";
 import { PipelineCountdowns } from "./PipelineCountdowns";
 import { MonetisationCompact } from "./MonetisationCompact";
+import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -248,6 +249,13 @@ export default function MissionControl() {
                 only per the AUTO #2 runbook §4-5. */}
             <RolloutPctSlider />
             <MonetisationCompact />
+            {/* PR T (2026-06-23): operator-leverage opener. Per-niche
+                sponsorship readiness tier (eligible_now / within_2_months
+                / within_6_months / tracking) derived from the existing
+                monetisationprogress data. Sits next to MonetisationCompact
+                because they're conceptually adjacent: progress shows the
+                raw numbers, readiness shows the actionable inference. */}
+            <SponsorshipReadinessCard />
           </div>
         </div>
       )}

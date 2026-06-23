@@ -90,6 +90,9 @@ export const queryKeys = {
   monetisation: {
     progress: () => ["monetisation", "progress"] as const,
   },
+  sponsorship: {
+    readiness: () => ["sponsorship", "readiness"] as const,
+  },
   revenue: {
     summary: () => ["revenue", "summary"] as const,
     clickTrends: () => ["revenue", "click-trends"] as const,

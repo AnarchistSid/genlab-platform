@@ -220,6 +220,42 @@ export interface Notification {
   entity_id?: string;
 }
 
+// ── Sponsorship Readiness ──────────────────────────────────
+// PR T (2026-06-23) — operator-leverage opener. The Mission Control
+// SponsorshipReadinessCard polls /api/v1/sponsorship/readiness every
+// 60s and tiers each niche so the operator sees "which channels can
+// I pitch sponsors on this week?" without computing it by hand.
+
+export type SponsorshipTier =
+  | "eligible_now"
+  | "within_2_months"
+  | "within_6_months"
+  | "tracking";
+
+export interface SponsorshipPrimaryMetric {
+  metric_name: string;
+  pct_complete: number | null;
+  current_value: number | null;
+  target_value: number | null;
+  days_to_threshold_est: number | null;
+  delta_7d: number | null;
+  is_threshold_met: boolean;
+}
+
+export interface SponsorshipPlatformSummary {
+  is_monetised: boolean;
+  primary_metric: SponsorshipPrimaryMetric | null;
+  metric_count: number;
+}
+
+export interface SponsorshipNicheReadiness {
+  tier: SponsorshipTier;
+  nearest_threshold_days: number | null;
+  platforms: Record<string, SponsorshipPlatformSummary>;
+}
+
+export type SponsorshipReadinessData = Record<string, SponsorshipNicheReadiness>;
+
 export interface BlueprintUpdatedEvent {
   id: string;
   status: string;
