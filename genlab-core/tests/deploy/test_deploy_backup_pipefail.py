@@ -261,5 +261,82 @@ def test_backup_sh_warns_when_falling_back_to_socket(tmp_path: Path) -> None:
     )
 
 
+# ---------------------------------------------------------------------------
+# PR #507 (2026-06-24) — git log | head -20 | tee SIGPIPE fix
+#
+# With set -o pipefail (line 36) AND set -e, the pipeline `git log ... |
+# head -20 | tee` returns exit 141 when git log produces >20 lines.
+# `head -20` exits early, SIGPIPE fires upstream to `git log`, and the
+# pipeline's exit status becomes 141 — set -e then kills the deploy.
+# Hit on 2026-06-23 trying to deploy a 22-commit pull; operator had to
+# bypass the script entirely and run git pull + systemctl restart manually.
+# ---------------------------------------------------------------------------
+
+
+def test_deploy_sh_scopes_pipefail_disable_in_subshell() -> None:
+    """The git log pipeline must run inside a subshell with pipefail off.
+
+    Pin the exact safe pattern — a refactor that simplifies back to the
+    bare `git log ... | head -20 | tee` shape re-introduces the bug
+    invisibly (a deploy with ≤20 commits succeeds, a deploy with >20
+    commits exits 141).
+    """
+    src = _DEPLOY_SH.read_text()
+    # Pin the subshell + set +o pipefail shape
+    assert "set +o pipefail" in src, (
+        "deploy.sh must contain `set +o pipefail` to scope the disable "
+        "around the `git log | head -20 | tee` line (PR #507)."
+    )
+    assert 'git log --oneline "$HEAD_BEFORE..$REMOTE_HEAD" | head -20 | tee -a "$LOG"' in src, (
+        "The git log show-the-gap pipeline must still exist (we're not "
+        "removing it — just scoping pipefail off around it)."
+    )
+
+
+def test_deploy_sh_git_log_pipe_does_not_kill_script_when_head_truncates() -> None:
+    """End-to-end behavioural pin: emulate the bug shape standalone.
+
+    Pre-fix, this exact pipeline shape exits 141 under pipefail. Post-fix,
+    the subshell-scoped `set +o pipefail` lets the pipeline exit 0 (tee's
+    success) regardless of head truncation.
+    """
+    # Reproduce the script's prologue + the specific pattern. yes(1)
+    # produces infinite output; head -20 truncates to 20 lines; tee writes
+    # them to a tmp log.
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".log", mode="w", delete=False) as tmp:
+        tmp_log = tmp.name
+
+    # The PRE-FIX shape — assert it DOES exit 141 (proving the test
+    # reproduces the bug shape correctly)
+    pre_fix_script = f"""
+set -euo pipefail
+yes "hello" | head -20 | tee {tmp_log} > /dev/null
+"""
+    pre_fix = subprocess.run(["bash", "-c", pre_fix_script], capture_output=True, text=True)
+    assert pre_fix.returncode == 141, (
+        f"Pre-fix shape should exit 141 (SIGPIPE) under set -o pipefail. "
+        f"Got: returncode={pre_fix.returncode}, stderr={pre_fix.stderr!r}"
+    )
+
+    # The POST-FIX shape — assert it exits 0 (proving the fix works)
+    post_fix_script = f"""
+set -euo pipefail
+(
+    set +o pipefail
+    yes "hello" | head -20 | tee {tmp_log} > /dev/null
+)
+"""
+    post_fix = subprocess.run(["bash", "-c", post_fix_script], capture_output=True, text=True)
+    assert post_fix.returncode == 0, (
+        f"Post-fix shape must exit 0 — pipefail scoped to the subshell. "
+        f"Got: returncode={post_fix.returncode}, stderr={post_fix.stderr!r}"
+    )
+
+    # Cleanup
+    Path(tmp_log).unlink(missing_ok=True)
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-v"])

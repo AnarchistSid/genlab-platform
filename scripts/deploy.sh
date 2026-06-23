@@ -121,7 +121,19 @@ else
         fail "local HEAD is $AHEAD_COUNT commit(s) AHEAD of origin/main. Pull would be non-fast-forward. Did someone force-push? Investigate before continuing."
     fi
     log "Behind origin/main by $BEHIND_COUNT commit(s):"
-    git log --oneline "$HEAD_BEFORE..$REMOTE_HEAD" | head -20 | tee -a "$LOG"
+    # PR #507 (2026-06-24): scope `pipefail` disable to a subshell.
+    # `set -o pipefail` (line 36) makes the pipeline return git log's
+    # SIGPIPE exit code (141) when `head -20` exits early after
+    # capturing 20 lines, and `set -e` then kills the entire deploy.
+    # This hit on 2026-06-23 trying to deploy a 22-commit pull —
+    # operator had to bypass the script entirely (manual git pull +
+    # systemctl restart) to land the fix. `tee` has already received
+    # the 20 lines before SIGPIPE fires upstream, so the log content
+    # is correct either way; only the exit-status semantics differ.
+    (
+        set +o pipefail
+        git log --oneline "$HEAD_BEFORE..$REMOTE_HEAD" | head -20 | tee -a "$LOG"
+    )
     [[ "$BEHIND_COUNT" -gt 20 ]] && log "  ... (+$((BEHIND_COUNT - 20)) more)"
 fi
 
