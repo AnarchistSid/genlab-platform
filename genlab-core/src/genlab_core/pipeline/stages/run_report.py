@@ -187,12 +187,24 @@ class RunReport:
         # `stage_failures` field at the top level of the report so the
         # dashboard can show what specifically went wrong.
         stage_failures: dict[str, int] = {}
+        # PR #504 (2026-06-23) — extended the tracking loop to cover
+        # filter/gate/mutator stages too (video_gate, relevance_gate,
+        # pre_download_dedup, push_to_backlog). They don't currently
+        # emit ``failed/errors`` keys (today they fail-open or pass-
+        # through), so the loop is forward-visibility scaffolding —
+        # the moment any of them starts tracking failures, the
+        # status determination escalates automatically without
+        # touching this loop.
         for stage_name, stats_dict in (
             ("video_validation", video_val),
             ("audio", audio),
             ("text_overlays", overlays),
             ("whisper_captions", run_stats.get("whisper_captions", {}) or {}),
             ("publishing", publishing),
+            ("video_gate", run_stats.get("video_gate", {}) or {}),
+            ("relevance_gate", run_stats.get("relevance_gate", {}) or {}),
+            ("pre_download_dedup", run_stats.get("pre_download_dedup", {}) or {}),
+            ("push_to_backlog", run_stats.get("push_to_backlog", {}) or {}),
         ):
             if not isinstance(stats_dict, dict):
                 continue
@@ -207,6 +219,66 @@ class RunReport:
         qc_failed = int(qc.get("failed", 0) or 0)
         if qc_failed > 0:
             stage_failures["qc"] = qc_failed
+
+        # PR #504 (2026-06-23) — structured ``bottleneck_stage`` field.
+        # When ``blueprints_pushed == 0`` the operator currently has to
+        # parse the ``slo_violations`` string to know WHICH stage was
+        # the funnel killer. A structured field lets the dashboard
+        # render a clean "blocked at X" badge instead.
+        #
+        # Detection runs in pipeline-order — first-match wins, because
+        # the EARLIEST drop is the most useful signal (fixing it
+        # unblocks the downstream stages without needing more changes).
+        # Picks from existing run_stats — no new instrumentation needed.
+        bottleneck_stage: str | None = None
+        bottleneck_reason: str | None = None
+        if zero_blueprints:
+            pdd = run_stats.get("pre_download_dedup") or {}
+            vg = run_stats.get("video_gate") or {}
+            ptb = run_stats.get("push_to_backlog") or {}
+
+            pdd_input = int(pdd.get("input_count", 0) or 0)
+            pdd_kept = int(pdd.get("kept_count", 0) or 0)
+
+            vg_passed = int(vg.get("passed", 0) or 0)
+            vg_skipped = int(vg.get("skipped", 0) or 0)
+
+            ptb_video_dedup_skipped = int(ptb.get("video_dedup_skipped", 0) or 0)
+
+            # Detection order = pipeline order (earliest filter wins).
+            # The earliest drop is the most actionable signal — fixing
+            # it unblocks every downstream filter that ran on its empty
+            # output. The "fetch wipeout" branch is checked LAST as a
+            # fallthrough when no filter ran (because no stories reached
+            # them in the first place).
+            if pdd_input > 0 and pdd_kept == 0:
+                bottleneck_stage = "pre_download_dedup"
+                bottleneck_reason = (
+                    f"all {pdd_input} stories dropped by URL/video-id dedup "
+                    f"(check url_dedup_ttl_days for sticky-source niches)"
+                )
+            elif vg_passed == 0 and vg_skipped > 0:
+                bottleneck_stage = "video_gate"
+                bottleneck_reason = (
+                    f"all {vg_skipped}/{vg_passed + vg_skipped} stories dropped "
+                    f"for missing clips (VideoSourcer tier failure)"
+                )
+            elif video_val.get("failed", 0) and not video_val.get("passed", 0):
+                bottleneck_stage = "video_validation"
+                bottleneck_reason = (
+                    f"all {video_val.get('failed', 0)} rendered videos failed validation"
+                )
+            elif ptb_video_dedup_skipped > 0 and blueprints_pushed == 0:
+                bottleneck_stage = "push_to_backlog"
+                bottleneck_reason = (
+                    f"{ptb_video_dedup_skipped} stories video-dedup-skipped at PushToBacklog"
+                )
+            elif len(stories) == 0 and vg_passed == 0 and vg_skipped == 0 and pdd_input == 0:
+                # Fallthrough: no filter saw any input → fetchers themselves
+                # produced nothing. Real bottleneck is upstream of all the
+                # tracked filter stages.
+                bottleneck_stage = "fetch"
+                bottleneck_reason = "no stories fetched (WARP / quota / source outage?)"
 
         if zero_blueprints:
             status = "failed"
@@ -246,6 +318,16 @@ class RunReport:
             # promoted from "success" to "partial". Dashboard reads this to
             # render a "this run had silent failures in X, Y, Z" badge.
             "stage_failures": stage_failures,
+            # PR #504 (2026-06-23): structured bottleneck attribution for
+            # zero-blueprint runs. ``bottleneck_stage`` is one of:
+            # "fetch", "pre_download_dedup", "video_gate",
+            # "video_validation", "push_to_backlog", or None when
+            # blueprints were produced normally. ``bottleneck_reason``
+            # is the human-readable explanation. Dashboard reads these
+            # to surface a "blocked at X" badge instead of forcing the
+            # operator to parse slo_violations strings.
+            "bottleneck_stage": bottleneck_stage,
+            "bottleneck_reason": bottleneck_reason,
         }
 
         # Write to run directory — prefer context's run_dir (set by pipeline_runner)

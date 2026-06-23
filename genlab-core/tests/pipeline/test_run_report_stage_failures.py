@@ -258,3 +258,116 @@ class TestZeroBlueprintsSLOMessageAccuracy:
         assert any("from 1 stories" in v for v in slo_v), (
             f"When len(stories)>0 at run_report, the existing message wins. Got: {slo_v}"
         )
+
+
+# ---------------------------------------------------------------------------
+# PR #504 (2026-06-23) — extended stage_failures tracking + bottleneck_stage.
+#
+# The pre-PR loop only tracked 6 stages (video_validation, audio, text_
+# overlays, whisper_captions, publishing, qc). PR #504 extends to 4 more
+# (video_gate, relevance_gate, pre_download_dedup, push_to_backlog) AND
+# adds a structured ``bottleneck_stage`` field that names which filter
+# was the funnel killer on zero-blueprint runs.
+# ---------------------------------------------------------------------------
+
+
+class TestExtendedStageFailuresLoop:
+    """Pin that the loop covers all filter/gate stages, not just the
+    post-render handful. Today these stages don't emit failed/errors
+    keys (they fail-open or pass-through), so the assertions use the
+    forward-visibility shape: if a stage DOES report failed/errors,
+    it surfaces in ``stage_failures``.
+    """
+
+    def test_video_gate_failures_surface(self):
+        report = _run(_ctx(blueprints_pushed=2, video_gate={"failed": 1, "errors": 0}))
+        assert report["stage_failures"].get("video_gate") == 1
+
+    def test_relevance_gate_failures_surface(self):
+        report = _run(_ctx(blueprints_pushed=2, relevance_gate={"errors": 3}))
+        assert report["stage_failures"].get("relevance_gate") == 3
+
+    def test_pre_download_dedup_failures_surface(self):
+        report = _run(_ctx(blueprints_pushed=2, pre_download_dedup={"failed": 2, "errors": 1}))
+        assert report["stage_failures"].get("pre_download_dedup") == 3
+
+    def test_push_to_backlog_failures_surface(self):
+        report = _run(_ctx(blueprints_pushed=1, push_to_backlog={"errors": 2}))
+        assert report["stage_failures"].get("push_to_backlog") == 2
+
+    def test_new_stages_with_zero_failures_stay_absent(self):
+        """The loop should only add stages with non-zero failures —
+        keeps stage_failures dict readable on dashboard."""
+        report = _run(
+            _ctx(
+                blueprints_pushed=2,
+                video_gate={"passed": 2, "skipped": 0},  # normal-success shape
+                pre_download_dedup={"input_count": 2, "kept_count": 2, "dropped_url": 0},
+            )
+        )
+        assert "video_gate" not in report["stage_failures"]
+        assert "pre_download_dedup" not in report["stage_failures"]
+
+
+class TestBottleneckStageField:
+    """Pin the new structured ``bottleneck_stage`` + ``bottleneck_reason``
+    fields that surface WHICH stage was the funnel killer on zero-
+    blueprint runs. Dashboard reads these for a clean "blocked at X"
+    badge instead of parsing slo_violations strings.
+    """
+
+    def test_clean_run_has_no_bottleneck(self):
+        """Successful run with blueprints pushed → no bottleneck."""
+        report = _run(_ctx(blueprints_pushed=3))
+        assert report["bottleneck_stage"] is None
+        assert report["bottleneck_reason"] is None
+
+    def test_fetch_wipeout_detected(self):
+        """0 stories + no video_gate stats → fetch bottleneck."""
+        report = _run(_ctx(blueprints_pushed=0))
+        assert report["bottleneck_stage"] == "fetch"
+        assert "no stories fetched" in report["bottleneck_reason"]
+
+    def test_pre_download_dedup_bottleneck_detected(self):
+        """All stories dropped by URL dedup → pre_download_dedup bottleneck."""
+        ctx = _ctx(
+            blueprints_pushed=0,
+            pre_download_dedup={
+                "input_count": 5,
+                "kept_count": 0,
+                "dropped_url": 5,
+                "dropped_video_id": 0,
+            },
+        )
+        ctx["stories"] = []
+        report = _run(ctx)
+        assert report["bottleneck_stage"] == "pre_download_dedup"
+        assert "5 stories" in report["bottleneck_reason"]
+        assert "url_dedup_ttl_days" in report["bottleneck_reason"]
+
+    def test_video_gate_bottleneck_detected(self):
+        """All stories clipless → video_gate bottleneck.
+        Replicates today's pre-fix sports outage shape (PR #501)."""
+        ctx = _ctx(
+            blueprints_pushed=0,
+            video_gate={"passed": 0, "skipped": 2},
+        )
+        ctx["stories"] = []
+        report = _run(ctx)
+        assert report["bottleneck_stage"] == "video_gate"
+        assert "2/2 stories" in report["bottleneck_reason"]
+        assert "VideoSourcer" in report["bottleneck_reason"]
+
+    def test_first_match_wins_pre_download_over_video_gate(self):
+        """When multiple filters could be the bottleneck, the EARLIEST
+        pipeline-position one wins. The earliest drop is the most
+        actionable signal — fixing it unblocks downstream stages."""
+        ctx = _ctx(
+            blueprints_pushed=0,
+            pre_download_dedup={"input_count": 5, "kept_count": 0, "dropped_url": 5},
+            video_gate={"passed": 0, "skipped": 2},
+        )
+        ctx["stories"] = []
+        report = _run(ctx)
+        # pre_download_dedup runs BEFORE video_gate — it wins
+        assert report["bottleneck_stage"] == "pre_download_dedup"
