@@ -1246,14 +1246,19 @@ class PushToBacklog:
             # When url_dedup_ttl_days is set, also exclude blueprints whose
             # created_at predates the TTL cutoff — letting today's "Overwatch"
             # republish if the last "Overwatch" was >7 days ago.
+            #
+            # ``created_at`` lookup order: top-level key (Postgres backend
+            # since 2026-06-23 PR #501) → fields dict (legacy JSON backend +
+            # test fixtures). Falling all the way through to None means a
+            # missing date — conservative: KEEP the blueprint in the dedup
+            # set so we don't risk re-publishing unknown-age content.
             def _is_within_url_ttl(bp: dict) -> bool:
                 if _url_dedup_cutoff is None:
                     return True
-                fields = bp.get("fields", bp)
-                created = fields.get("created_at")
+                created = bp.get("created_at")
                 if not created:
-                    # Missing date — be conservative and KEEP it in the dedup
-                    # set (don't risk re-publishing unknown-age content).
+                    created = bp.get("fields", bp).get("created_at")
+                if not created:
                     return True
                 if isinstance(created, str):
                     try:

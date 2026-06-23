@@ -686,16 +686,43 @@ class PostgresBackend:
 
     @staticmethod
     def _row_to_record(row: dict[str, Any]) -> dict[str, Any]:
-        """Convert a PostgreSQL row to the {id, fields} format."""
+        """Convert a PostgreSQL row to the {id, fields, created_at, updated_at} format.
+
+        ``created_at`` and ``updated_at`` are auto-managed SQL columns that we
+        deliberately keep OUT of ``fields`` — putting them in ``fields`` would
+        mean every write-back round-trip pushes them through ``_split_fields``
+        into the ``extra`` JSONB (they aren't promoted columns), growing the
+        JSONB indefinitely and shadowing the authoritative SQL values.
+
+        Surfacing them as top-level keys instead (alongside ``id``) lets
+        consumers that genuinely need lifecycle timestamps reach them
+        without forcing the field-merge path. PushToBacklog + PreDownloadDedup
+        both need ``created_at`` for the URL-dedup TTL filter (added 2026-06-
+        23 — see those stages' ``_is_within_url_ttl`` helpers); before this
+        change the helpers always read None and silently kept every blueprint
+        in the dedup set (TTL no-op).
+        """
         record_id = str(row.pop("id", ""))
         extra = row.pop("extra", None) or {}
         if isinstance(extra, str):
             extra = json.loads(extra)
 
+        # Pop the auto-managed lifecycle columns BEFORE we iterate row.items()
+        # so they don't slip into ``fields``. Surface them as ISO strings at
+        # top level, matching the existing datetime → isoformat convention
+        # below for promoted columns.
+        def _iso(v: object) -> str | None:
+            if v is None:
+                return None
+            if isinstance(v, (datetime, date)):
+                return v.isoformat()
+            return str(v)
+
+        created_at = _iso(row.pop("created_at", None))
+        updated_at = _iso(row.pop("updated_at", None))
+
         fields: dict[str, Any] = {}
         for k, v in row.items():
-            if k in ("created_at", "updated_at"):
-                continue
             if isinstance(v, (datetime, date)):
                 fields[k] = v.isoformat()
             else:
@@ -708,7 +735,12 @@ class PostgresBackend:
             if k not in fields:  # Only use extra for keys NOT in promoted columns
                 fields[k] = v
 
-        return {"id": record_id, "fields": fields}
+        return {
+            "id": record_id,
+            "fields": fields,
+            "created_at": created_at,
+            "updated_at": updated_at,
+        }
 
 
 class PostgresTableProxy:
