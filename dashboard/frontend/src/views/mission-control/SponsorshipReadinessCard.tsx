@@ -150,6 +150,23 @@ export function SponsorshipReadinessCard() {
             })
         )}
       </div>
+
+      {/* PR X (2026-06-23): portfolio link closes the discoverability
+          gap — PRs #482/#483 shipped /media-kit routes with no nav
+          entry from the dashboard. Footer link opens the all-5-niches
+          printable in a new tab so operator doesn't lose Mission
+          Control state. */}
+      <div className="mt-3 pt-2 border-t border-text-muted/10 flex items-center justify-end">
+        <a
+          href="/media-kit/all"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-text-secondary hover:text-text-primary transition-colors"
+          title="Open the multi-niche portfolio kit in a new tab"
+        >
+          View portfolio →
+        </a>
+      </div>
     </div>
   );
 }
@@ -270,6 +287,21 @@ function NicheRow({ nicheId, label, hex, readiness }: NicheRowProps) {
           writes body to clipboard. The single button is the entire
           new operator-leverage surface from this row. */}
       <CopyPitchButton nicheId={nicheId} />
+
+      {/* PR X: View kit — opens per-niche printable kit in new tab.
+          Sibling to CopyPitchButton; together they make a row a
+          two-button operator-leverage micro-surface (Copy text + View
+          full kit). Both share the same nicheId source-of-truth. */}
+      <a
+        href={`/media-kit/${nicheId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] px-1.5 py-0.5 rounded border border-text-muted/30 text-text-secondary hover:bg-text-muted/10 shrink-0 inline-flex items-center justify-center"
+        title={`Open the ${label} media kit in a new tab`}
+        style={{ minWidth: 36 }}
+      >
+        Kit
+      </a>
     </div>
   );
 }
