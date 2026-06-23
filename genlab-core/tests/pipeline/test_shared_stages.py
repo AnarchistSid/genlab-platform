@@ -331,6 +331,64 @@ class TestExpressLane:
         assert stats["total"] == 2
         assert stats["express_count"] >= 1
 
+    def test_error_handler_survives_none_title_and_story_id(self, monkeypatch):
+        """PR #502 regression — error-handler logger must not crash on None fields.
+
+        Pre-fix, the error path at express_lane.py:128 evaluated
+        ``story.get("title", "unknown")[:40]`` to compute a fallback
+        identifier for the log line. When fetchers set ``title=None``
+        explicitly (key present, value None), ``get()`` returned None
+        and ``None[:40]`` crashed with ``'NoneType' object is not
+        subscriptable`` inside the logger format args — turning the
+        exception handler into a SECONDARY exception that ate the
+        original traceback (the actual classification failure).
+
+        With ``or`` coalescing in the identifier expression, the
+        logger always receives a valid string and the original
+        exception traceback survives.
+        """
+        import genlab_core.pipeline.stages.express_lane as el
+
+        stage = self._make()
+
+        def _boom(_self, _story):
+            raise RuntimeError("synthetic classification failure")
+
+        monkeypatch.setattr(el.ExpressLane, "_classify", _boom)
+
+        ctx = {
+            "stories": [
+                {"story_id": None, "title": None, "summary": "irrelevant"},
+            ],
+        }
+        # Must not raise — pre-fix this crashed inside logger.exception()
+        result = stage.execute(ctx)
+
+        # Original classification still gets a LOW fallback set by the
+        # except branch (lines 130-135), proving the handler ran fully.
+        clf = result["stories"][0]["urgency_classification"]
+        assert clf["urgency"] == "LOW"
+        assert clf["express"] is False
+
+    def test_source_pins_express_lane_safe_identifier_pattern(self):
+        """Source-level pin: the ``or`` coalesce pattern must stay.
+
+        A refactor that reverts to ``story.get("title", "unknown")[:40]``
+        re-introduces the None-slice crash invisibly (the test above
+        catches it on synthetic-exception path, this catches it on
+        plain code-review).
+        """
+        from pathlib import Path
+
+        import genlab_core.pipeline.stages.express_lane as mod
+
+        src = Path(mod.__file__).read_text()
+        # Pin the safe shape — must contain the coalesce
+        assert 'story.get("story_id") or (story.get("title") or "unknown")[:40]' in src, (
+            "express_lane.py must use ``or`` coalesce for the error-handler "
+            "identifier — see PR #502 docstring."
+        )
+
 
 # ── RenderTextOverlays ──────────────────────────────────────────
 

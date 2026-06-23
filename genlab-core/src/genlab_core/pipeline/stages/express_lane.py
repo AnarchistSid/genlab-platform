@@ -123,9 +123,20 @@ class ExpressLane:
                 if classification["express"]:
                     express_count += 1
             except Exception:
+                # Defensive identifier resolution — see the same pattern in
+                # video_gate.py (PR #499). ``dict.get(k, default)`` returns the
+                # default ONLY when the key is ABSENT. When fetchers set
+                # ``story_id=None`` or ``title=None`` explicitly, ``get()``
+                # returns None and the previous ``story.get("title",
+                # "unknown")[:40]`` slice crashed with ``'NoneType' object is
+                # not subscriptable`` inside the logger format args — turning
+                # this error-handler into a SECONDARY exception that ate the
+                # original traceback. ``... or default`` coerces None to the
+                # fallback so the exception logger always succeeds.
+                _ident = story.get("story_id") or (story.get("title") or "unknown")[:40]
                 logger.exception(
                     "[ExpressLane] Classification failed for %s",
-                    story.get("story_id", story.get("title", "unknown")[:40]),
+                    _ident,
                 )
                 story["urgency_classification"] = {
                     "urgency": URGENCY_LOW,
