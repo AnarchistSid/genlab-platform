@@ -256,6 +256,33 @@ export interface SponsorshipNicheReadiness {
 
 export type SponsorshipReadinessData = Record<string, SponsorshipNicheReadiness>;
 
+// ── Media Kit ──────────────────────────────────────────────
+// PR U (2026-06-23) — operator-deliverable media kit. The MediaKit
+// route renders this with print-friendly CSS so the operator can
+// Cmd+P → "Save as PDF" → email to a brand.
+
+export interface MediaKitAudienceEntry {
+  /** Platform identifier, e.g. "youtube", "instagram". */
+  platform: string;
+  /** The headline-metric name (subscribers / followers / fans). */
+  metric_name: string;
+  current_value: number | null;
+  delta_7d: number | null;
+  is_threshold_met: boolean;
+}
+
+export interface MediaKitData {
+  niche_id: string;
+  tier: SponsorshipTier;
+  nearest_threshold_days: number | null;
+  /** Ordered list — sorted DESC by current_value. The list shape
+   * (not a dict) is deliberate: it survives Flask's JSON_SORT_KEYS. */
+  audience: MediaKitAudienceEntry[];
+  monetised_platforms: string[];
+  /** ISO-8601 UTC timestamp of generation. */
+  generated_at: string;
+}
+
 export interface BlueprintUpdatedEvent {
   id: string;
   status: string;

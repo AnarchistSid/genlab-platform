@@ -538,6 +538,7 @@ from server.api.revenue import bp as revenue_bp
 from server.api.runway import bp as runway_bp
 from server.api.schedule import bp as schedule_bp
 from server.api.scheduler import scheduler_bp
+from server.api.media_kit import bp as media_kit_bp
 from server.api.sources import bp as sources_bp
 from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
@@ -571,6 +572,7 @@ app.register_blueprint(trends_bp)
 app.register_blueprint(youtube_quota_bp)
 app.register_blueprint(monetisation_bp)
 app.register_blueprint(sponsorship_bp)
+app.register_blueprint(media_kit_bp)
 app.register_blueprint(scheduler_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(links_bp)
