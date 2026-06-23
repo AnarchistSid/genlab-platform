@@ -299,6 +299,22 @@ export interface MediaKitAudienceEntry {
   is_threshold_met: boolean;
 }
 
+/** PR CC (2026-06-23) — top-performing post entry in the kit. */
+export interface MediaKitTopPost {
+  platform: string;
+  post_id: string;
+  /** Stable public URL. Only platforms with derivable URLs (YT, FB,
+   * X at v1) appear here. */
+  post_url: string;
+  /** ISO-8601 UTC. */
+  published_at: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  /** Composite engagement = views + likes*5 + comments*10. */
+  score: number;
+}
+
 export interface MediaKitData {
   niche_id: string;
   tier: SponsorshipTier;
@@ -307,6 +323,9 @@ export interface MediaKitData {
    * (not a dict) is deliberate: it survives Flask's JSON_SORT_KEYS. */
   audience: MediaKitAudienceEntry[];
   monetised_platforms: string[];
+  /** PR CC (2026-06-23) — top 3 recent posts by composite engagement.
+   * Empty when no qualifying posts (cold start) or fetch fails. */
+  top_posts: MediaKitTopPost[];
   /** ISO-8601 UTC timestamp of generation. */
   generated_at: string;
 }
@@ -320,6 +339,8 @@ export interface MediaKitPortfolioNiche {
   nearest_threshold_days: number | null;
   audience: MediaKitAudienceEntry[];
   monetised_platforms: string[];
+  /** PR CC (2026-06-23) — per-niche top posts inside the portfolio. */
+  top_posts: MediaKitTopPost[];
 }
 
 // PR W (2026-06-23) — Outreach template generator.

@@ -126,13 +126,27 @@ def _build_audience_summary(platforms: dict[str, list[dict]]) -> list[dict[str, 
     return summary
 
 
-def _build_niche_kit(niche_id: str, records: list[dict]) -> dict[str, Any]:
+def _build_niche_kit(
+    niche_id: str,
+    records: list[dict],
+    *,
+    include_top_posts: bool = True,
+) -> dict[str, Any]:
     """Build the kit payload for a single niche from already-fetched rows.
 
     Extracted so both the per-niche route and the portfolio route can
     share the same body-building logic. Takes pre-fetched ``records``
     (filtered to this niche) so the portfolio route can issue ONE DB
     query and slice per-niche in memory rather than 5 separate queries.
+
+    Args:
+        niche_id: niche identifier
+        records: per-niche monetisationprogress rows
+        include_top_posts: when True (default), fetches top 3 recent
+            posts from publishing_analytics and embeds them in the
+            response under ``top_posts``. PR CC (2026-06-23) — brands
+            judge content not numbers; embedding clickable top-post
+            links closes the kit's prequalification gap.
 
     Returns the same shape as the per-niche endpoint's response body,
     minus the ``generated_at`` field (the route handler stamps that
@@ -159,12 +173,31 @@ def _build_niche_kit(niche_id: str, records: list[dict]) -> dict[str, Any]:
     )
     audience = _build_audience_summary(platforms)
 
+    # PR CC: fetch top 3 recent posts from publishing_analytics.
+    # Lazy import keeps the test-mocking surface clean (patching
+    # the source module rather than this re-export).
+    top_posts: list[dict[str, Any]] = []
+    if include_top_posts:
+        try:
+            from server.core.top_posts_pg import fetch_top_posts
+
+            top_posts = fetch_top_posts(niche_id, limit=3, lookback_days=30)
+        except Exception as exc:
+            # Top-posts is a kit-quality enhancement, not a kit-blocker.
+            # Empty list on any failure — kit still renders.
+            logger.debug(
+                "[media_kit] top_posts fetch failed for niche=%s: %s",
+                niche_id,
+                exc,
+            )
+
     return {
         "niche_id": niche_id,
         "tier": tier,
         "nearest_threshold_days": nearest_days,
         "audience": audience,
         "monetised_platforms": monetised_platforms,
+        "top_posts": top_posts,
     }
 
 

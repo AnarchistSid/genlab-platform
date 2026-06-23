@@ -18,7 +18,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { mediaKit } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
-import type { MediaKitAudienceEntry, MediaKitData, SponsorshipTier } from "@/api/types";
+import type {
+  MediaKitAudienceEntry,
+  MediaKitData,
+  MediaKitTopPost,
+  SponsorshipTier,
+} from "@/api/types";
 import { getNiche, type NicheId } from "@/niches/registry";
 
 const TIER_LABEL: Record<SponsorshipTier, string> = {
@@ -167,6 +172,21 @@ function KitDocument({ niche, data }: { niche: NicheId; data: MediaKitData }) {
         )}
       </section>
 
+      {/* PR CC: top-performing posts. Brands judge content, not
+          numbers — embedding clickable top-post links closes the
+          kit's prequalification gap. Only render section when there
+          are URL-derivable posts (YT/FB/X at v1). */}
+      {data.top_posts.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Recent top posts</h2>
+          <ul className="space-y-2 text-sm">
+            {data.top_posts.map((post) => (
+              <TopPostRow key={`${post.platform}-${post.post_id}`} post={post} />
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Monetised platforms — only visible when there's something to say */}
       {data.monetised_platforms.length > 0 && (
         <section>
@@ -258,6 +278,36 @@ function AudienceRow({
         )}
       </td>
     </tr>
+  );
+}
+
+function TopPostRow({ post }: { post: MediaKitTopPost }) {
+  const date = post.published_at
+    ? new Date(post.published_at).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : "";
+  return (
+    <li className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
+      <div className="flex-1 min-w-0">
+        <a
+          href={post.post_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-slate-900 hover:underline capitalize font-medium"
+          title={`Open this ${post.platform} post in a new tab`}
+        >
+          {post.platform}
+        </a>
+        <span className="text-slate-500 text-xs ml-2">{date}</span>
+      </div>
+      <div className="flex gap-3 text-xs text-slate-600 font-mono">
+        <span title="Views">{formatNumber(post.views)} views</span>
+        <span title="Likes">{formatNumber(post.likes)} likes</span>
+        <span title="Comments">{formatNumber(post.comments)} comments</span>
+      </div>
+    </li>
   );
 }
 
