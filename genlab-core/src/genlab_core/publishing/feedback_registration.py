@@ -53,6 +53,14 @@ def register_pending_feedback(
 
     fb_store = PendingFeedbackStore(backlog_client)
     try:
+        # Lift published_at out of the PendingFeedbackTask constructor
+        # call so the SAME timestamp powers both the task.published_at
+        # field AND the hour-arm built inside _build_bandit_context.
+        # Pre-PR Z this was computed inline as datetime.now(UTC) per
+        # platform — same hour in practice but a fresh wall-clock read
+        # per platform. Lifting it makes the hour-of-day attribution
+        # consistent across all platforms in a single dispatch.
+        published_at = datetime.now(UTC)
         for plat, pstatus in outcome.platform_status.items():
             if not _is_published_status(pstatus):
                 continue
@@ -74,13 +82,18 @@ def register_pending_feedback(
             # going forward.
             post_id_for_plat = outcome.successful_post_ids.get(plat, "")
             post_id_for_plat = _normalize_post_id(plat, post_id_for_plat)
-            bandit_ctx = _build_bandit_context(fields, niche_id)
+            bandit_ctx = _build_bandit_context(
+                fields,
+                niche_id,
+                publish_hour=published_at.hour,
+                platform=plat,
+            )
 
             task = PendingFeedbackTask(
                 content_id=candidate_id or record_id[:16],
                 platform=plat,
                 niche_id=niche_id,
-                published_at=datetime.now(UTC),
+                published_at=published_at,
                 platform_post_id=post_id_for_plat,
                 content_type="video",
                 hook_text=fields.get("hook", "")[:100],
@@ -130,7 +143,13 @@ def _is_published_status(pstatus: Any) -> bool:
     return isinstance(pstatus, dict) and pstatus.get("status") == "PUBLISHED"
 
 
-def _build_bandit_context(fields: dict[str, Any], niche_id: str) -> dict | None:
+def _build_bandit_context(
+    fields: dict[str, Any],
+    niche_id: str,
+    *,
+    publish_hour: int | None = None,
+    platform: str | None = None,
+) -> dict | None:
     """Build the ``bandit_context`` dict the learning-loop's
     metric_collector update expects.
 
@@ -138,12 +157,32 @@ def _build_bandit_context(fields: dict[str, Any], niche_id: str) -> dict | None:
 
     * ``hook_features`` — text features for the hook classifier.
     * ``linucb_context`` — 6D feature vector for the LinUCB bandit.
-    * ``extra_arms`` — the hook_style arm the picker chose, so the 48h
-      reward update can credit the style arm too (Break-11 fix that
-      closes the loop opened in commit 84b7801).
+    * ``extra_arms`` — additional bandit arms that receive the SAME
+      reward as the primary content arm via metric_collector's
+      multi-arm credit pass. Two arm shapes get added when present:
+        - ``style:{niche}:{name}``    — hook style (Break-11 fix)
+        - ``hour:{H}:{platform}:{niche}`` — UTC publish hour (PR Z,
+          2026-06-23). Foundation for the optimal-time bandit:
+          captures publish-hour data so future runs can sample from
+          Thompson Sampling posteriors per (hour, platform, niche)
+          tuple. Read side is env-gated in optimal_time_learner.
 
     Returns ``None`` on any failure — keeps PendingFeedback registration
     from blocking on a learning-loop import error or a malformed field.
+
+    Args:
+        fields: blueprint fields (hook, hook_style, etc.)
+        niche_id: niche identifier
+        publish_hour: UTC hour of publish (0-23). When provided WITH
+            ``platform``, an hour-arm is appended to extra_arms so the
+            bandit accumulates per-hour posteriors. Optional for
+            backward compat with callers that don't have the hour
+            handy yet (tests + legacy paths).
+        platform: destination platform string (e.g. "youtube",
+            "instagram"). Required for the hour-arm to be added —
+            without it the bandit can't distinguish "Tuesday 14:00 on
+            YouTube" from "Tuesday 14:00 on Instagram" which have
+            very different audience dynamics.
     """
     try:
         from genlab_core.learning.hook_features import build_feature_vector
@@ -156,9 +195,26 @@ def _build_bandit_context(fields: dict[str, Any], niche_id: str) -> dict | None:
             "hook_features": hook_feats,
             "linucb_context": linucb_ctx,
         }
+        extra_arms: list[str] = []
+
         hook_style = fields.get("hook_style", "")
         if hook_style:
-            ctx["extra_arms"] = [f"style:{niche_id}:{hook_style}"]
+            extra_arms.append(f"style:{niche_id}:{hook_style}")
+
+        # PR Z (2026-06-23): publish-hour arm. Guard against missing
+        # platform / out-of-range hour so a malformed call doesn't
+        # poison the bandit_arms table with garbage arm_ids that the
+        # consumer's prefix-match would then have to filter.
+        if (
+            publish_hour is not None
+            and platform
+            and isinstance(publish_hour, int)
+            and 0 <= publish_hour <= 23
+        ):
+            extra_arms.append(f"hour:{publish_hour}:{platform}:{niche_id}")
+
+        if extra_arms:
+            ctx["extra_arms"] = extra_arms
         return ctx
     except Exception as exc:
         logger.debug("[publish] bandit_context build failed: %s", exc)
