@@ -191,8 +191,29 @@ class PersonaEngine:
             self._client = anthropic.Anthropic()
         client = self._client
 
+        # 2026-06-22 — scratchpad context. The weekly Opus reflection
+        # (PR #474) synthesizes 7 days of operator reviews + edits +
+        # bombed posts into actionable markdown. Engagement reply
+        # quality is the brand-trust surface — operator-taste signal
+        # belongs here as much as in hook generation. Same pattern
+        # as PR #471 (hook gen) + PR #476 (gate judge): prepend the
+        # scratchpad BEFORE the task definition. Fail-OPEN: missing
+        # scratchpad = empty string = no prepend.
+        try:
+            from genlab_core.learning.scratchpad import read_scratchpad
+
+            scratchpad = read_scratchpad()
+        except Exception:  # noqa: BLE001 — scratchpad is augmentation
+            scratchpad = ""
+        scratchpad_block = (
+            "## Recent learnings (scratchpad)\n\n" + scratchpad + "\n\n---\n\n"
+            if scratchpad
+            else ""
+        )
+
         system = (
-            "You are a strict quality judge for social-media replies. "
+            scratchpad_block
+            + "You are a strict quality judge for social-media replies. "
             "Score the reply 0-100 on three dimensions:\n"
             "1. on-topic: does the reply directly address the comment?\n"
             "2. on-voice: does the reply match the niche persona?\n"
