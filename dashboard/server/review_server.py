@@ -516,6 +516,7 @@ from server.api.alerts import bp as alerts_bp
 from server.api.analytics import bp as analytics_bp
 from server.api.audience import bp as audience_bp
 from server.api.auto_approval import bp as auto_approval_bp
+from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.config_routes import bp as config_bp
@@ -582,6 +583,7 @@ app.register_blueprint(revenue_bp)
 app.register_blueprint(alerts_bp)
 app.register_blueprint(metrics_bp)
 app.register_blueprint(audience_bp)
+app.register_blueprint(bandit_hour_posteriors_bp)
 app.register_blueprint(events_bp)
 
 

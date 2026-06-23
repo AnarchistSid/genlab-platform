@@ -29,6 +29,7 @@ import { ContentQuality } from "./ContentQuality";
 import { PipelineCountdowns } from "./PipelineCountdowns";
 import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
+import { BanditHourHeatmap } from "./BanditHourHeatmap";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -256,6 +257,13 @@ export default function MissionControl() {
                 because they're conceptually adjacent: progress shows the
                 raw numbers, readiness shows the actionable inference. */}
             <SponsorshipReadinessCard />
+            {/* PR BB (2026-06-23): operator's feedback loop for PR #487's
+                optimal-time bandit foundation. Per-niche 24-hour strips
+                colored by Beta posterior mean. Operator sees when each
+                niche crosses 30 observations (readiness threshold for
+                flipping GENLAB_OPTIMAL_TIME_BANDIT=1) — same pattern as
+                AutoApprovalCalibrationCard. */}
+            <BanditHourHeatmap />
           </div>
         </div>
       )}
