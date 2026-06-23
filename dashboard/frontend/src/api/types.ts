@@ -294,6 +294,32 @@ export interface MediaKitPortfolioNiche {
   monetised_platforms: string[];
 }
 
+// PR W (2026-06-23) — Outreach template generator.
+// Ready-to-send sponsor outreach pre-drafted per-niche; the
+// SponsorshipReadinessCard's "Copy pitch" button calls this
+// endpoint and writes the body to the clipboard.
+
+export interface OutreachAudienceEntry {
+  platform: string;
+  metric_name: string;
+  current_value: number | null;
+  delta_7d: number | null;
+  is_threshold_met: boolean;
+}
+
+export interface OutreachTemplate {
+  niche_id: string;
+  tier: SponsorshipTier;
+  /** Tier-aware subject ("Sponsorship opportunity" vs "Quick intro"). */
+  subject: string;
+  /** Full email/DM body with [BRAND] + [NAME] placeholders. */
+  body: string;
+  /** Relative URL — the frontend can prefix with origin if needed. */
+  media_kit_url: string;
+  /** Top-3 platforms for inline preview without re-fetch. */
+  audience_summary: OutreachAudienceEntry[];
+}
+
 export interface MediaKitPortfolioData {
   /** Always all 5 niches, in stable order. Cold-start niches appear
    * with tier=tracking + empty audience rather than being omitted. */
