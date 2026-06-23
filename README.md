@@ -72,7 +72,23 @@ uv run --package genlab-core python -m genlab_core.pipeline --niche <niche_id>
 
 # 5. Run tests
 uv run --package genlab-core pytest genlab-core/tests/ -x
+
+# 6. (Contributors) arm the local pre-commit hooks
+pre-commit install
+pre-commit run -a       # one-time check against the whole repo
 ```
+
+## Operator + contributor playbook
+
+After cloning, read **[`docs/OPERATOR-PLAYBOOK.md`](docs/OPERATOR-PLAYBOOK.md)** — single source of truth for:
+
+- Post-deploy activation (which YAMLs to flip per niche, when to flip env flags)
+- Daily dashboard workflow (Copy/Kit/Portfolio buttons for sponsor outreach)
+- Architecture primitives (shared helpers + which PRs compose on them)
+- Test patterns for lazy-imported dependencies (avoids common mock-target gotchas)
+- Workflow patterns (pre-format-then-push, refactor-on-2nd-implementation, etc.)
+
+The playbook is the durable handoff document — survives across clones and sessions.
 
 ## Configuration
 
