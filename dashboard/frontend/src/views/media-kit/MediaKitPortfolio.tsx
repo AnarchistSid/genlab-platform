@@ -245,12 +245,40 @@ function PortfolioTopPostRow({ post }: { post: MediaKitTopPost }) {
       })
     : "";
   return (
-    <li className="flex items-center justify-between gap-2 text-slate-600">
+    <li className="flex items-center gap-2 text-slate-600">
+      {/* PR HH (2026-06-23): symmetry fix for PR #494 — MediaKit.tsx
+          got YT thumbnails but MediaKitPortfolio missed them. Portfolio
+          row is more compact than the single-niche kit, so thumbnail
+          shrinks to w-12 h-8 (vs MediaKit's w-20 h-12). Same fallback
+          to platform-name placeholder when thumbnail_url is null. */}
+      {post.thumbnail_url ? (
+        <a
+          href={post.post_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0"
+          title={`Open this ${post.platform} post in a new tab`}
+        >
+          <img
+            src={post.thumbnail_url}
+            alt={`${post.platform} post thumbnail`}
+            className="w-12 h-8 object-cover rounded border border-slate-200"
+            loading="lazy"
+          />
+        </a>
+      ) : (
+        <div
+          className="shrink-0 w-12 h-8 rounded border border-slate-200 bg-slate-100 flex items-center justify-center text-[8px] uppercase text-slate-500 font-medium"
+          title={`No thumbnail derivable for ${post.platform}`}
+        >
+          {post.platform.slice(0, 4)}
+        </div>
+      )}
       <a
         href={post.post_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="hover:underline capitalize text-slate-700"
+        className="hover:underline capitalize text-slate-700 flex-1"
       >
         {post.platform}
         {date && <span className="text-slate-400 ml-1">· {date}</span>}
