@@ -16,6 +16,7 @@ import type {
   AudienceSnapshot,
   ViralityBreakdownData,
   MonetizationDataEnvelope,
+  BanditHourPosteriors,
   MediaKitData,
   MediaKitPortfolioData,
   MonetisationProgressData,
@@ -699,6 +700,28 @@ export const outreach = {
         return envelope.data;
       }
       return d as PortfolioOutreachTemplate;
+    }),
+};
+
+// PR BB (2026-06-23) — bandit hour-posteriors for Mission Control
+// heatmap. Operator feedback loop for PR #487's optimal-time bandit.
+export const bandit = {
+  hourPosteriors: (nicheId: string) =>
+    get<BanditHourPosteriors | { data: BanditHourPosteriors }>(
+      "/bandit/hour-posteriors",
+      { niche: nicheId },
+    ).then((d): BanditHourPosteriors => {
+      const envelope = d as { data?: BanditHourPosteriors };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as BanditHourPosteriors;
     }),
 };
 

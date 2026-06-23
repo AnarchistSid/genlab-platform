@@ -256,6 +256,34 @@ export interface SponsorshipNicheReadiness {
 
 export type SponsorshipReadinessData = Record<string, SponsorshipNicheReadiness>;
 
+// ── Bandit Hour Posteriors ─────────────────────────────────
+// PR BB (2026-06-23) — Mission Control hour-heatmap card. Operator
+// feedback loop for PR #487's optimal-time bandit foundation.
+
+export interface BanditHourEntry {
+  /** UTC hour 0..23. */
+  hour: number;
+  /** Aggregated Beta(alpha) across all platforms for this niche+hour. */
+  alpha_sum: number;
+  /** Aggregated Beta(beta) across all platforms. */
+  beta_sum: number;
+  /** alpha+beta-2 baseline — proxy for observation count. */
+  n_obs_est: number;
+  /** alpha / (alpha+beta), or 0.5 for cold-start hours. */
+  mean: number;
+}
+
+export interface BanditHourPosteriors {
+  niche_id: string;
+  /** Always 24 entries (hour 0..23), even when most are cold-start. */
+  hours: BanditHourEntry[];
+  total_observations: number;
+  /** True when total_observations ≥ 30 — same threshold as the
+   * AutoApprovalCalibrationCard's readiness gate. Operator's signal
+   * to flip GENLAB_OPTIMAL_TIME_BANDIT=1. */
+  ready_for_activation: boolean;
+}
+
 // ── Media Kit ──────────────────────────────────────────────
 // PR U (2026-06-23) — operator-deliverable media kit. The MediaKit
 // route renders this with print-friendly CSS so the operator can

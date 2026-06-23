@@ -97,6 +97,10 @@ export const queryKeys = {
     get: (nicheId: string) => ["media-kit", nicheId] as const,
     all: () => ["media-kit", "_all"] as const,
   },
+  bandit: {
+    hourPosteriors: (nicheId: string) =>
+      ["bandit", "hour-posteriors", nicheId] as const,
+  },
   revenue: {
     summary: () => ["revenue", "summary"] as const,
     clickTrends: () => ["revenue", "click-trends"] as const,
