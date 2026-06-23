@@ -283,6 +283,28 @@ export interface MediaKitData {
   generated_at: string;
 }
 
+/** Per-niche slice inside the portfolio kit. Same shape as
+ * MediaKitData minus the top-level generated_at (the portfolio's
+ * generated_at is at the envelope level). */
+export interface MediaKitPortfolioNiche {
+  niche_id: string;
+  tier: SponsorshipTier;
+  nearest_threshold_days: number | null;
+  audience: MediaKitAudienceEntry[];
+  monetised_platforms: string[];
+}
+
+export interface MediaKitPortfolioData {
+  /** Always all 5 niches, in stable order. Cold-start niches appear
+   * with tier=tracking + empty audience rather than being omitted. */
+  niches: MediaKitPortfolioNiche[];
+  summary: {
+    eligible_now_count: number;
+    monetised_platforms_total: number;
+  };
+  generated_at: string;
+}
+
 export interface BlueprintUpdatedEvent {
   id: string;
   status: string;

@@ -235,3 +235,205 @@ class TestFailure:
         would hide the bug."""
         resp = client.get("/api/v1/media-kit/ai_creators")
         assert resp.status_code == 500
+
+
+# ───────────────────────────────────────────────────────────
+# Portfolio endpoint (PR V, 2026-06-23) — GET /api/v1/media-kit/_all
+# ───────────────────────────────────────────────────────────
+
+# Cross-niche mock — covers different tiers so the portfolio summary
+# logic can compute eligible_now_count properly.
+_PORTFOLIO_MIXED = [
+    # ai_creators — eligible_now (YouTube fully met)
+    {
+        "niche_id": "ai_creators",
+        "platform": "youtube",
+        "metric_name": "subscribers",
+        "current_value": 1500,
+        "target_value": 1000,
+        "pct_complete": 150.0,
+        "delta_7d": 30,
+        "days_to_threshold_est": None,
+        "is_threshold_met": True,
+    },
+    {
+        "niche_id": "ai_creators",
+        "platform": "youtube",
+        "metric_name": "watch_hours_12mo",
+        "current_value": 4500,
+        "target_value": 4000,
+        "pct_complete": 112.5,
+        "delta_7d": 100,
+        "days_to_threshold_est": None,
+        "is_threshold_met": True,
+    },
+    # gaming — within_2_months
+    {
+        "niche_id": "gaming",
+        "platform": "instagram",
+        "metric_name": "followers",
+        "current_value": 9500,
+        "target_value": 10000,
+        "pct_complete": 95.0,
+        "delta_7d": 50,
+        "days_to_threshold_est": 21,
+        "is_threshold_met": False,
+    },
+    # sports — tracking (no positive velocity → tracking)
+    {
+        "niche_id": "sports",
+        "platform": "instagram",
+        "metric_name": "followers",
+        "current_value": 200,
+        "target_value": 10000,
+        "pct_complete": 2.0,
+        "delta_7d": 0,
+        "days_to_threshold_est": 600,
+        "is_threshold_met": False,
+    },
+    # movies + anime intentionally absent — exercise cold-start path
+]
+
+
+class TestPortfolioEndpoint:
+    """Pins for GET /api/v1/media-kit/_all (multi-niche aggregate)."""
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_returns_200_with_all_5_niches(self, _mock, client):
+        """Pin: portfolio response ALWAYS carries all 5 niches, even
+        the ones with zero monetisationprogress rows. Operator never
+        has to apologise to a brand for missing entries."""
+        resp = client.get("/api/v1/media-kit/_all")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        niche_ids = [n["niche_id"] for n in data["niches"]]
+        assert set(niche_ids) == {
+            "ai_creators",
+            "gaming",
+            "sports",
+            "movies",
+            "anime",
+        }
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_niche_order_is_stable(self, _mock, client):
+        """Pin: niches appear in the stable order
+        (ai_creators, gaming, sports, movies, anime) so the printed
+        portfolio document layout is deterministic — same A4 layout
+        across requests, no reflow when refreshing for re-print."""
+        resp = client.get("/api/v1/media-kit/_all")
+        data = json.loads(resp.data)["data"]
+        order = [n["niche_id"] for n in data["niches"]]
+        assert order == ["ai_creators", "gaming", "sports", "movies", "anime"]
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_per_niche_tier_reuses_single_niche_logic(self, _mock, client):
+        """Pin: each portfolio entry's tier matches what the per-niche
+        endpoint would return for the same data. Confirms the shared
+        ``_build_niche_kit`` helper has not drifted from the
+        per-niche route. The kit and portfolio must NEVER disagree on
+        a single niche's tier."""
+        resp = client.get("/api/v1/media-kit/_all")
+        data = json.loads(resp.data)["data"]
+        by_id = {n["niche_id"]: n for n in data["niches"]}
+        assert by_id["ai_creators"]["tier"] == "eligible_now"
+        assert by_id["gaming"]["tier"] == "within_2_months"
+        assert by_id["sports"]["tier"] == "tracking"
+        # Cold-start niches → tracking with empty audience
+        assert by_id["movies"]["tier"] == "tracking"
+        assert by_id["movies"]["audience"] == []
+        assert by_id["anime"]["tier"] == "tracking"
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_summary_counts(self, _mock, client):
+        """Pin: portfolio summary carries eligible_now_count +
+        monetised_platforms_total — these are the headline numbers
+        the printed first-page summary table reads from."""
+        resp = client.get("/api/v1/media-kit/_all")
+        data = json.loads(resp.data)["data"]
+        # Only ai_creators is eligible
+        assert data["summary"]["eligible_now_count"] == 1
+        # Only ai_creators/youtube is fully met
+        assert data["summary"]["monetised_platforms_total"] == 1
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_single_fetch_call_for_all_niches(self, mock_fetch, client):
+        """Pin: portfolio uses ONE fetch_progress() call (no niche
+        filter) rather than 5 sequential calls. This is the perf
+        invariant — operator clicking 'Refresh' on the portfolio kit
+        must not multiply DB load by 5x."""
+        resp = client.get("/api/v1/media-kit/_all")
+        assert resp.status_code == 200
+        # Exactly one call, with no niche_id filter
+        assert mock_fetch.call_count == 1
+        call_kwargs = mock_fetch.call_args.kwargs
+        assert "niche_id" not in call_kwargs or call_kwargs.get("niche_id") is None
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=[],
+    )
+    def test_empty_data_returns_all_cold_start_niches(self, _mock, client):
+        """Pin: zero rows in monetisationprogress → 200 + all 5
+        niches as cold-start (tracking tier, empty audience). The
+        printable document still has its full 5-section shape;
+        brand sees ‘growing audience’ tone rather than ‘no data’."""
+        resp = client.get("/api/v1/media-kit/_all")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        assert len(data["niches"]) == 5
+        for n in data["niches"]:
+            assert n["tier"] == "tracking"
+            assert n["audience"] == []
+            assert n["monetised_platforms"] == []
+        assert data["summary"]["eligible_now_count"] == 0
+        assert data["summary"]["monetised_platforms_total"] == 0
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        side_effect=RuntimeError("pg connection refused"),
+    )
+    def test_portfolio_fetch_exception_returns_500(self, _mock, client):
+        """Pin: same fail-loud semantics as the per-niche route —
+        infra error returns 500, NOT a silent-200 with empty data."""
+        resp = client.get("/api/v1/media-kit/_all")
+        assert resp.status_code == 500
+
+
+class TestRouteCollision:
+    """The portfolio route is ``/_all``. Flask routes static segments
+    BEFORE dynamic ones, so ``/_all`` should match the portfolio
+    handler rather than being interpreted as ``niche_id="_all"``.
+    These pins guard that priority."""
+
+    @patch(
+        "server.api.media_kit._pg_fetch_progress",
+        return_value=[],
+    )
+    def test_underscore_all_hits_portfolio_not_per_niche(self, _mock, client):
+        """Pin: GET /_all returns the portfolio shape (with ``niches``
+        + ``summary`` keys), NOT a 404 from the per-niche validator
+        treating ``_all`` as an unknown niche_id."""
+        resp = client.get("/api/v1/media-kit/_all")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        # Portfolio shape carries ``niches`` (list); per-niche shape
+        # would carry ``niche_id`` (string) instead.
+        assert "niches" in data
+        assert isinstance(data["niches"], list)
+        assert "niche_id" not in data

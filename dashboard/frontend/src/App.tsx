@@ -23,6 +23,9 @@ const SettingsView = lazy(() => import("@/views/settings"));
 const FocusReviewView = lazy(() => import("@/views/focus-review"));
 const BulkReviewView = lazy(() => import("@/views/bulk-review"));
 const MediaKitView = lazy(() => import("@/views/media-kit/MediaKit"));
+const MediaKitPortfolioView = lazy(
+  () => import("@/views/media-kit/MediaKitPortfolio"),
+);
 const PublishingQueueView = lazy(() => import("@/views/publishing-queue/PublishingQueue"));
 const ChannelHealthView = lazy(() => import("@/views/channel-health/ChannelHealth"));
 const MonetisationView = lazy(() => import("@/views/monetisation/MonetisationProgress"));
@@ -143,6 +146,20 @@ const router = createBrowserRouter([
           </Suspense>
         </ErrorBoundary>
       </NuqsAdapter>
+    ),
+  },
+  {
+    // PR V (2026-06-23): multi-niche portfolio kit. Declared BEFORE
+    // the :niche dynamic route so React Router prefers the static
+    // segment match (defense in depth — RR static-segment ranking
+    // already gives it priority, but explicit order avoids surprise).
+    path: "/media-kit/all",
+    element: (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
+          <MediaKitPortfolioView />
+        </Suspense>
+      </ErrorBoundary>
     ),
   },
   {
