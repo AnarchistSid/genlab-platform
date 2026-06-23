@@ -155,8 +155,11 @@ export function SponsorshipReadinessCard() {
           gap — PRs #482/#483 shipped /media-kit routes with no nav
           entry from the dashboard. Footer link opens the all-5-niches
           printable in a new tab so operator doesn't lose Mission
-          Control state. */}
-      <div className="mt-3 pt-2 border-t border-text-muted/10 flex items-center justify-end">
+          Control state.
+          PR AA (2026-06-23): added portfolio Copy button next to View
+          so the footer mirrors the per-row Copy+Kit symmetry. */}
+      <div className="mt-3 pt-2 border-t border-text-muted/10 flex items-center justify-end gap-2">
+        <CopyPortfolioPitchButton />
         <a
           href="/media-kit/all"
           target="_blank"
@@ -168,6 +171,54 @@ export function SponsorshipReadinessCard() {
         </a>
       </div>
     </div>
+  );
+}
+
+/**
+ * PR AA (2026-06-23): generates the cross-channel portfolio outreach
+ * template and writes it to the clipboard. Sibling to the per-niche
+ * CopyPitchButton; mirrors its UX exactly so operator muscle memory
+ * carries over.
+ *
+ * One button is the entire new operator-leverage surface from the
+ * card footer — operator clicks, the cross-channel pitch lands in
+ * clipboard, paste into email with [BRAND] + [NAME] to fill.
+ */
+function CopyPortfolioPitchButton() {
+  const [busy, setBusy] = useState(false);
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const tpl = await outreach.templateAll();
+      const text = `Subject: ${tpl.subject}\n\n${tpl.body}`;
+      await navigator.clipboard.writeText(text);
+      toast.success(
+        `Portfolio pitch copied (${tpl.eligible_now_count}/${tpl.niche_count} pitch-ready)`,
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? `Copy failed: ${err.message}`
+          : "Copy failed — try again",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      className="text-[10px] px-1.5 py-0.5 rounded border border-text-muted/30 text-text-secondary hover:bg-text-muted/10 disabled:opacity-50 disabled:cursor-not-allowed"
+      title="Generate cross-channel portfolio pitch and copy to clipboard"
+    >
+      {busy ? "…" : "Copy portfolio"}
+    </button>
   );
 }
 

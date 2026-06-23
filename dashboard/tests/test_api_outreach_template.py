@@ -278,6 +278,212 @@ class TestAudienceSummary:
             assert v0 >= v1
 
 
+# ───────────────────────────────────────────────────────────────
+# PR AA (2026-06-23) — portfolio outreach template
+# ───────────────────────────────────────────────────────────────
+
+# Mixed-tier portfolio for testing the multi-niche aggregation.
+# ai_creators eligible_now (YT met), gaming within_2_months (close +
+# velocity), sports tracking (flat), movies+anime cold-start absent.
+_PORTFOLIO_MIXED = [
+    {
+        "niche_id": "ai_creators",
+        "platform": "youtube",
+        "metric_name": "subscribers",
+        "current_value": 1500,
+        "target_value": 1000,
+        "pct_complete": 150.0,
+        "delta_7d": 30,
+        "days_to_threshold_est": None,
+        "is_threshold_met": True,
+    },
+    {
+        "niche_id": "ai_creators",
+        "platform": "youtube",
+        "metric_name": "watch_hours_12mo",
+        "current_value": 5000,
+        "target_value": 4000,
+        "pct_complete": 125.0,
+        "delta_7d": 100,
+        "days_to_threshold_est": None,
+        "is_threshold_met": True,
+    },
+    {
+        "niche_id": "gaming",
+        "platform": "instagram",
+        "metric_name": "followers",
+        "current_value": 9500,
+        "target_value": 10000,
+        "pct_complete": 95.0,
+        "delta_7d": 50,
+        "days_to_threshold_est": 21,
+        "is_threshold_met": False,
+    },
+    {
+        "niche_id": "sports",
+        "platform": "instagram",
+        "metric_name": "followers",
+        "current_value": 200,
+        "target_value": 10000,
+        "pct_complete": 2.0,
+        "delta_7d": 0,
+        "days_to_threshold_est": 600,
+        "is_threshold_met": False,
+    },
+]
+
+
+class TestPortfolioEndpoint:
+    """Pins for the cross-channel portfolio outreach endpoint
+    (PR AA). Different shape from the per-niche endpoint —
+    references multi-channel framing, links to /media-kit/all."""
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_returns_all_5_niches_in_stable_order(self, _mock, client):
+        """Pin: portfolio response carries ALL 5 niches in stable
+        order, even cold-start ones. Brand sees the full portfolio,
+        not just niches that happen to have monetisation data."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)["data"]
+        ids = [n["niche_id"] for n in data["niches"]]
+        assert ids == ["ai_creators", "gaming", "sports", "movies", "anime"]
+        assert data["niche_count"] == 5
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_eligible_now_count_correct(self, _mock, client):
+        """Pin: eligible_now_count matches the number of niches with
+        tier=eligible_now. Drives the CTA copy choice."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        # Only ai_creators is eligible in mock data
+        assert data["eligible_now_count"] == 1
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_subject_active_pitch_when_eligible_count_positive(self, _mock, client):
+        """Pin: eligible_now_count ≥ 1 → subject 'Cross-channel
+        sponsorship opportunity'. Active-pitch framing is honest
+        when at least one channel is sponsor-ready."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        assert "Cross-channel sponsorship opportunity" in data["subject"]
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=[],
+    )
+    def test_subject_soft_intro_when_no_eligibles(self, _mock, client):
+        """Pin: zero eligible niches → subject 'Quick intro' (NOT
+        'opportunity'). Operator can't accidentally over-promise
+        deal-readiness with cold-start data."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        assert "Quick intro" in data["subject"]
+        assert "opportunity" not in data["subject"].lower()
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_body_links_to_portfolio_kit(self, _mock, client):
+        """Pin: body includes the portfolio kit URL (/media-kit/all),
+        NOT a per-niche kit URL. Recipient lands on the multi-niche
+        document, matching the email's portfolio framing."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        assert data["media_kit_url"] == "/media-kit/all"
+        assert "/media-kit/all" in data["body"]
+        # And NOT any single-niche URL pattern
+        assert "/media-kit/ai_creators" not in data["body"]
+        assert "/media-kit/gaming" not in data["body"]
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_body_contains_each_niche_display_name(self, _mock, client):
+        """Pin: body's stat block names every niche. Brand can scan
+        the portfolio at a glance without clicking through to the
+        kit. Display names (not raw niche_ids) — recipient-friendly."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        body = data["body"]
+        # Display names per _NICHE_DISPLAY
+        assert "Blackbox Brief" in body
+        assert "CriticalRush" in body
+        assert "ClutchWire" in body
+        assert "SpliceReel" in body
+        assert "FrameDrift" in body
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_body_contains_brand_and_name_placeholders(self, _mock, client):
+        """Pin: portfolio body has [BRAND] + [NAME] placeholders, same
+        operator-fillable convention as per-niche template."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        assert "[BRAND]" in data["body"]
+        assert "[NAME]" in data["body"]
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_cta_references_eligible_count(self, _mock, client):
+        """Pin: CTA mentions the eligible_now_count when ≥1, anchoring
+        the pitch in real numbers (not vague claims). Operator
+        credibility detail."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        # eligible_now=1, niche_count=5 → "1 of our 5 channels"
+        assert "1 of our 5 channels" in data["body"]
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        side_effect=RuntimeError("pg connection refused"),
+    )
+    def test_fetch_exception_returns_500(self, _mock, client):
+        """Pin: infra error → 500 (visible to operator). Same fail-loud
+        contract as the per-niche endpoint and the media-kit endpoints."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        assert resp.status_code == 500
+
+
+class TestRoutePrecedence:
+    """The portfolio endpoint is /_all; the per-niche endpoint takes
+    ?niche=<id>. These are different routes (no path collision) but
+    the test guards that Flask sees them as distinct."""
+
+    @patch(
+        "server.api.outreach_template._pg_fetch_progress",
+        return_value=_PORTFOLIO_MIXED,
+    )
+    def test_all_route_returns_portfolio_shape(self, _mock, client):
+        """Pin: /outreach-template/_all returns portfolio shape (with
+        ``niches`` array + ``eligible_now_count``), NOT per-niche shape
+        (with ``niche_id`` + ``tier``)."""
+        resp = client.get("/api/v1/sponsorship/outreach-template/_all")
+        data = json.loads(resp.data)["data"]
+        # Portfolio markers
+        assert "niches" in data
+        assert "eligible_now_count" in data
+        assert "niche_count" in data
+        # NOT per-niche markers
+        assert "niche_id" not in data
+        assert "tier" not in data
+
+
 class TestNumberFormatting:
     def test_format_k(self):
         """Pin: thousand-scale numbers compact to 'Nk' format."""

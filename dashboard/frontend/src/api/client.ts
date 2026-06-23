@@ -20,6 +20,7 @@ import type {
   MediaKitPortfolioData,
   MonetisationProgressData,
   OutreachTemplate,
+  PortfolioOutreachTemplate,
   SponsorshipReadinessData,
   YouTubeDemographics,
   AnalyticsOverviewResponse,
@@ -678,6 +679,26 @@ export const outreach = {
         return envelope.data;
       }
       return d as OutreachTemplate;
+    }),
+  /** PR AA (2026-06-23): cross-channel portfolio pitch generator.
+   * Used by the SponsorshipReadinessCard footer's "Copy portfolio"
+   * button — closes the asymmetry where per-niche has Copy+Kit but
+   * portfolio only had View. */
+  templateAll: () =>
+    get<PortfolioOutreachTemplate | { data: PortfolioOutreachTemplate }>(
+      "/sponsorship/outreach-template/_all",
+    ).then((d): PortfolioOutreachTemplate => {
+      const envelope = d as { data?: PortfolioOutreachTemplate };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as PortfolioOutreachTemplate;
     }),
 };
 
