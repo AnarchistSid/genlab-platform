@@ -127,3 +127,10 @@ pipeline:
   # name in the title). 3-day title window allows different moment-clips
   # from the same game/team without re-blueprinting the same actual video.
   title_dedup_days: 3
+  # URL-dedup TTL (2026-06-23) — ScoreBat match URLs for popular fixtures
+  # recur within 1-2 weeks (same Liverpool vs Crystal Palace match page
+  # gets cited in multiple highlight clips over the week). Live diagnosed
+  # 2026-06-23: PreDownloadDedup dropped 3 of 5 stories (Angers-PSG,
+  # Getafe-Barcelona, Liverpool-Crystal Palace) as URL-already-published,
+  # contributing to the 5-day publishing gap. 7-day TTL matches gaming.
+  url_dedup_ttl_days: 7
