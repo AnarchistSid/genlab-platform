@@ -786,6 +786,41 @@ def _classify_arm(
                         experiment_assignment_id,
                         sel.arm_id,
                     )
+                    # 2026-06-23 — close the 8-event taxonomy. The LAST
+                    # dormant event type: EVENT_EXPERIMENT_ASSIGNMENT.
+                    # Fires only when assign_to_experiment() actually
+                    # returns a selection (experiment is registered,
+                    # enabled env flag set, deterministic-bucket math
+                    # succeeded). Sibling to EVENT_BANDIT_PICK (line
+                    # ~1576) which fires AFTER classification regardless
+                    # of path; this one fires at the precise moment the
+                    # experiment branch wins. With both emits a later
+                    # query can answer "of the N times this niche
+                    # received candidates, how many were experiment-
+                    # assigned vs bandit-picked?" without inferring it
+                    # from arm_id naming conventions.
+                    try:
+                        from genlab_core.learning.episodic_memory import (
+                            EVENT_EXPERIMENT_ASSIGNMENT,
+                            record_event,
+                        )
+
+                        record_event(
+                            event_type=EVENT_EXPERIMENT_ASSIGNMENT,
+                            niche_id=niche_id,
+                            blueprint_id=experiment_assignment_id,
+                            payload={
+                                "experiment_id": active_experiment.experiment_id,
+                                "arm_id": sel.arm_id,
+                                "assignment_id": experiment_assignment_id,
+                                "arms_in_experiment": len(active_experiment.arms),
+                            },
+                        )
+                    except Exception as exc:  # noqa: BLE001 — episodic emit must never block classification
+                        logger.debug(
+                            "[classify_arm] episodic experiment_assignment emit failed: %s",
+                            exc,
+                        )
                     return sel.arm_id
         except Exception as exc:  # noqa: BLE001 — fail-open to bandit chain
             logger.debug(
