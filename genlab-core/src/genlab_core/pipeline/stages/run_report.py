@@ -384,6 +384,27 @@ class RunReport:
             for v in slo_violations:
                 logger.warning("[RunReport] SLO VIOLATION: %s", v)
 
+        # PR #505 (2026-06-23): fire opt-in webhook alert. No-op when
+        # ``GENLAB_SLO_ALERT_WEBHOOK`` env var is unset. The alerter
+        # itself is fail-open (never raises) — the only impact of a
+        # broken webhook is missing the notification, not blocking
+        # the pipeline.
+        try:
+            from genlab_core.observability.slo_alerter import fire_slo_alert
+
+            fire_slo_alert(report)
+        except Exception as exc:
+            # Defensive — slo_alerter.fire_slo_alert should never raise,
+            # but a future import-time error (missing dependency, etc.)
+            # would propagate here. Log at WARNING so operators see the
+            # alerting outage without it blocking the pipeline.
+            logger.warning(
+                "[RunReport] slo_alerter wiring failed for %s run %s: %s",
+                niche_id,
+                run_id,
+                exc,
+            )
+
         # Push dashboard notification event
         try:
             from genlab_core.observability.dashboard_events import push_event
