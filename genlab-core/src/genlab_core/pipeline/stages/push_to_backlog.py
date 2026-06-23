@@ -1214,8 +1214,55 @@ class PushToBacklog:
             # queries return correctly ordered params. The Python-side filter
             # below is kept because it's simple and the story count is small.
 
+            # URL-dedup TTL (added 2026-06-23): opt-in per niche. Niches whose
+            # source URLs are "sticky" — same URL returned daily by the upstream
+            # source — get permanently dedup-locked once the URL publishes once.
+            # Gaming is the worst offender: 45 of 89 active blueprints have
+            # ``twitch.tv/directory/game/{game}`` URLs (Twitch directory pages,
+            # same URL forever per game) + 27 have ``store.steampowered.com/app/
+            # {id}`` Steam store pages. Once "Overwatch" publishes once, every
+            # subsequent day's trending fetch (which still returns Overwatch
+            # because it's still trending) gets dedup-rejected here. Sports
+            # has the same pattern at shorter recurrence — ScoreBat match URLs
+            # for popular matches recur within 1-2 weeks.
+            #
+            # Anime/movies/ai_creators have naturally-unique YouTube
+            # ``watch?v={id}`` URLs (one URL per video) and don't need the TTL
+            # — they leave the config unset, preserving the old "forever
+            # dedup" behaviour.
+            #
+            # Config: ``pipeline.url_dedup_ttl_days: 7`` in niche.yaml. None or
+            # missing or <=0 → old behaviour (no TTL, dedup forever).
+            _url_dedup_ttl_days = (
+                context.get("niche_config", {}).get("pipeline", {}).get("url_dedup_ttl_days")
+            )
+            _url_dedup_cutoff = (
+                datetime.now(UTC) - timedelta(days=_url_dedup_ttl_days)
+                if _url_dedup_ttl_days and _url_dedup_ttl_days > 0
+                else None
+            )
+
             # Seed URL hashes from blueprints in blocking states only.
-            active_bps = [bp for bp in recent_bps if _is_blocking(bp)]
+            # When url_dedup_ttl_days is set, also exclude blueprints whose
+            # created_at predates the TTL cutoff — letting today's "Overwatch"
+            # republish if the last "Overwatch" was >7 days ago.
+            def _is_within_url_ttl(bp: dict) -> bool:
+                if _url_dedup_cutoff is None:
+                    return True
+                fields = bp.get("fields", bp)
+                created = fields.get("created_at")
+                if not created:
+                    # Missing date — be conservative and KEEP it in the dedup
+                    # set (don't risk re-publishing unknown-age content).
+                    return True
+                if isinstance(created, str):
+                    try:
+                        created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    except (ValueError, TypeError):
+                        return True  # Unparseable — keep in dedup set
+                return created >= _url_dedup_cutoff
+
+            active_bps = [bp for bp in recent_bps if _is_blocking(bp) and _is_within_url_ttl(bp)]
             url_hashes_from_bps = 0
             for bp in active_bps:
                 fields = bp.get("fields", bp)

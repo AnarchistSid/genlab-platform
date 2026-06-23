@@ -25,6 +25,7 @@ push stage still catches duplicates.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any
 
@@ -46,6 +47,35 @@ def _blocks_pre_download(row: dict) -> bool:
     """
     fields = row.get("fields", row)
     return fields.get("status", "") in _PRE_DOWNLOAD_BLOCKING
+
+
+def _is_within_url_ttl(bp: dict, cutoff: datetime | None) -> bool:
+    """True if blueprint is recent enough to still block URL dedup.
+
+    Mirrors the same helper in push_to_backlog.py — see there for the
+    fuller "sticky-source-URL" rationale (gaming Twitch directory pages
+    + Steam store pages + sports ScoreBat match URLs recur daily, and
+    permanently dedup-lock fresh trending fetches without a TTL). When
+    ``cutoff`` is None (default), every blueprint blocks forever; with
+    a cutoff set, blueprints whose ``created_at`` predates it stop
+    contributing to the dedup set, letting today's "Overwatch" run
+    re-publish if the last "Overwatch" was >cutoff days ago.
+
+    Missing or unparseable dates → keep in dedup set (conservative —
+    don't risk re-publishing unknown-age content).
+    """
+    if cutoff is None:
+        return True
+    fields = bp.get("fields", bp)
+    created = fields.get("created_at")
+    if not created:
+        return True
+    if isinstance(created, str):
+        try:
+            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return True
+    return created >= cutoff
 
 
 logger = logging.getLogger(__name__)
@@ -91,7 +121,26 @@ class PreDownloadDedup:
             )
             return context
 
-        active_bps = [bp for bp in recent_bps if _blocks_pre_download(bp)]
+        # URL-dedup TTL (added 2026-06-23) — opt-in via niche.yaml
+        # ``pipeline.url_dedup_ttl_days``. Same semantics as the helper in
+        # push_to_backlog.py: blueprints older than the TTL stop blocking
+        # fresh URL fetches, so sticky-source niches (gaming, sports) can
+        # republish trending content after the cutoff. Niches without the
+        # config keep the old "dedup forever" behaviour.
+        _url_dedup_ttl_days = (
+            context.get("niche_config", {}).get("pipeline", {}).get("url_dedup_ttl_days")
+        )
+        _url_dedup_cutoff = (
+            datetime.now(UTC) - timedelta(days=_url_dedup_ttl_days)
+            if _url_dedup_ttl_days and _url_dedup_ttl_days > 0
+            else None
+        )
+
+        active_bps = [
+            bp
+            for bp in recent_bps
+            if _blocks_pre_download(bp) and _is_within_url_ttl(bp, _url_dedup_cutoff)
+        ]
         seen_url_hashes: set[str] = set()
         seen_video_ids: set[str] = set()
         for bp in active_bps:
