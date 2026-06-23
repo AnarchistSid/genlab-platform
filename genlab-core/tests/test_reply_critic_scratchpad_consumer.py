@@ -32,11 +32,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 _PERSONA_SRC = (
-    Path(__file__).resolve().parents[1]
-    / "src"
-    / "genlab_core"
-    / "engagement"
-    / "persona_engine.py"
+    Path(__file__).resolve().parents[1] / "src" / "genlab_core" / "engagement" / "persona_engine.py"
 )
 
 
@@ -46,9 +42,7 @@ class TestReplyCriticScratchpadWire:
 
     def test_imports_read_scratchpad(self):
         """Pin: read_scratchpad imported inside validate_reply."""
-        assert (
-            "from genlab_core.learning.scratchpad import read_scratchpad" in self.content
-        )
+        assert "from genlab_core.learning.scratchpad import read_scratchpad" in self.content
 
     def test_prepends_before_task_prompt(self):
         """Pin: scratchpad block prepended BEFORE the 'You are a strict
@@ -108,9 +102,7 @@ class TestRuntimeBehaviorWithMock:
         fake_client.messages.create.return_value = fake_resp
         self.engine._client = fake_client
 
-        with patch(
-            "genlab_core.intelligence.cost_accumulator.record_anthropic_usage"
-        ):
+        with patch("genlab_core.intelligence.cost_accumulator.record_anthropic_usage"):
             self.engine.validate_reply(
                 comment="any comment", reply="any reply", platform="instagram"
             )
@@ -140,12 +132,8 @@ class TestRuntimeBehaviorWithMock:
         fake_client.messages.create.return_value = fake_resp
         self.engine._client = fake_client
 
-        with patch(
-            "genlab_core.intelligence.cost_accumulator.record_anthropic_usage"
-        ):
-            self.engine.validate_reply(
-                comment="x", reply="y", platform="instagram"
-            )
+        with patch("genlab_core.intelligence.cost_accumulator.record_anthropic_usage"):
+            self.engine.validate_reply(comment="x", reply="y", platform="instagram")
 
         call_kwargs = fake_client.messages.create.call_args.kwargs
         system_arg = call_kwargs.get("system", "")

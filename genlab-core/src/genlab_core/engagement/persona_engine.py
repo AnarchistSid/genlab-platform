@@ -212,8 +212,7 @@ class PersonaEngine:
         )
 
         system = (
-            scratchpad_block
-            + "You are a strict quality judge for social-media replies. "
+            scratchpad_block + "You are a strict quality judge for social-media replies. "
             "Score the reply 0-100 on three dimensions:\n"
             "1. on-topic: does the reply directly address the comment?\n"
             "2. on-voice: does the reply match the niche persona?\n"
