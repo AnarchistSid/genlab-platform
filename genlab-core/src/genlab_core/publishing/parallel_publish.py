@@ -218,6 +218,21 @@ def _on_success(
     )
     # Post affiliate link as first reply/comment (non-blocking).
     post_affiliate_reply(platform, result.post_id, fields, niche_id)
+    # 2026-06-23 — cross-platform synergy (PR S). YouTube → X teaser
+    # is the initial route. Other routes (IG → X, FB → X) are
+    # intentional follow-ups pending stable public post URLs from
+    # the Meta API. Opt-in per niche via publishing.yaml; default off.
+    # Non-blocking — fails the same way as affiliate_reply does.
+    try:
+        from genlab_core.publishing.cross_post_teaser import post_cross_teaser
+
+        post_cross_teaser(platform, result.post_id, result.post_url, fields, niche_id)
+    except Exception as exc:  # noqa: BLE001 — cross-teaser failure must never block publish
+        logger.warning(
+            "[publish] cross_teaser invocation failed for %s (non-blocking): %s",
+            platform,
+            exc,
+        )
     # Persist the per-platform state NOW so a crash between here and the
     # orchestrator's final update doesn't lose the success and re-post on
     # the next run.
