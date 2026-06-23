@@ -28,6 +28,10 @@ Mirrors the dispatch pattern from cross_post_teaser._SOURCE_ROUTES
 ``_NICHE_HANDLES_*`` mappings below — both platforms have stable
 per-handle URLs, handles change ~never, no YAML loader needed.
 
+PR KK (2026-06-23) added Instagram via Graph API shortcode lookup
+(``instagram_shortcode_resolver.resolve``). All 6 platforms now
+have URL coverage.
+
   youtube      → https://youtube.com/shorts/{post_id}
   facebook     → https://www.facebook.com/{post_id}
   x_twitter    → https://twitter.com/i/web/status/{post_id}
@@ -35,12 +39,15 @@ per-handle URLs, handles change ~never, no YAML loader needed.
                  (handle from _NICHE_HANDLES_THREADS; PR FF)
   tiktok       → https://www.tiktok.com/@{handle}/video/{post_id}
                  (handle from _NICHE_HANDLES_TIKTOK; PR FF)
-  instagram    → https://www.instagram.com/p/{shortcode}
-                 (shortcode != post_id; needs Graph API lookup; v2)
+  instagram    → https://www.instagram.com/p/{shortcode}/
+                 (shortcode resolved via Graph API + permanent
+                 in-process cache; PR KK)
 
-Only platforms with a derivable URL are included in the top_posts
-list. IG posts still count for engagement ranking but get filtered
-at URL-derivation so the kit doesn't render dead links.
+All platforms with a derivable URL are included in the top_posts
+list. Posts where the URL derivation fails (missing IG token,
+Graph API error, malformed permalink) still count for engagement
+ranking but get filtered at URL-derivation so the kit doesn't
+render dead links.
 
 The hardcoded handles mirror MediaKit.tsx's frontend
 ``NICHE_HANDLES`` constant — one source of truth per layer rather
@@ -142,8 +149,21 @@ def _derive_post_url(platform: str, post_id: str, niche_id: str | None = None) -
         if not handle:
             return None
         return f"https://www.tiktok.com/@{handle}/video/{post_id}"
-    # instagram: needs shortcode (not post_id) — Graph API lookup.
-    # Deferred to v2.
+    if platform == "instagram":
+        # PR KK (2026-06-23): IG public URLs use a shortcode that
+        # differs from the Meta media_id we have on hand. The
+        # resolver hits the Graph API to map media_id → shortcode
+        # (cached permanently in-process). Returns None on any
+        # failure (no token, API error, malformed permalink) — the
+        # caller filters the post from the kit's response.
+        if not niche_id:
+            return None
+        from server.core.instagram_shortcode_resolver import resolve
+
+        shortcode = resolve(post_id, niche_id)
+        if not shortcode:
+            return None
+        return f"https://www.instagram.com/p/{shortcode}/"
     return None
 
 

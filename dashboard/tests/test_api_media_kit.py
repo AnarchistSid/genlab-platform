@@ -539,9 +539,15 @@ class TestTopPostsURLDerivation:
 
         assert _derive_post_url("x_twitter", "1234") == "https://twitter.com/i/web/status/1234"
 
-    def test_instagram_returns_none_v1(self):
-        """Pin: IG requires shortcode (not post_id) — return None at v1
-        so the kit doesn't render dead links. Deferred to v2."""
+    def test_instagram_without_niche_id_returns_none_pr_kk(self):
+        """Pin: IG without niche_id → None (can't look up access
+        token for the resolver). PR KK (2026-06-23) wired the
+        resolver path; legacy callers without niche_id still get
+        None — backward-compat preserved.
+
+        Was: ``test_instagram_returns_none_v1`` before PR KK; now
+        renamed + scoped to the no-niche_id case. The IG-with-niche_id
+        success path is tested in TestInstagramURLInDerivePostURL."""
         from server.core.top_posts_pg import _derive_post_url
 
         assert _derive_post_url("instagram", "1234567890") is None
@@ -601,6 +607,229 @@ class TestTopPostsURLDerivation:
 
         assert _derive_post_url("youtube", "") is None
         assert _derive_post_url("youtube", "youtube:") is None
+
+
+class TestInstagramShortcodeResolver:
+    """Pins for PR KK (2026-06-23) — IG shortcode lookup via Graph API.
+
+    Resolver mediates between Meta's internal media_id and the public
+    shortcode used in IG URLs. Module-level cache (permanent —
+    shortcodes never change for a given media_id) eliminates repeat
+    HTTP calls.
+    """
+
+    def setup_method(self):
+        """Clear the resolver cache between tests for isolation."""
+        from server.core.instagram_shortcode_resolver import reset_cache_for_tests
+
+        reset_cache_for_tests()
+
+    def test_resolve_extracts_shortcode_from_permalink(self, monkeypatch):
+        """Pin: Graph API returns a permalink; resolver extracts the
+        shortcode segment after ``/p/``. This is the happy path."""
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"permalink": "https://www.instagram.com/p/DWQeTghibLu/"}
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=MagicMock(return_value=fake_resp)),
+        )
+        # Resolver looks up the token via niche_credentials — mock it
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {"ig_access_token": "EAAtoken"},
+        )
+
+        result = instagram_shortcode_resolver.resolve("18067901951361934", "gaming")
+        assert result == "DWQeTghibLu"
+
+    def test_resolve_handles_reel_permalink(self, monkeypatch):
+        """Pin: reels use ``/reel/{shortcode}/`` instead of ``/p/``.
+        Resolver handles both shapes uniformly."""
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"permalink": "https://www.instagram.com/reel/CXxXxXxXxXx/"}
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=MagicMock(return_value=fake_resp)),
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {"ig_access_token": "tok"},
+        )
+
+        result = instagram_shortcode_resolver.resolve("media_id_xyz", "gaming")
+        assert result == "CXxXxXxXxXx"
+
+    def test_resolve_caches_results(self, monkeypatch):
+        """Pin: second call for the same media_id is a cache hit —
+        zero additional HTTP calls. Shortcodes are permanent so the
+        cache never invalidates."""
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {"permalink": "https://www.instagram.com/p/ABCDEF/"}
+        get_mock = MagicMock(return_value=fake_resp)
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=get_mock),
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {"ig_access_token": "tok"},
+        )
+
+        # 2 sequential calls for the same media_id
+        instagram_shortcode_resolver.resolve("media_1", "gaming")
+        instagram_shortcode_resolver.resolve("media_1", "gaming")
+
+        # Only ONE HTTP call should have been made
+        assert get_mock.call_count == 1
+
+    def test_resolve_returns_none_on_missing_token(self, monkeypatch):
+        """Pin: no IG access token for the niche → return None without
+        making any HTTP call. Defends against API-error-with-no-token
+        confusing the cache."""
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        get_mock = MagicMock()
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=get_mock),
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {},  # No ig_access_token
+        )
+
+        result = instagram_shortcode_resolver.resolve("media_x", "gaming")
+        assert result is None
+        assert get_mock.call_count == 0
+
+    def test_resolve_returns_none_on_http_error(self, monkeypatch):
+        """Pin: Graph API non-200 (rate limit, auth failure, etc.) →
+        return None. Caller filters from kit response."""
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 429
+        fake_resp.text = "rate limited"
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=MagicMock(return_value=fake_resp)),
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {"ig_access_token": "tok"},
+        )
+
+        result = instagram_shortcode_resolver.resolve("media_y", "gaming")
+        assert result is None
+
+    def test_resolve_returns_none_on_empty_media_id(self):
+        """Pin: empty media_id → None without any HTTP call."""
+        from server.core.instagram_shortcode_resolver import resolve
+
+        assert resolve("", "gaming") is None
+
+    def test_resolve_strips_platform_prefix(self, monkeypatch):
+        """Pin: PR #486 W3.2 normalised some post_ids to
+        ``{platform}:{id}``. Resolver strips the prefix so Graph
+        API sees the bare media_id (NOT ``instagram:18067...``).
+        """
+        from unittest.mock import MagicMock
+
+        from server.core import instagram_shortcode_resolver
+
+        captured_url = []
+
+        def fake_get(url, params=None, timeout=None):
+            captured_url.append(url)
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.json.return_value = {"permalink": "https://www.instagram.com/p/STRIP/"}
+            return resp
+
+        monkeypatch.setattr(
+            instagram_shortcode_resolver,
+            "requests",
+            MagicMock(get=fake_get),
+        )
+        monkeypatch.setattr(
+            "genlab_core.publishing.niche_credentials.resolve_meta_credentials",
+            lambda nid: {"ig_access_token": "tok"},
+        )
+
+        instagram_shortcode_resolver.resolve("instagram:18067901", "gaming")
+        # URL should contain the bare ID, NOT the prefix
+        assert "18067901" in captured_url[0]
+        assert "instagram:" not in captured_url[0]
+
+
+class TestInstagramURLInDerivePostURL:
+    """Pin: PR KK — _derive_post_url calls the IG resolver for the
+    instagram platform when niche_id is supplied."""
+
+    def setup_method(self):
+        from server.core.instagram_shortcode_resolver import reset_cache_for_tests
+
+        reset_cache_for_tests()
+
+    def test_instagram_without_niche_id_returns_none(self):
+        """Pin: IG without niche_id → None (can't look up access
+        token). Same fallback shape as Threads/TikTok in PR #493."""
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("instagram", "media_x") is None
+
+    def test_instagram_with_resolver_success(self, monkeypatch):
+        """Pin: IG with niche_id + resolver returns shortcode →
+        full ``instagram.com/p/{shortcode}/`` URL. The closing of
+        the last platform gap."""
+        # Stub the resolver to return a known shortcode
+        monkeypatch.setattr(
+            "server.core.instagram_shortcode_resolver.resolve",
+            lambda media_id, niche_id: "ABCDEF",
+        )
+
+        from server.core.top_posts_pg import _derive_post_url
+
+        url = _derive_post_url("instagram", "media_x", niche_id="gaming")
+        assert url == "https://www.instagram.com/p/ABCDEF/"
+
+    def test_instagram_with_resolver_failure_returns_none(self, monkeypatch):
+        """Pin: when the resolver returns None (no token, API error,
+        etc.), _derive_post_url also returns None — post gets filtered
+        from the kit response."""
+        monkeypatch.setattr(
+            "server.core.instagram_shortcode_resolver.resolve",
+            lambda media_id, niche_id: None,
+        )
+
+        from server.core.top_posts_pg import _derive_post_url
+
+        url = _derive_post_url("instagram", "media_x", niche_id="gaming")
+        assert url is None
 
 
 class TestThumbnailURLDerivation:
