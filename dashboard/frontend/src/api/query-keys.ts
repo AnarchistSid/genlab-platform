@@ -93,6 +93,9 @@ export const queryKeys = {
   sponsorship: {
     readiness: () => ["sponsorship", "readiness"] as const,
   },
+  mediaKit: {
+    get: (nicheId: string) => ["media-kit", nicheId] as const,
+  },
   revenue: {
     summary: () => ["revenue", "summary"] as const,
     clickTrends: () => ["revenue", "click-trends"] as const,

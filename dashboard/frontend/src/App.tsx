@@ -22,6 +22,7 @@ const RunsView = lazy(() => import("@/views/runs"));
 const SettingsView = lazy(() => import("@/views/settings"));
 const FocusReviewView = lazy(() => import("@/views/focus-review"));
 const BulkReviewView = lazy(() => import("@/views/bulk-review"));
+const MediaKitView = lazy(() => import("@/views/media-kit/MediaKit"));
 const PublishingQueueView = lazy(() => import("@/views/publishing-queue/PublishingQueue"));
 const ChannelHealthView = lazy(() => import("@/views/channel-health/ChannelHealth"));
 const MonetisationView = lazy(() => import("@/views/monetisation/MonetisationProgress"));
@@ -142,6 +143,19 @@ const router = createBrowserRouter([
           </Suspense>
         </ErrorBoundary>
       </NuqsAdapter>
+    ),
+  },
+  {
+    // PR U (2026-06-23): standalone print-friendly per-niche media kit.
+    // No dashboard chrome — the route is the printable surface. Operator
+    // navigates to /media-kit/<niche_id>, Cmd+P → Save as PDF.
+    path: "/media-kit/:niche",
+    element: (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
+          <MediaKitView />
+        </Suspense>
+      </ErrorBoundary>
     ),
   },
 ]);

@@ -527,6 +527,7 @@ from server.api.health import bp as health_bp
 from server.api.learning import bp as learning_bp
 from server.api.legal import legal_bp
 from server.api.links import bp as links_bp
+from server.api.media_kit import bp as media_kit_bp
 from server.api.metrics import bp as metrics_bp
 from server.api.monetisation import bp as monetisation_bp
 from server.api.niches import bp as niches_bp
@@ -571,6 +572,7 @@ app.register_blueprint(trends_bp)
 app.register_blueprint(youtube_quota_bp)
 app.register_blueprint(monetisation_bp)
 app.register_blueprint(sponsorship_bp)
+app.register_blueprint(media_kit_bp)
 app.register_blueprint(scheduler_bp)
 app.register_blueprint(health_bp)
 app.register_blueprint(links_bp)
