@@ -95,6 +95,7 @@ export const queryKeys = {
   },
   mediaKit: {
     get: (nicheId: string) => ["media-kit", nicheId] as const,
+    all: () => ["media-kit", "_all"] as const,
   },
   revenue: {
     summary: () => ["revenue", "summary"] as const,

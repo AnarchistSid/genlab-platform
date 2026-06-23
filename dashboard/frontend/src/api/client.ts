@@ -17,6 +17,7 @@ import type {
   ViralityBreakdownData,
   MonetizationDataEnvelope,
   MediaKitData,
+  MediaKitPortfolioData,
   MonetisationProgressData,
   SponsorshipReadinessData,
   YouTubeDemographics,
@@ -682,8 +683,8 @@ export const sponsorship = {
     }),
 };
 
-// PR U (2026-06-23) — Media Kit API client.
-// One endpoint per niche; the route renders this with print styling.
+// PR U (2026-06-23) + PR V (2026-06-23) — Media Kit API client.
+// Single-niche endpoint + portfolio (multi-niche) endpoint.
 export const mediaKit = {
   get: (nicheId: string) =>
     get<MediaKitData | { data: MediaKitData }>(`/media-kit/${nicheId}`).then(
@@ -701,6 +702,24 @@ export const mediaKit = {
         return d as MediaKitData;
       },
     ),
+  /** Portfolio kit covering all 5 niches in stable order. Used for
+   * cross-channel sponsor pitches. */
+  all: () =>
+    get<MediaKitPortfolioData | { data: MediaKitPortfolioData }>(
+      "/media-kit/_all",
+    ).then((d): MediaKitPortfolioData => {
+      const envelope = d as { data?: MediaKitPortfolioData };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as MediaKitPortfolioData;
+    }),
 };
 
 export const learning = {

@@ -2,6 +2,7 @@
 
 Routes:
     GET /api/v1/media-kit/<niche_id>  -- per-niche printable sponsor kit
+    GET /api/v1/media-kit/_all        -- portfolio kit covering all 5 niches
 
 ## Why this endpoint exists
 
@@ -61,6 +62,12 @@ bp = Blueprint("media_kit_api", __name__, url_prefix="/api/v1/media-kit")
 # (e.g., monetisation.py's _VALID_CHANNELS); follow established pattern.
 _VALID_NICHE_IDS = frozenset({"ai_creators", "gaming", "sports", "movies", "anime"})
 
+# Stable display order for the portfolio kit. Brings ai_creators
+# (Blackbox Brief — highest-engagement niche per 2026-06-22 audit)
+# first, followed by the rest in launch order. Mirrors the order
+# used in genlab-core/config/niches_registry.yaml.
+_STABLE_NICHE_ORDER = ("ai_creators", "gaming", "sports", "movies", "anime")
+
 
 def _build_audience_summary(platforms: dict[str, list[dict]]) -> list[dict[str, Any]]:
     """Flatten the per-platform metrics into a media-kit-ready shape.
@@ -119,6 +126,122 @@ def _build_audience_summary(platforms: dict[str, list[dict]]) -> list[dict[str, 
     return summary
 
 
+def _build_niche_kit(niche_id: str, records: list[dict]) -> dict[str, Any]:
+    """Build the kit payload for a single niche from already-fetched rows.
+
+    Extracted so both the per-niche route and the portfolio route can
+    share the same body-building logic. Takes pre-fetched ``records``
+    (filtered to this niche) so the portfolio route can issue ONE DB
+    query and slice per-niche in memory rather than 5 separate queries.
+
+    Returns the same shape as the per-niche endpoint's response body,
+    minus the ``generated_at`` field (the route handler stamps that
+    at its own response layer so the per-niche and portfolio routes
+    use consistent timestamps).
+    """
+    # Group raw rows by platform
+    platforms: dict[str, list[dict]] = {}
+    for raw in records:
+        rec = raw.get("fields", raw)
+        platform = rec.get("platform") or "unknown"
+        platforms.setdefault(platform, []).append(rec)
+
+    # Reuse the sponsorship card's tier computation so the kit's tier
+    # NEVER disagrees with the Mission Control card.
+    platforms_summary = {
+        plat: _compute_platform_summary(metrics) for plat, metrics in platforms.items()
+    }
+    all_metrics = [m for metrics in platforms.values() for m in metrics]
+    tier, nearest_days = _compute_tier(platforms_summary, all_metrics)
+
+    monetised_platforms = sorted(
+        plat for plat, summary in platforms_summary.items() if summary["is_monetised"]
+    )
+    audience = _build_audience_summary(platforms)
+
+    return {
+        "niche_id": niche_id,
+        "tier": tier,
+        "nearest_threshold_days": nearest_days,
+        "audience": audience,
+        "monetised_platforms": monetised_platforms,
+    }
+
+
+@bp.route("/_all")
+def get_media_kit_all():
+    """Return a portfolio kit covering all 5 niches.
+
+    Single endpoint for portfolio-style sponsor pitches — brands that
+    want cross-channel deals (e.g., advertise across gaming + sports +
+    movies in one campaign) need one document, not five. The frontend
+    renders this at ``/media-kit/all`` as a multi-section printable
+    document.
+
+    Reuses ``_build_niche_kit`` so the portfolio sections are pixel-
+    identical to the per-niche kits they shadow. One DB query (no
+    niche filter) → slice per-niche in memory → build per-niche
+    payloads. Strictly cheaper than 5 separate ``/<niche_id>`` calls.
+
+    Response shape::
+
+        {
+          "niches": [
+            {
+              "niche_id": "ai_creators",
+              "tier": "...",
+              "nearest_threshold_days": ...,
+              "audience": [...],
+              "monetised_platforms": [...]
+            },
+            ...  // one entry per niche in NICHE_IDS, even cold-start
+          ],
+          "summary": {
+            "eligible_now_count": <int>,    // how many pitchable
+            "monetised_platforms_total": <int>
+          },
+          "generated_at": "<ISO-8601 UTC>"
+        }
+
+    Niches with zero monetisationprogress rows still appear as cold-
+    start entries (tier=tracking, empty audience) so the printed
+    document always has the full 5-niche shape — operator never has
+    to apologise to a brand for "missing data".
+    """
+    try:
+        records = _pg_fetch_progress()
+    except Exception as exc:
+        logger.exception("[media_kit] portfolio fetch_progress failed")
+        return api_error(error=str(exc), code=500)
+
+    # Slice records per-niche in memory (one DB query for the whole set)
+    by_niche: dict[str, list[dict]] = {nid: [] for nid in _VALID_NICHE_IDS}
+    for raw in records:
+        rec = raw.get("fields", raw)
+        nid = rec.get("niche_id")
+        if nid in by_niche:
+            by_niche[nid].append(rec)
+
+    # Build per-niche kit payloads in a deterministic order so the
+    # printable document layout is stable across requests.
+    niches: list[dict[str, Any]] = []
+    for nid in _STABLE_NICHE_ORDER:
+        niches.append(_build_niche_kit(nid, by_niche.get(nid, [])))
+
+    eligible_now_count = sum(1 for n in niches if n["tier"] == "eligible_now")
+    monetised_platforms_total = sum(len(n["monetised_platforms"]) for n in niches)
+
+    payload = {
+        "niches": niches,
+        "summary": {
+            "eligible_now_count": eligible_now_count,
+            "monetised_platforms_total": monetised_platforms_total,
+        },
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+    return api_success(data=payload)
+
+
 @bp.route("/<niche_id>")
 def get_media_kit(niche_id: str):
     """Return the per-niche media kit payload.
@@ -157,33 +280,6 @@ def get_media_kit(niche_id: str):
         logger.exception("[media_kit] fetch_progress failed for niche=%s", niche_id)
         return api_error(error=str(exc), code=500)
 
-    # Group raw rows by platform
-    platforms: dict[str, list[dict]] = {}
-    for raw in records:
-        rec = raw.get("fields", raw)
-        platform = rec.get("platform") or "unknown"
-        platforms.setdefault(platform, []).append(rec)
-
-    # Reuse the sponsorship card's tier computation so the kit's tier
-    # NEVER disagrees with the Mission Control card.
-    platforms_summary = {
-        plat: _compute_platform_summary(metrics) for plat, metrics in platforms.items()
-    }
-    all_metrics = [m for metrics in platforms.values() for m in metrics]
-    tier, nearest_days = _compute_tier(platforms_summary, all_metrics)
-
-    monetised_platforms = sorted(
-        plat for plat, summary in platforms_summary.items() if summary["is_monetised"]
-    )
-
-    audience = _build_audience_summary(platforms)
-
-    payload = {
-        "niche_id": niche_id,
-        "tier": tier,
-        "nearest_threshold_days": nearest_days,
-        "audience": audience,
-        "monetised_platforms": monetised_platforms,
-        "generated_at": datetime.now(UTC).isoformat(),
-    }
+    payload = _build_niche_kit(niche_id, records)
+    payload["generated_at"] = datetime.now(UTC).isoformat()
     return api_success(data=payload)
