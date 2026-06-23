@@ -22,6 +22,7 @@ from typing import Any
 import feedparser
 import requests
 import yaml
+from genlab_core.cache.stable_ids import generate_story_id
 from genlab_core.intelligence.dedup_engine import DedupEngine
 from genlab_core.pipeline.models import FetcherStage, replace_stories
 from genlab_core.ratelimit.token_bucket import TokenBucket
@@ -128,13 +129,26 @@ class SteamSpikeFetcher:
                     # Update baseline with slow EMA
                     baseline[app_id] = (avg * 0.8) + (current * 0.2)
 
+                # PR #506 (2026-06-24) — explicitly generate ``story_id``.
+                # Without it, ``StoryCandidate.model_dump()`` (called via the
+                # FetcherStage register path) fills the field with None default,
+                # producing dicts whose ``story_id`` value is the literal None
+                # (not absent). Downstream ``story.get("story_id", "")[:N]``
+                # then crashes because the default-arg only fires on ABSENT
+                # keys — the 2026-06-23 VideoGate outage shape (PR #499).
+                # Setting it at the source kills the bug class architecturally,
+                # matching the established pattern in TrendingVideoFetcher /
+                # FetchTwitchClips / FetchRedditClips.
+                published_iso = _now_utc().isoformat()
+                source_url = f"https://store.steampowered.com/app/{app_id}"
                 stories.append(
                     {
+                        "story_id": generate_story_id(source_url, published_iso),
                         "title": name,
                         "source": "steam_spike",
-                        "source_url": f"https://store.steampowered.com/app/{app_id}",
+                        "source_url": source_url,
                         "score": round(score, 3),
-                        "published_at": _now_utc().isoformat(),
+                        "published_at": published_iso,
                         "summary": f"Currently {current:,} players (baseline ~{int(avg):,})",
                         "steam_app_id": app_id,
                         "igdb_game_id": None,
@@ -260,13 +274,20 @@ class TwitchTrendingFetcher:
                     .replace("{width}", "285")
                     .replace("{height}", "380")
                 )
+                # PR #506 — explicit story_id (see SteamSpikeFetcher above
+                # for the full rationale; same root cause + same fix shape).
+                published_iso = _now_utc().isoformat()
+                source_url = (
+                    f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}"
+                )
                 stories.append(
                     {
+                        "story_id": generate_story_id(source_url, published_iso),
                         "title": game["name"],
                         "source": "twitch_trending",
-                        "source_url": f"https://www.twitch.tv/directory/game/{game['name'].replace(' ', '%20')}",
+                        "source_url": source_url,
                         "score": max(score, 0.1),
-                        "published_at": _now_utc().isoformat(),
+                        "published_at": published_iso,
                         "summary": f"Twitch trending rank #{rank}",
                         "steam_app_id": None,
                         "igdb_game_id": game.get("igdb_id") or game.get("id"),
@@ -365,13 +386,17 @@ class RSSFeedAggregator:
                     if len(summary) > 200:
                         summary = summary[:197] + "..."
 
+                    # PR #506 — explicit story_id (see SteamSpikeFetcher above
+                    # for the full rationale; same root cause + same fix shape).
+                    published_iso = published_at.isoformat()
                     stories.append(
                         {
+                            "story_id": generate_story_id(link, published_iso),
                             "title": title,
                             "source": "rss",
                             "source_url": link,
                             "score": round(score, 3),
-                            "published_at": published_at.isoformat(),
+                            "published_at": published_iso,
                             "summary": summary,
                             "steam_app_id": None,
                             "igdb_game_id": None,
