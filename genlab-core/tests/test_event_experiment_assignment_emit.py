@@ -99,9 +99,7 @@ class TestHappyPath:
                 experiment_assignment_id="bp_emit_001",
             )
 
-        assignment_events = [
-            e for e in emitted if e.get("event_type") == "experiment_assignment"
-        ]
+        assignment_events = [e for e in emitted if e.get("event_type") == "experiment_assignment"]
         assert len(assignment_events) == 1
 
     def test_payload_carries_full_context(self, monkeypatch):
@@ -127,9 +125,7 @@ class TestHappyPath:
                 experiment_assignment_id="bp_payload_test",
             )
 
-        assignment_events = [
-            e for e in emitted if e.get("event_type") == "experiment_assignment"
-        ]
+        assignment_events = [e for e in emitted if e.get("event_type") == "experiment_assignment"]
         assert assignment_events, "no EVENT_EXPERIMENT_ASSIGNMENT emitted"
         event = assignment_events[0]
         assert event["niche_id"] == "gaming"
@@ -186,9 +182,7 @@ class TestFallThroughNoEmit:
                 experiment_assignment_id="bp_disabled_001",
             )
 
-        assert [
-            e for e in emitted if e.get("event_type") == "experiment_assignment"
-        ] == []
+        assert [e for e in emitted if e.get("event_type") == "experiment_assignment"] == []
 
     def test_no_active_experiment_no_emit(self, monkeypatch):
         """Pin: active_experiment=None → the entire experiment branch
@@ -213,9 +207,7 @@ class TestFallThroughNoEmit:
                 experiment_assignment_id="bp_no_exp_001",
             )
 
-        assert [
-            e for e in emitted if e.get("event_type") == "experiment_assignment"
-        ] == []
+        assert [e for e in emitted if e.get("event_type") == "experiment_assignment"] == []
 
     def test_expired_experiment_no_emit(self, monkeypatch):
         """Pin: assign_to_experiment returns None (expired window) →
@@ -240,15 +232,11 @@ class TestFallThroughNoEmit:
                 experiment_assignment_id="bp_expired_001",
             )
 
-        assert [
-            e for e in emitted if e.get("event_type") == "experiment_assignment"
-        ] == []
+        assert [e for e in emitted if e.get("event_type") == "experiment_assignment"] == []
 
 
 class TestFailOpen:
-    def test_record_event_exception_does_not_break_classification(
-        self, monkeypatch
-    ):
+    def test_record_event_exception_does_not_break_classification(self, monkeypatch):
         """Pin: record_event raising mid-call → classification still
         returns the assigned arm_id. The episodic emit MUST NEVER
         block the pipeline (the canonical 'episodic emit must never
@@ -293,6 +281,4 @@ class TestSourceWire:
         assert "experiment_id" in src
         assert "arms_in_experiment" in src
         # Fail-OPEN canonical phrase
-        assert (
-            "episodic emit must never block classification" in src
-        )
+        assert "episodic emit must never block classification" in src
