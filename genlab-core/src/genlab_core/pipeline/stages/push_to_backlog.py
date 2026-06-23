@@ -1576,12 +1576,22 @@ class PushToBacklog:
                     continue
 
             # Extract video_id for dedup — available from FetchTrendingVideos or DownloadTopVideos
-            video_id = story.get("video_id", "")
+            video_id = story.get("video_id") or ""
             if not video_id:
                 # Try clip_index lookup
-                clip_index = context.get("clip_index", {})
-                clip_entry = clip_index.get("clips", {}).get(story_id, {})
-                source_url_for_vid = clip_entry.get("source_url", "")
+                # Defensive ``or {}`` at each step — see video_gate.py (PR #499)
+                # and the same fix pattern. ``dict.get(k, {})`` returns the
+                # default ONLY when the key is ABSENT. Both ``context["clip_
+                # index"]`` and ``clip_index["clips"]`` can exist with value
+                # None (some fetchers initialise the structure but leave the
+                # inner dict unset on early-exit paths). Without the ``or {}``
+                # coercion, ``None.get(...)`` would crash with ``'NoneType'
+                # object has no attribute 'get'`` mid-PushToBacklog, which
+                # the surrounding try/except at line 1517 would log as a
+                # generic story-push failure — losing the structural signal.
+                clip_index = context.get("clip_index") or {}
+                clip_entry = (clip_index.get("clips") or {}).get(story_id) or {}
+                source_url_for_vid = clip_entry.get("source_url") or ""
                 if "youtube" in source_url_for_vid:
                     video_id = source_url_for_vid.split("v=")[-1].split("&")[0]
 
