@@ -71,11 +71,29 @@ pipeline:
     - inject: phase1_relevance_gate
 
     # Common dedup + download + verify-video before spending render time.
+    #
+    # PreDownloadDedup + VideoGate both abort on exception (2026-06-23,
+    # P6 follow-up). Their entire job is to MUTATE downstream state via
+    # setting flags (PreDownloadDedup drops dedup-rejected stories from
+    # the active list; VideoGate sets ``story["_skip_llm"] = True`` for
+    # stories without valid clips, AND drops _skip_llm stories from
+    # ``context["stories"]``). If they raise mid-loop with the default
+    # ``fail_mode: continue``, the unset flag silently fails open —
+    # downstream stages then process corrupted state (rendering for
+    # clipless stories, hook generation for unmarked ones, etc.) and
+    # the pipeline produces 0 blueprints with no per-stage crash signal.
+    # Exactly the 2026-06-23 outage shape PR #499 fixed reactively.
+    #
+    # Abort means: the run report's status becomes "failed" and the
+    # operator sees the original traceback in the journal — not a
+    # confusing 0-blueprints SLO violation 6 minutes later.
     - class: genlab_core.pipeline.stages.pre_download_dedup.PreDownloadDedup
+      fail_mode: abort
     - class: genlab_core.media.download_top_videos.DownloadTopVideos
       retries: 1
       retry_delay_seconds: 30
     - class: genlab_core.pipeline.stages.video_gate.VideoGate
+      fail_mode: abort
 
     # ── Phase 2: Content generation ───────────────────────────────
     - inject: phase2_writing
@@ -87,7 +105,12 @@ pipeline:
     - class: genlab_core.monetization.affiliate_matcher.AffiliateMatch
 
     # ── Phase 3: Quality gates ────────────────────────────────────
+    # QCGates filters out _skip_llm + missing-required-field stories.
+    # Same "filter-stage-aborts-on-exception" reasoning as VideoGate
+    # above — a mid-loop crash would let unvalidated stories through
+    # to render. Abort surfaces the real exception.
     - class: genlab_core.pipeline.stages.qc_gates.QCGates
+      fail_mode: abort
     - class: genlab_core.pipeline.stages.virality_scoring.ViralityScoring
 
     # ── Phase 4: Rendering ────────────────────────────────────────
