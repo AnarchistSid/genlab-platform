@@ -663,3 +663,151 @@ class TestFetchGamingStoriesUpstreamSchemaTolerance:
             assert len(result["stories"]) == 2
             # Twitch (score 1.0) > upstream default (0.5)
             assert result["stories"][0]["title"] == "Valorant"
+
+
+# ---------------------------------------------------------------------------
+# PR #506 (2026-06-24) — all 3 sub-fetchers must emit `story_id` explicitly.
+#
+# Without explicit story_id, StoryCandidate.model_dump() fills the field with
+# its default None, and downstream `story.get("story_id", "")[:N]` slicing
+# crashes (the 2026-06-23 VideoGate outage shape that PR #499 + PR #502
+# defensively patched at consumers).
+#
+# These pins make the bug class architecturally impossible at the source.
+# ---------------------------------------------------------------------------
+
+
+class TestStoryIdAlwaysPresent:
+    """Every dict produced by a gaming sub-fetcher must carry a real
+    ``story_id`` — not absent, not None, not empty.
+    """
+
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_steam_spike_emits_story_id(self, mock_get, tmp_path, monkeypatch):
+        featured_resp = MagicMock()
+        featured_resp.raise_for_status = MagicMock()
+        featured_resp.json.return_value = {
+            "top_sellers": {"items": [{"id": 1245620, "name": "Elden Ring"}]}
+        }
+        players_resp = MagicMock()
+        players_resp.raise_for_status = MagicMock()
+        players_resp.json.return_value = {"response": {"player_count": 50000}}
+        mock_get.side_effect = [featured_resp, players_resp]
+
+        monkeypatch.setattr("niches.gaming.stages.fetch_gaming_stories.PROJECT_ROOT", tmp_path)
+        from niches.gaming.stages.fetch_gaming_stories import SteamSpikeFetcher
+
+        fetcher = SteamSpikeFetcher({"spike_threshold_multiplier": 1.5, "max_stories": 5})
+        fetcher._baseline_path = tmp_path / ".tmp" / "steam_baseline.json"
+        stories = fetcher.fetch()
+
+        assert stories, "Steam spike must produce at least 1 story for this test"
+        for s in stories:
+            assert "story_id" in s, "story_id key must be PRESENT"
+            assert s["story_id"], "story_id must be truthy (not None, not '')"
+            assert isinstance(s["story_id"], str)
+
+    @patch("niches.gaming.tools._twitch_auth.TwitchTokenManager")
+    @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
+    def test_twitch_trending_emits_story_id(self, mock_get, mock_token_mgr_cls):
+        # TwitchTrendingFetcher pulls credentials from
+        # ``genlab_core.settings.settings`` (Pydantic env-cached, loaded at
+        # module import). A bare ``monkeypatch.setenv`` from the test won't
+        # reach the cached attrs — CI hits "TWITCH_CLIENT_ID not set" and
+        # the fetcher exits early returning []. Fix: construct the fetcher
+        # then inject credentials directly + mock the token manager so the
+        # network token call is bypassed.
+        token_inst = MagicMock()
+        token_inst.get_token.return_value = "fake_token"
+        mock_token_mgr_cls.return_value = token_inst
+
+        # Top games response (GET)
+        top_resp = MagicMock()
+        top_resp.raise_for_status = MagicMock()
+        top_resp.json.return_value = {
+            "data": [
+                {"id": "1", "name": "Valorant", "igdb_id": "200", "box_art_url": ""},
+            ]
+        }
+        mock_get.return_value = top_resp
+
+        from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
+
+        fetcher = TwitchTrendingFetcher()
+        fetcher._client_id = "test_id"
+        fetcher._client_secret = "test_secret"
+
+        stories = fetcher.fetch()
+
+        assert stories
+        for s in stories:
+            assert "story_id" in s
+            assert s["story_id"]
+            assert isinstance(s["story_id"], str)
+
+    def test_rss_emits_story_id(self, monkeypatch):
+        # Construct a fake feedparser result with a single entry
+        fake_entry = MagicMock()
+        fake_entry.title = "Big gaming news"
+        fake_entry.link = "https://example.com/news/1"
+        fake_entry.summary = "summary text"
+        # published 1 hour ago — passes the 48h freshness gate
+        recent = _now_utc() - timedelta(hours=1)
+        fake_entry.published_parsed = recent.timetuple()
+
+        fake_parsed = MagicMock()
+        fake_parsed.entries = [fake_entry]
+
+        monkeypatch.setattr(
+            "niches.gaming.stages.fetch_gaming_stories.feedparser.parse",
+            lambda url: fake_parsed,
+        )
+
+        from niches.gaming.stages.fetch_gaming_stories import RSSFeedAggregator
+
+        fetcher = RSSFeedAggregator(
+            [{"name": "TestFeed", "url": "https://example.com/feed.xml", "weight": 0.5}]
+        )
+        stories = fetcher.fetch(trending_titles=[])
+
+        assert stories
+        for s in stories:
+            assert "story_id" in s
+            assert s["story_id"]
+            assert isinstance(s["story_id"], str)
+
+    def test_story_id_stable_across_runs_for_same_url(self):
+        """Same URL + same published_at → same story_id (sha256-deterministic).
+
+        Pins that the chosen helper (`generate_story_id`) IS deterministic —
+        a non-deterministic helper would defeat the dedup logic downstream
+        that hashes (story_id) for cross-run uniqueness.
+        """
+        from genlab_core.cache.stable_ids import generate_story_id
+
+        a = generate_story_id("https://example.com/x", "2026-06-24T00:00:00+00:00")
+        b = generate_story_id("https://example.com/x", "2026-06-24T00:00:00+00:00")
+        assert a == b
+
+
+class TestSourcePinsExplicitStoryId:
+    """Source-level negative pins — the OLD unsafe shapes (no story_id key)
+    must NOT come back. PR #499 + #502's defensive consumer-side coercion
+    only works AS A SAFETY NET; the architectural fix is producer-side."""
+
+    def test_source_has_explicit_story_id_in_steam_spike_append(self):
+        from pathlib import Path
+
+        import niches.gaming.stages.fetch_gaming_stories as mod
+
+        src = Path(mod.__file__).read_text()
+        # Pin the new shape — each sub-fetcher's append must include
+        # ``"story_id": generate_story_id(...)`` as the first key.
+        assert src.count('"story_id": generate_story_id(') >= 3, (
+            "Expected 3 sub-fetchers (Steam/Twitch/RSS) each emitting a "
+            "``story_id`` via ``generate_story_id`` — see PR #506 docstring."
+        )
+        # Negative pin: the OLD unsafe shape (story dict without story_id)
+        # would have ``"title": name, "source": "steam_spike"`` directly
+        # without story_id above it. The presence of all 3 ``"story_id":
+        # generate_story_id(`` strings prevents that.
