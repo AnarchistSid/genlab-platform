@@ -707,17 +707,19 @@ class TestStoryIdAlwaysPresent:
             assert s["story_id"], "story_id must be truthy (not None, not '')"
             assert isinstance(s["story_id"], str)
 
+    @patch("niches.gaming.tools._twitch_auth.TwitchTokenManager")
     @patch("niches.gaming.stages.fetch_gaming_stories.requests.get")
-    @patch("niches.gaming.stages.fetch_gaming_stories.requests.post")
-    def test_twitch_trending_emits_story_id(self, mock_post, mock_get, monkeypatch):
-        monkeypatch.setenv("TWITCH_CLIENT_ID", "test_id")
-        monkeypatch.setenv("TWITCH_CLIENT_SECRET", "test_secret")
-
-        # OAuth token response (POST)
-        token_resp = MagicMock()
-        token_resp.raise_for_status = MagicMock()
-        token_resp.json.return_value = {"access_token": "fake_token"}
-        mock_post.return_value = token_resp
+    def test_twitch_trending_emits_story_id(self, mock_get, mock_token_mgr_cls):
+        # TwitchTrendingFetcher pulls credentials from
+        # ``genlab_core.settings.settings`` (Pydantic env-cached, loaded at
+        # module import). A bare ``monkeypatch.setenv`` from the test won't
+        # reach the cached attrs — CI hits "TWITCH_CLIENT_ID not set" and
+        # the fetcher exits early returning []. Fix: construct the fetcher
+        # then inject credentials directly + mock the token manager so the
+        # network token call is bypassed.
+        token_inst = MagicMock()
+        token_inst.get_token.return_value = "fake_token"
+        mock_token_mgr_cls.return_value = token_inst
 
         # Top games response (GET)
         top_resp = MagicMock()
@@ -732,6 +734,9 @@ class TestStoryIdAlwaysPresent:
         from niches.gaming.stages.fetch_gaming_stories import TwitchTrendingFetcher
 
         fetcher = TwitchTrendingFetcher()
+        fetcher._client_id = "test_id"
+        fetcher._client_secret = "test_secret"
+
         stories = fetcher.fetch()
 
         assert stories
