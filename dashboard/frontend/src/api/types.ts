@@ -320,6 +320,32 @@ export interface OutreachTemplate {
   audience_summary: OutreachAudienceEntry[];
 }
 
+/** Per-niche slice surfaced inside the portfolio outreach template
+ * (PR AA). Just enough for the frontend to render a per-niche
+ * inline preview if it wants — the body string is already a fully-
+ * composed cross-channel pitch. */
+export interface PortfolioOutreachNiche {
+  niche_id: string;
+  tier: SponsorshipTier;
+  audience_summary: OutreachAudienceEntry[];
+}
+
+export interface PortfolioOutreachTemplate {
+  /** Subject — "Cross-channel sponsorship opportunity" when
+   * eligible_now_count ≥ 1, else "Quick intro: 5-channel video portfolio". */
+  subject: string;
+  /** Full email/DM body with [BRAND] + [NAME] placeholders. */
+  body: string;
+  /** Always /media-kit/all — the portfolio kit. */
+  media_kit_url: string;
+  /** How many niches are tier=eligible_now (0..5). Drives CTA choice. */
+  eligible_now_count: number;
+  /** Always 5 with the current niche registry. */
+  niche_count: number;
+  /** Per-niche slices in stable order. */
+  niches: PortfolioOutreachNiche[];
+}
+
 export interface MediaKitPortfolioData {
   /** Always all 5 niches, in stable order. Cold-start niches appear
    * with tier=tracking + empty audience rather than being omitted. */

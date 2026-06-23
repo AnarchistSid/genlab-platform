@@ -3,6 +3,8 @@
 Routes:
     GET /api/v1/sponsorship/outreach-template?niche=<niche_id>
        -- pre-drafted sponsor outreach text + subject + kit URL
+    GET /api/v1/sponsorship/outreach-template/_all
+       -- cross-channel portfolio pitch (5 niches in one email)
 
 ## Why this endpoint exists
 
@@ -200,6 +202,163 @@ def _build_subject(niche_id: str, tier: str) -> str:
     if tier == "eligible_now":
         return f"Sponsorship opportunity: {name}"
     return f"Quick intro: {name}"
+
+
+def _build_portfolio_body(
+    niches: list[dict[str, Any]],
+    eligible_now_count: int,
+    portfolio_kit_url: str,
+) -> str:
+    """Build the cross-channel portfolio pitch body.
+
+    Different shape from the per-niche body — brands receiving this
+    care about portfolio reach and cross-channel synergy, not any
+    single niche's milestones. The CTA references the multi-channel
+    deal opportunity directly.
+
+    Stat-block shape: one line per niche with "Name — N audience on
+    Platform" so the brand can scan the whole portfolio at a glance.
+    Sorted by largest-headline-first inside each niche (already done
+    by ``_build_audience_summary``).
+    """
+    # Per-niche one-liners — strongest platform per niche
+    niche_lines: list[str] = []
+    for niche_data in niches:
+        nid = niche_data["niche_id"]
+        display = _NICHE_DISPLAY.get(nid, {"name": nid})
+        name = display["name"]
+        audience = niche_data.get("audience_summary", [])
+        if audience:
+            top = audience[0]
+            phrase = _format_audience_phrase(top)
+            niche_lines.append(f"  • {name} — {phrase}")
+        else:
+            niche_lines.append(f"  • {name} — audience building")
+
+    stat_block = "\n".join(niche_lines)
+
+    # CTA varies by how many niches are pitch-ready. A portfolio with
+    # ≥1 eligible niche has REAL deal-readiness to lead with; a
+    # portfolio with zero eligibles pivots to "growing portfolio
+    # introduction" rather than active pitch.
+    if eligible_now_count >= 1:
+        cta = (
+            f"{eligible_now_count} of our {len(niches)} channels are at "
+            "brand-deal readiness and we're actively building cross-"
+            "channel partnerships this quarter. Would a 20-minute call "
+            "next week work to walk through fit across the portfolio?"
+        )
+    else:
+        cta = (
+            "We're still building audience across the portfolio but "
+            "wanted to introduce all 5 channels for future cross-channel "
+            "opportunities. Happy to share growth updates as we hit "
+            "thresholds."
+        )
+
+    body = (
+        f"Hi [BRAND],\n\n"
+        f"I'm reaching out about our multi-niche video portfolio — 5 short-form "
+        f"channels across AI, gaming, sports, movies, and anime. Quick snapshot:\n\n"
+        f"{stat_block}\n\n"
+        f"{cta}\n\n"
+        f"Full portfolio kit: {portfolio_kit_url}\n\n"
+        f"Best,\n"
+        f"[NAME]"
+    )
+    return body
+
+
+def _build_portfolio_subject(eligible_now_count: int) -> str:
+    """Subject line for the portfolio pitch.
+
+    ≥1 niche eligible → "Cross-channel sponsorship opportunity"
+                        (actively pitchable framing)
+    0 niches eligible → "Quick intro: 5-channel video portfolio"
+                        (no false promise about deal-readiness)
+    """
+    if eligible_now_count >= 1:
+        return "Cross-channel sponsorship opportunity"
+    return "Quick intro: 5-channel video portfolio"
+
+
+@bp.route("/outreach-template/_all")
+def outreach_template_all():
+    """Return a cross-channel portfolio outreach template.
+
+    For brands that want a single deal across multiple niches.
+    Different shape from the per-niche endpoint — references
+    "portfolio" framing, links to the multi-niche /media-kit/all
+    kit, CTA depends on how many niches are eligible_now rather
+    than any single niche's tier.
+
+    Response shape::
+
+        {
+          "subject": "Cross-channel sponsorship opportunity",
+          "body": "<full email body with [BRAND] + [NAME] placeholders>",
+          "media_kit_url": "/media-kit/all",
+          "eligible_now_count": <int>,   # 0..5
+          "niche_count": 5,
+          "niches": [
+            {"niche_id": "ai_creators", "tier": "...",
+             "audience_summary": [<top-3>]}, ...
+          ]
+        }
+    """
+    try:
+        records = _pg_fetch_progress()
+    except Exception as exc:
+        logger.exception("[outreach_template] portfolio fetch_progress failed")
+        return api_error(error=str(exc), code=500)
+
+    # Group raw rows by (niche, platform) — same shape as the per-niche
+    # endpoint but expanded to all niches.
+    by_niche: dict[str, dict[str, list[dict]]] = {}
+    for raw in records:
+        rec = raw.get("fields", raw)
+        nid = rec.get("niche_id")
+        if nid not in _VALID_NICHE_IDS:
+            continue
+        platform = rec.get("platform") or "unknown"
+        by_niche.setdefault(nid, {}).setdefault(platform, []).append(rec)
+
+    # Build per-niche summaries in stable order (matches media-kit
+    # portfolio order) so portfolio pitches read deterministically.
+    stable_order = ("ai_creators", "gaming", "sports", "movies", "anime")
+    niche_summaries: list[dict[str, Any]] = []
+    eligible_now_count = 0
+    for nid in stable_order:
+        platforms = by_niche.get(nid, {})
+        platforms_summary = {
+            plat: _compute_platform_summary(metrics) for plat, metrics in platforms.items()
+        }
+        all_metrics = [m for metrics in platforms.values() for m in metrics]
+        tier, _ = _compute_tier(platforms_summary, all_metrics)
+        if tier == "eligible_now":
+            eligible_now_count += 1
+        audience = _build_audience_summary(platforms)
+        niche_summaries.append(
+            {
+                "niche_id": nid,
+                "tier": tier,
+                "audience_summary": audience[:3],
+            }
+        )
+
+    kit_url = "/media-kit/all"
+    subject = _build_portfolio_subject(eligible_now_count)
+    body = _build_portfolio_body(niche_summaries, eligible_now_count, kit_url)
+
+    payload = {
+        "subject": subject,
+        "body": body,
+        "media_kit_url": kit_url,
+        "eligible_now_count": eligible_now_count,
+        "niche_count": len(stable_order),
+        "niches": niche_summaries,
+    }
+    return api_success(data=payload)
 
 
 @bp.route("/outreach-template")
