@@ -193,6 +193,91 @@ def _query_4hour_bins(
     return hours
 
 
+def sample_optimal_hours_from_bandit(
+    niche_id: str,
+    platform: str,
+    *,
+    top_n: int = 3,
+) -> list[OptimalHour]:
+    """Thompson-sample the top-N hours for (niche, platform) from
+    bandit posteriors.
+
+    PR Z (2026-06-23): this is the READ side of the optimal-time
+    bandit foundation. PendingFeedbackTask now captures publish-hour
+    as ``hour:{H}:{platform}:{niche_id}`` extra-arms, and the
+    metric_collector's multi-arm credit pass updates each arm's
+    Beta(alpha, beta) posterior on the same reward as the content
+    arm. This function samples each hour's Beta and returns the
+    top-N hours sorted by descending sample.
+
+    Returns empty list when:
+      - BacklogClient init fails (no DSN, no creds)
+      - bandit_arms proxy missing
+      - no hour arms exist for (niche, platform) yet (cold start)
+      - any unexpected error
+
+    Cold-start behavior: the caller (``get_optimal_hours``) checks
+    for empty here and falls through to the legacy Bayesian-shrinkage
+    heuristic — so the bandit augments rather than replaces the
+    heuristic until it has enough data to be confidently better.
+    """
+    try:
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.arm_loader import load_all_arms
+    except ImportError:
+        return []
+
+    try:
+        client = BacklogClient()
+    except Exception:  # noqa: BLE001 — bandit sampling is optional
+        return []
+
+    proxy = getattr(client, "bandit_arms", None)
+    if proxy is None:
+        return []
+
+    arms = load_all_arms(proxy, niche_id)
+    suffix = f":{platform}:{niche_id}"
+    hour_prefix = "hour:"
+
+    # Thompson-sample each matching hour arm.
+    import random as _random
+
+    samples: list[tuple[int, float]] = []
+    for arm_id, (alpha, beta) in arms.items():
+        if not arm_id.startswith(hour_prefix) or not arm_id.endswith(suffix):
+            continue
+        # Extract H from "hour:{H}:{platform}:{niche_id}"
+        try:
+            hour_str = arm_id[len(hour_prefix) : arm_id.index(":", len(hour_prefix))]
+            hour = int(hour_str)
+        except (ValueError, IndexError):
+            continue
+        if not (0 <= hour <= 23):
+            continue
+        a = alpha if alpha > 0 else 1.0
+        b = beta if beta > 0 else 1.0
+        try:
+            sample = _random.betavariate(a, b)
+        except (ValueError, OverflowError):
+            sample = 0.5
+        samples.append((hour, sample))
+
+    if not samples:
+        return []
+
+    samples.sort(key=lambda x: x[1], reverse=True)
+    return [
+        OptimalHour(
+            hour_utc=hour,
+            avg_engagement=sample,  # Beta sample as proxy for engagement
+            sample_size=0,  # arm-derived; raw n_plays not surfaced here
+            confidence=sample,  # Beta sample IS the score for ranking
+        )
+        for hour, sample in samples[:top_n]
+    ]
+
+
 def get_optimal_hours(
     niche_id: str,
     platform: str,
@@ -201,19 +286,43 @@ def get_optimal_hours(
     min_observations: int = _MIN_OBSERVATIONS,
     lookback_days: int = _LOOKBACK_DAYS,
 ) -> list[OptimalHour]:
-    """Return up to ``top_n`` hours-of-day for the (niche, platform) pair,
-    sorted by Bayesian-shrunk engagement score (descending).
+    """Return up to ``top_n`` hours-of-day for the (niche, platform) pair.
 
-    Empty list when:
-      - DATABASE_URL not set
-      - psycopg unavailable / connection fails
-      - No hours meet ``min_observations``
-      - Query errors
+    Two source paths:
+      1. **Bandit path** (PR Z, env-gated): when
+         ``GENLAB_OPTIMAL_TIME_BANDIT=1``, Thompson-sample from
+         hour-arm posteriors written by PR Z's publish-hour capture.
+         Returns immediately when the bandit has any data; falls
+         through to the heuristic when arms are cold-start empty.
+      2. **Heuristic path** (legacy default): Bayesian-shrunk
+         engagement aggregation over ``analytics.composite``. Sorted
+         descending by shrunk score.
+
+    Empty list when both paths return empty.
 
     Cached per (niche, platform) for ``_CACHE_TTL_S`` seconds.
     """
     if not niche_id or not platform:
         return []
+
+    # PR Z: bandit path is opt-in via env flag for staged rollout.
+    # Ship the producer side first (PendingFeedbackTask hour-arm
+    # capture); flip this flag once arms have ≥1 week of observations
+    # so cold-start doesn't push worse picks than the heuristic.
+    # The cache is intentionally NOT consulted on the bandit path —
+    # Thompson sampling is stochastic by design and operator's
+    # repeated "Refresh" should reveal posterior variance.
+    if os.environ.get("GENLAB_OPTIMAL_TIME_BANDIT") == "1":
+        bandit_hours = sample_optimal_hours_from_bandit(niche_id, platform, top_n=top_n)
+        if bandit_hours:
+            logger.debug(
+                "[optimal_time] bandit sampled %d hours for %s/%s",
+                len(bandit_hours),
+                niche_id,
+                platform,
+            )
+            return bandit_hours
+        # Bandit returned empty → cold-start, fall through to heuristic
 
     key = (niche_id, platform)
     now = time.monotonic()
