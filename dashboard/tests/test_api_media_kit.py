@@ -546,15 +546,46 @@ class TestTopPostsURLDerivation:
 
         assert _derive_post_url("instagram", "1234567890") is None
 
-    def test_threads_returns_none_v1(self):
+    def test_threads_without_niche_id_returns_none(self):
+        """Pin: Threads needs niche_id for the @handle URL segment.
+        Called without niche_id (legacy / cold-start path) → None,
+        not a malformed URL. PR FF added niche_id parameter."""
         from server.core.top_posts_pg import _derive_post_url
 
-        assert _derive_post_url("threads", "anything") is None
+        assert _derive_post_url("threads", "post_abc") is None
 
-    def test_tiktok_returns_none_v1(self):
+    def test_tiktok_without_niche_id_returns_none(self):
+        """Pin: TikTok needs niche_id for the @handle URL segment.
+        Same fallback shape as Threads."""
         from server.core.top_posts_pg import _derive_post_url
 
-        assert _derive_post_url("tiktok", "anything") is None
+        assert _derive_post_url("tiktok", "video_xyz") is None
+
+    def test_threads_with_niche_id_returns_handle_url(self):
+        """Pin: PR FF — Threads URL uses the per-niche handle from
+        _NICHE_HANDLES_THREADS. Shape:
+        https://www.threads.net/@{handle}/post/{post_id}"""
+        from server.core.top_posts_pg import _derive_post_url
+
+        url = _derive_post_url("threads", "post_abc", niche_id="gaming")
+        assert url == "https://www.threads.net/@criticalrush/post/post_abc"
+
+    def test_tiktok_with_niche_id_returns_handle_url(self):
+        """Pin: PR FF — TikTok URL uses the per-niche handle from
+        _NICHE_HANDLES_TIKTOK. Shape:
+        https://www.tiktok.com/@{handle}/video/{post_id}"""
+        from server.core.top_posts_pg import _derive_post_url
+
+        url = _derive_post_url("tiktok", "video_xyz", niche_id="movies")
+        assert url == "https://www.tiktok.com/@splicereel/video/video_xyz"
+
+    def test_threads_with_unknown_niche_id_returns_none(self):
+        """Pin: niche_id not in _NICHE_HANDLES_THREADS → None.
+        Defense against shipping a kit with a hypothetical 6th
+        niche before its handle is added to the mapping."""
+        from server.core.top_posts_pg import _derive_post_url
+
+        assert _derive_post_url("threads", "any", niche_id="hypothetical") is None
 
     def test_prefixed_post_id_strips_platform_prefix(self):
         """Pin: PR #486 W3.2 normalised some post_ids to

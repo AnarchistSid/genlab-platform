@@ -24,24 +24,30 @@ ago." Brands care about momentum, not legacy highlights.
 ## URL derivation per platform
 
 Mirrors the dispatch pattern from cross_post_teaser._SOURCE_ROUTES
-(PR #486):
+(PR #486). PR FF (2026-06-23) added Threads + TikTok via the
+``_NICHE_HANDLES_*`` mappings below — both platforms have stable
+per-handle URLs, handles change ~never, no YAML loader needed.
 
   youtube      → https://youtube.com/shorts/{post_id}
   facebook     → https://www.facebook.com/{post_id}
   x_twitter    → https://twitter.com/i/web/status/{post_id}
-  threads      → https://www.threads.net/@<niche>/post/{post_id}
-                 (operator handle lookup needed; skip for v1)
+  threads      → https://www.threads.net/@{handle}/post/{post_id}
+                 (handle from _NICHE_HANDLES_THREADS; PR FF)
+  tiktok       → https://www.tiktok.com/@{handle}/video/{post_id}
+                 (handle from _NICHE_HANDLES_TIKTOK; PR FF)
   instagram    → https://www.instagram.com/p/{shortcode}
-                 (shortcode != post_id; needs Graph API lookup; skip v1)
-  tiktok       → https://www.tiktok.com/@<niche>/video/{post_id}
-                 (operator handle lookup needed; skip for v1)
+                 (shortcode != post_id; needs Graph API lookup; v2)
 
 Only platforms with a derivable URL are included in the top_posts
-list. Posts on IG / Threads / TikTok still count for engagement
-ranking (the SQL doesn't filter platform), but they're filtered
-OUT at the URL-derivation step so the kit doesn't render dead
-links. Future v2 adds handle lookups for the IG/Threads/TikTok
-cases.
+list. IG posts still count for engagement ranking but get filtered
+at URL-derivation so the kit doesn't render dead links.
+
+The hardcoded handles mirror MediaKit.tsx's frontend
+``NICHE_HANDLES`` constant — one source of truth per layer rather
+than a runtime YAML loader (handles change ~never; brand identity
+not configuration). Frontend + backend diverge only on the rare
+rebrand event, which the editor catches because both files appear
+in the same PR diff.
 """
 
 from __future__ import annotations
@@ -54,8 +60,27 @@ from genlab_core.storage.tenant_context import pg_connect
 
 logger = logging.getLogger(__name__)
 
+# PR FF (2026-06-23): per-niche handles for Threads + TikTok URL
+# derivation. Mirrors MediaKit.tsx's NICHE_HANDLES (frontend) —
+# one source of truth per layer. Handles change ~never; rebrand
+# events catch both layers in the same PR diff.
+_NICHE_HANDLES_THREADS: dict[str, str] = {
+    "ai_creators": "blackbox.brief",
+    "gaming": "criticalrush",
+    "sports": "clutchwire",
+    "movies": "splicereel",
+    "anime": "framedrift",
+}
+_NICHE_HANDLES_TIKTOK: dict[str, str] = {
+    "ai_creators": "blackbox.brief",
+    "gaming": "criticalrush",
+    "sports": "clutchwire",
+    "movies": "splicereel",
+    "anime": "framedrift",
+}
 
-def _derive_post_url(platform: str, post_id: str) -> str | None:
+
+def _derive_post_url(platform: str, post_id: str, niche_id: str | None = None) -> str | None:
     """Return the public URL for a (platform, post_id) pair, or None.
 
     None signals "no stable public URL derivable from post_id alone"
@@ -78,8 +103,21 @@ def _derive_post_url(platform: str, post_id: str) -> str | None:
         return f"https://www.facebook.com/{post_id}"
     if platform in ("x_twitter", "twitter"):
         return f"https://twitter.com/i/web/status/{post_id}"
-    # instagram / threads / tiktok: need handle / shortcode lookup
-    # that we don't have at this layer. Defer to v2.
+    if platform == "threads":
+        # PR FF: handle-based URL. Returns None when niche_id isn't
+        # supplied (cold-start path) or isn't in the handle map.
+        handle = _NICHE_HANDLES_THREADS.get(niche_id or "")
+        if not handle:
+            return None
+        return f"https://www.threads.net/@{handle}/post/{post_id}"
+    if platform == "tiktok":
+        # PR FF: handle-based URL. Same fallback shape as threads.
+        handle = _NICHE_HANDLES_TIKTOK.get(niche_id or "")
+        if not handle:
+            return None
+        return f"https://www.tiktok.com/@{handle}/video/{post_id}"
+    # instagram: needs shortcode (not post_id) — Graph API lookup.
+    # Deferred to v2.
     return None
 
 
@@ -148,10 +186,11 @@ def fetch_top_posts(
         return []
 
     # Derive URLs + filter to platforms with derivable URLs.
+    # PR FF: pass niche_id so Threads/TikTok URLs get their handle.
     out: list[dict[str, Any]] = []
     for row in rows:
         platform, post_id, published_at, views, likes, comments, score = row
-        url = _derive_post_url(platform, post_id or "")
+        url = _derive_post_url(platform, post_id or "", niche_id=niche_id)
         if url is None:
             continue
         out.append(
