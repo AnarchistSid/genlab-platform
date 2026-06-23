@@ -329,6 +329,32 @@ class TestVideoGate:
         assert result["run_stats"]["video_gate"]["passed"] == 0
         assert result["run_stats"]["video_gate"]["skipped"] == 0
 
+    def test_video_gate_handles_none_story_id_2026_06_23_outage(self):
+        """Regression for 2026-06-23 production outage:
+        gaming + sports pipelines crashed at video_gate when a story
+        had ``story_id`` set explicitly to ``None`` (vs absent).
+
+        ``dict.get("story_id", "")`` returns the default ONLY when the
+        key is ABSENT — when the key exists with value None, get()
+        returns None. Then ``story_id[:16]`` at lines 125/133/150
+        crashed with ``'NoneType' object is not subscriptable``,
+        and fail_mode=continue let the pipeline keep running with
+        broken state until PushToBacklog produced 0 blueprints
+        despite render running for 6+ minutes per run.
+
+        The fix coerces None → "" so slicing is always safe.
+        """
+        # Story has story_id explicitly set to None (the regression
+        # input shape — NOT just missing the key).
+        stories = [
+            {"story_id": None, "title": "Niche story that broke gaming"},
+        ]
+        gate = VideoGate()
+        # Before the fix, this raised TypeError. After: clean skip.
+        result = gate.execute(_make_context(stories))
+        assert result["run_stats"]["video_gate"]["skipped"] == 1
+        assert result["run_stats"]["video_gate"]["passed"] == 0
+
     def test_video_gate_handles_missing_clip_index(self):
         """If clip_index is missing from context, all stories should be skipped."""
         stories = [

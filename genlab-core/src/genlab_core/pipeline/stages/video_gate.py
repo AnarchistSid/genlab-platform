@@ -110,8 +110,20 @@ class VideoGate:
         skipped = 0
 
         for story in stories:
-            story_id = story.get("story_id", "")
-            clip_entry = clips.get(story_id, {})
+            # 2026-06-23 production outage fix — gaming + sports pipelines
+            # were crashing here when fetchers (e.g. FetchTrendingVideos)
+            # populated stories with ``story_id=None`` explicitly.
+            # ``dict.get(key, default)`` returns the default ONLY when the
+            # key is ABSENT — when the key exists with value None, get()
+            # returns None. The downstream ``story_id[:16]`` slices at
+            # lines 125/133/150 then crashed with
+            # ``'NoneType' object is not subscriptable``, and fail_mode=
+            # continue meant the pipeline kept running with stories that
+            # lacked the ``_skip_llm`` gate, ending in PushToBacklog
+            # producing 0 blueprints despite render running for 6+ minutes.
+            # Coerce ``None`` → ``""`` so the slicing is safe.
+            story_id = story.get("story_id") or ""
+            clip_entry = clips.get(story_id, {}) if story_id else {}
 
             has_valid_clip = clip_entry.get("success", False) and clip_entry.get("clip_path")
 
