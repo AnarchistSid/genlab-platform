@@ -243,6 +243,25 @@ export function RunHistoryTable({ runs, isLoading }: Props) {
                         {Object.keys(run.stage_failures).length > 2 && " · …"}
                       </span>
                     )}
+                    {/* PR #508 (2026-06-24): structured bottleneck badge.
+                       When `blueprints_pushed === 0` the genlab-core
+                       run_report stage (PR #504) sets `bottleneck_stage`
+                       to name which filter killed the funnel. Distinct
+                       from stage_failures (which surfaces partial failures
+                       on runs that DID produce blueprints) — this is the
+                       "no content produced and HERE'S WHY" signal. Uses
+                       error-coloured styling because zero blueprints is
+                       a dark-day SLO violation, not a "partial" warning.
+                       The full reason lands in the title tooltip — the
+                       short stage name fits in the row without overflow. */}
+                    {run.bottleneck_stage && (
+                      <span
+                        className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-error/15 text-error border border-error/30"
+                        title={run.bottleneck_reason ?? `blocked at ${run.bottleneck_stage}`}
+                      >
+                        blocked: {run.bottleneck_stage}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="mono">{formatDate(run.started_at || run.date)}</td>
