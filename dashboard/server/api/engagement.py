@@ -282,6 +282,39 @@ def create_pending_reply():
     return api_success(data=reply, code=201)
 
 
+def _reject_if_reply_outside_allowlist(reply: dict):
+    """SR-F guard for pending replies.
+
+    PR #545 (2026-06-24): pending replies carry a ``niche_id`` field
+    written by the platform poller. When the current operator has a
+    per-user allowlist configured, mutations on a reply outside that
+    scope MUST return 403 before any platform call fires.
+
+    Returns None to proceed, or an api_error(403) tuple to short-
+    circuit. Mirrors the shape of
+    ``server.api.blueprints._enforce_blueprint_niche_allowlist``
+    (the blueprint counterpart) so future operators only need to
+    learn one pattern. Fast path for unrestricted users — no
+    additional I/O.
+    """
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    allowed = get_allowed_niches()
+    if allowed is None:
+        return None  # unrestricted — fast path
+    niche = str(reply.get("niche_id") or "").strip()
+    if niche and niche in allowed:
+        return None
+    return api_error(
+        error=(
+            f"Reply belongs to niche '{niche or 'unknown'}' which is not "
+            f"in your allowlist (allowed: {sorted(allowed)}). "
+            f"See SR-F (PR #545)."
+        ),
+        code=403,
+    )
+
+
 @bp.route("/pending-replies/<reply_id>/approve", methods=["POST"])
 def approve_reply(reply_id: str):
     """Approve a queued reply and dispatch it to the platform."""
@@ -300,6 +333,11 @@ def approve_reply(reply_id: str):
                     message="Cannot approve a non-pending reply",
                     code=409,
                 )
+            # PR #545 (SR-F wire pass 6): per-tenant guard. Check
+            # BEFORE any text mutation or platform call.
+            _err = _reject_if_reply_outside_allowlist(reply)
+            if _err is not None:
+                return _err
             if edited_text:
                 reply["reply_text"] = edited_text
 
@@ -361,6 +399,12 @@ def reject_reply(reply_id: str):
                     message="Cannot reject a non-pending reply",
                     code=409,
                 )
+            # PR #545 (SR-F wire pass 6): per-tenant guard mirrors
+            # approve_reply — reject is still a mutation on the
+            # reply's lifecycle and must respect the operator's scope.
+            _err = _reject_if_reply_outside_allowlist(reply)
+            if _err is not None:
+                return _err
             reply["status"] = "rejected"
             reply["reviewed_at"] = datetime.now(UTC).isoformat()
             reply["rejection_reason"] = data.get("reason", "")
