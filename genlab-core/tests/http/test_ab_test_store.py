@@ -134,8 +134,10 @@ class TestUpdateAbTest:
         # Two backend calls: find + update
         assert backend.find.call_args.kwargs["formula"] == "{test_id}='t1'"
         assert backend.find.call_args.kwargs["max_records"] == 1
+        # PR #534 adds niche_id kwarg to backend.update. No niche_id
+        # arg in this test → kwarg is None (admin-mode backward compat).
         backend.update.assert_called_once_with(
-            "AB_Tests", "ab_1", {"status": "complete"}, typecast=True
+            "AB_Tests", "ab_1", {"status": "complete"}, typecast=True, niche_id=None
         )
 
     def test_noop_when_no_record_matches(self) -> None:

@@ -205,10 +205,15 @@ class AssetStore:
         )
         if not records:
             raise ValueError(f"Asset {asset_id} not found")
+        # PR #534 (2026-06-24, SR-A migration): pass niche_id to
+        # backend.update so SET LOCAL fires. The find already runs
+        # tenant-scoped (line 200-205); the update was previously
+        # admin-mode. Same pattern as BlueprintStore PR #533.
         self._backend("Assets").update(
             "Assets",
             records[0]["id"],
             {"status": status, **kwargs},
+            niche_id=niche_id,
         )
 
     # ── Batch ──────────────────────────────────────────────────────

@@ -76,16 +76,28 @@ class SourceStore:
 
     # ── Update ─────────────────────────────────────────────────────
 
-    def update_source_fetch_status(self, source_id: str, status: str) -> None:
+    def update_source_fetch_status(
+        self,
+        source_id: str,
+        status: str,
+        *,
+        niche_id: str | None = None,
+    ) -> None:
         """Record the most recent fetch attempt for a source.
 
         Stamps ``last_fetch_at`` (UTC ISO 8601) + ``last_fetch_status``.
         No-op when the source doesn't exist — matches the historical
         behaviour.
+
+        PR #534 (2026-06-24, SR-A migration): new ``niche_id`` kwarg
+        scopes BOTH the find AND the update to the tenant. Backward
+        compat: ``niche_id=None`` (the default) keeps the existing
+        admin-mode behaviour for all current callers.
         """
         records = self._backend("Sources").find(
             "Sources",
             formula=f"{{source_id}}='{_esc(source_id)}'",
+            niche_id=niche_id,
             max_records=1,
         )
         if not records:
@@ -97,6 +109,7 @@ class SourceStore:
                 "last_fetch_at": datetime.now(UTC).isoformat(),
                 "last_fetch_status": status,
             },
+            niche_id=niche_id,
         )
 
     # ── Read ───────────────────────────────────────────────────────
