@@ -25,6 +25,11 @@ load_dotenv()
 
 import requests
 
+# PR #515 (2026-06-24): import canonical Meta Graph API base URL from
+# genlab-core so this script stays in sync with version bumps. Pre-PR
+# had 5 hardcoded ``v21.0`` URLs that lagged genlab-core's v22.0 bump.
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL as _META_GRAPH_BASE_URL  # noqa: E402
+
 logger = logging.getLogger("social_analytics")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -137,7 +142,7 @@ def get_instagram_analytics(days: int = 7) -> dict[str, Any]:
 
     # Get IG business account ID from the Facebook Page
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{page_id}",
+        f"{_META_GRAPH_BASE_URL}/{page_id}",
         params={"access_token": token, "fields": "instagram_business_account"},
         timeout=15,
     )
@@ -150,7 +155,7 @@ def get_instagram_analytics(days: int = 7) -> dict[str, Any]:
 
     # Account info
     resp2 = requests.get(
-        f"https://graph.facebook.com/v21.0/{ig_id}",
+        f"{_META_GRAPH_BASE_URL}/{ig_id}",
         params={"access_token": token, "fields": "username,followers_count,media_count"},
         timeout=15,
     )
@@ -158,7 +163,7 @@ def get_instagram_analytics(days: int = 7) -> dict[str, Any]:
 
     # Recent media
     resp3 = requests.get(
-        f"https://graph.facebook.com/v21.0/{ig_id}/media",
+        f"{_META_GRAPH_BASE_URL}/{ig_id}/media",
         params={
             "access_token": token,
             "fields": "caption,like_count,comments_count,timestamp,media_type",
@@ -203,7 +208,7 @@ def get_facebook_analytics(days: int = 7) -> dict[str, Any]:
 
     # Page info
     resp = requests.get(
-        f"https://graph.facebook.com/v21.0/{page_id}",
+        f"{_META_GRAPH_BASE_URL}/{page_id}",
         params={"access_token": token, "fields": "name,followers_count,fan_count"},
         timeout=15,
     )
@@ -215,7 +220,7 @@ def get_facebook_analytics(days: int = 7) -> dict[str, Any]:
     # Recent posts
     since_ts = int((datetime.now(UTC) - timedelta(days=days)).timestamp())
     resp2 = requests.get(
-        f"https://graph.facebook.com/v21.0/{page_id}/posts",
+        f"{_META_GRAPH_BASE_URL}/{page_id}/posts",
         params={
             "access_token": token,
             "fields": "message,created_time,shares,likes.summary(true),comments.summary(true)",
