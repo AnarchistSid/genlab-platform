@@ -196,6 +196,73 @@ class TestOverviewReviewQueueSplit(unittest.TestCase):
     @patch("server.api.overview._platform_health_from_reports")
     @patch("server.api.pipeline._merge_prefect_status", side_effect=lambda x: x)
     @patch("server.api.pipeline._prefect_healthy", return_value=False)
+    def test_oldest_age_reads_top_level_created_at_when_fields_lacks_it(
+        self, _ph, _mp, _phr, mock_registry, mock_client_fn
+    ):
+        """Post-PR-#501, the Postgres backend surfaces ``created_at`` at
+        the record's TOP LEVEL (not inside ``fields``). Pin that the
+        oldest-age computation reads the top-level key, falling back to
+        ``fields.created_at`` only for the legacy / JSON-backend path.
+
+        Pre-fix regression shape: oldest_operator_review_age_hours was
+        always None on prod because the loop only checked
+        ``r['fields']['created_at']`` and the Postgres backend doesn't
+        put it there. The banner then dropped the "(oldest: Xd)" suffix
+        silently — operators saw "10 awaiting your review" with no
+        urgency signal.
+        """
+        from server.api.overview import _build_overview
+
+        mock_registry.return_value = [{"id": "movies", "status": "active", "display_name": "SR"}]
+        _phr.return_value = {}
+
+        now = datetime.now(UTC)
+        records = [
+            # POSTGRES-BACKEND SHAPE: created_at at top level, fields
+            # carries the niche/status/action but NOT created_at.
+            {
+                "id": "v_pg_top_level",
+                "fields": {
+                    "status": "VISUAL_READY",
+                    "action_taken": "",
+                    "niche_id": "movies",
+                    # NOTE: no created_at here — Postgres backend pops
+                    # it before building fields (per PR #501 design).
+                },
+                "created_at": (now - timedelta(hours=48)).isoformat(),
+            },
+            # LEGACY SHAPE: created_at in fields (JSON backend / tests)
+            {
+                "id": "v_legacy_fields",
+                "fields": {
+                    "status": "VISUAL_READY",
+                    "action_taken": "",
+                    "niche_id": "movies",
+                    "created_at": (now - timedelta(hours=24)).isoformat(),
+                },
+            },
+        ]
+        mock_client = MagicMock()
+        mock_client.blueprints.all.return_value = records
+        mock_client_fn.return_value = mock_client
+        mock_client.publishing_analytics.all.return_value = []
+
+        result = _build_overview()
+        age = result["global"]["oldest_operator_review_age_hours"]
+        # The 48h record (top-level created_at) MUST be the oldest. If
+        # the loop only read fields.created_at, it would miss this and
+        # return 24h instead.
+        assert age is not None
+        assert 47 <= age <= 49, (
+            f"oldest age must be ~48h (the top-level record), got {age}. "
+            "Pre-PR shape: only fields.created_at read → returned 24h."
+        )
+
+    @patch("server.api.overview._get_client")
+    @patch("server.api.overview._load_registry")
+    @patch("server.api.overview._platform_health_from_reports")
+    @patch("server.api.pipeline._merge_prefect_status", side_effect=lambda x: x)
+    @patch("server.api.pipeline._prefect_healthy", return_value=False)
     def test_per_niche_split_counts_appear_on_niche_dict(
         self, _ph, _mp, _phr, mock_registry, mock_client_fn
     ):

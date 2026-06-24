@@ -268,11 +268,22 @@ def _build_overview() -> dict:
     # prioritise without opening the queue. None when no operator-review
     # items exist (no banner shown). Defensive parsing — a malformed
     # created_at degrades to None rather than crashing the endpoint.
+    #
+    # ``created_at`` lookup order: top-level key (Postgres backend
+    # since 2026-06-23 PR #501) → fields dict (legacy JSON backend +
+    # test fixtures). The Postgres backend's ``_row_to_record`` puts
+    # the auto-managed lifecycle columns at top level deliberately to
+    # avoid ``_split_fields`` round-tripping them through extra JSONB
+    # (see PR #501 docstring). The previous fields-only lookup made
+    # this whole age computation a silent no-op on prod — banner
+    # surfaced "10 awaiting your review" without the age suffix.
     oldest_operator_review_age_hours: int | None = None
     if operator_review_records:
         oldest_age = 0.0
         for r in operator_review_records:
-            created = r.get("fields", {}).get("created_at")
+            created = r.get("created_at")
+            if not created:
+                created = r.get("fields", {}).get("created_at")
             if not created:
                 continue
             try:
