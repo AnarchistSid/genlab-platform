@@ -283,6 +283,42 @@ class ScheduleGuardedProxy:
 # ── Niche filter helper ──────────────────────────────────────────────
 
 
+# SR-D (PR #520, 2026-06-24): observability + opt-in strict mode for
+# the niche-filter injection. Documented gap from SYSTEM-RESEARCH §9
+# (SR-D): when ``niche_id`` is None, the filter silently returns the
+# unfiltered formula → multi-tenant queries return cross-tenant rows.
+# Single-tenant phase: harmless. Tenant #2 onboarding: critical leak.
+#
+# Three-step migration (this PR ships steps 1 + 2):
+#
+#   1. **WARNING log** on every None call. Operators audit logs to
+#      identify legacy call sites that need the kwarg.
+#   2. **Counter** to track frequency (process-local; persists across
+#      requests in a single worker). Lets operators measure migration
+#      progress before flipping the strict-mode env var.
+#   3. **Opt-in strict mode** via ``GENLAB_REQUIRE_NICHE_FILTER=1``
+#      env var. When set, raises ValueError instead of returning the
+#      unfiltered formula. Default off — preserves legacy behaviour
+#      until the call-site audit lands. Once 0 None-calls measured for
+#      ≥1 week, flip on in production.
+#
+# After step 3 + green prod for tenant #1, removing this opt-in entirely
+# (always-strict) closes SR-D permanently.
+_SR_D_NONE_CALL_COUNT: int = 0
+
+
+def _sr_d_none_call_count() -> int:
+    """Test helper: read the SR-D fallthrough counter. Pinned by the
+    PR #520 regression tests."""
+    return _SR_D_NONE_CALL_COUNT
+
+
+def _sr_d_reset_counter_for_tests() -> None:
+    """Test helper: reset between test cases."""
+    global _SR_D_NONE_CALL_COUNT
+    _SR_D_NONE_CALL_COUNT = 0
+
+
 def _inject_niche_filter(
     formula: str | None,
     niche_id: str | None,
@@ -296,9 +332,39 @@ def _inject_niche_filter(
     If formula already exists, wraps in AND():
       AND({status}='INTAKE', {niche_id}='gaming')
 
-    Returns original formula if niche_id is None.
+    When ``niche_id`` is None or empty:
+      * Default (legacy): returns the unfiltered formula + emits a
+        WARNING log line. Increments ``_SR_D_NONE_CALL_COUNT`` for
+        operator visibility.
+      * Strict (``GENLAB_REQUIRE_NICHE_FILTER=1``): raises ValueError.
+
+    The strict-mode env var is the SR-D mechanism — see module-level
+    comment above for the 3-step migration plan.
     """
     if not niche_id:
+        global _SR_D_NONE_CALL_COUNT
+        _SR_D_NONE_CALL_COUNT += 1
+        if os.environ.get("GENLAB_REQUIRE_NICHE_FILTER", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            raise ValueError(
+                "SR-D: _inject_niche_filter called without niche_id when "
+                "GENLAB_REQUIRE_NICHE_FILTER is enabled. Cross-tenant leak "
+                "blocked. Caller must pass niche_id= explicitly. "
+                "See SYSTEM-RESEARCH.md §9 SR-D + PR #520 docstring."
+            )
+        # Log at WARNING so the call site shows up in operator audits.
+        # stacklevel=2 surfaces the caller's location in the formatter,
+        # making the audit grep trivial.
+        logger.warning(
+            "[SR-D] _inject_niche_filter called without niche_id "
+            "(formula=%r) — cross-tenant leak risk. Caller must pass "
+            "niche_id=. Set GENLAB_REQUIRE_NICHE_FILTER=1 to enforce.",
+            formula[:100] if isinstance(formula, str) else formula,
+            stacklevel=2,
+        )
         return formula
     niche_clause = f"{{{niche_field}}}='{_esc(niche_id)}'"
     if not formula:
