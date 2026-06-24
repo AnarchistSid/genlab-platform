@@ -277,10 +277,22 @@ class BlueprintStore:
         — matches the historical behaviour (callers tolerate
         partial success).
 
-        Note: the bulk path omits the same niche_id/clip_url/etc.
-        optional fields that single-row create includes. This is
-        the historical behaviour (single create has had those
-        fields added over time; bulk wasn't kept in sync).
+        PR #527 (2026-06-24, SR-C bulk path): each record now carries
+        ``niche_id`` (was previously omitted — exactly the SR-C bug
+        class for bulk rows). Behaviour by unique niche set:
+
+          * 1 unique niche → pass as ``niche_id=`` kwarg to the
+            backend, getting full ``SET LOCAL app.niche_id`` binding
+            on the INSERT pipeline.
+          * 0 niches (legacy callers that don't carry niche_id) →
+            pass ``None`` kwarg; backend admin-mode fallback (PR #517
+            backward compat).
+          * >1 niches (heterogeneous batch — unexpected; production
+            pipelines run per-niche) → log a WARNING and pass ``None``
+            kwarg. Per-record ``niche_id`` field still lands so the
+            row gets its tenant tag for read-time RLS; only the
+            ``SET LOCAL`` optimization is skipped to avoid the
+            backend's heterogeneous-tenant ValueError.
         """
         story_cache: dict[str, dict | None] = {}
         template_cache: dict[str, dict | None] = {}
@@ -305,22 +317,58 @@ class BlueprintStore:
                 if template:
                     template_record_id = template["id"]
 
-            records.append(
-                {
-                    "candidate_id": bp["candidate_id"],
-                    "story": [story["id"]],
-                    "template": [template_record_id] if template_record_id else [],
-                    "topic": bp.get("topic", ""),
-                    "angle": bp.get("angle", ""),
-                    "format": bp.get("format"),
-                    "hook": bp.get("hook", ""),
-                    "structure": "\n".join(bp.get("structure", [])),
-                    "cta": bp.get("cta", ""),
-                    "priority_score": bp.get("priority_score", 0.5),
-                    "status": "INTEL_READY",
-                    "why_this_will_work": bp.get("why_this_will_work", ""),
-                }
-            )
+            record = {
+                "candidate_id": bp["candidate_id"],
+                "story": [story["id"]],
+                "template": [template_record_id] if template_record_id else [],
+                "topic": bp.get("topic", ""),
+                "angle": bp.get("angle", ""),
+                "format": bp.get("format"),
+                "hook": bp.get("hook", ""),
+                "structure": "\n".join(bp.get("structure", [])),
+                "cta": bp.get("cta", ""),
+                "priority_score": bp.get("priority_score", 0.5),
+                "status": "INTEL_READY",
+                "why_this_will_work": bp.get("why_this_will_work", ""),
+            }
+            # PR #527 (2026-06-24): inject niche_id into each record so
+            # the row carries its tenant tag. Was previously omitted —
+            # bulk rows landed without tenant binding (exactly the SR-C
+            # bug class flagged by the audit, just on the bulk path).
+            if bp.get("niche_id"):
+                record["niche_id"] = bp["niche_id"]
+            records.append(record)
 
-        created = self._backend("Blueprints").batch_create("Blueprints", records)
+        # PR #527: detect unique-niche state to decide kwarg shape.
+        # PostgresBackend.batch_create() raises ValueError on
+        # heterogeneous-tenant batches when niche_id kwarg is set, so
+        # we only pass the kwarg when every record agrees.
+        niche_ids = {r.get("niche_id") for r in records if r.get("niche_id")}
+        batch_niche_id: str | None
+        if len(niche_ids) == 1:
+            batch_niche_id = next(iter(niche_ids))
+        elif len(niche_ids) > 1:
+            # Heterogeneous batch — unexpected; production pipelines run
+            # per-niche. Log loudly so the operator notices a misconfig,
+            # but don't crash: rows still get the per-record niche_id
+            # field; only the SET LOCAL optimization is sacrificed.
+            logger.warning(
+                "[blueprint_store] heterogeneous-niche batch (%d distinct: %s) — "
+                "passing niche_id=None to backend.batch_create to avoid "
+                "tenant-mismatch ValueError. Each record still carries its "
+                "own niche_id field. See PR #527 for the dispatch logic.",
+                len(niche_ids),
+                sorted(niche_ids),
+            )
+            batch_niche_id = None
+        else:
+            # 0 niches — legacy callers that don't carry niche_id at all.
+            # Preserve backward compat (admin-mode INSERT).
+            batch_niche_id = None
+
+        created = self._backend("Blueprints").batch_create(
+            "Blueprints",
+            records,
+            niche_id=batch_niche_id,
+        )
         return [r["id"] for r in created]
