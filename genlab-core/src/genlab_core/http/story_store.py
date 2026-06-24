@@ -72,10 +72,15 @@ class StoryStore:
         }
         if story.get("niche_id"):
             fields["niche_id"] = story["niche_id"]
+        # PR #528 (2026-06-24, SR-C tenant binding): pass niche_id
+        # through to backend's SET LOCAL app.niche_id. Mirrors PR #526
+        # (BlueprintStore single-row). The story dict already carries
+        # niche_id from callers (intake fetchers), so just forward it.
         record = self._sp_call(
             self._backend("Stories").create,
             "Stories",
             fields,
+            niche_id=story.get("niche_id"),
         )
         return record["id"]
 
@@ -134,25 +139,58 @@ class StoryStore:
         Note: the bulk path omits ``why_it_matters`` from the field
         set — this matches the historical behaviour
         (``BacklogClient.batch_create_stories`` never included it).
+
+        PR #528 (2026-06-24, SR-C bulk path): mirrors PR #527's
+        BlueprintStore bulk migration exactly — inject niche_id into
+        each record + dispatch on unique-niche set. See PR #527 for
+        the rationale and trade-offs on heterogeneous batches.
         """
         records = []
         for story in stories:
             scores = story.get("scores", {})
-            records.append(
-                {
-                    "story_id": story["story_id"],
-                    "title": story["title"],
-                    "url": story["url"],
-                    "source": self._resolve_source(story),
-                    "published_at": story.get("published_at"),
-                    "summary": story.get("summary", ""),
-                    "priority": story.get("priority", scores.get("priority", 0.5)),
-                    "status": "INTAKE",
-                    "themes": story.get("themes", []),
-                    "authority_score": scores.get("authority", 0.0),
-                    "recency_score": scores.get("recency", 0.0),
-                    "novelty_score": scores.get("novelty", 0.0),
-                }
+            record = {
+                "story_id": story["story_id"],
+                "title": story["title"],
+                "url": story["url"],
+                "source": self._resolve_source(story),
+                "published_at": story.get("published_at"),
+                "summary": story.get("summary", ""),
+                "priority": story.get("priority", scores.get("priority", 0.5)),
+                "status": "INTAKE",
+                "themes": story.get("themes", []),
+                "authority_score": scores.get("authority", 0.0),
+                "recency_score": scores.get("recency", 0.0),
+                "novelty_score": scores.get("novelty", 0.0),
+            }
+            # PR #528: inject niche_id into each record (closes the
+            # bulk-path SR-C data gap — same shape as PR #527).
+            if story.get("niche_id"):
+                record["niche_id"] = story["niche_id"]
+            records.append(record)
+
+        # PR #528: unique-niche dispatch — pass kwarg only when all
+        # records agree, to avoid backend's heterogeneous-tenant
+        # ValueError. Per-record fields still land in the >1 case
+        # so the row gets its tenant tag for read-time RLS.
+        niche_ids = {r.get("niche_id") for r in records if r.get("niche_id")}
+        batch_niche_id: str | None
+        if len(niche_ids) == 1:
+            batch_niche_id = next(iter(niche_ids))
+        elif len(niche_ids) > 1:
+            logger.warning(
+                "[story_store] heterogeneous-niche batch (%d distinct: %s) — "
+                "passing niche_id=None to backend.batch_create. Per-record "
+                "niche_id fields still land. See PR #528.",
+                len(niche_ids),
+                sorted(niche_ids),
             )
-        created = self._backend("Stories").batch_create("Stories", records)
+            batch_niche_id = None
+        else:
+            batch_niche_id = None
+
+        created = self._backend("Stories").batch_create(
+            "Stories",
+            records,
+            niche_id=batch_niche_id,
+        )
         return [r["id"] for r in created]
