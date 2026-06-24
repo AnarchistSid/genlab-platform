@@ -390,6 +390,17 @@ def reorder():
         return api_error(error="blueprint_id and to_slot required")
     if not RECORD_RE.match(str(blueprint_id)):
         return api_error(error="Invalid blueprint_id")
+    # PR #544 (SR-F wire pass 5): the schedule /reorder endpoint is the
+    # final remaining blueprint-mutation surface. Reusing the guard
+    # from blueprints.py directly (rather than the publishing_queue
+    # wrapper) — schedule.py is a peer of blueprints.py, not a
+    # dependent. Same backward-compat semantics: None allowlist = fast
+    # no-op for unrestricted users.
+    from server.api.blueprints import _enforce_blueprint_niche_allowlist
+
+    _err = _enforce_blueprint_niche_allowlist(str(blueprint_id))
+    if _err is not None:
+        return _err
     if not SLOT_RE.match(str(to_slot)):
         return api_error(error="Invalid to_slot format")
     # Validate to_slot is a known schedule slot
