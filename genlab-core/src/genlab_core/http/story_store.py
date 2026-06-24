@@ -120,11 +120,16 @@ class StoryStore:
         story = self.find_story_by_story_id(story_id, niche_id=niche_id)
         if not story:
             raise ValueError(f"Story {story_id} not found")
+        # PR #534 (2026-06-24, SR-A migration): pass niche_id to
+        # backend.update so SET LOCAL fires. find already runs
+        # tenant-scoped (line above); the update was previously
+        # admin-mode. Same pattern as BlueprintStore PR #533.
         self._sp_call(
             self._backend("Stories").update,
             "Stories",
             story["id"],
             {"status": status, **kwargs},
+            niche_id=niche_id,
         )
 
     # ── Batch ──────────────────────────────────────────────────────

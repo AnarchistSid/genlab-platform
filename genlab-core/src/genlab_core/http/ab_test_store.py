@@ -103,12 +103,26 @@ class ABTestStore:
 
     # ── Update ─────────────────────────────────────────────────────
 
-    def update_ab_test(self, test_id: str, fields: dict) -> None:
+    def update_ab_test(
+        self,
+        test_id: str,
+        fields: dict,
+        *,
+        niche_id: str | None = None,
+    ) -> None:
+        """Find an A/B test row by test_id and update its fields.
+
+        PR #534 (2026-06-24, SR-A migration): new ``niche_id`` kwarg
+        scopes BOTH the find AND the update. Backward compat:
+        ``niche_id=None`` (default) preserves admin-mode behaviour
+        for the ~3 existing callers.
+        """
         if not self._proxy:
             return
         records = self._backend("AB_Tests").find(
             "AB_Tests",
             formula=f"{{test_id}}='{_esc(test_id)}'",
+            niche_id=niche_id,
             max_records=1,
         )
         if records:
@@ -117,4 +131,5 @@ class ABTestStore:
                 records[0]["id"],
                 fields,
                 typecast=True,
+                niche_id=niche_id,
             )
