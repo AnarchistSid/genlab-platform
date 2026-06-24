@@ -53,7 +53,20 @@ class SharePointBackend:
         formula = _inject_niche_filter(formula, niche_id)
         return self._proxy(table).all(formula=formula, max_records=max_records)
 
-    def get(self, table: str, record_id: str) -> dict[str, Any]:
+    def get(
+        self,
+        table: str,
+        record_id: str,
+        *,
+        niche_id: str | None = None,  # noqa: ARG002 — accept-and-ignore (SR-A parity)
+    ) -> dict[str, Any]:
+        """SharePoint get — ``niche_id`` accepted for API parity.
+
+        PR #532 (2026-06-24): same accept-and-ignore pattern as the
+        create() kwarg shipped in PR #526 — backend-agnostic stores
+        (BlueprintStore etc.) need to pass ``niche_id=`` uniformly
+        on both backends without TypeError on the SharePoint side.
+        """
         return self._proxy(table).get(record_id)
 
     def create(
@@ -83,10 +96,19 @@ class SharePointBackend:
         fields: dict[str, Any],
         *,
         typecast: bool = False,
+        niche_id: str | None = None,  # noqa: ARG002 — accept-and-ignore (SR-A parity)
     ) -> dict[str, Any]:
+        """SharePoint update — ``niche_id`` accepted for API parity (PR #532)."""
         return self._proxy(table).update(record_id, fields, typecast=typecast)
 
-    def delete(self, table: str, record_id: str) -> None:
+    def delete(
+        self,
+        table: str,
+        record_id: str,
+        *,
+        niche_id: str | None = None,  # noqa: ARG002 — accept-and-ignore (SR-A parity)
+    ) -> None:
+        """SharePoint delete — ``niche_id`` accepted for API parity (PR #532)."""
         self._proxy(table).delete(record_id)
 
     def batch_create(
