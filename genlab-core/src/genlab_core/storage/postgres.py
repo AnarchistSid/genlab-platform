@@ -426,10 +426,63 @@ class PostgresBackend:
 
     # ── CREATE ──────────────────────────────────────────────────────
 
-    def create(self, table: str, record: dict[str, Any], *, typecast: bool = False) -> str:
-        """Create a record. Returns the new UUID record ID."""
+    def create(
+        self,
+        table: str,
+        record: dict[str, Any],
+        *,
+        typecast: bool = False,
+        niche_id: str | None = None,
+    ) -> str:
+        """Create a record. Returns the new UUID record ID.
+
+        PR #517 (2026-06-24, SR-C tenant-isolation hardening):
+        ``niche_id`` parameter accepted to ``SET LOCAL app.niche_id``
+        before INSERT, so the row's tenant context matches the
+        ``WITH CHECK`` clause on each RLS policy (added in migrations
+        ``t0o1p2q3r4s5`` + ``u1p2q3r4s5t6``).
+
+        When ``niche_id`` is provided:
+          * ``SET LOCAL app.niche_id = niche_id`` runs in the same
+            transaction as the INSERT (transaction-scoped, doesn't
+            leak across pool connections).
+          * If ``record`` carries a ``niche_id`` field, it MUST match
+            the ``niche_id`` kwarg — otherwise ValueError (prevents
+            silent tenant-spoofing via record-side forgery).
+          * If ``record`` lacks ``niche_id``, it's injected from the
+            kwarg before the split, so the row carries the right tenant
+            tag.
+
+        When ``niche_id`` is None (backward compat for the ~200 existing
+        callers): falls through to admin-mode INSERT (RLS WITH CHECK
+        clause permits ``app.niche_id IS NULL``). The audit (SR-C) flagged
+        this as a correctness-bug risk for tenant #2 onboarding —
+        callers that forget the kwarg silently create rows with no
+        tenant binding. Migrate callers incrementally; once all sites
+        pass ``niche_id``, this admin-mode fallback can flip to
+        require-strict.
+        """
         table = _validate_table(table)
         record_id = str(uuid.uuid4())
+
+        # Validate + inject niche_id BEFORE splitting fields, so the
+        # tenant tag lands in the correct SQL column (niche_id is
+        # promoted across every multi-tenant table per PROMOTED_COLUMNS).
+        if niche_id is not None:
+            record_niche = record.get("niche_id")
+            if record_niche is not None and record_niche != niche_id:
+                raise ValueError(
+                    f"niche_id kwarg '{niche_id}' does not match record's "
+                    f"niche_id field '{record_niche}' — tenant-spoofing "
+                    "attempt prevented (SR-C guard, PR #517). Either drop "
+                    "the kwarg, drop the field, or align the two."
+                )
+            if record_niche is None:
+                # Defensive: inject so the row's column matches the GUC.
+                # Caller may have omitted niche_id from fields trusting
+                # the kwarg to do the right thing — honour that.
+                record = {**record, "niche_id": niche_id}
+
         cols, extra = self._split_fields(table, record)
         cols["extra"] = json.dumps(extra) if extra else "{}"
 
@@ -446,6 +499,15 @@ class PostgresBackend:
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
+                # SR-C: set tenant context BEFORE the INSERT so RLS
+                # WITH CHECK evaluates correctly. SET LOCAL is
+                # transaction-scoped, so it doesn't leak to other
+                # pool consumers.
+                if niche_id is not None:
+                    cur.execute(
+                        "SELECT set_config('app.niche_id', %s, true)",
+                        (niche_id,),
+                    )
                 cur.execute(sql, values)
                 row = cur.fetchone()
                 conn.commit()
@@ -652,17 +714,58 @@ class PostgresBackend:
 
     # ── BATCH CREATE ────────────────────────────────────────────────
 
-    def batch_create(self, table: str, records: list[dict[str, Any]]) -> list[str]:
-        """Create multiple records using pipeline mode for performance."""
+    def batch_create(
+        self,
+        table: str,
+        records: list[dict[str, Any]],
+        *,
+        niche_id: str | None = None,
+    ) -> list[str]:
+        """Create multiple records using pipeline mode for performance.
+
+        PR #517 (2026-06-24, SR-C): ``niche_id`` parameter behaves
+        identically to ``create()`` — see that method's docstring for
+        the full SR-C tenant-isolation rationale.
+
+        IMPORTANT: when ``niche_id`` is provided, EVERY record in the
+        batch must share that tenant. Heterogeneous-tenant batches
+        raise ValueError before any INSERT runs — atomic-validation
+        prevents partial cross-tenant inserts that would leave the
+        DB in a mixed-up state if the pipeline fails mid-batch.
+        """
         table = _validate_table(table)
         if not records:
             return []
+
+        # SR-C: pre-validate every record against the niche_id kwarg
+        # BEFORE entering the pipeline — partial inserts on tenant
+        # mismatch would be worse than failing fast.
+        if niche_id is not None:
+            for i, record in enumerate(records):
+                record_niche = record.get("niche_id")
+                if record_niche is not None and record_niche != niche_id:
+                    raise ValueError(
+                        f"niche_id kwarg '{niche_id}' does not match record[{i}]'s "
+                        f"niche_id '{record_niche}' — heterogeneous-tenant batch "
+                        "rejected before INSERT (SR-C guard, PR #517)."
+                    )
+            # Inject niche_id into any record missing it (mirrors
+            # ``create()``'s defensive behaviour).
+            records = [
+                {**r, "niche_id": niche_id} if r.get("niche_id") is None else r for r in records
+            ]
 
         ids = []
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.pipeline():
                 with conn.cursor() as cur:
+                    # SR-C: set tenant context once for the whole pipeline.
+                    if niche_id is not None:
+                        cur.execute(
+                            "SELECT set_config('app.niche_id', %s, true)",
+                            (niche_id,),
+                        )
                     for record in records:
                         record_id = str(uuid.uuid4())
                         cols, extra = self._split_fields(table, record)
