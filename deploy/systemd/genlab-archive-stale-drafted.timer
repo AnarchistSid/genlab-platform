@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab — stale DRAFTED blueprint cleanup timer
+Documentation=https://github.com/AnarchistSid/genlab-platform/blob/main/scripts/archive_stale_drafted.py
+
+[Timer]
+# 04:15 UTC = 09:45 IST. Pre-publisher window (publisher runs at 06:30 UTC).
+# Off-peak so the UPDATE doesn't contend with any operator review action.
+# 15-minute offset from db_maintenance (08:45 UTC) keeps the two
+# maintenance jobs from running back-to-back if either drifts.
+OnCalendar=*-*-* 04:15:00 UTC
+# Persistent=true so a missed run (system off / network down at 04:15)
+# fires once on next boot — matches the durable-cron expectation. Without
+# this, a missed window means the row keeps accumulating for another 24h.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

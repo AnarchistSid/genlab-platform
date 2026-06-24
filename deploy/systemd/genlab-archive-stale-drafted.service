@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab — auto-archive stale DRAFTED blueprints (no source video)
+Documentation=https://github.com/AnarchistSid/genlab-platform/blob/main/scripts/archive_stale_drafted.py
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# Conservative 7-day grace: matches scripts/archive_stale_drafted.py default.
+# Lower values are more aggressive but increase the false-positive risk on
+# in-flight blueprints. Operators wanting tighter cleanup can run the
+# script manually with --age-days N.
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/archive_stale_drafted.py --apply --age-days 7
+TimeoutSec=300
+# Stay quiet on the happy path (no rows to archive) — the script's own
+# print output goes to systemd's journal so an operator can `journalctl
+# -u genlab-archive-stale-drafted` to see the last run.
+StandardOutput=journal
+StandardError=journal
