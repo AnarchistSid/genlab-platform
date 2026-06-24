@@ -524,9 +524,14 @@ class TestBatchCreateBlueprints:
         assert result == ["r1", "r2", "r3"]
 
     def test_bulk_path_field_set_matches_legacy(self) -> None:
-        # Pin the historical narrower field set on bulk path.
-        # Single-row create has clip_url, niche_id, template_id etc.;
-        # batch path doesn't.
+        # Pin the historical narrower field set on bulk path —
+        # except for ``niche_id``, which PR #527 (2026-06-24)
+        # deliberately adds because the bulk-path-without-niche
+        # behaviour was exactly the SR-C bug we're closing
+        # (rows landing without tenant binding). ``clip_url``
+        # is still legitimately omitted on the bulk path
+        # (the renderer-asset trail) — that's still legacy
+        # behaviour and not a tenant-isolation concern.
         store, backend = _make_store()
         backend.batch_create.return_value = [{"id": "r1"}]
         store.batch_create_blueprints(
@@ -535,10 +540,13 @@ class TestBatchCreateBlueprints:
                     "candidate_id": "c1",
                     "story_id": "s1",
                     "clip_url": "would be ignored",
-                    "niche_id": "would also be ignored",
+                    "niche_id": "gaming",
                 }
             ]
         )
         row = backend.batch_create.call_args[0][1][0]
         assert "clip_url" not in row
-        assert "niche_id" not in row
+        # PR #527: niche_id IS now passed through (was the SR-C bug).
+        # See tests/http/test_blueprint_store_batch_niche_id.py for
+        # the full dispatch-logic coverage.
+        assert row.get("niche_id") == "gaming"
