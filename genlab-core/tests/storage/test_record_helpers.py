@@ -16,14 +16,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from genlab_core.storage.record_helpers import (
     record_created_at,
     record_created_at_dt,
     record_updated_at,
     record_updated_at_dt,
 )
-
 
 # ── raw value lookup ────────────────────────────────────────────────
 
