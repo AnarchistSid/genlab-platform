@@ -31,6 +31,75 @@ _duration_cache: dict[str, float] = {}  # file path → duration in seconds
 _DURATION_CACHE_MAX = 200
 
 RECORD_RE = re.compile(r"^[\w-]+$")  # Integer (SharePoint) or UUID (Postgres)
+
+
+# PR #540 (2026-06-24, SR-F wire): per-blueprint tenant guard.
+# Pre-PR-540 every operator could approve any niche's blueprints; this
+# helper threads the niche-allowlist resolver from PR #539's foundation
+# into the action endpoints so a tenant-B operator gets 403 when
+# touching tenant-A content. Default behavior preserved when the user
+# has no allowlist configured (None → unrestricted).
+_BP_NICHE_FIELD_FALLBACK = "ai_creators"
+
+
+def _record_niche_id(record: dict) -> str:
+    """Extract a blueprint's niche_id from either the flat shape (Postgres
+    backend, niche_id at top level) or the nested SharePoint shape
+    (``fields.niche_id``). Falls back to ai_creators (the legacy
+    default before niche_id was promoted) to match the canonical
+    behavior of the review-queue filter at line 501."""
+    if not isinstance(record, dict):
+        return _BP_NICHE_FIELD_FALLBACK
+    flat = record.get("niche_id")
+    if flat:
+        return str(flat)
+    fields = record.get("fields")
+    if isinstance(fields, dict):
+        nested = fields.get("niche_id")
+        if nested:
+            return str(nested)
+    return _BP_NICHE_FIELD_FALLBACK
+
+
+def _enforce_blueprint_niche_allowlist(record_id: str):
+    """Per-tenant action guard. Returns None to proceed, or an api_error
+    Response (403) when the current user's allowlist excludes the
+    blueprint's niche.
+
+    No-op for unrestricted users (the common case today). When the
+    blueprint can't be fetched, we let the underlying handler 404 —
+    the guard's job is tenant isolation, not existence checking.
+    """
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    allowed = get_allowed_niches()
+    if allowed is None:
+        return None  # unrestricted — fast path for the common case
+    try:
+        client = _get_client()
+        bp = client.blueprints.get(record_id)
+    except Exception as exc:
+        # Fetch failure isn't a tenant issue — let the action handler
+        # surface the right error (404, 500, etc). Defense in depth:
+        # don't accidentally pass an obviously-broken request.
+        logger.debug("[SR-F guard] blueprint fetch failed: %s", exc)
+        return None
+    logger.debug("[SR-F guard] fetched bp=%r", bp)
+    if not bp:
+        return None
+    niche = _record_niche_id(bp)
+    logger.debug("[SR-F guard] niche=%r allowed=%r match=%s", niche, allowed, niche in allowed)
+    if niche not in allowed:
+        return api_error(
+            error=(
+                f"Blueprint belongs to niche '{niche}' which is not in your "
+                f"allowlist (allowed: {sorted(allowed)}). See SR-F (PR #540)."
+            ),
+            code=403,
+        )
+    return None
+
+
 _YT_URL_RE = re.compile(
     r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)"
     r"([a-zA-Z0-9_-]{11})"
@@ -500,6 +569,17 @@ def review_queue():
                 for r in records
                 if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
             ]
+        # PR #540 (SR-F wire): per-user allowlist filter. When the
+        # logged-in user has a configured REVIEW_NICHE_ALLOWLIST_<USER>
+        # env var, results are scoped to ONLY their allowed niches.
+        # ``get_allowed_niches()`` returns None for unrestricted users
+        # → no filter applied (backward compat — current single-admin
+        # operator sees everything as before).
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        allowed = get_allowed_niches()
+        if allowed is not None:
+            records = [r for r in records if _record_niche_id(r) in allowed]
     except Exception as e:
         logger.error("Failed to fetch review queue: %s", e)
         # Serve stale cache instead of 502
@@ -649,6 +729,10 @@ def review_action(record_id):
     if action not in VALID_ACTIONS:
         return api_error(error=f"Invalid action: {action}")
     action_taken = VALID_ACTIONS[action]
+    # PR #540 (SR-F wire): same per-tenant guard as /review POST.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     try:
         from server.review_server import _execute_review_action
 
@@ -995,6 +1079,13 @@ def review_blueprint(record_id):
     if action not in VALID_ACTIONS:
         return api_error(error=f"Invalid action: {action}")
     action_taken = VALID_ACTIONS[action]
+    # PR #540 (SR-F wire): per-tenant guard. Fetch the blueprint first
+    # so we know its niche, then reject with 403 if the current user
+    # has an allowlist that excludes it. When the user is unrestricted
+    # (None allowlist), the check is a fast no-op.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     # Persist the review decision to backlog — uses shared helper from review_server
     try:
         from server.review_server import _execute_review_action
