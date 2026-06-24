@@ -180,12 +180,29 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
 
     # /insights — Meta deprecates metrics aggressively; if the call 400s we
     # still want shares + completion_rate to populate from the post object.
+    #
+    # PR #518 (2026-06-24): added fb_reels_total_plays alongside
+    # post_video_views. Per the deprecation registry, post_video_views
+    # is RETIRED in v23.0 for FB Reels (replaced by
+    # fb_reels_total_plays). We're on v22 today, so post_video_views
+    # still works — but the moment Meta cuts over, the metric silently
+    # returns 0 and our reward signal stalls. Requesting BOTH means:
+    #   - v22: post_video_views returns; fb_reels_total_plays may also
+    #     return for Reels posts. Parsing prefers fb_reels_total_plays
+    #     when present so the migration is gradual.
+    #   - v23+: post_video_views returns 0 / nothing for Reels;
+    #     fb_reels_total_plays is the only signal. We seamlessly handle
+    #     the cutover.
+    # If fb_reels_total_plays isn't valid for the account's posts
+    # (non-Reels videos), Meta returns it with value 0 — we fall back
+    # to post_video_views which is the right semantic for non-Reels.
     fb_feed_metrics = (
         "post_impressions,post_impressions_unique,"
-        "post_engaged_users,post_video_views,"
+        "post_engaged_users,post_video_views,fb_reels_total_plays,"
         "post_video_avg_time_watched"
     )
     warn_if_deprecated(fb_feed_metrics, context="fb_feed_insights")
+    reels_total_plays: int | None = None  # tracked so we can prefer it
     try:
         resp = requests.get(
             f"{META_GRAPH_BASE_URL}/{post_id}/insights",
@@ -210,6 +227,12 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
                 elif name == "post_video_views":
                     video_views = int(val)
                     metrics["video_views"] = val
+                elif name == "fb_reels_total_plays":
+                    # PR #518: v23 replacement for post_video_views.
+                    # Only meaningful when > 0 (Reels post); for
+                    # non-Reels posts Meta returns 0 here.
+                    if val:
+                        reels_total_plays = int(val)
                 elif name == "post_video_avg_time_watched":
                     avg_watch_time_ms = float(val)
                     metrics["avg_watch_time"] = val
@@ -221,6 +244,13 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
             )
     except Exception as exc:
         logger.debug("[metric_collector] fb insights fetch failed for %s: %s", post_id, exc)
+
+    # PR #518: prefer fb_reels_total_plays over post_video_views when
+    # the post IS a Reel. Migration-friendly: works on both v22 (both
+    # metrics return) and v23+ (only fb_reels_total_plays).
+    if reels_total_plays is not None:
+        video_views = reels_total_plays
+        metrics["video_views"] = reels_total_plays
 
     metrics["impressions"] = impressions
     metrics["reach"] = reach or impressions  # fall back to impressions if reach unavailable

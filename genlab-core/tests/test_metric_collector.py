@@ -319,6 +319,73 @@ class TestFetchFacebook:
         assert "avg_watch_time" not in result
 
 
+class TestFetchFacebookReelsV23Migration:
+    """PR #518 (2026-06-24): v23 retirement of post_video_views for FB
+    Reels means callers must request fb_reels_total_plays as the primary
+    Reels view counter. Pin both:
+      - the request includes fb_reels_total_plays
+      - parsing prefers fb_reels_total_plays over post_video_views when both
+        return values (the v22 transition case)
+    """
+
+    def test_fb_reels_total_plays_in_metric_request(self, monkeypatch):
+        """The /insights request must include fb_reels_total_plays."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"data": []}
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            _fetch_facebook("fbpost_reels_check")
+        params = mock_get.call_args_list[0][1]["params"]
+        assert "fb_reels_total_plays" in params["metric"], (
+            "v23 retirement of post_video_views for Reels requires "
+            "fb_reels_total_plays to be in the request (PR #518)."
+        )
+
+    def test_fb_reels_total_plays_overrides_post_video_views(self, monkeypatch):
+        """When both metrics return — v22 transition shape — prefer the
+        Reels-specific count. Per the deprecation registry, post_video_views
+        for Reels has unstable semantics; fb_reels_total_plays is the
+        canonical replacement."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": [
+                {"name": "post_impressions", "values": [{"value": 10000}]},
+                {"name": "post_video_views", "values": [{"value": 8000}]},
+                {"name": "fb_reels_total_plays", "values": [{"value": 9500}]},
+                {"name": "post_video_avg_time_watched", "values": [{"value": 10}]},
+            ]
+        }
+        with patch("requests.get", return_value=mock_resp):
+            result = _fetch_facebook("fbpost_both_views")
+        assert result["video_views"] == 9500, (
+            "fb_reels_total_plays (9500) must override post_video_views (8000) "
+            "per PR #518 migration shape."
+        )
+
+    def test_zero_fb_reels_total_plays_falls_back_to_post_video_views(self, monkeypatch):
+        """For NON-Reels posts, fb_reels_total_plays returns 0 — we must
+        fall back to post_video_views so non-Reels videos still report
+        view counts correctly."""
+        monkeypatch.setenv("FB_PAGE_ACCESS_TOKEN", "tok_fb")
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "data": [
+                {"name": "post_video_views", "values": [{"value": 5000}]},
+                {"name": "fb_reels_total_plays", "values": [{"value": 0}]},
+            ]
+        }
+        with patch("requests.get", return_value=mock_resp):
+            result = _fetch_facebook("fbpost_non_reel")
+        assert result["video_views"] == 5000, (
+            "When fb_reels_total_plays is 0 (non-Reel post), post_video_views "
+            "should still drive the metric. PR #518 fallback path."
+        )
+
+
 class TestFetchFacebookVideoObject:
     """Reel-era FB fetch — recovers engagement from the video object directly
     when the legacy page-post /insights endpoint 400s on a Reel ID.
