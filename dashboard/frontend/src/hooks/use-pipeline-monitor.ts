@@ -50,6 +50,14 @@ export interface PipelineRunDetail {
   // in the run-history table as a warning badge per entry (e.g.
   // "whisper_captions: 2") so operators don't trust a lying success.
   stage_failures?: Record<string, number>;
+  // PR #508 (2026-06-24): structured bottleneck attribution for
+  // zero-blueprint runs. When `blueprints_count === 0`, the genlab-core
+  // run_report stage (via PR #504) populates these to name which filter
+  // killed the funnel. RunHistoryTable renders a "blocked at X" badge
+  // so the operator doesn't have to read slo_violations strings.
+  // Both fields are null when blueprints were produced normally.
+  bottleneck_stage?: string | null;
+  bottleneck_reason?: string | null;
 }
 
 interface PipelineStatusResponse {

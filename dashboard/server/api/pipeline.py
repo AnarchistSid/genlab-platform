@@ -146,6 +146,22 @@ def _normalize_run(data: dict, run_id: str) -> dict:
         # what specifically failed (e.g. whisper_captions: 2) instead
         # of having to grep the journal.
         "stage_failures": data.get("stage_failures", {}),
+        # PR #508 (2026-06-24): structured bottleneck attribution for
+        # zero-blueprint runs. ``bottleneck_stage`` is one of
+        # "fetch", "pre_download_dedup", "video_gate",
+        # "video_validation", "push_to_backlog", or None when
+        # blueprints were produced normally. ``bottleneck_reason``
+        # is the human-readable explanation. Frontend renders these
+        # as a "blocked at X" badge in the run-history row so the
+        # operator sees the funnel killer without parsing
+        # ``slo_violations`` strings.
+        #
+        # Fields were added by PR #504 (genlab-core run_report.py).
+        # Default to None (not "") so the frontend can use
+        # `if (run.bottleneck_stage)` as a truthy guard — empty string
+        # vs None ambiguity would force less-readable explicit checks.
+        "bottleneck_stage": data.get("bottleneck_stage"),
+        "bottleneck_reason": data.get("bottleneck_reason"),
     }
 
 
