@@ -55,6 +55,19 @@ class ABTestStore:
     # ── Create ─────────────────────────────────────────────────────
 
     def create_ab_test(self, test: dict) -> str | None:
+        """Record a new A/B test row.
+
+        PR #530 (2026-06-24, SR-C tenant binding, 4th store): pass
+        ``niche_id`` from the test dict to backend.create so the row's
+        ``SET LOCAL app.niche_id`` step fires. The ab_tests table on
+        prod has a ``niche_id`` column (verified 2026-06-24 schema
+        probe — 117 rows, tenant-scoped). Pre-PR test rows landed
+        without tenant binding.
+
+        The test dict already carries ``niche_id`` (callers building
+        an A/B record for a specific channel always set it), so no
+        new data is needed — just the kwarg forward.
+        """
         if not self._proxy:
             logger.warning("AB_Tests table not configured")
             return None
@@ -63,6 +76,7 @@ class ABTestStore:
                 "AB_Tests",
                 test,
                 typecast=True,
+                niche_id=test.get("niche_id"),
             )
             return record["id"]
         except Exception as exc:
