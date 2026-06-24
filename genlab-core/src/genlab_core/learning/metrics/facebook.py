@@ -304,6 +304,51 @@ def _fetch_facebook(post_id: str, niche_id: str = "") -> dict:
     metrics.setdefault("shares", 0)
     metrics.setdefault("completion_rate", 0.0)
 
+    # PR #523 (2026-06-24): v23 synthetic fallback for engaged_users.
+    # post_engaged_users is deprecated for new posts in v22.0 and will
+    # silently return 0 once Meta cuts over. Per the registry's
+    # replacement hint ("compute engagement from post_reactions_* +
+    # post_comments + post_shares instead"), synthesize the field from
+    # the components we already collect when the direct fetch yields 0.
+    #
+    # Migration-friendly (same shape as PR #518's fb_reels_total_plays
+    # fallback):
+    #   * v22 with post_engaged_users still returning: keep the direct
+    #     value; the synthetic computes the same number from parts so
+    #     comparing the two helps the operator audit drift.
+    #   * v22 with post_engaged_users returning 0 (already happens on
+    #     newer posts per the deprecation note): synthetic kicks in
+    #     and we keep a usable signal.
+    #   * v23+ where post_engaged_users always returns 0: synthetic
+    #     is the only path.
+    #
+    # We only synthesize when (a) the direct value is 0/missing AND
+    # (b) at least one of the components is non-zero — otherwise the
+    # synthetic 0 is indistinguishable from the missing-data 0 and
+    # adds nothing.
+    # Only the synthetic path is tagged so existing v22 dict shapes are
+    # preserved bit-for-bit. Absence of the tag → direct value (the
+    # historical default); presence of "synthetic_v23" → derived from
+    # reactions+comments+shares so the operator can audit migration.
+    direct_engaged = metrics.get("engaged_users", 0)
+    if not direct_engaged:
+        reactions = int(metrics.get("reactions", 0) or 0)
+        comments = int(metrics.get("comments", 0) or 0)
+        shares = int(metrics.get("shares", 0) or 0)
+        components_sum = reactions + comments + shares
+        if components_sum > 0:
+            metrics["engaged_users"] = components_sum
+            metrics["engaged_users_source"] = "synthetic_v23"
+            logger.debug(
+                "[fb] synthesized engaged_users=%d from reactions=%d "
+                "+ comments=%d + shares=%d (post_engaged_users was %s)",
+                components_sum,
+                reactions,
+                comments,
+                shares,
+                "0" if direct_engaged == 0 else "missing",
+            )
+
     return metrics
 
 
