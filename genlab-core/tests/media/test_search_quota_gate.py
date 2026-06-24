@@ -94,7 +94,8 @@ def test_search_skipped_when_quota_exhausted() -> None:
         )
 
     assert result == []
-    stub.can_afford.assert_called_once_with("search")
+    # PR #537: fetcher now passes niche_id alongside "search".
+    stub.can_afford.assert_called_once_with("search", niche_id="anime")
     fetcher._session.get.assert_not_called()
 
 
@@ -118,7 +119,8 @@ def test_search_proceeds_when_quota_available() -> None:
         )
 
     assert result == []
-    stub.can_afford.assert_called_once_with("search")
+    # PR #537: fetcher now passes niche_id alongside "search".
+    stub.can_afford.assert_called_once_with("search", niche_id="anime")
     mock_get.assert_called_once()
 
 

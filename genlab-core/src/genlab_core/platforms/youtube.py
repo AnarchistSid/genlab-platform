@@ -390,8 +390,14 @@ class YouTubeClient:
         # when the gate was actually at 88% of the 9800u hard-stop —
         # operator misread it as "headroom remaining" and tried to retry.
         if self._quota_tracker is not None:
-            if not self._quota_tracker.can_upload():
-                qs = self._quota_tracker.status()
+            # PR #537 (SR-E): migrate from can_upload() to
+            # can_afford("upload", niche_id=...) — functionally
+            # identical today (foundation only; PR #538 turns on per-niche
+            # enforcement), but threads niche_id through so the per-niche
+            # gate fires once enforcement lands. status() also gets the
+            # niche kwarg so the error message includes per-tenant detail.
+            if not self._quota_tracker.can_afford("upload", niche_id=self.niche_id):
+                qs = self._quota_tracker.status(niche_id=self.niche_id)
                 hard_stop = qs.get("hard_stop", 9800)
                 self._log.error(
                     "YouTube quota gate blocked upload: %d/%d units used (hard-stop, %d uploads today)",
@@ -436,7 +442,10 @@ class YouTubeClient:
         # Record quota usage after successful upload
         if self._quota_tracker is not None:
             try:
-                self._quota_tracker.record("upload")
+                # PR #537 (SR-E): per-niche attribution. Global counter
+                # still incremented (backward compat); per-niche sub-counter
+                # populates so PR #538 can enforce against it.
+                self._quota_tracker.record("upload", niche_id=self.niche_id)
             except Exception as exc:
                 self._log.warning("YouTube quota recording failed (non-fatal): %s", exc)
 
