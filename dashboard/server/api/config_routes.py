@@ -21,6 +21,37 @@ _REGISTRY_PATH = _DASHBOARD_ROOT / "configs" / "niches_registry.yaml"
 PROJECT_ROOT = _DASHBOARD_ROOT
 
 
+def _enforce_niche_keyed_allowlist(niche_id: str):
+    """PR #546 (SR-F wire pass 7): per-tenant guard for niche-keyed
+    config endpoints.
+
+    Different shape than the blueprint guard (which fetches a row to
+    learn its niche): here the niche_id is right there in the request
+    so we can check it directly against the allowlist — no I/O.
+
+    Same backward-compat semantics as the blueprint guards: returns
+    None (proceed) when the operator's allowlist is None (unrestricted)
+    or when the niche is in the allowlist; returns api_error(403)
+    otherwise. Reuses the same get_allowed_niches() resolver from
+    PR #539's foundation.
+    """
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    allowed = get_allowed_niches()
+    if allowed is None:
+        return None  # unrestricted — fast path
+    if niche_id in allowed:
+        return None
+    return api_error(
+        error=(
+            f"Config endpoint scoped to niche '{niche_id}' which is not "
+            f"in your allowlist (allowed: {sorted(allowed)}). "
+            f"See SR-F (PR #546)."
+        ),
+        code=403,
+    )
+
+
 def _niche_registry() -> list[dict]:
     """Load the niche registry, mtime-cached.
 
@@ -385,6 +416,10 @@ def list_youtube_channels():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     data, _path = _load_sources_yaml_rt(niche_id)
     if data is None:
         return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
@@ -405,6 +440,10 @@ def add_youtube_channel():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     body = request.get_json(silent=True) or {}
     url = (body.get("url") or "").strip()
     name = (body.get("name") or "").strip()
@@ -480,6 +519,10 @@ def remove_youtube_channel():
     url = (request.args.get("url") or "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     if not url:
         return api_error(error="url is required", code=400)
 
@@ -581,6 +624,10 @@ def list_rss_feeds():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     data, _path = _load_sources_yaml_rt(niche_id)
     if data is None:
         return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
@@ -605,6 +652,10 @@ def add_rss_feed():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     body = request.get_json(silent=True) or {}
     url = (body.get("url") or "").strip()
     name = (body.get("name") or "").strip()
@@ -681,6 +732,10 @@ def remove_rss_feed():
     url = (request.args.get("url") or "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     if not url:
         return api_error(error="url is required", code=400)
 
@@ -777,6 +832,10 @@ def list_subreddits():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     data, _path = _load_sources_yaml_rt(niche_id)
     if data is None:
         return api_not_found(message=f"sources.yaml not found for niche={niche_id}")
@@ -805,6 +864,10 @@ def add_subreddit():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     body = request.get_json(silent=True) or {}
     name = _normalize_subreddit_name(body.get("name", ""))
     name_err = _validate_subreddit_name(name)
@@ -880,6 +943,10 @@ def remove_subreddit():
     name = _normalize_subreddit_name(request.args.get("name", ""))
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     name_err = _validate_subreddit_name(name)
     if name_err:
         return api_error(error=name_err, code=400)
@@ -994,6 +1061,10 @@ def get_auto_publish():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
 
     data, _path = _load_publishing_yaml_rt(niche_id)
     if data is None:
@@ -1077,6 +1148,10 @@ def update_auto_publish():
     niche_id = request.args.get("niche_id", "").strip()
     if not niche_id:
         return api_error(error="niche_id is required", code=400)
+    # PR #546 (SR-F wire pass 7): per-tenant guard on niche-keyed config.
+    _err = _enforce_niche_keyed_allowlist(niche_id)
+    if _err is not None:
+        return _err
     body = request.get_json(silent=True) or {}
     raw_pct = body.get("rollout_pct")
     if raw_pct is None:
