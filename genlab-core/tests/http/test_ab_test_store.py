@@ -48,8 +48,13 @@ class TestCreateAbTest:
         backend.create.return_value = {"id": "ab_42"}
         result = store.create_ab_test({"test_id": "t1", "status": "running"})
         assert result == "ab_42"
+        # PR #530 adds niche_id kwarg. Test dict here has no niche_id
+        # → kwarg is None (backward-compat admin-mode path).
         backend.create.assert_called_once_with(
-            "AB_Tests", {"test_id": "t1", "status": "running"}, typecast=True
+            "AB_Tests",
+            {"test_id": "t1", "status": "running"},
+            typecast=True,
+            niche_id=None,
         )
 
     def test_returns_none_and_warns_when_unconfigured(self, caplog) -> None:
