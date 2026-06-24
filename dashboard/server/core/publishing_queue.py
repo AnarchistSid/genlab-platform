@@ -257,17 +257,64 @@ def _next_available_slot(niche_id: str = "", exclude_record_id: str = "") -> str
     except ImportError:
         from backports.zoneinfo import ZoneInfo  # type: ignore[no-redef]
 
-    config_path = os.getenv("BACKLOG_CONFIG_PATH", "")
-    if not config_path:
-        return None
+    # PR #509 (2026-06-24): resolve the per-niche publishing.yaml first
+    # when ``niche_id`` is provided. Pre-PR, the function always loaded
+    # ``$BACKLOG_CONFIG_PATH/../publishing.yaml`` regardless of niche —
+    # in prod that resolves to ``/opt/genlab/genlab-core/config/
+    # publishing.yaml`` (the ai_creators config) for every niche. The
+    # bug stayed silent because every niche's publishing.yaml currently
+    # declares the same ``schedule_slots: ["12:00"]``, but it becomes a
+    # real bug the first time any niche diverges. Closes the audit
+    # surfacing 2026-06-24.
+    #
+    # Mirrors the canonical pattern in ``publish_all_platforms.py:175-
+    # 195`` — same import, same fallback ladder (nested gaming layout
+    # first, then flat per-niche layout, then the shared genlab-core
+    # config). Centralising in a helper is appealing but resisted here
+    # to keep the change tightly scoped — same reasoning that kept
+    # ``_is_within_url_ttl`` as parallel helpers in PR #500 / #501.
+    pub_yaml: Path | None = None
+    if niche_id:
+        try:
+            from genlab_core.pipeline.cli import (
+                NICHE_DIR_NAMES,
+                _resolve_genlab_root,
+            )
 
-    pub_yaml = Path(config_path).parent / "publishing.yaml"
-    if not pub_yaml.exists():
-        # Try genlab-core config
-        genlab_root = Path(config_path).parent.parent.parent
-        pub_yaml = genlab_root / "genlab-core" / "config" / "publishing.yaml"
-    if not pub_yaml.exists():
-        return None
+            root = _resolve_genlab_root()
+            dir_name = NICHE_DIR_NAMES.get(niche_id)
+            if dir_name:
+                niche_root = Path(root) / dir_name
+                # Nested gaming layout first, flat layout second.
+                for candidate in (
+                    niche_root / "niches" / niche_id / "config" / "publishing.yaml",
+                    niche_root / "config" / "publishing.yaml",
+                ):
+                    if candidate.exists():
+                        pub_yaml = candidate
+                        break
+        except Exception as exc:
+            # Per-niche resolution is best-effort — fall through to the
+            # legacy path on any import / FS error so an environment
+            # without genlab-core importable still gets some slot.
+            logger.debug(
+                "[QUEUE] per-niche publishing.yaml lookup failed for niche=%s: %s",
+                niche_id,
+                exc,
+            )
+
+    if pub_yaml is None:
+        config_path = os.getenv("BACKLOG_CONFIG_PATH", "")
+        if not config_path:
+            return None
+
+        pub_yaml = Path(config_path).parent / "publishing.yaml"
+        if not pub_yaml.exists():
+            # Try genlab-core config
+            genlab_root = Path(config_path).parent.parent.parent
+            pub_yaml = genlab_root / "genlab-core" / "config" / "publishing.yaml"
+        if not pub_yaml.exists():
+            return None
 
     try:
         with open(pub_yaml) as f:
