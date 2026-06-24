@@ -205,8 +205,24 @@ def _build_overview() -> dict:
         except Exception as e:
             logger.warning("Failed to fetch blueprints for overview: %s", e)
 
-    # Derive metrics from single result set
+    # Derive metrics from single result set.
+    #
+    # PR #510 (2026-06-24): split the historical "pending" bucket into
+    # the TWO distinct sub-queues operators actually care about:
+    #
+    #   * render_retry_records  (status=DRAFTED)             → render
+    #     failed; needs a pipeline re-run, NOT operator click
+    #   * operator_review_records (status=VISUAL_READY +
+    #     action_taken is empty)                              → ready to
+    #     ship, awaiting operator approve/reject decision
+    #
+    # ``pending_records`` is kept as the union of both so existing
+    # downstream code (per-niche pending count, ``total_pending_review``
+    # global) keeps reporting the historical conflated number for
+    # backward compat. New consumers should prefer the split counts.
     pending_records = []
+    render_retry_records: list[dict] = []
+    operator_review_records: list[dict] = []
     today_records = []
     archived_records = []
     for r in all_records:
@@ -218,6 +234,10 @@ def _build_overview() -> dict:
             action = fields.get("action_taken", "") or ""
             if not action.strip():
                 pending_records.append(r)
+                if status == "DRAFTED":
+                    render_retry_records.append(r)
+                else:  # VISUAL_READY
+                    operator_review_records.append(r)
         elif status == "PUBLISHED":
             # Check multiple date sources: published_at, reviewed_at, updated_at, created_at
             pub_at = (
@@ -238,8 +258,35 @@ def _build_overview() -> dict:
                     pass
 
     total_pending = len(pending_records)
+    total_render_retry = len(render_retry_records)
+    total_operator_review = len(operator_review_records)
     total_published_today = len(today_records)
     total_archived = len(archived_records)
+
+    # PR #510: oldest unreviewed VISUAL_READY age, in hours. Powers the
+    # "X awaiting your review (oldest: Yh)" banner so the operator can
+    # prioritise without opening the queue. None when no operator-review
+    # items exist (no banner shown). Defensive parsing — a malformed
+    # created_at degrades to None rather than crashing the endpoint.
+    oldest_operator_review_age_hours: int | None = None
+    if operator_review_records:
+        oldest_age = 0.0
+        for r in operator_review_records:
+            created = r.get("fields", {}).get("created_at")
+            if not created:
+                continue
+            try:
+                if isinstance(created, str):
+                    dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                else:
+                    dt = created
+                age_h = (datetime.now(UTC) - dt).total_seconds() / 3600.0
+                if age_h > oldest_age:
+                    oldest_age = age_h
+            except (ValueError, TypeError):
+                continue
+        if oldest_age > 0:
+            oldest_operator_review_age_hours = int(round(oldest_age))
 
     # Count all-time published from the fetched records (for pass_rate)
     total_published_all = sum(
@@ -329,11 +376,24 @@ def _build_overview() -> dict:
 
     # Build per-niche pending/published counts and best performer
     niche_pending: dict[str, int] = {}
+    # PR #510: parallel per-niche split. ``niche_pending`` keeps the
+    # historical union for backward compat (consumed by existing
+    # ``pending_review`` field on each niche). New consumers can read
+    # the structured split to render distinct render-retry vs operator-
+    # review badges (different actions: retry vs click).
+    niche_render_retry: dict[str, int] = {}
+    niche_operator_review: dict[str, int] = {}
     niche_published: dict[str, int] = {}
     niche_best: dict[str, dict] = {}
     for r in pending_records:
         n = _bp_niche_overview(r.get("fields", {}))
         niche_pending[n] = niche_pending.get(n, 0) + 1
+    for r in render_retry_records:
+        n = _bp_niche_overview(r.get("fields", {}))
+        niche_render_retry[n] = niche_render_retry.get(n, 0) + 1
+    for r in operator_review_records:
+        n = _bp_niche_overview(r.get("fields", {}))
+        niche_operator_review[n] = niche_operator_review.get(n, 0) + 1
     for r in today_records:
         fields = r.get("fields", {})
         n = _bp_niche_overview(fields)
@@ -375,6 +435,11 @@ def _build_overview() -> dict:
                 "current_stage": current_stage,
                 "last_run_at": last_run,
                 "pending_review": niche_pending.get(niche_id, 0),
+                # PR #510: structured split — render_retry needs pipeline
+                # re-run; operator_review needs the operator to click.
+                # Old ``pending_review`` left as the union for back-compat.
+                "render_retry_count": niche_render_retry.get(niche_id, 0),
+                "operator_review_count": niche_operator_review.get(niche_id, 0),
                 "published_today": niche_published.get(niche_id, 0),
                 "archived_today": niche_archived.get(niche_id, 0),
                 "target_posts_per_day": niche.get("target_posts_per_day", 4),
@@ -509,6 +574,21 @@ def _build_overview() -> dict:
         "prefect_connected": prefect_connected,
         "global": {
             "total_pending_review": total_pending,
+            # PR #510: structured split for prominent surfacing.
+            # ``total_render_retry`` = DRAFTED count (needs pipeline
+            # re-run); ``total_operator_review`` = VISUAL_READY-with-
+            # NULL-action count (needs operator click). The historical
+            # union ``total_pending_review`` stays for backward compat;
+            # downstream consumers should prefer the split when
+            # rendering "X items NEED YOUR ATTENTION" banners.
+            #
+            # ``oldest_operator_review_age_hours`` powers the
+            # "X awaiting your review (oldest: Yh)" banner so the
+            # operator can prioritise without opening the queue. None
+            # when no operator-review items exist (no banner shown).
+            "total_render_retry": total_render_retry,
+            "total_operator_review": total_operator_review,
+            "oldest_operator_review_age_hours": oldest_operator_review_age_hours,
             "total_published_today": total_published_today,
             "total_archived": total_archived,
             "auto_archive_today": {
