@@ -226,7 +226,10 @@ class TestBatchCreateStories:
         store, backend = _make_store()
         backend.batch_create.return_value = []
         assert store.batch_create_stories([]) == []
-        backend.batch_create.assert_called_once_with("Stories", [])
+        # PR #528 adds niche_id kwarg to every backend.batch_create
+        # call. For empty input the dispatch evaluates 0 niches →
+        # niche_id=None (admin-mode fallback, backward compat).
+        backend.batch_create.assert_called_once_with("Stories", [], niche_id=None)
 
     def test_bulk_path_omits_why_it_matters(self) -> None:
         # Historical quirk: BacklogClient.batch_create_stories never
