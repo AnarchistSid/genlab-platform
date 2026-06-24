@@ -885,8 +885,12 @@ class TrendingVideoFetcher:
         # R-28: gate the 100-unit search against the shared cross-process daily
         # budget BEFORE spending it. Without this, 5 niche processes can each
         # blow through to 10k independently (e.g. on an RSS outage).
+        # PR #537 (SR-E): pass niche_id so the per-niche dimension lights up
+        # — populates per-niche counters in the shared state file. The
+        # can_afford answer is unchanged today (PR #536 foundation = plumbing
+        # only); PR #538 turns on per-niche budget enforcement.
         _quota = _get_persistent_quota()
-        if _quota is not None and not _quota.can_afford("search"):
+        if _quota is not None and not _quota.can_afford("search", niche_id=niche_id):
             logger.warning(
                 "[%s] YouTube daily quota near ceiling — skipping search.list for '%s' "
                 "(global cross-process budget protects the 10k/day cap)",
@@ -919,7 +923,11 @@ class TrendingVideoFetcher:
             _increment_quota(100, f"search.list q={query[:30]}")
             if _quota is not None:
                 try:
-                    _quota.record("search")  # persist against the global daily budget
+                    # PR #537 (SR-E): per-niche attribution. The shared
+                    # global counter is still incremented (backward compat);
+                    # the per-niche sub-counter populates so PR #538 has
+                    # data to enforce against.
+                    _quota.record("search", niche_id=niche_id)
                 except Exception as exc:  # pragma: no cover - defensive
                     logger.debug("Persistent quota record failed (non-fatal): %s", exc)
             items = resp.json().get("items", [])

@@ -996,9 +996,14 @@ class TestQuotaGate:
             enable_quota_gate=False,
         )
 
-        # Manually inject a mock quota tracker
+        # Manually inject a mock quota tracker. PR #537 migrated the
+        # upload gate from can_upload() to can_afford("upload", niche_id=...)
+        # so the per-niche dimension threads through. Stubs both for
+        # symmetry — MagicMock returns truthy by default, explicit
+        # False ensures the gate blocks regardless of internal flow.
         mock_qt = MagicMock()
         mock_qt.can_upload.return_value = False
+        mock_qt.can_afford.return_value = False
         mock_qt.status.return_value = {"used": 9500, "upload_count": 5}
         client._quota_tracker = mock_qt
 
@@ -1023,15 +1028,23 @@ class TestQuotaGate:
         """Successful publish records upload in quota tracker."""
         from genlab_core.platforms.youtube import YouTubeClient
 
+        # PR #537: pass niche_id so the quota record() call picks it
+        # up via self.niche_id. Pre-PR this test relied on the empty-
+        # string default because the tracker didn't care about it.
         client = YouTubeClient(
             client_id="id",
             client_secret="secret",
             refresh_token="token",
             enable_quota_gate=False,
+            niche_id="ai_creators",
         )
 
+        # PR #537: upload gate now uses can_afford("upload", niche_id=...).
+        # MagicMock returns truthy by default so the gate passes anyway;
+        # explicit True kept for clarity + symmetry with the blocked test.
         mock_qt = MagicMock()
         mock_qt.can_upload.return_value = True
+        mock_qt.can_afford.return_value = True
         client._quota_tracker = mock_qt
 
         mp4 = tmp_path / "v.mp4"
@@ -1058,7 +1071,8 @@ class TestQuotaGate:
             result = client.publish(payload)
 
         assert result.success is True
-        mock_qt.record.assert_called_once_with("upload")
+        # PR #537: record() now includes niche_id from the payload
+        mock_qt.record.assert_called_once_with("upload", niche_id="ai_creators")
 
 
 # ---------------------------------------------------------------------------
