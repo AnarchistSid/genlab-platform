@@ -62,7 +62,18 @@ class SharePointBackend:
         fields: dict[str, Any],
         *,
         typecast: bool = False,
+        niche_id: str | None = None,  # noqa: ARG002 — accept-and-ignore (SR-C parity)
     ) -> dict[str, Any]:
+        """SharePoint create — ``niche_id`` accepted for API parity.
+
+        PR #526 (2026-06-24): SharePoint has no SR-C tenant-binding
+        concept (multi-tenant SaaS is Postgres-only). The kwarg is
+        declared so a backend-agnostic store (BlueprintStore, etc.)
+        can pass ``niche_id=`` unconditionally without TypeError on
+        the SharePoint path. The value is intentionally ignored —
+        any tenant filtering on SharePoint happens via the existing
+        SharePoint List ACLs, not via SET LOCAL.
+        """
         return self._proxy(table).create(fields, typecast=typecast)
 
     def update(
@@ -82,7 +93,15 @@ class SharePointBackend:
         self,
         table: str,
         records: list[dict[str, Any]],
+        *,
+        niche_id: str | None = None,  # noqa: ARG002 — accept-and-ignore (SR-C parity)
     ) -> list[dict[str, Any]]:
+        """SharePoint batch_create — ``niche_id`` accepted for API parity.
+
+        See :meth:`create` for the rationale — same shape, applied
+        to the bulk path so the BlueprintStore batch migration
+        (follow-up PR) can pass ``niche_id=`` unconditionally too.
+        """
         return self._proxy(table).batch_create(records)
 
     def batch_update(

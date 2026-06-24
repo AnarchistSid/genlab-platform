@@ -133,11 +133,18 @@ class BlueprintStore:
             if val:
                 fields[key] = val
 
+        # PR #526 (2026-06-24, SR-C tenant binding): pass niche_id
+        # through to the backend's SET LOCAL app.niche_id step. The
+        # blueprint dict always carries niche_id from the caller
+        # (push_to_backlog), so it's just a forwarding hop — no new
+        # data needed. Wrapper-forward shipped in PR #525.
+        bp_niche_id = blueprint.get("niche_id")
         try:
             record = self._backend("Blueprints").create(
                 "Blueprints",
                 fields,
                 typecast=True,
+                niche_id=bp_niche_id,
             )
         except Exception as e:
             err_str = str(e)
@@ -156,7 +163,13 @@ class BlueprintStore:
                     "clip_url",
                 ):
                     fields.pop(f, None)
-                record = self._backend("Blueprints").create("Blueprints", fields)
+                # Retry preserves the same niche binding — the original
+                # ValueError was about column shape, not tenant context.
+                record = self._backend("Blueprints").create(
+                    "Blueprints",
+                    fields,
+                    niche_id=bp_niche_id,
+                )
             else:
                 raise
         return record["id"]
