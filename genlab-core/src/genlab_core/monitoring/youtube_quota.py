@@ -108,11 +108,30 @@ class YouTubeQuotaTracker:
         self,
         state_path: Path | None = None,
         daily_quota: int = DAILY_QUOTA,
+        per_niche_quota: int | None = None,
     ) -> None:
+        """
+        Parameters
+        ----------
+        per_niche_quota:
+            PR #538 (SR-E enforcement). When set to an int N, can_afford
+            checks BOTH the global hard-stop AND that the niche-specific
+            usage + cost ≤ N. ``None`` (the default) preserves the
+            pre-PR-538 behavior — no per-niche enforcement. Operators
+            opt in via the ``GENLAB_YOUTUBE_PER_NICHE_QUOTA`` env var
+            (sensible default: ``DAILY_QUOTA / 5 = 2000`` for the 5
+            current channels, leaves headroom for non-niche admin
+            queries). Explicit kwarg overrides the env var.
+        """
         self._lock = threading.Lock()
         self._state_path = Path(state_path) if state_path else _DEFAULT_STATE_PATH
         self._daily_quota = daily_quota
         self._hard_stop = int(self._daily_quota * HARD_STOP_PCT)
+        # PR #538: per-niche cap. Explicit kwarg wins over env var.
+        # Env-var path lets operators flip the enforcement on without
+        # a code change once the per-niche data (PR #537) shows the
+        # cap is safe.
+        self._per_niche_quota: int | None = self._resolve_per_niche_quota(per_niche_quota)
 
         # internal state — always accessed under _lock
         self._used: int = 0
@@ -124,6 +143,34 @@ class YouTubeQuotaTracker:
         self._per_niche: dict[str, dict[str, int]] = {}
 
         self._load()
+
+    @staticmethod
+    def _resolve_per_niche_quota(explicit: int | None) -> int | None:
+        """Resolve the per-niche cap from explicit kwarg → env var → None.
+
+        PR #538: ``GENLAB_YOUTUBE_PER_NICHE_QUOTA`` lets operators turn
+        enforcement on at deploy time without a code change. Invalid
+        values (non-int, ≤0) silently fall back to None — fail-open
+        for defense-in-depth (a typo in the env var doesn't crash the
+        quota gate; the global hard-stop still protects).
+        """
+        if explicit is not None and explicit > 0:
+            return int(explicit)
+        raw = os.environ.get("GENLAB_YOUTUBE_PER_NICHE_QUOTA", "").strip()
+        if not raw:
+            return None
+        try:
+            parsed = int(raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "GENLAB_YOUTUBE_PER_NICHE_QUOTA=%r is not a valid int — "
+                "per-niche enforcement DISABLED (fail-open)",
+                raw,
+            )
+            return None
+        if parsed <= 0:
+            return None
+        return parsed
 
     # ── public API ─────────────────────────────────────────────────────
 
@@ -208,24 +255,53 @@ class YouTubeQuotaTracker:
         operations cost 0 (always affordable) rather than raising, so a gate
         check never breaks a fetch.
 
-        PR #536 (SR-E foundation): ``niche_id`` parameter accepted but
-        NOT YET enforced — the per-niche budget check lands in PR #538.
-        Today, ``niche_id`` is just plumbing: callers can wire it
-        through ahead of time and the answer remains identical to the
-        no-kwarg call. This staged approach lets the wire-up PRs land
-        without behavior change, then a single config-flip PR turns on
-        the per-niche enforcement.
+        PR #538 (SR-E enforcement): when ``niche_id`` is given AND
+        per-niche enforcement is enabled (via constructor kwarg or
+        ``GENLAB_YOUTUBE_PER_NICHE_QUOTA`` env var), the gate also
+        rejects when the niche-specific usage + cost would exceed the
+        per-niche cap. The global hard-stop check still runs (so a
+        misconfigured per-niche cap can't accidentally allow global
+        overrun).
+
+        Backward compat:
+          * ``niche_id=None`` → behaves exactly like PR #536
+          * per-niche enforcement disabled (default) → behaves like #536
+            even when niche_id is passed (foundation-only mode)
+          * both set → per-niche cap applied alongside global hard-stop
         """
         cost = OPERATION_COSTS.get(operation, 0) * count
         with self._lock, self._file_lock():
             self._reload_locked()
             self._maybe_reset(persist=True)
-            # NOTE: niche_id intentionally unused today (foundation only).
-            # Future PR #538 will add: per-niche budget check via
-            # self._per_niche.get(niche_id, {}).get("used", 0) + cost
-            # against a per-niche cap from config.
-            _ = niche_id
-            return (self._used + cost) <= self._hard_stop
+
+            # Global hard-stop check (existing behavior, always runs)
+            if (self._used + cost) > self._hard_stop:
+                return False
+
+            # PR #538: per-niche cap check. Two-of-two required:
+            # (a) caller supplied niche_id, AND
+            # (b) per-niche enforcement is configured (kwarg or env)
+            # Both being optional is what makes this a staged rollout:
+            # operators turn it on via env when ready without touching
+            # caller code.
+            if niche_id and self._per_niche_quota is not None:
+                niche_used = self._per_niche.get(niche_id, {}).get("used", 0)
+                if (niche_used + cost) > self._per_niche_quota:
+                    logger.warning(
+                        "YouTube quota: niche=%r at %d/%d units (per-niche "
+                        "cap reached) — refusing %r (%d units). Global is "
+                        "%d/%d.",
+                        niche_id,
+                        niche_used,
+                        self._per_niche_quota,
+                        operation,
+                        cost,
+                        self._used,
+                        self._hard_stop,
+                    )
+                    return False
+
+            return True
 
     def daily_uploads_used(self) -> int:
         """Return the number of uploads recorded today."""
@@ -271,11 +347,24 @@ class YouTubeQuotaTracker:
                 # hasn't spent anything today. Surfaced under "niche"
                 # so the top-level shape is preserved.
                 niche_state = self._per_niche.get(niche_id, {"used": 0, "upload_count": 0})
-                out["niche"] = {
+                niche_block: dict[str, object] = {
                     "niche_id": niche_id,
                     "used": niche_state["used"],
                     "upload_count": niche_state["upload_count"],
                 }
+                # PR #538: expose per-niche cap + remaining when
+                # enforcement is enabled. Dashboards can show
+                # "gaming 1500 / 2000 (75%)" mirroring the global
+                # pct_of_hard_stop key. When enforcement is OFF, these
+                # keys are absent so consumers can detect the
+                # foundation-only state.
+                if self._per_niche_quota is not None:
+                    niche_block["cap"] = self._per_niche_quota
+                    niche_block["remaining"] = max(self._per_niche_quota - niche_state["used"], 0)
+                    niche_block["pct_of_cap"] = round(
+                        niche_state["used"] / self._per_niche_quota * 100, 1
+                    )
+                out["niche"] = niche_block
             return out
 
     # ── internals ──────────────────────────────────────────────────────
