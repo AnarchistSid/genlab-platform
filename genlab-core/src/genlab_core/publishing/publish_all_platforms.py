@@ -199,6 +199,49 @@ def _filter_enabled_platforms(niche_id: str, default_list: list[str]) -> list[st
             # consolidated ``platforms`` block — no filter needed.
             return default_list
 
+        # PR #514 (2026-06-24): list-format allowlist. Gaming uses
+        #
+        #   platforms:
+        #     enabled:
+        #       - instagram
+        #       - youtube
+        #       # - twitter        # Disabled Sprint 30
+        #
+        # rather than per-platform ``enabled: false`` dicts. Pre-PR the
+        # filter only knew the dict shape; the list shape's keys
+        # (``enabled``, ``concurrent_publish``, ``publish_strategy``)
+        # all failed the ``isinstance(settings, dict)`` check + got
+        # skipped, returning the full default list. The publisher then
+        # tried Twitter, hit "No x_twitter credentials" CREDENTIAL skip,
+        # and recorded a noisy SKIPPED row in publishing_analytics
+        # every day. The list shape is the INTENDED form for niches
+        # that disable platforms by omission.
+        #
+        # Resolution order (mutually exclusive):
+        #   1. ``platforms.enabled: [list]``  → ALLOWLIST: default_list ∩ list
+        #   2. ``platforms.<name>.enabled: false`` per-platform dict
+        #      → DENYLIST (legacy shape, preserved)
+        #
+        # If both shapes exist somehow, the list-allowlist wins (it's
+        # the more explicit operator intent).
+        enabled_list = platforms_block.get("enabled")
+        if isinstance(enabled_list, list):
+            allowed: set[str] = set()
+            for entry in enabled_list:
+                if not isinstance(entry, str):
+                    continue
+                publisher_name = _CONFIG_PLATFORM_ALIASES.get(entry, entry)
+                allowed.add(publisher_name)
+            filtered = [p for p in default_list if p in allowed]
+            if len(filtered) < len(default_list):
+                logger.info(
+                    "[publish] %s: allowlist platforms %s (config-disabled: %s)",
+                    niche_id,
+                    filtered,
+                    sorted(set(default_list) - set(filtered)),
+                )
+            return filtered
+
         # Build the set of explicitly-disabled platforms (publisher-side
         # names, applying the config→publisher alias map).
         disabled: set[str] = set()
