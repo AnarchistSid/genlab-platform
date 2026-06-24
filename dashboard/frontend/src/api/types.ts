@@ -827,6 +827,17 @@ export interface CrossNicheOverviewResponse {
   prefect_connected?: boolean;
   global: {
     total_pending_review: number;
+    // PR #510 (2026-06-24): structured split of the historical
+    // ``total_pending_review`` bucket. DRAFTED → render_retry (needs
+    // pipeline re-run, not operator click); VISUAL_READY-with-NULL-
+    // action → operator_review (needs operator click). The union
+    // stays in ``total_pending_review`` for backward compat. Prefer
+    // ``total_operator_review`` for "X needs your attention" banners
+    // — it filters out the render-retry items the operator can't act
+    // on directly.
+    total_render_retry?: number;
+    total_operator_review?: number;
+    oldest_operator_review_age_hours?: number | null;
     total_published_today: number;
     agents_running: number;
     platform_health: Record<string, "ok" | "degraded" | "error" | "not_configured">;
@@ -850,6 +861,11 @@ export interface CrossNicheOverviewResponse {
     current_stage: string | null;
     last_run_at: string | null;
     pending_review: number;
+    // PR #510: structured per-niche split. ``render_retry_count`` =
+    // DRAFTED count (different action: pipeline retry, not click).
+    // ``operator_review_count`` = VISUAL_READY+NULL action count.
+    render_retry_count?: number;
+    operator_review_count?: number;
     published_today: number;
     archived_today?: number;
     target_posts_per_day: number;

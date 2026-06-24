@@ -93,10 +93,26 @@ function useAlertMessage(): {
       }
     }
 
-    // Check pending review count
-    if (data.global.total_pending_review > 5) {
+    // PR #510 (2026-06-24): prefer the structured operator-review
+    // count over the historical conflated ``total_pending_review``.
+    // The old count lumped DRAFTED (render-retry, NOT an operator
+    // action) with VISUAL_READY-awaiting-click — when the dashboard
+    // banner says "X posts waiting for review" but X of those are
+    // really render-retry, the operator clicks through, sees the
+    // unactionable DRAFTED rows, and loses trust in the badge.
+    // Falls back to the legacy field on older API responses.
+    const operatorReviewCount =
+      data.global.total_operator_review ?? data.global.total_pending_review;
+    if (operatorReviewCount > 5) {
+      const oldestHours = data.global.oldest_operator_review_age_hours;
+      // Annotate the message with oldest-age when >24h so the operator
+      // sees the urgency signal inline. Younger queues just show count.
+      const ageSuffix =
+        oldestHours != null && oldestHours >= 24
+          ? ` (oldest: ${Math.round(oldestHours / 24)}d)`
+          : "";
       return {
-        message: `${data.global.total_pending_review} posts waiting for review`,
+        message: `${operatorReviewCount} awaiting your review${ageSuffix}`,
         type: "info" as const,
         link: "/content",
       };
