@@ -106,7 +106,12 @@ class TestCreateTemplate:
     def test_uses_typecast(self) -> None:
         store, backend = _make_store()
         store.create_template(self._full_template())
-        assert backend.create.call_args.kwargs == {"typecast": True}
+        # PR #529 adds the niche_id kwarg to every backend.create
+        # call (None when the template dict lacks one — backward
+        # compat admin-mode fallback). Assert per-key rather than
+        # whole-dict so the test stays robust to future kwargs.
+        assert backend.create.call_args.kwargs.get("typecast") is True
+        assert backend.create.call_args.kwargs.get("niche_id") is None
 
 
 # ---------------------------------------------------------------------------
