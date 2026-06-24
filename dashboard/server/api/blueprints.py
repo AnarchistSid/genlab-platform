@@ -61,6 +61,80 @@ def _record_niche_id(record: dict) -> str:
     return _BP_NICHE_FIELD_FALLBACK
 
 
+def _filter_batch_ids_by_allowlist(ids: list) -> tuple[list[str], list[dict]]:
+    """Batch variant of the SR-F tenant guard.
+
+    PR #542 (2026-06-24): batch endpoints (POST /batch-review +
+    POST /batch-approve-schedule) iterate over caller-supplied IDs.
+    A homogeneous-niche batch (the common case from the UI) means
+    the single-record guard on top of the loop would either pass
+    every iteration or reject every iteration. But a heterogeneous
+    batch (operator selected mixed-tenant rows) must process the
+    in-tenant rows + denied-skip the others — partial-success
+    semantics matching the existing per-row error shape at
+    line 1138/1255.
+
+    Returns:
+      * allowed_ids — IDs the current user is authorized to mutate.
+        Caller iterates these as if SR-F didn't exist.
+      * denied_results — per-row entries for the SKIPPED ids, in
+        the same {"id", "status", "error"} shape the batch loop
+        already appends on validation failure. Caller extends its
+        results list with these so the dashboard's batch-response
+        UI shows a clear "denied: cross-tenant" row.
+
+    For unrestricted users (None allowlist), every ID is allowed
+    (denied_results is empty + no per-record fetch is performed).
+    Fast path matches single-record guard's semantics.
+    """
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    allowed = get_allowed_niches()
+    if allowed is None:
+        return [str(i) for i in ids], []
+
+    allowed_ids: list[str] = []
+    denied: list[dict] = []
+    try:
+        client = _get_client()
+    except Exception as exc:
+        # Match the single-record guard's defensive fail-open — let
+        # the downstream loop's per-row error handling kick in.
+        logger.debug("[SR-F batch guard] client init failed: %s", exc)
+        return [str(i) for i in ids], []
+
+    for rid in ids:
+        try:
+            bp_record = client.blueprints.get(str(rid))
+        except Exception as exc:
+            # Per-record fetch failure isn't a tenant issue. Let the
+            # loop's existing error handling 404/500 it instead of
+            # silently denying a row we can't even read.
+            logger.debug("[SR-F batch guard] fetch failed for %s: %s", rid, exc)
+            allowed_ids.append(str(rid))
+            continue
+        if not bp_record:
+            # Missing blueprint — same logic: pass through so the
+            # batch loop's existing missing-record path runs.
+            allowed_ids.append(str(rid))
+            continue
+        niche = _record_niche_id(bp_record)
+        if niche in allowed:
+            allowed_ids.append(str(rid))
+        else:
+            denied.append(
+                {
+                    "id": rid,
+                    "status": "denied",
+                    "error": (
+                        f"Blueprint niche '{niche}' not in your allowlist "
+                        f"({sorted(allowed)}) — SR-F (PR #542)."
+                    ),
+                }
+            )
+    return allowed_ids, denied
+
+
 def _enforce_blueprint_niche_allowlist(record_id: str):
     """Per-tenant action guard. Returns None to proceed, or an api_error
     Response (403) when the current user's allowlist excludes the
@@ -1132,8 +1206,15 @@ def batch_review():
         return api_error(error=f"Invalid action: {action}")
     action_taken = VALID_BATCH[action]
 
+    # PR #542 (SR-F batch wire): drop cross-tenant IDs upfront. Allowed
+    # IDs proceed through the normal loop; denied IDs land as
+    # {"status": "denied"} rows in the response so the UI can render
+    # them clearly. Unrestricted users (None allowlist) get every ID
+    # back as allowed — fast path.
+    ids, denied_results = _filter_batch_ids_by_allowlist(ids)
+
     client = _get_client()
-    results = []
+    results = list(denied_results)
     for rid in ids:
         if not RECORD_RE.match(str(rid)):
             results.append({"id": rid, "status": "error", "error": "Invalid ID"})
@@ -1246,10 +1327,15 @@ def batch_approve_schedule():
     if not ids:
         return api_error(error="No blueprint IDs provided")
 
+    # PR #542 (SR-F batch wire): same upfront cross-tenant filter as
+    # batch-review. Denied rows pre-populate results so the UI sees
+    # them alongside the per-iteration outcomes from the loop below.
+    ids, denied_results = _filter_batch_ids_by_allowlist(ids)
+
     from server.core.publishing_queue import _advisory_lock, _next_available_slot
 
     client = _get_client()
-    results = []
+    results = list(denied_results)
     for bp_id in ids:
         if not RECORD_RE.match(str(bp_id)):
             results.append({"id": bp_id, "status": "error", "error": "Invalid ID"})
