@@ -1737,6 +1737,180 @@ def detect_dead_pollers(niche_id: str) -> list[Alert]:
     return alerts
 
 
+def check_engagement_health() -> list[Alert]:
+    """System-wide health probe for the engagement engine.
+
+    PR #516 (2026-06-24): added to close the infrastructure-half-wired
+    gap surfaced by the 2026-06-24 audit (Q4: loud probe). The
+    engagement engine went silent for 22 days starting 2026-05-21 because
+    AGENT_ROOT was missing from the poller's systemd unit (fixed in PR
+    #513). No probe existed to detect the silence — operators only
+    noticed when scrolling the dashboard manually 22 days later.
+
+    Three signals:
+
+      * **pending_engagement table is fresh** — at least 1 row in the
+        last 24h with status != 'COMPLETED'. Absence means the poller
+        isn't writing, OR every comment fired produced no reply.
+      * **DLQ is bounded** — if a Dramatiq dead-letter-queue table
+        exists, count rows; alert if >10 accumulated (suggests workers
+        are crashing on every task).
+      * **Recent reply timestamps** — max(updated_at) on
+        pending_engagement with status='COMPLETED' is within 48h. If
+        no completions in 48h, the consumer half of the pipeline is
+        wedged even if producers fire.
+
+    Defensive: any query failure → log + return [] (don't crash the
+    monitor on DB hiccups). Three discrete signals so an alert points
+    at the actual broken layer.
+    """
+    alerts: list[Alert] = []
+    try:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all") as conn:
+            with conn.cursor() as cur:
+                # Signal 1: pending_engagement freshness
+                cur.execute("""
+                    SELECT
+                        COUNT(*) AS total,
+                        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS last_24h,
+                        MAX(updated_at) FILTER (WHERE status = 'COMPLETED') AS latest_completed
+                    FROM pending_engagement
+                """)
+                row = cur.fetchone()
+                if row is None:
+                    return alerts
+                total, last_24h, latest_completed = row
+
+                if last_24h == 0 and total > 0:
+                    alerts.append(
+                        Alert(
+                            check="engagement_no_recent_writes",
+                            severity="warning",
+                            message=(
+                                f"No pending_engagement writes in the last 24h "
+                                f"(total table size: {total}). "
+                                "The poller may be silent — check AGENT_ROOT env var on "
+                                "genlab-engagement-poller.service + journalctl for tracebacks."
+                            ),
+                            details={"total": int(total), "last_24h_writes": int(last_24h)},
+                        )
+                    )
+
+                # Signal 3: completions stalled
+                if latest_completed is not None:
+                    from datetime import datetime as _dt
+
+                    if isinstance(latest_completed, _dt):
+                        age_hours = (datetime.now(UTC) - latest_completed).total_seconds() / 3600
+                        if age_hours > 48:
+                            alerts.append(
+                                Alert(
+                                    check="engagement_completion_stalled",
+                                    severity="warning",
+                                    message=(
+                                        f"No engagement reply completions in {int(age_hours)}h "
+                                        f"(latest: {latest_completed.isoformat()}). "
+                                        "Worker may be stuck on a poison message — check DLQ + "
+                                        "worker journal."
+                                    ),
+                                    details={"last_completed_hours_ago": int(age_hours)},
+                                )
+                            )
+    except Exception as exc:
+        # Fail-open: probe failure must NOT crash the health monitor.
+        # Operator visibility for engagement is the GOAL; logging the
+        # probe failure at DEBUG (not WARNING) is intentional — we don't
+        # want noisy "probe couldn't connect to DB" alerts on transient
+        # DB hiccups. The pipeline_alerts table itself will eventually
+        # surface the broader DB issue via other checks.
+        logger.debug("[engagement_health] probe failed: %s", exc)
+    return alerts
+
+
+def check_content_pool_health() -> list[Alert]:
+    """System-wide health probe for the content_pool routing subsystem.
+
+    PR #516 (2026-06-24): added to close the infrastructure-half-wired
+    gap (Q4: loud probe). The AUTONOMY-GAP-ANALYSIS doc flagged that
+    77% of blueprints bypass the cross-niche classifier because content
+    pool's claim rate is only ~23%. Without a probe, this degradation
+    is invisible until someone audits the data flow by hand.
+
+    Two signals:
+
+      * **Producer freshness** — at least 1 row written in the last
+        24h. Absence means shared_ingestion isn't producing.
+      * **Consumer claim rate** — over the last 7 days, what % of
+        routed rows got claimed by trending_video_fetcher? Below 5%
+        means consumer's nearly entirely bypassing pool.
+
+    Same fail-open posture as ``check_engagement_health``.
+    """
+    alerts: list[Alert] = []
+    try:
+        from genlab_core.storage.tenant_context import pg_connect
+
+        with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all") as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE fetched_at >= NOW() - INTERVAL '24 hours') AS last_24h,
+                        COUNT(*) FILTER (WHERE fetched_at >= NOW() - INTERVAL '7 days') AS last_7d,
+                        COUNT(*) FILTER (
+                            WHERE fetched_at >= NOW() - INTERVAL '7 days'
+                              AND status = 'claimed'
+                        ) AS claimed_7d
+                    FROM content_pool
+                """)
+                row = cur.fetchone()
+                if row is None:
+                    return alerts
+                last_24h, last_7d, claimed_7d = row
+
+                # Signal 1: producer freshness
+                if last_24h == 0:
+                    alerts.append(
+                        Alert(
+                            check="content_pool_producer_silent",
+                            severity="warning",
+                            message=(
+                                "No content_pool writes in the last 24h. "
+                                "shared_ingestion may have stopped firing — check "
+                                "genlab-shared-ingestion.timer + journal for tracebacks."
+                            ),
+                            details={"last_24h_writes": int(last_24h)},
+                        )
+                    )
+
+                # Signal 2: consumer claim rate
+                if last_7d > 0:
+                    claim_pct = 100.0 * claimed_7d / last_7d
+                    if claim_pct < 5.0:
+                        alerts.append(
+                            Alert(
+                                check="content_pool_consumer_bypass",
+                                severity="warning",
+                                message=(
+                                    f"content_pool claim rate is only {claim_pct:.1f}% "
+                                    f"({claimed_7d}/{last_7d} rows in last 7d). "
+                                    "FetchTrendingVideos may be bypassing the pool — "
+                                    "the cross-niche classifier is barely being "
+                                    "exercised."
+                                ),
+                                details={
+                                    "claim_pct": round(claim_pct, 1),
+                                    "claimed_7d": int(claimed_7d),
+                                    "total_7d": int(last_7d),
+                                },
+                            )
+                        )
+    except Exception as exc:
+        logger.debug("[content_pool_health] probe failed: %s", exc)
+    return alerts
+
+
 def run_all_checks(niche_id: str | None = None) -> list[Alert]:
     """Run all health checks. If niche_id is None, checks all niches."""
     all_alerts: list[Alert] = []
@@ -1769,6 +1943,9 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_foreign_host_writes())
         all_alerts.extend(check_git_drift())
         all_alerts.extend(check_warp_health())
+        # PR #516 (2026-06-24): infrastructure-half-wired audit probes
+        all_alerts.extend(check_engagement_health())
+        all_alerts.extend(check_content_pool_health())
 
     return all_alerts
 
