@@ -42,19 +42,35 @@ class SourceStore:
 
     def create_source(self, source: dict) -> str:
         """Record a new content source (RSS feed, YouTube channel,
-        etc.). Returns the new record id."""
+        etc.). Returns the new record id.
+
+        PR #531 (2026-06-24, SR-C tenant binding, 5th + final store):
+        pass ``niche_id`` from the source dict to backend.create so
+        the row's tenant tag lands AND the backend's SET LOCAL fires.
+        Mirrors the BlueprintStore/StoryStore/TemplateStore/ABTestStore
+        single-row migration shape. The sources table on prod has a
+        ``niche_id`` column (verified 2026-06-24 schema probe —
+        219 rows, tenant-scoped).
+        """
+        fields = {
+            "source_id": source["source_id"],
+            "domain": source["domain"],
+            "name": source.get("name", source["domain"]),
+            "url": source["url"],
+            "type": source["type"],
+            "priority": source.get("priority", 1.0),
+            "enabled": source.get("enabled", True),
+            "authority_score": source.get("authority_score", 0.5),
+        }
+        # PR #531: surface niche_id as a promoted field (was
+        # previously omitted — same SR-C bug class as TemplateStore
+        # pre-PR-529). Some sources are operator-owned per-niche.
+        if source.get("niche_id"):
+            fields["niche_id"] = source["niche_id"]
         record = self._backend("Sources").create(
             "Sources",
-            {
-                "source_id": source["source_id"],
-                "domain": source["domain"],
-                "name": source.get("name", source["domain"]),
-                "url": source["url"],
-                "type": source["type"],
-                "priority": source.get("priority", 1.0),
-                "enabled": source.get("enabled", True),
-                "authority_score": source.get("authority_score", 0.5),
-            },
+            fields,
+            niche_id=source.get("niche_id"),
         )
         return record["id"]
 
