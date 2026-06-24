@@ -983,4 +983,134 @@ class TestFilterEnabledPlatforms:
 
         result = publish_all_platforms._filter_enabled_platforms("gaming", self.DEFAULT_PLATFORMS)
         assert "facebook" not in result
+
+    # ── PR #514 (2026-06-24) — list-format allowlist support ──────────
+
+    def test_list_format_allowlist_filters_to_named_platforms(self, tmp_path, monkeypatch):
+        """``platforms.enabled: [list]`` form acts as an ALLOWLIST.
+
+        Mirrors gaming's actual publishing.yaml shape:
+
+            platforms:
+              enabled:
+                - instagram
+                - youtube
+                # - twitter        # Disabled Sprint 30
+                - facebook
+
+        Pre-PR-#514 the filter saw ``enabled`` whose VALUE was a list
+        (not a dict), failed ``isinstance(settings, dict)``, skipped
+        every entry, and returned the FULL default list — including
+        twitter, which then hit a CREDENTIAL skip every cycle.
+        """
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "platforms:\n  enabled:\n    - instagram\n    - youtube\n    - facebook\n"
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        # ALLOWLIST: only the 3 listed platforms (twitter + threads dropped)
+        assert "instagram" in result
+        assert "youtube" in result
+        assert "facebook" in result
+        assert "twitter" not in result
+        assert "threads" not in result
+
+    def test_list_format_x_twitter_alias_in_allowlist(self, tmp_path, monkeypatch):
+        """When the list uses ``x_twitter`` or ``x`` aliases, they map
+        to publisher-side ``twitter`` and stay enabled."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "platforms:\n  enabled:\n    - instagram\n    - x_twitter\n"
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert "twitter" in result, (
+            "x_twitter alias in list-format allowlist must keep twitter enabled"
+        )
+        assert "instagram" in result
+        assert "youtube" not in result
+        assert "facebook" not in result
+
+    def test_list_format_empty_allowlist_filters_everything(self, tmp_path, monkeypatch):
+        """Edge case: empty list means NO platforms enabled.
+
+        Defensive — this is unlikely in practice but the filter must
+        not crash. Returns empty list; caller's run_publish would then
+        exit early with no work to do.
+        """
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text("platforms:\n  enabled: []\n")
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        assert result == []
+
+    def test_list_format_wins_when_both_shapes_present(self, tmp_path, monkeypatch):
+        """If both list-allowlist AND per-platform dicts exist, the
+        list wins (more explicit operator intent). Documents the
+        priority order from PR #514's docstring."""
+        from genlab_core.publishing import publish_all_platforms
+
+        cfg_dir = tmp_path / "FakeNiche" / "config"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "publishing.yaml").write_text(
+            "platforms:\n"
+            "  enabled:\n"
+            "    - instagram\n"  # allowlist says only IG
+            "  facebook:\n"
+            "    enabled: true\n"  # but FB has a dict saying true — list wins
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli.NICHE_DIR_NAMES",
+            {"fake_niche": "FakeNiche"},
+        )
+        monkeypatch.setattr(
+            "genlab_core.pipeline.cli._resolve_genlab_root",
+            lambda: tmp_path,
+        )
+
+        result = publish_all_platforms._filter_enabled_platforms(
+            "fake_niche", self.DEFAULT_PLATFORMS
+        )
+        # List-allowlist wins: only instagram passes
+        assert result == ["instagram"]
         assert "instagram" in result
