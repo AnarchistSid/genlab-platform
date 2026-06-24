@@ -255,11 +255,20 @@ class BlueprintStore:
             raise ValueError(f"Blueprint {candidate_id} not found")
         if not force:
             self._assert_not_scheduled(blueprint, status)
+        # PR #533 (2026-06-24, SR-A tenant binding): pass niche_id to
+        # backend.update so SET LOCAL app.niche_id fires before the
+        # UPDATE. Without this, a malicious caller (or buggy code)
+        # with the blueprint id could mutate rows across tenants —
+        # admin-mode UPDATE bypasses RLS USING clauses. niche_id
+        # already comes in as a kwarg for the find step (line 253),
+        # so this is a pure forwarding hop. Wrapper layer (#532)
+        # forwards niche_id to backend.update.
         self._backend("Blueprints").update(
             "Blueprints",
             blueprint["id"],
             {"status": status, **kwargs},
             typecast=True,
+            niche_id=niche_id,
         )
 
     # ── Batch ──────────────────────────────────────────────────────

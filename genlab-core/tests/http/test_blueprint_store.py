@@ -425,7 +425,10 @@ class TestUpdateBlueprintStatus:
         store, backend = _make_store()
         backend.find.return_value = [{"id": "bp_1"}]
         store.update_blueprint_status("cid_1", "VISUAL_READY")
-        assert backend.update.call_args.kwargs == {"typecast": True}
+        # PR #533 adds niche_id kwarg to backend.update. No niche_id
+        # arg here → kwarg is None (backward-compat admin-mode path).
+        assert backend.update.call_args.kwargs.get("typecast") is True
+        assert backend.update.call_args.kwargs.get("niche_id") is None
 
     def test_kwargs_merged_into_update_fields(self) -> None:
         store, backend = _make_store()
