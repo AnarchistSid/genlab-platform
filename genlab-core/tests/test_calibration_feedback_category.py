@@ -58,7 +58,7 @@ class TestCategoryNormalization:
         from genlab_core.scheduling.calibration_logger import log
 
         result = log(
-            blueprint_id="bp_test",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=None,
             operator_action="approved",
@@ -70,7 +70,7 @@ class TestCategoryNormalization:
         from genlab_core.scheduling.calibration_logger import log
 
         result = log(
-            blueprint_id="bp_test",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=None,
             operator_action="rejected",
@@ -86,7 +86,7 @@ class TestCategoryNormalization:
 
         for bad_value in ("", "   ", "\t\n"):
             result = log(
-                blueprint_id="bp_test",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=None,
                 operator_action="rejected",
@@ -100,7 +100,7 @@ class TestCategoryNormalization:
         from genlab_core.scheduling.calibration_logger import log
 
         result = log(
-            blueprint_id="bp_test",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=None,
             operator_action="rejected",
@@ -113,7 +113,7 @@ class TestCategoryNormalization:
 
         for bad_value in (123, [], {}, object()):
             result = log(
-                blueprint_id="bp_test",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=None,
                 operator_action="rejected",

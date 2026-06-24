@@ -49,7 +49,7 @@ class TestLogNoDb:
     def test_returns_false_silently(self, clean_env):
         assert (
             log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=_decision(),
                 operator_action="approved",
@@ -75,7 +75,7 @@ class TestLogValidation:
     def test_empty_niche_id(self, clean_env):
         assert (
             log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="",
                 decision=_decision(),
                 operator_action="approved",
@@ -88,7 +88,7 @@ class TestLogValidation:
         monkeypatch.setenv("DATABASE_URL", "postgresql://x")
         assert (
             log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=_decision(),
                 operator_action="published",  # not in VALID_OPERATOR_ACTIONS
@@ -115,7 +115,7 @@ class TestLogDbErrorFailsOpen:
         with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
             # Must return False, NOT raise
             result = log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=_decision(),
                 operator_action="approved",
@@ -131,7 +131,7 @@ class TestLogDbErrorFailsOpen:
         mock_psycopg.connect.return_value.__enter__.return_value = mock_conn
         with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
             result = log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=_decision(),
                 operator_action="approved",
@@ -142,7 +142,7 @@ class TestLogDbErrorFailsOpen:
             args = mock_cur.execute.call_args[0]
             assert "INSERT INTO auto_approval_calibration" in args[0]
             # parameters tuple: (bp, niche, gate_approved, conf, passed, failed, action)
-            assert args[1][0] == "bp1"
+            assert args[1][0] == "00000000-0000-0000-0000-000000000001"
             assert args[1][1] == "gaming"
             assert args[1][2] is True  # gate_approved
             assert args[1][6] == "approved"
@@ -161,7 +161,7 @@ class TestLogNoneDecision:
         mock_psycopg.connect.return_value.__enter__.return_value = mock_conn
         with patch.dict("sys.modules", {"psycopg": mock_psycopg}):
             result = log(
-                blueprint_id="bp1",
+                blueprint_id="00000000-0000-0000-0000-000000000001",
                 niche_id="gaming",
                 decision=None,
                 operator_action="rejected",
@@ -325,7 +325,7 @@ class TestDecidedAtOverride:
         )
         # No decided_at param — live path
         log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -367,7 +367,7 @@ class TestDecidedAtOverride:
         )
         historical = datetime(2026, 6, 1, 12, 30, tzinfo=UTC)
         log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -409,7 +409,7 @@ class TestDecidedAtOverride:
             reasons=["ok"],
         )
         log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -459,7 +459,7 @@ class TestNonOperatorSourceFilter:
             reasons=["ok"],
         )
         result = log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -501,7 +501,7 @@ class TestNonOperatorSourceFilter:
         )
         # No action_taken_source kwarg — pre-S1 default behavior
         result = log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -539,7 +539,7 @@ class TestNonOperatorSourceFilter:
             reasons=["ok"],
         )
         result = log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",
@@ -578,7 +578,7 @@ class TestNonOperatorSourceFilter:
             reasons=["ok"],
         )
         result = log(
-            blueprint_id="bp1",
+            blueprint_id="00000000-0000-0000-0000-000000000001",
             niche_id="gaming",
             decision=decision,
             operator_action="approved",

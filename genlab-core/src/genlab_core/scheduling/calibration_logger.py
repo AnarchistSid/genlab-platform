@@ -59,6 +59,38 @@ _NON_OPERATOR_SOURCE_TAGS: frozenset[str] = frozenset(
 )
 
 
+def _is_uuid_shape(blueprint_id: str) -> bool:
+    """Return True when ``blueprint_id`` matches the canonical 36-char
+    UUID layout (``8-4-4-4-12`` with dashes).
+
+    Real ``blueprints.id`` values are ``uuid``-typed in Postgres — only
+    UUIDs ever land in production. Synthetic IDs like ``"10001"``
+    originate from dashboard test fixtures
+    (``dashboard/tests/test_review_action_dashboard_events.py``) that
+    can leak writes to a live DB when ``DATABASE_URL`` survives the
+    pytest conftest's pop — for example when a test is run via
+    ``python -m pytest`` outside the dashboard tree, when a fixture
+    re-loads ``.env``, or when ``calibration_logger.log()`` reads
+    ``DATABASE_URL`` at call time (which it does, line 170) after
+    something else set it back.
+
+    PR #519 added the symmetric read-side filter
+    (``blueprint_id LIKE '________-____-____-____-____________'``);
+    this writer-side guard stops the rows landing in the first place
+    so the table never accumulates pollution that downstream consumers
+    have to defend against.
+    """
+    if not isinstance(blueprint_id, str) or len(blueprint_id) != 36:
+        return False
+    # Cheap structural check — avoid importing uuid for hot path.
+    return (
+        blueprint_id[8] == "-"
+        and blueprint_id[13] == "-"
+        and blueprint_id[18] == "-"
+        and blueprint_id[23] == "-"
+    )
+
+
 @dataclass(frozen=True)
 class CalibrationStats:
     """Per-niche agreement-rate summary for the AUTO #2 readiness check."""
@@ -145,6 +177,20 @@ def log(
             "[calibration] skipping log — empty blueprint_id or niche_id (bp=%r niche=%r)",
             blueprint_id,
             niche_id,
+        )
+        return False
+    # PR #521 (2026-06-24): symmetric write-side UUID-shape guard.
+    # blueprints.id is uuid-typed in Postgres — real callers always pass
+    # UUIDs. Non-UUID strings (test fixtures like "10001"-"10005") leak
+    # into the calibration table when DATABASE_URL stays set during a
+    # test run, polluting agreement-rate calculations. PR #519 filters
+    # them on read; this stops them landing on write.
+    if not _is_uuid_shape(blueprint_id):
+        logger.warning(
+            "[calibration] refusing to log non-UUID blueprint_id=%r "
+            "(test fixture or programmer error — see PR #521; "
+            "real blueprint IDs are 36-char uuid-typed)",
+            blueprint_id,
         )
         return False
     if operator_action not in VALID_OPERATOR_ACTIONS:
