@@ -30,6 +30,24 @@ def _get_queue_manager():
     return PublishingQueueManager()
 
 
+# PR #543 (2026-06-24, SR-F wire pass 4): the publishing-queue endpoints
+# are queue-level mutations on the same blueprints the review endpoints
+# touch. Same tenant guard applies — a tenant-B operator shouldn't be
+# able to approve/hold/release/unschedule/archive a tenant-A blueprint
+# even through this alternate API surface. We import the existing guard
+# from blueprints.py rather than re-implementing so a single helper
+# change propagates everywhere.
+def _enforce_queue_tenant_guard(record_id: str):
+    """Lazy-imported wrapper for the SR-F guard from blueprints.py.
+
+    Lazy import lets this module load even if blueprints.py imports
+    haven't been resolved yet (Flask blueprint registration order).
+    """
+    from server.api.blueprints import _enforce_blueprint_niche_allowlist
+
+    return _enforce_blueprint_niche_allowlist(record_id)
+
+
 # ── Queue endpoints ──────────────────────────────────────────
 
 
@@ -53,9 +71,19 @@ def list_queue():
 
         # Lite transform: resolve visual_paths to URLs for thumbnails
         # without expensive ffprobe / review_server import
-        from server.api.blueprints import _transform_media
+        from server.api.blueprints import _record_niche_id, _transform_media
 
         items = [_transform_media(item, lite=True) for item in items]
+
+        # PR #543 (SR-F wire pass 4): per-user allowlist filter on the
+        # queue list. Symmetric with /review-queue (#540) — operator
+        # scoped to gaming only sees gaming items in the queue. Default
+        # (unrestricted) returns the full list unchanged.
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        _allowed = get_allowed_niches()
+        if _allowed is not None:
+            items = [it for it in items if _record_niche_id(it) in _allowed]
 
         return api_success(
             data={"data": items, "meta": {"total": len(items), "niche_id": niche_id}}
@@ -110,6 +138,10 @@ def approve_item(record_id):
     """Approve a blueprint for publishing."""
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #543 (SR-F wire pass 4): tenant guard — see _enforce_queue_tenant_guard.
+    _err = _enforce_queue_tenant_guard(record_id)
+    if _err is not None:
+        return _err
     data = request.json or {}
     try:
         mgr = _get_queue_manager()
@@ -147,6 +179,10 @@ def hold_item(record_id):
     """Hold a blueprint — blocks publishing."""
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #543 (SR-F wire pass 4): tenant guard — see _enforce_queue_tenant_guard.
+    _err = _enforce_queue_tenant_guard(record_id)
+    if _err is not None:
+        return _err
     data = request.json or {}
     reason = data.get("reason", "")
     try:
@@ -183,6 +219,10 @@ def release_item(record_id):
     """Release a held blueprint back to PENDING_APPROVAL."""
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #543 (SR-F wire pass 4): tenant guard — see _enforce_queue_tenant_guard.
+    _err = _enforce_queue_tenant_guard(record_id)
+    if _err is not None:
+        return _err
     try:
         mgr = _get_queue_manager()
         mgr.release(record_id)
@@ -219,6 +259,10 @@ def unschedule_item(record_id):
     """Remove a blueprint from the schedule (clear scheduled_for)."""
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #543 (SR-F wire pass 4): tenant guard — see _enforce_queue_tenant_guard.
+    _err = _enforce_queue_tenant_guard(record_id)
+    if _err is not None:
+        return _err
     try:
         from server.core.graph_sync import get_sync_client
 
@@ -258,6 +302,10 @@ def archive_item(record_id):
     """Archive a blueprint — permanently removes from all queues."""
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #543 (SR-F wire pass 4): tenant guard — see _enforce_queue_tenant_guard.
+    _err = _enforce_queue_tenant_guard(record_id)
+    if _err is not None:
+        return _err
     try:
         from server.core.graph_sync import get_sync_client
 
