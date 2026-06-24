@@ -263,39 +263,28 @@ def _build_overview() -> dict:
     total_published_today = len(today_records)
     total_archived = len(archived_records)
 
-    # PR #510: oldest unreviewed VISUAL_READY age, in hours. Powers the
-    # "X awaiting your review (oldest: Yh)" banner so the operator can
-    # prioritise without opening the queue. None when no operator-review
-    # items exist (no banner shown). Defensive parsing — a malformed
-    # created_at degrades to None rather than crashing the endpoint.
+    # PR #510 + #511: oldest unreviewed VISUAL_READY age, in hours.
+    # Powers the "X awaiting your review (oldest: Yh)" banner so the
+    # operator can prioritise without opening the queue. None when no
+    # operator-review items exist (no banner shown).
     #
-    # ``created_at`` lookup order: top-level key (Postgres backend
-    # since 2026-06-23 PR #501) → fields dict (legacy JSON backend +
-    # test fixtures). The Postgres backend's ``_row_to_record`` puts
-    # the auto-managed lifecycle columns at top level deliberately to
-    # avoid ``_split_fields`` round-tripping them through extra JSONB
-    # (see PR #501 docstring). The previous fields-only lookup made
-    # this whole age computation a silent no-op on prod — banner
-    # surfaced "10 awaiting your review" without the age suffix.
+    # PR #512 (2026-06-24): delegate the top-level vs fields
+    # lookup-trap workaround to ``record_created_at_dt`` (centralised
+    # after the same trap silently broke PR #500 + PR #510 — both
+    # required follow-up PRs to fix).
+    from genlab_core.storage.record_helpers import record_created_at_dt
+
     oldest_operator_review_age_hours: int | None = None
     if operator_review_records:
         oldest_age = 0.0
+        now = datetime.now(UTC)
         for r in operator_review_records:
-            created = r.get("created_at")
-            if not created:
-                created = r.get("fields", {}).get("created_at")
-            if not created:
+            dt = record_created_at_dt(r)
+            if dt is None:
                 continue
-            try:
-                if isinstance(created, str):
-                    dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                else:
-                    dt = created
-                age_h = (datetime.now(UTC) - dt).total_seconds() / 3600.0
-                if age_h > oldest_age:
-                    oldest_age = age_h
-            except (ValueError, TypeError):
-                continue
+            age_h = (now - dt).total_seconds() / 3600.0
+            if age_h > oldest_age:
+                oldest_age = age_h
         if oldest_age > 0:
             oldest_operator_review_age_hours = int(round(oldest_age))
 

@@ -61,23 +61,19 @@ def _is_within_url_ttl(bp: dict, cutoff: datetime | None) -> bool:
     contributing to the dedup set, letting today's "Overwatch" run
     re-publish if the last "Overwatch" was >cutoff days ago.
 
-    ``created_at`` lookup order: top-level key (Postgres backend since
-    2026-06-23 PR #501) → fields dict (legacy JSON backend + test
-    fixtures). Missing or unparseable dates → keep in dedup set
-    (conservative — don't risk re-publishing unknown-age content).
+    PR #512 (2026-06-24): the top-level vs fields lookup-trap workaround
+    moved to ``record_helpers.record_created_at_dt`` (centralised after
+    this same trap bit 3 callers in 24h). Missing or unparseable dates
+    → keep in dedup set (conservative — don't risk re-publishing
+    unknown-age content).
     """
     if cutoff is None:
         return True
-    created = bp.get("created_at")
-    if not created:
-        created = bp.get("fields", bp).get("created_at")
-    if not created:
+    from genlab_core.storage.record_helpers import record_created_at_dt
+
+    created = record_created_at_dt(bp)
+    if created is None:
         return True
-    if isinstance(created, str):
-        try:
-            created = datetime.fromisoformat(created.replace("Z", "+00:00"))
-        except (ValueError, TypeError):
-            return True
     return created >= cutoff
 
 
