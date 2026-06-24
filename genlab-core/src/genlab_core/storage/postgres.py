@@ -902,12 +902,29 @@ class PostgresTableProxy:
         fields: dict | None = None,
         *,
         typecast: bool = False,
+        niche_id: str | None = None,
         **kwargs,
     ):
+        """BacklogClient.create — thin wrapper over PostgresBackend.create.
+
+        PR #525 (2026-06-24): forwards ``niche_id`` to the backend so
+        SR-C tenant binding actually reaches the INSERT. Before this
+        PR the wrapper accepted ``**kwargs`` (which silently swallowed
+        ``niche_id=``) but never forwarded it — making PR #517's
+        SR-C mechanism *dormant for every store-level caller*. The
+        wrapper-forward unblocks per-store migration: store classes
+        can now pass ``niche_id=`` and trust it lands at the
+        backend's ``SET LOCAL app.niche_id`` step.
+        """
         if fields is None and isinstance(table, dict):
             fields = table
             table = None
-        return self._backend.create(table or self._table, fields or {}, typecast=typecast)
+        return self._backend.create(
+            table or self._table,
+            fields or {},
+            typecast=typecast,
+            niche_id=niche_id,
+        )
 
     def update(
         self,
@@ -938,11 +955,29 @@ class PostgresTableProxy:
             return self._backend.delete(record_id_or_table, record_id)
         return self._backend.delete(self._table, record_id_or_table)
 
-    def batch_create(self, table: str | None = None, records: list | None = None):
+    def batch_create(
+        self,
+        table: str | None = None,
+        records: list | None = None,
+        *,
+        niche_id: str | None = None,
+    ):
+        """BacklogClient.batch_create — thin wrapper over PostgresBackend.batch_create.
+
+        PR #525 (2026-06-24): forwards ``niche_id`` to the backend.
+        See :meth:`create` for the SR-C wrapper-forward rationale —
+        identical pattern. ``niche_id=None`` preserves the existing
+        admin-mode fallback so unmigrated callers keep working
+        unchanged.
+        """
         if records is None and isinstance(table, list):
             records = table
             table = None
-        return self._backend.batch_create(table or self._table, records or [])
+        return self._backend.batch_create(
+            table or self._table,
+            records or [],
+            niche_id=niche_id,
+        )
 
     def claim_status(self, record_id: str, *, expected_status: str, new_status: str) -> bool:
         """Atomic conditional status flip — see PostgresBackend.claim_status (R-24)."""
