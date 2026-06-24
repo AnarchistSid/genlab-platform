@@ -48,25 +48,41 @@ class TemplateStore:
 
         Flattens the nested ``constraints`` dict into top-level
         promoted columns. Returns the new record id.
+
+        PR #529 (2026-06-24, SR-C tenant binding, 3rd store): pass
+        ``niche_id`` from the template dict to backend.create so the
+        row carries its tenant tag AND the backend does the
+        ``SET LOCAL app.niche_id`` step. Mirrors PR #528 (StoryStore
+        single-row). The ``templates`` table on prod has a
+        ``niche_id`` column (verified 2026-06-24 schema probe),
+        so this is a real tenant-scoped table.
         """
         constraints = template.get("constraints", {})
+        fields = {
+            "template_id": template["template_id"],
+            "name": template["name"],
+            "format": template["format"],
+            "best_for": template.get("best_for", []),
+            "max_slides": constraints.get("max_slides"),
+            "max_words_per_slide_title": constraints.get("max_words_per_slide_title"),
+            "max_words_per_slide_body": constraints.get("max_words_per_slide_body"),
+            "max_reel_seconds": constraints.get("max_reel_seconds"),
+            "structure": "\n".join(template.get("structure", [])),
+            "default_cta": template.get("default_cta", ""),
+            "pattern_refs": ", ".join(template.get("pattern_refs", [])),
+            "status": "active",
+        }
+        # PR #529: surface niche_id as a promoted field so the row
+        # carries its tenant tag (was previously omitted — exactly
+        # the SR-C bug class for the bulk path PR #527 fixed on
+        # blueprints).
+        if template.get("niche_id"):
+            fields["niche_id"] = template["niche_id"]
         record = self._backend("Templates").create(
             "Templates",
-            {
-                "template_id": template["template_id"],
-                "name": template["name"],
-                "format": template["format"],
-                "best_for": template.get("best_for", []),
-                "max_slides": constraints.get("max_slides"),
-                "max_words_per_slide_title": constraints.get("max_words_per_slide_title"),
-                "max_words_per_slide_body": constraints.get("max_words_per_slide_body"),
-                "max_reel_seconds": constraints.get("max_reel_seconds"),
-                "structure": "\n".join(template.get("structure", [])),
-                "default_cta": template.get("default_cta", ""),
-                "pattern_refs": ", ".join(template.get("pattern_refs", [])),
-                "status": "active",
-            },
+            fields,
             typecast=True,
+            niche_id=template.get("niche_id"),
         )
         return record["id"]
 
