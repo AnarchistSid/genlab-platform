@@ -340,6 +340,20 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
     try:
         with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
+                # PR #519 (2026-06-24): exclude synthetic test-fixture
+                # rows. blueprint_id ~ '________-____-____-____-____________'
+                # matches the UUID shape (32 hex chars + 4 dashes); real
+                # blueprints always carry UUIDs. Test fixtures and
+                # backfill scripts have historically used integer-string
+                # IDs ('10001', '10002', '10005') which leaked into the
+                # calibration table — gaming had 80 such rows polluting
+                # the agreement-rate calc, dragging it from a real
+                # ~36% down to the displayed 22%. PR #222 (D1.1 in
+                # AUTO_2_ROLLOUT_2026-06-15) was supposed to purge
+                # synthetic rows once, but new rows accumulate. The
+                # shape filter is the durable read-side defense — even
+                # if 100 more synthetic rows land tomorrow, the stats
+                # ignore them automatically.
                 cur.execute(
                     """
                     SELECT
@@ -367,6 +381,8 @@ def stats(*, niche_id: str, window_days: int = 7) -> CalibrationStats:
                     FROM auto_approval_calibration
                     WHERE niche_id = %s
                       AND decided_at >= NOW() - (%s || ' days')::interval
+                      -- PR #519: UUID-shape filter (exclude synthetic IDs)
+                      AND blueprint_id LIKE '________-____-____-____-____________'
                     """,
                     (niche_id, str(window_days)),
                 )
@@ -459,6 +475,9 @@ def breakdown_by_category(
     try:
         with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
+                # PR #519: UUID-shape filter — synthetic test rows
+                # don't carry feedback_category but defensively scope
+                # to real blueprints anyway.
                 cur.execute(
                     """
                     SELECT
@@ -470,6 +489,7 @@ def breakdown_by_category(
                     WHERE niche_id = %s
                       AND feedback_category IS NOT NULL
                       AND decided_at >= NOW() - (%s || ' days')::interval
+                      AND blueprint_id LIKE '________-____-____-____-____________'
                     GROUP BY feedback_category
                     ORDER BY total DESC
                     """,
@@ -522,6 +542,12 @@ def stats_all_niches(*, window_days: int = 7) -> dict[str, CalibrationStats]:
         # aggregation; no per-niche RLS GUC needed.
         with pg_connect(dsn, niche_id="all", connect_timeout=5) as conn:
             with conn.cursor() as cur:
+                # PR #519: same UUID-shape filter as ``stats()`` so the
+                # batch endpoint doesn't disagree with the per-niche
+                # one. Without this, ``stats_all_niches`` reports
+                # contaminated counts while ``stats`` (per-niche) reports
+                # filtered counts — same data, two answers, operator
+                # loses trust.
                 cur.execute(
                     """
                     SELECT
@@ -545,6 +571,8 @@ def stats_all_niches(*, window_days: int = 7) -> dict[str, CalibrationStats]:
                         ) AS false_negatives
                     FROM auto_approval_calibration
                     WHERE decided_at >= NOW() - (%s || ' days')::interval
+                      -- PR #519: UUID-shape filter (exclude synthetic IDs)
+                      AND blueprint_id LIKE '________-____-____-____-____________'
                     GROUP BY niche_id
                     """,
                     (str(window_days),),
