@@ -1247,24 +1247,22 @@ class PushToBacklog:
             # created_at predates the TTL cutoff — letting today's "Overwatch"
             # republish if the last "Overwatch" was >7 days ago.
             #
-            # ``created_at`` lookup order: top-level key (Postgres backend
-            # since 2026-06-23 PR #501) → fields dict (legacy JSON backend +
-            # test fixtures). Falling all the way through to None means a
-            # missing date — conservative: KEEP the blueprint in the dedup
-            # set so we don't risk re-publishing unknown-age content.
+            # PR #512 (2026-06-24): delegate the lookup-with-fallback to
+            # ``record_created_at_dt`` rather than inlining the top-level
+            # vs fields trap. The helper returns None on
+            # missing/unparseable input — same conservative posture as
+            # before (keep blueprint in dedup set on unknown age).
+            from genlab_core.storage.record_helpers import record_created_at_dt
+
             def _is_within_url_ttl(bp: dict) -> bool:
                 if _url_dedup_cutoff is None:
                     return True
-                created = bp.get("created_at")
-                if not created:
-                    created = bp.get("fields", bp).get("created_at")
-                if not created:
+                created = record_created_at_dt(bp)
+                if created is None:
+                    # Missing or unparseable — conservative: KEEP it in
+                    # the dedup set (don't risk re-publishing unknown-
+                    # age content).
                     return True
-                if isinstance(created, str):
-                    try:
-                        created = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                    except (ValueError, TypeError):
-                        return True  # Unparseable — keep in dedup set
                 return created >= _url_dedup_cutoff
 
             active_bps = [bp for bp in recent_bps if _is_blocking(bp) and _is_within_url_ttl(bp)]
