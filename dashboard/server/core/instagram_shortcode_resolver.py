@@ -61,7 +61,17 @@ logger = logging.getLogger(__name__)
 
 # Graph API endpoint. Always graph.facebook.com per CLAUDE.md
 # "Meta / Instagram API" rule — never graph.instagram.com.
-_GRAPH_BASE_URL: Final[str] = "https://graph.facebook.com/v21.0"
+#
+# PR #515 (2026-06-24): import the canonical version from genlab-core
+# (META_GRAPH_BASE_URL) rather than hardcoding v21.0 here. This dashboard
+# module was stranded on v21.0 because the R-44 cleanup (genlab-core
+# bumped to v22.0) didn't touch downstream consumers. Future bumps should
+# update ``META_GRAPH_API_VERSION`` in
+# ``genlab_core/platforms/meta_api.py`` and re-deploy — this constant
+# auto-tracks.
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL
+
+_GRAPH_BASE_URL: Final[str] = META_GRAPH_BASE_URL
 
 # Permanent module-level cache. See docstring for why never
 # invalidating is correct.

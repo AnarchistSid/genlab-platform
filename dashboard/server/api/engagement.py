@@ -18,6 +18,12 @@ from pathlib import Path
 
 from flask import Blueprint, request
 
+# PR #515 (2026-06-24): import the canonical Meta Graph API base URL
+# from genlab-core so all callers stay in sync on version bumps. Pre-PR
+# this module had 4 hardcoded ``v21.0`` URLs that were stranded when
+# the R-44 audit bumped genlab-core to v22.0.
+from genlab_core.platforms.meta_api import META_GRAPH_BASE_URL as _META_GRAPH_BASE_URL
+
 from server.core.responses import api_error, api_not_found, api_success
 
 logger = logging.getLogger(__name__)
@@ -398,7 +404,7 @@ def recent_comments():
 
         try:
             media_resp = _requests.get(
-                f"https://graph.facebook.com/v21.0/{ig_id}/media",
+                f"{_META_GRAPH_BASE_URL}/{ig_id}/media",
                 params={
                     "fields": "id,comments_count",
                     "limit": 10,
@@ -418,7 +424,7 @@ def recent_comments():
 
             try:
                 comments_resp = _requests.get(
-                    f"https://graph.facebook.com/v21.0/{item['id']}/comments",
+                    f"{_META_GRAPH_BASE_URL}/{item['id']}/comments",
                     params={
                         "fields": "id,text,username,timestamp",
                         "limit": 10,
@@ -483,7 +489,7 @@ def fetch_comments():
         try:
             # Get recent media
             media_resp = _requests.get(
-                f"https://graph.facebook.com/v21.0/{ig_id}/media",
+                f"{_META_GRAPH_BASE_URL}/{ig_id}/media",
                 params={"fields": "id,comments_count", "limit": 20, "access_token": token},
                 timeout=15,
             )
@@ -496,7 +502,7 @@ def fetch_comments():
 
                 # Fetch comments for this media
                 comments_resp = _requests.get(
-                    f"https://graph.facebook.com/v21.0/{item['id']}/comments",
+                    f"{_META_GRAPH_BASE_URL}/{item['id']}/comments",
                     params={
                         "fields": "id,text,username,timestamp",
                         "limit": 50,
