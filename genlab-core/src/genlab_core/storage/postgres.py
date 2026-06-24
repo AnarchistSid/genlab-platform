@@ -515,8 +515,27 @@ class PostgresBackend:
 
     # ── GET ─────────────────────────────────────────────────────────
 
-    def get(self, table: str, record_id: str) -> dict[str, Any] | None:
-        """Get a single record by ID (UUID or legacy SharePoint integer ID)."""
+    def get(
+        self,
+        table: str,
+        record_id: str,
+        *,
+        niche_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Get a single record by ID (UUID or legacy SharePoint integer ID).
+
+        PR #532 (2026-06-24, SR-A tenant binding): ``niche_id`` parameter
+        accepted to ``SET LOCAL app.niche_id`` before SELECT, so RLS
+        ``USING`` clauses filter to the correct tenant. Pre-PR-#532 the
+        method ran with ``app.niche_id=''`` (admin mode) — any caller
+        with a record_id could read across tenants by ID alone.
+
+        When ``niche_id`` is None (backward compat for all existing
+        callers): admin-mode SELECT (RLS treats empty GUC as "all
+        tenants" per the existing policies). Migrate callers
+        incrementally; once all sites pass ``niche_id``, the admin
+        fallback can flip to require-strict.
+        """
         table = _validate_table(table)
         from psycopg.rows import dict_row
 
@@ -525,7 +544,10 @@ class PostgresBackend:
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)",
+                    (niche_id or "",),
+                )
                 if self._is_uuid(record_id):
                     cur.execute(f"SELECT * FROM {table} WHERE id = %s::uuid", (record_id,))
                 else:
@@ -623,16 +645,46 @@ class PostgresBackend:
         fields: dict[str, Any],
         *,
         typecast: bool = False,
+        niche_id: str | None = None,
     ) -> None:
-        """Update fields on an existing record."""
+        """Update fields on an existing record.
+
+        PR #532 (2026-06-24, SR-A): ``niche_id`` parameter accepted to
+        ``SET LOCAL app.niche_id`` before UPDATE — without this an
+        attacker (or a buggy caller) with a record_id could mutate
+        rows across tenants. RLS ``USING`` clauses filter rows to the
+        tenant scope; admin-mode (``niche_id=None``) preserves
+        backward compat.
+
+        When ``fields`` carries an explicit ``niche_id`` AND the
+        ``niche_id`` kwarg is provided, the two MUST match — otherwise
+        ValueError to prevent silent tenant-spoofing on updates.
+        Mirrors the ``create()`` guard (PR #517).
+        """
         table = _validate_table(table)
+
+        # SR-A guard: reject tenant-spoofing attempts on update —
+        # a caller passing niche_id='gaming' but trying to update a
+        # 'sports' row would silently land in admin-mode without this.
+        if niche_id is not None and "niche_id" in fields:
+            field_niche = fields["niche_id"]
+            if field_niche is not None and field_niche != niche_id:
+                raise ValueError(
+                    f"niche_id kwarg '{niche_id}' does not match fields' "
+                    f"niche_id '{field_niche}' — tenant-spoofing attempt "
+                    "prevented (SR-A guard, PR #532)."
+                )
+
         cols, extra = self._split_fields(table, fields)
         record_id = str(record_id).strip()
 
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)",
+                    (niche_id or "",),
+                )
 
                 sets = []
                 values: list[Any] = []
@@ -665,6 +717,7 @@ class PostgresBackend:
         *,
         expected_status: str,
         new_status: str,
+        niche_id: str | None = None,
     ) -> bool:
         """Atomically flip ``status`` only if it currently equals
         ``expected_status``.
@@ -674,6 +727,13 @@ class PostgresBackend:
         guard (R-24): two concurrent publishers cannot both claim the same
         ``VISUAL_READY`` blueprint, because the conditional ``UPDATE … WHERE
         status = expected RETURNING id`` only matches for the first one.
+
+        PR #532 (2026-06-24, SR-A): ``niche_id`` parameter accepted to
+        ``SET LOCAL app.niche_id`` before the conditional UPDATE.
+        Without this, a concurrent claim from a different tenant
+        could potentially win the race — admin-mode flip is the
+        worst-case behaviour. ``niche_id=None`` preserves backward
+        compat (existing publishers don't break).
         """
         table = _validate_table(table)
         record_id = str(record_id).strip()
@@ -682,7 +742,10 @@ class PostgresBackend:
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)",
+                    (niche_id or "",),
+                )
                 cur.execute(
                     f"UPDATE {table} SET status = %s, updated_at = now() "
                     f"WHERE {id_pred} AND status = %s RETURNING id",
@@ -694,15 +757,37 @@ class PostgresBackend:
 
     # ── DELETE ──────────────────────────────────────────────────────
 
-    def delete(self, table: str, record_id: str) -> None:
-        """Delete a record by ID."""
+    def delete(
+        self,
+        table: str,
+        record_id: str,
+        *,
+        niche_id: str | None = None,
+    ) -> None:
+        """Delete a record by ID.
+
+        PR #532 (2026-06-24, SR-A): ``niche_id`` parameter accepted to
+        ``SET LOCAL app.niche_id`` before DELETE — without this an
+        attacker (or a buggy caller) with a record_id could erase
+        rows across tenants. RLS ``USING`` clauses scope the DELETE to
+        the tenant; admin-mode (``niche_id=None``) preserves backward
+        compat for the ~5 existing delete call sites.
+
+        Delete is the most-destructive of the three SR-A methods —
+        cross-tenant deletion can't be undone, unlike get (read-only)
+        or update (audit-recoverable). Once the migration is complete
+        this admin fallback should be the first to flip to require-strict.
+        """
         table = _validate_table(table)
         record_id = str(record_id).strip()
 
         pool = self._get_pool()
         with pool.connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT set_config('app.niche_id', %s, true)", ("",))
+                cur.execute(
+                    "SELECT set_config('app.niche_id', %s, true)",
+                    (niche_id or "",),
+                )
                 if self._is_uuid(record_id):
                     cur.execute(f"DELETE FROM {table} WHERE id = %s::uuid", (record_id,))
                 else:
@@ -891,10 +976,19 @@ class PostgresTableProxy:
             columns=columns,
         )
 
-    def get(self, record_id_or_table: str, record_id: str | None = None):
+    def get(
+        self,
+        record_id_or_table: str,
+        record_id: str | None = None,
+        *,
+        niche_id: str | None = None,
+    ):
+        """Wrapper forward for PR #532 (SR-A): niche_id reaches
+        backend.get's SET LOCAL step. Mirrors the create() forward
+        from PR #525."""
         if record_id is not None:
-            return self._backend.get(record_id_or_table, record_id)
-        return self._backend.get(self._table, record_id_or_table)
+            return self._backend.get(record_id_or_table, record_id, niche_id=niche_id)
+        return self._backend.get(self._table, record_id_or_table, niche_id=niche_id)
 
     def create(
         self,
@@ -933,13 +1027,18 @@ class PostgresTableProxy:
         fields: dict | None = None,
         *,
         typecast: bool = False,
+        niche_id: str | None = None,
     ):
+        """Wrapper forward for PR #532 (SR-A): niche_id reaches
+        backend.update's SET LOCAL + tenant-spoofing guard.
+        Identical pattern to create() forward from PR #525."""
         if isinstance(record_id_or_fields, dict):
             return self._backend.update(
                 self._table,
                 record_id_or_table,
                 record_id_or_fields,
                 typecast=typecast,
+                niche_id=niche_id,
             )
         if fields is not None:
             return self._backend.update(
@@ -947,13 +1046,25 @@ class PostgresTableProxy:
                 record_id_or_fields,
                 fields,
                 typecast=typecast,
+                niche_id=niche_id,
             )
         raise ValueError("update() requires fields dict")
 
-    def delete(self, record_id_or_table: str, record_id: str | None = None):
+    def delete(
+        self,
+        record_id_or_table: str,
+        record_id: str | None = None,
+        *,
+        niche_id: str | None = None,
+    ):
+        """Wrapper forward for PR #532 (SR-A): niche_id reaches
+        backend.delete's SET LOCAL step. Delete is the most-
+        destructive of the SR-A methods — cross-tenant deletion is
+        irreversible — so the forwarding here matters more than for
+        get() or update()."""
         if record_id is not None:
-            return self._backend.delete(record_id_or_table, record_id)
-        return self._backend.delete(self._table, record_id_or_table)
+            return self._backend.delete(record_id_or_table, record_id, niche_id=niche_id)
+        return self._backend.delete(self._table, record_id_or_table, niche_id=niche_id)
 
     def batch_create(
         self,
@@ -979,11 +1090,25 @@ class PostgresTableProxy:
             niche_id=niche_id,
         )
 
-    def claim_status(self, record_id: str, *, expected_status: str, new_status: str) -> bool:
-        """Atomic conditional status flip — see PostgresBackend.claim_status (R-24)."""
+    def claim_status(
+        self,
+        record_id: str,
+        *,
+        expected_status: str,
+        new_status: str,
+        niche_id: str | None = None,
+    ) -> bool:
+        """Atomic conditional status flip — see PostgresBackend.claim_status (R-24).
+
+        PR #532 (SR-A): forwards ``niche_id`` so the SET LOCAL fires
+        inside the backend. Without this, a publisher claiming a
+        VISUAL_READY row runs in admin mode and the RLS USING clause
+        doesn't scope the SELECT FOR UPDATE to the right tenant.
+        """
         return self._backend.claim_status(
             self._table,
             record_id,
             expected_status=expected_status,
             new_status=new_status,
+            niche_id=niche_id,
         )
