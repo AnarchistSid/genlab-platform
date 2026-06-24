@@ -1178,6 +1178,13 @@ def approve_and_schedule(blueprint_id):
     """Approve a blueprint and auto-schedule to the next available slot."""
     if not RECORD_RE.match(str(blueprint_id)):
         return api_error(error="Invalid blueprint ID")
+    # PR #541 (SR-F wire — adoption pass): tenant guard mirrors the
+    # /review POST + /review-action PATCH guards from #540. Without
+    # this, a tenant-B operator could approve+schedule a tenant-A
+    # blueprint by knowing the id.
+    _err = _enforce_blueprint_niche_allowlist(blueprint_id)
+    if _err is not None:
+        return _err
     try:
         client = _get_client()
         record = client.blueprints.get(blueprint_id)
@@ -1290,6 +1297,12 @@ def batch_approve_schedule():
 def reschedule(record_id):
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #541 (SR-F wire — adoption pass): rescheduling is a
+    # write-side action on the blueprint's lifecycle. Same tenant
+    # guard as the approve paths.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     data = request.json or {}
     scheduled_for = data.get("scheduled_for")
     if not scheduled_for:
@@ -1374,6 +1387,12 @@ def reschedule(record_id):
 def update_content(record_id):
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #541 (SR-F wire — adoption pass): content edits are
+    # write-side mutations on the blueprint payload (hook + caption
+    # overrides etc). Same tenant guard as the other action endpoints.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     data = request.json or {}
     allowed = {"hook_text", "caption", "hashtags"}
     updates = {k: v for k, v in data.items() if k in allowed}
