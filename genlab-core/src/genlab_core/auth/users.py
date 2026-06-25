@@ -172,6 +172,49 @@ def get_user_by_username(username: str) -> User | None:
         return None
 
 
+def get_user_password_hash(username: str) -> str | None:
+    """Return the user's stored password_hash, or None.
+
+    PR #562 (2026-06-25): the auth path needs the hash to call
+    verify_password, but the User DTO intentionally OMITS
+    password_hash (PR #559 design — keeps User safe to log /
+    serialize). This separate accessor exposes the hash ONLY
+    to code that explicitly needs it, so the leak surface is
+    one named function instead of every User reference.
+
+    Returns:
+      * None if the username is unknown
+      * None if password_hash column is NULL (env-var-auth user,
+        the PR #559 seed shape — caller falls back to env auth)
+      * None if DB unavailable / connection error
+      * The argon2id hash string otherwise
+
+    Callers should NOT log or persist the return value. The
+    auth-path pattern is:
+
+        h = get_user_password_hash(submitted_user)
+        if h and verify_password(submitted_pass, h):
+            ... grant session ...
+    """
+    if not username:
+        return None
+    conn_cm = _connect()
+    if conn_cm is None:
+        return None
+    try:
+        with conn_cm as conn:
+            row = conn.execute(
+                "SELECT password_hash FROM users WHERE username = %s LIMIT 1",
+                (username,),
+            ).fetchone()
+        if row is None:
+            return None
+        return row.get("password_hash")
+    except Exception as exc:  # noqa: BLE001 — fail-close
+        logger.warning("[users] get_user_password_hash(%r) failed: %s", username, exc)
+        return None
+
+
 def create_user(
     username: str,
     display_name: str,

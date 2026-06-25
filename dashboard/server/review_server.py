@@ -279,6 +279,87 @@ def _enforce_localhost_when_no_auth():
 app.before_request(_enforce_localhost_when_no_auth)
 
 
+def _authenticate(submitted_user: str, submitted_pass: str) -> bool:
+    """Three-step resolver — PR #562 (2026-06-25), 3b in the SaaS
+    multi-tenancy dependency path.
+
+    Order:
+      1. DB users-table lookup. If the row exists AND password_hash
+         is non-NULL, verify_password is the SOLE check — env-var
+         values are NOT consulted (the DB row is the source of
+         truth once a password is set). On success: best-effort
+         update_last_login(user.id) — auth doesn't fail if the
+         timestamp write fails.
+      2. DB row exists but password_hash is NULL → fall back to
+         env-var check. This is the PR #559 seed shape: the admin
+         user row exists, but REVIEW_AUTH_PASS still owns
+         authentication until set_password runs. Backward compat.
+      3. DB row doesn't exist (or DB unavailable, or lookup fails)
+         → fall back to env-var check. Legacy operators not yet
+         migrated to the users table; matches the pre-PR-562
+         behavior bit-for-bit.
+
+    Returns True on successful auth, False otherwise. NEVER raises
+    (verify_password is constant-time + never-raises; the user
+    lookup helper fail-closes to None on every error path).
+
+    KNOWN LIMITATION: DB-up vs DB-down has different timing
+    (1ms vs 5s on connect timeout). For owner-mode + early
+    multi-tenant this is acceptable; a hardened multi-tenant
+    deployment would add per-IP rate-limiting + constant-time
+    dummy-hash on the miss path.
+    """
+    if not submitted_user:
+        return False
+    # Step 1+2 — try the DB users table
+    try:
+        from genlab_core.auth.passwords import verify_password
+        from genlab_core.auth.users import (
+            get_user_by_username,
+            get_user_password_hash,
+            update_last_login,
+        )
+    except ImportError:
+        # Old core (pre-PR-561) → skip DB path, go straight to env-var
+        logger.debug("[auth] passwords / users module unavailable — env-var only")
+        return _env_var_auth_match(submitted_user, submitted_pass)
+    user = get_user_by_username(submitted_user)
+    if user is not None and user.status != "active":
+        # Suspended / deactivated → never grants auth, even with the
+        # right password. Matches the principle "status is enforced
+        # at write time" — admin UI sets status, auth honors it.
+        logger.info("[auth] denying %r: status=%s (not active)", submitted_user, user.status)
+        return False
+    if user is not None:
+        # The User DTO intentionally omits password_hash for safety
+        # (PR #559 design). Fetch the hash via the dedicated
+        # accessor; None means env-var-auth user (the seed shape).
+        password_hash = get_user_password_hash(submitted_user)
+        if password_hash:
+            # Step 1: DB row has a real password → verify_password is
+            # the sole check. NEVER fall back to env-var even if the
+            # env-var would match — the DB is the source of truth.
+            if verify_password(submitted_pass, password_hash):
+                # Best-effort timestamp; auth doesn't fail if write fails
+                update_last_login(user.id)
+                return True
+            return False
+        # Step 2: DB row exists but password_hash NULL → env-var
+        # fallback (seed admin pattern from PR #559).
+    # Step 3 (no DB row): env-var fallback (legacy operators).
+    return _env_var_auth_match(submitted_user, submitted_pass)
+
+
+def _env_var_auth_match(submitted_user: str, submitted_pass: str) -> bool:
+    """Constant-time env-var credential check. Extracted so both
+    the basic-auth path and the form-POST path share one
+    implementation."""
+    return bool(
+        hmac.compare_digest(submitted_user.encode(), _AUTH_USER.encode())
+        and hmac.compare_digest(submitted_pass.encode(), _AUTH_PASS.encode())
+    )
+
+
 def _check_auth():
     """Verify auth via session cookie (preferred) or HTTP Basic Auth (fallback).
 
@@ -297,13 +378,11 @@ def _check_auth():
     if session.get("authenticated"):
         return None
 
-    # 2. Fall back to HTTP Basic Auth header (API clients / curl)
+    # 2. Fall back to HTTP Basic Auth header (API clients / curl).
+    # PR #562 (2026-06-25): try DB users-table password first, fall
+    # back to env-var for legacy operators not yet in the DB.
     auth = request.authorization
-    if (
-        auth
-        and hmac.compare_digest(auth.username or "", _AUTH_USER)
-        and hmac.compare_digest(auth.password or "", _AUTH_PASS)
-    ):
+    if auth and _authenticate(auth.username or "", auth.password or ""):
         session["authenticated"] = True
         session.permanent = True
         return None
@@ -342,9 +421,10 @@ def _login_page():
 
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if hmac.compare_digest(username.encode(), _AUTH_USER.encode()) and hmac.compare_digest(
-            password.encode(), _AUTH_PASS.encode()
-        ):
+        # PR #562 (2026-06-25): single auth resolver shared with
+        # basic-auth path. DB users-table password takes priority;
+        # env-var REVIEW_AUTH_PASS is the legacy fallback.
+        if _authenticate(username, password):
             session["authenticated"] = True
             session.permanent = True
             return redirect("/")
