@@ -372,24 +372,49 @@ class TestPolicyLoading:
         assert policy.enabled is False
 
     def test_ai_creators_loads_policy_from_blackboxbrief_yaml(self):
-        """AUTO #2 S7 (2026-06-15): BlackboxBrief/config/publishing.yaml
-        must exist + must expose the auto_publish block, so a future
-        operator who wants to flip enabled=true has a concrete file to
-        edit. Without this file, load_policy falls through every
-        candidate path and returns the default disabled policy with
-        no way to override.
+        """AUTO #2 S7 (2026-06-15) — guard rail on the ramp ladder.
 
-        Pin checks the file exists in the real repo (NOT a fixture)
-        and that load_policy reads it correctly."""
-        # Use the real repo root, not a fixture — we're asserting on
-        # the shipped state of BlackboxBrief/config/publishing.yaml.
+        2026-06-15 origin: BlackboxBrief/config/publishing.yaml must
+        exist + expose the auto_publish block, so a future operator
+        who wants to flip enabled=true has a concrete file to edit.
+        Without this file, load_policy falls through every candidate
+        path and returns the default disabled policy with no way to
+        override.
+
+        2026-06-22 update (PR #462 controlled ramp): the original
+        ``enabled is False`` assertion was the right guard while the
+        yaml was a placeholder; once we begin the staged AUTO #2
+        ramp (Week 1 = rollout_pct 0.1 → Week 4 = 1.0) the file MUST
+        be allowed to ship with enabled=true. The new contract:
+
+        - enabled=False is always OK (the original safe state)
+        - enabled=True requires rollout_pct ≤ 0.5 (staged-ramp
+          contract from BlackboxBrief/config/publishing.yaml header
+          docstring; pre-Week-4 PRs must NEVER set rollout_pct=1.0
+          without explicitly bumping this pin)
+
+        This enforces: a future hand-edit that flips enabled=true
+        without setting a conservative rollout_pct fails the pin.
+        Each ramp PR (Week 2 0.25, Week 3 0.5) passes the same
+        check. The Week 4 PR (rollout_pct: 1.0) MUST also update
+        this assertion as a deliberate checkpoint.
+        """
         policy = load_policy("ai_creators")
-        # The file ships with enabled=false (safe default); changing
-        # to true is the AUTO #2 Day-8 flip step.
-        assert policy.enabled is False, (
-            "BlackboxBrief publishing.yaml must ship with enabled=false. "
-            "Operator flips to true via PR — never hand-edit on prod."
-        )
+        if policy.enabled:
+            # Staged-ramp invariant — pre-Week-4 PRs cap at 0.5.
+            assert policy.rollout_pct is not None, (
+                "BlackboxBrief publishing.yaml has enabled=true but no "
+                "rollout_pct set. Per the staged-ramp contract, "
+                "enabling auto-publish requires a rollout_pct ≤ 0.5 "
+                "(W1: 0.1, W2: 0.25, W3: 0.5). Bump this pin when "
+                "Week 4 ships rollout_pct=1.0."
+            )
+            assert policy.rollout_pct <= 0.5, (
+                f"BlackboxBrief publishing.yaml has rollout_pct="
+                f"{policy.rollout_pct}, which violates the staged-ramp "
+                f"contract (must be ≤ 0.5 until the explicit Week-4 "
+                f"flip PR bumps this pin)."
+            )
         # The other two fields must be loaded from the yaml — if they're
         # at AutoApprovalPolicy() defaults, the yaml wasn't found.
         # 0.85 + 3 are also the dataclass defaults so this isn't a
