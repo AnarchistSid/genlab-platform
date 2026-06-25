@@ -284,6 +284,39 @@ def _kill_switch_file_path() -> str:
     return os.environ.get(_KILL_SWITCH_FILE_ENV, "").strip() or _KILL_SWITCH_DEFAULT_FILE
 
 
+def _niche_is_paused(niche_id: str) -> bool:
+    """PR #577 consumer wire (2026-06-25): consult the niche_pauses
+    table via the genlab_core.scheduling.niche_pause helper.
+
+    Returns True when the niche has an active pause (row exists +
+    paused_until is NULL OR > NOW()). Returns False on:
+      * No active pause
+      * DB error / missing DSN (helper fails-OPEN)
+      * ImportError (running against pre-PR-577 core — graceful
+        degrade so this wire is safe to deploy independently)
+
+    Lazy import so the auto_approver module loads cheaply in
+    environments that don't need pause checking (tests, CLI dry
+    runs). The is_paused helper itself has a 5s connect timeout
+    so a totally-down DB worst-case adds 5s to the pass start
+    rather than crashing it.
+    """
+    try:
+        from genlab_core.scheduling.niche_pause import is_paused
+
+        return is_paused(niche_id)
+    except ImportError:
+        # Pre-PR-577 core → no pause table → not paused. Safe default.
+        return False
+    except Exception as exc:  # noqa: BLE001 — never crash the pass
+        logger.warning(
+            "[auto_approver] niche_pause.is_paused(%r) failed: %s",
+            niche_id,
+            exc,
+        )
+        return False
+
+
 def _kill_switch_active() -> tuple[bool, str]:
     """Return (active, source) — checks env var AND file flag.
 
@@ -582,6 +615,11 @@ class AutoApprovalPassResult:
     cap_reached: bool = False
     kill_switch_active: bool = False
     policy_disabled: bool = False
+    # PR #577 consumer wire (2026-06-25): True when the niche has an
+    # active row in niche_pauses. Distinct from kill_switch_active
+    # (global) + policy_disabled (per-niche YAML flag) so operators
+    # can see WHICH guard halted the pass on the dashboard.
+    niche_paused: bool = False
     dry_run: bool = False
     errors: list[str] = field(default_factory=list)
 
@@ -627,6 +665,20 @@ def run_pass(
         result.policy_disabled = True
         logger.debug(
             "[auto_approver] niche=%s — auto_publish.enabled=false, no approvals",
+            niche_id,
+        )
+        return result
+
+    # ── Guard 3: per-niche pause (PR #577) ────────────────────────────────
+    # Operator emergency-stop. is_paused() fails-OPEN (returns False
+    # on DB error) so a transient DB hiccup doesn't accidentally
+    # disable autonomy. When a pause IS active, skip the entire pass
+    # + log to compliance_events for forensic visibility.
+    if _niche_is_paused(niche_id):
+        result.niche_paused = True
+        logger.info(
+            "[auto_approver] niche=%s — niche is paused (PR #577 emergency-stop), "
+            "no approvals performed",
             niche_id,
         )
         return result
@@ -971,7 +1023,8 @@ def _cli() -> int:
             f"idempotent={len(result.skipped_idempotent)} "
             f"errors={len(result.errors)} "
             f"dry_run={result.dry_run} disabled={result.policy_disabled} "
-            f"kill={result.kill_switch_active} cap={result.cap_reached}"
+            f"kill={result.kill_switch_active} paused={result.niche_paused} "
+            f"cap={result.cap_reached}"
         )
         if result.errors:
             exit_code = 1
