@@ -32,8 +32,20 @@ DIST="$DASHBOARD_ROOT/frontend/dist"
 if [ ! -d "$DIST" ] || [ "$(find "$DASHBOARD_ROOT/frontend/src" -newer "$DIST/index.html" 2>/dev/null | head -1)" ]; then
     echo "[$(date)] Building dashboard..."
     cd "$DASHBOARD_ROOT/frontend"
+    # Inject version into vite build so the dashboard shows the real
+    # commit SHA instead of "0.0.0-dev" — resolves the 'Dashboard 0.0.0'
+    # symptom from the 2026-06-25 prod audit. Prod's scripts/deploy.sh
+    # writes the same env to /etc/genlab/version.env for systemd to load.
+    export VITE_APP_VERSION="$(git -C "$GENLAB_ROOT" rev-parse --short HEAD 2>/dev/null || echo 0.0.0-dev)"
+    export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     npm run build
 fi
+
+# Also export to the dashboard server process so the backend health
+# endpoint returns matching version values (so frontend/backend
+# version strings agree).
+export GENLAB_GIT_COMMIT="$(git -C "$GENLAB_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+export GENLAB_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 LOG_DIR="$GENLAB_ROOT/.logs"
 mkdir -p "$LOG_DIR"

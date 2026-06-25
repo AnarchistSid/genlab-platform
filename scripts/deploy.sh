@@ -214,6 +214,33 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+# Phase 6.5 — Write deployed-version env file (resolves Dashboard 0.0.0)
+# ----------------------------------------------------------------------------
+# The dashboard's Settings → System "Dashboard Version" card reads from
+# the GENLAB_GIT_COMMIT + GENLAB_BUILD_TIME env vars (review_server.py
+# _app_version / _build_time helpers; injected into vite build via
+# VITE_APP_VERSION). Pre-fix the version field was hardcoded "2.0.0"
+# so operators couldn't tell "fresh deploy" from "stale deploy."
+#
+# We write to /etc/genlab/version.env which systemd loads via
+# EnvironmentFile= on the relevant services. If the dir doesn't exist
+# or we can't write, log a warning and continue — the env vars fall
+# back to "unknown" / "0.0.0-dev" gracefully.
+VERSION_ENV_FILE="/etc/genlab/version.env"
+GIT_SHA=$(git rev-parse --short HEAD)
+BUILD_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+if mkdir -p "$(dirname "$VERSION_ENV_FILE")" 2>/dev/null && \
+   tee "$VERSION_ENV_FILE" >/dev/null 2>&1 <<EOF
+GENLAB_GIT_COMMIT=$GIT_SHA
+GENLAB_BUILD_TIME=$BUILD_TS
+EOF
+then
+    log "Wrote version env to $VERSION_ENV_FILE (commit=$GIT_SHA build=$BUILD_TS)"
+else
+    log "WARN: could not write $VERSION_ENV_FILE — dashboard will show 'unknown' version"
+fi
+
+# ----------------------------------------------------------------------------
 # Phase 7 — Restart services (unless --skip-restart)
 # ----------------------------------------------------------------------------
 if [[ "$SKIP_RESTART" -eq 1 ]]; then

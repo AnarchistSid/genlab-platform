@@ -804,8 +804,18 @@ function SystemTab() {
               Dashboard Version
             </p>
             <p className="text-lg font-semibold text-text-primary">
-              {(data?.version as string) ?? "0.0.0"}
+              {/* Prefer backend's GENLAB_GIT_COMMIT (proves what's
+                  RUNNING on prod), fall back to vite's compile-time
+                  __APP_VERSION__ (proves what was BUILT into bundle).
+                  Final "0.0.0" only fires when both are missing —
+                  pre-2026-06-26-fix behavior preserved as last resort. */}
+              {(data?.version as string) ?? __APP_VERSION__ ?? "0.0.0"}
             </p>
+            {__BUILD_TIME__ && (
+              <p className="text-[10px] text-text-muted mt-1 font-mono">
+                built {__BUILD_TIME__}
+              </p>
+            )}
           </CardContent>
         </Card>
 

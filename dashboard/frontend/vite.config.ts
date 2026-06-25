@@ -9,7 +9,26 @@ import path from "path";
 // chain so the official preset can be composed cleanly. Same runtime
 // behaviour (RC enabled for the project) — just expressed through the
 // new API.
+
+// Build-time version injection — resolves the 'Dashboard 0.0.0'
+// symptom surfaced by the 2026-06-25 prod audit. The frontend reads
+// `__APP_VERSION__` / `__BUILD_TIME__` as compile-time globals; the
+// values come from env vars set by scripts/deploy.sh (or CI on
+// auto-deploy). Falls back to "0.0.0-dev" / empty string for local
+// dev / pre-injection deployments so existing UX is preserved when
+// the env isn't set.
+//
+// Reads from process.env (not exec) per repo workflow-security
+// guidance. The deploy script computes `git rev-parse --short HEAD`
+// and writes the result to VITE_APP_VERSION before `npm run build`.
+const APP_VERSION = process.env.VITE_APP_VERSION || "0.0.0-dev";
+const BUILD_TIME = process.env.VITE_BUILD_TIME || "";
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),
