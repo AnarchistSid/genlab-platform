@@ -375,7 +375,11 @@ class GenericPipelineRunner:
             try:
                 metrics.flush(run_dir)
             except Exception:
-                logger.debug("[Pipeline] metrics flush failed", exc_info=True)
+                # 2026-06-26 observability audit: was DEBUG. Per-run timing
+                # silently lost makes pipeline-analytics card unreadable.
+                # WARN gives operators a grep hit when investigating empty
+                # metrics. Crash-safety preserved (still in except).
+                logger.warning("[Pipeline] metrics flush failed", exc_info=True)
 
             return ctx
 
@@ -404,7 +408,13 @@ class GenericPipelineRunner:
                         summary=summary,
                     )
             except Exception:
-                logger.debug(
+                # 2026-06-26 observability audit: was DEBUG. The comment
+                # above documents this finally-block as the safety net for
+                # a 57% silent-gap discovered 2026-06-17. Logging at DEBUG
+                # means the gap STAYS silent — defeats the safety-net's
+                # purpose. WARN surfaces cost-persist failures so operators
+                # see when costs aren't being recorded.
+                logger.warning(
                     "[Pipeline] finally cost persist failed",
                     exc_info=True,
                 )
@@ -416,7 +426,11 @@ class GenericPipelineRunner:
             try:
                 reset_accumulator(cost_token)
             except Exception:
-                logger.debug("[Pipeline] cost-accumulator reset failed", exc_info=True)
+                # 2026-06-26 observability audit: was DEBUG. Contextvar
+                # reset failure → next run's cost-accumulator inherits
+                # stale state → cost attribution gets polluted across
+                # runs. WARN so operators see when run isolation breaks.
+                logger.warning("[Pipeline] cost-accumulator reset failed", exc_info=True)
             remove_log_handler(log_handler)
             _current_context.reset(token)
             # R-68 — clear the structlog contextvars we bound at run
