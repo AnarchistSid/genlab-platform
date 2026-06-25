@@ -157,6 +157,17 @@ def top_posts():
             }
         )
 
+    # PR #552 (2026-06-25, SR-F wire pass 13): per-user allowlist
+    # filter BEFORE the top-20 cut. A restricted operator should see
+    # the top 20 within THEIR niches (not the global top 20 minus
+    # cross-tenant rows, which would yield <20 results). Default
+    # (unrestricted) returns the global top 20 unchanged.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None:
+        posts = [p for p in posts if (p.get("niche_id") or "") in _allowed]
+
     posts.sort(key=lambda p: p["likes"], reverse=True)
     top = posts[:20]
 
@@ -195,6 +206,24 @@ def overview():
     niche_id = request.args.get("niche_id", "all")
     window = request.args.get("window", "7d")
     days = {"7d": 7, "14d": 14, "30d": 30}.get(window, 7)
+    # PR #552 (SR-F wire pass 13): reject cross-tenant explicit
+    # niche_id query (same shape as audience /history). When
+    # niche_id=="all" or unset, the unrestricted aggregate is
+    # returned — restricted operators see all-niche data in this
+    # mode today; tightening that requires drilling into
+    # _build_overview's response shape (deferred follow-up).
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None and niche_id and niche_id != "all" and niche_id not in _allowed:
+        return api_error(
+            error=(
+                f"Analytics overview scoped to niche '{niche_id}' which is "
+                f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                f"See SR-F (PR #552)."
+            ),
+            code=403,
+        )
 
     cache_key = f"{niche_id}:{window}"
     now = _time.time()
