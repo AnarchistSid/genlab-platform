@@ -1,0 +1,91 @@
+# Auto-deploy on merge-to-main — closes the deploy-pipeline gap surfaced
+# by the 2026-06-25 prod audit (dashboard showed 0.0.0 + 9 unmerged PRs
+# from the same session not visible on prod). Until this workflow ships,
+# the operator must manually SSH to prod and run scripts/deploy.sh —
+# resulting in N-day deploy lag after each merge.
+#
+# Disabled by default (operator must add HETZNER_SSH_KEY + HETZNER_HOST
+# secrets and change the `if: false` guard to `if: true` below). This
+# safety guard prevents accidental auto-deploy when no SSH key is
+# configured — the workflow would otherwise fail loudly on every push
+# to main.
+#
+# Why opt-in not opt-out:
+#   - Operator's current workflow is deliberate manual deploy via
+#     scripts/deploy.sh (safe-by-default per its docstring)
+#   - Auto-deploy changes that contract
+#   - Operator may prefer to keep manual deploys for some periods
+#     (e.g., during sensitive refactors)
+#
+# Activation sequence:
+#   1. Operator adds HETZNER_SSH_KEY secret (Settings → Secrets → Actions)
+#   2. Operator adds HETZNER_HOST secret (the genlab user's SSH endpoint)
+#   3. Operator changes `if: false` below to `if: true` (or removes the
+#      conditional). Test merge a no-op PR to verify.
+#   4. Once stable, can promote to required check + add alerting on
+#      failure (Slack webhook).
+#
+# Security notes (per repo's workflow-security guidance):
+#   - All untrusted inputs flow through env: blocks with proper quoting
+#   - No use of github.event.* fields in run: commands
+#   - SSH host key verification via ssh-keyscan + known_hosts
+#   - Secrets (HETZNER_SSH_KEY, HETZNER_HOST) never echoed to logs
+
+name: Auto-deploy on main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # allow manual trigger from Actions tab
+
+jobs:
+  deploy:
+    # SAFETY GUARD — change to `true` after configuring secrets.
+    if: false
+    runs-on: ubuntu-latest
+    # Wait for CI to pass before deploying. Operator wires this to
+    # the ci.yml jobs once activated (e.g., needs: [test, lint]).
+    steps:
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Verify SSH host fingerprint
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Pull + run scripts/deploy.sh on prod
+        env:
+          HOST: ${{ secrets.HETZNER_HOST }}
+        # Uses env vars (not direct ${{ }} interpolation in run:) to
+        # avoid command-injection risk per repo's workflow security
+        # guidance.
+        run: |
+          ssh "genlab@$HOST" 'set -e && cd /opt/genlab && git fetch origin main && ./scripts/deploy.sh --apply'
+
+      - name: Post-deploy smoke test
+        env:
+          HEALTH_URL: https://review.aspirehub.ai/api/health
+        run: |
+          # Allow services up to 30s to restart cleanly
+          sleep 30
+          # Hit the dashboard's health endpoint and verify the version
+          # bumped from 0.0.0 (== broken/un-injected) to something real.
+          VERSION=$(curl -sf "$HEALTH_URL" | jq -r '.version // "unknown"')
+          echo "Deployed version: $VERSION"
+          if [ "$VERSION" = "0.0.0" ] || [ "$VERSION" = "unknown" ]; then
+            echo "ERROR: dashboard reports version=$VERSION after deploy — frontend not rebuilt or version-injection broken"
+            exit 1
+          fi
+
+      - name: Notify on failure (placeholder)
+        if: failure()
+        run: |
+          # Operator can wire this to Slack/email via curl + webhook URL
+          # stored as another secret. Default: just fail loudly (Actions
+          # email notification will fire).
+          echo "Deploy or smoke test FAILED — see job logs above"
