@@ -252,12 +252,15 @@ async def poll_twitter_mentions(niche_id: str, user_id: str) -> list[dict]:
 
                 emit_token_expiry_alert("x_twitter", niche_id, str(unauth))
             except Exception as alert_exc:
-                # Silent-swallow audit (2026-06-21): downgrade to debug
-                # with exc trace. Alert emission is allowed to fail
-                # (operator runbook says swallow), but operators
-                # debugging "why didn't we get a token-expiry alert?"
-                # need at least a debug-level signal to grep for.
-                logger.debug(
+                # 2026-06-21: PR #426 downgraded this to debug under the
+                # rationale "alert emission is allowed to fail." The
+                # 2026-06-25 prod audit then found Threads tokens had
+                # been silently dead for 22 days because no operator-
+                # visible signal surfaced — operators don't check DEBUG
+                # logs. Upgrading to WARNING: when the ALERT mechanism
+                # itself fails, that IS the alert. It must surface in
+                # operator logs / Slack / email, not stay quiet.
+                logger.warning(
                     "[POLLER] x_twitter token-expiry alert emission failed for %s: %s",
                     niche_id,
                     alert_exc,
@@ -434,11 +437,14 @@ async def poll_threads_comments(niche_id: str, user_id: str) -> list[dict]:
             if is_oauth_expiry(error_body):
                 emit_token_expiry_alert("threads", niche_id, error_body)
         except Exception as alert_exc:
-            # Silent-swallow audit (2026-06-21): preserve "alert emission
-            # never crashes the poll loop" semantics but emit a debug
-            # trace so operators investigating missing token-expiry
-            # alerts have at least one signal to grep for.
-            logger.debug(
+            # 2026-06-21: PR #426 set this to debug. The 2026-06-25
+            # prod audit then confirmed Threads tokens had been
+            # silently dead for 22 days — DEBUG was the wrong level
+            # because operators never grep DEBUG. Upgraded to WARNING:
+            # when the alert mechanism itself fails, THAT is the
+            # alert. Crash-safety preserved (still in except), but
+            # observability restored.
+            logger.warning(
                 "[POLLER] threads token-expiry alert emission failed for %s: %s",
                 niche_id,
                 alert_exc,
@@ -497,10 +503,12 @@ async def poll_facebook_comments(niche_id: str, page_id: str) -> list[dict]:
                 if is_oauth_expiry(posts_resp.text):
                     emit_token_expiry_alert("facebook", niche_id, posts_resp.text)
             except Exception as alert_exc:
-                # Silent-swallow audit (2026-06-21): debug trace for
-                # operators investigating missing facebook token-expiry
-                # alerts (preserve crash-safety, add observability).
-                logger.debug(
+                # 2026-06-21: PR #426 set this to debug. The 2026-06-25
+                # prod audit confirmed 22d of silent Threads downtime
+                # under the same DEBUG-level swallow pattern. Upgraded
+                # to WARNING — when the alert mechanism itself fails,
+                # that's exactly when operators need to know.
+                logger.warning(
                     "[POLLER] facebook token-expiry alert emission failed for %s: %s",
                     niche_id,
                     alert_exc,
