@@ -29,35 +29,59 @@ def publishing_metrics():
         with pg_connect(
             dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
         ) as conn:
+            # BUGFIX (post-2026-06-25 audit): prior query excluded 'SKIPPED'
+            # from both the WHERE filter AND the failure FILTER counter. Per
+            # parallel_publish.py:168-176, CREDENTIAL-class failures (e.g.,
+            # YouTube token expired) write status='SKIPPED' so they don't
+            # spam alerts as FAILED — but the metrics query then literally
+            # excluded them from the rate denominator. Result: YT showed
+            # "0%" success when actually every attempt was credential-skipped,
+            # invisible to the operator. Surface SKIPPED as its own counter
+            # AND include it in the failure denominator so success_rate
+            # reflects "of all publish attempts" not "of all attempts that
+            # didn't have credential issues."
             # Success rate by platform (last 7 days)
             rates = conn.execute("""
                 SELECT platform,
                        COUNT(*) FILTER (WHERE status='SUCCESS') as ok,
-                       COUNT(*) FILTER (WHERE status='FAILED') as fail
+                       COUNT(*) FILTER (WHERE status='FAILED') as fail,
+                       COUNT(*) FILTER (WHERE status='SKIPPED') as skipped
                 FROM publishing_analytics
                 WHERE created_at > NOW() - INTERVAL '7 days'
-                  AND status IN ('SUCCESS', 'FAILED')
+                  AND status IN ('SUCCESS', 'FAILED', 'SKIPPED')
                 GROUP BY platform ORDER BY platform
             """).fetchall()
 
             success_rates = {}
+            skipped_by_platform = {}
             for r in rates:
-                total = (r["ok"] or 0) + (r["fail"] or 0)
-                success_rates[r["platform"]] = int(r["ok"] / total * 100) if total else 0
+                ok = r["ok"] or 0
+                fail = r["fail"] or 0
+                skipped = r["skipped"] or 0
+                total = ok + fail + skipped
+                success_rates[r["platform"]] = int(ok / total * 100) if total else 0
+                skipped_by_platform[r["platform"]] = skipped
 
             # Daily trend (last 7 days)
             trend = conn.execute("""
                 SELECT DATE(created_at) as day,
                        COUNT(*) FILTER (WHERE status='SUCCESS') as ok,
-                       COUNT(*) FILTER (WHERE status='FAILED') as fail
+                       COUNT(*) FILTER (WHERE status='FAILED') as fail,
+                       COUNT(*) FILTER (WHERE status='SKIPPED') as skipped
                 FROM publishing_analytics
                 WHERE created_at > NOW() - INTERVAL '7 days'
-                  AND status IN ('SUCCESS', 'FAILED')
+                  AND status IN ('SUCCESS', 'FAILED', 'SKIPPED')
                 GROUP BY DATE(created_at) ORDER BY day
             """).fetchall()
 
             daily_trend = [
-                {"date": str(r["day"]), "ok": r["ok"] or 0, "fail": r["fail"] or 0} for r in trend
+                {
+                    "date": str(r["day"]),
+                    "ok": r["ok"] or 0,
+                    "fail": r["fail"] or 0,
+                    "skipped": r["skipped"] or 0,
+                }
+                for r in trend
             ]
 
             # Error distribution (last 7 days) — from error_message column
@@ -87,20 +111,24 @@ def publishing_metrics():
             status_24h = conn.execute("""
                 SELECT platform,
                        COUNT(*) FILTER (WHERE status='SUCCESS') as ok,
-                       COUNT(*) FILTER (WHERE status='FAILED') as fail
+                       COUNT(*) FILTER (WHERE status='FAILED') as fail,
+                       COUNT(*) FILTER (WHERE status='SKIPPED') as skipped
                 FROM publishing_analytics
                 WHERE created_at > NOW() - INTERVAL '24 hours'
-                  AND status IN ('SUCCESS', 'FAILED')
+                  AND status IN ('SUCCESS', 'FAILED', 'SKIPPED')
                 GROUP BY platform
             """).fetchall()
 
             platform_status = {}
             for r in status_24h:
-                total = (r["ok"] or 0) + (r["fail"] or 0)
+                ok = r["ok"] or 0
+                fail = r["fail"] or 0
+                skipped = r["skipped"] or 0
+                total = ok + fail + skipped
                 if total == 0:
                     platform_status[r["platform"]] = "grey"  # no data
                 else:
-                    rate = r["ok"] / total
+                    rate = ok / total
                     if rate >= 0.8:
                         platform_status[r["platform"]] = "green"
                     elif rate >= 0.5:
@@ -112,25 +140,31 @@ def publishing_metrics():
             niche_rates = conn.execute("""
                 SELECT niche_id,
                        COUNT(*) FILTER (WHERE status='SUCCESS') as ok,
-                       COUNT(*) FILTER (WHERE status='FAILED') as fail
+                       COUNT(*) FILTER (WHERE status='FAILED') as fail,
+                       COUNT(*) FILTER (WHERE status='SKIPPED') as skipped
                 FROM publishing_analytics
                 WHERE created_at > NOW() - INTERVAL '7 days'
-                  AND status IN ('SUCCESS', 'FAILED')
+                  AND status IN ('SUCCESS', 'FAILED', 'SKIPPED')
                 GROUP BY niche_id ORDER BY niche_id
             """).fetchall()
 
             by_niche = {}
             for r in niche_rates:
-                total = (r["ok"] or 0) + (r["fail"] or 0)
+                ok = r["ok"] or 0
+                fail = r["fail"] or 0
+                skipped = r["skipped"] or 0
+                total = ok + fail + skipped
                 by_niche[r["niche_id"]] = {
-                    "success": r["ok"] or 0,
-                    "failed": r["fail"] or 0,
-                    "rate": int(r["ok"] / total * 100) if total else 0,
+                    "success": ok,
+                    "failed": fail,
+                    "skipped": skipped,
+                    "rate": int(ok / total * 100) if total else 0,
                 }
 
         return api_success(
             data={
                 "success_rate_7d": success_rates,
+                "skipped_7d": skipped_by_platform,
                 "daily_trend": daily_trend,
                 "error_distribution": error_dist,
                 "platform_status": platform_status,
