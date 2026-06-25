@@ -39,6 +39,11 @@ on event logging (logging is observability, not enforcement —
 losing one log row beats blocking a publish).
 """
 
+# Import side-effect: registers copyright_attribution_check into the
+# policy_gate's registry (PR #568, 2026-06-25). Any caller that
+# imports `genlab_core.compliance` (or anything that pulls it
+# transitively) gets the check live.
+from genlab_core.compliance import copyright_safety  # noqa: F401
 from genlab_core.compliance.events import ComplianceDecision, log_compliance_event
 
 __all__ = ["ComplianceDecision", "log_compliance_event"]

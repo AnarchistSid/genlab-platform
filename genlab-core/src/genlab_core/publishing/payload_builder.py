@@ -24,6 +24,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from genlab_core.compliance.copyright_safety import format_youtube_attribution
 from genlab_core.compliance.disclosure import apply_ai_disclosure
 from genlab_core.platforms.models import (
     FacebookSpecific,
@@ -108,9 +109,23 @@ def build_platform_specific(
             description = raw_yt
             legacy_title = ""
         shorts_title = hook[:100] or legacy_title or fields.get("topic", "")
+
+        # PR #568 (2026-06-25): copyright safety — append source
+        # attribution (Footage: youtube.com/watch?v=…) to the
+        # description so YouTube Content ID + the rights-holder
+        # review staff see the fair-use intent. Idempotent
+        # substring match prevents double-append on re-publish.
+        # community_post_text falls back to caption when description
+        # is empty — apply attribution to the chosen text so the
+        # operator-supplied description ALSO gets attribution.
+        body_text = description or caption
+        attribution = format_youtube_attribution(fields)
+        if attribution and attribution.strip() not in body_text:
+            body_text = body_text + attribution
+
         return YouTubeSpecific(
             shorts_title=shorts_title[:100],
-            community_post_text=description or caption,
+            community_post_text=body_text,
         )
 
     if platform == "twitter":
