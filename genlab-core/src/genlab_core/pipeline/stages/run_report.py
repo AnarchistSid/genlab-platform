@@ -164,7 +164,12 @@ class RunReport:
                         f"${budget_cap:.2f} per-run budget"
                     )
         except Exception:
-            logger.debug("[RunReport] cost-accumulator read failed", exc_info=True)
+            # 2026-06-26 observability audit: was DEBUG. Cost-accumulator
+            # read failure means the SLO-violation check for "LLM cost
+            # exceeds budget" is silently skipped — operator never sees
+            # the cost overrun. WARN so blank cost-violation status has
+            # a grep-able cause.
+            logger.warning("[RunReport] cost-accumulator read failed", exc_info=True)
 
         # Determine status. A dark day (0 blueprints) is always a failure,
         # regardless of story count or errors (R-65) — this is the signal an
@@ -366,7 +371,14 @@ class RunReport:
                     ),
                 )
             except Exception:
-                logger.debug("[RunReport] cost persist call failed", exc_info=True)
+                # 2026-06-26 observability audit: was DEBUG. This is the
+                # CANONICAL cost-persist call (pipeline_runner.py:407 is
+                # the finally-block safety-net for crash cases). When
+                # this fails silently, costs disappear from
+                # pipeline_run_costs table → cost dashboard misses
+                # data → operator can't tell if they're under budget.
+                # WARN so persistence failures surface immediately.
+                logger.warning("[RunReport] cost persist call failed", exc_info=True)
 
         # Log summary
         logger.info(

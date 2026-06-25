@@ -180,6 +180,88 @@ class TestPollerAuditFix:
             f"Expected silent-swallow audit log messages in poller.py; missing: {missing}"
         )
 
+    def test_pipeline_observability_sites_use_warning_not_debug(self):
+        """REGRESSION (post-2026-06-25 audit P3 cleanup): 5 pipeline-
+        observability sites previously logged at DEBUG, hiding silent
+        failures from operators:
+
+          * pipeline_runner.py metrics flush failure
+          * pipeline_runner.py finally-block cost persist
+              (the comment itself documents a 57% silent gap in
+               2026-06-17 audit — DEBUG defeats the safety net's
+               purpose)
+          * pipeline_runner.py cost-accumulator reset
+              (contextvar leak between runs → cost attribution
+               pollution)
+          * run_report.py cost-accumulator read
+              (SLO-violation check silently skipped → cost-overrun
+               invisible)
+          * run_report.py cost persist call
+              (canonical write to pipeline_run_costs table; failures
+               hide costs from dashboard)
+
+        Each is a different category from the LinUCB / episodic-emit
+        fall-open sites (those legitimately stay DEBUG because the
+        primary signal degrades gracefully). These cost / metrics
+        sites are the PRIMARY observability paths — DEBUG was the
+        wrong level.
+
+        Pin so future refactors that touch these sites don't
+        downgrade back to DEBUG.
+        """
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parents[2]
+
+        # Each tuple: (relative_path, distinguishing log message)
+        # The pin checks that the log message exists AND the line
+        # immediately preceding it (after stripping whitespace) is
+        # `logger.warning(` not `logger.debug(`.
+        sites = [
+            (
+                "genlab-core/src/genlab_core/pipeline/pipeline_runner.py",
+                "[Pipeline] metrics flush failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/pipeline/pipeline_runner.py",
+                "[Pipeline] finally cost persist failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/pipeline/pipeline_runner.py",
+                "[Pipeline] cost-accumulator reset failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/pipeline/stages/run_report.py",
+                "[RunReport] cost-accumulator read failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/pipeline/stages/run_report.py",
+                "[RunReport] cost persist call failed",
+            ),
+        ]
+
+        for rel_path, message in sites:
+            content = (repo_root / rel_path).read_text()
+            # Find the index of the log message and look backward for
+            # the logger.X( call. The message string must be inside a
+            # logger.warning(...) invocation, not logger.debug(...).
+            assert message in content, f"Log message missing: {message!r} in {rel_path}"
+            # Find approximate caller. The message may be on its own
+            # line or in the middle of a multi-line log call. Check
+            # the 3 preceding lines for `logger.warning(`.
+            lines = content.splitlines()
+            for i, line in enumerate(lines):
+                if message in line:
+                    # Look back up to 3 lines for the logger.X(
+                    context = "\n".join(lines[max(0, i - 3) : i + 1])
+                    assert "logger.warning" in context, (
+                        f"Site for {message!r} in {rel_path} is not using "
+                        f"logger.warning — must be WARN, not DEBUG (P3 "
+                        f"observability cleanup pin).\n"
+                        f"Context:\n{context}"
+                    )
+                    break
+
     def test_token_expiry_alert_sites_use_warning_not_debug(self):
         """REGRESSION (post-2026-06-25 audit): the 3 token-expiry
         alert-emission failure sites MUST use logger.warning, not
