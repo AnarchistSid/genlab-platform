@@ -133,6 +133,61 @@ def _parse_allowlist(raw: str) -> set[str] | None:
     return valid if valid else None
 
 
+def _tenant_slug_env_key_for_user(username: str) -> str:
+    """PR #558 (2026-06-25): mirror of ``_env_key_for_user`` for the
+    tenant-slug shortcut. ``REVIEW_TENANT_SLUG_<USER>`` binds an
+    operator to a tenant in the tenants table, and the allowlist
+    is derived from ``list_niches_for_tenant`` at resolution time.
+
+    Example: ``REVIEW_TENANT_SLUG_ACME_OP=acme`` means the operator
+    "acme_op" sees whatever niches the "acme" tenant has bindings
+    for. Adding a niche to the tenant via SQL automatically grants
+    the operator access — no env-var redeploy needed.
+    """
+    sanitized = "".join(c.upper() if c.isalnum() else "_" for c in username)
+    return f"REVIEW_TENANT_SLUG_{sanitized}"
+
+
+def _allowlist_from_tenant(slug: str) -> set[str] | None:
+    """Resolve a tenant slug to its allowlist via the tenant model.
+
+    Returns:
+      * None if the tenant model lookup returns no niches (unknown
+        slug, empty bindings, DB unavailable, no DATABASE_URL —
+        the helper fail-closes per its contract).
+      * A non-empty set of validated niche IDs otherwise. Same
+        validation as ``_parse_allowlist`` — unknown niche IDs from
+        the DB (legacy data, drift) are dropped with a WARNING.
+
+    This is the bridge between PR #557's tenant model and SR-F.
+    """
+    # Lazy import — keep the module importable in environments
+    # without the tenant model (e.g. unit tests that don't need it).
+    try:
+        from genlab_core.auth.tenants import list_niches_for_tenant
+    except ImportError:
+        logger.debug("[allowlist] tenant model unavailable — skipping tenant resolution")
+        return None
+    niches = list_niches_for_tenant(slug)
+    if not niches:
+        return None
+    valid = set()
+    rejected = []
+    for n in niches:
+        if n in _VALID_NICHE_IDS:
+            valid.add(n)
+        else:
+            rejected.append(n)
+    if rejected:
+        logger.warning(
+            "Tenant %r had unknown niche IDs %r in its bindings — dropped. Valid IDs: %s",
+            slug,
+            rejected,
+            sorted(_VALID_NICHE_IDS),
+        )
+    return valid if valid else None
+
+
 def get_allowed_niches() -> set[str] | None:
     """Return the set of niche IDs the current user is authorized for.
 
@@ -144,13 +199,26 @@ def get_allowed_niches() -> set[str] | None:
       empty/all-invalid lists to None) — callers don't need to
       handle that edge case.
 
-    Reads from ``REVIEW_NICHE_ALLOWLIST_<USERNAME>`` env var at every
-    call (not cached) so an operator config change via env reload
-    takes effect on next request without a process restart.
+    ## Resolution order (PR #558, 2026-06-25)
 
-    PR #540 (follow-up) will wire this into blueprint listing endpoints
-    + approve actions to enforce the scope. This foundation PR ships
-    only the resolver so endpoints can adopt it incrementally.
+      1. Explicit list via ``REVIEW_NICHE_ALLOWLIST_<USER>`` env var.
+         Deterministic, no DB roundtrip, today's behavior unchanged.
+      2. Tenant binding via ``REVIEW_TENANT_SLUG_<USER>`` env var.
+         Looks up ``list_niches_for_tenant(slug)`` from PR #557.
+         Lets onboarding manage allowlists via SQL on tenant_niches
+         instead of editing env vars per operator.
+      3. None (unrestricted) — auth-disabled or no config.
+
+    Step 1 wins when both env vars are set for the same user — the
+    explicit list is the more constrained choice (operators can
+    pin an exception on a tenant-bound user). A WARNING fires when
+    both are set to surface the override.
+
+    Reads at every call (not cached) so an env reload OR a tenant_niches
+    row insert/delete takes effect on next request without a process
+    restart. The tenant lookup has a 5s connect timeout (in pg_connect)
+    so a transient DB outage degrades to None (unrestricted) rather
+    than blocking the request.
     """
     username = _username_for_session()
     if not username:
@@ -160,7 +228,28 @@ def get_allowed_niches() -> set[str] | None:
         return None
     env_key = _env_key_for_user(username)
     raw = os.environ.get(env_key, "")
-    return _parse_allowlist(raw)
+    parsed = _parse_allowlist(raw)
+    # Step 1: explicit env-var allowlist wins. If set, also surface
+    # any concurrent tenant-slug binding as a WARNING so operators
+    # know the env list is overriding it.
+    if parsed is not None:
+        tenant_key = _tenant_slug_env_key_for_user(username)
+        if os.environ.get(tenant_key, "").strip():
+            logger.warning(
+                "Both %s and %s are set; explicit env-var allowlist wins. "
+                "Unset %s to use the tenant-derived list.",
+                env_key,
+                tenant_key,
+                env_key,
+            )
+        return parsed
+    # Step 2: tenant-slug fallback. Resolves via PR #557's tenant model.
+    tenant_key = _tenant_slug_env_key_for_user(username)
+    slug = os.environ.get(tenant_key, "").strip()
+    if slug:
+        return _allowlist_from_tenant(slug)
+    # Step 3: unrestricted (pre-PR-539 default).
+    return None
 
 
 def is_niche_allowed(niche_id: str) -> bool:
