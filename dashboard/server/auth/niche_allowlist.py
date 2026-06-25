@@ -148,6 +148,81 @@ def _tenant_slug_env_key_for_user(username: str) -> str:
     return f"REVIEW_TENANT_SLUG_{sanitized}"
 
 
+def _allowlist_from_user_record(username: str) -> set[str] | None:
+    """PR #560 (2026-06-25): resolve allowlist via the users table.
+
+    Looks up the user by username, then queries the tenant's niche
+    bindings. Returns:
+
+      * None if the user doesn't exist in DB OR the tenant has no
+        bindings (cold-start) OR the tenant's bindings cover ALL
+        valid niches (effectively unrestricted — admin shortcut) OR
+        the helper chain fail-closes (no DSN, connection error,
+        ImportError on the optional module).
+      * A validated set of niche IDs otherwise. Same drift-defense
+        as the env-var path — unknown niche IDs from the DB are
+        dropped with a WARNING.
+
+    The "ALL valid niches → None" shortcut matters for two reasons:
+
+      1. Performance — downstream SR-F endpoints' fast-path (which
+         skips per-record niche checks when get_allowed_niches
+         returns None) applies to operators who effectively have
+         access to everything. Without this shortcut, every API
+         call for a fully-bound admin user runs N per-record DB
+         fetches just to confirm the niche is in their (universal)
+         allowlist.
+      2. Backward compat — pre-PR-560 the "admin" operator returned
+         None from get_allowed_niches (no env-var allowlist was
+         set). After PR #559 seeded the admin row bound to all 5
+         niches, the same operator would resolve to a 5-element
+         set. This shortcut preserves the None-returning behavior
+         for full-access operators.
+
+    This is the second consumer of PR #557's tenant model (after
+    PR #558's REVIEW_TENANT_SLUG_<USER> env path). Together they
+    cover both "operator is in the users table" (this) and
+    "operator hasn't been migrated to DB yet" (PR #558 env path).
+    """
+    try:
+        from genlab_core.auth.tenants import list_niches_for_tenant
+        from genlab_core.auth.users import get_user_by_username
+    except ImportError:
+        logger.debug("[allowlist] users / tenants module unavailable — skipping DB resolution")
+        return None
+    user = get_user_by_username(username)
+    if user is None:
+        return None
+    # The user.tenant_id is a UUID (FK to tenants.id); pass the UUID
+    # branch of list_niches_for_tenant (PK-indexed lookup) rather
+    # than re-deriving the slug.
+    niches = list_niches_for_tenant(user.tenant_id)
+    if not niches:
+        return None
+    valid = set()
+    rejected = []
+    for n in niches:
+        if n in _VALID_NICHE_IDS:
+            valid.add(n)
+        else:
+            rejected.append(n)
+    if rejected:
+        logger.warning(
+            "User %r's tenant had unknown niche IDs %r — dropped. Valid IDs: %s",
+            username,
+            rejected,
+            sorted(_VALID_NICHE_IDS),
+        )
+    if not valid:
+        return None
+    # Full-access shortcut: tenant covers ALL valid niches = effectively
+    # unrestricted. Returning None lets the SR-F endpoints' fast-path
+    # skip per-record niche enumeration. See docstring rationale above.
+    if valid == _VALID_NICHE_IDS:
+        return None
+    return valid
+
+
 def _allowlist_from_tenant(slug: str) -> set[str] | None:
     """Resolve a tenant slug to its allowlist via the tenant model.
 
@@ -199,26 +274,36 @@ def get_allowed_niches() -> set[str] | None:
       empty/all-invalid lists to None) — callers don't need to
       handle that edge case.
 
-    ## Resolution order (PR #558, 2026-06-25)
+    ## Resolution order (PR #560, 2026-06-25)
 
       1. Explicit list via ``REVIEW_NICHE_ALLOWLIST_<USER>`` env var.
          Deterministic, no DB roundtrip, today's behavior unchanged.
-      2. Tenant binding via ``REVIEW_TENANT_SLUG_<USER>`` env var.
-         Looks up ``list_niches_for_tenant(slug)`` from PR #557.
-         Lets onboarding manage allowlists via SQL on tenant_niches
-         instead of editing env vars per operator.
-      3. None (unrestricted) — auth-disabled or no config.
+      2. **Users table lookup** (PR #560 — this PR). Resolves
+         username → ``users.tenant_id`` → ``list_niches_for_tenant``.
+         No env config needed; operator just needs a row in the
+         users table (PR #559 seeds the 'admin' row at migration time).
+      3. Tenant binding via ``REVIEW_TENANT_SLUG_<USER>`` env var
+         (PR #558). Backward-compat fallback for operators not yet
+         in the users table.
+      4. None (unrestricted) — auth-disabled or no config.
 
     Step 1 wins when both env vars are set for the same user — the
-    explicit list is the more constrained choice (operators can
-    pin an exception on a tenant-bound user). A WARNING fires when
-    both are set to surface the override.
+    explicit list is the more constrained choice (operators can pin
+    an exception on a tenant-bound user). A WARNING fires when both
+    are set to surface the override.
 
-    Reads at every call (not cached) so an env reload OR a tenant_niches
-    row insert/delete takes effect on next request without a process
-    restart. The tenant lookup has a 5s connect timeout (in pg_connect)
-    so a transient DB outage degrades to None (unrestricted) rather
-    than blocking the request.
+    Step 2 is consulted BEFORE step 3 because the users table is
+    the eventual source of truth (PR #558's env-tenant path is
+    explicitly the "user not yet in DB" fallback). When the user
+    row exists, the DB binding wins — even if a TENANT_SLUG env var
+    is also set. A WARNING fires in that conflict case too.
+
+    Reads at every call (not cached) so an env reload OR a
+    tenant_niches row insert/delete OR a users.tenant_id update
+    takes effect on next request without a process restart. The
+    tenant lookup has a 5s connect timeout so a transient DB
+    outage degrades to None (unrestricted) rather than blocking
+    the request.
     """
     username = _username_for_session()
     if not username:
@@ -243,12 +328,31 @@ def get_allowed_niches() -> set[str] | None:
                 env_key,
             )
         return parsed
-    # Step 2: tenant-slug fallback. Resolves via PR #557's tenant model.
+    # Step 2: users-table lookup (PR #560). The users table is the
+    # eventual source of truth; if a row exists for this username,
+    # its tenant binding wins over the env-slug fallback below.
+    user_allowlist = _allowlist_from_user_record(username)
+    if user_allowlist is not None:
+        # Surface any concurrent TENANT_SLUG env var so the operator
+        # knows the DB is winning over their env config.
+        tenant_key = _tenant_slug_env_key_for_user(username)
+        if os.environ.get(tenant_key, "").strip():
+            logger.warning(
+                "%s is set but users table row also exists for %r; "
+                "users table tenant binding wins. Unset %s to silence "
+                "this warning.",
+                tenant_key,
+                username,
+                tenant_key,
+            )
+        return user_allowlist
+    # Step 3: tenant-slug env fallback (PR #558). For operators not
+    # yet in the users table.
     tenant_key = _tenant_slug_env_key_for_user(username)
     slug = os.environ.get(tenant_key, "").strip()
     if slug:
         return _allowlist_from_tenant(slug)
-    # Step 3: unrestricted (pre-PR-539 default).
+    # Step 4: unrestricted (pre-PR-539 default).
     return None
 
 
