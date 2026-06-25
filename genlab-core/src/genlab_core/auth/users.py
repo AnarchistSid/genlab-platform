@@ -17,6 +17,22 @@ first-class database entities — no more env-var-as-identity.
     (active + suspended + deactivated all returned; UI does the
     filtering). Empty list on any failure mode.
 
+  create_user(username, display_name, tenant_id, role, password,
+              status) -> User | None
+    PR #561 — write helper. Hashes password (if given) via argon2id
+    BEFORE the INSERT so a hash failure doesn't leave a half-created
+    row. Returns None on UNIQUE conflict (username exists), FK
+    violation, or DSN missing. ValueError on caller misuse (empty
+    fields, invalid role/status).
+
+  set_password(user_id, plaintext) -> bool
+    PR #561 — rotate or set a password. Hashes first, UPDATEs the
+    row, returns whether the row was found.
+
+  update_last_login(user_id) -> bool
+    PR #561 — best-effort timestamp write on successful auth. Auth
+    flows should NOT fail because this returned False.
+
 ## Backward compat
 
 This module is read-only and additive. The env-var auth path
@@ -154,6 +170,157 @@ def get_user_by_username(username: str) -> User | None:
     except Exception as exc:  # noqa: BLE001 — fail-close
         logger.warning("[users] get_user_by_username(%r) failed: %s", username, exc)
         return None
+
+
+def create_user(
+    username: str,
+    display_name: str,
+    tenant_id: str | uuid.UUID,
+    role: str = "operator",
+    password: str | None = None,
+    status: str = "active",
+) -> User | None:
+    """Insert a new user. Returns the created User, or None on failure.
+
+    PR #561 (2026-06-25): write-side counterpart to get_user_by_username.
+
+    Args:
+      username       — must be unique (UNIQUE constraint on column;
+                       ON CONFLICT DO NOTHING returns None for dupes)
+      display_name   — operator-facing label
+      tenant_id      — must reference an existing tenants.id; FK
+                       violation returns None + WARNING
+      role           — must be in VALID_ROLES; ValueError otherwise
+      password       — optional plaintext (hashed via argon2 before
+                       INSERT). None means env-var-auth user (the
+                       PR #559 seed shape).
+      status         — must be in VALID_STATUSES; defaults 'active'
+
+    Failure modes (all return None, log at WARNING):
+      * Invalid role / status (caller bug — raised as ValueError,
+        not silently None, because this is misuse not a runtime
+        condition)
+      * Empty username / display_name (raised as ValueError)
+      * Username collision (logged + None — caller decides whether
+        to surface as 'user exists' or treat as idempotent)
+      * Tenant FK violation (DB error — logged + None)
+      * DSN missing / connection error (logged + None)
+
+    The password hash is computed BEFORE the DB roundtrip so a
+    hashing failure (e.g. argon2-cffi missing) doesn't leave a
+    half-created row.
+    """
+    if not username:
+        raise ValueError("username must be non-empty")
+    if not display_name:
+        raise ValueError("display_name must be non-empty")
+    if role not in VALID_ROLES:
+        raise ValueError(f"role must be one of {sorted(VALID_ROLES)}; got {role!r}")
+    if status not in VALID_STATUSES:
+        raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}; got {status!r}")
+
+    password_hash: str | None = None
+    if password is not None:
+        # Lazy import — passwords module raises on missing argon2-cffi
+        # which we want to surface to the caller (silent None would
+        # let an unhashed-password user slip through, much worse).
+        from genlab_core.auth.passwords import hash_password
+
+        password_hash = hash_password(password)
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return None
+    try:
+        with conn_cm as conn:
+            row = conn.execute(
+                """
+                INSERT INTO users
+                    (username, display_name, tenant_id, role, password_hash, status)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (username) DO NOTHING
+                RETURNING id, username, display_name, tenant_id, role, status
+                """,
+                (username, display_name, str(tenant_id), role, password_hash, status),
+            ).fetchone()
+        if row is None:
+            # ON CONFLICT DO NOTHING fired — username already exists
+            logger.warning("[users] create_user(%r) skipped: username already exists", username)
+            return None
+        return _row_to_user(row)
+    except Exception as exc:  # noqa: BLE001 — log + fail-close
+        logger.warning("[users] create_user(%r) failed: %s", username, exc)
+        return None
+
+
+def set_password(user_id: str | uuid.UUID, plaintext: str) -> bool:
+    """Set or rotate a user's password. Returns True on success.
+
+    Hashes BEFORE the DB roundtrip (atomic — either both the hash
+    and the UPDATE succeed, or neither). Rejects empty plaintext +
+    overly-long inputs (delegated to hash_password's guards).
+
+    Returns False on:
+      * user_id not found (UPDATE affected 0 rows)
+      * DB unavailable / connection error
+      * Hashing failure (re-raised, NOT silently False, because
+        a hashing crash should surface to the caller)
+    """
+    if not user_id:
+        return False
+    # Hash first — raises on bad input (caught at the route layer)
+    from genlab_core.auth.passwords import hash_password
+
+    password_hash = hash_password(plaintext)
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return False
+    try:
+        with conn_cm as conn:
+            result = conn.execute(
+                """
+                UPDATE users
+                SET password_hash = %s, updated_at = NOW()
+                WHERE id = %s
+                """,
+                (password_hash, str(user_id)),
+            )
+            # psycopg returns the cursor; .rowcount is the affected count
+            updated = getattr(result, "rowcount", 0) or 0
+        return updated > 0
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[users] set_password(%r) failed: %s", user_id, exc)
+        return False
+
+
+def update_last_login(user_id: str | uuid.UUID) -> bool:
+    """Set users.last_login_at = NOW() on successful auth. Returns
+    True when the row was updated, False on any failure mode.
+
+    Best-effort — auth should NOT fail because the timestamp write
+    failed. Caller pattern:
+
+        if verify_password(submitted, user.password_hash):
+            update_last_login(user.id)  # ignore return value
+            ... grant session ...
+    """
+    if not user_id:
+        return False
+    conn_cm = _connect()
+    if conn_cm is None:
+        return False
+    try:
+        with conn_cm as conn:
+            result = conn.execute(
+                "UPDATE users SET last_login_at = NOW(), updated_at = NOW() WHERE id = %s",
+                (str(user_id),),
+            )
+            updated = getattr(result, "rowcount", 0) or 0
+        return updated > 0
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[users] update_last_login(%r) failed: %s", user_id, exc)
+        return False
 
 
 def list_users_for_tenant(tenant_slug_or_id: str | uuid.UUID) -> list[User]:
