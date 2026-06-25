@@ -119,6 +119,121 @@ def _connect():
         return None
 
 
+def stats_by_niche(window_days: int = 7) -> dict[str, dict]:
+    """Per-niche aggregation of compliance events in the window.
+
+    Returns a dict keyed by ``niche_id``, value:
+
+      {
+        "total":   int,      # all events in window
+        "warns":   int,      # decision='warn' count
+        "blocks":  int,      # decision='block' count
+        "allows":  int,      # decision='allow' count
+        "top_event_type": str | None,  # most-frequent warn/block
+                                        # event_type, None if 0 warns
+        "top_event_count": int,        # count of top_event_type
+        "by_event_type": {             # full breakdown
+            event_type: {"warn": N, "block": N, "allow": N},
+            ...
+        }
+      }
+
+    Niches with zero events in the window are NOT in the returned
+    dict — the dashboard component fills them with a zero-state row.
+    This keeps the response small for the common case (most niches
+    have zero events on a quiet day).
+
+    Fail-OPEN: returns empty dict on DB error / missing DSN. Same
+    contract as the other compliance read helpers — the dashboard
+    card renders zero-state rather than crashing.
+
+    Args:
+      window_days — clamped to [1, 90] to avoid runaway scans
+                    (compliance_events grows ~100 rows/day at
+                    Phase A volumes; 90d ≈ 9k rows). Default 7d
+                    matches the Mission Control card's headline
+                    period.
+    """
+    # Defensive clamp — endpoint also enforces, but library
+    # callers from scripts/tests shouldn't blow the heap either
+    window_days = max(1, min(90, int(window_days)))
+
+    conn_cm = _connect()
+    if conn_cm is None:
+        return {}
+
+    try:
+        with conn_cm as conn:
+            rows = conn.execute(
+                """
+                SELECT niche_id, event_type, decision, COUNT(*) AS n
+                FROM compliance_events
+                WHERE created_at > NOW() - make_interval(days => %s)
+                GROUP BY niche_id, event_type, decision
+                """,
+                (window_days,),
+            ).fetchall()
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning("[compliance] stats_by_niche failed: %s", exc)
+        return {}
+
+    # Each row is (niche_id, event_type, decision, n). Build the
+    # nested aggregation incrementally so a single niche with many
+    # event_types lands in one dict.
+    out: dict[str, dict] = {}
+    for row in rows:
+        # Row shape varies with row_factory — tolerate both tuple
+        # and dict (compliance.events._connect doesn't pin dict_row
+        # like niche_pause does, so we get tuples by default)
+        if isinstance(row, dict):
+            niche_id = row["niche_id"]
+            event_type = row["event_type"]
+            decision = row["decision"]
+            n = int(row["n"])
+        else:
+            niche_id, event_type, decision, n = row[0], row[1], row[2], int(row[3])
+
+        bucket = out.setdefault(
+            niche_id,
+            {
+                "total": 0,
+                "warns": 0,
+                "blocks": 0,
+                "allows": 0,
+                "top_event_type": None,
+                "top_event_count": 0,
+                "by_event_type": {},
+            },
+        )
+        bucket["total"] += n
+        if decision == "warn":
+            bucket["warns"] += n
+        elif decision == "block":
+            bucket["blocks"] += n
+        elif decision == "allow":
+            bucket["allows"] += n
+
+        et = bucket["by_event_type"].setdefault(event_type, {"warn": 0, "block": 0, "allow": 0})
+        if decision in ("warn", "block", "allow"):
+            et[decision] += n
+
+    # Post-pass: derive top_event_type per niche (most-frequent
+    # warn OR block — allows aren't actionable, so they're excluded
+    # from "what should the operator investigate first")
+    for bucket in out.values():
+        top_type = None
+        top_n = 0
+        for et, counts in bucket["by_event_type"].items():
+            attention = counts["warn"] + counts["block"]
+            if attention > top_n:
+                top_n = attention
+                top_type = et
+        bucket["top_event_type"] = top_type
+        bucket["top_event_count"] = top_n
+
+    return out
+
+
 def log_compliance_event(
     niche_id: str,
     event_type: str,

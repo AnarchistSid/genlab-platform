@@ -157,6 +157,74 @@ def list_compliance_events():
         return api_error(error="Internal server error", code=500)
 
 
+@bp.route("/stats", methods=["GET"])
+def compliance_stats():
+    """Per-niche aggregation of compliance_events in a time window.
+
+    Powers the Mission Control ComplianceStatsCard. One DB query
+    pulls grouped counts, the library layer post-processes into the
+    nested shape the card needs.
+
+    Query params:
+      window_days — int, clamped to [1, 90]. Default 7.
+
+    Response shape:
+      {data: {
+        window_days: int,
+        by_niche: {
+          <niche_id>: {
+            total, warns, blocks, allows,
+            top_event_type: str | null,
+            top_event_count: int,
+            by_event_type: {event_type: {warn, block, allow}}
+          },
+          ...
+        }
+      }}
+
+    SR-F: post-filter on the operator's niche allowlist. Restricted
+    operators see only their niches' aggregates.
+
+    Fail-OPEN: stats_by_niche() returns empty dict on DB failure;
+    we return {by_niche: {}} rather than 500 so the card renders
+    its zero-state instead of vanishing.
+    """
+    try:
+        window_days = int(request.args.get("window_days", 7))
+    except (ValueError, TypeError):
+        return api_error(error="Invalid window_days parameter")
+
+    # Defence in depth — library also clamps but the endpoint
+    # rejects garbage early
+    window_days = max(1, min(90, window_days))
+
+    try:
+        from genlab_core.compliance.events import stats_by_niche
+
+        by_niche = stats_by_niche(window_days=window_days)
+    except ImportError:
+        # Graceful degrade against a pre-PR-579 core that lacks
+        # stats_by_niche — card renders zero-state.
+        return api_success(data={"window_days": window_days, "by_niche": {}})
+    except Exception as exc:
+        logger.error("compliance stats error: %s", exc, exc_info=True)
+        return api_error(error="Internal server error", code=500)
+
+    # SR-F filter — restricted operators don't see other niches
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None:
+        by_niche = {n: v for n, v in by_niche.items() if n in _allowed}
+
+    return api_success(
+        data={
+            "window_days": window_days,
+            "by_niche": by_niche,
+        }
+    )
+
+
 @bp.route("/checks", methods=["GET"])
 def list_registered_checks():
     """Names of currently registered policy_gate checks.

@@ -224,6 +224,117 @@ def test_checks_handles_missing_compliance_gracefully():
     assert "compliance package" in (body.get("reason") or "")
 
 
+# ── GET /compliance/stats (PR after #581) ─────────────────────────
+
+
+def test_stats_invalid_window_days_returns_400():
+    """Garbage in window_days → 400 (defence before clamping)."""
+    app = _make_app_with_compliance_bp()
+    with app.test_client() as c:
+        r = c.get("/api/v1/compliance/stats?window_days=not-a-number")
+    body = r.get_json() or {}
+    assert "window_days" in (body.get("error") or "")
+
+
+def test_stats_uses_default_window_when_missing():
+    """No window_days param → 7d default."""
+    app = _make_app_with_compliance_bp()
+    with patch("genlab_core.compliance.events.stats_by_niche", return_value={}) as mock_stats:
+        with app.test_client() as c:
+            r = c.get("/api/v1/compliance/stats")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["window_days"] == 7
+    mock_stats.assert_called_once_with(window_days=7)
+
+
+def test_stats_clamps_oversized_window_at_endpoint():
+    """window_days=9999 → clamped to 90 BEFORE the library call
+    (defence in depth — library also clamps but we reject early)."""
+    app = _make_app_with_compliance_bp()
+    with patch("genlab_core.compliance.events.stats_by_niche", return_value={}) as mock_stats:
+        with app.test_client() as c:
+            r = c.get("/api/v1/compliance/stats?window_days=9999")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["window_days"] == 90
+    mock_stats.assert_called_once_with(window_days=90)
+
+
+def test_stats_returns_per_niche_breakdown():
+    """Library returns nested aggregation; endpoint passes through."""
+    fake_stats = {
+        "gaming": {
+            "total": 12,
+            "warns": 5,
+            "blocks": 1,
+            "allows": 6,
+            "top_event_type": "spam_pattern_detected",
+            "top_event_count": 4,
+            "by_event_type": {
+                "spam_pattern_detected": {"warn": 4, "block": 1, "allow": 0},
+                "pre_publish_check": {"warn": 1, "block": 0, "allow": 6},
+            },
+        },
+    }
+    app = _make_app_with_compliance_bp()
+    with patch("genlab_core.compliance.events.stats_by_niche", return_value=fake_stats):
+        with app.test_client() as c:
+            r = c.get("/api/v1/compliance/stats?window_days=7")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["by_niche"]["gaming"]["warns"] == 5
+    assert body["by_niche"]["gaming"]["top_event_type"] == "spam_pattern_detected"
+
+
+def test_stats_sr_f_filters_to_allowlist():
+    """Restricted operators see ONLY their niche's row in by_niche."""
+    fake_stats = {
+        "gaming": {
+            "total": 1,
+            "warns": 1,
+            "blocks": 0,
+            "allows": 0,
+            "top_event_type": "x",
+            "top_event_count": 1,
+            "by_event_type": {},
+        },
+        "anime": {
+            "total": 5,
+            "warns": 5,
+            "blocks": 0,
+            "allows": 0,
+            "top_event_type": "y",
+            "top_event_count": 5,
+            "by_event_type": {},
+        },
+    }
+    app = _make_app_with_compliance_bp()
+    with (
+        patch("genlab_core.compliance.events.stats_by_niche", return_value=fake_stats),
+        patch(
+            "server.auth.niche_allowlist.get_allowed_niches",
+            return_value={"gaming"},
+        ),
+    ):
+        with app.test_client() as c:
+            r = c.get("/api/v1/compliance/stats?window_days=7")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert set(body["by_niche"].keys()) == {"gaming"}
+
+
+def test_stats_handles_import_error_gracefully():
+    """Pre-stats-PR core → empty by_niche, not 500."""
+    app = _make_app_with_compliance_bp()
+    with patch.dict("sys.modules", {"genlab_core.compliance.events": None}):
+        with app.test_client() as c:
+            r = c.get("/api/v1/compliance/stats?window_days=7")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["by_niche"] == {}
+
+
 # ── GET /learning/source-performance ──────────────────────────────
 
 
