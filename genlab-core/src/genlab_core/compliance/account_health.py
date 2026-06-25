@@ -261,11 +261,84 @@ def check_account_health(
     signal = get_signal(platform, niche_id)
     if signal is None or signal.state == "healthy":
         return ComplianceDecision(decision="allow")
+    # PR (2026-06-25, ships after PR #578): opt-in auto-pause when
+    # critical (10x reach drop = shadowban signal). Fires BEFORE
+    # operator notices the warning — protects the niche from
+    # publishing more content that might compound the shadowban.
+    # Best-effort: failures don't change the ComplianceDecision
+    # return value (which the policy_gate already wires through).
+    if signal.state == "critical":
+        _maybe_auto_pause_on_critical(niche_id, signal)
     return ComplianceDecision(
         decision="warn",
         reasons=[f"account_health_{signal.state}"],
         metadata={"message": signal.message, **signal.evidence},
     )
+
+
+def _maybe_auto_pause_on_critical(niche_id: str, signal: HealthSignal) -> None:
+    """Opt-in auto-pause when account_health_check returns 'critical'.
+
+    Gated by the env var GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL=1 — when
+    unset, this is a no-op + a DEBUG log. Default-off lets the feature
+    ship without changing behavior on existing deployments; operators
+    flip the flag when they're confident in the false-positive rate.
+
+    When the flag is set:
+      * pause() is called with paused_by='system:account_health_check'
+        + reason embedding the critical-signal message
+      * paused_until is NOW() + 4 hours — gives operator time to
+        investigate without locking the niche indefinitely. If the
+        shadowban is real, operator can extend OR the next 4h-window
+        critical signal will re-pause automatically (UPSERT semantics
+        from PR #575).
+
+    Best-effort: every failure path logs at WARNING and returns
+    None. The ComplianceDecision returned by check_account_health is
+    UNAFFECTED — auto-pause failure doesn't change the 'warn' verdict
+    the operator sees.
+    """
+    if os.environ.get("GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL", "").strip() != "1":
+        logger.debug(
+            "[account_health] auto-pause disabled (set "
+            "GENLAB_AUTO_PAUSE_ON_HEALTH_CRITICAL=1 to enable); "
+            "would have paused %r on critical signal",
+            niche_id,
+        )
+        return
+    try:
+        from datetime import UTC, datetime, timedelta
+
+        from genlab_core.scheduling.niche_pause import pause
+
+        # 4-hour pause window — gives operator time to investigate
+        # without locking the niche indefinitely. If the underlying
+        # shadowban persists, the next account_health check will
+        # re-fire (UPSERT extends the window).
+        paused_until = datetime.now(tz=UTC) + timedelta(hours=4)
+        result = pause(
+            niche_id=niche_id,
+            reason=f"auto_paused_health_critical: {signal.message}",
+            paused_until=paused_until,
+            paused_by="system:account_health_check",
+        )
+        if result:
+            logger.warning(
+                "[account_health] AUTO-PAUSED niche=%r for 4h on critical signal: %s",
+                niche_id,
+                signal.message,
+            )
+        else:
+            logger.warning(
+                "[account_health] auto-pause attempt for %r returned False (see niche_pause logs)",
+                niche_id,
+            )
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        logger.warning(
+            "[account_health] auto-pause for %r failed: %s; operator must pause manually",
+            niche_id,
+            exc,
+        )
 
 
 # Register at module import. Same pattern as PR #568 + #569 — each
