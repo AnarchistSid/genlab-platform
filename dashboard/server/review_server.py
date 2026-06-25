@@ -798,6 +798,7 @@ from server.api.revenue import bp as revenue_bp
 from server.api.runway import bp as runway_bp
 from server.api.schedule import bp as schedule_bp
 from server.api.scheduler import scheduler_bp
+from server.api.scheduling_pauses import bp as scheduling_pauses_bp
 from server.api.sources import bp as sources_bp
 from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
@@ -824,6 +825,7 @@ app.register_blueprint(token_health_bp)
 app.register_blueprint(platform_posts_bp)
 app.register_blueprint(learning_bp)
 app.register_blueprint(compliance_bp)  # PR #578: /api/v1/compliance/{events,checks}
+app.register_blueprint(scheduling_pauses_bp)  # PR #577 consumer: /api/v1/scheduling/pauses
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
