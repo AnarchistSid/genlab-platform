@@ -137,4 +137,9 @@ export const queryKeys = {
     tiktok: () => ["platform-posts", "tiktok"] as const,
     threads: () => ["platform-posts", "threads"] as const,
   },
+  /** Operator emergency-stop primitive — list of active niche pauses.
+   * Consumed by the Mission Control NichePauseCard at 60s polling. */
+  schedulingPauses: {
+    list: () => ["scheduling", "pauses"] as const,
+  },
 };

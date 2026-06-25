@@ -31,6 +31,7 @@ import { PipelineCountdowns } from "./PipelineCountdowns";
 import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
+import { NichePauseCard } from "./NichePauseCard";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -289,6 +290,13 @@ export default function MissionControl() {
                 flipping GENLAB_OPTIMAL_TIME_BANDIT=1) — same pattern as
                 AutoApprovalCalibrationCard. */}
             <BanditHourHeatmap />
+            {/* PR after #580 (2026-06-25): operator emergency-stop
+                surface. Wraps PR #577 endpoints + the niche_pause
+                primitive (PR #575) + the auto-pause wire (PR #579).
+                Per-niche Pause/Resume buttons close the operator-
+                leverage loop — what previously took a DB row or a
+                publishing.yaml edit + redeploy is now one click. */}
+            <NichePauseCard />
           </div>
         </div>
       )}
