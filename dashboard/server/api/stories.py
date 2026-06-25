@@ -62,6 +62,17 @@ def list_stories():
         records = [
             r for r in records if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
         ]
+    # PR #551 (2026-06-25, SR-F wire pass 12): per-user allowlist
+    # filter. Same shape as blueprints + queue list filters
+    # (#540, #543, #549). Restricted operator sees only stories
+    # from niches in their allowlist; unrestricted admin sees all.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None:
+        records = [
+            r for r in records if (r.get("fields", {}).get("niche_id") or "ai_creators") in _allowed
+        ]
 
     if search:
         records = [
@@ -106,6 +117,26 @@ def get_story(record_id):
         return api_error(error="Invalid record ID")
     try:
         r = _get_client().stories.get(record_id)
-        return api_success(data={"data": {"id": r["id"], **r.get("fields", {})}})
     except Exception:
         return api_not_found(message="Not found")
+    # PR #551 (SR-F wire pass 12): per-record tenant guard. Story has
+    # a niche_id field — restricted operator outside the story's niche
+    # gets 403 (mirrors GET /blueprints/<id> from PR #550). The fetch
+    # happens BEFORE the guard so we can read the story's niche; on
+    # missing-story we let the existing 404 path fire.
+    if r:
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        _allowed = get_allowed_niches()
+        if _allowed is not None:
+            _story_niche = r.get("fields", {}).get("niche_id") or "ai_creators"
+            if _story_niche not in _allowed:
+                return api_error(
+                    error=(
+                        f"Story belongs to niche '{_story_niche}' which is "
+                        f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                        f"See SR-F (PR #551)."
+                    ),
+                    code=403,
+                )
+    return api_success(data={"data": {"id": r["id"], **r.get("fields", {})}})
