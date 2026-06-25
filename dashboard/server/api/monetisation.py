@@ -184,6 +184,27 @@ def send_deal():
             error=f"Invalid channel. Must be one of: {', '.join(sorted(_VALID_CHANNELS))}",
             code=400,
         )
+    # PR #548 (2026-06-25, SR-F wire pass 9): per-tenant guard.
+    # /send-deal takes a channel slug (e.g. "criticalrush"); SR-F's
+    # allowlist is keyed by niche_id ("gaming"). Map via the canonical
+    # _CHANNEL_TO_NICHE constant from links.py — same source of truth
+    # used by /links/subscribe. A restricted operator can only send
+    # deals for channels mapped to niches in their allowlist; admin
+    # (unrestricted) keeps the existing behavior.
+    from server.api.config_routes import _enforce_niche_keyed_allowlist
+    from server.api.links import _CHANNEL_TO_NICHE
+
+    _mapped_niche = _CHANNEL_TO_NICHE.get(channel)
+    if _mapped_niche is None:
+        # Defensive — _VALID_CHANNELS check above should make this
+        # unreachable, but guard against the two constants drifting.
+        return api_error(
+            error=f"channel '{channel}' has no niche mapping (config drift?)",
+            code=500,
+        )
+    _err = _enforce_niche_keyed_allowlist(_mapped_niche)
+    if _err is not None:
+        return _err
     if not product_name:
         return api_error(error="product_name is required", code=400)
     if not product_url:
