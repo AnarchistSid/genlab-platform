@@ -46,7 +46,9 @@ losing one log row beats blocking a publish).
 #
 #   copyright_safety (PR #568) — copyright_attribution_check
 #   spam_detection   (PR #569) — spam_pattern_check
+#   account_health   (PR #570) — account_health_check (Phase A close)
 from genlab_core.compliance import (
+    account_health,  # noqa: F401
     copyright_safety,  # noqa: F401
     spam_detection,  # noqa: F401
 )
