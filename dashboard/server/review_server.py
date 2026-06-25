@@ -1019,6 +1019,24 @@ def get_blueprints():
         return response
 
 
+def _app_version() -> str:
+    """Return the actual deployed git commit SHA, or 'unknown' if the
+    deploy script didn't inject it. Set by scripts/deploy.sh writing to
+    the systemd EnvironmentFile, OR by CI on auto-deploy. Falls back to
+    'unknown' for local dev / pre-version-injection deployments.
+
+    Resolves the 'Dashboard 0.0.0' symptom surfaced by the 2026-06-25
+    prod audit — previously hardcoded "2.0.0" so operators couldn't
+    distinguish 'fresh deploy' from 'stale deploy.'"""
+    return os.environ.get("GENLAB_GIT_COMMIT", "unknown")
+
+
+def _build_time() -> str:
+    """Return the build-time timestamp set by scripts/deploy.sh / CI.
+    Empty string if not set (local dev / pre-injection)."""
+    return os.environ.get("GENLAB_BUILD_TIME", "")
+
+
 @app.route("/api/health")
 def health():
     """Lightweight health / diagnostics endpoint.
@@ -1032,7 +1050,14 @@ def health():
     authenticated = session.get("authenticated", False)
 
     if not authenticated:
-        return jsonify({"status": "ok", "version": "2.0.0", "environment": "production"})
+        return jsonify(
+            {
+                "status": "ok",
+                "version": _app_version(),
+                "build_time": _build_time(),
+                "environment": "production",
+            }
+        )
 
     # ── Full diagnostics for authenticated users ──
     local_mode = app.config.get("LOCAL_MODE", False)
@@ -1073,7 +1098,8 @@ def health():
         return jsonify(
             {
                 "status": "ok",
-                "version": "2.0.0",
+                "version": _app_version(),
+                "build_time": _build_time(),
                 "environment": "production",
                 "mode": "backlog",
                 "uptime_seconds": uptime_seconds,
