@@ -13,7 +13,7 @@
  * test surface is purely rendering pins.
  */
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/api/client", () => ({
@@ -165,5 +165,127 @@ describe("ComplianceStatsCard", () => {
     expect(
       await screen.findByText(/Compliance endpoint unreachable/i),
     ).toBeInTheDocument();
+  });
+});
+
+// ── Drill-down popover (PR after #582) ────────────────────────────
+
+describe("ComplianceStatsCard drill-down", () => {
+  function statsFixture() {
+    return {
+      window_days: 7,
+      by_niche: {
+        gaming: {
+          total: 12,
+          warns: 5,
+          blocks: 1,
+          allows: 6,
+          top_event_type: "spam_pattern_detected",
+          top_event_count: 4,
+          by_event_type: {
+            spam_pattern_detected: { warn: 4, block: 1, allow: 0 },
+            pre_publish_check: { warn: 1, block: 0, allow: 5 },
+            copyright_flag: { warn: 0, block: 0, allow: 1 },
+          },
+        },
+      },
+    };
+  }
+
+  it("drill-down panel is hidden by default", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    // Wait for the card to render
+    await screen.findByText(/· spam/);
+    // Panel must NOT be in the DOM until clicked
+    expect(screen.queryByTestId("drill-down-panel")).not.toBeInTheDocument();
+  });
+
+  it("clicking a drillable niche row reveals the by_event_type panel", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    // Find the gaming row by its button role (only drillable rows
+    // get role=button)
+    const rows = await screen.findAllByRole("button");
+    // Only one drillable row in fixture (gaming has by_event_type)
+    expect(rows.length).toBe(1);
+    fireEvent.click(rows[0]);
+
+    const panel = await screen.findByTestId("drill-down-panel");
+    expect(panel).toBeInTheDocument();
+    // Panel should show all 3 event_types in the fixture
+    expect(within(panel).getByText("spam")).toBeInTheDocument();
+    expect(within(panel).getByText("pre-publish")).toBeInTheDocument();
+    expect(within(panel).getByText("copyright")).toBeInTheDocument();
+  });
+
+  it("panel orders rows by attention (warn+block) desc", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    const rows = await screen.findAllByRole("button");
+    fireEvent.click(rows[0]);
+
+    const panel = await screen.findByTestId("drill-down-panel");
+    // spam (4w+1b=5 attn) → pre-publish (1w=1 attn) → copyright (0 attn)
+    const listItems = within(panel).getAllByRole("listitem");
+    expect(listItems[0]).toHaveTextContent("spam");
+    expect(listItems[1]).toHaveTextContent("pre-publish");
+    expect(listItems[2]).toHaveTextContent("copyright");
+  });
+
+  it("panel surfaces warn / block / allow counts per event_type", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    const rows = await screen.findAllByRole("button");
+    fireEvent.click(rows[0]);
+
+    const panel = await screen.findByTestId("drill-down-panel");
+    // spam: 4w + 1b
+    expect(within(panel).getByText("4w")).toBeInTheDocument();
+    expect(within(panel).getByText("1b")).toBeInTheDocument();
+    // pre-publish: 1w + 5a
+    expect(within(panel).getByText("1w")).toBeInTheDocument();
+    expect(within(panel).getByText("5a")).toBeInTheDocument();
+  });
+
+  it("clicking again collapses the panel", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    const rows = await screen.findAllByRole("button");
+
+    fireEvent.click(rows[0]);
+    expect(await screen.findByTestId("drill-down-panel")).toBeInTheDocument();
+    fireEvent.click(rows[0]);
+    expect(screen.queryByTestId("drill-down-panel")).not.toBeInTheDocument();
+  });
+
+  it("zero-state niches are not interactive (no drillable role)", async () => {
+    // No niches have data → no drillable rows
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce({
+      window_days: 7,
+      by_niche: {},
+    });
+    renderWithClient(<ComplianceStatsCard />);
+    await screen.findByText(/All niches clean/i);
+    // No role=button rows — clean niches aren't drillable
+    expect(screen.queryAllByRole("button").length).toBe(0);
+  });
+
+  it("aria-expanded attribute reflects the panel state for accessibility", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    const rows = await screen.findAllByRole("button");
+    // Collapsed initially
+    expect(rows[0]).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(rows[0]);
+    expect(rows[0]).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("keyboard activation (Enter) toggles the panel", async () => {
+    vi.mocked(complianceStats.fetch).mockResolvedValueOnce(statsFixture());
+    renderWithClient(<ComplianceStatsCard />);
+    const rows = await screen.findAllByRole("button");
+    fireEvent.keyDown(rows[0], { key: "Enter" });
+    expect(await screen.findByTestId("drill-down-panel")).toBeInTheDocument();
   });
 });
