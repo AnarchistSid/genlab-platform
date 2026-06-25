@@ -775,6 +775,7 @@ from server.api.auto_approval import bp as auto_approval_bp
 from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
+from server.api.compliance import bp as compliance_bp
 from server.api.config_routes import bp as config_bp
 from server.api.config_routes import settings_bp
 from server.api.costs import bp as costs_bp
@@ -822,6 +823,7 @@ app.register_blueprint(focus_health_bp)
 app.register_blueprint(token_health_bp)
 app.register_blueprint(platform_posts_bp)
 app.register_blueprint(learning_bp)
+app.register_blueprint(compliance_bp)  # PR #578: /api/v1/compliance/{events,checks}
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
