@@ -1762,12 +1762,25 @@ class PushToBacklog:
                 # it's the PK and would trigger a UNIQUE-constraint error.
                 if True:
                     story_record_id = story_record["id"]
+                    # PR after #585 (2026-06-25): foundation for the
+                    # source-discovery proposer. Capture the source
+                    # YouTube channel_id at blueprint creation time so
+                    # the proposer can answer "which source channels
+                    # produce the highest-engagement clips on each
+                    # niche?". NULL when the story doesn't carry
+                    # channel data (non-YouTube source, or fetcher
+                    # didn't surface it) — proposer's WHERE clause
+                    # filters IS NOT NULL.
+                    source_channel_id = (
+                        story.get("source_channel_id") or story.get("channel_id") or None
+                    )
                     fields: dict[str, Any] = {
                         "candidate_id": candidate_id,
                         "story": [story_record_id],
                         "story_id": story_id,
                         "video_id": video_id,
                         "video_url": story.get("source_url", ""),
+                        "source_channel_id": source_channel_id,
                         "hook": hook,
                         "hook_text": hook,
                         "title": title,

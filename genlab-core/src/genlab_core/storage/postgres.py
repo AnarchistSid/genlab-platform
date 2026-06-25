@@ -182,6 +182,12 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "affiliate_commission_pct",
         "affiliate_cta",
         "affiliate_cta_variant",
+        # PR after #585 (2026-06-25): source-discovery proposer foundation.
+        # YouTube channel_id (UC...) of the SOURCE clip's uploader.
+        # Captured at trending-fetch time for blueprints sourced from a
+        # YouTube clip; NULL for legacy blueprints + non-YouTube sources.
+        # Migration g3h4i5j6k7l8 adds the column + partial index.
+        "source_channel_id",
     },
     "stories": {
         "niche_id",
