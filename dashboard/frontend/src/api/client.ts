@@ -45,6 +45,7 @@ import type {
   ClickTrend,
   NichePauseRecord,
   ComplianceStatsResponse,
+  SourceDiscoveryProposalsResponse,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -857,6 +858,35 @@ export const alerts = {
 
 export const metrics = {
   publishing: () => get<Record<string, unknown>>("/metrics/publishing"),
+};
+
+// PR after #586 — Source-discovery proposer ranks the source channels
+// our trending fetcher pulled clips from, ordered by per-clip avg
+// engagement. Foundation (channel_id column + producer wire) shipped
+// in PR #586; this client wraps the proposer endpoint.
+export const sourceDiscovery = {
+  proposals: (nicheId: string, windowDays: number = 30, minClips: number = 2, topN: number = 10) =>
+    get<
+      | SourceDiscoveryProposalsResponse
+      | { data: SourceDiscoveryProposalsResponse }
+    >("/source-discovery/proposals", {
+      niche_id: nicheId,
+      window_days: String(windowDays),
+      min_clips: String(minClips),
+      top_n: String(topN),
+    }).then((d): SourceDiscoveryProposalsResponse => {
+      const envelope = d as { data?: SourceDiscoveryProposalsResponse };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as SourceDiscoveryProposalsResponse;
+    }),
 };
 
 // PR after #581 — Compliance stats aggregation for Mission Control.

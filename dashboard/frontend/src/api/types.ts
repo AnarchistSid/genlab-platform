@@ -993,6 +993,39 @@ export interface QualityStats {
   videos_fixed: number;
 }
 
+// ── Source-Discovery Proposer (Mission Control, PR after #586) ──
+
+/**
+ * One ranked source-channel suggestion returned by
+ * /api/v1/source-discovery/proposals.
+ *
+ * Mirrors genlab_core.source_discovery.ChannelSuggestion (frozen
+ * dataclass) — values are read-only on the frontend; mutations
+ * would go to a separate "add to sources.yaml" endpoint (future PR).
+ */
+export interface SourceChannelProposal {
+  source_channel_id: string;
+  clips_used: number;
+  total_engagement: number;
+  avg_engagement: number;
+  /** ISO-8601 datetime or null. */
+  last_used_at: string | null;
+  /** Reserved for a future PR that resolves YouTube channel display
+   *  names via the Data API. */
+  channel_name: string | null;
+  sample_blueprints: string[];
+}
+
+export interface SourceDiscoveryProposalsResponse {
+  niche_id: string;
+  window_days: number;
+  min_clips: number;
+  proposals: SourceChannelProposal[];
+  /** Present when the core build lacks the source_discovery module
+   *  (pre-PR-586 deployment) — card renders zero-state. */
+  warning?: string;
+}
+
 // ── Compliance Stats (Mission Control dashboard, PR after #581) ──
 
 /**

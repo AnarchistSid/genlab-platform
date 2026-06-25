@@ -146,4 +146,9 @@ export const queryKeys = {
   complianceStats: {
     fetch: (windowDays: number) => ["compliance", "stats", windowDays] as const,
   },
+  /** Source-discovery proposer rankings (per-niche source channels). */
+  sourceDiscovery: {
+    proposals: (nicheId: string, windowDays: number) =>
+      ["source-discovery", "proposals", nicheId, windowDays] as const,
+  },
 };
