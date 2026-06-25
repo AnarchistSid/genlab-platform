@@ -789,12 +789,32 @@ def publishing():
 @bp.route("/content", methods=["GET"])
 def content():
     niche_id = request.args.get("niche_id", "all")
+    # PR #556 (2026-06-25, SR-F wire pass 15): explicit cross-tenant
+    # niche_id → 403; the "all" branch post-filters records below.
+    # Same shape as analytics /overview from PR #552.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None and niche_id and niche_id != "all" and niche_id not in _allowed:
+        return api_error(
+            error=(
+                f"Content analytics scoped to niche '{niche_id}' which is "
+                f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                f"See SR-F (PR #556)."
+            ),
+            code=403,
+        )
     try:
         records = _get_client().blueprints.all(
             formula="OR({status}='PUBLISHED',{status}='VISUAL_READY')"
         )
         if niche_id and niche_id != "all":
             records = [r for r in records if _bp_niche(r.get("fields", {})) == niche_id]
+        # PR #556: "all" mode — trim to allowlist niches BEFORE the
+        # template aggregation (otherwise template totals would
+        # include cross-tenant blueprints).
+        if _allowed is not None and (not niche_id or niche_id == "all"):
+            records = [r for r in records if _bp_niche(r.get("fields", {})) in _allowed]
         # Group by template — check template_id (text), then template (linked record)
         templates = {}
         for r in records:
@@ -997,6 +1017,19 @@ def pipeline_analytics():
 def funnel():
     """Status funnel: count blueprints at each pipeline stage + total cost."""
     niche_id = request.args.get("niche_id", "all")
+    # PR #556 (SR-F wire pass 15): same shape as /content above.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None and niche_id and niche_id != "all" and niche_id not in _allowed:
+        return api_error(
+            error=(
+                f"Funnel analytics scoped to niche '{niche_id}' which is "
+                f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                f"See SR-F (PR #556)."
+            ),
+            code=403,
+        )
     STAGES = ["INTEL_READY", "DRAFTED", "VISUAL_READY", "PUBLISHED"]
     try:
         records = _get_client().blueprints.all(
@@ -1005,6 +1038,10 @@ def funnel():
         )
         if niche_id and niche_id != "all":
             records = [r for r in records if _bp_niche(r.get("fields", {})) == niche_id]
+        # PR #556: "all" mode trims to allowlist niches so funnel
+        # counts + total_cost reflect only the operator's scope.
+        if _allowed is not None and (not niche_id or niche_id == "all"):
+            records = [r for r in records if _bp_niche(r.get("fields", {})) in _allowed]
         counts = {s: 0 for s in STAGES}
         total_cost = 0.0
         for r in records:
@@ -1411,6 +1448,16 @@ def monetization():
     derived entirely from the blueprints table (affiliate_product,
     affiliate_network columns).
     """
+    # PR #556 (SR-F wire pass 15): all 3 queries are global aggregates.
+    # When the operator has an allowlist, parameterise each query with
+    # an explicit niche_id filter — same per-niche-30d-totals pattern
+    # PR #555 used on the cross-niche overview. List-of-strings is
+    # safely passed via psycopg's standard parameter binding.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    _scoped = _allowed is not None
+    _allowed_list = sorted(_allowed) if _allowed else []
     try:
         dsn = os.environ.get("DATABASE_URL", "")
         affiliate_count = 0
@@ -1422,24 +1469,49 @@ def monetization():
 
             try:
                 with pg_connect(dsn, row_factory=dict_row, niche_id="all") as conn:
-                    total_published = conn.execute(
-                        "SELECT COUNT(*) AS cnt FROM blueprints WHERE status = 'PUBLISHED'"
-                    ).fetchone()["cnt"]
+                    if _scoped:
+                        total_published = conn.execute(
+                            "SELECT COUNT(*) AS cnt FROM blueprints "
+                            "WHERE status = 'PUBLISHED' AND niche_id = ANY(%s)",
+                            (_allowed_list,),
+                        ).fetchone()["cnt"]
 
-                    affiliate_count = conn.execute(
-                        "SELECT COUNT(*) AS cnt FROM blueprints "
-                        "WHERE status IN ('PUBLISHED', 'VISUAL_READY') "
-                        "AND affiliate_product IS NOT NULL"
-                    ).fetchone()["cnt"]
+                        affiliate_count = conn.execute(
+                            "SELECT COUNT(*) AS cnt FROM blueprints "
+                            "WHERE status IN ('PUBLISHED', 'VISUAL_READY') "
+                            "AND affiliate_product IS NOT NULL "
+                            "AND niche_id = ANY(%s)",
+                            (_allowed_list,),
+                        ).fetchone()["cnt"]
 
-                    # Network breakdown
-                    net_rows = conn.execute(
-                        "SELECT affiliate_network, COUNT(*) AS cnt "
-                        "FROM blueprints "
-                        "WHERE affiliate_product IS NOT NULL "
-                        "AND affiliate_network IS NOT NULL "
-                        "GROUP BY affiliate_network ORDER BY cnt DESC"
-                    ).fetchall()
+                        net_rows = conn.execute(
+                            "SELECT affiliate_network, COUNT(*) AS cnt "
+                            "FROM blueprints "
+                            "WHERE affiliate_product IS NOT NULL "
+                            "AND affiliate_network IS NOT NULL "
+                            "AND niche_id = ANY(%s) "
+                            "GROUP BY affiliate_network ORDER BY cnt DESC",
+                            (_allowed_list,),
+                        ).fetchall()
+                    else:
+                        total_published = conn.execute(
+                            "SELECT COUNT(*) AS cnt FROM blueprints WHERE status = 'PUBLISHED'"
+                        ).fetchone()["cnt"]
+
+                        affiliate_count = conn.execute(
+                            "SELECT COUNT(*) AS cnt FROM blueprints "
+                            "WHERE status IN ('PUBLISHED', 'VISUAL_READY') "
+                            "AND affiliate_product IS NOT NULL"
+                        ).fetchone()["cnt"]
+
+                        # Network breakdown
+                        net_rows = conn.execute(
+                            "SELECT affiliate_network, COUNT(*) AS cnt "
+                            "FROM blueprints "
+                            "WHERE affiliate_product IS NOT NULL "
+                            "AND affiliate_network IS NOT NULL "
+                            "GROUP BY affiliate_network ORDER BY cnt DESC"
+                        ).fetchall()
                     catalog_networks = {r["affiliate_network"]: r["cnt"] for r in net_rows}
             except Exception as e:
                 logger.warning("[Monetization] Postgres query failed: %s", e)
@@ -1554,4 +1626,14 @@ def cross_niche_analytics():
         logger.error("cross-niche analytics failed: %s", exc)
         return api_error(error=str(exc))
 
+    # PR #556 (SR-F wire pass 15): per-niche dict — trim outer keys
+    # by allowlist (same shape as /audience/current from PR #551 and
+    # cross-niche-overview niche_totals_30d from PR #555). Restricted
+    # operator sees only their niche row(s); admin sees the full
+    # comparison.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None:
+        result = {k: v for k, v in result.items() if k in _allowed}
     return api_success(data=result)
