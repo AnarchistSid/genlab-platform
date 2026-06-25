@@ -46,11 +46,19 @@ def test_source_pin_form_post_uses_authenticate(monkeypatch):
 
 
 def test_source_pin_basic_auth_uses_authenticate():
-    """The basic-auth header path also routes through _authenticate."""
+    """The basic-auth header path also routes through _authenticate.
+    PR #564 (2026-06-25): pin loosened — the basic-auth block now
+    splits the guard (``if auth:``) from the auth call so it can
+    apply rate-limiting in between. Pin both halves separately."""
     import server.review_server as mod
 
     src = Path(mod.__file__).read_text()
-    assert 'if auth and _authenticate(auth.username or "", auth.password or ""):' in src
+    # The basic-auth path is guarded by ``if auth:`` (so requests
+    # without an Authorization header skip the rate-limit too)
+    assert "    if auth:\n" in src
+    # The _authenticate call uses auth.username / auth.password
+    # with empty-string defaults (basic-auth header may be malformed)
+    assert 'if _authenticate(auth.username or "", auth.password or ""):' in src
 
 
 # ── behavioral pins ────────────────────────────────────────────────
