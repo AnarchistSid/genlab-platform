@@ -49,6 +49,14 @@ def current_audience():
                 "as_of": str(r["snapshot_date"]),
             }
 
+        # PR #551 (2026-06-25, SR-F wire pass 12): per-user allowlist
+        # filter on the outer niche map. Restricted operator sees only
+        # their niche's audience metrics; unrestricted admin sees all.
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        _allowed = get_allowed_niches()
+        if _allowed is not None:
+            data = {k: v for k, v in data.items() if k in _allowed}
         return api_success(data=data)
     except Exception as e:
         logger.error("Audience current error: %s", e, exc_info=True)
@@ -60,6 +68,23 @@ def audience_history():
     """Daily follower snapshots for growth charts."""
     days = int(request.args.get("days", 30))
     niche_id = request.args.get("niche_id", "")
+    # PR #551 (SR-F wire pass 12): per-user allowlist guard. Two cases:
+    # explicit niche_id query → reject if outside allowlist (403);
+    # no niche_id → fall through to the unfiltered query + post-filter
+    # the result list below so the restricted operator sees only
+    # their niches' history rows.
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None and niche_id and niche_id not in _allowed:
+        return api_error(
+            error=(
+                f"Audience history scoped to niche '{niche_id}' which is "
+                f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                f"See SR-F (PR #551)."
+            ),
+            code=403,
+        )
     dsn = os.environ.get("DATABASE_URL", "")
     if not dsn:
         return api_error(error="DATABASE_URL not configured", code=503)
@@ -100,6 +125,12 @@ def audience_history():
             }
             for r in rows
         ]
+        # PR #551: post-filter the result list when no explicit
+        # niche_id was given. The query above pulled all niches in
+        # the no-niche-id branch; allowlist trims to the operator's
+        # scope. Same logic structure as the /current endpoint.
+        if _allowed is not None and not niche_id:
+            data = [row for row in data if row.get("niche_id") in _allowed]
         return api_success(data=data)
     except Exception as e:
         logger.error("Audience history error: %s", e, exc_info=True)
