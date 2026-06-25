@@ -140,11 +140,20 @@ class TestRunReportAuditFix:
 
 class TestPollerAuditFix:
     """The 4 poller sites swallow token-expiry alert failures by design
-    (alert emission must never crash poll loop). The audit fix downgrades
-    them to DEBUG level with exception trace so operators investigating
-    missing alerts have a signal to grep for. These tests pin that the
-    log message strings exist in the source so a future refactor
-    doesn't silently re-introduce the swallow."""
+    (alert emission must never crash poll loop). PR #426 (2026-06-21)
+    added DEBUG-level traces so operators investigating missing alerts
+    had a signal to grep for.
+
+    The 2026-06-25 prod audit confirmed that Threads tokens had been
+    silently dead for 22 days under this DEBUG-level swallow pattern —
+    operators don't check DEBUG logs. The fix UPGRADES the 3
+    token-expiry alert-emission sites from DEBUG to WARNING because
+    when the alert mechanism itself fails, that IS the alert and must
+    surface in operator log review / Slack / email.
+
+    The 4th site (threads /me fetch) stays at DEBUG — it's a graceful
+    fallback (self-reply filter degrades) not a token-expiry signal.
+    """
 
     def test_poller_audit_messages_present_in_source(self):
         """Source-level pin: the 4 audit-fix log messages exist in
@@ -159,7 +168,7 @@ class TestPollerAuditFix:
         expected_messages = [
             # x_twitter token-expiry alert site
             "x_twitter token-expiry alert emission failed",
-            # threads /me fetch site
+            # threads /me fetch site (still DEBUG — graceful fallback)
             "threads /me fetch failed",
             # threads token-expiry alert site
             "threads token-expiry alert emission failed",
@@ -170,3 +179,39 @@ class TestPollerAuditFix:
         assert not missing, (
             f"Expected silent-swallow audit log messages in poller.py; missing: {missing}"
         )
+
+    def test_token_expiry_alert_sites_use_warning_not_debug(self):
+        """REGRESSION (post-2026-06-25 audit): the 3 token-expiry
+        alert-emission failure sites MUST use logger.warning, not
+        logger.debug. The 22-day silent Threads downtime happened
+        because DEBUG-level was the wrong level for "the alert
+        mechanism itself failed" — operators never check DEBUG.
+
+        Each site immediately precedes a string like
+        "<platform> token-expiry alert emission failed". The check
+        finds those strings, looks at the call preceding each, and
+        verifies it's logger.warning(...). Pin so a future
+        well-meaning refactor doesn't downgrade them back to DEBUG.
+        """
+        import re
+        from pathlib import Path
+
+        poller_path = (
+            Path(__file__).resolve().parents[1] / "src" / "genlab_core" / "engagement" / "poller.py"
+        )
+        content = poller_path.read_text()
+
+        token_expiry_platforms = ["x_twitter", "threads", "facebook"]
+        for platform in token_expiry_platforms:
+            # Find each "<platform> token-expiry alert emission failed"
+            # message and check the preceding call is logger.warning
+            pattern = rf"logger\.(\w+)\(\s*\n\s*\"\[POLLER\] {re.escape(platform)} token-expiry alert emission failed"
+            match = re.search(pattern, content)
+            assert match is not None, (
+                f"Could not find token-expiry alert site for {platform!r} in poller.py"
+            )
+            log_level = match.group(1)
+            assert log_level == "warning", (
+                f"Site for {platform!r} uses logger.{log_level} — must be logger.warning "
+                f"(post-2026-06-25 audit). DEBUG-level swallow led to 22d Threads downtime."
+            )
