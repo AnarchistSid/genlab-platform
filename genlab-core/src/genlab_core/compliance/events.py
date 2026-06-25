@@ -313,7 +313,6 @@ def log_compliance_event(
                     metadata_json,
                 ),
             )
-        return True
     except Exception as exc:  # noqa: BLE001 — fail-open
         logger.warning(
             "[compliance] log write failed (event_type=%r, decision=%r): %s",
@@ -322,3 +321,32 @@ def log_compliance_event(
             exc,
         )
         return False
+
+    # AFTER successful DB write: fire Slack alert on block decisions
+    # (opt-in via GENLAB_COMPLIANCE_SLACK_WEBHOOK env). Order matters
+    # — we never want to alert on a decision we failed to persist.
+    # notify_compliance_block is fail-OPEN; its return value does NOT
+    # affect the function's success contract (DB write is the source
+    # of truth, Slack is operator convenience).
+    if decision == "block":
+        try:
+            from genlab_core.compliance.slack_notifier import (
+                notify_compliance_block,
+            )
+
+            notify_compliance_block(
+                niche_id=niche_id,
+                event_type=event_type,
+                blueprint_id=blueprint_id,
+                platform=platform,
+                reasons=reasons,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "[compliance] slack notify dispatch failed for event_type=%r: %s",
+                event_type,
+                exc,
+            )
+
+    return True
