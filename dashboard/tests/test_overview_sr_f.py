@@ -64,15 +64,45 @@ def test_source_pin_view_calls_helper_after_cache():
     assert cache_idx < scope_idx
 
 
-def test_source_pin_fail_secure_likes_comments_zero():
-    """For restricted operators total_likes/comments fail-secure to 0
-    because we don't have per-niche breakdown in scope. Pin the choice
-    so a future refactor doesn't accidentally leak the global values."""
+def test_source_pin_per_niche_totals_precision():
+    """PR #555 (2026-06-25): the v1 fail-secure-to-0 for likes/comments
+    is gone — they're now summed from niche_totals_30d (per-niche 30d
+    breakdown materialised by the upgraded GROUP BY query). Pin both
+    the new sum shape and that the old `= 0` line is gone — guards
+    against a future refactor accidentally re-introducing the v1
+    compromise."""
     import server.api.overview as mod
 
     src = Path(mod.__file__).read_text()
-    assert 'g["total_likes"] = 0' in src
-    assert 'g["total_comments"] = 0' in src
+    # New shape: sum from filtered niche_totals_30d for all 3 metrics
+    assert (
+        'int(t.get("reach") or 0) for nid, t in niche_totals_30d.items() if nid in allowed' in src
+    )
+    assert (
+        'int(t.get("likes") or 0) for nid, t in niche_totals_30d.items() if nid in allowed' in src
+    )
+    assert (
+        'int(t.get("comments") or 0) for nid, t in niche_totals_30d.items() if nid in allowed'
+        in src
+    )
+    # The v1 compromise lines must NOT survive (guard against accidental revert)
+    assert 'g["total_likes"] = 0' not in src
+    assert 'g["total_comments"] = 0' not in src
+    # Anchor the precision PR for future archaeology
+    assert "PR #555" in src
+
+
+def test_source_pin_niche_totals_30d_query_group_by():
+    """The upgraded SQL must GROUP BY niche_id so per-niche totals
+    materialise alongside the globals. Pin both the GROUP BY clause
+    and the in-Python sum that produces the global numbers from
+    the per-niche rowset."""
+    import server.api.overview as mod
+
+    src = Path(mod.__file__).read_text()
+    assert "GROUP BY niche_id" in src
+    assert "niche_totals_30d.values()" in src
+    assert 'sum(v["reach"] for v in niche_totals_30d.values())' in src
 
 
 # ── behavioral pins ────────────────────────────────────────────────
@@ -167,6 +197,18 @@ def _build_fake_overview() -> dict:
             "anime": [{"date": "2026-06-24", "reach": 5000}, {"date": "2026-06-25", "reach": 7000}],
             "sports": [{"date": "2026-06-25", "reach": 800}],
         },
+        # PR #555 (2026-06-25): per-niche 30-day breakdown materialised
+        # alongside the daily-reach sparkline. Drives the scope helper's
+        # precise total_likes / total_comments computation for scoped
+        # operators (replaces the v1 fail-secure-to-0 from PR #553).
+        # Values intentionally != global.total_* because in production
+        # the global SQL aggregate can include legacy niches not in the
+        # current registry — a small but realistic mismatch.
+        "niche_totals_30d": {
+            "gaming": {"reach": 10000, "likes": 500, "comments": 50},
+            "anime": {"reach": 40000, "likes": 2000, "comments": 120},
+            "sports": {"reach": 5000, "likes": 300, "comments": 20},
+        },
     }
 
 
@@ -218,14 +260,18 @@ def test_overview_restricted_recomputes_globals(monkeypatch):
     assert g["total_archived"] == 2
     # agents_running: gaming has pipeline_status=running → 1 (anime running excluded)
     assert g["agents_running"] == 1
-    # total_reach reconstructed from gaming's 14d sparkline: 1000+1500 = 2500
-    assert g["total_reach"] == 2500
-    # likes/comments fail-secure to 0
-    assert g["total_likes"] == 0
-    assert g["total_comments"] == 0
-    # SR-F scoped flag + note
+    # PR #555: total_reach / total_likes / total_comments now come from
+    # the per-niche 30-day breakdown (was 14d sparkline for reach, was
+    # fail-secure-0 for likes/comments). gaming's 30d totals from
+    # fixture: reach=10000, likes=500, comments=50.
+    assert g["total_reach"] == 10000
+    assert g["total_likes"] == 500
+    assert g["total_comments"] == 50
+    # SR-F scoped flag + note (note no longer carries the 14d/zero caveat)
     assert g["_sr_f_scoped"] is True
-    assert "Scoped to your niche allowlist" in g["_sr_f_note"]
+    assert "30-day per-niche sums (admin parity)" in g["_sr_f_note"]
+    assert "14-day" not in g["_sr_f_note"]
+    assert "unavailable in scoped mode" not in g["_sr_f_note"]
 
 
 def test_overview_restricted_auto_archive_breakdown_zeroed(monkeypatch):
@@ -329,3 +375,73 @@ def test_overview_restricted_oldest_age_cleared_when_zero(monkeypatch):
     body = r.get_json()["data"]
     assert body["global"]["total_operator_review"] == 0
     assert body["global"]["oldest_operator_review_age_hours"] is None
+
+
+# ── PR #555 (per-niche 30d totals) behavioral pins ───────────────
+
+
+def test_overview_restricted_niche_totals_30d_trimmed(monkeypatch):
+    """The niche_totals_30d map itself must be trimmed by allowlist —
+    otherwise a restricted operator could enumerate cross-tenant
+    niche IDs by reading the response payload keys (info disclosure
+    even without revealing the values)."""
+    _reset_cache(monkeypatch)
+    _scope_user_to_gaming(monkeypatch)
+
+    fake = _build_fake_overview()
+    app = _make_app()
+    with patch("server.api.overview._build_overview", return_value=fake):
+        with app.test_client() as c:
+            r = c.get("/api/v1/cross-niche/overview")
+    body = r.get_json()["data"]
+    # Only gaming key in niche_totals_30d
+    assert set(body["niche_totals_30d"].keys()) == {"gaming"}
+    # Value structure intact
+    assert body["niche_totals_30d"]["gaming"] == {"reach": 10000, "likes": 500, "comments": 50}
+
+
+def test_overview_admin_sees_full_niche_totals_30d(monkeypatch):
+    """Backward compat: admin sees the full niche_totals_30d map
+    with all niches (drives any future per-niche analytics surface
+    that wants 30-day rollups)."""
+    _reset_cache(monkeypatch)
+    monkeypatch.setenv("REVIEW_AUTH_USER", "admin")
+    monkeypatch.delenv("REVIEW_NICHE_ALLOWLIST_ADMIN", raising=False)
+
+    fake = _build_fake_overview()
+    app = _make_app()
+    with patch("server.api.overview._build_overview", return_value=fake):
+        with app.test_client() as c:
+            r = c.get("/api/v1/cross-niche/overview")
+    body = r.get_json()["data"]
+    assert set(body["niche_totals_30d"].keys()) == {"gaming", "anime", "sports"}
+
+
+def test_overview_scoped_totals_match_unrestricted_sum(monkeypatch):
+    """If an admin's allowlist were the universe of all 3 niches, the
+    scoped totals would equal the per-niche sum. Pin the math by
+    summing the fixture's niche_totals_30d directly."""
+    _reset_cache(monkeypatch)
+    # Bespoke username with allowlist covering all 3 niches
+    monkeypatch.setenv("REVIEW_AUTH_USER", "all_niche_op")
+    monkeypatch.setenv("REVIEW_NICHE_ALLOWLIST_ALL_NICHE_OP", "gaming,anime,sports")
+    monkeypatch.setattr(
+        "server.auth.niche_allowlist._username_for_session",
+        lambda: "all_niche_op",
+    )
+
+    fake = _build_fake_overview()
+    expected_reach = sum(t["reach"] for t in fake["niche_totals_30d"].values())
+    expected_likes = sum(t["likes"] for t in fake["niche_totals_30d"].values())
+    expected_comments = sum(t["comments"] for t in fake["niche_totals_30d"].values())
+
+    app = _make_app()
+    with patch("server.api.overview._build_overview", return_value=fake):
+        with app.test_client() as c:
+            r = c.get("/api/v1/cross-niche/overview")
+    body = r.get_json()["data"]
+    g = body["global"]
+    assert g["total_reach"] == expected_reach
+    assert g["total_likes"] == expected_likes
+    assert g["total_comments"] == expected_comments
+    assert g["_sr_f_scoped"] is True
