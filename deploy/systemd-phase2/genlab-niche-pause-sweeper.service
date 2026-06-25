@@ -1,0 +1,49 @@
+[Unit]
+Description=GenLab Niche Pause Sweeper — daily GC of expired niche_pauses rows
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-26 — activates PR #580's niche_pause_sweeper CLI module.
+#
+# Background: PR #580 (2026-06-25) shipped
+# `genlab_core.scheduling.niche_pause_sweeper` to garbage-collect
+# expired rows from the niche_pauses table (auto-pauses written by
+# PR #579's compliance-driven auto-pause wire have a 4h paused_until,
+# manual operator pauses can be indefinite — sweeper only removes
+# rows where paused_until IS NOT NULL AND paused_until < NOW(), so
+# indefinite operator pauses are NEVER swept).
+#
+# The CLI shipped in PR #580 but no systemd timer was created,
+# meaning the GC has never fired on prod. Surfaced by the
+# 2026-06-25 prod audit "shipped-but-not-activated" pattern (see
+# memory: ACTION-PLAN-next-session.md P2).
+#
+# Schedule rationale (see .timer): runs at 02:00 UTC nightly —
+# operationally-tidy GC during the low-traffic window. The sweep
+# is purely table hygiene (not correctness) so timing is not
+# load-bearing — even daily-skipped-for-a-week is fine.
+#
+# Safety knobs:
+#   1. Only deletes rows where paused_until IS NOT NULL — indefinite
+#      operator pauses are NEVER swept (would silently re-enable
+#      publishing on a niche the operator deliberately halted)
+#   2. Returns -1 on DB failure → CLI exits 1 → systemd surfaces
+#      "failed" state. Operator sees if the sweeper is broken.
+#   3. Read paths (is_paused/get_pause/list_active_pauses) already
+#      filter on paused_until > NOW() so stale expired rows don't
+#      cause incorrect publishing behaviour — sweeper is hygiene
+#      only.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.scheduling.niche_pause_sweeper
+TimeoutSec=120
+# Single-shot — no restart-on-failure. If the sweep fails, the next
+# nightly fire will catch up; cumulative miss is operationally fine.
+
+[Install]
+WantedBy=multi-user.target
