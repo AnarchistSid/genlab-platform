@@ -215,8 +215,15 @@ def test_policy_gate_aggregate_allow_when_attribution_present():
 
 def test_source_pin_registration_in_init():
     """The compliance __init__ MUST import copyright_safety so the
-    registration side-effect fires at package-import time."""
+    registration side-effect fires at package-import time.
+
+    PR #569 reformatted the imports into a parenthesized multi-line
+    group; whitespace-normalise + check for the import identifier."""
+    import re
+
     import genlab_core.compliance as pkg
 
     src = Path(pkg.__file__).read_text()
-    assert "from genlab_core.compliance import copyright_safety" in src
+    normalised = re.sub(r"\s+", " ", src)
+    assert "from genlab_core.compliance import" in normalised
+    assert "copyright_safety" in normalised
