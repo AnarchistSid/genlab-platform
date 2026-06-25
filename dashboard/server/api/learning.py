@@ -280,3 +280,67 @@ def config_updates():
     except Exception as exc:
         logger.warning("[learning] config_updates query failed: %s", exc)
         return api_error(error=str(exc), code=500)
+
+
+@bp.route("/source-performance", methods=["GET"])
+def source_performance():
+    """PR #578 (2026-06-25): per-source Beta posteriors from the
+    bandit_arms-via-arm_id-prefix convention (PR #571).
+
+    Query params:
+      niche_id — required; per-niche scope. Returns 400 when missing.
+                 SR-F: restricted operator's explicit cross-tenant
+                 niche → 403.
+
+    Response shape:
+      {data: [
+        {niche_id, source, alpha, beta, n_plays, reward_mean}, ...
+      ]}
+      DESC by reward_mean (the per-source ordering the future
+      'best/worst sources' dashboard card consumes directly).
+
+    Empty list when no source-arm data exists yet (cold-start —
+    PR #572's reward-loop wire populates this over 7-14 days as
+    48h reward windows close).
+    """
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if not niche_id:
+        return api_error(error="niche_id query parameter required")
+
+    # SR-F: validate against operator allowlist
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None and niche_id not in _allowed:
+        return api_error(
+            error=(
+                f"Source performance scoped to niche '{niche_id}' which is "
+                f"not in your allowlist (allowed: {sorted(_allowed)}). "
+                f"See SR-F (PR #578)."
+            ),
+            code=403,
+        )
+
+    try:
+        from genlab_core.learning.source_performance import list_source_performance
+
+        records = list_source_performance(niche_id)
+    except ImportError:
+        # Graceful degrade for pre-PR-571 core
+        return api_success(data=[])
+    except Exception as exc:
+        logger.error("[learning] source_performance list failed: %s", exc, exc_info=True)
+        return api_error(error="Internal server error", code=500)
+
+    data = [
+        {
+            "niche_id": r.niche_id,
+            "source": r.source,
+            "alpha": r.alpha,
+            "beta": r.beta,
+            "n_plays": r.n_plays,
+            "reward_mean": r.reward_mean,
+        }
+        for r in records
+    ]
+    return api_success(data=data)
