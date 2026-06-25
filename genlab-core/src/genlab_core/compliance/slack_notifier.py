@@ -202,3 +202,172 @@ def _build_slack_payload(
         )
 
     return {"text": fallback, "blocks": blocks}
+
+
+def send_compliance_digest(
+    by_niche: dict[str, dict],
+    *,
+    window_days: int = 1,
+) -> bool:
+    """Best-effort Slack POST summarising compliance activity.
+
+    Companion to ``notify_compliance_block`` for the proactive
+    digest channel. While the block notifier fires reactively on
+    enforcement events, the digest fires on a schedule (typically
+    a daily systemd timer) and gives operators the at-a-glance
+    summary of the prior window.
+
+    Reuses ``GENLAB_COMPLIANCE_SLACK_WEBHOOK`` from PR #584 —
+    same env, same webhook, different message tone. Operators who
+    activate the webhook get both surfaces 'free' once the env
+    flag is set.
+
+    ## When to send
+
+    Always-send semantics. Even a 'zero events' digest is useful
+    because it confirms the digest job is alive — an operator
+    seeing no daily summary doesn't know whether to interpret it
+    as 'all clean' or 'monitoring is broken'. A daily ✅ message
+    resolves the ambiguity at low Slack-volume cost (1/day).
+
+    ## Return value
+
+      * True — webhook POST succeeded (HTTP 2xx)
+      * False — env unset, network error, non-2xx, library exception
+
+    Same fail-OPEN contract as notify_compliance_block. NEVER raises.
+
+    Args:
+      by_niche — output of compliance.events.stats_by_niche().
+                  Empty dict is a valid input (sends 'all clean').
+      window_days — passed-in for the message subject line; should
+                    match what was passed to stats_by_niche().
+    """
+    webhook = os.environ.get(_ENV_WEBHOOK, "").strip()
+    if not webhook:
+        logger.debug(
+            "[compliance_slack] %s unset; digest skipped — operator must set env to activate",
+            _ENV_WEBHOOK,
+        )
+        return False
+
+    payload = _build_digest_payload(by_niche, window_days=window_days)
+
+    try:
+        import requests
+
+        resp = requests.post(webhook, json=payload, timeout=_TIMEOUT_SECONDS)
+    except Exception as exc:  # noqa: BLE001 — fail-open per contract
+        logger.warning("[compliance_slack] digest POST failed: %s", exc)
+        return False
+
+    if 200 <= resp.status_code < 300:
+        n_niches = len(by_niche)
+        total_warns = sum(b.get("warns", 0) for b in by_niche.values())
+        total_blocks = sum(b.get("blocks", 0) for b in by_niche.values())
+        logger.info(
+            "[compliance_slack] digest sent — %d niche(s) with activity, %d warn, %d block",
+            n_niches,
+            total_warns,
+            total_blocks,
+        )
+        return True
+
+    logger.warning(
+        "[compliance_slack] digest webhook returned HTTP %d — check %s",
+        resp.status_code,
+        _ENV_WEBHOOK,
+    )
+    return False
+
+
+def _build_digest_payload(
+    by_niche: dict[str, dict],
+    *,
+    window_days: int,
+) -> dict:
+    """Compose the daily-digest Slack message.
+
+    Two visual modes:
+      * Empty by_niche → ✅ 'all clean' single-line headline
+      * Non-empty     → 📊 header + per-niche summary lines
+
+    Per-niche line: ``• gaming   5w / 1b · top: spam_pattern_detected``
+    """
+    total_warns = sum(b.get("warns", 0) for b in by_niche.values())
+    total_blocks = sum(b.get("blocks", 0) for b in by_niche.values())
+    n_active = len(by_niche)
+
+    window_label = f"{window_days}d" if window_days != 1 else "24h"
+
+    if n_active == 0:
+        # All-clean digest — small message, positive confirmation
+        # that monitoring is alive
+        fallback = f"✅ Compliance digest ({window_label}): all niches clean"
+        return {
+            "text": fallback,
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            f"✅ *Compliance digest* ({window_label}): "
+                            "all niches clean — no warns, no blocks."
+                        ),
+                    },
+                }
+            ],
+        }
+
+    # Active digest — header + summary + per-niche lines
+    fallback = (
+        f"📊 Compliance digest ({window_label}): "
+        f"{n_active} niche(s) active · {total_warns}w / {total_blocks}b total"
+    )
+
+    # Sort niches by (blocks desc, warns desc) so operator's eye
+    # lands on the highest-attention niche first. Blocks weighted
+    # above warns — enforcement events are more actionable.
+    sorted_items = sorted(
+        by_niche.items(),
+        key=lambda kv: (kv[1].get("blocks", 0), kv[1].get("warns", 0)),
+        reverse=True,
+    )
+
+    lines: list[str] = []
+    for niche_id, bucket in sorted_items:
+        warns = bucket.get("warns", 0)
+        blocks = bucket.get("blocks", 0)
+        top = bucket.get("top_event_type")
+        if blocks > 0:
+            counts = f"{warns}w / {blocks}b"
+        else:
+            counts = f"{warns}w"
+        if top:
+            lines.append(f"• `{niche_id}` — {counts} · top: `{top}`")
+        else:
+            lines.append(f"• `{niche_id}` — {counts}")
+
+    summary_md = (
+        f"*{n_active} niche{'s' if n_active != 1 else ''} active* · "
+        f"{total_warns} warn{'s' if total_warns != 1 else ''} · "
+        f"{total_blocks} block{'s' if total_blocks != 1 else ''}\n"
+    ) + "\n".join(lines)
+
+    return {
+        "text": fallback,
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"📊 Compliance digest — last {window_label}",
+                },
+            },
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": summary_md},
+            },
+        ],
+    }
