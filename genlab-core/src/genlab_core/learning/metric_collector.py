@@ -380,6 +380,62 @@ def _fetch_rca_context(niche_id: str, blueprint_id: str) -> tuple[float, list[di
     return baseline_rate, winners, bombed_post
 
 
+def _update_source_arm_reward(
+    *,
+    niche_id: str,
+    blueprint_id: str,
+    reward: float,
+) -> bool:
+    """PR #571b (2026-06-25): per-source bandit arm update at the 48h
+    reward-window close.
+
+    Looks up the blueprint's `source` column (lazy DB query), then
+    calls record_source_outcome to apply the Bayesian Beta update to
+    the (niche, source) arm.
+
+    Returns True on successful update, False on:
+      * blueprint_id missing
+      * Source lookup fails (no DSN / blueprint not found / DB error)
+      * record_source_outcome returns False (also DSN / DB error)
+
+    Best-effort: every failure path is silent + DEBUG-logged. A missed
+    update just means the per-source posterior is one observation
+    behind reality — the next blueprint from that source will catch up.
+
+    Lazy imports keep the metric_collector module load-cost low; the
+    per-source machinery only imports when this function fires (once
+    per blueprint per 48h, not per request).
+    """
+    if not blueprint_id:
+        return False
+    try:
+        from genlab_core.http.backlog_client import BacklogClient
+        from genlab_core.learning.source_performance import record_source_outcome
+
+        bp = BacklogClient().blueprints.get(blueprint_id)
+        if not bp:
+            return False
+        fields = bp.get("fields", {}) if isinstance(bp, dict) else {}
+        source = (fields.get("source") or "").strip()
+        if not source:
+            # No source recorded — likely a legacy blueprint OR a
+            # niche whose fetcher doesn't populate the column yet.
+            # Don't WARN; just skip silently.
+            return False
+        return record_source_outcome(
+            niche_id=niche_id,
+            source=source,
+            reward=reward,
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort
+        logger.debug(
+            "[metric_collector] source-arm update failed for bp=%r: %s",
+            blueprint_id,
+            exc,
+        )
+        return False
+
+
 def _check_post_bomb_signal(
     *,
     niche_id: str,
@@ -856,6 +912,22 @@ def process_pending_task(
             )
         except Exception as exc:  # noqa: BLE001 — fail-open
             logger.debug("[metric_collector] post-bomb check failed: %s", exc)
+
+        # PR #571b (2026-06-25, Phase B step 1b): update per-source
+        # bandit arm with the 48h reward signal. Requires looking up
+        # the blueprint's `source` column — done lazily so the cost
+        # is paid only on reward-window completion (~1 query per
+        # blueprint per 48h, not per request). Fail-OPEN: a missed
+        # update just means the source's posterior is one observation
+        # behind reality.
+        try:
+            _update_source_arm_reward(
+                niche_id=task_record.niche_id,
+                blueprint_id=task_record.content_id,
+                reward=reward_48h,
+            )
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.debug("[metric_collector] per-source arm update skipped: %s", exc)
 
         # Update content bandit with the 48h reward signal.
         # The arm name is the niche-specific classified arm (e.g.
