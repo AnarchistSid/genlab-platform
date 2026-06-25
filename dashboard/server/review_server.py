@@ -76,6 +76,45 @@ _login_attempts: dict[str, list] = defaultdict(list)
 _LOGIN_RATE_LIMIT = 5
 _LOGIN_RATE_WINDOW = 60  # seconds
 
+
+def _login_rate_limit_exceeded(ip: str) -> bool:
+    """PR #564 (2026-06-25): reusable rate-limit check shared by
+    form-POST and basic-auth paths.
+
+    Returns True when the IP has already used its budget within
+    the sliding 60-second window. Caller should return 429 and
+    NOT proceed to the auth check.
+
+    Mutates ``_login_attempts[ip]`` to prune stale timestamps.
+    Also lazily purges the whole dict when it grows past 200 IPs
+    so memory stays bounded (same heuristic as the pre-#564
+    form-POST cleanup).
+
+    Does NOT record this attempt — caller pairs this with
+    ``_login_record_attempt(ip)``. The split lets the basic-auth
+    path skip recording when there's no Authorization header at
+    all (avoid polluting the bucket with pre-auth probes).
+    """
+    now = _time.time()
+    # Purge stale IPs to keep dict bounded (200 IPs = comfortable
+    # headroom for a single-tenant dashboard; bumps for multi-tenant)
+    if len(_login_attempts) > 200:
+        cutoff = now - _LOGIN_RATE_WINDOW * 10
+        stale = [k for k, v in _login_attempts.items() if all(t < cutoff for t in v)]
+        for k in stale:
+            del _login_attempts[k]
+    # Prune stale timestamps in THIS IP's bucket
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_RATE_WINDOW]
+    return len(_login_attempts[ip]) >= _LOGIN_RATE_LIMIT
+
+
+def _login_record_attempt(ip: str) -> None:
+    """Append a timestamp to the IP's bucket. Paired with
+    ``_login_rate_limit_exceeded`` — call after the rate-limit
+    check admits the attempt."""
+    _login_attempts[ip].append(_time.time())
+
+
 # Strict run_id validation: alphanumeric, underscores, hyphens only, max 64 chars
 _SAFE_RUN_ID = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
 
@@ -427,11 +466,29 @@ def _check_auth():
     # 2. Fall back to HTTP Basic Auth header (API clients / curl).
     # PR #562 (2026-06-25): try DB users-table password first, fall
     # back to env-var for legacy operators not yet in the DB.
+    # PR #564 (2026-06-25): per-IP rate-limit on basic-auth — closes
+    # the brute-force gap flagged as a known limitation in PR #562.
+    # The form-POST path already had this; extraction lets both
+    # share one implementation. Skip the rate-limit check entirely
+    # when no Authorization header is present (no auth attempt to
+    # rate-limit, just a pre-auth probe from browser chrome).
     auth = request.authorization
-    if auth and _authenticate(auth.username or "", auth.password or ""):
-        session["authenticated"] = True
-        session.permanent = True
-        return None
+    if auth:
+        ip = request.remote_addr or "unknown"
+        if _login_rate_limit_exceeded(ip):
+            # 429 with WWW-Authenticate stripped — don't prompt for
+            # creds we're refusing to accept. Same 60-sec retry-after
+            # the form-POST returns.
+            return Response(
+                '{"error":"Too many login attempts. Try again later."}\n',
+                429,
+                {"Content-Type": "application/json", "Retry-After": "60"},
+            )
+        _login_record_attempt(ip)
+        if _authenticate(auth.username or "", auth.password or ""):
+            session["authenticated"] = True
+            session.permanent = True
+            return None
 
     # 3. Not authenticated — redirect browsers to /login, return 401 for API
     if request.path.startswith("/api/"):
@@ -451,19 +508,13 @@ def _login_page():
     error = ""
     if request.method == "POST":
         # ── Rate limiting: 5 attempts per minute per IP ──
+        # PR #564 (2026-06-25): extracted shared helpers; identical
+        # semantics to pre-#564 inline implementation, now also used
+        # by the basic-auth header path in _check_auth.
         ip = request.remote_addr or "unknown"
-        now = _time.time()
-        # Purge stale IPs to keep dict bounded
-        if len(_login_attempts) > 200:
-            cutoff = now - _LOGIN_RATE_WINDOW * 10
-            stale_ips = [k for k, v in _login_attempts.items() if all(t < cutoff for t in v)]
-            for k in stale_ips:
-                del _login_attempts[k]
-
-        _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_RATE_WINDOW]
-        if len(_login_attempts[ip]) >= _LOGIN_RATE_LIMIT:
+        if _login_rate_limit_exceeded(ip):
             return "Too many login attempts. Try again later.", 429
-        _login_attempts[ip].append(now)
+        _login_record_attempt(ip)
 
         username = request.form.get("username", "")
         password = request.form.get("password", "")
