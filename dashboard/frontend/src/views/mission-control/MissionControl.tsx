@@ -33,6 +33,7 @@ import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
+import { SourceDiscoveryCard } from "./SourceDiscoveryCard";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -305,6 +306,16 @@ export default function MissionControl() {
                 surface the same backend signals; pause is the action,
                 stats are the diagnosis. */}
             <ComplianceStatsCard />
+            {/* PR after #586 (2026-06-25): source-discovery proposer.
+                Ranks SOURCE YouTube channels we pulled clips from
+                by per-clip avg engagement so operators decide which
+                under-tracked channels deserve config/sources.yaml
+                slots. Per-niche selector (10 rows × 1 niche at a
+                time, vs the 1-row × 5-niche layout of the sibling
+                cards) because the proposer's output IS itself a
+                ranked list. Zero-state for days until source data
+                accumulates from new trending fetches. */}
+            <SourceDiscoveryCard />
           </div>
         </div>
       )}
