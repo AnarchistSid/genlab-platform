@@ -318,6 +318,42 @@ def _enforce_localhost_when_no_auth():
 app.before_request(_enforce_localhost_when_no_auth)
 
 
+# PR #565 (2026-06-25): precompute a fixed argon2 hash at module
+# load. The auth path runs verify_password against this hash on the
+# user-not-found path (and the password_hash-NULL path) to equalize
+# CPU work — without it an attacker can enumerate valid usernames
+# by timing: ~50ms for "user exists + wrong password" (real verify)
+# vs ~1ms for "user doesn't exist" (no verify). Running the dummy
+# verify burns the same ~50ms, flattening the signal.
+#
+# The plaintext doesn't matter — what matters is the argon2 work.
+# We hash a fixed sentinel once at import so:
+#   * The CPU cost is paid exactly once at startup, not per-request
+#   * The hash uses current argon2 defaults (auto-updates when the
+#     library bumps them — same primitive PR #563 rotation uses)
+#   * Tests can monkeypatch the module attribute when needed
+#
+# None when argon2-cffi isn't installed (graceful: dummy verify is
+# skipped, timing leak remains but auth still works).
+def _compute_dummy_hash() -> str | None:
+    """Precompute the fixed dummy hash for constant-time user-not-
+    found responses. Returns None when argon2-cffi is missing."""
+    try:
+        from genlab_core.auth.passwords import hash_password
+
+        return hash_password("dummy-password-for-constant-time-auth")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[auth] dummy-hash compute failed (%s); timing-attack guard "
+            "disabled, username enumeration via timing still possible",
+            exc,
+        )
+        return None
+
+
+_DUMMY_PASSWORD_HASH: str | None = _compute_dummy_hash()
+
+
 def _authenticate(submitted_user: str, submitted_pass: str) -> bool:
     """Three-step resolver — PR #562 (2026-06-25), 3b in the SaaS
     multi-tenancy dependency path.
@@ -342,11 +378,15 @@ def _authenticate(submitted_user: str, submitted_pass: str) -> bool:
     (verify_password is constant-time + never-raises; the user
     lookup helper fail-closes to None on every error path).
 
-    KNOWN LIMITATION: DB-up vs DB-down has different timing
-    (1ms vs 5s on connect timeout). For owner-mode + early
-    multi-tenant this is acceptable; a hardened multi-tenant
-    deployment would add per-IP rate-limiting + constant-time
-    dummy-hash on the miss path.
+    PR #565 (2026-06-25): runs verify_password against a fixed
+    dummy hash on the user-not-found path and the password_hash-
+    NULL path so all three resolver outcomes pay the same ~50ms of
+    argon2 work. Closes the username-enumeration timing leak
+    flagged in PR #562's known-limitation docstring.
+
+    REMAINING TIMING LEAK: DB-up vs DB-down (1ms vs 5s connect
+    timeout) is still distinguishable. Operationally rare; mitigated
+    by per-IP rate-limiting from PR #564.
     """
     if not submitted_user:
         return False
@@ -393,8 +433,47 @@ def _authenticate(submitted_user: str, submitted_pass: str) -> bool:
             return False
         # Step 2: DB row exists but password_hash NULL → env-var
         # fallback (seed admin pattern from PR #559).
-    # Step 3 (no DB row): env-var fallback (legacy operators).
+        # PR #565: burn equivalent CPU to Step 1's verify_password so
+        # the timing signal "this user has no DB password" doesn't
+        # leak. Result discarded — env-var check below owns the
+        # actual decision.
+        _constant_time_dummy_verify(submitted_pass, verify_password)
+    else:
+        # Step 3 (no DB row): env-var fallback (legacy operators).
+        # PR #565: burn equivalent CPU to Step 1's verify_password so
+        # the timing signal "this username doesn't exist" doesn't
+        # leak. Without this, an attacker probing usernames can
+        # distinguish ~50ms "exists + wrong pw" from ~1ms "doesn't
+        # exist" and enumerate the user table.
+        _constant_time_dummy_verify(submitted_pass, verify_password)
     return _env_var_auth_match(submitted_user, submitted_pass)
+
+
+def _constant_time_dummy_verify(submitted_pass: str, verify_fn) -> None:
+    """PR #565 (2026-06-25): burn equivalent CPU to a real
+    verify_password call so the user-not-found and
+    password_hash-NULL paths have the same timing as the
+    user-exists + verify path.
+
+    Takes verify_fn as a parameter (instead of importing locally)
+    so the caller can pass the same already-imported binding and
+    tests can mock verify_password by patching the caller's
+    binding directly.
+
+    No-op when _DUMMY_PASSWORD_HASH is None (argon2-cffi was
+    missing at module load — the timing leak remains but auth
+    still works, same graceful-degradation pattern as the rest
+    of the auth path).
+    """
+    if _DUMMY_PASSWORD_HASH is None:
+        return
+    try:
+        # Discard the result — this is timing equalisation, not
+        # an actual auth check. verify_password is constant-time
+        # against the dummy hash regardless of submitted_pass.
+        verify_fn(submitted_pass, _DUMMY_PASSWORD_HASH)
+    except Exception as exc:  # noqa: BLE001 — never propagate
+        logger.debug("[auth] dummy-verify swallowed exception: %s", exc)
 
 
 def _maybe_rotate_password_hash(user_id, submitted_pass: str, current_hash: str) -> None:
