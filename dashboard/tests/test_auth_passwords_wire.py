@@ -297,6 +297,150 @@ def test_update_last_login_failure_doesnt_block_auth(monkeypatch):
 # ── _env_var_auth_match isolated ───────────────────────────────────
 
 
+def test_rotation_fires_when_needs_rehash_true(monkeypatch):
+    """PR #563: on successful DB-password auth, if needs_rehash
+    returns True, the resolver re-hashes via set_password. Pin
+    the rotation is invoked with the verified plaintext + user.id.
+    """
+    import server.review_server as mod
+    from genlab_core.auth.users import User
+
+    _patch_env_creds(monkeypatch, user="env_user", password="env_pass")
+    user = User(
+        id=uuid.uuid4(),
+        username="admin",
+        display_name="Admin",
+        tenant_id=uuid.uuid4(),
+        role="admin",
+        status="active",
+    )
+
+    with (
+        patch("genlab_core.auth.users.get_user_by_username", return_value=user),
+        patch("genlab_core.auth.users.get_user_password_hash", return_value="$argon2id$weak..."),
+        patch("genlab_core.auth.passwords.verify_password", return_value=True),
+        patch("genlab_core.auth.users.update_last_login"),
+        patch("genlab_core.auth.passwords.needs_rehash", return_value=True),
+        patch("genlab_core.auth.users.set_password", return_value=True) as mock_set,
+    ):
+        assert mod._authenticate("admin", "correct_password") is True
+    mock_set.assert_called_once_with(user.id, "correct_password")
+
+
+def test_rotation_skipped_when_needs_rehash_false(monkeypatch):
+    """When the stored hash uses current params (the common case),
+    rotation is a no-op — set_password NOT called. Pin so a future
+    refactor doesn't accidentally re-hash on every login (which
+    would defeat argon2's per-login work-factor design)."""
+    import server.review_server as mod
+    from genlab_core.auth.users import User
+
+    _patch_env_creds(monkeypatch, user="env_user", password="env_pass")
+    user = User(
+        id=uuid.uuid4(),
+        username="admin",
+        display_name="Admin",
+        tenant_id=uuid.uuid4(),
+        role="admin",
+        status="active",
+    )
+
+    with (
+        patch("genlab_core.auth.users.get_user_by_username", return_value=user),
+        patch("genlab_core.auth.users.get_user_password_hash", return_value="$argon2id$current..."),
+        patch("genlab_core.auth.passwords.verify_password", return_value=True),
+        patch("genlab_core.auth.users.update_last_login"),
+        patch("genlab_core.auth.passwords.needs_rehash", return_value=False),
+        patch("genlab_core.auth.users.set_password") as mock_set,
+    ):
+        assert mod._authenticate("admin", "correct_password") is True
+    mock_set.assert_not_called()
+
+
+def test_rotation_failure_does_not_block_auth(monkeypatch):
+    """If set_password raises (DB hiccup, write failure), auth STILL
+    succeeds because the verify_password check already passed. The
+    rotation is best-effort — denying a session because the rotation
+    failed would be the worst of both worlds (operator can't log in
+    AND the hash still uses weak params)."""
+    import server.review_server as mod
+    from genlab_core.auth.users import User
+
+    _patch_env_creds(monkeypatch, user="env_user", password="env_pass")
+    user = User(
+        id=uuid.uuid4(),
+        username="admin",
+        display_name="Admin",
+        tenant_id=uuid.uuid4(),
+        role="admin",
+        status="active",
+    )
+
+    with (
+        patch("genlab_core.auth.users.get_user_by_username", return_value=user),
+        patch("genlab_core.auth.users.get_user_password_hash", return_value="$argon2id$weak..."),
+        patch("genlab_core.auth.passwords.verify_password", return_value=True),
+        patch("genlab_core.auth.users.update_last_login"),
+        patch("genlab_core.auth.passwords.needs_rehash", return_value=True),
+        # set_password raises — must not propagate
+        patch("genlab_core.auth.users.set_password", side_effect=RuntimeError("DB hiccup")),
+    ):
+        assert mod._authenticate("admin", "correct_password") is True
+
+
+def test_rotation_not_attempted_on_env_var_fallback(monkeypatch):
+    """Step 2 (DB row + NULL hash) and Step 3 (no DB row) both fall
+    back to env-var. Pin that needs_rehash + set_password are NOT
+    called in those paths — there's no DB hash to rotate."""
+    import server.review_server as mod
+    from genlab_core.auth.users import User
+
+    _patch_env_creds(monkeypatch, user="admin", password="env_pass")
+    user = User(
+        id=uuid.uuid4(),
+        username="admin",
+        display_name="Admin",
+        tenant_id=uuid.uuid4(),
+        role="admin",
+        status="active",
+    )
+
+    # Step 2: DB row exists but NULL hash
+    with (
+        patch("genlab_core.auth.users.get_user_by_username", return_value=user),
+        patch("genlab_core.auth.users.get_user_password_hash", return_value=None),
+        patch("genlab_core.auth.passwords.needs_rehash") as mock_needs,
+        patch("genlab_core.auth.users.set_password") as mock_set,
+    ):
+        assert mod._authenticate("admin", "env_pass") is True
+    mock_needs.assert_not_called()
+    mock_set.assert_not_called()
+
+    # Step 3: no DB row
+    with (
+        patch("genlab_core.auth.users.get_user_by_username", return_value=None),
+        patch("genlab_core.auth.passwords.needs_rehash") as mock_needs,
+        patch("genlab_core.auth.users.set_password") as mock_set,
+    ):
+        assert mod._authenticate("admin", "env_pass") is True
+    mock_needs.assert_not_called()
+    mock_set.assert_not_called()
+
+
+def test_source_pin_rotation_helper_present():
+    """The _maybe_rotate_password_hash helper exists with the
+    expected name + PR anchor. Pin so a future refactor that
+    inlines it surfaces in tests."""
+    import server.review_server as mod
+
+    src = Path(mod.__file__).read_text()
+    assert (
+        "def _maybe_rotate_password_hash(user_id, submitted_pass: str, current_hash: str) -> None:"
+        in src
+    )
+    assert "PR #563" in src
+
+
 def test_env_var_auth_match_constant_time_compare(monkeypatch):
     """The extracted env-var helper uses hmac.compare_digest. Pin
     the function exists + behaves correctly so the form-POST and

@@ -342,12 +342,58 @@ def _authenticate(submitted_user: str, submitted_pass: str) -> bool:
             if verify_password(submitted_pass, password_hash):
                 # Best-effort timestamp; auth doesn't fail if write fails
                 update_last_login(user.id)
+                # PR #563 (2026-06-25): transparent parameter rotation.
+                # If the stored hash uses weaker argon2 parameters than
+                # current defaults, re-hash with the plaintext we just
+                # verified and persist. Each successful login amortises
+                # the upgrade — operators never see a "your password
+                # is stale, please change it" prompt. Best-effort:
+                # failure logs at WARNING but doesn't deny auth.
+                _maybe_rotate_password_hash(user.id, submitted_pass, password_hash)
                 return True
             return False
         # Step 2: DB row exists but password_hash NULL → env-var
         # fallback (seed admin pattern from PR #559).
     # Step 3 (no DB row): env-var fallback (legacy operators).
     return _env_var_auth_match(submitted_user, submitted_pass)
+
+
+def _maybe_rotate_password_hash(user_id, submitted_pass: str, current_hash: str) -> None:
+    """PR #563 (2026-06-25): rotate to current argon2 params when
+    needs_rehash returns True. Best-effort — any failure logs at
+    WARNING but does NOT propagate to the caller (auth has already
+    succeeded; a rotation failure must not deny the session).
+
+    The rotation flow:
+      1. needs_rehash(current_hash) → bool
+      2. If True: set_password(user_id, submitted_pass) re-hashes
+         and UPDATEs the row
+      3. On any exception: WARNING + swallow (caller continues)
+
+    This is the consumer for the needs_rehash primitive shipped in
+    PR #561. Without this, hashes would NEVER rotate even when the
+    argon2 library bumped its defaults — every login would consult
+    the same weakening hash until manual intervention.
+    """
+    try:
+        from genlab_core.auth.passwords import needs_rehash
+        from genlab_core.auth.users import set_password
+    except ImportError:
+        return
+    try:
+        if not needs_rehash(current_hash):
+            return
+        # The stored hash uses weaker params than current defaults
+        # → re-hash + persist. set_password handles the hashing +
+        # UPDATE atomically (PR #561 hash-first contract).
+        if set_password(user_id, submitted_pass):
+            logger.info("[auth] rotated password hash for user_id=%s to current params", user_id)
+        else:
+            logger.warning(
+                "[auth] password rotation skipped for %s (set_password returned False)", user_id
+            )
+    except Exception as exc:  # noqa: BLE001 — never propagate
+        logger.warning("[auth] password rotation failed for %s: %s", user_id, exc)
 
 
 def _env_var_auth_match(submitted_user: str, submitted_pass: str) -> bool:
