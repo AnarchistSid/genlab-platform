@@ -320,6 +320,64 @@ AUTO_APPROVAL_SOURCE_TAG = "auto_approver_v1"
 _DICE_BUCKETS: int = 10000
 
 
+def _check_compliance_gate(
+    *,
+    blueprint: dict,
+    niche_id: str,
+    record_id: str,
+) -> list[str]:
+    """PR #576 (2026-06-25): consult the Phase A compliance policy_gate
+    for each platform the blueprint would publish to.
+
+    Returns the list of platform-tagged reasons when ANY platform
+    returns decision='block'; empty list when all platforms are
+    'allow' or 'warn' (observation-only Phase A — proceed).
+
+    Today policy_gate is observation-only, so 'block' never fires.
+    This integration ships the safety architecture for when checks
+    flip to enforcement per-(niche, check). The COMPLIANCE_EVENTS
+    audit log records each consultation (one row per platform per
+    auto-approval attempt) so operators can analyse what the gate
+    WOULD have done before flipping any check to block.
+
+    Best-effort: import + check failures log at DEBUG and return
+    empty list (proceed). Auto-approval flow must NEVER fail because
+    of a compliance-check side effect — the gate logs its own
+    decisions; a missed check just degrades the audit log, not the
+    publish path.
+    """
+    try:
+        from genlab_core.compliance.policy_gate import check_publish_policy
+    except ImportError:
+        # Old core (pre-PR-566) → no compliance gate → proceed
+        return []
+    # The platforms the auto-approver pass would publish to. Today
+    # this is the full default list — operators tune per-niche in
+    # publishing.yaml's platforms_enabled, but at the auto-approver
+    # layer we check the same set for simplicity (matches the
+    # publish_all_platforms default).
+    platforms_to_check = ("instagram", "youtube", "facebook", "twitter", "threads")
+    block_reasons: list[str] = []
+    for platform in platforms_to_check:
+        try:
+            decision = check_publish_policy(blueprint, platform, niche_id)
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.debug(
+                "[auto_approver] compliance check failed for bp=%s platform=%s: %s",
+                record_id,
+                platform,
+                exc,
+            )
+            continue
+        if decision.decision == "block":
+            # Tag reasons with the platform that produced them so
+            # operators can see "instagram blocked + youtube allowed"
+            # in compliance_events forensics.
+            for r in decision.reasons:
+                block_reasons.append(f"{platform}:{r}")
+    return block_reasons
+
+
 def _dice_value(record_id: str) -> float:
     """Return a deterministic dice value in [0.0, 1.0) for a blueprint.
 
@@ -514,6 +572,13 @@ class AutoApprovalPassResult:
     # operators can see the rollout knob's actual throttle effect in
     # dashboards (vs gate quality issues).
     skipped_rollout: list[str] = field(default_factory=list)
+    # PR #576 (2026-06-25): blueprints that passed the gate +
+    # confidence + rollout dice but were blocked by Phase A
+    # compliance checks (copyright_attribution_check, spam_pattern_check,
+    # account_health_check). Distinct from the other skip lists so
+    # operators can see compliance-driven blocks separately from
+    # gate-quality or rollout throttle.
+    skipped_compliance_block: list[str] = field(default_factory=list)
     cap_reached: bool = False
     kill_switch_active: bool = False
     policy_disabled: bool = False
@@ -716,6 +781,37 @@ def run_pass(
                 niche_id,
                 record_id,
                 policy.rollout_pct,
+            )
+            continue
+
+        # ── PR #576 (2026-06-25): consult compliance policy_gate ──────────
+        # Before auto-approving, run the per-platform compliance checks
+        # registered in Phase A (PRs #566-#570): copyright attribution,
+        # spam pattern detection, account health monitoring.
+        #
+        # Today policy_gate is observation-only — every check returns
+        # 'allow' or 'warn'. 'block' is reserved for when the operator
+        # explicitly enables enforcement per-(niche, check). So this
+        # integration is a NO-OP behavior-wise today, but the
+        # compliance_events table records each consultation and the
+        # auto-approver respects 'block' automatically when checks flip
+        # to enforcement (no future code change needed).
+        #
+        # Per-platform check fires once per platform the blueprint
+        # would publish to. ANY platform 'block' → skip auto-approval
+        # for ALL platforms (conservative: don't partial-publish into
+        # a state where some platforms got the post and others didn't).
+        compliance_block_reasons = _check_compliance_gate(
+            blueprint=blueprint, niche_id=niche_id, record_id=record_id
+        )
+        if compliance_block_reasons:
+            result.skipped_compliance_block.append(record_id)
+            logger.info(
+                "[auto_approver] niche=%s bp=%s — compliance gate BLOCKED "
+                "auto-approval (reasons=%s)",
+                niche_id,
+                record_id,
+                "; ".join(compliance_block_reasons[:5]),
             )
             continue
 
