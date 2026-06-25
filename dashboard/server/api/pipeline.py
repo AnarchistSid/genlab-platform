@@ -534,6 +534,30 @@ def trigger():
         VALID_NICHES = {"ai_creators", "gaming", "sports", "movies", "anime", "all"}
         if niche_id not in VALID_NICHES:
             return api_error(error=f"Unknown niche: {niche_id}", code=400)
+        # PR #547 (2026-06-25, SR-F wire pass 8): per-tenant guard.
+        # The "all" value runs pipelines for every niche — for a
+        # restricted operator it would step outside their allowlist
+        # in one of the 5 sub-runs. Reject "all" when restricted.
+        # For a specific niche, defer to the standard
+        # _enforce_niche_keyed_allowlist helper from PR #546 — same
+        # shape as config_routes.py.
+        from server.api.config_routes import _enforce_niche_keyed_allowlist
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        _allowed = get_allowed_niches()
+        if _allowed is not None and niche_id == "all":
+            return api_error(
+                error=(
+                    f"niche_id='all' requires unrestricted access; your "
+                    f"allowlist is {sorted(_allowed)}. Trigger per-niche "
+                    f"pipelines individually. See SR-F (PR #547)."
+                ),
+                code=403,
+            )
+        if niche_id != "all":
+            _err = _enforce_niche_keyed_allowlist(niche_id)
+            if _err is not None:
+                return _err
 
         # Atomically acquire the per-niche pipeline lock. Two concurrent POSTs
         # used to race past a non-atomic existence check; flock is the only
