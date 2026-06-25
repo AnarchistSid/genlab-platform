@@ -211,13 +211,23 @@ class AnalyticsStore:
         composite_id = post_id if post_id.startswith(f"{platform}:") else f"{platform}:{post_id}"
 
         reach = insights.get("reach", 0) or insights.get("impressions", 0) or 0
-        engagement = insights.get("engagement", 0) or 0
         likes = insights.get("likes", 0) or 0
         comments = insights.get("comments", 0) or 0
         saves = insights.get("saves", 0) or insights.get("saved", 0) or 0
         shares = insights.get("shares", 0) or insights.get("retweets", 0) or 0
         plays = insights.get("plays", 0) or insights.get("views", 0) or 0
         impressions = insights.get("impressions", 0) or reach
+        # BUGFIX (post-2026-06-25 audit): platform metric fetchers in
+        # learning/metrics/{youtube,instagram,facebook,x_twitter,tiktok,threads}.py
+        # NEVER return an "engagement" key — they return likes/comments/shares as
+        # separate fields. The prior `insights.get("engagement", 0) or 0` always
+        # evaluated to 0, making engagement_rate = 0 / reach = 0.0 for every
+        # record since commit f32b6189 (2026-06-09). Top Performers eng% on the
+        # Analytics dashboard showed 0.0% across all rows as a consequence.
+        # Fix: fall back to (likes + comments + shares) when no caller-provided
+        # engagement field is present. Backward-compatible — callers (like the
+        # unit tests) that DO pass "engagement" still take precedence.
+        engagement = insights.get("engagement", 0) or (likes + comments + shares)
 
         # Only compute rates when reach > 0 — dividing by 1 when reach=0
         # inflates rates.

@@ -250,6 +250,65 @@ class TestUpsertAnalytics:
         fields = backend.create.call_args.args[1]
         assert fields["viral_score"] == 0.42
 
+    def test_engagement_falls_back_to_likes_comments_shares_when_key_missing(self) -> None:
+        """REGRESSION (post-2026-06-25 audit): platform metric fetchers in
+        learning/metrics/*.py never provide an "engagement" key — they return
+        likes/comments/shares separately. The prior code path
+        ``engagement = insights.get("engagement", 0) or 0`` made engagement
+        always 0 → engagement_rate = 0 / reach = 0.0 for ~16 days of records.
+
+        The bug originated at commit f32b6189 (2026-06-09) and was caught by
+        the 2026-06-25 prod audit. Tests passed because the existing
+        ``test_rates_computed_when_reach_nonzero`` artificially injected the
+        ``engagement`` key, which production fetchers never do.
+
+        Pin: when "engagement" key is absent, the upsert must derive it from
+        the sum of base engagement metrics (likes + comments + shares).
+        """
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="instagram",
+            # Realistic IG fetcher output: NO "engagement" key.
+            insights={"reach": 1000, "likes": 50, "comments": 30, "shares": 20},
+        )
+        fields = backend.create.call_args.args[1]
+        # Derived: 50 + 30 + 20 = 100
+        assert fields["engagement"] == 100
+        # Rate: 100 / 1000 = 0.1
+        assert fields["engagement_rate"] == 0.1
+        # Viral score formula uses engagement_rate, save_rate, share_rate:
+        #   0.1 * 0.25 + 0.02 * 0.40 + 0 * 0.35 = 0.025 + 0.008 = 0.033
+        assert fields["viral_score"] == 0.033
+
+    def test_engagement_explicit_zero_falls_back_to_sum(self) -> None:
+        """Defensive: explicit ``engagement: 0`` is treated the same as
+        missing — both fall back to (likes + comments + shares). This is the
+        same ``or`` semantics that drove the original bug, but now applied
+        intentionally on the correct side of the lookup."""
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="facebook",
+            insights={"reach": 500, "engagement": 0, "likes": 10, "comments": 5, "shares": 2},
+        )
+        fields = backend.create.call_args.args[1]
+        # 10 + 5 + 2 = 17, not 0
+        assert fields["engagement"] == 17
+
+    def test_explicit_engagement_takes_precedence_over_sum(self) -> None:
+        """Backward-compatible: callers that DO pass an explicit ``engagement``
+        value (e.g., a future pre-aggregated source) still see it preserved."""
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="instagram",
+            insights={"reach": 1000, "engagement": 200, "likes": 50, "comments": 30, "shares": 20},
+        )
+        fields = backend.create.call_args.args[1]
+        # 200 takes precedence over the 100 sum
+        assert fields["engagement"] == 200
+
     def test_legacy_saved_alias_treated_as_saves(self) -> None:
         """IG insights use the legacy ``saved`` key; the new canonical
         is ``saves``. Both must work."""
