@@ -44,6 +44,7 @@ import type {
   QualityStats,
   ClickTrend,
   NichePauseRecord,
+  ComplianceStatsResponse,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -856,6 +857,30 @@ export const alerts = {
 
 export const metrics = {
   publishing: () => get<Record<string, unknown>>("/metrics/publishing"),
+};
+
+// PR after #581 — Compliance stats aggregation for Mission Control.
+// Wraps /api/v1/compliance/stats which aggregates compliance_events
+// rows over a [1, 90] day window via the events.stats_by_niche
+// library helper.
+export const complianceStats = {
+  fetch: (windowDays = 7) =>
+    get<ComplianceStatsResponse | { data: ComplianceStatsResponse }>(
+      "/compliance/stats",
+      { window_days: String(windowDays) },
+    ).then((d): ComplianceStatsResponse => {
+      const envelope = d as { data?: ComplianceStatsResponse };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as ComplianceStatsResponse;
+    }),
 };
 
 // PR after #580 — Scheduling Pauses API client.

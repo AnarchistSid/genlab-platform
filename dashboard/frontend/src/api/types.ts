@@ -993,6 +993,35 @@ export interface QualityStats {
   videos_fixed: number;
 }
 
+// ── Compliance Stats (Mission Control dashboard, PR after #581) ──
+
+/**
+ * Per-niche aggregation row from /api/v1/compliance/stats.
+ *
+ * Mirrors the shape returned by genlab_core.compliance.events.stats_by_niche.
+ * Niches with zero events in the window are absent from the parent dict —
+ * the card fills the gap with a zero-state row.
+ */
+export interface ComplianceNicheStats {
+  total: number;
+  warns: number;
+  blocks: number;
+  allows: number;
+  /** Most-frequent warn/block event_type, or null when only allows. */
+  top_event_type: string | null;
+  /** Count of warn+block for top_event_type (the operator-attention metric). */
+  top_event_count: number;
+  by_event_type: Record<
+    string,
+    { warn: number; block: number; allow: number }
+  >;
+}
+
+export interface ComplianceStatsResponse {
+  window_days: number;
+  by_niche: Record<string, ComplianceNicheStats>;
+}
+
 // ── Scheduling Pauses (operator emergency-stop, PR after #579) ──
 
 /**

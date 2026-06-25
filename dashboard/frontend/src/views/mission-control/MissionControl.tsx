@@ -32,6 +32,7 @@ import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
+import { ComplianceStatsCard } from "./ComplianceStatsCard";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -297,6 +298,13 @@ export default function MissionControl() {
                 leverage loop — what previously took a DB row or a
                 publishing.yaml edit + redeploy is now one click. */}
             <NichePauseCard />
+            {/* PR after #581 (2026-06-25): Phase A compliance-moat
+                visibility. Aggregates compliance_events rows over a
+                7d window into per-niche warn/block counts + the top-
+                firing event_type. Sibling to NichePauseCard — both
+                surface the same backend signals; pause is the action,
+                stats are the diagnosis. */}
+            <ComplianceStatsCard />
           </div>
         </div>
       )}

@@ -142,4 +142,8 @@ export const queryKeys = {
   schedulingPauses: {
     list: () => ["scheduling", "pauses"] as const,
   },
+  /** Compliance event aggregation (Mission Control ComplianceStatsCard). */
+  complianceStats: {
+    fetch: (windowDays: number) => ["compliance", "stats", windowDays] as const,
+  },
 };
