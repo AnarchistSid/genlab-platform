@@ -276,3 +276,60 @@ def unpause(niche_id: str) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.warning("[niche_pause] unpause(%r) failed: %s", niche_id, exc)
         return False
+
+
+def sweep_expired_pauses() -> int:
+    """Garbage-collect expired auto-pause rows.
+
+    Deletes every niche_pauses row where ``paused_until`` is a
+    timestamp in the past. Returns the count of deleted rows.
+
+    ## What we DO NOT delete
+
+      * ``paused_until IS NULL`` — indefinite pauses (operator must
+        explicitly unpause). Sweeping these would silently re-enable
+        publishing on a niche the operator deliberately halted.
+      * ``paused_until > NOW()`` — still-active pauses.
+
+    ## Why this is safe to run on any schedule
+
+    Read paths (``is_paused`` / ``get_pause`` / ``list_active_pauses``)
+    already filter on ``paused_until > NOW()``, so an expired row
+    sitting in the table does NOT cause incorrect publishing
+    behavior — it's purely visual clutter on a ``SELECT * FROM
+    niche_pauses`` operator inspection. The sweeper is therefore
+    table-hygiene, not correctness; it can run hourly, daily, or
+    even fail silently for days without any blast radius.
+
+    ## Return value
+
+      * ``>= 0`` — count of rows deleted on the successful run.
+      * ``-1`` — DB unavailable / SQL error. Logged at WARNING.
+        Caller (the CLI / systemd timer) can use the sentinel to
+        exit non-zero so monitoring notices repeated failures.
+
+    Fail-CLOSED on errors (returns -1, not 0) so operators can
+    distinguish "nothing needed sweeping" from "sweep failed".
+    """
+    conn_cm = _connect()
+    if conn_cm is None:
+        return -1
+    try:
+        with conn_cm as conn:
+            cur = conn.execute(
+                """
+                DELETE FROM niche_pauses
+                WHERE paused_until IS NOT NULL
+                  AND paused_until < NOW()
+                """,
+            )
+            # psycopg3 exposes rowcount on the cursor returned by execute()
+            count = int(cur.rowcount) if cur.rowcount is not None else 0
+        if count:
+            logger.info("[niche_pause] sweep_expired_pauses deleted %d row(s)", count)
+        else:
+            logger.debug("[niche_pause] sweep_expired_pauses: nothing to delete")
+        return count
+    except Exception as exc:  # noqa: BLE001 — fail-CLOSED via -1 sentinel
+        logger.warning("[niche_pause] sweep_expired_pauses failed: %s", exc)
+        return -1
