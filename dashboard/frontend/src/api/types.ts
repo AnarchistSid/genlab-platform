@@ -852,6 +852,27 @@ export interface CrossNicheOverviewResponse {
     total_likes?: number;
     total_comments?: number;
     configured_platform_count?: number;
+    // PR #554 (2026-06-25, SR-F wire pass 14 consumer): the server
+    // sets these when the current operator has a niche allowlist
+    // configured (REVIEW_NICHE_ALLOWLIST_<USER> env). The shape
+    // below has been carve-out filtered to the operator's scope:
+    //
+    //   * niches[]            → trimmed to allowlist niches only
+    //   * schedule_today[]    → trimmed by niche_id
+    //   * niche_daily_reach{} → trimmed by key
+    //   * total_*             → recomputed from filtered niches
+    //   * total_reach         → reconstructed from 14d sparkline
+    //                           (vs global 30d); _sr_f_note flags
+    //                           this limitation
+    //   * total_likes/comments → fail-secure to 0 (no per-niche
+    //                            breakdown in scope; PR #553 deferred
+    //                            per-request filtered SQL)
+    //
+    // When undefined / false the operator is unrestricted and the
+    // response is the original full overview shape — backward compat
+    // for admin sessions. The ScopedAccessBanner consumes these.
+    _sr_f_scoped?: boolean;
+    _sr_f_note?: string;
   };
   niches: Array<{
     id: string;

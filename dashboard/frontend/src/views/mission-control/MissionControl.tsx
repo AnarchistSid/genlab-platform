@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { PublishingAlertBanner } from "./AlertBanner";
 import { CriticalAlertsBanner } from "./CriticalAlertsBanner";
+import { ScopedAccessBanner } from "./ScopedAccessBanner";
 import { PublishingHealth } from "./PublishingHealth";
 import { KpiHero } from "./KpiHero";
 import { TopPostSpotlight } from "./TopPostSpotlight";
@@ -154,6 +155,14 @@ export default function MissionControl() {
           <AutoApprovalKillSwitch />
         </div>
       </div>
+
+      {/* SR-F scoped-access banner (PR #554, consumer for PR #553's
+          server-side carve-out). Renders ABOVE infrastructure +
+          publishing alerts so the operator's first orienting signal
+          is "this is the data I'm scoped to" — totals + sparklines
+          differ from the unrestricted admin view, and that's
+          expected. Hidden for admin sessions (back-compat). */}
+      <ScopedAccessBanner />
 
       {/* Critical infrastructure alerts banner — reads unresolved
           CRITICAL rows from pipeline_alerts (warp_down,
