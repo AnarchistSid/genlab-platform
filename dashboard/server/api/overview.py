@@ -523,9 +523,25 @@ def _build_overview() -> dict:
     agents_running = sum(1 for n in niches_data if n.get("pipeline_status") == "running")
 
     # ── Aggregate engagement from analytics table ──
+    #
+    # PR #555 (2026-06-25): the 30-day aggregate query was originally a
+    # single-row SUM-only query — fast, but it produced global totals
+    # only. PR #553's SR-F carve-out had to fail-secure total_likes /
+    # total_comments to 0 in scoped mode (no per-niche column was
+    # available for sum-filtering); total_reach was reconstructed from
+    # the 14d sparkline as a compromise.
+    #
+    # We now ``GROUP BY niche_id`` instead. Same scan (DB still reads
+    # the same 30d rowset), just adds a small hash-aggregate on top.
+    # In exchange we get the per-niche 30-day totals materialised
+    # alongside the globals — Python sums each column for the legacy
+    # global numbers, the scope helper sums the filtered subset for
+    # scoped operators. Single round-trip, no cache bust, no per-user
+    # query.
     total_reach = 0
     total_likes = 0
     total_comments = 0
+    niche_totals_30d: dict[str, dict[str, int]] = {}
     niche_daily_reach: dict[str, list[dict]] = {}
     try:
         from psycopg.rows import dict_row
@@ -535,20 +551,30 @@ def _build_overview() -> dict:
             with pg_connect(
                 _dsn, row_factory=dict_row, niche_id=request.args.get("niche_id", "all") or "all"
             ) as _conn:
-                # Aggregate totals
-                agg = _conn.execute(
-                    "SELECT "
-                    "COALESCE(SUM(COALESCE((extra->>'reach')::numeric, 0)), 0)::bigint AS total_reach, "
-                    "COALESCE(SUM(COALESCE((extra->>'likes')::numeric, 0)), 0)::bigint AS total_likes, "
-                    "COALESCE(SUM(COALESCE((extra->>'comments')::numeric, 0)), 0)::bigint AS total_comments "
+                # Per-niche 30d totals (also produces the globals via Python sum)
+                niche_rows = _conn.execute(
+                    "SELECT niche_id, "
+                    "COALESCE(SUM(COALESCE((extra->>'reach')::numeric, 0)), 0)::bigint AS reach, "
+                    "COALESCE(SUM(COALESCE((extra->>'likes')::numeric, 0)), 0)::bigint AS likes, "
+                    "COALESCE(SUM(COALESCE((extra->>'comments')::numeric, 0)), 0)::bigint AS comments "
                     "FROM analytics "
                     "WHERE niche_id NOT LIKE 'rls_test%%' AND niche_id NOT LIKE 'test_%%' "
-                    "AND collected_at > NOW() - INTERVAL '30 days'"
-                ).fetchone()
-                if agg:
-                    total_reach = agg["total_reach"]
-                    total_likes = agg["total_likes"]
-                    total_comments = agg["total_comments"]
+                    "AND collected_at > NOW() - INTERVAL '30 days' "
+                    "GROUP BY niche_id"
+                ).fetchall()
+                for row in niche_rows:
+                    nid = row["niche_id"]
+                    niche_totals_30d[nid] = {
+                        "reach": int(row["reach"]),
+                        "likes": int(row["likes"]),
+                        "comments": int(row["comments"]),
+                    }
+                # Globals = sum across all niches (same answer the
+                # original single-row SUM produced, just computed
+                # client-side over the aggregated rowset).
+                total_reach = sum(v["reach"] for v in niche_totals_30d.values())
+                total_likes = sum(v["likes"] for v in niche_totals_30d.values())
+                total_comments = sum(v["comments"] for v in niche_totals_30d.values())
 
                 # Per-niche daily reach (last 14 days) for sparklines
                 daily_rows = _conn.execute(
@@ -610,6 +636,12 @@ def _build_overview() -> dict:
         "niches": niches_data,
         "schedule_today": schedule_today,
         "niche_daily_reach": niche_daily_reach,
+        # PR #555: per-niche 30-day totals. Consumed by the SR-F
+        # carve-out (_scope_overview_to_allowlist) to recompute
+        # total_likes / total_comments precisely for scoped operators
+        # — replaces the v1 fail-secure-to-0 from PR #553. The data
+        # is also useful for any future per-niche analytics surface.
+        "niche_totals_30d": niche_totals_30d,
     }
 
 
@@ -621,29 +653,24 @@ def _scope_overview_to_allowlist(data: dict, allowed: set[str]) -> dict:
     unrestricted-shape for subsequent admin requests. Returns the
     scoped copy.
 
-    Carve-out shape (4 surfaces + 1 recompute pass on globals):
+    Carve-out shape (5 surfaces + 1 recompute pass on globals):
 
       niches[]            → drop entries outside allowlist
       schedule_today[]    → drop entries whose niche_id is outside
       niche_daily_reach{} → drop keys outside allowlist
+      niche_totals_30d{}  → drop keys outside allowlist (PR #555)
       global.*            → recompute counts from filtered niches[]
 
-    DB aggregates (total_reach / total_likes / total_comments) come
-    from a SQL aggregate query without per-niche breakdown. For v1:
-
-      * total_reach is reconstructed from the (already-filtered)
-        niche_daily_reach 14-day sums — accurate but truncated to
-        14d vs. the 30d global window
-      * total_likes / total_comments fail-secure to 0 since no
-        per-niche breakdown is available in scope (a follow-up PR
-        can add a per-request filtered SQL)
+    DB aggregates (total_reach / total_likes / total_comments) are
+    summed from ``niche_totals_30d`` filtered by allowlist — same
+    30-day window the unrestricted view uses. PR #555 replaced
+    PR #553's v1 compromise (14d-reach reconstruction + zeroed
+    likes/comments) once the per-niche query landed.
 
     ``_sr_f_scoped: true`` + ``_sr_f_note`` flag the response shape
-    so the frontend can render a "scoped to your niches" banner and
-    operators understand the 14-day-reach + zeroed-likes/comments
-    limitation. ``platform_health`` is intentionally NOT trimmed —
-    operators need to know if IG/YT are globally down regardless
-    of allowlist.
+    so the frontend can render a "scoped to your niches" banner.
+    ``platform_health`` is intentionally NOT trimmed — operators
+    need to know if IG/YT are globally down regardless of allowlist.
     """
     scoped = copy.deepcopy(data)
 
@@ -672,13 +699,29 @@ def _scope_overview_to_allowlist(data: dict, allowed: set[str]) -> dict:
     g["total_archived"] = sum(int(n.get("archived_today") or 0) for n in filtered_niches)
     g["agents_running"] = sum(1 for n in filtered_niches if n.get("pipeline_status") == "running")
 
-    # 5. DB aggregates — reach from filtered niche_daily_reach, likes/comments
-    # fail-secure to 0 (no per-niche column in scope).
+    # 5. DB aggregates from per-niche 30-day totals.
+    #
+    # PR #555 (2026-06-25): replaces PR #553's v1 compromise. Before:
+    # total_reach was reconstructed from 14d sparkline (window mismatch
+    # vs global 30d); total_likes / total_comments fail-secured to 0
+    # (no per-niche column was available for sum-filtering). Now: we
+    # have niche_totals_30d (a per-niche 30-day breakdown of all three
+    # metrics) materialised at build time, so we can sum the filtered
+    # subset with the SAME window the unrestricted view uses.
+    niche_totals_30d: dict = scoped.get("niche_totals_30d") or {}
     g["total_reach"] = sum(
-        int(d.get("reach") or 0) for days in scoped["niche_daily_reach"].values() for d in days
+        int(t.get("reach") or 0) for nid, t in niche_totals_30d.items() if nid in allowed
     )
-    g["total_likes"] = 0
-    g["total_comments"] = 0
+    g["total_likes"] = sum(
+        int(t.get("likes") or 0) for nid, t in niche_totals_30d.items() if nid in allowed
+    )
+    g["total_comments"] = sum(
+        int(t.get("comments") or 0) for nid, t in niche_totals_30d.items() if nid in allowed
+    )
+    # The niche_totals_30d map itself must also be trimmed so the
+    # frontend can't enumerate cross-tenant niche IDs from the
+    # response payload (info disclosure even without the values).
+    scoped["niche_totals_30d"] = {k: v for k, v in niche_totals_30d.items() if k in allowed}
 
     # 6. Trim oldest_operator_review_age_hours to filtered set. The original
     # value is the max across ALL niches; if the operator's allowlist
@@ -700,10 +743,16 @@ def _scope_overview_to_allowlist(data: dict, allowed: set[str]) -> dict:
         aa["pass_rate_note"] = "scoped per allowlist; by_reason omitted for SR-F"
 
     g["_sr_f_scoped"] = True
+    # PR #555: dropped the 14-day-reach / zeroed-likes-comments caveat
+    # — total_reach / total_likes / total_comments are now computed
+    # from per-niche 30-day totals with the SAME window an admin sees.
+    # The remaining limitation is auto_archive_today.by_reason (still
+    # zeroed; would require capturing reason per-niche through the
+    # record pipeline).
     g["_sr_f_note"] = (
-        "Scoped to your niche allowlist. total_reach is 14-day "
-        "(vs. global 30-day); total_likes/total_comments unavailable "
-        "in scoped mode."
+        "Scoped to your niche allowlist. Totals are 30-day "
+        "per-niche sums (admin parity); archive breakdown by_reason "
+        "is omitted in scoped mode."
     )
     return scoped
 
