@@ -24,6 +24,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from genlab_core.compliance.disclosure import apply_ai_disclosure
 from genlab_core.platforms.models import (
     FacebookSpecific,
     InstagramSpecific,
@@ -118,6 +119,17 @@ def build_platform_specific(
             str(tw_content.get("routing", tw_content.get("strategy", "single"))).strip().lower()
         )
         tweet_text = str(tw_content.get("tweet_text", "") or caption).strip()
+        # PR #567 (2026-06-25): AI disclosure with 280-char budget.
+        # Must run BEFORE the [:280] truncation — apply_ai_disclosure
+        # itself handles the budget by truncating the original caption
+        # to make room for the disclosure suffix. Without this order,
+        # the [:280] would cut off the disclosure half-way.
+        tweet_text = apply_ai_disclosure(
+            tweet_text,
+            "twitter",
+            niche_id=fields.get("niche_id", "") or "",
+            blueprint_id=fields.get("id"),
+        )
         tweet_text = tweet_text[:280]
         return TwitterSpecific(
             routing=routing if routing in ("single", "thread") else "single",
@@ -201,6 +213,27 @@ def build_payload(fields: dict[str, Any], platform: str) -> PublishPayload:
         caption = (fields.get("facebook_content", "") or "").strip()
     else:
         caption = (fields.get("caption", "") or "").strip()
+
+    # PR #567 (2026-06-25): apply per-platform AI disclosure
+    # (YouTube/Meta/TikTok 2024 AI-content policies). Idempotent —
+    # re-publishing won't double-append. Budget-aware — for platforms
+    # with hard char caps (twitter handled separately in
+    # build_platform_specific where the 280-cap lives). Logs to
+    # compliance_events on every successful append.
+    #
+    # Apply AFTER caption selection (so platform-override captions
+    # like threads_content / facebook_content also get disclosure)
+    # but BEFORE build_platform_specific (so the platform-specific
+    # sub-models receive the disclosure-augmented caption when they
+    # fall back to it). Twitter is the exception — its tweet_text
+    # branch in build_platform_specific applies its own disclosure
+    # with the 280-char budget aware.
+    caption = apply_ai_disclosure(
+        caption,
+        platform,
+        niche_id=niche_id,
+        blueprint_id=fields.get("id"),
+    )
 
     # Hashtags — accept either a list or a space-separated string.
     hashtags_raw = fields.get("hashtags", "") or ""

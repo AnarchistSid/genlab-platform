@@ -223,7 +223,10 @@ class TestBuildPayload:
         bp = _make_blueprint(twitter_content=tw_content)
         payload = build_payload(bp["fields"], "twitter")
         assert payload.platform_specific is not None
-        assert payload.platform_specific.tweet_text == "Insane clutch play!"
+        # PR #567 (2026-06-25): AI disclosure appended to tweet_text
+        # (budget-aware, fits in 280-char cap).
+        assert payload.platform_specific.tweet_text.startswith("Insane clutch play!")
+        assert payload.platform_specific.tweet_text.endswith("AI-assisted. #ai")
         assert payload.platform_specific.routing == "single"
 
     def test_twitter_first_comment_set_for_legacy_name(self):

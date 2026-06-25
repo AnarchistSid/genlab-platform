@@ -148,7 +148,11 @@ class TestBuildPlatformSpecific:
         result = build_platform_specific(fields, "twitter", "cap", "")
         assert isinstance(result, TwitterSpecific)
         assert result.routing == "single"
-        assert result.tweet_text == "Hello world"
+        # PR #567 (2026-06-25): AI disclosure auto-appended for twitter
+        # (budget-aware truncation in apply_ai_disclosure). The original
+        # tweet_text is preserved + ' AI-assisted. #ai' suffix added.
+        assert result.tweet_text.startswith("Hello world")
+        assert result.tweet_text.endswith("AI-assisted. #ai")
 
     def test_twitter_thread_routing_via_routing_key(self) -> None:
         fields = {
@@ -255,6 +259,12 @@ class TestBuildPayloadMediaValidation:
 
 
 class TestBuildPayloadCaptionSelection:
+    # PR #567 (2026-06-25): build_payload now appends platform AI
+    # disclosure to the final caption (YouTube/Meta/TikTok 2024
+    # policy compliance). These tests pin the SOURCE caption is
+    # selected correctly + the disclosure SUFFIX is appended. The
+    # disclosure itself is unit-tested in compliance/test_disclosure_apply.
+
     def test_threads_uses_threads_content_when_present(self, video_file: Path) -> None:
         with _patch_transcode_passthrough():
             payload = build_payload(
@@ -266,7 +276,9 @@ class TestBuildPayloadCaptionSelection:
                 },
                 "threads",
             )
-        assert payload.caption == "threads-specific caption"
+        # Source caption selected from threads_content + disclosure appended
+        assert payload.caption.startswith("threads-specific caption")
+        assert "AI-assisted" in payload.caption
 
     def test_facebook_uses_facebook_content_when_present(self, video_file: Path) -> None:
         with _patch_transcode_passthrough():
@@ -279,7 +291,8 @@ class TestBuildPayloadCaptionSelection:
                 },
                 "facebook",
             )
-        assert payload.caption == "fb-specific caption"
+        assert payload.caption.startswith("fb-specific caption")
+        assert "AI-assisted" in payload.caption
 
     def test_threads_falls_back_to_caption_when_empty(self, video_file: Path) -> None:
         with _patch_transcode_passthrough():
@@ -292,7 +305,8 @@ class TestBuildPayloadCaptionSelection:
                 },
                 "threads",
             )
-        assert payload.caption == "generic caption"
+        assert payload.caption.startswith("generic caption")
+        assert "AI-assisted" in payload.caption
 
 
 class TestBuildPayloadHashtags:

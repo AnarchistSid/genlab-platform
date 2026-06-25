@@ -69,9 +69,111 @@ AI_DISCLOSURE_BY_PLATFORM: dict[str, str] = {
     # X: short by design (280-char budget). Hashtag is the durable
     # signal that survives reshares.
     "x_twitter": "AI-assisted. #ai",
+    # R-46 legacy alias: the default platform list still uses
+    # "twitter"; build_platform_specific's twitter branch passes
+    # "twitter" not "x_twitter". Same disclosure either way.
+    "twitter": "AI-assisted. #ai",
     # Threads: same shape as Twitter.
     "threads": "AI-assisted. #ai",
 }
+
+
+# Per-platform hard character budgets. None means "no cap that matters
+# at typical caption length" — IG (2200), FB (63206), YT description
+# (5000), Threads (500) all have plenty of room.
+# Twitter is the only platform where the disclosure could push us
+# over budget — 280-char hard cap.
+PLATFORM_CHAR_BUDGETS: dict[str, int | None] = {
+    "instagram": None,
+    "youtube": None,
+    "facebook": None,
+    "tiktok": None,
+    "threads": 500,
+    "x_twitter": 280,
+    "twitter": 280,  # legacy name still in some code paths
+}
+
+
+def apply_ai_disclosure(
+    caption: str,
+    platform: str,
+    *,
+    niche_id: str = "",
+    blueprint_id=None,
+) -> str:
+    """PR #567 (2026-06-25): append the platform's AI disclosure
+    text to ``caption`` if not already present. Idempotent +
+    budget-aware + logs to compliance_events when an append happens.
+
+    Returns the caption with disclosure appended, or unchanged if:
+      * caption is empty
+      * platform has no disclosure text configured
+      * disclosure substring is already in the caption (idempotent —
+        re-publishing a blueprint won't double-append)
+      * disclosure alone exceeds the platform's char budget (fail-
+        safe: return caption unchanged rather than ship a broken
+        truncation)
+
+    For platforms with a char budget (twitter: 280), the original
+    caption is truncated FIRST to make room for ``" {disclosure}"``.
+    Other platforms (IG/YT/FB/TT) have plenty of room — disclosure
+    just appends.
+
+    Logging: writes one ``ai_disclosure_added`` event to
+    compliance_events per append (best-effort; never raises).
+    Skipped publishes (already present, no disclosure for platform)
+    do NOT log — only actual changes log.
+    """
+    if not caption or not platform:
+        return caption
+    disclosure = generate_ai_disclosure(platform)
+    if not disclosure:
+        return caption
+    if disclosure in caption:
+        # Idempotent — already there. No log because nothing changed.
+        return caption
+
+    suffix = f" {disclosure}"
+    max_len = PLATFORM_CHAR_BUDGETS.get(platform.lower())
+
+    if max_len is not None:
+        if len(suffix) > max_len:
+            # Disclosure alone won't fit — fail-safe.
+            logger.warning(
+                "[disclosure] disclosure for platform=%r exceeds budget %d; "
+                "skipping append (caption unchanged)",
+                platform,
+                max_len,
+            )
+            return caption
+        if len(caption) + len(suffix) > max_len:
+            # Truncate caption to make room. rstrip prevents trailing
+            # whitespace from the truncation site.
+            budget = max_len - len(suffix)
+            caption = caption[:budget].rstrip()
+
+    result = caption + suffix
+
+    # Best-effort log — never raises (log_compliance_event fail-opens)
+    try:
+        from genlab_core.compliance.events import log_compliance_event
+
+        log_compliance_event(
+            niche_id=niche_id or "all",
+            event_type="ai_disclosure_added",
+            decision="allow",
+            blueprint_id=blueprint_id,
+            platform=platform,
+            reasons=["caption_disclosure_appended"],
+            metadata={
+                "disclosure_length": len(disclosure),
+                "caption_truncated": len(caption) + len(suffix) > (max_len or 999_999),
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 — never propagate
+        logger.debug("[disclosure] compliance_events log skipped: %s", exc)
+
+    return result
 
 
 def generate_ai_disclosure(platform: str) -> str:
