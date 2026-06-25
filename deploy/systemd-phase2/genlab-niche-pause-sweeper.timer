@@ -1,0 +1,20 @@
+[Unit]
+Description=GenLab Niche Pause Sweeper Timer — daily expired-row GC
+
+[Timer]
+# 02:00 UTC = 07:30 IST = low-traffic operator pre-morning window.
+# The sweep itself is operationally trivial (DELETE WHERE paused_until
+# IS NOT NULL AND paused_until < NOW(), runs in ms), but scheduling
+# during low traffic avoids any lock contention with operator
+# dashboard reads / publisher activity.
+#
+# Specifically: NOT 01:00 UTC (gate-tuner runs then), NOT 02:30 UTC
+# (AI pipeline starts then). The 02:00–02:30 gap is clean.
+OnCalendar=*-*-* 02:00:00 UTC
+# Catch up on missed fires after reboot. The sweeper is idempotent
+# and missing a night just means slightly more clutter in the
+# niche_pauses table — non-blocking for any downstream code path.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

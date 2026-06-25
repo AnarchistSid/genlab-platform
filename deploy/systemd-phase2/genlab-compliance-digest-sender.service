@@ -1,0 +1,50 @@
+[Unit]
+Description=GenLab Compliance Digest Sender — daily Slack digest of compliance events
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-26 — activates PR #585's compliance_digest_sender CLI module.
+#
+# Background: PR #585 (2026-06-25) shipped
+# `genlab_core.compliance.compliance_digest_sender` to push a daily
+# Slack message summarising the prior 24h of compliance_events
+# activity. Companion to PR #584's reactive block-alert path —
+# proactive digest so operators see "what fired" without polling
+# Mission Control.
+#
+# The CLI shipped in PR #585 but no systemd timer was created,
+# meaning the digest has never sent on prod. Surfaced by the
+# 2026-06-25 prod audit "shipped-but-not-activated" pattern (see
+# memory: ACTION-PLAN-next-session.md P2).
+#
+# Schedule rationale (see .timer): runs at 03:30 UTC = 09:00 IST,
+# matching the operator's morning IST review window. By the time
+# operator opens the dashboard, the Slack digest summarising
+# yesterday's compliance activity is already in their channel.
+#
+# Always-send semantics (per PR #585 module docstring): even a
+# zero-events day fires "✅ all clean" — operator sees positive
+# confirmation that the digest job is alive rather than ambiguity
+# between "all clean" and "job broken."
+#
+# Operator activation: requires GENLAB_COMPLIANCE_SLACK_WEBHOOK env
+# (in /opt/genlab/.env or systemd EnvironmentFile). When unset, the
+# CLI exits 0 (no-op — normal for pre-activation deployments) so
+# this systemd unit can ship enabled without an operator-specific
+# webhook URL.
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.compliance.compliance_digest_sender
+TimeoutSec=60
+# Single-shot — no restart-on-failure. The CLI's exit-code discipline
+# (0 = success or no-op, 1 = configured-but-failed) means systemd's
+# "failed" state surfaces only when the webhook is actually broken,
+# which is the operator-actionable signal.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+[Unit]
+Description=GenLab Compliance Digest Timer — daily Slack push at start of operator's day
+
+[Timer]
+# 03:30 UTC = 09:00 IST = start of operator's morning IST window.
+# By the time operator opens the dashboard at ~08:00–10:00 IST, the
+# Slack digest summarising yesterday's compliance activity is
+# already in their channel — they can act on it before opening
+# Mission Control.
+#
+# Specifically: NOT 01:00 (gate-tuner), NOT 02:00 (sweeper),
+# NOT 02:30 (AI pipeline). The 03:30 slot is clean and aligns
+# with the operator's wake-up.
+#
+# Window matches the digest's default --window-days=1 (last 24h).
+# The 03:30 UTC fire window includes the prior day's full activity
+# (publishes ran 06:30 UTC, compliance events accumulated through
+# the operator's evening IST = noon UTC).
+OnCalendar=*-*-* 03:30:00 UTC
+# Catch up on missed fires after reboot. A missed daily digest just
+# means the operator doesn't see yesterday's summary — annoying
+# but non-blocking. Persistent=true ensures one catch-up fire post-
+# reboot (idempotent — same data window).
+Persistent=true
+
+[Install]
+WantedBy=timers.target
