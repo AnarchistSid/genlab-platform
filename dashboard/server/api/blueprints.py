@@ -943,6 +943,17 @@ def list_blueprints():
                 for r in records
                 if (r.get("fields", {}).get("niche_id") or "ai_creators") == niche_id
             ]
+        # PR #549 (2026-06-25, SR-F wire pass 10): per-user allowlist
+        # filter on the main blueprint list (the most-visited GET
+        # endpoint in the dashboard). Symmetric with /review-queue
+        # (#540) and /queue (#543) — restricted operators only see
+        # blueprints from their allowed niches. Unrestricted users
+        # see everything (None allowlist → no filter applied).
+        from server.auth.niche_allowlist import get_allowed_niches
+
+        _allowed = get_allowed_niches()
+        if _allowed is not None:
+            records = [r for r in records if _record_niche_id(r) in _allowed]
     except Exception as e:
         logger.error("Failed to fetch blueprints: %s", e)
         return api_error(error="Failed to fetch blueprints", code=502)
