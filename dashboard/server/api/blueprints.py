@@ -1039,6 +1039,15 @@ def list_blueprints():
 def get_blueprint(record_id):
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #550 (2026-06-25, SR-F wire pass 11): per-record read guard.
+    # Without this, a restricted operator can fetch any single
+    # blueprint by UUID (info disclosure even though mutations are
+    # already 403'd by PRs #540-#548). The guard fetches the bp to
+    # learn its niche so we accept the second fetch — caching the
+    # fetch across guard + handler is a future micro-optimisation.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     try:
         r = _get_client().blueprints.get(record_id)
         return api_success(data={"data": _transform_media({"id": r["id"], **r.get("fields", {})})})
@@ -1067,6 +1076,13 @@ def auto_approval_preview(record_id):
     """
     if not RECORD_RE.match(record_id):
         return api_error(error="Invalid record ID")
+    # PR #550 (SR-F wire pass 11): same per-record guard. Even though
+    # this endpoint is read-only (preview_only contract), exposing
+    # gate verdicts for tenant-A blueprints to tenant-B is still
+    # cross-tenant info disclosure.
+    _err = _enforce_blueprint_niche_allowlist(record_id)
+    if _err is not None:
+        return _err
     try:
         from genlab_core.scheduling.auto_approval_gate import evaluate
 
