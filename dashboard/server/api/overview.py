@@ -1,5 +1,6 @@
 """Cross-niche overview API endpoint for Mission Control."""
 
+import copy
 import json
 import logging
 import os
@@ -612,17 +613,121 @@ def _build_overview() -> dict:
     }
 
 
+def _scope_overview_to_allowlist(data: dict, allowed: set[str]) -> dict:
+    """PR #553 (2026-06-25, SR-F wire pass 14): per-user allowlist
+    carve-out for the Mission Control aggregator.
+
+    Mutates a deepcopy of ``data`` so the shared 120s cache stays
+    unrestricted-shape for subsequent admin requests. Returns the
+    scoped copy.
+
+    Carve-out shape (4 surfaces + 1 recompute pass on globals):
+
+      niches[]            → drop entries outside allowlist
+      schedule_today[]    → drop entries whose niche_id is outside
+      niche_daily_reach{} → drop keys outside allowlist
+      global.*            → recompute counts from filtered niches[]
+
+    DB aggregates (total_reach / total_likes / total_comments) come
+    from a SQL aggregate query without per-niche breakdown. For v1:
+
+      * total_reach is reconstructed from the (already-filtered)
+        niche_daily_reach 14-day sums — accurate but truncated to
+        14d vs. the 30d global window
+      * total_likes / total_comments fail-secure to 0 since no
+        per-niche breakdown is available in scope (a follow-up PR
+        can add a per-request filtered SQL)
+
+    ``_sr_f_scoped: true`` + ``_sr_f_note`` flag the response shape
+    so the frontend can render a "scoped to your niches" banner and
+    operators understand the 14-day-reach + zeroed-likes/comments
+    limitation. ``platform_health`` is intentionally NOT trimmed —
+    operators need to know if IG/YT are globally down regardless
+    of allowlist.
+    """
+    scoped = copy.deepcopy(data)
+
+    # 1. niches[] — drop entries outside allowlist
+    scoped["niches"] = [n for n in scoped.get("niches", []) if n.get("id") in allowed]
+
+    # 2. schedule_today[] — drop entries whose niche_id is outside
+    scoped["schedule_today"] = [
+        s for s in scoped.get("schedule_today", []) if s.get("niche_id") in allowed
+    ]
+
+    # 3. niche_daily_reach{} — drop keys outside allowlist
+    scoped["niche_daily_reach"] = {
+        k: v for k, v in scoped.get("niche_daily_reach", {}).items() if k in allowed
+    }
+
+    # 4. Recompute global aggregates from filtered niches[]
+    g = scoped.setdefault("global", {})
+    filtered_niches = scoped["niches"]
+    g["total_render_retry"] = sum(int(n.get("render_retry_count") or 0) for n in filtered_niches)
+    g["total_operator_review"] = sum(
+        int(n.get("operator_review_count") or 0) for n in filtered_niches
+    )
+    g["total_pending_review"] = sum(int(n.get("pending_review") or 0) for n in filtered_niches)
+    g["total_published_today"] = sum(int(n.get("published_today") or 0) for n in filtered_niches)
+    g["total_archived"] = sum(int(n.get("archived_today") or 0) for n in filtered_niches)
+    g["agents_running"] = sum(1 for n in filtered_niches if n.get("pipeline_status") == "running")
+
+    # 5. DB aggregates — reach from filtered niche_daily_reach, likes/comments
+    # fail-secure to 0 (no per-niche column in scope).
+    g["total_reach"] = sum(
+        int(d.get("reach") or 0) for days in scoped["niche_daily_reach"].values() for d in days
+    )
+    g["total_likes"] = 0
+    g["total_comments"] = 0
+
+    # 6. Trim oldest_operator_review_age_hours to filtered set. The original
+    # value is the max across ALL niches; if the operator's allowlist
+    # excludes that niche, the banner would falsely claim "Yh waiting" for
+    # blueprints the operator can't see. Recompute conservatively from
+    # filtered operator_review_count — None when no items remain.
+    if g["total_operator_review"] == 0:
+        g["oldest_operator_review_age_hours"] = None
+
+    # 7. Auto-archive breakdown — total_archived already recomputed above;
+    # by_reason / pass_rate are global because the underlying record
+    # source isn't carried per-niche through the dict. Zero out for
+    # restricted operators to prevent cross-tenant pattern disclosure.
+    aa = g.get("auto_archive_today")
+    if isinstance(aa, dict):
+        aa["total"] = g["total_archived"]
+        aa["by_reason"] = {}
+        aa["pass_rate"] = None
+        aa["pass_rate_note"] = "scoped per allowlist; by_reason omitted for SR-F"
+
+    g["_sr_f_scoped"] = True
+    g["_sr_f_note"] = (
+        "Scoped to your niche allowlist. total_reach is 14-day "
+        "(vs. global 30-day); total_likes/total_comments unavailable "
+        "in scoped mode."
+    )
+    return scoped
+
+
 @bp.route("/overview", methods=["GET"])
 def cross_niche_overview():
     now = time.time()
     if _overview_cache["data"] and (now - _overview_cache["ts"]) < _CACHE_TTL:
-        return api_success(data=_overview_cache["data"])
+        data = _overview_cache["data"]
+    else:
+        try:
+            data = _build_overview()
+            _overview_cache["data"] = data
+            _overview_cache["ts"] = now
+        except Exception as e:
+            logger.error("Cross-niche overview error: %s", e, exc_info=True)
+            return api_error(error="Failed to build overview", code=502)
 
-    try:
-        data = _build_overview()
-        _overview_cache["data"] = data
-        _overview_cache["ts"] = now
-        return api_success(data=data)
-    except Exception as e:
-        logger.error("Cross-niche overview error: %s", e, exc_info=True)
-        return api_error(error="Failed to build overview", code=502)
+    # PR #553 (SR-F wire pass 14): per-user allowlist carve-out.
+    # Applied AFTER cache so the shared cache stays unrestricted shape
+    # (mutation-safe via deepcopy inside the helper).
+    from server.auth.niche_allowlist import get_allowed_niches
+
+    _allowed = get_allowed_niches()
+    if _allowed is not None:
+        data = _scope_overview_to_allowlist(data, _allowed)
+    return api_success(data=data)
