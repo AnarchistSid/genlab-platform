@@ -318,6 +318,96 @@ def test_update_last_login_sql_uses_now_function(monkeypatch):
 # ── end-to-end integration with real argon2 ────────────────────────
 
 
+def test_get_user_password_hash_no_dsn_returns_none(monkeypatch):
+    """PR #562: dedicated accessor for the password_hash column.
+    The User DTO intentionally omits the hash for safety (PR #559).
+    Fail-close on missing DSN."""
+    from genlab_core.auth import users
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert users.get_user_password_hash("admin") is None
+
+
+def test_get_user_password_hash_empty_username_returns_none_no_db_roundtrip():
+    """Defensive short-circuit: empty username → None, no DB call."""
+    from genlab_core.auth import users
+
+    with patch.object(users, "_connect") as connect_mock:
+        assert users.get_user_password_hash("") is None
+    connect_mock.assert_not_called()
+
+
+def test_get_user_password_hash_returns_stored_hash(monkeypatch):
+    from genlab_core.auth import users
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_cursor = MagicMock()
+    fake_cursor.fetchone.return_value = {"password_hash": "$argon2id$v=19$m=65536...fake..."}
+    fake_conn.execute.return_value = fake_cursor
+
+    with patch.object(users, "_connect", return_value=fake_conn):
+        result = users.get_user_password_hash("admin")
+    assert result == "$argon2id$v=19$m=65536...fake..."
+
+
+def test_get_user_password_hash_null_column_returns_none(monkeypatch):
+    """Seed admin pattern (PR #559): row exists but password_hash
+    is NULL. Helper returns None so caller knows to fall back to
+    env-var auth."""
+    from genlab_core.auth import users
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_cursor = MagicMock()
+    fake_cursor.fetchone.return_value = {"password_hash": None}
+    fake_conn.execute.return_value = fake_cursor
+
+    with patch.object(users, "_connect", return_value=fake_conn):
+        result = users.get_user_password_hash("admin")
+    assert result is None
+
+
+def test_get_user_password_hash_unknown_user_returns_none(monkeypatch):
+    """Unknown username → None (UPDATE-where-user-not-found-style
+    fail-close); auth caller falls back to env-var path."""
+    from genlab_core.auth import users
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_cursor = MagicMock()
+    fake_cursor.fetchone.return_value = None
+    fake_conn.execute.return_value = fake_cursor
+
+    with patch.object(users, "_connect", return_value=fake_conn):
+        result = users.get_user_password_hash("nonexistent")
+    assert result is None
+
+
+def test_get_user_password_hash_sql_uses_limit_1(monkeypatch):
+    """Pin SQL contract: SELECT password_hash + WHERE username + LIMIT 1.
+    The narrow SELECT (just one column) avoids accidentally returning
+    other sensitive columns to a caller that wants only the hash."""
+    from genlab_core.auth import users
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_cursor = MagicMock()
+    fake_cursor.fetchone.return_value = None
+    fake_conn.execute.return_value = fake_cursor
+
+    with patch.object(users, "_connect", return_value=fake_conn):
+        users.get_user_password_hash("admin")
+    sql = str(fake_conn.execute.call_args.args[0])
+    assert "SELECT password_hash FROM users" in sql
+    assert "WHERE username = %s" in sql
+    assert "LIMIT 1" in sql
+
+
 def test_create_user_then_verify_password_roundtrip(monkeypatch):
     """End-to-end pin: create with password → fetch hash → verify
     against the original plaintext succeeds, against a wrong one
