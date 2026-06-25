@@ -43,6 +43,7 @@ import type {
   EngagementStatusResponse,
   QualityStats,
   ClickTrend,
+  NichePauseRecord,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -855,4 +856,58 @@ export const alerts = {
 
 export const metrics = {
   publishing: () => get<Record<string, unknown>>("/metrics/publishing"),
+};
+
+// PR after #580 — Scheduling Pauses API client.
+// Wraps the GET/POST/DELETE endpoints shipped in PR #577. The
+// NichePauseCard on Mission Control consumes these via TanStack
+// Query for the list + invalidation flow.
+//
+// SR-F: the backend filters list responses by the operator's
+// allowlist and rejects out-of-allowlist mutations with 403. We
+// surface those errors via toast in the consumer.
+export const schedulingPauses = {
+  list: () =>
+    get<NichePauseRecord[] | { data: NichePauseRecord[] }>(
+      "/scheduling/pauses",
+    ).then((d): NichePauseRecord[] => {
+      const envelope = d as { data?: NichePauseRecord[] };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        Array.isArray(envelope.data)
+      ) {
+        return envelope.data;
+      }
+      return (Array.isArray(d) ? d : []) as NichePauseRecord[];
+    }),
+  /**
+   * Pause a niche. Backend UPSERT — re-posting the same niche updates
+   * the existing pause's reason / paused_until.
+   *
+   * @param nicheId — must be in the operator's SR-F allowlist or 403
+   * @param reason — required by the backend (audit log enforcement)
+   * @param pausedUntil — optional ISO-8601 timestamp; null = indefinite
+   */
+  pause: (
+    nicheId: string,
+    reason: string,
+    pausedUntil?: string | null,
+  ) =>
+    mutate<{ niche_id: string; paused_until: string | null; reason: string; paused_by: string }>(
+      "POST",
+      "/scheduling/pauses",
+      {
+        niche_id: nicheId,
+        reason,
+        paused_until: pausedUntil ?? null,
+      },
+    ),
+  /** Idempotent — returns 200 even when no pause existed. */
+  unpause: (nicheId: string) =>
+    mutate<{ niche_id: string; paused: false }>(
+      "DELETE",
+      `/scheduling/pauses/${encodeURIComponent(nicheId)}`,
+    ),
 };

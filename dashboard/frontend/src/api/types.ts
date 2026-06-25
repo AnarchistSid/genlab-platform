@@ -992,3 +992,27 @@ export interface QualityStats {
   videos_validated: number;
   videos_fixed: number;
 }
+
+// ── Scheduling Pauses (operator emergency-stop, PR after #579) ──
+
+/**
+ * A single active niche_pauses row.
+ *
+ * Mirrors the genlab_core.scheduling.niche_pause.NichePause dataclass.
+ * paused_until: null means indefinite — operator must explicitly
+ * unpause. A future timestamp means auto-expiry; the sweeper
+ * (PR #580) will GC expired rows.
+ */
+export interface NichePauseRecord {
+  niche_id: string;
+  /** ISO-8601 datetime, or null for indefinite pauses. */
+  paused_until: string | null;
+  /** Operator-supplied (or auto-pause-generated) audit reason. */
+  reason: string;
+  /** Username from session, or 'system:account_health_check' for
+   *  auto-pauses. Null on pre-PR-577 rows that lacked the column. */
+  paused_by: string | null;
+  /** First-ever pause timestamp (preserved across re-pauses by the
+   *  ON CONFLICT clause — repause does NOT reset this). */
+  created_at: string | null;
+}
