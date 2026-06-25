@@ -144,6 +144,40 @@ _CONFIG_PLATFORM_ALIASES: dict[str, str] = {
 }
 
 
+def _publisher_niche_is_paused(niche_id: str) -> bool:
+    """PR #577 consumer wire (2026-06-25): consult the per-niche
+    pause primitive shipped in PR #575.
+
+    Returns True when the niche has an active pause row. Returns
+    False on:
+      * No active pause
+      * ImportError on niche_pause module (graceful degrade against
+        pre-PR-577 core — safe to deploy this PR independently of
+        the niche_pause module)
+      * Any exception from is_paused (fail-OPEN — publishing MUST
+        NOT halt on a transient DB hiccup; the auto-approver wire
+        in PR #576 uses the identical pattern)
+
+    Lazy import — the cost of pause-checking is paid only on the
+    publisher's actual run (once per niche per cron tick), not on
+    module load.
+    """
+    try:
+        from genlab_core.scheduling.niche_pause import is_paused
+
+        return is_paused(niche_id)
+    except ImportError:
+        # Pre-PR-577 core → no pause table → not paused. Safe default.
+        return False
+    except Exception as exc:  # noqa: BLE001 — never crash the publish
+        logger.warning(
+            "[publish] niche_pause.is_paused(%r) failed: %s",
+            niche_id,
+            exc,
+        )
+        return False
+
+
 def _filter_enabled_platforms(niche_id: str, default_list: list[str]) -> list[str]:
     """Return ``default_list`` minus any platform the niche's
     ``publishing.yaml`` explicitly disables.
@@ -299,6 +333,24 @@ def run_publish(
     logger.info(
         "[publish] niche=%s platforms=%s retry_only=%s", niche_id, enabled_platforms, retry_only
     )
+
+    # PR #577 consumer wire (2026-06-25): per-niche pause halts BOTH
+    # fresh publish AND retry pass. Without this, operator-approved
+    # blueprints would still publish through a paused niche (only the
+    # auto-approver respected the pause until now). Same fail-OPEN
+    # pattern as the auto_approver wire — never halt publishing on a
+    # transient DB hiccup.
+    #
+    # Returns EXIT_SUCCESS so the launchd job is recorded as success
+    # (the pause is a deliberate skip, not a failure). The pipeline
+    # log carries the reason for operators investigating.
+    if _publisher_niche_is_paused(niche_id):
+        logger.info(
+            "[publish] niche=%s — niche is paused (PR #577 emergency-stop), "
+            "skipping fresh publish + retry pass",
+            niche_id,
+        )
+        return EXIT_SUCCESS
 
     # R-35: refresh near-expiry tokens before any publish attempt (non-fatal).
     _preflight_token_refresh(niche_id, enabled_platforms)
