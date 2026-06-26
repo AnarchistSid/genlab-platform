@@ -222,15 +222,19 @@ fi
 # VITE_APP_VERSION). Pre-fix the version field was hardcoded "2.0.0"
 # so operators couldn't tell "fresh deploy" from "stale deploy."
 #
-# We write to /etc/genlab/version.env which systemd loads via
-# EnvironmentFile= on the relevant services. If the dir doesn't exist
-# or we can't write, log a warning and continue — the env vars fall
-# back to "unknown" / "0.0.0-dev" gracefully.
-VERSION_ENV_FILE="/etc/genlab/version.env"
+# 2026-06-26 fix: file lives at /opt/genlab/.version.env (NOT
+# /etc/genlab/version.env as in the original PR #592). The genlab
+# user cannot write to root-owned /etc/genlab, so the original write
+# silently failed on every deploy — caught by the post-deploy-verify
+# harness (PR #602) on its first prod run. /opt/genlab is genlab-owned
+# so this write always succeeds; the canonical systemd drop-in at
+# deploy/systemd-phase2/genlab-dashboard.service.d/version.conf loads
+# from BOTH paths with the new one winning, keeping legacy installs
+# backwards-compatible during the transition.
+VERSION_ENV_FILE="/opt/genlab/.version.env"
 GIT_SHA=$(git rev-parse --short HEAD)
 BUILD_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-if mkdir -p "$(dirname "$VERSION_ENV_FILE")" 2>/dev/null && \
-   tee "$VERSION_ENV_FILE" >/dev/null 2>&1 <<EOF
+if tee "$VERSION_ENV_FILE" >/dev/null 2>&1 <<EOF
 GENLAB_GIT_COMMIT=$GIT_SHA
 GENLAB_BUILD_TIME=$BUILD_TS
 EOF
