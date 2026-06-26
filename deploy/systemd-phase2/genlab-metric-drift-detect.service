@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab Metric Drift Detect — nightly engagement_rate distribution sanity check
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-26 — would have caught the engagement_rate=0 bug
+# (analytics_store.py:214, 17 days undetected) in 24 hours.
+# Designed AFTER the bug as the prevention layer: when a load-
+# bearing metric structurally goes to zero, alert WARN to the
+# journal where compliance-digest-sender + the operator's
+# eventual Slack webhook will pick it up. See research:
+# docs/AGENT-AUTONOMY-RESEARCH.md Tier 1 Move #2.
+ExecStart=/opt/genlab/scripts/detect_metric_drift.sh
+TimeoutSec=120
+
+[Install]
+WantedBy=multi-user.target
