@@ -1,0 +1,13 @@
+[Unit]
+Description=GenLab Metric Drift Detect Timer — nightly distribution sanity check
+
+[Timer]
+# 04:00 UTC = 09:30 IST = after the 03:00/03:15 refit jobs but
+# before the 04:00 Monday verify harness. Aligned with the
+# morning IST window so any WARN landing in journalctl is
+# operator-visible during their normal review time.
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
