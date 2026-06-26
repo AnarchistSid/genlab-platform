@@ -1,0 +1,36 @@
+[Unit]
+Description=GenLab Conformal Router Refit — nightly per-niche posterior + calibration-score recomputation
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# Where the state file lives — same dir as the inference call uses.
+# Path override via env so dev/test can point at a tmp file.
+Environment=GENLAB_CONFORMAL_STATE_PATH=/opt/genlab/.conformal_router_state.json
+# 2026-06-26 — activates PR #605's conformal_router refit. Without
+# this timer, the engine stays at its safe default ("route_to_operator"
+# for every blueprint) because no posterior is ever fit — exactly the
+# "shipped-but-not-activated" pattern the post-deploy-verify harness
+# (PR #602) was built to catch.
+#
+# The refit reads `auto_approval_calibration` rows, fits per-niche
+# logistic regression base model + computes non-conformity scores on
+# a 50/50 calibration split, persists everything to one JSON blob
+# (~5KB per niche). The inference path opens the file once at
+# decision time; the timer keeps it fresh.
+#
+# Idempotent: re-running is safe — overwrites state with latest fit.
+ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.scheduling.conformal_router import refit_from_calibration; import sys; sys.exit(0 if refit_from_calibration() else 1)"
+TimeoutSec=300
+# Single-shot. If the refit fails, next nightly fire will catch up.
+# Cumulative miss for this engine is operationally fine — the inference
+# path stays at safe defaults until a successful fit lands.
+
+[Install]
+WantedBy=multi-user.target
