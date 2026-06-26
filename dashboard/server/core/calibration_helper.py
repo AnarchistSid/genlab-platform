@@ -139,12 +139,39 @@ def log_calibration_for_action(
         operator_action = _ACTION_ALIAS.get(action, action)
 
         action_source = (flat.get("action_taken_source") or "").strip() or None
+
+        # Engine 1.4 (2026-06-26): for bulk-review / archive / queue-hold
+        # operator paths, no UI dropdown is shown — so the operator can't
+        # pick a feedback_category. When the canonical action resolves to
+        # "rejected", ask Haiku to auto-classify so the calibration row
+        # still carries the categorical signal that downstream consumers
+        # (rejection-breakdown endpoint, Engine 2.4 rubric synthesis)
+        # depend on. Opt-in via GENLAB_RATIONALE_CLASSIFIER_ENABLED;
+        # default OFF so legacy behaviour (NULL category) is preserved.
+        # Fail-OPEN: any error leaves feedback_category None.
+        feedback_category: str | None = None
+        if operator_action == "rejected":
+            try:
+                from genlab_core.learning.rationale_classifier import (
+                    UNCATEGORIZED as _RC_UNCATEGORIZED,
+                )
+                from genlab_core.learning.rationale_classifier import (
+                    classify_rejection as _rc_classify,
+                )
+
+                auto_category, _auto_conf = _rc_classify(flat, niche_id)
+                if auto_category != _RC_UNCATEGORIZED:
+                    feedback_category = auto_category
+            except Exception as rc_exc:  # noqa: BLE001 — never block caller
+                logger.debug("[rationale] auto-classify skipped: %s", rc_exc)
+
         calibration_logger.log(
             blueprint_id=record_id,
             niche_id=niche_id,
             decision=decision,
             operator_action=operator_action,
             action_taken_source=action_source,
+            feedback_category=feedback_category,
         )
     except Exception as cal_exc:  # noqa: BLE001 — never block caller
         logger.debug("[calibration] skipped (non-fatal): %s", cal_exc)
