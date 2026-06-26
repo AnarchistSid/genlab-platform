@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Post-Deploy Verify — sanity-check prod after deploy/restart
+After=genlab-dashboard.service postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/genlab
+ExecStart=/opt/genlab/scripts/post_deploy_verify.sh
+TimeoutSec=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
