@@ -520,6 +520,33 @@ def generate_hook(
     if not candidates:
         return (None, chosen_style) if return_style else None
 
+    # 2026-06-26 — diversity penalty via embedding distance. Catches
+    # the LLM drifting into template overfit ("Cinema is back",
+    # "absolutely insane" etc.) before they ship, complementing the
+    # reactive ``_BANNED_PHRASES`` list above (which only catches
+    # phrases an operator already spotted in prod).
+    #
+    # Default OFF (env-gated by GENLAB_HOOK_DIVERSITY_ENABLED). When
+    # ON, drops candidates with cos_sim > 0.85 vs last 30 PUBLISHED
+    # hooks for this niche. If ALL candidates fail, fall back to the
+    # full set so ranking still picks a winner — never block
+    # generation entirely. Fail-OPEN throughout.
+    try:
+        from genlab_core.learning.hook_diversity_cache import reject_if_too_similar
+
+        diverse = [c for c in candidates if not reject_if_too_similar(c, niche_id)]
+        if diverse:
+            candidates = diverse
+        else:
+            logger.info(
+                "[%s] hook diversity dropped ALL %d candidates — keeping originals "
+                "so ranking can still pick a winner",
+                niche_id,
+                len(candidates),
+            )
+    except Exception as exc:  # noqa: BLE001 — diversity is augmentation only
+        logger.debug("[%s] hook diversity check failed (continuing): %s", niche_id, exc)
+
     # Score candidates and pick the best. Two-layer score:
     #   1. Heuristic on feature vector (always available, hand-tuned)
     #   2. Hook classifier learned from 48h reward signal (per niche;
