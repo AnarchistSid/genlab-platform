@@ -46,7 +46,7 @@ engagement = [
     "starlette>=1.0,<2",
 ]
 bandit = ["numpy>=1.26"]
-learning = ["numpy>=1.26", "xgboost>=2.0"]
+learning = ["numpy>=1.26", "xgboost>=2.0", "scipy>=1.11"]
 scoring = ["scikit-learn>=1.4"]
 smart-crop = ["opencv-python-headless>=4.8"]
 whisper = ["faster-whisper>=1.0"]

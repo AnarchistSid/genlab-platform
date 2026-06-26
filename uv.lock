@@ -1290,6 +1290,7 @@ http = [
 ]
 learning = [
     { name = "numpy" },
+    { name = "scipy" },
     { name = "xgboost" },
 ]
 publishing = [
@@ -1369,6 +1370,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32" },
     { name = "ruamel-yaml", specifier = ">=0.18" },
     { name = "scikit-learn", marker = "extra == 'scoring'", specifier = ">=1.4" },
+    { name = "scipy", marker = "extra == 'learning'", specifier = ">=1.11" },
     { name = "starlette", marker = "extra == 'engagement'", specifier = ">=1.0,<2" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'engagement'", specifier = ">=0.32" },
