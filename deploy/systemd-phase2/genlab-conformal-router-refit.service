@@ -26,7 +26,15 @@ Environment=GENLAB_CONFORMAL_STATE_PATH=/opt/genlab/.conformal_router_state.json
 # decision time; the timer keeps it fresh.
 #
 # Idempotent: re-running is safe — overwrites state with latest fit.
-ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.scheduling.conformal_router import refit_from_calibration; import sys; sys.exit(0 if refit_from_calibration() else 1)"
+# 2026-06-26 fix: refit_from_calibration() returns False when no niches
+# meet the 50-row minimum (the expected early-stage state for any new
+# niche). systemd interprets exit 1 as "failed" — visible to operators
+# as a red service in mission-control + spurious alert noise. Instead,
+# log the no-data case and exit 0; the script ran correctly, it just
+# had nothing to fit. The function itself logs which niches lack data
+# (visible via journalctl) so the operator can see exactly what's
+# being skipped without the false-positive failure signal.
+ExecStart=/opt/genlab/.venv/bin/python -c "import logging, sys; logging.basicConfig(level=logging.INFO); from genlab_core.scheduling.conformal_router import refit_from_calibration; ok = refit_from_calibration(); print('conformal-router-refit:', 'fit at least one niche' if ok else 'no niches met min sample size yet (expected early state)'); sys.exit(0)"
 TimeoutSec=300
 # Single-shot. If the refit fails, next nightly fire will catch up.
 # Cumulative miss for this engine is operationally fine — the inference

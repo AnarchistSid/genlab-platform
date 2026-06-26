@@ -466,7 +466,13 @@ def _fetch_training_rows(niche_id: str) -> tuple[Any, Any, int]:
                         COALESCE(c.gate_confidence, 0.5),
                         c.operator_action
                     FROM auto_approval_calibration c
-                    LEFT JOIN blueprints b ON b.id = c.blueprint_id
+                    -- 2026-06-26 fix: blueprints.id is UUID, but
+                    -- auto_approval_calibration.blueprint_id is TEXT
+                    -- (per migration o5j6k7l8m9n0). Without the cast
+                    -- Postgres errors with "operator does not exist:
+                    -- uuid = text" and the refit silently falls back to
+                    -- 0 rows for every niche.
+                    LEFT JOIN blueprints b ON b.id::text = c.blueprint_id
                     WHERE c.niche_id = %s
                       AND c.gate_approved IS NOT NULL
                       AND c.blueprint_id LIKE '________-____-____-____-____________'

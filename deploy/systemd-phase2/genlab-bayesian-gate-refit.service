@@ -22,7 +22,12 @@ Environment=HOME=/opt/genlab
 # time; the timer keeps the posterior fresh.
 #
 # Idempotent: re-running overwrites state with latest fit.
-ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.learning.bayesian_gate import refit_all_niches; r = refit_all_niches(); fits = sum(1 for v in r.values() if v is not None); import sys; print(f'bayesian-gate-refit: {fits}/{len(r)} niches fit'); sys.exit(0 if fits > 0 else 1)"
+# 2026-06-26 fix: same rationale as the conformal-router-refit unit —
+# 0 niches fit is the EXPECTED early-stage state (per-niche row counts
+# are ai_creators=24, gaming=46, sports=28, movies=41, anime=34 at
+# session-end; all below the 50-row minimum). Exit 0 always so systemd
+# doesn't paint the timer red; rely on log output for visibility.
+ExecStart=/opt/genlab/.venv/bin/python -c "import logging, sys; logging.basicConfig(level=logging.INFO); from genlab_core.learning.bayesian_gate import refit_all_niches; r = refit_all_niches(); fits = sum(1 for v in r.values() if v is not None); print(f'bayesian-gate-refit: {fits}/{len(r)} niches fit (0 is expected early-stage; threshold is 50 rows per niche)'); sys.exit(0)"
 TimeoutSec=300
 # Single-shot. If refit fails (no qualifying data, sklearn error),
 # inference path stays at the safe (0.5, 0.5) default — never breaks
