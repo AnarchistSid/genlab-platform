@@ -520,6 +520,33 @@ def generate_hook(
     if not candidates:
         return (None, chosen_style) if return_style else None
 
+    # 2026-06-26 — diversity penalty via embedding distance. Catches
+    # the LLM drifting into template overfit ("Cinema is back",
+    # "absolutely insane" etc.) before they ship, complementing the
+    # reactive ``_BANNED_PHRASES`` list above (which only catches
+    # phrases an operator already spotted in prod).
+    #
+    # Default OFF (env-gated by GENLAB_HOOK_DIVERSITY_ENABLED). When
+    # ON, drops candidates with cos_sim > 0.85 vs last 30 PUBLISHED
+    # hooks for this niche. If ALL candidates fail, fall back to the
+    # full set so ranking still picks a winner — never block
+    # generation entirely. Fail-OPEN throughout.
+    try:
+        from genlab_core.learning.hook_diversity_cache import reject_if_too_similar
+
+        diverse = [c for c in candidates if not reject_if_too_similar(c, niche_id)]
+        if diverse:
+            candidates = diverse
+        else:
+            logger.info(
+                "[%s] hook diversity dropped ALL %d candidates — keeping originals "
+                "so ranking can still pick a winner",
+                niche_id,
+                len(candidates),
+            )
+    except Exception as exc:  # noqa: BLE001 — diversity is augmentation only
+        logger.debug("[%s] hook diversity check failed (continuing): %s", niche_id, exc)
+
     # Score candidates and pick the best. Two-layer score:
     #   1. Heuristic on feature vector (always available, hand-tuned)
     #   2. Hook classifier learned from 48h reward signal (per niche;
@@ -537,6 +564,42 @@ def generate_hook(
     best_clf_score: float | None = None
     if len(candidates) == 1:
         best = candidates[0]
+        # Lever K extension — SELF-REFINE critique→rewrite loop (2026-06-26).
+        # When only one candidate survived banned-phrase / length / dedup
+        # filters, the original Lever K fallback ("fall back to #2") doesn't
+        # apply — the bad hook would pass through silently. Run the critic
+        # here; if it rejects, attempt up to ``max_rounds=2`` rewrite passes
+        # that feed the critique reason back into a second Haiku call.
+        # Opt-in via ``GENLAB_HOOK_REWRITER_ENABLED=1`` (default OFF so the
+        # pre-2026-06-26 behavior is preserved exactly). Fail-OPEN throughout:
+        # any failure returns the original ``best``.
+        # Refs: SELF-REFINE (Madaan et al. 2023, arXiv 2303.17651);
+        # docs/AGENT-LEARNING-ENGINES.md Engine 1.3.
+        if os.environ.get("GENLAB_HOOK_REWRITER_ENABLED", "0") == "1":
+            try:
+                grounded, critique_reason = _critique_hook_grounded(best, story, niche_id)
+                if not grounded:
+                    logger.warning(
+                        "[%s] Hook critic rejected sole candidate (%s) — invoking rewriter loop",
+                        niche_id,
+                        critique_reason,
+                    )
+                    rewritten = _rewrite_hook(
+                        original_hook=best,
+                        story=story,
+                        critique_reason=critique_reason,
+                        niche_id=niche_id,
+                    )
+                    if rewritten is not None:
+                        best = rewritten
+            except Exception as rewriter_exc:
+                # Rewriter MUST NEVER block hook generation — preserve
+                # pre-rewriter behavior on any infra failure.
+                logger.debug(
+                    "[%s] Hook rewriter loop failed (non-fatal): %s",
+                    niche_id,
+                    rewriter_exc,
+                )
     else:
         try:
             from genlab_core.learning.hook_classifier import HookClassifier
@@ -759,6 +822,213 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
         # Catch-all for anything else (very rare). Fail open.
         logger.debug("[%s] Hook critic post-call exception: %s", niche_id, exc)
         return (True, "critique_failed")
+
+
+# ────────────────────────────────────────────────────────────────────
+# Engine 1.3 (2026-06-26): SELF-REFINE critique→rewrite loop
+# ────────────────────────────────────────────────────────────────────
+#
+# Extends Lever K. When the critic rejects a hook AND no #2 candidate
+# is available (because the other 2 of 3 best-of-N candidates were
+# filtered by banned-phrase / length / dedup gates), the bad hook
+# would otherwise pass through silently. SELF-REFINE (Madaan et al.
+# 2023, arXiv 2303.17651) shows that piping a critic's reason back
+# into a second generation pass produces a 5-40% absolute improvement
+# on similar grounded-text tasks.
+#
+# Safety: opt-in via GENLAB_HOOK_REWRITER_ENABLED=1; hard ceiling on
+# rewrites at max_rounds=2; defensive cumulative-attempt cap; fail-OPEN
+# returns original hook on any error.
+
+_REWRITE_ATTEMPT_HARD_CEILING = 3  # cumulative across recursion; defensive
+
+
+def _rewrite_hook(
+    original_hook: str,
+    story: dict[str, Any],
+    critique_reason: str,
+    niche_id: str = "",
+    max_rounds: int = 2,
+    _attempts_used: int = 0,
+) -> str | None:
+    """SELF-REFINE: rewrite ``original_hook`` with the critic's reason as context.
+
+    Generates a SINGLE corrected hook via a second Claude Haiku pass
+    that explicitly cites why the previous hook was rejected. Re-runs
+    the critic on the rewritten hook; if it passes, returns the new
+    hook. If still fails, recurses up to ``max_rounds=2``.
+
+    Returns:
+      - The rewritten hook (str) when the critic passes on any round.
+      - ``None`` when all rounds fail (caller must keep the original).
+
+    Safety:
+      - Hard ceiling at ``max_rounds=2`` — never exceeded regardless
+        of caller input.
+      - Defensive cumulative cap at ``_REWRITE_ATTEMPT_HARD_CEILING``;
+        on breach we abort and log WARN.
+      - Fail-OPEN on every error path — returns ``None`` (caller
+        preserves the original hook).
+      - Banned phrase / length / pattern filters applied to the
+        rewritten hook (same gates as ``generate_hook``).
+
+    Refs: SELF-REFINE (Madaan et al. 2023, arXiv 2303.17651);
+    docs/AGENT-LEARNING-ENGINES.md Engine 1.3.
+    """
+    # Hard cap — never exceed 2 rounds regardless of caller input.
+    if max_rounds > 2:
+        max_rounds = 2
+    if max_rounds <= 0:
+        return None
+
+    # Defensive cumulative-attempt cap. ``_attempts_used`` tracks total
+    # Haiku calls across all recursion levels for THIS blueprint. If a
+    # bug ever recurses unbounded, this halts at 3 cumulative attempts.
+    if _attempts_used >= _REWRITE_ATTEMPT_HARD_CEILING:
+        logger.warning(
+            "[%s] Hook rewriter hit cumulative-attempt ceiling (%d) — aborting",
+            niche_id,
+            _REWRITE_ATTEMPT_HARD_CEILING,
+        )
+        return None
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    title = (story.get("title") or "")[:300]
+    summary = (story.get("summary") or "")[:500]
+
+    rewrite_prompt = (
+        f"The following hook was rejected by a quality critic because: "
+        f"{critique_reason}\n\n"
+        f"Original hook: {original_hook}\n\n"
+        f"Story context:\n"
+        f"- Title: {title}\n"
+        f"- Summary: {summary}\n\n"
+        "Generate a SINGLE corrected hook that addresses the specific "
+        "critique above.\n"
+        "Constraints: <=60 characters, story-specific, no banned templates.\n"
+        "Return ONLY the new hook text, no explanation."
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=80,
+            temperature=0.5,  # Lower than generation (0.7) — we want correction, not diversity
+            messages=[{"role": "user", "content": rewrite_prompt}],
+        )
+        # Cost tracking — match the pattern in other LLM call sites.
+        try:
+            from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
+
+            record_anthropic_usage("claude-haiku-4-5-20251001", response)
+        except Exception:
+            pass  # Cost tracking failures must NEVER block the rewriter
+
+        logger.info(
+            "[%s] Hook rewriter round invoked (round %d of %d, cumulative=%d)",
+            niche_id,
+            (_attempts_used + 1),
+            max_rounds,
+            _attempts_used + 1,
+        )
+
+        rewritten = response.content[0].text.strip().strip('"').strip("'")
+        rewritten = rewritten.replace("’", "'").replace("‘", "'")
+        rewritten = rewritten.replace("“", '"').replace("”", '"')
+        if len(rewritten) > 60:
+            rewritten = rewritten[:57].rsplit(" ", 1)[0] + "..."
+        if len(rewritten) < 15:
+            # Too short — treat as a failed round and recurse / give up.
+            if max_rounds > 1:
+                return _rewrite_hook(
+                    original_hook=original_hook,
+                    story=story,
+                    critique_reason=critique_reason,
+                    niche_id=niche_id,
+                    max_rounds=max_rounds - 1,
+                    _attempts_used=_attempts_used + 1,
+                )
+            return None
+        # Apply the same banned-phrase + pattern gates as generate_hook.
+        if any(bp.lower() in rewritten.lower() for bp in _BANNED_PHRASES):
+            if max_rounds > 1:
+                return _rewrite_hook(
+                    original_hook=original_hook,
+                    story=story,
+                    critique_reason=critique_reason,
+                    niche_id=niche_id,
+                    max_rounds=max_rounds - 1,
+                    _attempts_used=_attempts_used + 1,
+                )
+            return None
+        if any(pat.search(rewritten) for pat in _BANNED_PATTERNS):
+            if max_rounds > 1:
+                return _rewrite_hook(
+                    original_hook=original_hook,
+                    story=story,
+                    critique_reason=critique_reason,
+                    niche_id=niche_id,
+                    max_rounds=max_rounds - 1,
+                    _attempts_used=_attempts_used + 1,
+                )
+            return None
+    except Exception as exc:
+        logger.debug("[%s] Hook rewriter API call failed: %s", niche_id, exc)
+        return None
+
+    # Re-run the critic on the rewritten hook.
+    try:
+        grounded, reason = _critique_hook_grounded(rewritten, story, niche_id)
+    except Exception as critic_exc:
+        # Critic failure on rewritten hook — fail-OPEN, accept the rewrite.
+        # Better to ship the rewritten hook (which the LLM addressed the
+        # critique on) than the original we already know was rejected.
+        logger.debug(
+            "[%s] Critic re-evaluation failed on rewritten hook (accepting rewrite): %s",
+            niche_id,
+            critic_exc,
+        )
+        return rewritten
+
+    if grounded:
+        logger.info(
+            "[%s] Hook rewriter SUCCESS — rewritten hook passed critic: %s",
+            niche_id,
+            rewritten[:60],
+        )
+        return rewritten
+
+    # Still rejected. Recurse if we have rounds left; otherwise give up
+    # and signal None so the caller keeps the original.
+    if max_rounds > 1:
+        logger.info(
+            "[%s] Hook rewriter round failed critic (%s) — trying another round",
+            niche_id,
+            reason,
+        )
+        return _rewrite_hook(
+            original_hook=original_hook,
+            story=story,
+            critique_reason=reason,  # Pass the LATEST critique reason
+            niche_id=niche_id,
+            max_rounds=max_rounds - 1,
+            _attempts_used=_attempts_used + 1,
+        )
+
+    logger.warning(
+        "[%s] Hook rewriter exhausted all rounds — keeping original hook",
+        niche_id,
+    )
+    return None
 
 
 def generate_platform_hooks(
