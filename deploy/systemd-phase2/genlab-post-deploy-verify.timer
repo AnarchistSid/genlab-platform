@@ -1,0 +1,16 @@
+[Unit]
+Description=GenLab Post-Deploy Verify Timer — weekly drift check
+
+[Timer]
+# Weekly cadence — picks up any drift between deploys. The script is
+# designed to be also invoked manually after every deploy.sh run, but
+# this catches the case where deploy.sh ran successfully yet something
+# subsequently drifted (config edit, manual systemctl, etc.).
+#
+# Mondays 04:00 UTC = 09:30 IST = visible in operator's morning window
+# if something failed.
+OnCalendar=Mon *-*-* 04:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
