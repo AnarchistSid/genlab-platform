@@ -94,10 +94,34 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
     fail "not on main (current: $CURRENT_BRANCH). Production deploys must come from main."
 fi
 
+# Auto-reset dashboard/frontend/package-lock.json drift before the dirty
+# check. Background: when a Dependabot frontend-dep bump merges and the
+# operator runs `npm install` on prod to pull the new packages, npm
+# rewrites the lockfile with cosmetic differences (binary hash bytes
+# differ even when semantic deps match). Subsequent `deploy.sh --apply`
+# runs then fail the dirty-tree check with a single "M dashboard/
+# frontend/package-lock.json" — which is benign because the next deploy
+# would `git pull` the canonical lockfile from origin/main anyway, and
+# `npm install` runs again post-deploy as needed.
+#
+# Hit on 2026-06-26 (twice — Dependabot batch merge of #595-#599 caused
+# both the initial lockfile drift AND a follow-up "deploy.sh refused"
+# moment when the operator tried to ship PR #603's fix).
+#
+# This auto-reset is narrowly scoped to the ONE file npm install
+# legitimately rewrites without our intent. Any other modified tracked
+# file still triggers the dirty-tree failure below.
+if git diff --quiet -- dashboard/frontend/package-lock.json 2>/dev/null; then
+    : # lockfile clean, nothing to do
+else
+    log "Resetting dashboard/frontend/package-lock.json drift (likely from prior npm install)"
+    git checkout -- dashboard/frontend/package-lock.json 2>&1 | tee -a "$LOG"
+fi
+
 if ! git diff --quiet || ! git diff --cached --quiet; then
-    log "--- dirty files ---"
-    git status --short | tee -a "$LOG"
-    fail "working tree is dirty. Commit, stash, or reset before deploying."
+    log "--- dirty files (tracked modifications only — untracked .bak files do not block deploy) ---"
+    git status --short | grep -vE '^\?\?' | tee -a "$LOG"
+    fail "working tree has modified tracked files. Commit, stash, or reset before deploying."
 fi
 
 # ----------------------------------------------------------------------------
