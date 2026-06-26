@@ -61,6 +61,19 @@ log() {
 
 log "Failure alert triggered for $FAILING_UNIT"
 
+# 2026-06-27 hardening: write to systemd journal FIRST as a redundant
+# alert channel. Background: on 2026-06-22 this script's psql write
+# hung (probably a transient pg lock), systemd SIGTERMed it at the 60s
+# TimeoutSec, the failure-alert itself entered "failed" state — and
+# stayed there silently for 4 days because no operator was checking.
+# With this journal write, even if the DB step times out, journalctl
+# + the post-deploy verify harness will still surface the original
+# failure. logger never blocks on network/DB so this always completes
+# in <100ms.
+logger -p user.crit -t genlab-failure-alert \
+    "Systemd unit $FAILING_UNIT failed (will attempt pipeline_alerts DB write next)" \
+    2>/dev/null || true
+
 # Collect context — last 20 journal lines from the failed unit. Skip
 # anything older than 5 min so we don't capture stale state from
 # prior runs.
@@ -109,8 +122,15 @@ INSERT INTO pipeline_alerts (
 SQL
 )
 
-if ! echo "$SQL_INSERT" | psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -X -q 2>&1 >> "$LOG_FILE"; then
-    log "WARN: alert write to pipeline_alerts failed; original failure already logged"
+# 2026-06-27 hardening: wrap psql with `timeout 15` so a hung DB
+# connection can't SIGTERM the whole failure-alert script. 15s is
+# enough for healthy psql (connect <1s + query <1s in production) +
+# 13s of headroom, and well within the bumped systemd TimeoutSec=120.
+# If the timeout fires, the journal entry from the `logger` call above
+# is the surviving record.
+if ! timeout 15 bash -c 'echo "$1" | psql -h "$2" -p "$3" -U "$4" -d "$5" -X -q 2>&1 >> "$6"' \
+    _ "$SQL_INSERT" "$DB_HOST" "$DB_PORT" "$DB_USER" "$DB_NAME" "$LOG_FILE"; then
+    log "WARN: alert write to pipeline_alerts failed or timed out (>15s); journal entry retained"
     unset PGPASSWORD
     exit 0
 fi
