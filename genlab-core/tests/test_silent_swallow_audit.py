@@ -297,3 +297,119 @@ class TestPollerAuditFix:
                 f"Site for {platform!r} uses logger.{log_level} — must be logger.warning "
                 f"(post-2026-06-25 audit). DEBUG-level swallow led to 22d Threads downtime."
             )
+
+    def test_round_3_observability_sites_use_warning_not_debug(self):
+        """REGRESSION (Round-3 observability audit, 2026-06-26): 8
+        additional silent-swallow sites upgraded from DEBUG to WARNING.
+
+        These sites all share the failure mode that motivated PR #591
+        (poller token-expiry) and PR #594 (pipeline cost/metrics):
+        the silenced exception path IS the operator's primary
+        observability surface for whatever it guards. A DEBUG-level
+        swallow means operators discover the problem only by reading
+        DEBUG logs — which the 2026-06-25 audit confirmed they never
+        do (22 days of dead Threads tokens proved it).
+
+        Categories represented:
+
+          * **observability/slo_alerter.py:138, 142**
+              SLO-violation webhook POST failure + non-2xx response.
+              The webhook IS the alert; failure means the alert was
+              dropped. Same lesson as PR #591.
+
+          * **observability/dashboard_events.py:51**
+              dashboard_events INSERT failure. Same lesson as
+              PR #594's run_report.py:317 upgrade — Mission Control's
+              timeline silently loses events.
+
+          * **compliance/disclosure.py:173**
+              compliance_events audit-row write failure. Audit trail
+              integrity for AI-disclosure-added events; regulators
+              + the compliance moat (#570→#585) depend on it.
+
+          * **learning/metric_collector.py:585**
+              get_channel_metrics DB query failure. Exact pattern of
+              the "engagement_rate=0 silently for ~6mo" bug
+              (commit f32b6189 / 2026-06-25 audit). When this fails,
+              RewardShaper falls back to base weights → bandit
+              learns against a corrupted reward signal.
+
+          * **scheduling/auto_approver.py:397**
+              Per-platform compliance check raised → block decision
+              silently skipped for that (blueprint, platform).
+              Compliance enforcement hole.
+
+          * **monitoring/health_monitor.py:945, 1037, 1116**
+              check_publish_failures + check_publish_silence +
+              check_services. Each generates a critical/warning
+              alert; silently swallowed check ⇒ alert NEVER fires.
+              The SERVICE_DOWN 6h-ago + YT 0% + publish-silence
+              findings from the 2026-06-25 audit are all this
+              pattern.
+
+        Pin each upgraded site by message substring. The check finds
+        the message in source, scans the 5 preceding lines for the
+        logger.LEVEL( call, and asserts it's logger.warning.
+        """
+        from pathlib import Path
+
+        repo_root = Path(__file__).resolve().parents[2]
+
+        # Each tuple: (relative_path, distinguishing log message)
+        sites = [
+            (
+                "genlab-core/src/genlab_core/observability/slo_alerter.py",
+                "SLO alert webhook POST failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/observability/slo_alerter.py",
+                "SLO alert webhook returned non-2xx",
+            ),
+            (
+                "genlab-core/src/genlab_core/observability/dashboard_events.py",
+                "[dashboard_events] push_event INSERT failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/compliance/disclosure.py",
+                "compliance_events log skipped",
+            ),
+            (
+                "genlab-core/src/genlab_core/learning/metric_collector.py",
+                "get_channel_metrics DB query failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/scheduling/auto_approver.py",
+                "compliance check raised for bp=",
+            ),
+            (
+                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "check_publish_failures DB query failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "check_publish_silence DB query failed",
+            ),
+            (
+                "genlab-core/src/genlab_core/monitoring/health_monitor.py",
+                "check_services systemctl call failed",
+            ),
+        ]
+
+        for rel_path, message in sites:
+            content = (repo_root / rel_path).read_text()
+            assert message in content, (
+                f"Round-3 audit log message missing: {message!r} in {rel_path}"
+            )
+            lines = content.splitlines()
+            for i, line in enumerate(lines):
+                if message in line:
+                    # Look back up to 5 lines for the logger.X( call
+                    # (some warnings are multi-line; 5 is generous).
+                    context = "\n".join(lines[max(0, i - 5) : i + 1])
+                    assert "logger.warning" in context, (
+                        f"Site for {message!r} in {rel_path} is not using "
+                        f"logger.warning — must be WARN, not DEBUG (Round-3 "
+                        f"observability audit pin).\n"
+                        f"Context:\n{context}"
+                    )
+                    break

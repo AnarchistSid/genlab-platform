@@ -583,8 +583,19 @@ def get_channel_metrics(niche_id: str, platform: str) -> dict[str, float]:
                 )
                 result = {str(name): float(val) for name, val in cur.fetchall() if val is not None}
     except Exception as exc:
-        logger.debug(
-            "[reward] get_channel_metrics failed for %s/%s: %s",
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # This is the exact "engagement_rate=0 silently for 6mo"
+        # pattern from the 2026-06-25 audit (commit f32b6189,
+        # MASTER-prod-findings). When monetisationprogress lookups
+        # fail silently, RewardShaper falls back to base weights and
+        # the monetisation-threshold-proximity boost is invisibly
+        # disabled — bandit posteriors learn against a corrupted
+        # reward signal. Primary observability path; DEBUG hid the
+        # foundation breakage for half a year.
+        logger.warning(
+            "[reward] get_channel_metrics DB query failed for %s/%s — "
+            "RewardShaper falling back to base weights "
+            "(monetisation-threshold boost disabled): %s",
             niche_id,
             platform,
             exc,
