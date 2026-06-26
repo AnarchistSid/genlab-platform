@@ -79,6 +79,53 @@ class TestScoreFloorGate:
         result = gatekeeper._score_floor_gate(bp, "instagram")
         assert result.allowed is False
 
+    def test_qc_penalty_zero_score_does_not_resurrect_to_default(self, gatekeeper):
+        """Regression pin (PR follow-up to #588 engagement_rate audit):
+        ``qc_gates.py:163`` legitimately writes ``priority_score = 0``
+        when a blueprint fails QC and its starting score equals the
+        ``SCORE_PENALTY`` (0.3). The historical
+        ``float(bp.get("priority_score", 0.5) or 0.5)`` would silently
+        resurrect that explicit 0 back to 0.5 — vaulting a QC-degraded
+        blueprint over the 0.3 floor.
+
+        Pinned: an explicit ``priority_score=0`` (or 0.0) must REJECT,
+        not be resurrected."""
+        bp_int_zero = {"priority_score": 0}
+        result_int = gatekeeper._score_floor_gate(bp_int_zero, "instagram")
+        assert result_int.allowed is False, (
+            "explicit priority_score=0 (e.g. after qc_gates SCORE_PENALTY) "
+            "must NOT be resurrected to 0.5"
+        )
+
+        bp_float_zero = {"priority_score": 0.0}
+        result_float = gatekeeper._score_floor_gate(bp_float_zero, "instagram")
+        assert result_float.allowed is False
+
+    def test_missing_priority_score_uses_default_passes(self, gatekeeper):
+        """Truly missing (no key in dict) still falls back to the 0.5
+        neutral default and passes the 0.3 floor — preserves the
+        cold-start behavior for blueprints written before priority_score
+        was populated."""
+        result = gatekeeper._score_floor_gate({}, "instagram")
+        assert result.allowed is True
+
+    def test_none_priority_score_uses_default(self, gatekeeper):
+        """An explicit None (e.g. SQL NULL deserialized) is also
+        treated as 'unknown' and falls back to 0.5 — but a numeric 0
+        is preserved (see test above). This keeps the
+        missing-vs-explicit-zero distinction clean."""
+        bp = {"priority_score": None}
+        result = gatekeeper._score_floor_gate(bp, "instagram")
+        assert result.allowed is True
+
+    def test_unparseable_priority_score_uses_default(self, gatekeeper):
+        """A non-numeric value (string that can't parse) falls back to
+        the 0.5 neutral default. Without this guard, the gate would
+        crash and propagate up through ``evaluate``."""
+        bp = {"priority_score": "n/a"}
+        result = gatekeeper._score_floor_gate(bp, "instagram")
+        assert result.allowed is True
+
 
 class TestScheduleGate:
     def test_due_now_passes(self, gatekeeper):
