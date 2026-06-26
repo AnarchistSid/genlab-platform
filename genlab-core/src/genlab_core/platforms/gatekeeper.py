@@ -125,7 +125,21 @@ class PublishGatekeeper:
         return GateResult(allowed=True, reason="due", gate_name="schedule_gate")
 
     def _score_floor_gate(self, bp: dict, platform: str) -> GateResult:
-        score = float(bp.get("priority_score", 0.5) or 0.5)
+        # Post-engagement_rate-audit fix (PR follow-up to #588): the prior
+        # ``bp.get("priority_score", 0.5) or 0.5`` resurrected an explicit
+        # ``priority_score=0`` back to 0.5, silently bypassing the score
+        # floor (default 0.3). ``qc_gates.py:163`` legitimately writes
+        # ``priority_score = max(0, score - SCORE_PENALTY)`` on QC failure
+        # — a starting score of 0.3 lands at 0.0 after penalty, and the
+        # ``or 0.5`` resurrection then promoted that QC-degraded blueprint
+        # above the floor. Use a try/except around ``float()`` so explicit
+        # ``0`` survives but truly missing / unparseable values still get
+        # the neutral 0.5 default.
+        raw_score = bp.get("priority_score", 0.5)
+        try:
+            score = float(raw_score) if raw_score is not None else 0.5
+        except (TypeError, ValueError):
+            score = 0.5
         # Niche-level floor if config carries one, else fall back to the
         # hardcoded 0.3. The config path is
         # niche_config["publishing"]["score_floor"].
