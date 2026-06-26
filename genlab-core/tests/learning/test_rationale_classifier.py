@@ -98,8 +98,7 @@ class TestClassificationBehaviour:
         from genlab_core.learning import rationale_classifier
 
         fake_client = _mock_haiku(
-            '{"category": "weak_hook", "confidence": 0.88, '
-            '"rationale": "Hook uses vague language"}'
+            '{"category": "weak_hook", "confidence": 0.88, "rationale": "Hook uses vague language"}'
         )
         with patch("anthropic.Anthropic", return_value=fake_client):
             category, confidence = rationale_classifier.classify_rejection(
@@ -116,8 +115,7 @@ class TestClassificationBehaviour:
         from genlab_core.learning import rationale_classifier
 
         fake_client = _mock_haiku(
-            '{"category": "too_generic", "confidence": 0.5, '
-            '"rationale": "Maybe template-y"}'
+            '{"category": "too_generic", "confidence": 0.5, "rationale": "Maybe template-y"}'
         )
         with patch("anthropic.Anthropic", return_value=fake_client):
             category, confidence = rationale_classifier.classify_rejection(
@@ -167,9 +165,7 @@ class TestClassificationBehaviour:
             '"rationale": "made-up category"}'
         )
         with patch("anthropic.Anthropic", return_value=fake_client):
-            category, _ = rationale_classifier.classify_rejection(
-                _blueprint(), "ai_creators"
-            )
+            category, _ = rationale_classifier.classify_rejection(_blueprint(), "ai_creators")
 
         assert category == rationale_classifier.UNCATEGORIZED
 
@@ -185,13 +181,9 @@ class TestClassificationBehaviour:
         }
         assert canonical == set(rationale_classifier.CANONICAL_CATEGORIES)
         for valid in canonical:
-            fake = _mock_haiku(
-                f'{{"category": "{valid}", "confidence": 0.9, "rationale": "x"}}'
-            )
+            fake = _mock_haiku(f'{{"category": "{valid}", "confidence": 0.9, "rationale": "x"}}')
             with patch("anthropic.Anthropic", return_value=fake):
-                cat, _ = rationale_classifier.classify_rejection(
-                    _blueprint(), "ai_creators"
-                )
+                cat, _ = rationale_classifier.classify_rejection(_blueprint(), "ai_creators")
             assert cat == valid
             assert cat in rationale_classifier.CANONICAL_CATEGORIES
 
@@ -201,9 +193,7 @@ class TestClassificationBehaviour:
         We inspect the user message that was sent to messages.create()."""
         from genlab_core.learning import rationale_classifier
 
-        fake_client = _mock_haiku(
-            '{"category": "bad_fit", "confidence": 0.9, "rationale": "x"}'
-        )
+        fake_client = _mock_haiku('{"category": "bad_fit", "confidence": 0.9, "rationale": "x"}')
         with patch("anthropic.Anthropic", return_value=fake_client):
             rationale_classifier.classify_rejection(_blueprint(), "anime")
 
@@ -223,9 +213,7 @@ class TestClassificationBehaviour:
         Haiku. Without them the classifier has nothing to reason over."""
         from genlab_core.learning import rationale_classifier
 
-        fake_client = _mock_haiku(
-            '{"category": "weak_hook", "confidence": 0.9, "rationale": "x"}'
-        )
+        fake_client = _mock_haiku('{"category": "weak_hook", "confidence": 0.9, "rationale": "x"}')
         with patch("anthropic.Anthropic", return_value=fake_client):
             rationale_classifier.classify_rejection(_blueprint(), "ai_creators")
 
@@ -240,9 +228,7 @@ class TestClassificationBehaviour:
         from genlab_core.learning import rationale_classifier
 
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        category, confidence = rationale_classifier.classify_rejection(
-            _blueprint(), "ai_creators"
-        )
+        category, confidence = rationale_classifier.classify_rejection(_blueprint(), "ai_creators")
         assert category == rationale_classifier.UNCATEGORIZED
         assert confidence == 0.0
 
@@ -271,9 +257,7 @@ class TestClassificationBehaviour:
             '```json\n{"category": "low_value", "confidence": 0.8, "rationale": "y"}\n```'
         )
         with patch("anthropic.Anthropic", return_value=fake_client):
-            category, _ = rationale_classifier.classify_rejection(
-                _blueprint(), "ai_creators"
-            )
+            category, _ = rationale_classifier.classify_rejection(_blueprint(), "ai_creators")
         assert category == "low_value"
 
     def test_blueprint_with_nested_fields_shape(self):
@@ -288,9 +272,7 @@ class TestClassificationBehaviour:
                 "story_summary": "A buzzer beater that won the game",
             },
         }
-        fake_client = _mock_haiku(
-            '{"category": "weak_hook", "confidence": 0.9, "rationale": "x"}'
-        )
+        fake_client = _mock_haiku('{"category": "weak_hook", "confidence": 0.9, "rationale": "x"}')
         with patch("anthropic.Anthropic", return_value=fake_client):
             rationale_classifier.classify_rejection(nested, "sports")
         kwargs = fake_client.messages.create.call_args.kwargs
