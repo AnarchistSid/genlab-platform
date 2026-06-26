@@ -1287,6 +1287,30 @@ def _execute_review_action(
         if action in ("rejected", "revised") and feedback_issue:
             _category = str(feedback_issue).strip() or None
 
+        # Engine 1.4 (2026-06-26): when no operator-picked category is
+        # available — or the operator left it on the fallback label —
+        # ask Haiku to auto-classify. Opt-in via
+        # GENLAB_RATIONALE_CLASSIFIER_ENABLED so the default behaviour
+        # (NULL feedback_category) is unchanged. classify_rejection is
+        # fail-OPEN: on any error it returns ("uncategorized", 0.0) and
+        # we leave _category as it was, never blocking the calibration
+        # write. See docs/AGENT-LEARNING-ENGINES.md §1.4.
+        _FALLBACK_LABELS = {"rejected_in_review", "needs_revision"}
+        if action == "rejected" and (_category is None or _category in _FALLBACK_LABELS):
+            try:
+                from genlab_core.learning.rationale_classifier import (
+                    UNCATEGORIZED as _RC_UNCATEGORIZED,
+                )
+                from genlab_core.learning.rationale_classifier import (
+                    classify_rejection as _rc_classify,
+                )
+
+                _auto_category, _auto_conf = _rc_classify(_flat, _niche)
+                if _auto_category != _RC_UNCATEGORIZED:
+                    _category = _auto_category
+            except Exception as _rc_exc:  # noqa: BLE001 — never block review
+                logger.debug("[rationale] auto-classify skipped: %s", _rc_exc)
+
         calibration_logger.log(
             blueprint_id=record_id,
             niche_id=_niche,
