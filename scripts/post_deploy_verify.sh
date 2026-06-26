@@ -125,6 +125,23 @@ else
     fail "flags in .env but NOT in dashboard process (restart needed): $(echo $missing_in_proc | tr '\n' ' ')"
 fi
 
+note "7. Failure-alert template state (auto-reset if found in failed state)"
+# 2026-06-27 — added after investigating a 4-day-stuck failed
+# instance of genlab-service-failure-alert@*. The OnFailure handler
+# IS the alert mechanism for other services — if IT enters failed
+# state, every other service's alerts get masked silently. Detect +
+# auto-reset because nothing recovers it otherwise.
+failed_alert_instances=$(systemctl list-units 'genlab-service-failure-alert@*' --state=failed --no-legend --plain 2>/dev/null | awk '{print $1}')
+if [ -z "$failed_alert_instances" ]; then
+    pass "no failed genlab-service-failure-alert instances"
+else
+    for inst in $failed_alert_instances; do
+        echo "  ⚠ resetting failed alert instance: $inst"
+        systemctl reset-failed "$inst" 2>/dev/null || true
+    done
+    pass "auto-reset $(echo "$failed_alert_instances" | wc -w | tr -d ' ') failed alert instance(s)"
+fi
+
 note ""
 if [ $EXITCODE -eq 0 ]; then
     note "ALL CHECKS PASSED ($(date -u +%Y-%m-%dT%H:%M:%SZ))"

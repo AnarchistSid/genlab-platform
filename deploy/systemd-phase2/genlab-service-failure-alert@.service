@@ -14,4 +14,11 @@ Group=genlab
 WorkingDirectory=/opt/genlab
 EnvironmentFile=/opt/genlab/.env
 ExecStart=/opt/genlab/scripts/systemd_failure_alert.sh "%i"
-TimeoutSec=60
+# 2026-06-27 — bumped from 60s after investigating a 4-day-stuck
+# failed state caused by a transient psql hang exceeding 60s. The
+# script itself now wraps psql with `timeout 15` (see
+# scripts/systemd_failure_alert.sh), so the systemd budget of 120s
+# only matters if EVERYTHING hangs — journal write + psql + cleanup.
+# 120s gives ~8x the worst-case healthy-system runtime and matches
+# sibling oneshot units (niche_pause_sweeper, compliance_digest_sender).
+TimeoutSec=120
