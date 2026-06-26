@@ -136,12 +136,25 @@ def fire_slo_alert(report: dict[str, Any]) -> bool:
     try:
         resp = requests.post(webhook_url, json=payload, timeout=_HTTP_TIMEOUT_S)
     except Exception as exc:
-        logger.debug("[slo_alerter] webhook POST failed (%s): %s", _WEBHOOK_ENV_VAR, exc)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # The webhook IS the SLO-violation alert; when its POST
+        # fails, that IS the alert and must surface in operator log
+        # review. Same lesson as PR #591's poller token-expiry sites.
+        logger.warning(
+            "[slo_alerter] SLO alert webhook POST failed (%s) — "
+            "operator will NOT see this SLO violation: %s",
+            _WEBHOOK_ENV_VAR,
+            exc,
+        )
         return False
 
     if not (200 <= resp.status_code < 300):
-        logger.debug(
-            "[slo_alerter] webhook returned non-2xx %d for niche=%s run=%s",
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # Non-2xx means the webhook endpoint rejected the alert —
+        # operator's SLO-violation signal was dropped.
+        logger.warning(
+            "[slo_alerter] SLO alert webhook returned non-2xx %d for niche=%s run=%s "
+            "— operator will NOT see this SLO violation",
             resp.status_code,
             report.get("niche_id", "?"),
             report.get("run_id", "?"),

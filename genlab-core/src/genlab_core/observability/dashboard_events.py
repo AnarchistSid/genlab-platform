@@ -49,4 +49,17 @@ def push_event(
                 (event_type, title, body, entity_id, entity_type, niche_id),
             )
     except Exception as e:
-        logger.debug("Failed to push dashboard event: %s", e)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # Same lesson as PR #594's run_report.py:317 upgrade — when
+        # dashboard_events INSERT fails, Mission Control's timeline
+        # silently misses the event and the operator never sees that
+        # this niche/run completed. The push is the PRIMARY operator
+        # notification path; a DEBUG-level swallow defeats it.
+        logger.warning(
+            "[dashboard_events] push_event INSERT failed for event_type=%r "
+            "title=%r niche=%r — Mission Control will miss this event: %s",
+            event_type,
+            title,
+            niche_id or "<unset>",
+            e,
+        )

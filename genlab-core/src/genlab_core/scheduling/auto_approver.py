@@ -395,8 +395,17 @@ def _check_compliance_gate(
         try:
             decision = check_publish_policy(blueprint, platform, niche_id)
         except Exception as exc:  # noqa: BLE001 — best-effort
-            logger.debug(
-                "[auto_approver] compliance check failed for bp=%s platform=%s: %s",
+            # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+            # When the compliance gate raises for a platform, this
+            # auto-approver path SILENTLY treats it as "no block
+            # reasons for that platform" — i.e. the gate is OFF for
+            # that platform on that blueprint. That's a compliance
+            # enforcement hole; operator must see it to investigate.
+            # Pairs with the compliance moat (#570→#585).
+            logger.warning(
+                "[auto_approver] compliance check raised for bp=%s platform=%s "
+                "— gate silently skipped for this (bp, platform), "
+                "block decision may be MISSED: %s",
                 record_id,
                 platform,
                 exc,

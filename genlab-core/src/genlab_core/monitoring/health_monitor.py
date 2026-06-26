@@ -943,7 +943,21 @@ def check_publish_failures(niche_id: str) -> list[Alert]:
                 )
             )
     except Exception as e:
-        logger.debug("Publish failures check failed: %s", e)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # This check generates the "≥5 FAILED in 24h" critical alert.
+        # When the check itself silently fails (DB hiccup,
+        # publishing_analytics schema drift, RLS misconfig), the
+        # critical alert NEVER FIRES and operator sees no signal
+        # that publishing is degrading. The 2026-06-25 audit
+        # specifically called out the YT 0% mystery as exactly this
+        # class of "the alert mechanism is broken, not the
+        # publishing".
+        logger.warning(
+            "[health] check_publish_failures DB query failed for niche=%s — "
+            "publish-failure alerts will NOT fire for this run: %s",
+            niche_id,
+            e,
+        )
     return alerts
 
 
@@ -1035,7 +1049,19 @@ def check_publish_silence(niche_id: str) -> list[Alert]:
                 )
             )
     except Exception as e:
-        logger.debug("Publish silence check failed: %s", e)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # This check generates the "zero successful publishes in 24h"
+        # warning alert — the closest thing to a full-outage alarm
+        # the system has (per the 2026-06-17 audit that found
+        # 1+0+1 publishes across 3 days with zero alerts firing).
+        # Silently swallowing the check's own failure recreates that
+        # blind spot.
+        logger.warning(
+            "[health] check_publish_silence DB query failed for niche=%s — "
+            "publish-silence alerts will NOT fire for this run: %s",
+            niche_id,
+            e,
+        )
     return alerts
 
 
@@ -1114,7 +1140,19 @@ def check_services() -> list[Alert]:
                 )
             )
     except Exception as e:
-        logger.debug("Service check failed: %s", e)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # This check generates the "service_down" CRITICAL alert AND
+        # attempts auto-restart. When systemctl raises (missing
+        # binary, permission failure, timeout), the check is
+        # SILENTLY DEAD — the SERVICE_DOWN 6h-ago finding from the
+        # 2026-06-25 audit is exactly this pattern (services were
+        # down, alerts didn't fire, auto-restart didn't trigger).
+        logger.warning(
+            "[health] check_services systemctl call failed — "
+            "service_down alerts will NOT fire AND auto-restart will "
+            "NOT run for this cycle: %s",
+            e,
+        )
     return alerts
 
 

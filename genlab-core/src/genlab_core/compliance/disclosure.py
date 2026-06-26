@@ -171,7 +171,19 @@ def apply_ai_disclosure(
             },
         )
     except Exception as exc:  # noqa: BLE001 — never propagate
-        logger.debug("[disclosure] compliance_events log skipped: %s", exc)
+        # Round-3 audit P3 cleanup (2026-06-26): WARN, not DEBUG.
+        # The compliance_events row is the AUDIT TRAIL. Losing this
+        # silently means a regulator-asked "did you log AI
+        # disclosure?" cannot be answered. The compliance moat
+        # depends on every disclosure-add being evidenced; DEBUG
+        # defeats that evidence chain.
+        logger.warning(
+            "[disclosure] compliance_events log skipped for blueprint=%s "
+            "platform=%s — AUDIT TRAIL has a gap: %s",
+            blueprint_id,
+            platform,
+            exc,
+        )
 
     return result
 
