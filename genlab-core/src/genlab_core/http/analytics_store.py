@@ -236,6 +236,17 @@ class AnalyticsStore:
         share_rate = round(shares / reach, 4) if reach > 0 else 0.0
         play_rate = round(plays / reach, 4) if reach > 0 else 0.0
 
+        # Clamp rates to [0.0, 1.0]. Real-world engagement_rate cannot exceed
+        # 100%; values above that come from tiny-audience posts where loyal
+        # followers re-engage faster than reach grows (e.g. reach=4, engagement=8
+        # yielded 200% on prod 2026-06-26 before this clamp). The clamp protects
+        # downstream consumers (Top Performers card, bandit reward shaping,
+        # viral_score formula) from misleading > 100% values.
+        engagement_rate = min(1.0, engagement_rate)
+        save_rate = min(1.0, save_rate)
+        share_rate = min(1.0, share_rate)
+        play_rate = min(1.0, play_rate)
+
         # Caller can pre-compute a config-driven score; otherwise fall back
         # to the generic weighted formula.
         if viral_score is not None:

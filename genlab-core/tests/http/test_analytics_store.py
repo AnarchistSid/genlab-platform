@@ -372,6 +372,60 @@ class TestUpsertAnalytics:
         result = store.upsert_analytics(post_id="x", platform="instagram", insights={"reach": 100})
         assert result == "00000000-uuid-string"
 
+    def test_engagement_rate_clamped_to_one_when_reach_smaller_than_engagement(self) -> None:
+        """REGRESSION (2026-06-26): tiny-audience IG posts showed 2.0 (200%)
+        engagement_rate on prod after the engagement-fallback fix landed.
+        With reach=4 and likes+comments+shares=8, the raw rate is 2.0 — a
+        physically impossible value (a single person counts once per metric).
+        The clamp caps any rate at 1.0 so the Top Performers card, bandit
+        reward shaping, and viral_score formula never see > 100%."""
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="instagram",
+            insights={"reach": 4, "likes": 5, "comments": 2, "shares": 1},
+        )
+        fields = backend.create.call_args.args[1]
+        # Raw computation would be 8 / 4 = 2.0; clamped to 1.0.
+        assert fields["engagement_rate"] == 1.0
+        # share_rate raw would be 1/4 = 0.25 — still under 1.0, so untouched.
+        assert fields["share_rate"] == 0.25
+
+    def test_normal_engagement_rate_under_one_unchanged(self) -> None:
+        """Clamp must be a no-op for typical reach >> engagement cases."""
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="instagram",
+            insights={"reach": 100, "likes": 5, "comments": 0, "shares": 0},
+        )
+        fields = backend.create.call_args.args[1]
+        # 5 / 100 = 0.05 — unchanged by the clamp.
+        assert fields["engagement_rate"] == 0.05
+
+    def test_viral_score_uses_clamped_rates(self) -> None:
+        """viral_score is derived from engagement_rate / save_rate / share_rate
+        AFTER the clamp — so an extreme tiny-audience post can't push
+        viral_score above the headline 1.0 ceiling either."""
+        store, backend, _ = _make_store()
+        store.upsert_analytics(
+            post_id="x",
+            platform="instagram",
+            insights={"reach": 4, "likes": 5, "comments": 2, "shares": 1, "saves": 4},
+        )
+        fields = backend.create.call_args.args[1]
+        # Clamped rates:
+        #   engagement_rate = min(1.0, 8/4)  = 1.0
+        #   share_rate      = min(1.0, 1/4)  = 0.25
+        #   save_rate       = min(1.0, 4/4)  = 1.0
+        # viral_score = 1.0 * 0.25 + 0.25 * 0.40 + 1.0 * 0.35
+        #             = 0.25     + 0.10        + 0.35
+        #             = 0.70
+        # The raw (un-clamped) computation would have produced
+        # 2.0 * 0.25 + 0.25 * 0.40 + 1.0 * 0.35 = 0.95, which is what this
+        # test pins AGAINST — i.e. assert viral_score reflects the clamp.
+        assert fields["viral_score"] == 0.70
+
 
 # ---------------------------------------------------------------------------
 # Optional-fields contract
