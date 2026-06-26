@@ -1,0 +1,32 @@
+[Unit]
+Description=GenLab Bayesian Gate Refit — nightly per-niche LR posterior recomputation
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-26 — activates PR #608's bayesian_gate refit. Without this
+# timer, the engine stays at its safe default ((0.5, 0.5)) because
+# no per-niche posterior is ever fit — same shipped-but-not-activated
+# pattern as the conformal-router-refit timer (this file's sibling).
+#
+# The refit reads `auto_approval_calibration` rows joined with
+# `blueprints`, fits a Bayesian LR per niche via Laplace approximation
+# (sklearn MAP + scipy Hessian), persists (mean, covariance) to a
+# per-niche JSON blob. The inference path samples Thompson at decision
+# time; the timer keeps the posterior fresh.
+#
+# Idempotent: re-running overwrites state with latest fit.
+ExecStart=/opt/genlab/.venv/bin/python -c "from genlab_core.learning.bayesian_gate import refit_all_niches; r = refit_all_niches(); fits = sum(1 for v in r.values() if v is not None); import sys; print(f'bayesian-gate-refit: {fits}/{len(r)} niches fit'); sys.exit(0 if fits > 0 else 1)"
+TimeoutSec=300
+# Single-shot. If refit fails (no qualifying data, sklearn error),
+# inference path stays at the safe (0.5, 0.5) default — never breaks
+# AUTO #2's existing rollout_pct mechanism.
+
+[Install]
+WantedBy=multi-user.target

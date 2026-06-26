@@ -1,0 +1,17 @@
+[Unit]
+Description=GenLab Bayesian Gate Refit Timer — daily Laplace posterior refresh
+
+[Timer]
+# 03:15 UTC = 08:45 IST = 15 minutes after conformal-router-refit.
+# Spaced to avoid simultaneous DB pressure on the 4 GB VPS (both
+# read the same calibration table + blueprints join). Slot belongs to
+# the morning posterior-refresh window (see conformal-router-refit
+# .timer for the full slot map).
+OnCalendar=*-*-* 03:15:00 UTC
+# Persistent — catch-up after reboot. A missed daily refit means
+# the engine uses yesterday's state, which is operationally fine
+# given the niche-size threshold (50 rows minimum before sampling).
+Persistent=true
+
+[Install]
+WantedBy=timers.target

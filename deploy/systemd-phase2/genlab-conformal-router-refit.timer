@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab Conformal Router Refit Timer — daily posterior refresh
+
+[Timer]
+# 03:00 UTC = 08:30 IST = before operator's morning review window.
+# By the time operator opens the dashboard, the conformal router's
+# state reflects yesterday's full operator clicks (which arrive by
+# ~18:00 IST = 12:30 UTC at the latest).
+#
+# Slot rationale (vs sibling timers):
+#   - 02:00 UTC: niche-pause sweeper (PR #593)
+#   - 03:00 UTC: conformal router refit (this)
+#   - 03:15 UTC: Bayesian gate refit (sibling timer)
+#   - 03:30 UTC: compliance digest (PR #593)
+#   - Mon 04:00 UTC: post-deploy verify (PR #602)
+# Spaced 15-30 min apart to avoid contention on the 4 GB VPS.
+OnCalendar=*-*-* 03:00:00 UTC
+# Catch up on missed fires after reboot. A missed daily refit just
+# means the engine uses yesterday's state — non-blocking. Persistent
+# ensures one catch-up after boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
