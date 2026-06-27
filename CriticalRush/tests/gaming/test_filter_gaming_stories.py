@@ -188,8 +188,7 @@ class TestFilterTopN:
         stage = FilterGamingStories()
         # 10 gaming-by-source stories, all pass _is_gaming_content
         stories = [
-            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01)
-            for i in range(10)
+            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01) for i in range(10)
         ]
         result = stage.execute({"stories": stories, "run_stats": {}})
         assert len(result["stories"]) == 5, (
@@ -202,8 +201,7 @@ class TestFilterTopN:
         """Gaming sets filter_top_n: 7 in niche.yaml; verify the stage reads it."""
         stage = FilterGamingStories()
         stories = [
-            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01)
-            for i in range(10)
+            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01) for i in range(10)
         ]
         result = stage.execute(
             {
