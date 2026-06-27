@@ -146,16 +146,21 @@ def test_insufficient_data_returns_null_rate(monkeypatch):
     assert result[1]["success_count"] == 2
 
 
-def test_only_success_failed_counted(monkeypatch):
-    """The library's SQL filter excludes SKIPPED + INSIGHTS_* statuses.
+def test_skipped_excluded_insights_included(monkeypatch):
+    """The library's SQL filter:
 
-    Pin: callers must NOT see SKIPPED in the success/failed counts. This
-    matches the post-2026-06-25-audit fix in metrics.py — SKIPPED is a
-    credential-class non-attempt, not a publish failure, and the card is
-    a publish-attempt success-rate view.
+      * INCLUDES SUCCESS, FAILED, and INSIGHTS_* (the lifecycle-mutated
+        SUCCESS rows — PR D 2026-06-27).
+      * EXCLUDES SKIPPED (credential / quota guards — not real attempts).
+
+    Pin: callers must NOT see SKIPPED in the success/failed counts, but
+    INSIGHTS_24H/48H/168H rows MUST count as successes (they're
+    lifecycle-mutated SUCCESS rows from the metric collector — the prior
+    code under-counted success rates ~5x for any platform measured >24h
+    after publish, e.g. anime YouTube showed 0% instead of ~75%).
 
     Verified by checking the SQL passed to execute() includes the
-    canonical WHERE clause, not an over-broad one.
+    canonical WHERE clause with INSIGHTS_% inclusion.
     """
     monkeypatch.setenv("DATABASE_URL", "postgresql://test")
     rows: list[dict] = []
@@ -170,9 +175,11 @@ def test_only_success_failed_counted(monkeypatch):
     # First execute = set_config. Second execute = the grouped query.
     second_call = fake_conn.execute.call_args_list[1]
     sql_text = second_call.args[0]
-    # The canonical WHERE clause must list both SUCCESS and FAILED but
-    # nothing else (no SKIPPED, no INSIGHTS_*).
+    # The canonical WHERE clause must accept SUCCESS, FAILED, AND
+    # the INSIGHTS_* lifecycle states (the literal % is double-escaped
+    # for psycopg parameter binding — server sees a single %).
     assert "status IN ('SUCCESS', 'FAILED')" in sql_text
+    assert "status LIKE 'INSIGHTS_%%'" in sql_text
     # Defensive: SKIPPED should not appear in the WHERE filter at all.
     # (It may appear in commentary elsewhere — keep the assertion scoped.)
     where_segment = sql_text.split("WHERE", 1)[1].split("GROUP BY", 1)[0]
@@ -432,3 +439,127 @@ def test_endpoint_handles_import_error_gracefully():
     body = r.get_json()["data"]
     assert body["rows"] == []
     assert "thresholds" in body
+
+
+# ── PR D (2026-06-27) lifecycle-state rollup pins ─────────────────
+#
+# These pins guarantee the per-niche / per-platform card correctly
+# rolls INSIGHTS_24H / INSIGHTS_48H / INSIGHTS_168H into the success
+# count. Without this, the card under-counts success ~5x for any
+# platform measured >24h after publish (publishing_analytics rows
+# get their status mutated as they age through insight windows).
+# Real prod evidence (2026-06-27): anime YouTube last 60d was 5
+# FAILED + 15 INSIGHTS_* (all originally SUCCESS) — the card was
+# showing 0% and operator thought YouTube was broken; real rate ~75%.
+
+
+def test_insights_states_counted_as_success(monkeypatch):
+    """SQL aggregates INSIGHTS_24H/48H/168H rows into success_count.
+
+    Since SQL is mocked, this test pins the FILTER clauses in the
+    query so the lifecycle-mutated SUCCESS rows aren't excluded.
+    Combined with test_realistic_lifecycle_scenario below, this
+    locks the rollup contract end-to-end.
+    """
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    rows: list[dict] = []
+    fake_conn = _mock_pg_with_rows(rows)
+    with patch("server.core.publishing_health_per_niche.pg_connect", return_value=fake_conn):
+        from server.core.publishing_health_per_niche import (
+            fetch_per_niche_platform_health,
+        )
+
+        fetch_per_niche_platform_health(days=14)
+
+    second_call = fake_conn.execute.call_args_list[1]
+    sql_text = second_call.args[0]
+    # Both the success_count FILTER and the last_success_at FILTER
+    # must accept INSIGHTS_* states. If either is missing, half the
+    # contract leaks (counts are right but last-success timestamp is
+    # wrong, or vice versa).
+    assert "COUNT(*) FILTER (WHERE status='SUCCESS' OR status LIKE 'INSIGHTS_%%')" in sql_text, (
+        "success_count FILTER must include INSIGHTS_*"
+    )
+    assert (
+        "MAX(created_at) FILTER (WHERE status='SUCCESS' OR status LIKE 'INSIGHTS_%%')" in sql_text
+    ), "last_success_at FILTER must include INSIGHTS_*"
+
+
+def test_skipped_state_excluded_from_both_counts(monkeypatch):
+    """SKIPPED rows (credential / quota guards) must NOT appear in
+    success_count NOR failed_count. They're deliberate non-attempts,
+    not failures; counting them either way pollutes the rate.
+
+    The card output has a success_count and failed_count column but
+    no skipped column — the FILTER expressions must omit SKIPPED.
+    """
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    rows: list[dict] = []
+    fake_conn = _mock_pg_with_rows(rows)
+    with patch("server.core.publishing_health_per_niche.pg_connect", return_value=fake_conn):
+        from server.core.publishing_health_per_niche import (
+            fetch_per_niche_platform_health,
+        )
+
+        fetch_per_niche_platform_health(days=14)
+
+    second_call = fake_conn.execute.call_args_list[1]
+    sql_text = second_call.args[0]
+    # Extract just the two FILTER expressions for the counts.
+    # Both must NOT mention SKIPPED.
+    for filter_clause in (
+        "COUNT(*) FILTER (WHERE status='SUCCESS' OR status LIKE 'INSIGHTS_%%')",
+        "COUNT(*) FILTER (WHERE status='FAILED')",
+    ):
+        assert filter_clause in sql_text, f"missing expected filter: {filter_clause}"
+    # And the WHERE clause that gates the whole query must not let
+    # SKIPPED rows through (they'd inflate group totals via GROUP BY).
+    where_segment = sql_text.split("WHERE", 1)[1].split("GROUP BY", 1)[0]
+    assert "SKIPPED" not in where_segment
+
+
+def test_realistic_lifecycle_scenario(monkeypatch):
+    """Realistic prod scenario: 5 SUCCESS + 8 INSIGHTS_* + 2 FAILED.
+
+    The mocked DB has already done the SQL aggregation, so we
+    simulate what the new query SHOULD return: success_count=13
+    (5+8), failed_count=2. The Python side just computes the rate.
+
+    Pin: rate = 13 / (13 + 2) * 100 = 86.666... → rounded to 86.7%.
+    Before PR D, the same DB state would have surfaced as 5 / 7
+    = 71.4% (or worse, with the WHERE excluding INSIGHTS_*, the
+    GROUP BY row would have only seen 5 + 2 = 7 total and reported
+    71.4%, masking 8 successful publishes that aged past 24h).
+
+    This is the closest unit-test analogue to the prod anime/YouTube
+    scenario that motivated this PR.
+    """
+    monkeypatch.setenv("DATABASE_URL", "postgresql://test")
+    rows = [
+        {
+            "niche_id": "anime",
+            "platform": "youtube",
+            "success_count": 13,  # 5 SUCCESS + 8 INSIGHTS_* rolled up
+            "failed_count": 2,
+            "last_success_at": datetime(2026, 6, 27, 6, 0, tzinfo=UTC),
+            "last_failure_at": datetime(2026, 6, 25, 12, 0, tzinfo=UTC),
+            "last_failure_error": "quotaExceeded",
+        }
+    ]
+    fake_conn = _mock_pg_with_rows(rows)
+    with patch("server.core.publishing_health_per_niche.pg_connect", return_value=fake_conn):
+        from server.core.publishing_health_per_niche import (
+            fetch_per_niche_platform_health,
+        )
+
+        result = fetch_per_niche_platform_health(days=60)
+
+    assert len(result) == 1
+    r = result[0]
+    assert r["success_count"] == 13
+    assert r["failed_count"] == 2
+    # 13 / 15 * 100 = 86.666... → 86.7 at 1dp.
+    assert r["success_rate_pct"] == 86.7
+    # Last-success timestamp survives the rollup (set on the
+    # INSIGHTS_* row, since those are the most recent ones).
+    assert r["last_success_at"] == "2026-06-27T06:00:00+00:00"
