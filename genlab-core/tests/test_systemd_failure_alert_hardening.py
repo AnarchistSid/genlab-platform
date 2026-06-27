@@ -147,8 +147,7 @@ class TestJournalctlFallback:
         # The fallback uses `-n 20` (last-20-lines syntax) without
         # `--since`. The first call uses `--since`. Both must coexist.
         assert "--since" in content, (
-            "First-pass journalctl call should use --since to scope to "
-            "the recent failure window."
+            "First-pass journalctl call should use --since to scope to the recent failure window."
         )
         assert "-n 20" in content, (
             "Fallback journalctl call must use `-n 20` to get the last "
