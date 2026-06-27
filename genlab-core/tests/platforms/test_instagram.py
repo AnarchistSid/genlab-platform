@@ -22,9 +22,27 @@ def ig_client():
 
 @pytest.fixture(autouse=True)
 def _mock_cdn_upload():
-    """All Instagram publish tests need CDN upload mocked (local paths don't exist)."""
-    with patch(
-        "genlab_core.platforms.cdn_upload.upload_to_cdn", return_value="https://cdn.test/clip.mp4"
+    """All Instagram publish tests need CDN upload mocked (local paths don't exist).
+
+    Patches both the structured ``upload_to_cdn_full`` (used by the publish
+    path's per-provider retry loop) and the legacy ``upload_to_cdn`` shim
+    so any test that exercises either entry point keeps working.
+    """
+    from genlab_core.platforms.cdn_upload import PROVIDER_LITTERBOX, CdnUploadResult
+
+    with (
+        patch(
+            "genlab_core.platforms.cdn_upload.upload_to_cdn_full",
+            return_value=CdnUploadResult(
+                url="https://cdn.test/clip.mp4",
+                provider=PROVIDER_LITTERBOX,
+                size_mb=1.0,
+            ),
+        ),
+        patch(
+            "genlab_core.platforms.cdn_upload.upload_to_cdn",
+            return_value="https://cdn.test/clip.mp4",
+        ),
     ):
         yield
 

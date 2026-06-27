@@ -11,6 +11,14 @@ Upload strategy (ordered by reliability):
 
 Files served via tunnel don't expire (available as long as the file exists
 on disk). External CDN files auto-expire (24h default).
+
+PROVIDER_TUNNEL / PROVIDER_LITTERBOX / PROVIDER_TMPFILES are the canonical
+provider IDs used by ``CdnUploadResult.provider`` and the
+``exclude_providers`` parameter on :func:`upload_to_cdn_full`. The latter
+exists so the IG / Threads publish path can retry against a *different*
+external CDN after Meta returns container error 2207077 (which means
+Meta's fetcher could not download from the URL we handed it — almost
+always a transient issue on the specific provider, not on the video).
 """
 
 from __future__ import annotations
@@ -19,9 +27,35 @@ import logging
 import os
 import shutil
 import time as _time
+from dataclasses import dataclass
 from pathlib import Path
 
 import requests
+
+# Canonical provider IDs (used in CdnUploadResult.provider and exclude_providers).
+PROVIDER_TUNNEL = "tunnel"
+PROVIDER_LITTERBOX = "litterbox"
+PROVIDER_TMPFILES = "tmpfiles"
+
+
+@dataclass(frozen=True)
+class CdnUploadResult:
+    """Structured result of a successful CDN upload.
+
+    Attributes:
+        url: The public HTTPS URL Meta / Threads / other consumers should fetch.
+        provider: One of :data:`PROVIDER_TUNNEL`, :data:`PROVIDER_LITTERBOX`,
+            :data:`PROVIDER_TMPFILES`. Callers retrying on container error
+            2207077 use this to populate ``exclude_providers`` on the next
+            :func:`upload_to_cdn_full` call.
+        size_mb: Size of the uploaded file in megabytes (decimal MB, file
+            size / (1024 * 1024)) — handy for log lines without re-statting.
+    """
+
+    url: str
+    provider: str
+    size_mb: float
+
 
 logger = logging.getLogger(__name__)
 
@@ -214,28 +248,38 @@ def _upload_to_tmpfiles(file_path: Path) -> str | None:
         return None
 
 
-def upload_to_cdn(
+def upload_to_cdn_full(
     file_path: str | Path,
     expiry: str = "24h",
     max_attempts: int = 3,
     *,
     require_external: bool = False,
-) -> str | None:
-    """Upload a local file and return a public HTTPS URL.
+    exclude_providers: frozenset[str] = frozenset(),
+) -> CdnUploadResult | None:
+    """Upload a local file and return a :class:`CdnUploadResult` describing
+    where it landed.
 
-    Strategy (ordered by reliability):
-      1. Cloudflare tunnel — local file served via dashboard (100% reliable)
-      2. litterbox.catbox.moe — free external CDN
-      3. tmpfiles.org — free fallback
+    Same tier order as :func:`upload_to_cdn` (tunnel → litterbox → tmpfiles),
+    but skips any provider whose ID is in ``exclude_providers``. The caller
+    uses this when Meta returns container error 2207077 on the previous URL
+    — re-uploading to the *same* provider would yield another URL Meta still
+    can't fetch, so the outer publisher loop excludes the failed provider
+    and tries the next tier.
 
     Args:
-        require_external: If True, skip the Cloudflare tunnel and use an
-            external CDN that third-party servers (e.g. Meta) can download
-            from.  Meta's video fetcher is blocked by Cloudflare's bot
-            protection on the tunnel, so Instagram/Threads uploads must use
-            an external host.
+        file_path: Local path to upload.
+        expiry: Litterbox-only — how long the file should be hosted
+            (``"1h"`` / ``"12h"`` / ``"24h"`` / ``"72h"``).
+        max_attempts: Litterbox-only retry budget per attempt.
+        require_external: If True, skip :data:`PROVIDER_TUNNEL` because Meta
+            can't fetch through Cloudflare bot protection.
+        exclude_providers: Frozenset of provider IDs to skip even when they
+            would otherwise be tried. Used by the IG / Threads retry loop
+            after a 2207077 to force a different provider on the next round.
 
-    Returns None if all methods fail.
+    Returns:
+        :class:`CdnUploadResult` on success, ``None`` if every non-excluded
+        provider returned no URL.
     """
     file_path = Path(file_path)
     if not file_path.exists():
@@ -244,24 +288,53 @@ def upload_to_cdn(
 
     size_mb = file_path.stat().st_size / (1024 * 1024)
     logger.info(
-        "CDN upload: %s (%.1f MB, expiry=%s, external=%s)",
+        "CDN upload: %s (%.1f MB, expiry=%s, external=%s, exclude=%s)",
         file_path.name,
         size_mb,
         expiry,
         require_external,
+        sorted(exclude_providers) if exclude_providers else "[]",
     )
 
-    if not require_external:
-        # Tier 1: Cloudflare tunnel (most reliable for direct access)
+    # Tier 1: Cloudflare tunnel (most reliable for direct access)
+    if not require_external and PROVIDER_TUNNEL not in exclude_providers:
         url = _serve_via_tunnel(file_path)
         if url:
-            return url
+            return CdnUploadResult(url=url, provider=PROVIDER_TUNNEL, size_mb=size_mb)
 
     # Tier 2: Litterbox (externally accessible)
-    url = _upload_to_litterbox(file_path, expiry, max_attempts)
-    if url:
-        return url
+    if PROVIDER_LITTERBOX not in exclude_providers:
+        url = _upload_to_litterbox(file_path, expiry, max_attempts)
+        if url:
+            return CdnUploadResult(url=url, provider=PROVIDER_LITTERBOX, size_mb=size_mb)
+        logger.warning("Litterbox unreachable, trying tmpfiles.org...")
 
     # Tier 3: tmpfiles (externally accessible)
-    logger.warning("Litterbox unreachable, trying tmpfiles.org...")
-    return _upload_to_tmpfiles(file_path)
+    if PROVIDER_TMPFILES not in exclude_providers:
+        url = _upload_to_tmpfiles(file_path)
+        if url:
+            return CdnUploadResult(url=url, provider=PROVIDER_TMPFILES, size_mb=size_mb)
+
+    return None
+
+
+def upload_to_cdn(
+    file_path: str | Path,
+    expiry: str = "24h",
+    max_attempts: int = 3,
+    *,
+    require_external: bool = False,
+) -> str | None:
+    """Backward-compatible wrapper around :func:`upload_to_cdn_full`.
+
+    Returns just the URL string for callers that don't need provider /
+    size metadata. New callers should prefer :func:`upload_to_cdn_full`
+    so they can pass ``exclude_providers`` on retry.
+    """
+    result = upload_to_cdn_full(
+        file_path,
+        expiry=expiry,
+        max_attempts=max_attempts,
+        require_external=require_external,
+    )
+    return result.url if result is not None else None
