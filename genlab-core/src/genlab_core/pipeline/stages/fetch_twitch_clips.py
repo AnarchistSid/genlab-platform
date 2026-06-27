@@ -225,11 +225,17 @@ class FetchTwitchClips(FetcherStage):
             "Client-Id": client_id,
         }
 
-        # Use IGDB-enriched game IDs from context if available, else defaults
-        game_ids = context.get("trending_game_ids", _DEFAULT_GAME_IDS[:5])
+        # Use IGDB-enriched game IDs from context if available, else defaults.
+        # max_games is config-driven (sources.yaml `twitch.max_games`); default
+        # stays 5 for backward compat. 2026-06-28: raised gaming's value to 8
+        # after audit surfaced this as a hidden cap that compounded with the
+        # filter-stage cap (PR #621) to starve gaming's daily blueprints.
+        # Rate-limit cost is negligible: 0.1s × max_games sleep = ~0.8s.
+        max_games = twitch_cfg.get("max_games", 5)
+        game_ids = context.get("trending_game_ids", _DEFAULT_GAME_IDS[:max_games])
 
         all_clips: list[dict] = []
-        for game_id in game_ids[:5]:
+        for game_id in game_ids[:max_games]:
             clips = _fetch_clips_for_game(game_id, headers, max_clips, lookback_days)
             all_clips.extend(clips)
             time.sleep(0.1)  # Be nice to Twitch API

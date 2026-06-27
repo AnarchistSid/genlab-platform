@@ -86,19 +86,28 @@ class FetchSteamTrailers(FetcherStage):
             return context
 
         max_per_game = steam_cfg.get("max_per_game", 2)
+        # max_games is config-driven (sources.yaml `steam_trailers.max_games`);
+        # default stays 5 for backward compat. 2026-06-28: raised gaming's
+        # value to 8 after audit surfaced this as a hidden cap that compounded
+        # with the filter-stage cap (PR #621) to starve gaming's daily
+        # blueprints. Rate-limit cost is negligible: 0.3s × max_games sleep
+        # = ~2.4s.
+        max_games = steam_cfg.get("max_games", 5)
 
         # Use trending game app IDs from context (e.g. from Steam spike detector)
         # or fall back to popular defaults
-        app_ids = context.get("trending_steam_app_ids", _DEFAULT_APP_IDS[:5])
+        app_ids = context.get("trending_steam_app_ids", _DEFAULT_APP_IDS[:max_games])
 
         all_trailers: list[dict] = []
-        for app_id in app_ids[:5]:
+        for app_id in app_ids[:max_games]:
             trailers = _fetch_trailers_for_app(int(app_id), max_per_game)
             all_trailers.extend(trailers)
             time.sleep(0.3)  # Respect Steam rate limit
 
         logger.info(
-            "[SteamTrailers] %d trailers from %d games", len(all_trailers), len(app_ids[:5])
+            "[SteamTrailers] %d trailers from %d games",
+            len(all_trailers),
+            len(app_ids[:max_games]),
         )
 
         if all_trailers:
