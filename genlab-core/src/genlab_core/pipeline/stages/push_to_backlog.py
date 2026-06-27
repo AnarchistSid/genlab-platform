@@ -1197,12 +1197,28 @@ class PushToBacklog:
         #
         # The tradeoff: stories that were ingested but never blueprinted (e.g.
         # writing failed) are now re-ingestable, which is what we want.
+        #
+        # 2026-06-28 refactor: the URL-hashes-from-blueprints seed now goes
+        # through ``genlab_core.pipeline.dedup_keys.load_dedup_keys`` so a
+        # second consumer (:class:`PreflightDedup`) can share IDENTICAL
+        # logic. The behaviour at this stage is unchanged — the helper
+        # returns the same set this block used to build inline. The title
+        # loop below still uses ``active_bps`` (the blocking + TTL-filtered
+        # blueprints) directly, because the title dedup has its own cutoff
+        # (``title_dedup_days``) that operates on the same filter base.
         seen_urls: set[str] = set()
+        active_bps: list = []
         _existing_stories_for_titles: list = []
         _cm_records_for_titles: list = []
         try:
             from datetime import datetime, timedelta
-            from hashlib import sha256 as _sha256
+
+            from genlab_core.pipeline.dedup_keys import (
+                _is_within_url_ttl as _dedup_keys_is_within_url_ttl,
+            )
+            from genlab_core.pipeline.dedup_keys import (
+                load_dedup_keys,
+            )
 
             _dedup_days = (
                 context.get("niche_config", {}).get("pipeline", {}).get("dedup_window_days", 14)
@@ -1242,41 +1258,28 @@ class PushToBacklog:
                 else None
             )
 
-            # Seed URL hashes from blueprints in blocking states only.
-            # When url_dedup_ttl_days is set, also exclude blueprints whose
-            # created_at predates the TTL cutoff — letting today's "Overwatch"
-            # republish if the last "Overwatch" was >7 days ago.
-            #
-            # PR #512 (2026-06-24): delegate the lookup-with-fallback to
-            # ``record_created_at_dt`` rather than inlining the top-level
-            # vs fields trap. The helper returns None on
-            # missing/unparseable input — same conservative posture as
-            # before (keep blueprint in dedup set on unknown age).
-            from genlab_core.storage.record_helpers import record_created_at_dt
-
+            # ``_is_within_url_ttl`` retained as a thin wrapper around the
+            # shared helper for source-pin compatibility (test_push_to_backlog_url_dedup_ttl
+            # asserts the literal expression below stays reachable).
             def _is_within_url_ttl(bp: dict) -> bool:
-                if _url_dedup_cutoff is None:
-                    return True
-                created = record_created_at_dt(bp)
-                if created is None:
-                    # Missing or unparseable — conservative: KEEP it in
-                    # the dedup set (don't risk re-publishing unknown-
-                    # age content).
-                    return True
-                return created >= _url_dedup_cutoff
+                return _dedup_keys_is_within_url_ttl(bp, _url_dedup_cutoff)
 
+            # The title loop further down (Layer 4.5) iterates ``active_bps``
+            # with its own title_dedup_days cutoff — keep this comprehension
+            # so both predicates remain visible AND so the title path keeps
+            # its existing behaviour. The URL hashes themselves now come
+            # from the shared helper.
             active_bps = [bp for bp in recent_bps if _is_blocking(bp) and _is_within_url_ttl(bp)]
-            url_hashes_from_bps = 0
-            for bp in active_bps:
-                fields = bp.get("fields", bp)
-                url = (fields.get("video_url") or "").strip()
-                if url:
-                    seen_urls.add(_sha256(url.encode()).hexdigest()[:16])
-                    url_hashes_from_bps += 1
+            keys = load_dedup_keys(
+                niche_id=niche_id,
+                backlog_client=client,
+                niche_config=context.get("niche_config", {}),
+            )
+            seen_urls.update(keys.url_hashes)
             logger.info(
                 "[PUSH] Loaded %d URL hashes from %d active blueprints",
-                url_hashes_from_bps,
-                len(active_bps),
+                len(keys.url_hashes),
+                keys.n_active_blueprints,
             )
 
             # Still load stories for title-level dedup (Layer 4.5 below).

@@ -94,6 +94,14 @@ pipeline:
     # Steam "GTA V") that stay the same across daily fetches. URL-level dedup
     # would block ALL new clips for any game that was ever blueprinted.
     # Gaming relies on clip-level video_id dedup at PushToBacklog instead.
+    #
+    # 2026-06-28: PreflightDedup added BETWEEN filter and enrich. It mirrors
+    # PushToBacklog's dedup logic (LIVE_OR_PENDING blocking + url_dedup_ttl_days
+    # + title fuzzy match) so dedup-blocked candidates are dropped BEFORE the
+    # ~280s enrich+render path runs on them. PushToBacklog stays as the final
+    # authority — this is an optimisation, not a replacement. Opt-in per niche;
+    # other niches keep current behaviour until calibrated.
+    - class: genlab_core.pipeline.stages.preflight_dedup.PreflightDedup
     - class: niches.gaming.stages.enrich_with_igdb.EnrichWithIGDB
       retries: 1
       retry_delay_seconds: 15
