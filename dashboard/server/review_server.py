@@ -793,6 +793,7 @@ from server.api.outreach_template import bp as outreach_template_bp
 from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
+from server.api.publishing_health import bp as publishing_health_bp
 from server.api.publishing_queue import bp as queue_bp
 from server.api.revenue import bp as revenue_bp
 from server.api.runway import bp as runway_bp
@@ -844,6 +845,7 @@ app.register_blueprint(links_bp)
 app.register_blueprint(revenue_bp)
 app.register_blueprint(alerts_bp)
 app.register_blueprint(metrics_bp)
+app.register_blueprint(publishing_health_bp)  # PR B: /api/v1/publishing/per-niche-platform-health
 app.register_blueprint(audience_bp)
 app.register_blueprint(bandit_hour_posteriors_bp)
 app.register_blueprint(events_bp)

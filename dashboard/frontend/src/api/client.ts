@@ -45,6 +45,7 @@ import type {
   ClickTrend,
   NichePauseRecord,
   ComplianceStatsResponse,
+  PerNichePlatformHealthResponse,
   SourceDiscoveryProposalsResponse,
 } from "./types";
 
@@ -911,6 +912,33 @@ export const complianceStats = {
       }
       return d as ComplianceStatsResponse;
     }),
+};
+
+// PR B (2026-06-27) — Per-niche per-platform publishing-health matrix.
+// Wraps /api/v1/publishing/per-niche-platform-health. Powers the
+// Mission Control PerPlatformHealthCard. The existing global health
+// view averages across niches × platforms and hides per-niche
+// regressions (see today's investigation of ai_creators IG silent
+// failures); this endpoint surfaces them at-a-glance.
+export const publishingHealthPerNiche = {
+  fetch: (days = 14) =>
+    get<
+      PerNichePlatformHealthResponse | { data: PerNichePlatformHealthResponse }
+    >("/publishing/per-niche-platform-health", { days: String(days) }).then(
+      (d): PerNichePlatformHealthResponse => {
+        const envelope = d as { data?: PerNichePlatformHealthResponse };
+        if (
+          envelope &&
+          typeof envelope === "object" &&
+          "data" in envelope &&
+          envelope.data &&
+          typeof envelope.data === "object"
+        ) {
+          return envelope.data;
+        }
+        return d as PerNichePlatformHealthResponse;
+      },
+    ),
 };
 
 // PR after #580 — Scheduling Pauses API client.

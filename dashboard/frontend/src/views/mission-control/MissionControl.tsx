@@ -33,6 +33,7 @@ import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
+import { PerPlatformHealthCard } from "./PerPlatformHealthCard";
 import { SourceDiscoveryCard } from "./SourceDiscoveryCard";
 
 // ── Helpers ────────────────────────────────────────────────
@@ -306,6 +307,15 @@ export default function MissionControl() {
                 surface the same backend signals; pause is the action,
                 stats are the diagnosis. */}
             <ComplianceStatsCard />
+            {/* PR B (2026-06-27): per-niche per-platform health matrix.
+                The existing publishing-health card averages across all
+                niches × platforms, hiding silent regressions like the
+                ai_creators IG 0/3 over 7 days that today's investigation
+                surfaced (error 2207077). This card renders one row per
+                niche, one column per platform; each cell is a 14d success-
+                rate colored red/yellow/green so an unhealthy combo is
+                visible at-a-glance instead of buried in a global average. */}
+            <PerPlatformHealthCard />
             {/* PR after #586 (2026-06-25): source-discovery proposer.
                 Ranks SOURCE YouTube channels we pulled clips from
                 by per-clip avg engagement so operators decide which
