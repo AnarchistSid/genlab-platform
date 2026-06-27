@@ -169,3 +169,71 @@ class TestStats:
         assert stats["rejected"] == 1
         assert stats["selected"] == 2
         assert len(stats["rejected_titles"]) == 1
+
+
+class TestFilterTopN:
+    """Pin: filter_top_n is config-driven (default 5, gaming overrides to 7).
+
+    Background — 2026-06-28: gaming was hitting daily 'zero_blueprints'
+    alerts when the top-3 trending happened to be already-published this
+    week. Funnel was: filter passes 5 → enrich loses 2 → render 3 →
+    push_to_backlog dedup blocks all 3. Cap was hardcoded `[:5]`. PR
+    raised it via niche_config.video_sourcing.filter_top_n (default 5
+    for backward compat). Pin guards against regression to hardcoded value.
+    """
+
+    def test_default_cap_is_5_when_no_config(self):
+        """Backward-compat: with no niche_config, cap stays at 5 — other
+        niches consuming this stage are unaffected."""
+        stage = FilterGamingStories()
+        # 10 gaming-by-source stories, all pass _is_gaming_content
+        stories = [
+            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01)
+            for i in range(10)
+        ]
+        result = stage.execute({"stories": stories, "run_stats": {}})
+        assert len(result["stories"]) == 5, (
+            "Default filter_top_n must remain 5 when niche_config is absent "
+            "or doesn't set video_sourcing.filter_top_n; raising the default "
+            "would silently affect other niches consuming this stage."
+        )
+
+    def test_config_override_raises_cap_to_7(self):
+        """Gaming sets filter_top_n: 7 in niche.yaml; verify the stage reads it."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story(f"Title {i}", source="steam_spike", score=1.0 - i * 0.01)
+            for i in range(10)
+        ]
+        result = stage.execute(
+            {
+                "stories": stories,
+                "run_stats": {},
+                "niche_config": {"video_sourcing": {"filter_top_n": 7}},
+            }
+        )
+        assert len(result["stories"]) == 7, (
+            "When niche_config.video_sourcing.filter_top_n=7 is set, the "
+            "filter must keep 7 top-scored survivors instead of 5. This is "
+            "the durable fix for gaming's daily 'zero_blueprints' alerts."
+        )
+
+    def test_top_scored_kept_in_order(self):
+        """Survivors must be the top-N by score, descending."""
+        stage = FilterGamingStories()
+        stories = [
+            _make_story("low", source="steam_spike", score=0.1),
+            _make_story("high", source="steam_spike", score=0.9),
+            _make_story("mid", source="steam_spike", score=0.5),
+        ]
+        result = stage.execute(
+            {
+                "stories": stories,
+                "run_stats": {},
+                "niche_config": {"video_sourcing": {"filter_top_n": 2}},
+            }
+        )
+        kept_titles = [s["title"] for s in result["stories"]]
+        assert kept_titles == ["high", "mid"], (
+            f"Expected top-2 by score [high, mid], got {kept_titles}"
+        )

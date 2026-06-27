@@ -189,9 +189,23 @@ class FilterGamingStories:
             else:
                 rejected.append(story["title"])
 
-        # Sort by score descending, take top 5
+        # Sort by score descending, take top N (config-driven, default 5).
+        #
+        # 2026-06-28 — was hardcoded `[:5]`. Gaming's daily zero_blueprints
+        # alerts traced to a small surviving-candidate pool: filter passes 5
+        # → enrich loses ~2 to IGDB failures → 3 reach writing/rendering →
+        # push_to_backlog dedup blocks any whose URL/title was published in
+        # the last url_dedup_ttl_days. When the top-3 trending happen to be
+        # already-published this week, the day ends with 0 blueprints. Raising
+        # the cap gives dedup more survivors to choose from without changing
+        # the publish cap (still 1/day at the publisher stage). Cost:
+        # ~2x render CPU on starvation-prone days (~5 extra min on the 4 GB
+        # Hetzner VPS); render only runs when sources line up so the actual
+        # marginal cost is small.
         filtered.sort(key=lambda s: s.get("score", 0), reverse=True)
-        top_stories = filtered[:5]
+        niche_config = context.get("niche_config", {})
+        filter_top_n = niche_config.get("video_sourcing", {}).get("filter_top_n", 5)
+        top_stories = filtered[:filter_top_n]
 
         context["stories"] = top_stories
         context.setdefault("run_stats", {})["filter"] = {
