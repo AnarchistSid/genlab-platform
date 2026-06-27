@@ -1055,6 +1055,51 @@ export interface ComplianceStatsResponse {
   by_niche: Record<string, ComplianceNicheStats>;
 }
 
+// ── Per-niche per-platform publishing health (PR B, 2026-06-27) ──
+
+/**
+ * One row of the publishing-health matrix: one (niche, platform) pair.
+ *
+ * Mirrors the rows produced by
+ * ``server.core.publishing_health_per_niche.fetch_per_niche_platform_health``.
+ *
+ * Fields:
+ *   * success_rate_pct = round(100 * success / (success+failed), 1) when
+ *     sample count >= 3; null otherwise (insufficient-data → "—" cell).
+ *   * last_failure_error is the FULL error_message from the latest
+ *     FAILED publish; the frontend truncates for tooltip display.
+ */
+export interface PerNichePlatformHealthRow {
+  niche_id: string;
+  platform: string;
+  success_count: number;
+  failed_count: number;
+  /** Null when sample count < 3 (insufficient data); card renders "—". */
+  success_rate_pct: number | null;
+  /** ISO-8601 datetime or null. */
+  last_success_at: string | null;
+  /** ISO-8601 datetime or null. */
+  last_failure_at: string | null;
+  /** Full error_message; frontend truncates for tooltip. */
+  last_failure_error: string | null;
+}
+
+/**
+ * Response shape from /api/v1/publishing/per-niche-platform-health.
+ *
+ * thresholds is server-supplied so the card doesn't hardcode them.
+ * If we ever tune the thresholds, the card picks it up via the API
+ * without a frontend rebuild.
+ */
+export interface PerNichePlatformHealthResponse {
+  rows: PerNichePlatformHealthRow[];
+  thresholds: {
+    red_below_pct: number;
+    yellow_below_pct: number;
+  };
+  window_days: number;
+}
+
 // ── Scheduling Pauses (operator emergency-stop, PR after #579) ──
 
 /**

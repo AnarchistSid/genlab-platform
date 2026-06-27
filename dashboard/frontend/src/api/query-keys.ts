@@ -146,6 +146,11 @@ export const queryKeys = {
   complianceStats: {
     fetch: (windowDays: number) => ["compliance", "stats", windowDays] as const,
   },
+  /** Per-(niche, platform) publishing health matrix
+   * (Mission Control PerPlatformHealthCard, PR B). */
+  publishingHealthPerNiche: {
+    fetch: (days: number) => ["publishing", "per-niche-health", days] as const,
+  },
   /** Source-discovery proposer rankings (per-niche source channels). */
   sourceDiscovery: {
     proposals: (nicheId: string, windowDays: number) =>
