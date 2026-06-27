@@ -165,12 +165,29 @@ def execute_parallel_publish(
                     error_class=error_class,
                 )
 
-            # Record to Publishing_Analytics. SKIPPED for credential failures
-            # (not retryable, not a real failure — the loud signal would
-            # otherwise drown out genuine outages in the dashboard).
+            # Record to Publishing_Analytics. SKIPPED for both CREDENTIAL and
+            # QUOTA failures — neither represents a real platform outage, and
+            # the loud "FAILED" signal would drown out genuine breakage in the
+            # dashboard.
+            #
+            #   CREDENTIAL — token expired / revoked. Not retryable in-run.
+            #     Operator must rotate the token; until then, every attempt
+            #     would write the same FAILED row, polluting the rate.
+            #
+            #   QUOTA — deliberate budget protection. The YouTube quota gate
+            #     at ``platforms/youtube.py:399-416`` returns success=False
+            #     when ``can_afford("upload")`` is False — that's a restraint
+            #     mechanism, not an outage. Counting it as FAILED inflated
+            #     YouTube failures by ~50% in the prod 60-day window (13 of
+            #     26 "failures" were quota-guards; see PR D 2026-06-27
+            #     investigation).
+            #
+            # Both classes are still surfaced in their platform_status entry
+            # as FAILED so the orchestrator's retry / pause logic can act on
+            # them; only the analytics row is downshifted to SKIPPED.
             if result.success:
                 analytics_status = "SUCCESS"
-            elif error_class == "CREDENTIAL":
+            elif error_class in ("CREDENTIAL", "QUOTA"):
                 analytics_status = "SKIPPED"
             else:
                 analytics_status = "FAILED"

@@ -104,14 +104,26 @@ def fetch_per_niche_platform_health(*, days: int = 14) -> list[dict[str, Any]]:
         # the days value AND for the days arg to the subquery, even
         # though they're the same value. psycopg requires every
         # placeholder to be supplied separately.
+        #
+        # INSIGHTS_24H / INSIGHTS_48H / INSIGHTS_168H are lifecycle-mutated
+        # SUCCESS rows from the metric_collector — once a publish ages past
+        # the 24h insight window, its status column flips from SUCCESS to
+        # INSIGHTS_24H, then INSIGHTS_48H at 48h, then INSIGHTS_168H at 7d.
+        # Treating those as not-success would understate success rates
+        # ~5× for any platform measured >24h after publish: e.g. anime
+        # YouTube last 60d was 5 FAILED + 15 INSIGHTS_* (all originally
+        # SUCCESS) and the card was showing 0% instead of ~75%.
+        # See ``docs/publishing_analytics_status_taxonomy.md`` /
+        # PR D (2026-06-27) for the full lifecycle. SKIPPED is still
+        # excluded — see module docstring for rationale.
         sql = """
             SELECT
                 niche_id,
                 platform,
-                COUNT(*) FILTER (WHERE status='SUCCESS')        AS success_count,
-                COUNT(*) FILTER (WHERE status='FAILED')         AS failed_count,
-                MAX(created_at) FILTER (WHERE status='SUCCESS') AS last_success_at,
-                MAX(created_at) FILTER (WHERE status='FAILED')  AS last_failure_at,
+                COUNT(*) FILTER (WHERE status='SUCCESS' OR status LIKE 'INSIGHTS_%%')        AS success_count,
+                COUNT(*) FILTER (WHERE status='FAILED')                                       AS failed_count,
+                MAX(created_at) FILTER (WHERE status='SUCCESS' OR status LIKE 'INSIGHTS_%%') AS last_success_at,
+                MAX(created_at) FILTER (WHERE status='FAILED')                                AS last_failure_at,
                 (
                     SELECT p2.error_message
                     FROM publishing_analytics p2
@@ -123,7 +135,7 @@ def fetch_per_niche_platform_health(*, days: int = 14) -> list[dict[str, Any]]:
                     LIMIT 1
                 ) AS last_failure_error
             FROM publishing_analytics p
-            WHERE status IN ('SUCCESS', 'FAILED')
+            WHERE (status IN ('SUCCESS', 'FAILED') OR status LIKE 'INSIGHTS_%%')
               AND created_at >= NOW() - make_interval(days => %s)
             GROUP BY niche_id, platform
             ORDER BY niche_id, platform
