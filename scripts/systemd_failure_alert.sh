@@ -74,12 +74,37 @@ logger -p user.crit -t genlab-failure-alert \
     "Systemd unit $FAILING_UNIT failed (will attempt pipeline_alerts DB write next)" \
     2>/dev/null || true
 
-# Collect context — last 20 journal lines from the failed unit. Skip
-# anything older than 5 min so we don't capture stale state from
-# prior runs.
-CONTEXT=$(journalctl -u "$FAILING_UNIT" --since "5 minutes ago" --no-pager 2>/dev/null \
-            | tail -20 \
-            | sed 's/[^[:print:]]//g' || echo "(journalctl failed)")
+# Collect context — last 20 journal lines from the failed unit.
+#
+# 2026-06-28 — was a single `journalctl --since "5 minutes ago"` call
+# whose default-empty fallback emitted a useless blame-the-tool string
+# whenever the 5-min window was empty (busy moment, journal locked,
+# oneshot finished too fast for the window, etc). Operators saw the
+# useless string in every alert and lost trust in the diagnostic text.
+# The 2026-06-27 deploy-restart-sweep screenshot had 7 unresolved
+# CRITICAL alerts ALL ending with this fallback; zero diagnostic value
+# carried through to the operator.
+#
+# Now: try the 5-min window first (recent transient state); if empty
+# OR the call fails, fall back to `-n 20` (last 20 lines regardless of
+# time, so we get SOMETHING useful even if the window happened to be
+# empty during a busy moment). Only emit "(journalctl unavailable)"
+# if BOTH calls produce nothing — and word it as a state of the tool,
+# not the script.
+_journalctl_lines() {
+    journalctl -u "$1" "${@:2}" --no-pager 2>/dev/null \
+        | tail -20 \
+        | sed 's/[^[:print:]]//g'
+}
+
+CONTEXT=$(_journalctl_lines "$FAILING_UNIT" --since "5 minutes ago")
+if [[ -z "${CONTEXT// }" ]]; then
+    # 5-min window empty (or call failed). Try untimed -n 20.
+    CONTEXT=$(_journalctl_lines "$FAILING_UNIT" -n 20)
+fi
+if [[ -z "${CONTEXT// }" ]]; then
+    CONTEXT="(journalctl unavailable — try: journalctl -u $FAILING_UNIT -n 50)"
+fi
 
 # Sanitize the unit name into a niche_id field (best-effort heuristic).
 case "$FAILING_UNIT" in
