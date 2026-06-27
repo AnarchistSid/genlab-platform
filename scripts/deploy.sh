@@ -276,16 +276,56 @@ if [[ "$SKIP_RESTART" -eq 1 ]]; then
 else
     log "systemctl daemon-reload..."
     systemctl daemon-reload 2>&1 | tee -a "$LOG"
-    log "Restarting genlab-*.service units..."
-    # Only restart units that are .service (not .timer) and active or loaded.
-    # We don't restart timers — they don't run code, they only fire services.
+    # ------------------------------------------------------------------
+    # 2026-06-27 — restart ONLY long-running (Type=exec) services.
+    #
+    # Background — today's stale-alerts incident:
+    #   The previous loop here `systemctl restart`-ed EVERY genlab-*
+    #   service, including all the Type=oneshot units (token-refresh,
+    #   snapshots, archive-stale-*, fb-survival-check, dpo-export,
+    #   pipeline-*, etc). For a oneshot, `restart` actually STARTS
+    #   the unit — outside its normal schedule, often during a busy
+    #   moment. At 14:59 IST on 2026-06-27 a deploy fired 20 oneshots
+    #   simultaneously; they hit transient errors (TTS API 429s in the
+    #   journal) and each one tripped its OnFailure=genlab-service-
+    #   failure-alert@.service handler (PR #615), writing 20 CRITICAL
+    #   rows to pipeline_alerts. Operator's Mission Control banner
+    #   suddenly showed 20 unresolved critical alerts — every one was
+    #   stale within minutes (next normal-schedule run succeeded), but
+    #   the rows stayed until manually cleared via SQL.
+    #
+    # Fix: only restart the units that actually need a restart to pick
+    # up new code — the long-running daemons. Type=oneshot units pick
+    # up new code naturally on their next timer fire; there's nothing
+    # to "restart" because they're not running between fires.
+    #
+    # Companion fix in this same PR: an auto-resolve sweeper
+    # (genlab-alert-auto-resolve.timer) bleeds out any
+    # systemd_unit_failed alert whose unit has since had a successful
+    # run, so even if a future deploy triggers an unexpected oneshot
+    # failure the operator banner self-cleans within 5 minutes.
+    # ------------------------------------------------------------------
+    log "Restarting long-running genlab services (Type=exec only)..."
+    LONG_RUNNING_SERVICES=(
+        genlab-dashboard.service
+        genlab-engagement-poller.service
+        genlab-engagement-worker.service
+        genlab-quota-monitor.service
+        genlab-webhook.service
+    )
     RESTARTED=()
-    while IFS= read -r unit; do
-        [[ -z "$unit" ]] && continue
-        log "  restart: $unit"
-        systemctl restart "$unit" 2>&1 | tee -a "$LOG" && RESTARTED+=("$unit")
-    done < <(systemctl list-units --all --type=service --no-legend --plain 2>/dev/null | awk '/^genlab-/ {print $1}')
-    log "Restarted ${#RESTARTED[@]} services ✓"
+    for unit in "${LONG_RUNNING_SERVICES[@]}"; do
+        if systemctl list-unit-files --type=service --no-legend --plain 2>/dev/null | grep -q "^$unit "; then
+            log "  restart: $unit"
+            if systemctl restart "$unit" 2>&1 | tee -a "$LOG"; then
+                RESTARTED+=("$unit")
+            fi
+        else
+            log "  skip (not installed): $unit"
+        fi
+    done
+    log "Restarted ${#RESTARTED[@]} long-running services ✓"
+    log "Type=oneshot units (pipeline-*, token-refresh, snapshots, etc.) will pick up new code on next timer fire."
 fi
 
 # ----------------------------------------------------------------------------

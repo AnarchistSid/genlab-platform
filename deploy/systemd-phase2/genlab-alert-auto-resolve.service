@@ -1,0 +1,58 @@
+[Unit]
+Description=GenLab Alert Auto-Resolve — bleed out stale systemd_unit_failed alerts
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-27 — bleed-out half of the deploy-restart-loop fix.
+#
+# Companion change: scripts/deploy.sh Phase 7 now restarts ONLY
+# long-running (Type=exec) services to PREVENT spurious oneshot
+# failures during deploys. This timer covers the BLEED-OUT path —
+# any time a unit fails for any reason (deploy-induced or not), the
+# failure-alert wire (PR #615) writes a CRITICAL row to
+# pipeline_alerts. Pre-PR, those rows lived forever until manually
+# cleared. Now they self-clean within 5 minutes of the unit's next
+# successful run.
+#
+# Background: today's 2026-06-27 14:59 IST deploy hit a restart sweep
+# that fired 20 oneshots out-of-schedule, all of which tripped
+# transient TTS API 429s, each writing a CRITICAL row. Operator's
+# Mission Control banner showed 20 unresolved CRITICAL alerts — all
+# stale within minutes of the next successful run. The bleed-out
+# wire here removes the manual-SQL-cleanup step from the operator
+# workflow.
+#
+# What this does:
+#   1. SELECT every unresolved systemd_unit_failed row
+#   2. For each, extract the unit name + query systemd for
+#      Result / ExecMainStatus / InactiveEnterTimestamp / ActiveState
+#   3. If the unit has had a successful run AFTER the alert's
+#      created_at (and is not currently active) → UPDATE
+#      resolved_at = NOW() with an audit-trail note
+#
+# Safety knobs:
+#   1. Active units are SKIPPED (race-condition safety — wait for the
+#      next sweep when the active run completes)
+#   2. Failed units are SKIPPED (still broken; operator must
+#      investigate)
+#   3. Resolution requires success_at > alert.created_at (no
+#      backfilling stale success timestamps)
+#   4. Per-row failures NEVER abort the whole sweep (fail-OPEN —
+#      one unparseable row can't stick 50 others)
+#   5. CLI ALWAYS exits 0 (the sweeper is informational; a silent
+#      failure means the banner takes 5 more minutes to self-clean,
+#      no operator action needed)
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/auto_resolve_alerts.py
+TimeoutSec=120
+# Single-shot — no restart-on-failure. If the sweep fails, the next
+# 5-min fire will catch up; cumulative miss is operationally fine.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab Alert Auto-Resolve Timer — bleed out stale systemd_unit_failed alerts every 5 min
+
+[Timer]
+# Every 5 minutes. The auto-resolve sweep is cheap (one SELECT +
+# one systemctl-show per unresolved row + per-row UPDATE) and the
+# operator-facing impact of a stale CRITICAL alert is "Mission
+# Control banner shows alarm count > 0" — visible the next time
+# the operator looks at the dashboard.
+#
+# 5 min is the right balance:
+#   * Fast enough that a deploy-induced spurious alert cluster
+#     (today's 2026-06-27 incident: 20 alerts at 14:59 IST) is
+#     gone before the operator next refreshes
+#   * Slow enough not to spam systemctl-show subprocess calls
+#     during the steady state (0 unresolved rows → SELECT returns
+#     empty, exits fast)
+OnCalendar=*:0/5
+# Catch up on a missed fire after reboot. The sweep is idempotent
+# so re-firing once is safe; missing a window just delays the
+# bleed-out by one 5-min cycle (operationally fine).
+Persistent=true
+
+[Install]
+WantedBy=timers.target
