@@ -51,6 +51,13 @@ video_sourcing:
   niche_category: gaming
   max_age_hours: 48
   top_n_per_run: 15
+  # 2026-06-28: raise from default 5 → 7. filter_gaming_stories.py:194 takes
+  # the top N filtered stories before enrichment; with 5 as the cap, gaming
+  # was hitting daily 'zero_blueprints' alerts when the top-3 trending all
+  # happened to be already-published-this-week URLs (Overwatch + LoL hit
+  # this on 2026-06-27). 7 gives push_to_backlog 2 extra survivors to
+  # clear dedup. Default stays 5 in code so other niches unaffected.
+  filter_top_n: 7
   min_view_velocity: 200
   use_google_trends: true
   allow_keyword_search: true
