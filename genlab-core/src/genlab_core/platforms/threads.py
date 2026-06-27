@@ -86,6 +86,11 @@ class ThreadsClient:
         self._base_url = "https://graph.threads.net/v1.0"
         # Threads API: 250 posts/hr. Conservative rate limiter.
         self._rate_limiter = TokenBucket(rate=250 / 3600, burst=10)
+        # Captured by _create_container / _threads_publish / _poll_container so
+        # the publish path can detect Meta error 2207077 (CDN fetch failed) and
+        # retry against a different CDN provider. Cleared at the top of every
+        # video / image publish so stale errors from a previous post don't leak.
+        self._last_error: str = ""
         # P2 phase 2: per-niche LoggerAdapter (mirrors IG pattern from PR #382).
         # When niche_id set, log records carry {niche_id, platform} extras for
         # operator log filtering. Empty niche_id → plain module logger (legacy).
@@ -286,91 +291,173 @@ class ThreadsClient:
     # ------------------------------------------------------------------
 
     def _publish_video(self, *, caption: str, media_paths: list) -> PublishResult:
-        """VIDEO container → wait → threads_publish."""
-        video_url = self._resolve_url(media_paths[0])
+        """VIDEO container → poll → threads_publish.
 
-        container_id = self._create_container(
+        Wraps the resolve-URL + create-container + poll + publish sequence in
+        a per-provider retry loop: when Meta returns container error 2207077
+        ("CDN fetch failed") the URL the current provider issued is the
+        problem, not the video itself. Re-uploading to the SAME provider
+        will issue another URL Meta still can't fetch — so we exclude the
+        failed provider and try the next CDN tier. Mirrors the IG client
+        loop from the same PR.
+        """
+        return self._publish_with_cdn_retry(
+            caption=caption,
+            media_path=media_paths[0],
             media_type="VIDEO",
-            video_url=video_url,
-            text=caption,
-        )
-        if container_id is None:
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error="Threads: video container creation failed",
-            )
-
-        # Poll container status instead of fixed sleep
-        container_status = self._poll_container(container_id, max_seconds=120)
-        if container_status == "ERROR":
-            return PublishResult(
-                platform=self.platform_id, success=False, error="Threads container processing error"
-            )
-        if container_status == "TIMEOUT":
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error="Threads container processing timeout (120s)",
-            )
-
-        post_id = self._threads_publish(container_id=container_id)
-        if post_id is None:
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error="Threads: video threads_publish failed",
-            )
-
-        # Fetch real permalink
-        post_url = f"https://www.threads.net/post/{post_id}"
-        try:
-            permalink_resp = requests.get(
-                f"{self._base_url}/{post_id}",
-                params={"fields": "permalink", "access_token": self._access_token},
-                timeout=10,
-            )
-            if permalink_resp.ok:
-                real_url = permalink_resp.json().get("permalink", "")
-                if real_url:
-                    post_url = real_url
-        except Exception:
-            pass
-
-        self._log.info("Threads: published video post %s — %s", post_id, post_url)
-        return PublishResult(
-            platform=self.platform_id,
-            success=True,
-            post_id=post_id,
-            post_url=post_url,
+            poll_after_create=True,
         )
 
     def _publish_image(self, *, caption: str, media_paths: list) -> PublishResult:
-        """IMAGE container → threads_publish (no wait needed)."""
-        image_url = self._resolve_url(media_paths[0])
+        """IMAGE container → threads_publish (no wait needed).
 
-        container_id = self._create_container(
+        Same per-provider retry loop as :meth:`_publish_video` so image
+        posts also rotate CDN on Meta 2207077.
+        """
+        return self._publish_with_cdn_retry(
+            caption=caption,
+            media_path=media_paths[0],
             media_type="IMAGE",
-            image_url=image_url,
-            text=caption,
+            poll_after_create=False,
         )
-        if container_id is None:
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error="Threads: image container creation failed",
-            )
 
-        post_id = self._threads_publish(container_id=container_id)
-        if post_id is None:
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error="Threads: image threads_publish failed",
-            )
+    def _publish_with_cdn_retry(
+        self,
+        *,
+        caption: str,
+        media_path: Path | str,
+        media_type: str,
+        poll_after_create: bool,
+    ) -> PublishResult:
+        """Shared video / image publish path with per-provider CDN retry.
 
-        post_url = self._get_permalink(post_id)
-        self._log.info("Threads: published image post %s — %s", post_id, post_url)
+        ``poll_after_create`` is True for VIDEO (Meta needs ~30 s to process
+        the upload before it's ready) and False for IMAGE (no processing
+        delay).
+
+        Returns a SUCCESS :class:`PublishResult` on first publish, otherwise
+        a FAILED result describing what went wrong. The loop terminates
+        early on any non-2207077 failure because rotating CDNs can't help
+        when (for example) the access token is invalid.
+        """
+        from genlab_core.platforms.cdn_upload import PROVIDER_LITTERBOX, PROVIDER_TMPFILES
+
+        provider_order = (PROVIDER_LITTERBOX, PROVIDER_TMPFILES)
+        excluded: frozenset[str] = frozenset()
+        last_failure_error = ""
+
+        for _ in provider_order:
+            self._last_error = ""
+            resolved = self._resolve_url_full(media_path, exclude_providers=excluded)
+            if resolved is None:
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        f"Threads: CDN upload failed for {media_type.lower()} "
+                        f"(exhausted providers {sorted(excluded)})"
+                    ),
+                )
+            cdn_url, used_provider = resolved
+
+            # Caller-supplied URL — we don't own the CDN, can't rotate.
+            external_url = used_provider == "external"
+
+            container_kwargs: dict[str, Any] = {"media_type": media_type, "text": caption}
+            if media_type == "VIDEO":
+                container_kwargs["video_url"] = cdn_url
+            else:  # IMAGE
+                container_kwargs["image_url"] = cdn_url
+
+            container_id = self._create_container(**container_kwargs)
+            if container_id is None:
+                last_failure_error = self._last_error or "container creation failed"
+                if external_url or "2207077" not in last_failure_error:
+                    return PublishResult(
+                        platform=self.platform_id,
+                        success=False,
+                        error=f"Threads: {media_type.lower()} {last_failure_error}",
+                    )
+                self._log.warning(
+                    "[Threads] 2207077 on container create with %s URL — rotating CDN provider",
+                    used_provider,
+                )
+                excluded = excluded | {used_provider}
+                continue
+
+            if poll_after_create:
+                container_status = self._poll_container(container_id, max_seconds=120)
+                if container_status == "ERROR":
+                    last_failure_error = self._last_error or "Threads container processing error"
+                    if external_url or "2207077" not in last_failure_error:
+                        return PublishResult(
+                            platform=self.platform_id,
+                            success=False,
+                            error=last_failure_error,
+                        )
+                    self._log.warning(
+                        "[Threads] 2207077 on container processing with %s URL — "
+                        "rotating CDN provider",
+                        used_provider,
+                    )
+                    excluded = excluded | {used_provider}
+                    continue
+                if container_status == "TIMEOUT":
+                    return PublishResult(
+                        platform=self.platform_id,
+                        success=False,
+                        error="Threads container processing timeout (120s)",
+                    )
+
+            post_id = self._threads_publish(container_id=container_id)
+            if post_id is None:
+                last_failure_error = (
+                    self._last_error or f"Threads: {media_type.lower()} threads_publish failed"
+                )
+                if external_url or "2207077" not in last_failure_error:
+                    return PublishResult(
+                        platform=self.platform_id,
+                        success=False,
+                        error=last_failure_error,
+                    )
+                self._log.warning(
+                    "[Threads] 2207077 on threads_publish with %s URL — rotating CDN provider",
+                    used_provider,
+                )
+                excluded = excluded | {used_provider}
+                continue
+
+            return self._build_publish_success(media_type=media_type, post_id=post_id)
+
+        return PublishResult(
+            platform=self.platform_id,
+            success=False,
+            error=(
+                f"Threads: 2207077 on all CDN providers ({list(provider_order)})"
+                f" — last error: {last_failure_error}"
+            ),
+        )
+
+    def _build_publish_success(self, *, media_type: str, post_id: str) -> PublishResult:
+        """Build a SUCCESS PublishResult after a confirmed Threads publish."""
+        if media_type == "VIDEO":
+            post_url = f"https://www.threads.net/post/{post_id}"
+            try:
+                permalink_resp = requests.get(
+                    f"{self._base_url}/{post_id}",
+                    params={"fields": "permalink", "access_token": self._access_token},
+                    timeout=10,
+                )
+                if permalink_resp.ok:
+                    real_url = permalink_resp.json().get("permalink", "")
+                    if real_url:
+                        post_url = real_url
+            except Exception:
+                pass
+        else:
+            post_url = self._get_permalink(post_id)
+
+        self._log.info("Threads: published %s post %s — %s", media_type.lower(), post_id, post_url)
         return PublishResult(
             platform=self.platform_id,
             success=True,
@@ -447,9 +534,11 @@ class ThreadsClient:
                 self._log.debug("Threads: created %s container %s", media_type, payload["id"])
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
+            self._last_error = f"container creation failed ({media_type}): {error_msg}"
             self._log.error("Threads: container creation failed (%s): %s", media_type, error_msg)
             return None
         except Exception as exc:
+            self._last_error = f"container request error: {exc}"
             self._log.error("Threads: container request error: %s", exc)
             return None
 
@@ -469,31 +558,47 @@ class ThreadsClient:
             if resp.ok and "id" in payload:
                 return payload["id"]
             error_msg = payload.get("error", {}).get("message", str(payload))
+            self._last_error = f"threads_publish failed: {error_msg}"
             self._log.error("Threads: threads_publish failed: %s", error_msg)
             return None
         except Exception as exc:
+            self._last_error = f"threads_publish request error: {exc}"
             self._log.error("Threads: threads_publish request error: %s", exc)
             return None
 
     def _poll_container(self, container_id: str, max_seconds: int = 120) -> str:
-        """Poll Threads container status until FINISHED, ERROR, or timeout."""
+        """Poll Threads container status until FINISHED, ERROR, or timeout.
+
+        Also re-queries the container with ``fields=status,error_message``
+        when status==ERROR so :attr:`_last_error` captures Meta's specific
+        error code (e.g. ``"2207077"`` — CDN fetch failed). The publish path
+        keys off this to decide whether to retry against a different CDN
+        provider.
+        """
         consecutive_errors = 0
         for _ in range(max_seconds // 5):
             try:
                 resp = requests.get(
                     f"{self._base_url}/{container_id}",
-                    params={"fields": "status", "access_token": self._access_token},
+                    params={
+                        "fields": "status,error_message",
+                        "access_token": self._access_token,
+                    },
                     timeout=10,
                 )
                 if resp.ok:
                     consecutive_errors = 0
-                    status = resp.json().get("status", "")
+                    body = resp.json()
+                    status = body.get("status", "")
                     if status == "FINISHED":
                         return "FINISHED"
                     if status == "ERROR":
+                        error_detail = body.get("error_message", "") or str(body)
+                        self._last_error = f"container processing error: {error_detail}"
                         self._log.error(
-                            "[Threads] container %s returned ERROR state",
+                            "[Threads] container %s returned ERROR state (detail: %s)",
                             container_id[:16],
+                            error_detail,
                         )
                         return "ERROR"
                 else:
@@ -511,9 +616,13 @@ class ThreadsClient:
                     exc,
                 )
                 if consecutive_errors >= 3:
+                    self._last_error = (
+                        f"container poll gave up after 3 consecutive errors (last: {exc})"
+                    )
                     self._log.error("[Threads] container poll gave up after 3 consecutive errors")
                     return "ERROR"
             time.sleep(5)  # uses module-level time import (mockable in tests)
+        self._last_error = f"container polling timed out after {max_seconds}s"
         return "TIMEOUT"
 
     def _get_permalink(self, post_id: str) -> str:
@@ -539,6 +648,9 @@ class ThreadsClient:
 
         If the path is already an HTTP URL, return as-is.
         Otherwise upload to CDN first so the Threads API receives a public URL.
+        Kept for backward-compatibility — the publish path now uses
+        :meth:`_resolve_url_full` so it can rotate CDN providers on
+        Meta error 2207077.
         """
         s = str(path)
         if s.startswith("http"):
@@ -551,6 +663,37 @@ class ThreadsClient:
             return cdn_url
         # CDN upload failed — return path as-is (will fail at API level)
         return s
+
+    def _resolve_url_full(
+        self,
+        path: Path | str,
+        *,
+        exclude_providers: frozenset[str] = frozenset(),
+    ) -> tuple[str, str] | None:
+        """Return ``(url, provider)`` for a media path, skipping excluded CDNs.
+
+        - If ``path`` is already an HTTP URL, returns ``(url, "external")``
+          — the URL came from the caller, we don't own the CDN choice and
+          can't rotate it on 2207077.
+        - Otherwise uploads via :func:`upload_to_cdn_full` and returns the
+          resulting URL + provider ID so the caller can populate
+          ``exclude_providers`` on retry.
+        - Returns ``None`` if every non-excluded provider failed.
+        """
+        s = str(path)
+        if s.startswith("http"):
+            return (s, "external")
+
+        from genlab_core.platforms.cdn_upload import upload_to_cdn_full
+
+        result = upload_to_cdn_full(
+            Path(path),
+            require_external=True,
+            exclude_providers=exclude_providers,
+        )
+        if result is None:
+            return None
+        return (result.url, result.provider)
 
     def _token_needs_refresh(self) -> bool:
         """Return True if the token is >= 50 days old (60-day expiry).

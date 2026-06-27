@@ -79,7 +79,7 @@ class TestPublish:
         def mock_get(url, *args, **kwargs):
             get_call_count["n"] += 1
             params = kwargs.get("params", {})
-            if isinstance(params, dict) and params.get("fields") == "status":
+            if isinstance(params, dict) and "status" in (params.get("fields", "") or ""):
                 # Poll container status — return FINISHED
                 return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
             else:
@@ -116,7 +116,7 @@ class TestPublish:
 
         def mock_get(url, *args, **kwargs):
             params = kwargs.get("params", {})
-            if isinstance(params, dict) and params.get("fields") == "status":
+            if isinstance(params, dict) and "status" in (params.get("fields", "") or ""):
                 return MagicMock(ok=True, json=lambda: {"status": "FINISHED"})
             return MagicMock(
                 ok=True, json=lambda: {"permalink": "https://www.threads.net/@user/post/99"}

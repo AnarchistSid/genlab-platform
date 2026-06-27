@@ -184,41 +184,6 @@ class InstagramClient:
         first_path = payload.media_paths[0]
         video_url = str(first_path)
 
-        if not video_url.startswith("http"):
-            from genlab_core.platforms.cdn_upload import upload_to_cdn
-
-            # Retry CDN upload once on failure (large files can timeout on first attempt)
-            cdn_url = None
-            _cdn_last_exc = None
-            for _cdn_attempt in range(2):
-                try:
-                    cdn_url = upload_to_cdn(video_url, require_external=True)
-                    if cdn_url:
-                        break
-                except Exception as _cdn_exc:
-                    _cdn_last_exc = _cdn_exc
-                    if _cdn_attempt == 0:
-                        self._log.warning("CDN upload failed (attempt 1), retrying: %s", _cdn_exc)
-                        continue
-                    raise
-                if _cdn_attempt == 0 and not cdn_url:
-                    self._log.warning("CDN upload returned None (attempt 1), retrying")
-            if not cdn_url:
-                tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
-                from pathlib import Path as _Path
-
-                exists = _Path(video_url).exists() if video_url else False
-                return PublishResult(
-                    platform=self.platform_id,
-                    success=False,
-                    error=(
-                        f"CDN upload failed for Instagram after 2 attempts"
-                        f" (file_exists={exists}, tunnel={'set' if tunnel else 'unset'},"
-                        f" path={video_url[-60:]})"
-                    ),
-                )
-            video_url = cdn_url
-
         # Build caption with hashtags (avoid duplication — caption may already
         # contain inline hashtags from the writing stage)
         caption = payload.caption
@@ -237,23 +202,117 @@ class InstagramClient:
             share_to_feed = ig_specific.share_to_feed
             cover_url = ig_specific.cover_url
 
-        self._last_error = ""
-        post_id = self._publish_reel(
-            video_url=video_url,
-            caption=caption,
-            share_to_feed=share_to_feed,
-            cover_url=cover_url,
-            max_poll_seconds=self._max_poll_seconds,
+        # Fast path: caller already supplied a public URL — skip CDN entirely.
+        if video_url.startswith("http"):
+            self._last_error = ""
+            post_id = self._publish_reel(
+                video_url=video_url,
+                caption=caption,
+                share_to_feed=share_to_feed,
+                cover_url=cover_url,
+                max_poll_seconds=self._max_poll_seconds,
+            )
+            if post_id is None:
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=self._last_error or "Instagram Reel publish failed — unknown error",
+                )
+            return self._build_publish_success(post_id)
+
+        # Local path — upload to CDN and retry against a different provider on
+        # Meta container error 2207077 ("media upload failed", i.e. Meta's
+        # fetcher could not download from the URL we gave it). The inner CDN
+        # helpers (litterbox + tmpfiles) each have their own attempt loop for
+        # ephemeral upload errors; the outer loop here is for the Meta-side
+        # 2207077 case where the upload succeeded but Meta still can't fetch.
+        # Prod data (ai_creators, last 60 days): 8/8 IG failures were 2207077
+        # on litterbox URLs — without this loop every one was a silent slot
+        # burn. See PR fix(platforms): retry IG/Threads CDN on Meta 2207077.
+        from genlab_core.platforms.cdn_upload import (
+            PROVIDER_LITTERBOX,
+            PROVIDER_TMPFILES,
+            upload_to_cdn_full,
         )
 
-        if post_id is None:
-            return PublishResult(
-                platform=self.platform_id,
-                success=False,
-                error=self._last_error or "Instagram Reel publish failed — unknown error",
+        provider_order = (PROVIDER_LITTERBOX, PROVIDER_TMPFILES)
+        excluded: frozenset[str] = frozenset()
+        last_failure_error = ""
+
+        for _ in provider_order:
+            cdn_result = upload_to_cdn_full(
+                video_url,
+                require_external=True,
+                exclude_providers=excluded,
+            )
+            if cdn_result is None:
+                # All non-excluded providers refused the upload (e.g. file too
+                # large, both circuits open). Trying again with no provider
+                # change will give the same answer — bail.
+                tunnel = os.environ.get("CLOUDFLARE_TUNNEL_URL", "")
+                from pathlib import Path as _Path
+
+                exists = _Path(video_url).exists() if video_url else False
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        f"CDN upload failed for Instagram (exhausted providers "
+                        f"{sorted(excluded)}, file_exists={exists},"
+                        f" tunnel={'set' if tunnel else 'unset'},"
+                        f" path={video_url[-60:]})"
+                    ),
+                )
+
+            cdn_url = cdn_result.url
+            used_provider = cdn_result.provider
+            self._last_error = ""
+            post_id = self._publish_reel(
+                video_url=cdn_url,
+                caption=caption,
+                share_to_feed=share_to_feed,
+                cover_url=cover_url,
+                max_poll_seconds=self._max_poll_seconds,
             )
 
-        # Fetch the real permalink (numeric Graph IDs don't resolve as /p/ URLs)
+            if post_id is not None:
+                return self._build_publish_success(post_id)
+
+            # Publish failed. If the failure is NOT a Meta CDN-fetch error,
+            # retrying with a different provider can't help — return now.
+            last_failure_error = self._last_error or "unknown error"
+            if "2207077" not in last_failure_error:
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=last_failure_error,
+                )
+
+            # 2207077 with this provider's URL — exclude it and try the next
+            # tier on the next iteration.
+            self._log.warning(
+                "[IG] 2207077 with %s URL — retrying with different CDN provider",
+                used_provider,
+            )
+            excluded = excluded | {used_provider}
+
+        # Loop exhausted on 2207077 across every provider.
+        return PublishResult(
+            platform=self.platform_id,
+            success=False,
+            error=(
+                f"Instagram: 2207077 on all CDN providers ({list(provider_order)})"
+                f" — last error: {last_failure_error}"
+            ),
+        )
+
+    def _build_publish_success(self, post_id: str) -> PublishResult:
+        """Build a SUCCESS PublishResult after a confirmed publish.
+
+        Fetches the real permalink (numeric Graph IDs don't resolve as ``/p/``
+        URLs) but falls back to a synthesised reel URL on any error — the
+        post is already live, the permalink is purely for dashboard display.
+        """
         real_url = f"https://www.instagram.com/reel/{post_id}/"
         try:
             permalink_resp = self._graph_get(f"/{post_id}", params={"fields": "permalink"})
