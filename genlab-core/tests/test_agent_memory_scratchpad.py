@@ -26,8 +26,16 @@ These pins guard:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+# 2026-06-27: timestamps used to be hardcoded '2026-06-20T12:00:00+00:00'
+# which crossed the production code's 7-day lookback boundary today,
+# breaking every PR opened on or after 2026-06-27. Use a relative
+# timestamp anchored to "now" so the test stays inside the lookback
+# window regardless of wall-clock date.
+_RECENT_EVENT_TS = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
 
 
 class TestFallbackMarkdown:
@@ -83,7 +91,7 @@ class TestSuccessfulGeneration:
                 event_type="operator_review",
                 niche_id="gaming",
                 blueprint_id="bp1",
-                timestamp="2026-06-20T12:00:00+00:00",
+                timestamp=_RECENT_EVENT_TS,
                 payload={"action": "rejected", "feedback_issue": "weak_hook"},
             ),
         ]
@@ -129,7 +137,7 @@ class TestSuccessfulGeneration:
                 event_type="operator_review",
                 niche_id="gaming",
                 blueprint_id="bp1",
-                timestamp="2026-06-20T12:00:00+00:00",
+                timestamp=_RECENT_EVENT_TS,
                 payload={"action": "approved"},
             )
         ]
