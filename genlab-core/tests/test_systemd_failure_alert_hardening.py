@@ -121,3 +121,83 @@ class TestVerifyHarnessDetectsFailedInstances:
             "the failure-alert template. Otherwise nothing recovers "
             "them between deploys."
         )
+
+
+class TestJournalctlFallback:
+    """Pin: 2026-06-28 — the failure-alert script must fall back to an
+    untimed `journalctl -n 20` when the `--since "5 minutes ago"` window
+    returns empty.
+
+    The 2026-06-27 deploy-restart-sweep produced 7 unresolved CRITICAL
+    alerts whose entire diagnostic context was the literal string
+    "(journalctl failed)". Operators saw this in every alert and lost
+    trust in the diagnostic text — zero useful info carried through.
+    Root cause: the 5-min window was empty (busy moment, journal
+    locked, oneshots that finished too fast for the window) and the
+    `|| echo "(journalctl failed)"` fired.
+
+    Pin guards against regressing to a single windowed call without
+    untimed fallback.
+    """
+
+    def test_untimed_fallback_present(self):
+        """The script must include a fallback `-n 20` call (no `--since`
+        filter) for when the time-windowed query returns empty."""
+        content = SCRIPT.read_text()
+        # The fallback uses `-n 20` (last-20-lines syntax) without
+        # `--since`. The first call uses `--since`. Both must coexist.
+        assert "--since" in content, (
+            "First-pass journalctl call should use --since to scope to "
+            "the recent failure window."
+        )
+        assert "-n 20" in content, (
+            "Fallback journalctl call must use `-n 20` to get the last "
+            "20 lines regardless of time window. Without this, an empty "
+            "5-min window leaves operators with no diagnostic context "
+            "(2026-06-27 incident: 7 alerts with '(journalctl failed)' "
+            "literal as their only context)."
+        )
+
+    def test_does_not_emit_journalctl_failed_string(self):
+        """The legacy '(journalctl failed)' string is replaced with a
+        more actionable '(journalctl unavailable — try: …)' message
+        that includes the manual command. Pin against the legacy
+        string regressing into the script."""
+        content = SCRIPT.read_text()
+        assert "(journalctl failed)" not in content, (
+            "Legacy '(journalctl failed)' string must not appear. The "
+            "operator-facing replacement is "
+            "'(journalctl unavailable — try: journalctl -u <unit> -n 50)' "
+            "which tells the operator what to do, not what didn't work."
+        )
+
+    def test_actionable_unavailable_message_present(self):
+        """When both calls return empty, the message should tell the
+        operator HOW to investigate, not just that something failed."""
+        content = SCRIPT.read_text()
+        assert "journalctl unavailable" in content, (
+            "Fallback-of-fallback message should say 'journalctl "
+            "unavailable' (descriptive, not blaming)."
+        )
+        assert "try:" in content.lower() or "journalctl -u " in content, (
+            "Fallback message must include the manual command for the "
+            "operator to run — operator-actionable diagnostics."
+        )
+
+    def test_fallback_runs_AFTER_windowed_call(self):
+        """The order matters: the windowed call must come FIRST (gives
+        recent context when it works), the untimed `-n 20` falls back
+        only when the first call returns empty. Reversing the order
+        would leak older/unrelated context into every alert."""
+        content = SCRIPT.read_text()
+        since_pos = content.find('--since "5 minutes ago"')
+        # Find the LAST occurrence of -n 20 so we don't accidentally
+        # match unrelated text earlier in the file.
+        fallback_pos = content.rfind("-n 20")
+        assert since_pos > 0, "--since '5 minutes ago' call must be present"
+        assert fallback_pos > 0, "-n 20 fallback call must be present"
+        assert since_pos < fallback_pos, (
+            f"--since call (pos={since_pos}) must precede the -n 20 "
+            f"fallback (pos={fallback_pos}). The windowed call is the "
+            f"preferred path; -n 20 only fires when it returns empty."
+        )
