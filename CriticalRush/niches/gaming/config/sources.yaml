@@ -188,10 +188,19 @@ twitch_clips:
   max_clips_per_game: 5
   min_view_count: 1000
   lookback_days: 7
+  # 2026-06-28: raise from default 5 → 8. Audit found this cap hidden in
+  # fetch_twitch_clips.py:232 (was hardcoded; now config-driven). Combined
+  # with PR #621 (filter cap 5→7) + PR #623 (PreflightDedup), gives gaming
+  # ~60% more upstream Twitch candidates per run to make dedup variance
+  # matter less. Rate-limit cost: 0.1s × 8 = 0.8s extra sleep.
+  max_games: 8
 
 steam_trailers:
   enabled: true
   max_per_game: 2
+  # 2026-06-28: same rationale as twitch_clips.max_games above. Rate-limit
+  # cost: 0.3s × 8 = 2.4s extra sleep.
+  max_games: 8
 
 # Reddit video fetcher (genlab_core.intel.reddit_fetcher)
 reddit_sources:
