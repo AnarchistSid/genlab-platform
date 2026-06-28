@@ -136,13 +136,29 @@ def _is_published(run_dir: Path) -> bool:
 
 
 def _get_pending_publish_run_ids() -> set[str]:
-    """Return run_ids referenced by scheduled-but-unpublished blueprints.
+    """Return run_ids referenced by any publish-pending blueprint.
 
     These runs must be protected from eviction even though they don't yet
     have a `publish_all_summary.json` — losing their visuals turns the
     blueprint into a dead schedule. Mac/Hetzner split-brain on 2026-04-29
     surfaced this: 75 scheduled blueprints had Hetzner-resident visuals
     purged because the host run hadn't published yet.
+
+    2026-06-28 — broadened the WHERE clause to cover blueprints that
+    HAVEN'T been scheduled yet but ARE still publish-pending. The
+    original query required the schedule timestamp to be set;
+    investigation found blueprints in DRAFTED / VISUAL_READY (post-
+    render, pre-approval) were silently unprotected — cleanup would
+    evict their media after ``protect_recent`` while operator was
+    deciding whether to approve. By the time operator scheduled the
+    blueprint days later, the file was already gone (publisher then
+    logs ``No valid media files for video publish`` and the blueprint
+    eventually auto-archives). Affected ~6 known blueprints over 2
+    months (April-June 2026), all post-rendered media lost between
+    approve-time and cleanup-window. The terminal-state filter
+    (PUBLISHED / ARCHIVED / PUBLISH_FAILED / REJECTED) is the right
+    gate — anything still in a publish-pending state needs its media
+    kept regardless of whether the schedule has been set.
 
     Returns an empty set on any DB failure — better to risk eviction of a
     pending run than to crash the cleanup loop and let the disk fill up.
@@ -161,8 +177,9 @@ def _get_pending_publish_run_ids() -> set[str]:
                     """
                     SELECT extra->>'visual_paths'
                     FROM blueprints
-                    WHERE scheduled_for IS NOT NULL
-                      AND status NOT IN ('PUBLISHED', 'ARCHIVED', 'PUBLISH_FAILED')
+                    WHERE status NOT IN (
+                              'PUBLISHED', 'ARCHIVED', 'PUBLISH_FAILED', 'REJECTED'
+                          )
                       AND extra ? 'visual_paths'
                     """
                 )
