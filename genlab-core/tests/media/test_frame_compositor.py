@@ -1,7 +1,8 @@
 """Tests for FrameCompositor -- Gen Lab Layout v4.
 
-Three layout paths: landscape (branding+hook+video), portrait (clean),
-square (branding+hook+video).
+Three layout paths: landscape (branding+hook+video), portrait
+(full-bleed video + logo + name + handle overlaid, hook opt-in per
+AUTONOMY-GAP Q3 2026-06-27), square (branding+hook+video).
 """
 
 from genlab_core.media.frame_compositor import (
@@ -129,9 +130,13 @@ class TestLockedConstants:
         assert S_HOOK_Y < S_VIDEO_Y, "Hook above video"
         assert S_LOGO_Y < S_HOOK_Y, "Logo above hook"
 
-    def test_portrait_is_clean(self):
-        """Portrait layout has NO branding — clean full-screen video."""
-        # No portrait-specific constants needed — it's just scale+crop
+    def test_portrait_has_no_extra_layout_constants(self):
+        """Portrait layout uses scale+crop directly (no L_/S_-style
+        constants). Branding (logo + name + handle defaults; hook
+        opt-in) is positioned via the P_LOGO_X / P_LOGO_Y constants
+        already covered above."""
+        # No portrait-specific layout constants needed — geometry is
+        # canvas-wide and computed inline in _build_cmd_portrait.
         pass
 
     def test_hook_max_chars(self):
