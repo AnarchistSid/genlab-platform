@@ -127,10 +127,18 @@ pipeline:
   # name in the title). 3-day title window allows different moment-clips
   # from the same game/team without re-blueprinting the same actual video.
   title_dedup_days: 3
-  # URL-dedup TTL (2026-06-23) — ScoreBat match URLs for popular fixtures
-  # recur within 1-2 weeks (same Liverpool vs Crystal Palace match page
-  # gets cited in multiple highlight clips over the week). Live diagnosed
+  # URL-dedup TTL — ScoreBat match URLs for popular fixtures recur
+  # within 1-2 weeks (same Liverpool vs Crystal Palace match page gets
+  # cited in multiple highlight clips over the week). Live diagnosed
   # 2026-06-23: PreDownloadDedup dropped 3 of 5 stories (Angers-PSG,
   # Getafe-Barcelona, Liverpool-Crystal Palace) as URL-already-published,
-  # contributing to the 5-day publishing gap. 7-day TTL matches gaming.
-  url_dedup_ttl_days: 7
+  # contributing to the 5-day publishing gap.
+  #
+  # 2026-06-28 — lowered from 7 → 3 days (matches gaming PR #627
+  # trade-off). Sports' 7-day pattern shows 3 zero-blueprint days out
+  # of 7 (06-22, 06-26, etc), same structural shape as gaming. Shorter
+  # TTL lets popular fixtures re-feature every 3 days instead of weekly,
+  # accepting slight feed repetition for steady cadence. Sports still
+  # produces 1.86 blueprints/day on average so this is marginal lift
+  # not a starvation fix — main effect is reducing variance.
+  url_dedup_ttl_days: 3
