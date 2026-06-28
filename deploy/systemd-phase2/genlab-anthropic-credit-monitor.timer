@@ -1,0 +1,27 @@
+[Unit]
+Description=GenLab Anthropic Credit Monitor Timer — scan journalctl for credit-low signal every 15 min
+
+[Timer]
+# Every 15 minutes. Credit-exhaustion has higher cost-of-being-slow
+# than systemd_unit_failed bleed-out (5-min sweep): when credit runs
+# out, EVERY downstream LLM call fails in succession for the rest of
+# the day. Slower detection costs an entire pipeline run-cycle's
+# worth of content (~6h for the next scheduled pipeline; a full day
+# of publishes if the operator doesn't notice the banner overnight).
+#
+# Why not 5 min:
+#   * Each fire shells out to journalctl + (sometimes) psql; doing
+#     that 3x more often during steady-state (when there are 0
+#     matches and the dedupe SELECT also runs) is wasted I/O.
+#   * 15 min is fast enough that an exhaustion at 09:00 IST is
+#     flagged before the operator's 10:00 IST Mission Control check.
+#   * 60-min lookback window in the library gives us 4x headroom
+#     for a missed fire (post-reboot catchup, etc).
+OnCalendar=*:0/15
+# Catch up on a missed fire after reboot. Dedupe makes re-firing
+# idempotent (no duplicate alert rows even if the timer catches up
+# multiple windows at once).
+Persistent=true
+
+[Install]
+WantedBy=timers.target
