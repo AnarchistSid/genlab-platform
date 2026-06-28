@@ -53,12 +53,20 @@ mkdir -p "$LOG_DIR"
 # Run from the GenLab workspace root so uv can find all workspace members.
 cd "$GENLAB_ROOT"
 
-# psycopg2 is fully synchronous — no event loop conflicts with eventlet.
+# psycopg (sync) is fully synchronous — no event loop conflicts with the
+# gthread worker. We migrated off eventlet in PR P (SYSTEM-RESEARCH.md U-07):
+# gunicorn v26 drops the eventlet worker class entirely. gthread keeps the
+# psycopg sync model clean. NOTE: with gthread the Flask-SocketIO
+# async_mode falls back to "threading", which serves Socket.IO via HTTP
+# long-polling only (no native WebSocket upgrades). Production runs behind
+# a Cloudflare tunnel that already forces polling, so the user-visible
+# behavior is unchanged.
 # GENLAB_USE_POSTGRES=true (from .env) routes all queries to PostgreSQL.
 exec /Users/anarchistsid/.local/bin/uv run --project "$DASHBOARD_ROOT" \
     gunicorn \
-    --worker-class eventlet \
+    --worker-class gthread \
     --workers 1 \
+    --threads 4 \
     --timeout 120 \
     --max-requests 500 \
     --max-requests-jitter 50 \
