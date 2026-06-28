@@ -128,6 +128,82 @@ class TestRegisterPendingFeedback:
             backlog_client=MagicMock(),
         )
 
+    # PR U (2026-06-28): IPS propensity wire-through pins. PR #634
+    # shipped the storage column + the LinUCBBandit.select_with_
+    # propensity producer; this PR closes the gap between
+    # push_to_backlog._classify_arm_with_propensity and the
+    # PendingFeedbackTask construction so the column actually gets
+    # populated under the LinUCB path.
+
+    @patch("genlab_core.learning.pending_feedback_task.PendingFeedbackTask")
+    @patch("genlab_core.learning.pending_feedback_store.PendingFeedbackStore")
+    def test_propensity_in_fields_flows_to_pending_feedback_task(self, MockStore, MockTask) -> None:
+        """Pin: ``fields["bandit_propensity"]`` flows to
+        ``PendingFeedbackTask.propensity`` AND a paired
+        ``temperature=0.5`` lands on the task. The 0.5 matches
+        ``linucb_picker._DETERMINISTIC_TEMPERATURE`` (and
+        ``LinUCBBandit.DEFAULT_TEMPERATURE``) so IPS replay reads both
+        producers under one convention."""
+        outcome = _outcome({"instagram": "PUBLISHED"}, {"instagram": "ig1"})
+        register_pending_feedback(
+            outcome=outcome,
+            fields={"hook": "h", "bandit_propensity": 0.6},
+            record_id="rec",
+            candidate_id="cand",
+            niche_id="gaming",
+            backlog_client=MagicMock(),
+        )
+        MockTask.assert_called_once()
+        assert MockTask.call_args.kwargs["propensity"] == 0.6
+        # Temperature is auto-paired with the propensity — the
+        # producer-side (linucb_picker) uses 0.5 as the deterministic
+        # temperature so this mirror keeps both ends consistent.
+        assert MockTask.call_args.kwargs["temperature"] == 0.5
+
+    @patch("genlab_core.learning.pending_feedback_task.PendingFeedbackTask")
+    @patch("genlab_core.learning.pending_feedback_store.PendingFeedbackStore")
+    def test_no_propensity_in_fields_keeps_task_propensity_none(self, MockStore, MockTask) -> None:
+        """Pin: when fields lacks the ``bandit_propensity`` key (every
+        non-LinUCB path — Thompson, force-explore, active-experiment,
+        random-control, no-match default), both propensity AND
+        temperature land as None on the task. Preserves the
+        ``NULL = not applicable`` sentinel that downstream IPS replay
+        uses to exclude rows."""
+        outcome = _outcome({"instagram": "PUBLISHED"}, {"instagram": "ig1"})
+        register_pending_feedback(
+            outcome=outcome,
+            fields={"hook": "h"},  # no bandit_propensity key
+            record_id="rec",
+            candidate_id="cand",
+            niche_id="gaming",
+            backlog_client=MagicMock(),
+        )
+        MockTask.assert_called_once()
+        assert MockTask.call_args.kwargs["propensity"] is None
+        # Pinned to None (NOT 0.5) so the task carries an unambiguous
+        # "not applicable" signal — temperature only makes sense when
+        # paired with a real propensity.
+        assert MockTask.call_args.kwargs["temperature"] is None
+
+    @patch("genlab_core.learning.pending_feedback_task.PendingFeedbackTask")
+    @patch("genlab_core.learning.pending_feedback_store.PendingFeedbackStore")
+    def test_propensity_value_passes_through_unchanged(self, MockStore, MockTask) -> None:
+        """Pin: the propensity value is NOT rounded, clamped, or
+        re-scaled at the registration layer. The picker already
+        floored at ``_MIN_PROPENSITY``; this layer is a pure
+        pass-through. Future refactors that touch this code path must
+        preserve the exact float."""
+        outcome = _outcome({"instagram": "PUBLISHED"}, {"instagram": "ig1"})
+        register_pending_feedback(
+            outcome=outcome,
+            fields={"hook": "h", "bandit_propensity": 0.123},
+            record_id="rec",
+            candidate_id="cand",
+            niche_id="gaming",
+            backlog_client=MagicMock(),
+        )
+        assert MockTask.call_args.kwargs["propensity"] == 0.123
+
 
 # ---------------------------------------------------------------------------
 # _build_bandit_context — graceful fallback when learning imports break
