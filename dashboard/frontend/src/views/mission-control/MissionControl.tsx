@@ -34,6 +34,7 @@ import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
 import { PerPlatformHealthCard } from "./PerPlatformHealthCard";
+import { BanditPlatformDivergenceCard } from "./BanditPlatformDivergenceCard";
 import { SourceDiscoveryCard } from "./SourceDiscoveryCard";
 
 // ── Helpers ────────────────────────────────────────────────
@@ -316,6 +317,16 @@ export default function MissionControl() {
                 rate colored red/yellow/green so an unhealthy combo is
                 visible at-a-glance instead of buried in a global average. */}
             <PerPlatformHealthCard />
+            {/* PR AG (2026-06-29): per-(niche, base_arm) per-platform
+                bandit divergence surface for PR #641. After ~2 weeks of
+                metric_collector reward updates accumulating both base +
+                per-platform variants, this card shows whether the per-
+                platform split is producing meaningful signal (IG↔YT delta
+                ≥5%) vs collapsing back to the base arm. Sits next to
+                PerPlatformHealthCard because both answer per-platform
+                operator questions — health is "does it publish?",
+                divergence is "does it work differently?". */}
+            <BanditPlatformDivergenceCard />
             {/* PR after #586 (2026-06-25): source-discovery proposer.
                 Ranks SOURCE YouTube channels we pulled clips from
                 by per-clip avg engagement so operators decide which

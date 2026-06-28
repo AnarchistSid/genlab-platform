@@ -1100,6 +1100,67 @@ export interface PerNichePlatformHealthResponse {
   window_days: number;
 }
 
+// ── Per-platform bandit divergence (PR AG, 2026-06-29) ──
+
+/**
+ * One row of the bandit-divergence matrix: one (niche, base_arm) pair
+ * with its base posterior + per-platform variant posteriors + the deltas.
+ *
+ * Mirrors the rows produced by
+ * ``server.core.bandit_platform_divergence_pg.fetch_per_platform_divergence``.
+ *
+ * Fields:
+ *   * *_mean values are Thompson posterior means (alpha / (alpha+beta));
+ *     null when no row exists in bandit_arms for that variant.
+ *   * *_n_plays is the bandit observation count; 0 when no row exists.
+ *   * ig_yt_delta is |instagram_mean - youtube_mean|. Null if either side
+ *     missing; frontend renders "—". Star the row when ≥ thresholds
+ *     .meaningful_delta_pct / 100.
+ *   * ig_delta_from_base / yt_delta_from_base are SIGNED (positive when
+ *     the variant outperforms the base on that platform).
+ */
+export interface BanditPlatformDivergenceRow {
+  niche_id: string;
+  base_arm_id: string;
+  /** alpha / (alpha+beta) for the base arm. */
+  base_mean: number | null;
+  base_n_plays: number;
+  /** alpha / (alpha+beta) for the per-platform variant (null when no row). */
+  instagram_mean: number | null;
+  instagram_n_plays: number;
+  /** alpha / (alpha+beta) for the per-platform variant (null when no row). */
+  youtube_mean: number | null;
+  youtube_n_plays: number;
+  /** Absolute |IG - YT|, [0, 1]. Null if either side missing. */
+  ig_yt_delta: number | null;
+  /** Signed IG - base, [-1, 1]. Null if either side missing. */
+  ig_delta_from_base: number | null;
+  /** Signed YT - base, [-1, 1]. Null if either side missing. */
+  yt_delta_from_base: number | null;
+}
+
+/**
+ * Response shape from /api/v1/learning/bandit-platform-divergence.
+ *
+ * thresholds is server-supplied so the card doesn't hardcode them.
+ * If we ever tune (say, raise the meaningful delta to 7%), the card
+ * picks it up via the API without a frontend rebuild.
+ */
+export interface BanditPlatformDivergenceResponse {
+  rows: BanditPlatformDivergenceRow[];
+  /** Canonical platform list (mirrors list_split_platforms()). */
+  platforms: string[];
+  thresholds: {
+    /** Star rows where ig_yt_delta * 100 ≥ this value. */
+    meaningful_delta_pct: number;
+    /** Variants with n_plays < this render with "(cold)" badge. */
+    cold_start_below_n: number;
+  };
+  /** Window descriptor — currently always "all_time" since bandit
+   *  posteriors are cumulative. */
+  window: string;
+}
+
 // ── Scheduling Pauses (operator emergency-stop, PR after #579) ──
 
 /**

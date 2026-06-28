@@ -46,6 +46,7 @@ import type {
   NichePauseRecord,
   ComplianceStatsResponse,
   PerNichePlatformHealthResponse,
+  BanditPlatformDivergenceResponse,
   SourceDiscoveryProposalsResponse,
 } from "./types";
 
@@ -939,6 +940,38 @@ export const publishingHealthPerNiche = {
         return d as PerNichePlatformHealthResponse;
       },
     ),
+};
+
+// PR AG (2026-06-29) — Per-platform bandit divergence client.
+// Wraps /api/v1/learning/bandit-platform-divergence. Powers the
+// Mission Control BanditPlatformDivergenceCard. Surfaces whether
+// PR #641's per-platform bandit split is producing meaningful
+// divergence vs collapsing back to the base arm. Operator-meaningful
+// data window: ~2 weeks of accumulation from PR #641 activation.
+export const banditPlatformDivergence = {
+  fetch: (params: { niche_id?: string; min_n_plays?: number } = {}) => {
+    const q: Record<string, string> = {};
+    if (params.niche_id) q.niche_id = params.niche_id;
+    if (params.min_n_plays != null) q.min_n_plays = String(params.min_n_plays);
+    return get<
+      | BanditPlatformDivergenceResponse
+      | { data: BanditPlatformDivergenceResponse }
+    >("/learning/bandit-platform-divergence", q).then(
+      (d): BanditPlatformDivergenceResponse => {
+        const envelope = d as { data?: BanditPlatformDivergenceResponse };
+        if (
+          envelope &&
+          typeof envelope === "object" &&
+          "data" in envelope &&
+          envelope.data &&
+          typeof envelope.data === "object"
+        ) {
+          return envelope.data;
+        }
+        return d as BanditPlatformDivergenceResponse;
+      },
+    );
+  },
 };
 
 // PR after #580 — Scheduling Pauses API client.

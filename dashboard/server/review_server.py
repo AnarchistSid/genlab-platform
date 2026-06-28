@@ -773,6 +773,7 @@ from server.api.analytics import bp as analytics_bp
 from server.api.audience import bp as audience_bp
 from server.api.auto_approval import bp as auto_approval_bp
 from server.api.bandit_hour_posteriors import bp as bandit_hour_posteriors_bp
+from server.api.bandit_platform_divergence import bp as bandit_platform_divergence_bp
 from server.api.blueprints import bp as blueprints_bp
 from server.api.blueprints import health_bp as focus_health_bp
 from server.api.compliance import bp as compliance_bp
@@ -848,6 +849,9 @@ app.register_blueprint(metrics_bp)
 app.register_blueprint(publishing_health_bp)  # PR B: /api/v1/publishing/per-niche-platform-health
 app.register_blueprint(audience_bp)
 app.register_blueprint(bandit_hour_posteriors_bp)
+app.register_blueprint(
+    bandit_platform_divergence_bp
+)  # PR AG: /api/v1/learning/bandit-platform-divergence
 app.register_blueprint(events_bp)
 
 
