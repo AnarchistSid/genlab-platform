@@ -133,6 +133,82 @@ def score_arm(
         return None
 
 
+def score_arm_with_platform_split(
+    arm_id: str,
+    context: np.ndarray | list[float],
+    linucb_arms: dict[str, LinUCBArm],
+    *,
+    min_obs: int = _DEFAULT_MIN_OBS,
+) -> float | None:
+    """Compute UCB score for ``arm_id`` aggregating across per-platform variants.
+
+    PR Z (2026-06-29) per-platform bandit arm split:
+
+    When ``GENLAB_PER_PLATFORM_BANDIT_ENABLED=1``, this function looks
+    up the base arm ``arm_id`` AND each per-platform variant
+    (e.g. ``arm_id__instagram``, ``arm_id__youtube``) and aggregates
+    via ``max`` — biases toward exploration when even one platform
+    shows strong signal for this content type. Documented choice:
+
+      * **max** (what we ship): if IG learned ``gameplay_clip`` works
+        well, the base score lifts even when YT hasn't picked up
+        signal yet. Encourages cross-platform discovery.
+      * **mean** (alternative): averages across platforms. More stable
+        but slower to react when one platform has clear signal.
+
+    Max selected because the asymmetric-decision-vs-reward split (see
+    ``bandit_platform_split.py`` module docstring) means we pick ONE
+    arm for a blueprint that publishes to MULTIPLE platforms — picking
+    based on the best-performing platform's UCB is the closest
+    behaviour to "publish where it'll work best."
+
+    Cold-start contract:
+    - If the BASE arm has a confident score, return it even when all
+      platform variants are cold-started — the base arm IS the
+      pre-PR-Z signal and is always at least as well-observed as any
+      per-platform variant.
+    - If the base arm itself is cold-started AND all variants are
+      cold-started, return None (caller falls back to Thompson).
+    - When a variant exists but is under-observed (n_obs < min_obs),
+      :func:`score_arm` already returns None — we filter Nones before
+      aggregating.
+
+    When the flag is OFF, this function is equivalent to
+    :func:`score_arm` (returns the base score directly). Caller can
+    use it unconditionally; the env check is centralized.
+    """
+    # Lazy import keeps bandit_platform_split off the import-time path
+    # for the dashboard-only deployments that don't ship the learning
+    # module's full dependency tree.
+    from genlab_core.learning.bandit_platform_split import (
+        expand_arm_for_platforms,
+    )
+    from genlab_core.learning.bandit_platform_split import (
+        is_enabled as _split_enabled,
+    )
+
+    if not _split_enabled():
+        # Flag OFF — preserve existing single-arm behaviour identically.
+        return score_arm(arm_id, context, linucb_arms, min_obs=min_obs)
+
+    # Flag ON — score the base AND every per-platform variant.
+    # ``expand_arm_for_platforms`` returns the base first, then the
+    # platform-specific arms in declaration order.
+    candidate_arms = expand_arm_for_platforms(arm_id)
+    scores: list[float] = []
+    for candidate in candidate_arms:
+        s = score_arm(candidate, context, linucb_arms, min_obs=min_obs)
+        if s is not None:
+            scores.append(s)
+
+    if not scores:
+        # All variants cold-started OR missing. Signal cold-start so
+        # caller's Thompson fallback handles the pick — same contract
+        # as :func:`score_arm`.
+        return None
+    return max(scores)
+
+
 def pick_best_arm(
     matches: list[str],
     context: np.ndarray | list[float],
@@ -167,7 +243,11 @@ def pick_best_arm(
 
     scores: dict[str, float] = {}
     for arm_id in matches:
-        s = score_arm(arm_id, context, linucb_arms, min_obs=min_obs)
+        # PR Z (2026-06-29): scoring helper aggregates per-platform
+        # variants via max when GENLAB_PER_PLATFORM_BANDIT_ENABLED=1.
+        # Identical to ``score_arm`` when flag is OFF — caller's
+        # cold-start contract is unchanged in that path.
+        s = score_arm_with_platform_split(arm_id, context, linucb_arms, min_obs=min_obs)
         if s is None:
             # Cold-start signal — even one under-observed arm collapses
             # the whole pick. Don't compare a confident arm against a
@@ -238,7 +318,11 @@ def pick_best_arm_with_propensity(
 
     scores: dict[str, float] = {}
     for arm_id in matches:
-        s = score_arm(arm_id, context, linucb_arms, min_obs=min_obs)
+        # PR Z (2026-06-29): scoring helper aggregates per-platform
+        # variants via max when GENLAB_PER_PLATFORM_BANDIT_ENABLED=1.
+        # Identical to ``score_arm`` when flag is OFF — propensity
+        # softmax shape is unchanged in that path.
+        s = score_arm_with_platform_split(arm_id, context, linucb_arms, min_obs=min_obs)
         if s is None:
             # Cold-start signal — collapses BOTH halves of the tuple so
             # the caller treats it identically to a missing arm in the
