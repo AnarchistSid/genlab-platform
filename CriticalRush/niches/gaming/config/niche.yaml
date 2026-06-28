@@ -184,13 +184,24 @@ pipeline:
   max_items_per_run: 10
   min_score_threshold: 0.20
   dedup_window_days: 7
-  # URL-dedup TTL (2026-06-23) — gaming's `video_url` field stores
-  # Twitch directory pages (`twitch.tv/directory/game/{game}`) and Steam
-  # store pages (`store.steampowered.com/app/{id}`). These are immortal
-  # per game — same URL every day for popular titles like Overwatch,
-  # GTA V, League of Legends. Without TTL, every fresh trending fetch
-  # gets dedup-rejected against prior-week published blueprints (live
-  # diagnosed 2026-06-23: all 4 fresh trending vids deduped out → 0
-  # blueprints). 7 days lets stable trending content republish weekly
-  # while still preventing daily repetition of the same clip.
-  url_dedup_ttl_days: 7
+  # URL-dedup TTL — gaming's `video_url` field stores Twitch directory
+  # pages (`twitch.tv/directory/game/{game}`) and Steam store pages
+  # (`store.steampowered.com/app/{id}`). These are immortal per game —
+  # same URL every day for popular titles like Overwatch, GTA V, LoL.
+  # Without TTL, every fresh trending fetch gets dedup-rejected against
+  # prior-week published blueprints.
+  #
+  # 2026-06-28 — lowered from 7 → 3 days. Today's 04:00 UTC run
+  # confirmed the structural ceiling: PreflightDedup (PR #623) correctly
+  # blocked Overwatch + LoL + Sand:Raiders + MECCHA — but those WERE the
+  # high-quality candidates with real Twitch/Steam gameplay clips
+  # available. The 4 survivors (Stellar Blade™, Avatar Legends, CAPTAIN
+  # TSUBASA, DF Direct Q+A) were pre-order trailers + discussion content
+  # with no real gameplay → clip_sourcer correctly returned "no clip
+  # found" → 0 blueprints. Cutting TTL to 3 lets the sticky-but-actually-
+  # playable games republish every 3 days instead of weekly, accepting
+  # slight feed repetition for steady cadence. Other niches
+  # (anime/movies/ai_creators) have naturally-unique YouTube watch URLs
+  # so they leave this unset (forever-dedup) — only gaming + sports use
+  # this knob today.
+  url_dedup_ttl_days: 3

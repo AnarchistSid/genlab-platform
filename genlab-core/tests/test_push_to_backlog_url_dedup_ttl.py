@@ -56,16 +56,31 @@ def test_push_to_backlog_filters_active_bps_through_ttl_helper() -> None:
     )
 
 
-def test_gaming_niche_has_7day_url_dedup_ttl() -> None:
-    """CriticalRush (gaming) must enable the 7-day TTL.
+def test_gaming_niche_has_3day_url_dedup_ttl() -> None:
+    """CriticalRush (gaming) must enable a SHORT URL-dedup TTL.
 
     Gaming's source URLs are immortal per game (Twitch directory pages +
-    Steam store pages). Removing this config restores the 2026-06-23
-    outage shape — 0 blueprints despite fresh trending content.
+    Steam store pages). Removing this config entirely restores the
+    2026-06-23 outage shape — 0 blueprints despite fresh trending
+    content.
+
+    2026-06-28 — lowered from 7 → 3 after the structural ceiling became
+    visible: PreflightDedup correctly blocks the high-quality candidates
+    (Overwatch, LoL etc) for the whole TTL window, but the SURVIVORS
+    are often pre-order trailers / discussion content where no real
+    gameplay clip exists → clip_sourcer returns no clip → 0 blueprints.
+    Shortening the TTL lets sticky-but-actually-playable games
+    re-feature every 3 days instead of weekly, trading slight feed
+    repetition for steady cadence. This pin guards against silent
+    regression to 7d (which would re-create the structural-zero pattern).
     """
     repo_root = Path(__file__).resolve().parent.parent.parent
     cfg = yaml.safe_load((repo_root / "CriticalRush/niches/gaming/config/niche.yaml").read_text())
-    assert cfg["pipeline"]["url_dedup_ttl_days"] == 7
+    assert cfg["pipeline"]["url_dedup_ttl_days"] == 3, (
+        "Gaming's url_dedup_ttl_days must be 3 (2026-06-28 trade-off). "
+        "Raising back to 7 will re-create the structural-zero pattern. "
+        "Removing the key entirely will re-create the 2026-06-23 outage."
+    )
 
 
 def test_sports_niche_has_7day_url_dedup_ttl() -> None:
