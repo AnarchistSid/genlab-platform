@@ -276,6 +276,10 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "collection_status",
         "reward_48h",
         "publish_time",
+        # AGENT-AUTONOMY-RESEARCH Move #8 — IPS propensity logging.
+        # See migration v3q4r5s6t7u8_pending_feedback_propensity.py.
+        "propensity",
+        "temperature",
     },
     "templates": {
         "niche_id",

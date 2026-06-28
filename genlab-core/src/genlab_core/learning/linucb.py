@@ -11,14 +11,43 @@ LinUCB formula:
     p = theta^T x + alpha * sqrt(x^T A^{-1} x)
     where theta = A^{-1} b
 
+Propensity logging (AGENT-AUTONOMY-RESEARCH Move #8, PR T)
+==========================================================
+Every selection now also returns the **propensity** ``p(arm | context)`` —
+the probability with which the policy would have picked this arm at this
+context. This is the foundational signal for Inverse Propensity Scoring
+(IPS) counterfactual evaluation: "what would last month's reward have
+been under a different policy?" Without per-decision propensity logged
+at the time of the decision, IPS is impossible to reconstruct — the
+doc explicitly flags this as **painful to add retroactively** but cheap
+to add forward (one float per decision).
+
+In default deterministic mode (``GENLAB_LINUCB_STOCHASTIC_ENABLED`` unset
+or ``0``), ``select_with_propensity`` returns ``(argmax_arm, 1.0)`` —
+the limit-case propensity for a pure-argmax policy. This preserves the
+existing behavior + reward-interpretation of every historical observation
+while still populating the propensity field with a meaningful value.
+
+In stochastic mode (``GENLAB_LINUCB_STOCHASTIC_ENABLED=1``), arms are
+sampled from a softmax over the UCB scores at temperature
+``GENLAB_LINUCB_TEMPERATURE`` (default 0.5 — mildly stochastic).
+Each arm's propensity equals its softmax weight. Lower temperatures
+approach the deterministic limit; higher temperatures approach uniform
+random. IPS estimators recover meaningful counterfactual estimates
+only under stochastic policies — flipping the flag is the natural
+prerequisite for the offline-policy-eval workflow Move #8 enables.
+
 References:
     Li et al. (2010) "A Contextual-Bandit Approach to Personalized News Article
     Recommendation", WWW 2010.
+    Eugene Yan, "Counterfactual Evaluation for Recommendation Systems".
+    AGENT-AUTONOMY-RESEARCH.md, Move #8 (this repo's docs/).
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -32,6 +61,100 @@ CONTEXT_DIM = 12
 # Minimum observations before LinUCB predictions are trusted.
 # Below this threshold, fall back to Thompson Sampling.
 MIN_OBS_FOR_LINUCB = 50
+
+# Default softmax temperature when stochastic mode is enabled. 0.5 is
+# mildly stochastic — argmax still wins most of the time but every arm
+# carries non-zero, knowable propensity. Tunable via env so an operator
+# can dial exploration up/down without code changes.
+DEFAULT_TEMPERATURE = 0.5
+
+# Numerical floor on per-arm propensity. IPS weights are 1/p, so an arm
+# with p≈0 becomes an outlier that dominates the estimator (the variance
+# explosion Move #8 calls out). Clamping to a small positive value
+# guarantees an upper bound on the IPS weight + matches the conventional
+# "truncation" mitigation from the offline-policy-eval literature.
+_MIN_PROPENSITY = 1e-6
+
+
+def _stochastic_mode_enabled() -> bool:
+    """Single source of truth for the stochastic-mode opt-in flag.
+
+    Default OFF — deterministic argmax is what every historical reward
+    observation was generated under, so flipping the default would
+    change the meaning of accumulated bandit_arms state without an
+    operator intent. Opt-in pattern matches Lever C / K / O / G1 /
+    G2 / I1+I3 / I2 throughout the learning subsystem.
+
+    Only the literal ``"1"`` enables — ``"true"``/``"yes"`` are
+    strictly disabled to avoid the env-string ambiguity that bit the
+    AUTO #2 rollout (Memory note: "only '1' enables").
+    """
+    return os.environ.get("GENLAB_LINUCB_STOCHASTIC_ENABLED", "0").strip() == "1"
+
+
+def _read_temperature() -> float:
+    """Read softmax temperature from env, falling back to default on
+    parse error or zero/negative values (which would be ill-defined
+    in the softmax formula)."""
+    raw = os.environ.get("GENLAB_LINUCB_TEMPERATURE", "").strip()
+    if not raw:
+        return DEFAULT_TEMPERATURE
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "[LinUCB] invalid GENLAB_LINUCB_TEMPERATURE=%r — using default %s",
+            raw,
+            DEFAULT_TEMPERATURE,
+        )
+        return DEFAULT_TEMPERATURE
+    if value <= 0.0:
+        logger.warning(
+            "[LinUCB] GENLAB_LINUCB_TEMPERATURE must be > 0 (got %s) — using default %s",
+            value,
+            DEFAULT_TEMPERATURE,
+        )
+        return DEFAULT_TEMPERATURE
+    return value
+
+
+def compute_softmax_probabilities(
+    scores: dict[str, float],
+    temperature: float = DEFAULT_TEMPERATURE,
+) -> dict[str, float]:
+    """Convert per-arm UCB scores to a softmax probability distribution.
+
+    ``p(arm i) = exp(score_i / temperature) / Σ exp(score_j / temperature)``
+
+    Numerically stable: subtracts the max score before the exponent
+    (the classic softmax trick) so exp() never overflows when UCB
+    scores are large.
+
+    Returns a dict mapping arm_id → probability with probabilities
+    summing to 1.0 (within float epsilon). Empty input returns empty
+    dict. Probabilities are clamped to ``_MIN_PROPENSITY`` to bound
+    downstream IPS weights — sum will still be ≈ 1.0 because the clamp
+    only fires on near-zero values that don't affect the total.
+    """
+    if not scores:
+        return {}
+    arm_ids = list(scores.keys())
+    raw = np.array([scores[a] for a in arm_ids], dtype=np.float64)
+    # Numerical stability: subtract max before exp.
+    shifted = (raw - raw.max()) / temperature
+    exp_vals = np.exp(shifted)
+    total = exp_vals.sum()
+    if not np.isfinite(total) or total <= 0.0:
+        # Degenerate case: fall back to uniform. Shouldn't happen with
+        # finite scores + positive temperature, but the IPS estimator
+        # downstream is safer with a defined fallback than a NaN.
+        probs = np.full_like(exp_vals, 1.0 / len(arm_ids))
+    else:
+        probs = exp_vals / total
+    # Clamp floor — never publish a propensity below _MIN_PROPENSITY.
+    probs = np.maximum(probs, _MIN_PROPENSITY)
+    return {arm_ids[i]: float(probs[i]) for i in range(len(arm_ids))}
+
 
 # Source type encoding map
 _SOURCE_TYPE_MAP: dict[str, float] = {
@@ -167,9 +290,85 @@ class LinUCBBandit:
         self.arms: dict[str, LinUCBArm] = {aid: LinUCBArm(d, alpha) for aid in arm_ids}
 
     def select(self, context: np.ndarray) -> str:
-        """Select the arm with the highest UCB score for the given context."""
+        """Select the arm with the highest UCB score for the given context.
+
+        Backward-compat alias for ``select_with_propensity`` that drops
+        the propensity. New callers wanting IPS support should use
+        ``select_with_propensity`` directly. Existing callers that
+        unpack a single string keep working unchanged.
+        """
+        arm_id, _propensity = self.select_with_propensity(context)
+        return arm_id
+
+    def select_with_propensity(
+        self,
+        context: np.ndarray,
+        *,
+        stochastic: bool | None = None,
+        temperature: float | None = None,
+    ) -> tuple[str, float]:
+        """Select an arm and return its selection propensity.
+
+        Returns ``(arm_id, propensity)`` where ``propensity`` is
+        ``p(arm_id | context)`` under the active selection policy:
+
+        - **Deterministic mode** (default): argmax over UCB scores;
+          propensity is 1.0 for the picked arm. This is the limit
+          case — every other arm had propensity 0.0, which is fine
+          to omit because IPS only uses the chosen arm's weight.
+        - **Stochastic mode** (``stochastic=True`` or env opt-in):
+          arms are sampled from softmax(UCB / temperature); propensity
+          is the picked arm's softmax weight.
+
+        Args:
+            context: feature vector (shape (d,)) used by every arm's
+                ``predict``.
+            stochastic: explicit override of the env-based opt-in.
+                ``None`` (default) consults ``GENLAB_LINUCB_STOCHASTIC_ENABLED``.
+                Tests pass ``True``/``False`` directly to avoid env
+                mutation.
+            temperature: explicit override of ``GENLAB_LINUCB_TEMPERATURE``.
+                ``None`` reads the env. Ignored in deterministic mode.
+
+        AGENT-AUTONOMY-RESEARCH Move #8: this is the entry point for
+        per-decision propensity logging. Caller writes the returned
+        ``propensity`` alongside the arm_id + context into the
+        ``pending_feedback`` row so future IPS-based offline policy
+        evaluation can reconstruct the selection distribution.
+        """
+        if stochastic is None:
+            stochastic = _stochastic_mode_enabled()
+        if temperature is None:
+            temperature = _read_temperature()
+
         scores = {aid: arm.predict(context) for aid, arm in self.arms.items()}
-        return max(scores, key=scores.get)  # type: ignore[arg-type]
+        if not scores:
+            raise ValueError("LinUCBBandit.select_with_propensity: no arms configured")
+
+        if not stochastic:
+            # Deterministic argmax. Propensity = 1.0 for the picked arm
+            # by definition of a degenerate policy. The clamp floor
+            # (_MIN_PROPENSITY) deliberately doesn't apply here — for
+            # a deterministic policy the chosen-arm weight IS 1.0;
+            # clamping would be a lie.
+            arm_id = max(scores, key=scores.get)  # type: ignore[arg-type]
+            return arm_id, 1.0
+
+        # Stochastic: softmax over UCB scores, sample one arm.
+        probs = compute_softmax_probabilities(scores, temperature=temperature)
+        arm_ids = list(probs.keys())
+        weights = np.array([probs[a] for a in arm_ids], dtype=np.float64)
+        # np.random.choice requires probabilities that exactly sum to 1.
+        # The clamp floor in compute_softmax_probabilities can push the
+        # sum slightly above 1 if many arms hit the floor. Renormalize
+        # here so np.random.choice doesn't reject our weights.
+        weights = weights / weights.sum()
+        chosen_idx = int(np.random.choice(len(arm_ids), p=weights))
+        chosen_arm = arm_ids[chosen_idx]
+        # Return the original (clamped) propensity, not the
+        # renormalized one — the floor is the value we want IPS to
+        # use as the lower bound on weights.
+        return chosen_arm, probs[chosen_arm]
 
     def update(self, arm_id: str, context: np.ndarray, reward: float) -> None:
         """Update the specified arm with the observed reward."""

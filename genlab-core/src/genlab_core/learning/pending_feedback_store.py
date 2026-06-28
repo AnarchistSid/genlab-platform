@@ -296,6 +296,22 @@ class PendingFeedbackStore:
             except (TypeError, ValueError):
                 reward_48h = None
 
+        # AGENT-AUTONOMY-RESEARCH Move #8: hydrate IPS propensity +
+        # temperature. Old rows predating the migration return None
+        # for both — IPS estimators downstream MUST filter on
+        # ``propensity is not None`` before applying the 1/p weight.
+        def _opt_float(*keys: str) -> float | None:
+            raw = _f(fields, *keys, default=None)
+            if raw in (None, ""):
+                return None
+            try:
+                return float(raw)
+            except (TypeError, ValueError):
+                return None
+
+        propensity = _opt_float("Propensity", "propensity")
+        temperature = _opt_float("Temperature", "temperature")
+
         return PendingFeedbackTask(
             content_id=post_id,
             platform=_f(fields, "Platform", "platform", default=""),
@@ -313,4 +329,6 @@ class PendingFeedbackStore:
             completed_windows=list(completed),
             early_stop=bool(_f(fields, "EarlyStop", "early_stop", default=False)),
             reward_48h=reward_48h,
+            propensity=propensity,
+            temperature=temperature,
         )
