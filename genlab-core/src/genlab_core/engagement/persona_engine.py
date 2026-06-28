@@ -12,6 +12,7 @@ import logging
 from genlab_core.engagement.persona_schema import NichePersona
 from genlab_core.engagement.toxicity_gate import ToxicityGate
 from genlab_core.http.circuit_breaker import ANTHROPIC_CB, CircuitOpenError
+from genlab_core.llm.prompt_cache import with_prompt_cache
 
 logger = logging.getLogger(__name__)
 
@@ -111,10 +112,17 @@ class PersonaEngine:
             try:
 
                 def _llm_call():
+                    # U-01: with_prompt_cache wraps the persona system
+                    # prompt for caching when it's long enough. The
+                    # PersonaEngine is reused across many reply
+                    # generations within a 5-min poller window
+                    # (YouTube poller fires every 30 min, Twitter
+                    # every 15 min) — calls 2-N within a poll cycle
+                    # become cache reads at ~10% input cost.
                     return client.messages.create(
                         model="claude-haiku-4-5-20251001",
                         max_tokens=150,
-                        system=system,
+                        system=with_prompt_cache(system),
                         messages=[{"role": "user", "content": user_content}],
                     )
 
@@ -231,10 +239,14 @@ class PersonaEngine:
         try:
 
             def _llm_call():
+                # U-01: cache the judge's system prompt (scratchpad +
+                # rubric). Scratchpad-augmented prompt is typically
+                # 2000-4000 chars; the helper auto-skips caching when
+                # below the 4000-char threshold (zero cost penalty).
                 return client.messages.create(
                     model="claude-haiku-4-5-20251001",
                     max_tokens=80,
-                    system=system,
+                    system=with_prompt_cache(system),
                     messages=[{"role": "user", "content": user_content}],
                 )
 

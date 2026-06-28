@@ -503,12 +503,19 @@ def _llm_judge_borderline(
         else:
             judge_system = _LLM_JUDGE_SYSTEM_PROMPT
 
+        # U-01: cache the judge system prompt. Same blueprint-by-
+        # blueprint within a run reuses the same scratchpad-augmented
+        # rubric. The scratchpad prepend pushes the prompt well past
+        # the 4000-char threshold; without scratchpad the helper
+        # auto-skips (zero behavior change).
+        from genlab_core.llm.prompt_cache import with_prompt_cache
+
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model=model,
             max_tokens=80,
             temperature=0.0,  # Deterministic verdict for the same inputs
-            system=judge_system,
+            system=with_prompt_cache(judge_system),
             messages=[{"role": "user", "content": signals}],
         )
 

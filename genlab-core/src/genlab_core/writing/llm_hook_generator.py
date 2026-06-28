@@ -487,6 +487,16 @@ def generate_hook(
         logger.warning("[%s] LLM client init failed: %s", niche_id, exc)
         return (None, chosen_style) if return_style else None
 
+    # U-01: cache the hook-generation system prompt. The 3-candidate
+    # loop fires 3 messages.create() calls with the IDENTICAL system
+    # prompt within ~1 second — cache writes on call 1, cache reads on
+    # calls 2+3 at ~10% input cost. With the constitution + few-shot +
+    # banned-phrase list, the system prompt is consistently >4000 chars
+    # so the threshold gate fires on every invocation.
+    from genlab_core.llm.prompt_cache import with_prompt_cache
+
+    cached_system = with_prompt_cache(system)
+
     for _ in range(3):
         try:
             response = client.messages.create(
@@ -494,7 +504,7 @@ def generate_hook(
                 max_tokens=80,
                 temperature=0.7,
                 messages=[{"role": "user", "content": user}],
-                system=system,
+                system=cached_system,
             )
             from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
 
@@ -766,12 +776,18 @@ def _critique_hook_grounded(hook: str, story: dict, niche_id: str) -> tuple[bool
         summary = (story.get("summary") or "")[:500]
         user = f"Source title: {title}\nSource summary: {summary}\n\nHook to evaluate: {hook}"
 
+        # U-01: cache the critic system prompt. Same critic prompt
+        # used for every hook in a pipeline run; with scratchpad
+        # prepend the prompt is consistently >4000 chars so the
+        # threshold gate fires.
+        from genlab_core.llm.prompt_cache import with_prompt_cache
+
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=80,
             temperature=0.0,  # Deterministic — same hook+story → same verdict
-            system=critic_system,
+            system=with_prompt_cache(critic_system),
             messages=[{"role": "user", "content": user}],
         )
 

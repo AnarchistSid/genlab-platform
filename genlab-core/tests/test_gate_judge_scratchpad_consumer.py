@@ -60,8 +60,16 @@ class TestGateJudgeScratchpadWire:
         scratchpad-prepended) judge_system variable, not the raw
         _LLM_JUDGE_SYSTEM_PROMPT directly. Without this, the wire
         would be dead — the system prompt would always be the stock
-        one regardless of scratchpad content."""
-        assert "system=judge_system" in self.content
+        one regardless of scratchpad content.
+
+        U-01 (2026-06-27): the literal kwarg became
+        ``system=with_prompt_cache(judge_system)`` after prompt-caching
+        wiring. Both forms count — assert that judge_system flows into
+        the system kwarg (directly or via the cache helper)."""
+        assert (
+            "system=judge_system" in self.content
+            or "system=with_prompt_cache(judge_system)" in self.content
+        )
 
     def test_fail_open_on_scratchpad_read_error(self):
         """Pin: scratchpad read wrapped in try/except — read errors

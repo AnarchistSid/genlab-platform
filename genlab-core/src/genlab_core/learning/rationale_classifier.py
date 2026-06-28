@@ -305,12 +305,22 @@ def classify_rejection(
     threshold = _read_threshold()
 
     try:
+        # U-01: cache the classifier system prompt. It's a static
+        # taxonomy that doesn't change between calls — every operator
+        # rejection in a session reuses the same prompt. The taxonomy
+        # plus rules totals ~1700 chars today which is below the
+        # 4000-char default threshold, so the helper falls back to
+        # plain-string passthrough until the prompt grows (or the
+        # threshold is lowered via env). Wiring through the helper now
+        # keeps the call site future-proof without behavior change.
+        from genlab_core.llm.prompt_cache import with_prompt_cache
+
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model=_HAIKU_MODEL,
             max_tokens=200,
             temperature=0.0,  # Deterministic verdict for same inputs.
-            system=_CLASSIFIER_SYSTEM_PROMPT,
+            system=with_prompt_cache(_CLASSIFIER_SYSTEM_PROMPT),
             messages=[{"role": "user", "content": user_message}],
         )
 

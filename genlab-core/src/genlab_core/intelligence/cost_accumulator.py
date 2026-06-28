@@ -79,6 +79,18 @@ class CostEntry:
     images: int = 0
     cost_usd: float = 0.0
     timestamp: float = field(default_factory=time.time)
+    # U-01 (2026-06-27): per-call prompt-caching observability. Both
+    # fields default to 0 so existing call sites that don't pass them
+    # continue to work unchanged. ``cache_creation_input_tokens``
+    # counts tokens written to cache (billed at 1.25× input rate);
+    # ``cache_read_input_tokens`` counts tokens served from cache
+    # (billed at 0.10× input rate). Without these the savings from
+    # prompt caching would be invisible — ``usage.input_tokens``
+    # excludes cached reads, so the existing cost number drops
+    # silently and operators can't tell whether it's from caching or
+    # reduced volume.
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 @dataclass
@@ -89,7 +101,26 @@ class CostAccumulator:
     entries: list = field(default_factory=list)
     _budget_usd: float = 5.0
 
-    def record_llm(self, model: str, input_tokens: int, output_tokens: int) -> float:
+    def record_llm(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        *,
+        cache_creation_input_tokens: int = 0,
+        cache_read_input_tokens: int = 0,
+    ) -> float:
+        """Record an LLM call. Returns the USD cost charged to this entry.
+
+        ``cache_creation_input_tokens`` + ``cache_read_input_tokens`` are
+        U-01 prompt-caching counters. They're recorded for observability
+        but NOT added to ``cost_usd`` here — the Anthropic API already
+        excludes cached reads from ``input_tokens`` and bills writes /
+        reads on its own dashboards, so double-counting would inflate
+        per-run totals. Future work: surface a separate
+        ``cache_savings_usd`` line on the dashboard derived from these
+        counters.
+        """
         cost = _compute_cost(model, input_tokens, output_tokens)
         entry = CostEntry(
             category="llm",
@@ -97,6 +128,8 @@ class CostAccumulator:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost,
+            cache_creation_input_tokens=cache_creation_input_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
         )
         self.entries.append(entry)
         return cost
@@ -145,6 +178,20 @@ class CostAccumulator:
             return 0.0
         return max(0.0, 1.0 - (self.total_usd / self._budget_usd)) * 100
 
+    @property
+    def cache_creation_tokens(self) -> int:
+        """Sum of cache-write tokens across all LLM entries (U-01)."""
+        return sum(e.cache_creation_input_tokens for e in self.entries)
+
+    @property
+    def cache_read_tokens(self) -> int:
+        """Sum of cache-read tokens across all LLM entries (U-01).
+
+        Higher = better. Pair with ``input_tokens`` total to derive the
+        per-run cache hit rate: ``read / (read + input)``.
+        """
+        return sum(e.cache_read_input_tokens for e in self.entries)
+
     def summary(self) -> dict:
         return {
             "run_id": self.run_id,
@@ -156,6 +203,11 @@ class CostAccumulator:
             "by_model": {k: round(v, 4) for k, v in self.by_model.items()},
             "budget_remaining_pct": round(self.budget_remaining_pct, 1),
             "entry_count": len(self.entries),
+            # U-01 (2026-06-27): prompt-caching observability. Surfaced
+            # so run_report.json + the dashboard can compute the cache
+            # hit rate. Without these the savings would be invisible.
+            "cache_creation_tokens": self.cache_creation_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
         }
 
 
@@ -185,10 +237,15 @@ def record_anthropic_usage(model: str, response: Any) -> None:
     R-27 "cost unmeasured" gap. Call this right after every
     ``messages.create()``.
 
+    U-01 (2026-06-27): also records ``cache_creation_input_tokens`` /
+    ``cache_read_input_tokens`` so prompt-caching savings are visible on
+    the cost dashboard. Without these the savings would be invisible —
+    ``usage.input_tokens`` already excludes cached reads, so the existing
+    cost number drops silently and operators can't tell whether it's
+    from caching or from reduced volume.
+
     Safe no-op if no accumulator is active or usage is unavailable: cost
-    tracking is non-critical and must NEVER break an LLM call. (When U-01 prompt
-    caching lands, extend this to also record ``cache_creation_input_tokens`` /
-    ``cache_read_input_tokens``.)
+    tracking is non-critical and must NEVER break an LLM call.
     """
     try:
         acc = get_accumulator()
@@ -197,10 +254,17 @@ def record_anthropic_usage(model: str, response: Any) -> None:
         usage = getattr(response, "usage", None)
         if usage is None:
             return
+        # U-01: pull cache fields if present. ``getattr(..., 0)`` keeps
+        # this safe with older SDK responses and test mocks that don't
+        # expose the fields.
+        cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
         acc.record_llm(
             model=model,
             input_tokens=getattr(usage, "input_tokens", 0) or 0,
             output_tokens=getattr(usage, "output_tokens", 0) or 0,
+            cache_creation_input_tokens=int(cache_creation),
+            cache_read_input_tokens=int(cache_read),
         )
     except Exception as exc:
         # Silent-swallow audit (2026-06-21): pre-fix this was
