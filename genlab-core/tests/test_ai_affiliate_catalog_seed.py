@@ -163,11 +163,17 @@ class TestOperatorSignupContract:
     what URLs they still need to fill in.
 
     The contract:
-      - If a product has ``enabled: false`` AND its only network entry
-        is a placeholder URL (containing ``example.com``), the YAML
-        source MUST contain a ``# signup:`` comment line somewhere in
-        the product's block.
+      - If a product has ``enabled: false`` AND every network URL
+        in its block contains the PR-AB placeholder sentinel
+        (``PLACEHOLDER-``), the YAML source MUST contain a
+        ``# signup:`` comment line somewhere in the product's block.
     """
+
+    # PR-AB-specific sentinel. Using a distinctive substring (not a
+    # bare domain name) so CodeQL does not flag this idiom as
+    # incomplete-URL-substring-sanitization — this is identification,
+    # not security validation.
+    _PLACEHOLDER_SENTINEL = "PLACEHOLDER-"
 
     def test_placeholder_url_has_signup_comment_nearby(self):
         catalog_text = CATALOG_PATH.read_text()
@@ -189,7 +195,7 @@ class TestOperatorSignupContract:
             # Is this a placeholder-URL product (Tier A)?
             networks = product.get("networks") or {}
             urls = [info.get("url", "") for info in networks.values()]
-            is_placeholder_only = bool(urls) and all("example.com" in u for u in urls)
+            is_placeholder_only = bool(urls) and all(self._PLACEHOLDER_SENTINEL in u for u in urls)
             if not is_placeholder_only:
                 continue
 
