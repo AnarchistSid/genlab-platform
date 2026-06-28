@@ -973,6 +973,57 @@ def process_pending_task(
                     task_record.platform_post_id,
                     exc,
                 )
+
+            # PR Z (2026-06-29): per-platform bandit arm split.
+            # When GENLAB_PER_PLATFORM_BANDIT_ENABLED=1 AND the reward
+            # platform is in the split set (instagram/youtube), ALSO
+            # update the per-platform arm ``{base}__{platform}``. The
+            # base-arm update above stays for backward-compat during
+            # the transition — operator can later DELETE the base
+            # arms once per-platform have enough observations.
+            # The asymmetric-decision-vs-reward split is the whole
+            # design: decision time picks ONE arm (platform unknown),
+            # reward attribution updates the platform-specific arm
+            # (platform known). See bandit_platform_split.py.
+            # Fail-OPEN: a per-platform update failure NEVER blocks
+            # the base bandit_update_succeeded stamp written below.
+            if bandit_update_succeeded:
+                try:
+                    from genlab_core.learning import bandit_platform_split as _bps
+
+                    if _bps.is_enabled() and task_record.platform in _bps.list_split_platforms():
+                        pp_arm = _bps.platform_arm_id(arm_for_update, task_record.platform)
+                        try:
+                            bandit_updater(
+                                task_record.niche_id,
+                                pp_arm,
+                                task_record.platform,
+                                reward_48h,
+                                task_record.bandit_context,
+                            )
+                            logger.info(
+                                "[metric_collector] per-platform bandit also updated: "
+                                "niche=%s arm=%s reward=%.3f",
+                                task_record.niche_id,
+                                pp_arm,
+                                reward_48h,
+                            )
+                        except Exception as exc:
+                            # Fail-OPEN — never let a per-platform
+                            # update failure unwind the base update.
+                            logger.warning(
+                                "[metric_collector] per-platform bandit update failed "
+                                "for %s/%s/%s: %s",
+                                task_record.niche_id,
+                                pp_arm,
+                                task_record.platform,
+                                exc,
+                            )
+                except Exception as exc:  # noqa: BLE001 — fail-open
+                    logger.debug(
+                        "[metric_collector] per-platform bandit split check failed: %s",
+                        exc,
+                    )
             # Stamp the row so the daily backfill timer's
             # ``(extra->>'bandit_backfilled_at') IS NULL`` filter
             # correctly excludes it. Without this, the live updater
