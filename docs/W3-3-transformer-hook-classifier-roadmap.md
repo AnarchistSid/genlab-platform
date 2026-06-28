@@ -1,5 +1,18 @@
 # W3.3 — Transformer-embedding hook classifier roadmap
 
+> **⚠ LARGELY SUPERSEDED 2026-06-28** — Yesterday's PRs #604-#608
+> shipped 5 learning engines that cover overlapping ground from a
+> different angle: PR #607 (click-rationale classifier) directly
+> overlaps Layer 3/4 of this roadmap; PR #608 (Bayesian LR gate)
+> implements Path B (LR on features) without the transformer-
+> embedding step; PRs #604/#605/#606 cover adjacent quality signals.
+> The original 4-layer plan is no longer the right shape. The open
+> question is now: **should the rationale classifier or Bayesian LR
+> gate consume hook embeddings (PR #336's foundation)?** That's a
+> much smaller, more measurable question — testable since #607/#608
+> log predictions against operator clicks. Layer 1 from PR #336
+> remains the embedding utility if any engine wants it.
+
 ## What W3.3 wants
 
 Replace (or augment) the 8 hand-engineered regex features in
