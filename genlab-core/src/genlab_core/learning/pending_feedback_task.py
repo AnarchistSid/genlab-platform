@@ -48,6 +48,15 @@ class PendingFeedbackTask(BaseModel):
     sharepoint_id: str | None = None
     bandit_arm: str | None = None
     bandit_context: dict | None = None
+    # AGENT-AUTONOMY-RESEARCH Move #8 — per-decision IPS propensity.
+    # ``propensity`` is ``p(bandit_arm | bandit_context)`` under the
+    # policy that picked the arm. ``temperature`` is the softmax
+    # temperature that was active when the decision was made (None in
+    # deterministic mode). Both are logged at decision time because
+    # adding them retroactively is impossible. See
+    # ``learning/linucb.py.select_with_propensity`` for the producer.
+    propensity: float | None = None
+    temperature: float | None = None
     collection_windows: list[CollectionWindow] = Field(
         default_factory=lambda: ["6h", "24h", "48h", "168h"]
     )
@@ -108,4 +117,11 @@ class PendingFeedbackTask(BaseModel):
         if self.hook_text:
             fields["hook_text"] = self.hook_text[:500]
             fields["hook_length"] = self.hook_length or len(self.hook_text)
+        # IPS propensity fields go to promoted columns (Move #8). Only
+        # write when set — preserves backward compat with the (many)
+        # callers that don't yet populate propensity.
+        if self.propensity is not None:
+            fields["propensity"] = self.propensity
+        if self.temperature is not None:
+            fields["temperature"] = self.temperature
         return fields
