@@ -617,11 +617,18 @@ export default function Analytics() {
         }
       />
 
-      {/* KPI Hero Row — aggregate totals from all engagement data */}
+      {/* KPI Hero Row — aggregate totals from all engagement data.
+       *
+       * H1 audit fix (2026-03-31): the same metric name was rendered
+       * with different windows on Mission Control vs. Analytics — MC
+       * "TOTAL REACH" is all-time, Analytics "Total Reach" is windowed.
+       * Adding the `(Nd)` suffix here removes the ambiguity. The
+       * `windowLabel` already drives subtitle copy below; we now wire
+       * it into the label itself so operators can't miss it. */}
       <div className="kpi-hero-grid mb-6">
         <KpiCard
           variant="hero"
-          label="Total Likes"
+          label={`Total Likes (${windowLabel}d)`}
           value={heroTotalLikes ?? 0}
           subtitle="across all niches"
           icon={Heart}
@@ -629,7 +636,7 @@ export default function Analytics() {
         />
         <KpiCard
           variant="hero"
-          label="Total Reach"
+          label={`Total Reach (${windowLabel}d)`}
           value={heroTotalReach ?? 0}
           subtitle="impressions served"
           icon={Eye}
@@ -637,7 +644,7 @@ export default function Analytics() {
         />
         <KpiCard
           variant="hero"
-          label="Total Comments"
+          label={`Total Comments (${windowLabel}d)`}
           value={heroTotalComments ?? 0}
           formatter={(n) => String(n)}
           subtitle="community interactions"
@@ -646,7 +653,7 @@ export default function Analytics() {
         />
         <KpiCard
           variant="hero"
-          label="Avg Eng Rate"
+          label={`Avg Eng Rate (${windowLabel}d)`}
           value={heroAvgEngRate ?? (summary?.avg_engagement_rate ?? 0)}
           formatter={(n) => `${n.toFixed(1)}%`}
           subtitle="likes + comments / reach"
@@ -701,16 +708,20 @@ export default function Analytics() {
       {/* ── Overview Tab ─────────────────────────────── */}
       {activeTab === "overview" && (
         <>
-          {/* KPI Cards */}
+          {/* KPI Cards.
+           *
+           * H1 audit fix (2026-03-31): label gets the `(Nd)` window
+           * suffix so the surface itself disambiguates from Mission
+           * Control's "all time" labels. */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
             <KpiCard
-              label="Total Reach"
+              label={`Total Reach (${windowLabel}d)`}
               value={summary?.total_reach ?? 0}
               subtitle="across all platforms"
               icon={Eye}
             />
             <KpiCard
-              label="Avg Engagement"
+              label={`Avg Engagement (${windowLabel}d)`}
               value={summary?.avg_engagement_rate ?? 0}
               formatter={(n) => `${n.toFixed(1)}%`}
               subtitle="likes \u00b7 comments \u00b7 shares / reach"
