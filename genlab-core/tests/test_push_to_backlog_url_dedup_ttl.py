@@ -83,15 +83,28 @@ def test_gaming_niche_has_3day_url_dedup_ttl() -> None:
     )
 
 
-def test_sports_niche_has_7day_url_dedup_ttl() -> None:
-    """ClutchWire (sports) must enable the 7-day TTL.
+def test_sports_niche_has_3day_url_dedup_ttl() -> None:
+    """ClutchWire (sports) must enable a SHORT URL-dedup TTL.
 
     Sports' ScoreBat URLs recur for popular fixtures within 1-2 weeks.
-    Removing this config contributes to multi-day publishing gaps.
+    Removing this config entirely contributes to multi-day publishing
+    gaps.
+
+    2026-06-28 — lowered from 7 → 3 days (matches gaming PR #627
+    trade-off). Sports' 7-day pattern shows 3 zero-blueprint days out
+    of 7, same structural shape as gaming. Shorter TTL lets popular
+    fixtures re-feature every 3 days. Pin guards against silent
+    regression in either direction:
+    - Raising back to 7 reintroduces structural variance
+    - Removing entirely reintroduces the 2026-06-23 outage shape
     """
     repo_root = Path(__file__).resolve().parent.parent.parent
     cfg = yaml.safe_load((repo_root / "ClutchWire/config/niche.yaml").read_text())
-    assert cfg["pipeline"]["url_dedup_ttl_days"] == 7
+    assert cfg["pipeline"]["url_dedup_ttl_days"] == 3, (
+        "Sports' url_dedup_ttl_days must be 3 (2026-06-28 trade-off, "
+        "mirroring gaming PR #627). Raising back to 7 or removing "
+        "entirely re-creates known starvation patterns."
+    )
 
 
 def test_naturally_unique_url_niches_leave_ttl_unset() -> None:
