@@ -466,6 +466,7 @@ content_filter:
     - crossplay
     - cross-play
   negative_keywords:
+    # General lifestyle / non-gaming
     - cooking
     - beauty tutorial
     - mukbang
@@ -473,3 +474,61 @@ content_filter:
     - meditation
     - yoga
     - recipe
+    - life hack
+    - prank
+    - vlog
+    - haul
+    - unboxing
+    - gym workout
+    - motivational speech
+    # Gaming-adjacent but NOT gameplay (reactions / podcasts / news talk)
+    - podcast episode
+    - news roundup
+    - irl stream
+    - just chatting
+    - reaction video
+    # Sports (belongs in ClutchWire)
+    - cricket highlights
+    - ipl highlights
+    - nba highlights
+    - nfl highlights
+    - premier league
+    - football match
+    - soccer match
+    - mma
+    - ufc
+    - boxing
+    - wrestling
+    - wwe
+    # Anime (belongs in FrameDrift) — exclude anime-only video formats
+    - anime opening
+    - anime amv
+    - manga chapter
+    - naruto
+    - one piece
+    - dragon ball
+    - jujutsu kaisen
+    - demon slayer
+    # Movies (belongs in SpliceReel)
+    - movie trailer
+    - box office
+    - film review
+    - bollywood
+    - hollywood premiere
+    # AI / tech / tutorials (belongs in BlackboxBrief)
+    - ai chatbot
+    - chatgpt tutorial
+    - claude tutorial
+    - python tutorial
+    - midjourney tutorial
+    - stable diffusion tutorial
+    # Music (non-gaming)
+    - music album
+    - music video
+    - official audio
+    - lyric video
+    # Finance / politics
+    - stock market
+    - mutual fund
+    - cryptocurrency
+    - election
