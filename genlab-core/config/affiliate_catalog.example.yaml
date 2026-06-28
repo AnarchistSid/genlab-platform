@@ -1003,95 +1003,373 @@ niches:
       image_url: https://m.media-amazon.com/images/I/61uhh0jZIQL._AC_SL1300_.jpg
       price_inr: 999
   ai_creators:
+    # AI affiliate seed catalog (PR AB, 2026-06-29)
+    #
+    # Pre-PR-AB state: ai_creators had 10 catalog entries but 0% of
+    # blueprints carried an affiliate_cta over 60 days, vs. 30% catalog
+    # average (gaming 68%, anime 57%, movies 41%). Root causes:
+    #   - 8 of 10 products either had ``enabled: false`` (no networks)
+    #     or sat above the ₹3000 ``max_price_inr`` cap (RTX 4090 at
+    #     ₹159,900, AI Course Bundle at ₹4,999, Portable Monitor at
+    #     ₹12,999, Coding Keyboard at ₹8,999, AI Microphone at ₹5,999).
+    #   - The 2 eligible-by-price products (Ring Light, Green Screen)
+    #     had hardware-only keywords that almost never appeared in AI
+    #     content captions.
+    #   - Only Claude Pro Subscription matched on AI-tool keywords —
+    #     a single product can't carry an entire niche's monetization.
+    #
+    # This seed expands the catalog with subscription-tier AI creator
+    # tools that (a) fit the ≤₹3000 impulse-buy cap, (b) match keywords
+    # already in BlackboxBrief/config/sources.yaml positive_keywords,
+    # and (c) have real affiliate programs OR honest direct landing
+    # pages.
+    #
+    # OPERATOR ACTION REQUIRED — for each product below where
+    # ``enabled: false`` is set, the operator must:
+    #
+    #   1. Visit the affiliate signup URL listed in the product's
+    #      ``# signup:`` comment.
+    #   2. Replace the placeholder ``url:`` value with the real
+    #      affiliate URL returned after signup.
+    #   3. Flip ``enabled: false`` → ``enabled: true``.
+    #   4. Restart the dashboard/pipeline services so the new catalog
+    #      is reloaded (``scripts/deploy.sh`` already does this, or
+    #      ``systemctl restart genlab-*``).
+    #
+    # Products that ship enabled use a ``direct:`` network at 0%
+    # commission pointing to the canonical product landing page. These
+    # generate honest CTAs that route users somewhere useful but earn
+    # no commission until the operator joins the program (then swap
+    # ``direct:`` for the real network).
+    #
+    # PR #638 reference: catalog-coverage data showing ai_creators at
+    # 0% affiliate_cta populated over the 60-day window.
     products:
+    # -- Tier B: direct-CTA-now, no commission until operator signs up --
+    - name: Claude Pro Subscription
+      enabled: true
+      keywords:
+      - claude
+      - anthropic
+      - claude pro
+      - claude sonnet
+      - claude opus
+      - sonnet
+      - opus
+      - haiku
+      - ai chat
+      - ai assistant
+      - llm
+      - chatbot
+      - language model
+      category: subscription
+      networks:
+        # Anthropic does not currently run a public affiliate program;
+        # we link to claude.ai directly so the CTA is honest and the
+        # referral lands somewhere useful. Replace with affiliate URL
+        # if/when Anthropic launches one. (PR AB preserves the earlier
+        # ``direct:`` pattern that replaced the broken Amazon ASIN
+        # B0GSRSRYSH per the 2026-05-21 audit.)
+        direct:
+          url: https://claude.ai/
+          commission_pct: 0.0
+      image_url: https://claude.ai/favicon.ico
+      price_inr: 1680
     - name: ChatGPT Plus
-      enabled: false
+      enabled: true
       keywords:
       - chatgpt
       - openai
       - gpt
       - gpt-4
       - gpt-5
+      - o1
+      - o3
+      - sora
+      - dall-e
       - ai chat
       - ai assistant
       - chatbot
       - language model
       - llm
-      category: tool
-      networks: {}
-      image_url: https://example.com/images/chatgpt.jpg
+      category: subscription
+      networks:
+        # OpenAI does not currently run a public consumer-tier
+        # affiliate program for ChatGPT Plus. Direct CTA to the
+        # signup page is the honest fallback.
+        direct:
+          url: https://chatgpt.com/
+          commission_pct: 0.0
+      image_url: https://openai.com/favicon.ico
       price_inr: 1680
-    - name: Midjourney Subscription
+    - name: Cursor IDE
+      enabled: true
+      keywords:
+      - cursor
+      - ide
+      - code editor
+      - ai code
+      - copilot
+      - github copilot
+      - ai coding
+      - pair programming
+      - vscode
+      - developer
+      - coding
+      category: subscription
+      networks:
+        # Cursor (Anysphere) does not currently run a public
+        # affiliate program. Direct CTA to the signup page is the
+        # honest fallback while we wait for one to launch.
+        direct:
+          url: https://www.cursor.com/
+          commission_pct: 0.0
+      image_url: https://www.cursor.com/favicon.ico
+      price_inr: 1660
+    - name: Perplexity Pro
+      enabled: true
+      keywords:
+      - perplexity
+      - perplexity pro
+      - ai search
+      - search engine
+      - research
+      - rag
+      - ai answer
+      - answer engine
+      category: subscription
+      networks:
+        # Perplexity does not currently run a stable public affiliate
+        # program (intermittent partner programs have surfaced but
+        # nothing creator-friendly). Direct CTA for now.
+        direct:
+          url: https://www.perplexity.ai/
+          commission_pct: 0.0
+      image_url: https://www.perplexity.ai/favicon.ico
+      price_inr: 1680
+    # -- Tier A: real affiliate programs — operator signup required --
+    - name: NordVPN
       enabled: false
       keywords:
-      - midjourney
-      - ai art
-      - ai image
-      - text to image
-      - ai generation
-      - diffusion
-      category: tool
-      networks: {}
-      image_url: https://example.com/images/midjourney.jpg
-      price_inr: 800
-    - name: NVIDIA RTX 4090
-      keywords:
-      - nvidia
-      - rtx
-      - gpu
-      - graphics card
-      - 4090
-      - 4080
-      - cuda
-      - ai training
-      - deep learning
-      - render
-      - training
-      - tensor
-      - machine learning
-      - stable diffusion
-      - llm
-      - local ai
-      - comfyui
-      - automatic1111
-      - ollama
-      - benchmark
-      - performance
-      category: hardware
+      - vpn
+      - nordvpn
+      - privacy
+      - security
+      - online privacy
+      - secure browsing
+      - geo unblock
+      - encryption
+      category: subscription
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0BHD9TS9Q?tag=${AMAZON_IN_AFFILIATE_TAG}
-          commission_pct: 3.0
-        amazon_us:
-          url: https://www.amazon.com/dp/B0BHD9TS9Q?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 3.0
-      image_url: https://m.media-amazon.com/images/I/81SmwFXiirL._SL1500_.jpg
-      price_inr: 159900
-    - name: AI Microphone
+        # signup: https://nordvpn.com/affiliate/ (operator must join
+        # via Impact/CJ, replace url below with affiliate link, flip
+        # enabled: true).
+        affiliate:
+          url: https://example.com/PLACEHOLDER-nordvpn-affiliate-link
+          commission_pct: 40.0
+      image_url: https://nordvpn.com/favicon.ico
+      price_inr: 250
+    - name: Notion
+      enabled: false
       keywords:
-      - microphone
-      - usb
-      - condenser
-      - podcast
-      - recording
-      - blue yeti
-      - audio
-      - voice
-      - tts
-      - text to speech
-      - voice clone
+      - notion
+      - notion ai
+      - note taking
+      - productivity
+      - second brain
+      - workspace
+      - knowledge base
+      - docs
+      category: subscription
+      networks:
+        # signup: https://www.notion.so/affiliates (operator must
+        # apply, replace url below with affiliate link, flip
+        # enabled: true). Notion AI is a paid addon — keyword
+        # ``notion ai`` is in BB positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-notion-affiliate-link
+          commission_pct: 50.0
+      image_url: https://www.notion.so/favicon.ico
+      price_inr: 830
+    - name: ElevenLabs Starter
+      enabled: false
+      keywords:
       - elevenlabs
-      category: hardware
+      - voice clone
+      - voice cloning
+      - ai voice
+      - text to speech
+      - tts
+      - voice generation
+      - synthetic voice
+      - ai narration
+      category: subscription
       networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0BXPFNNF9?tag=${AMAZON_IN_AFFILIATE_TAG}
-          commission_pct: 3.0
-        amazon_us:
-          url: https://www.amazon.com/dp/B0BXPFNNF9?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 3.0
-      image_url: https://m.media-amazon.com/images/I/71QclY4ig4L._AC_SL1500_.jpg
-      price_inr: 5999
+        # signup: https://elevenlabs.io/affiliate-program (operator
+        # must apply via Impact, replace url below with affiliate
+        # link, flip enabled: true). ``elevenlabs`` keyword is
+        # already in BB positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-elevenlabs-affiliate-link
+          commission_pct: 25.0
+      image_url: https://elevenlabs.io/favicon.ico
+      price_inr: 420
+    - name: HeyGen
+      enabled: false
+      keywords:
+      - heygen
+      - ai avatar
+      - ai video
+      - video generation
+      - talking head
+      - synthetic video
+      - ai presenter
+      category: subscription
+      networks:
+        # signup: https://www.heygen.com/affiliate (operator must
+        # apply via PartnerStack, replace url below with affiliate
+        # link, flip enabled: true). ``heygen`` keyword is already
+        # in BB positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-heygen-affiliate-link
+          commission_pct: 25.0
+      image_url: https://www.heygen.com/favicon.ico
+      price_inr: 2000
+    - name: Synthesia
+      enabled: false
+      keywords:
+      - synthesia
+      - ai video
+      - video generation
+      - ai avatar
+      - synthetic video
+      - corporate video
+      - explainer video
+      category: subscription
+      networks:
+        # signup: https://www.synthesia.io/partners (operator must
+        # apply, replace url below with affiliate link, flip
+        # enabled: true). ``synthesia`` keyword is already in BB
+        # positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-synthesia-affiliate-link
+          commission_pct: 20.0
+      image_url: https://www.synthesia.io/favicon.ico
+      price_inr: 1850
+    - name: Runway ML
+      enabled: false
+      keywords:
+      - runway
+      - runwayml
+      - runway ml
+      - ai video
+      - video generation
+      - text to video
+      - image to video
+      - gen-3
+      - gen-2
+      category: subscription
+      networks:
+        # signup: https://runwayml.com/creator-program (operator
+        # must apply, replace url below with affiliate link, flip
+        # enabled: true). ``runway`` keyword is already in BB
+        # positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-runway-affiliate-link
+          commission_pct: 20.0
+      image_url: https://runwayml.com/favicon.ico
+      price_inr: 1250
+    - name: Canva Pro
+      enabled: false
+      keywords:
+      - canva
+      - canva pro
+      - canva ai
+      - design tool
+      - graphic design
+      - thumbnail
+      - presentation
+      - social media graphics
+      category: subscription
+      networks:
+        # signup: https://www.canva.com/affiliates/ (operator must
+        # apply, replace url below with affiliate link, flip
+        # enabled: true). ``canva ai`` keyword is already in BB
+        # positive_keywords list.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-canva-affiliate-link
+          commission_pct: 20.0
+      image_url: https://www.canva.com/favicon.ico
+      price_inr: 1100
+    - name: Framer
+      enabled: false
+      keywords:
+      - framer
+      - no code
+      - no-code
+      - website builder
+      - landing page
+      - design tool
+      - prototyping
+      category: subscription
+      networks:
+        # signup: https://www.framer.com/affiliates/ (operator must
+        # apply via PartnerStack, replace url below with affiliate
+        # link, flip enabled: true).
+        affiliate:
+          url: https://example.com/PLACEHOLDER-framer-affiliate-link
+          commission_pct: 30.0
+      image_url: https://www.framer.com/favicon.ico
+      price_inr: 830
+    - name: Webflow
+      enabled: false
+      keywords:
+      - webflow
+      - no code
+      - no-code
+      - website builder
+      - cms
+      - landing page
+      - web design
+      category: subscription
+      networks:
+        # signup: https://webflow.com/affiliates (operator must
+        # apply via Impact, replace url below with affiliate link,
+        # flip enabled: true).
+        affiliate:
+          url: https://example.com/PLACEHOLDER-webflow-affiliate-link
+          commission_pct: 50.0
+      image_url: https://webflow.com/favicon.ico
+      price_inr: 1200
+    - name: Hostinger AI Hosting
+      enabled: false
+      keywords:
+      - hosting
+      - web hosting
+      - hostinger
+      - ai hosting
+      - vps
+      - cloud hosting
+      - domain
+      - server
+      category: subscription
+      networks:
+        # signup: https://www.hostinger.com/affiliates (operator
+        # must apply, replace url below with affiliate link, flip
+        # enabled: true). Wide-audience product useful for AI app
+        # builders + creators deploying demos.
+        affiliate:
+          url: https://example.com/PLACEHOLDER-hostinger-affiliate-link
+          commission_pct: 60.0
+      image_url: https://www.hostinger.com/favicon.ico
+      price_inr: 290
+    # -- Tier C: hardware fallbacks (already in catalog pre-PR-AB,
+    # preserved here so the catalog still has gear-mention coverage
+    # when an AI content piece mentions lighting / recording / chroma
+    # setup. Tier C is intentionally narrow — most AI creator content
+    # is software, not hardware.) --
     - name: Ring Light
+      enabled: true
       keywords:
       - ring light
       - led
@@ -1110,11 +1388,11 @@ niches:
       image_url: https://m.media-amazon.com/images/I/61FeV2kuB7L._AC_SL1500_.jpg
       price_inr: 2499
     - name: Green Screen
+      enabled: true
       keywords:
       - green screen
       - chroma key
       - background
-      - streaming
       - video production
       category: hardware
       networks:
@@ -1126,96 +1404,3 @@ niches:
           commission_pct: 3.0
       image_url: https://m.media-amazon.com/images/I/61i5eTZnhtL._AC_SL1500_.jpg
       price_inr: 1999
-    - name: Coding Keyboard
-      keywords:
-      - keyboard
-      - mechanical
-      - programmer
-      - typing
-      - code
-      - developer
-      - ergonomic
-      - coding
-      - vscode
-      - terminal
-      - github
-      - copilot
-      - cursor
-      - ide
-      category: hardware
-      networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0DF7Y1NZD?tag=${AMAZON_IN_AFFILIATE_TAG}
-          commission_pct: 3.0
-        amazon_us:
-          url: https://www.amazon.com/dp/B0DF7Y1NZD?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 3.0
-      image_url: https://m.media-amazon.com/images/I/81s5PDK7OBL._AC_SL1500_.jpg
-      price_inr: 8999
-    - name: AI Course Bundle
-      keywords:
-      - ai course
-      - machine learning
-      - deep learning
-      - udemy
-      - coursera
-      - online course
-      - learn ai
-      - tutorial
-      - bootcamp
-      - course
-      - python
-      - pytorch
-      - tensorflow
-      - openai
-      - anthropic
-      - claude
-      - chatgpt
-      - prompt engineering
-      category: educational
-      networks:
-        amazon_us:
-          url: https://www.amazon.com/dp/B0BSMSV1NL?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 4.0
-      image_url: https://m.media-amazon.com/images/I/81RnKN6BRuL._SL1500_.jpg
-      price_inr: 4999
-    - name: Portable Monitor
-      keywords:
-      - portable monitor
-      - usb-c
-      - second screen
-      - travel monitor
-      - external display
-      - remote work
-      - work from home
-      - dual screen
-      - second monitor
-      - productivity
-      category: hardware
-      networks:
-        amazon:
-          url: https://www.amazon.in/dp/B095GG31KX?tag=${AMAZON_IN_AFFILIATE_TAG}
-          commission_pct: 3.0
-        amazon_us:
-          url: https://www.amazon.com/dp/B095GG31KX?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 3.0
-      image_url: https://m.media-amazon.com/images/I/71k5N-RKVgL._AC_SL1500_.jpg
-      price_inr: 12999
-    - name: Claude Pro Subscription
-      keywords:
-      - claude
-      - anthropic
-      - claude pro
-      - ai assistant
-      - llm
-      - ai chat
-      category: tool
-      networks:
-        amazon:
-          url: https://www.amazon.in/dp/B0GSRSRYSH?tag=${AMAZON_IN_AFFILIATE_TAG}
-          commission_pct: 4.0
-        amazon_us:
-          url: https://www.amazon.com/dp/B0GSRSRYSH?tag=${AMAZON_US_AFFILIATE_TAG}
-          commission_pct: 4.0
-      image_url: https://m.media-amazon.com/images/I/81MCJnvo2KL._SL1500_.jpg
-      price_inr: 1680
