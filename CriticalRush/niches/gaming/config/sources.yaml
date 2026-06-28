@@ -49,6 +49,31 @@ reddit:
   # set (gaming/pcgaming/Games/PS5) is mostly text-discussion. These
   # subs are video-heavy with high upvote signal that correlates to
   # clip quality.
+  #
+  # Why this list matters (2026-06-29 — PR AD):
+  # On days when Twitch + Steam trending = pre-order trailers
+  # (Stellar Blade™, Avatar Legends, CAPTAIN TSUBASA), the clip
+  # sourcer correctly refuses Pexels stock-footage fallback
+  # ("Stock footage hurts channel credibility" — clip_sourcer.py
+  # :932-937). Result: gaming hits 0-blueprint days when trending
+  # doesn't include actively-played games with real clips. Reddit
+  # video subs are the rescue path — every entry below is a
+  # subreddit where the POST IS A CLIP, so this fetcher gives
+  # clip_sourcer real playable content even when upstream trending
+  # is all marketing.
+  #
+  # Curated for high video density + low IRL/drama drift:
+  #   * GamingClips — pure clip submissions (rules enforce video)
+  #   * LivestreamFail — Twitch fails/highlights, 600K+ subs
+  #     (negative_keywords below filter "just chatting" / "irl"
+  #     drift)
+  #   * gamingvids — video-only, lower-volume but on-topic
+  #   * speedrun — speedrun video submissions
+  #   * twitchclips — pure Twitch clip resharing; highest signal
+  #     -to-noise of the lot, ~100% video, all gaming
+  #   * (game-specific) valorant / leagueoflegends /
+  #     VALORANTclips / FortNiteBR — game-thread subs that
+  #     surface viral moments within minutes
   enabled: true
   listing: top
   time_window: day
@@ -58,6 +83,7 @@ reddit:
     - name: "LivestreamFail"
     - name: "gamingvids"
     - name: "speedrun"
+    - name: "twitchclips"
     - name: "valorant"
     - name: "leagueoflegends"
     - name: "VALORANTclips"
@@ -202,7 +228,15 @@ steam_trailers:
   # cost: 0.3s × 8 = 2.4s extra sleep.
   max_games: 8
 
-# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher) —
+# CURRENTLY INACTIVE (PR AD, 2026-06-29). Production path is the
+# ``reddit:`` block above, consumed by FetchRedditClips. The
+# genlab_core.intel.reddit_fetcher module has no production callers
+# (verified by grep on 2026-06-29) and the OAuth credentials it
+# requires (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET) are not
+# provisioned. Kept here for documentation only; do NOT add subs
+# here expecting them to be polled. Add to the ``reddit:`` block
+# above instead.
 reddit_sources:
   - subreddit: r/gaming
     min_score: 10000
@@ -487,6 +521,16 @@ content_filter:
     - irl stream
     - just chatting
     - reaction video
+    # r/LivestreamFail + r/twitchclips drift guards (PR AD, 2026-06-29) —
+    # those subs are video-first and on-topic ~80% of the time, but the
+    # high-upvote spillover into streamer drama / IRL is the dominant
+    # off-niche failure mode. Hard-reject these patterns before they
+    # consume a render slot.
+    - streamer drama
+    - streamer banned
+    - cam show
+    - irl reaction
+    - hot tub stream
     # Sports (belongs in ClutchWire)
     - cricket highlights
     - ipl highlights
