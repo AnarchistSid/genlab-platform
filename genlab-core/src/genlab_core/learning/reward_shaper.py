@@ -324,6 +324,29 @@ class RewardShaper:
 
         return max(0.0, min(1.0, raw_reward))
 
+    @staticmethod
+    def apply_rationale_multiplier(
+        base_reward: float,
+        rationale: str | None,
+        arm_kind: str,
+    ) -> float:
+        """Wire to per-rationale reward multipliers (PR AA).
+
+        Thin re-export of :func:`genlab_core.learning.rationale_weighted_reward.apply_rationale_multiplier`
+        so callers that already hold a ``RewardShaper`` instance can
+        access the rationale wire without an extra import. Default-OFF
+        until ``GENLAB_RATIONALE_WEIGHTED_REWARD_ENABLED=1`` is set.
+
+        Reads category → multiplier mapping from
+        ``genlab-core/config/learning_rationale_weights.yaml``. See the
+        module docstring for the design contract.
+        """
+        from genlab_core.learning.rationale_weighted_reward import (
+            apply_rationale_multiplier,
+        )
+
+        return apply_rationale_multiplier(base_reward, rationale, arm_kind)
+
     def _normalise_with_percentile(self, metric: str, value: float, platform: str) -> float:
         """Normalise ``value`` to [0, 1] using percentile-relative target
         when available, otherwise the hardcoded fallback.
