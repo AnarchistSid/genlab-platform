@@ -16,8 +16,9 @@ Environment=GENLAB_USE_POSTGRES=true
 Environment=REDIS_HOST=127.0.0.1
 Environment=REDIS_PORT=6379
 ExecStart=/opt/genlab/.venv/bin/gunicorn \
-    --worker-class eventlet \
+    --worker-class gthread \
     --workers 1 \
+    --threads 4 \
     --timeout 120 \
     --max-requests 500 \
     --max-requests-jitter 50 \
