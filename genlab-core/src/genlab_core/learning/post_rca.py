@@ -199,13 +199,20 @@ def analyze_post(
     niche_id = str(context["bombed"].get("niche_id") or "")
 
     try:
+        # U-01: route through prompt-cache helper. The RCA system
+        # prompt is ~1000 chars today (below the 4000-char default
+        # threshold) so the helper passes it through as plain string
+        # — no behavior change. Wired now so the call site is future-
+        # proof if the prompt grows or the threshold drops.
+        from genlab_core.llm.prompt_cache import with_prompt_cache
+
         user = json.dumps(context, indent=2)
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=200,
             temperature=0.0,  # Deterministic verdict for same inputs
-            system=_RCA_SYSTEM_PROMPT,
+            system=with_prompt_cache(_RCA_SYSTEM_PROMPT),
             messages=[{"role": "user", "content": user}],
         )
 

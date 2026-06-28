@@ -22,6 +22,19 @@ def _mock_anthropic_success(hook_text: str):
     return MagicMock(return_value=mock_client)
 
 
+def _system_text(captured) -> str:
+    """Normalize a captured ``system`` kwarg to a single text string.
+
+    U-01 (2026-06-27): with prompt caching wired, ``system`` is a
+    list-of-dict when the prompt exceeds the cache threshold. Tests that
+    do substring assertions on the prompt need to work with either
+    shape — this helper handles both.
+    """
+    if isinstance(captured, list):
+        return "".join(block.get("text", "") for block in captured)
+    return captured
+
+
 class TestGenerateHook:
     """Tests for the generate_hook function."""
 
@@ -340,7 +353,7 @@ class TestGenerateHookStyleHint:
                     generate_hook(_make_story(), "sports")
 
         client = mock_cls.return_value
-        system_prompt = client.messages.create.call_args.kwargs["system"]
+        system_prompt = _system_text(client.messages.create.call_args.kwargs["system"])
         assert "STYLE TARGET" in system_prompt
         # The body of the controversy hint should be in the prompt
         assert "tension" in system_prompt.lower() or "dispute" in system_prompt.lower()
@@ -356,7 +369,7 @@ class TestGenerateHookStyleHint:
                     generate_hook(_make_story(), "sports")
 
         client = mock_cls.return_value
-        system_prompt = client.messages.create.call_args.kwargs["system"]
+        system_prompt = _system_text(client.messages.create.call_args.kwargs["system"])
         assert "STYLE TARGET" not in system_prompt
 
     def test_none_returned_with_style_on_api_error(self):
@@ -401,7 +414,11 @@ class TestAntiFabricationRulesInSystemPrompt:
                 ):
                     generate_hook(_make_story(), niche_id)
         client = mock_cls.return_value
-        return client.messages.create.call_args.kwargs["system"]
+        # U-01 (2026-06-27): with prompt caching wired, ``system`` is
+        # a list-of-dict when the prompt exceeds the cache threshold.
+        # ``_system_text`` normalizes both shapes back to plain text so
+        # substring assertions below keep working.
+        return _system_text(client.messages.create.call_args.kwargs["system"])
 
     def test_anti_fabrication_header_present(self):
         """The system prompt must contain the explicit anti-fabrication

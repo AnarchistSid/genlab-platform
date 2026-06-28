@@ -67,8 +67,16 @@ class TestHookCriticScratchpadWire:
         """Pin: the messages.create() call uses the (possibly
         scratchpad-prepended) critic_system variable, NOT the raw
         _HOOK_CRITIC_SYSTEM_PROMPT directly. Without this, the wire
-        would be dead — system prompt would always be the stock one."""
-        assert "system=critic_system" in self.content
+        would be dead — system prompt would always be the stock one.
+
+        U-01 (2026-06-27): the literal kwarg became
+        ``system=with_prompt_cache(critic_system)`` after prompt-caching
+        wiring. Both forms count — assert that critic_system flows into
+        the system kwarg (directly or via the cache helper)."""
+        assert (
+            "system=critic_system" in self.content
+            or "system=with_prompt_cache(critic_system)" in self.content
+        )
 
     def test_fail_open_on_scratchpad_read_error(self):
         """Pin: scratchpad read wrapped in try/except with the

@@ -185,14 +185,21 @@ def rerank_for_niche_fit(
         return videos
 
     try:
+        from genlab_core.llm.prompt_cache import with_prompt_cache
+
         client = anthropic.Anthropic()
         system, user = _build_prompt(candidates, niche_id, effective_top_k)
 
         def _llm_call():
+            # U-01: route through prompt-cache helper. The niche-fit
+            # ranker system prompt is ~700 chars today (below the
+            # 4000-char default threshold) so the helper passes it
+            # through as plain string — no behavior change. Wired now
+            # so the call site is future-proof.
             return client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=80,
-                system=system,
+                system=with_prompt_cache(system),
                 messages=[{"role": "user", "content": user}],
             )
 

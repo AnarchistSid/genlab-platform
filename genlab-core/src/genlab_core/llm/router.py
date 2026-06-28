@@ -174,12 +174,19 @@ def _call_anthropic(
 ) -> str:
     import anthropic
 
+    from genlab_core.llm.prompt_cache import with_prompt_cache
+
     client = anthropic.Anthropic(api_key=api_key)
+    # U-01: route every Anthropic system prompt through the cache
+    # helper. The helper falls back to plain-string for short prompts
+    # (zero behavior change), and emits cache_control for prompts
+    # ≥4000 chars (~1000 tokens) so calls 2-N within a 5-minute
+    # window pay ~10% input cost on the cached portion.
     response = client.messages.create(
         model=model,
         max_tokens=max_tokens,
         temperature=temperature,
-        system=system,
+        system=with_prompt_cache(system),
         messages=[{"role": "user", "content": user}],
     )
     from genlab_core.intelligence.cost_accumulator import record_anthropic_usage
