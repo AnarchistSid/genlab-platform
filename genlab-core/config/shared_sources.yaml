@@ -270,9 +270,13 @@ youtube_channels:
   - name: "Premier League"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCG5qGWdu8nIRZqJ_GgDwQ-w"
     affinity: [sports]
-  - name: "House of Highlights"
-    url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqQo7ewe87aYAe7ub5cYxDg"
-    affinity: [sports]
+  # "House of Highlights" (UCqQo7ewe87aYAe7ub5cYxDg) removed 2026-06-28:
+  # RSS feed returns HTTP 404; the channel ID no longer resolves. The
+  # current @HouseofHighlights handle redirects to a different channel
+  # ("Creator League", UC5qUhMoqke0mnJtgVoEn0aw) which is not a direct
+  # replacement for sports highlights content. Re-add a verified
+  # alternative under a new entry rather than reviving this ID.
+  # See: DEEP_AUDIT_2026-03-26.md L1011 + chore/deep-audit-2026-03-ops-hygiene-sweep
   - name: "ESPN"
     url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWLfSweyRNmLpgEHekhoAg"
     affinity: [sports]
