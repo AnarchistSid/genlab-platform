@@ -151,6 +151,17 @@ export const queryKeys = {
   publishingHealthPerNiche: {
     fetch: (days: number) => ["publishing", "per-niche-health", days] as const,
   },
+  /** Per-(niche, base_arm) bandit-platform-divergence rows
+   * (Mission Control BanditPlatformDivergenceCard, PR AG). */
+  banditPlatformDivergence: {
+    fetch: (nicheId: string | undefined, minNPlays: number) =>
+      [
+        "learning",
+        "bandit-platform-divergence",
+        nicheId ?? "all",
+        minNPlays,
+      ] as const,
+  },
   /** Source-discovery proposer rankings (per-niche source channels). */
   sourceDiscovery: {
     proposals: (nicheId: string, windowDays: number) =>
