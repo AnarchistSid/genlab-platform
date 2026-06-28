@@ -306,15 +306,27 @@ interface AgentRow {
 }
 
 function AgentRow({ agent }: { agent: AgentRow }) {
+  // H6 audit fix (2026-03-31): a scheduled agent in its idle window
+  // (waiting for next launchd timer fire) reports status="stopped" —
+  // but that's expected behaviour, not an alarm. The badge already
+  // surfaces "Idle" in grey for scheduled agents (see ``AgentBadge``);
+  // make the status dot match so we don't paint a red dot next to a
+  // grey "Idle" badge. Without this fix, "Daily Intel" and every other
+  // cron-style agent stays red between runs, training operators to
+  // ignore the red signal (alarm fatigue).
+  const dotStatus: InfraStatus =
+    agent.status === "running"
+      ? "up"
+      : agent.status === "scheduled"
+        ? "unknown"
+        : agent.isScheduled
+          ? "unknown" // scheduled-but-currently-idle → grey, NOT red
+          : "down";
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <StatusDot
-          status={
-            agent.status === "running"   ? "up"      :
-            agent.status === "scheduled" ? "unknown" :
-                                           "down"
-          }
+          status={dotStatus}
           size={7}
         />
         <span

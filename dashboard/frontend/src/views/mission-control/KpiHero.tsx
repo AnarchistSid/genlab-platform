@@ -56,14 +56,21 @@ export function KpiHero() {
       stats
         ? [
             {
-              label: "TOTAL REACH",
+              // Window-qualifier suffix (H1 audit fix, 2026-03-31): Mission
+              // Control aggregates ALL analytics rows (all-time) while the
+              // Analytics page uses a windowed query. Without a window hint
+              // here, operators see "641K reach" on MC + "20K reach" on
+              // Analytics and assume one is wrong. Both are correct — they
+              // measure different windows. The "(all time)" suffix removes
+              // the ambiguity at the surface.
+              label: "TOTAL REACH (all time)",
               value: stats.reach,
               previousValue: stats.reachPrev,
               sparklineData: stats.reachSparkline,
               accentColor: "var(--color-blue)",
             },
             {
-              label: "TOTAL LIKES",
+              label: "TOTAL LIKES (all time)",
               value: stats.likes,
               accentColor: "var(--color-emerald)",
             },
