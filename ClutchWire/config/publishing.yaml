@@ -52,3 +52,36 @@ platforms:
     account_id: null  # TODO: Generate Threads token for @theclutchwire
     content_types: [video_post, text_post]
     aspect_ratio: "1:1"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# auto_publish — AUTO #2 enforcement scaffolding (2026-06-28)
+# ─────────────────────────────────────────────────────────────────────
+#
+# Per the AUTO #2 rollout runbook (docs/runbooks/AUTO_2_ROLLOUT_2026-06-15.md)
+# every niche needs this block before the enforcement worker can read
+# its policy. Currently disabled (enabled: false + rollout_pct: 0.0)
+# — the file exists so a single PR can flip THIS niche on without
+# scrambling for the file shape when calibration data justifies it.
+#
+# DO NOT FLIP without (per runbook §9 readiness checklist):
+#   1. ≥30 calibration samples × ≥90% agreement for THIS niche
+#      (read /api/v1/auto-approval/calibration-stats?niche_id=<this>)
+#   2. Operator-runbook pre-flight checks
+#   3. PR-based change (NOT a hand-edit on prod) per 2026-06-14
+#      deploy-pipeline-gap lesson
+#
+# Reference: BlackboxBrief/config/publishing.yaml has the full template
+# (ai_creators is at rollout_pct: 0.1 in Week-1 ramp as of 2026-06-26).
+#
+# Kill switches (in order of severity, all reversible via PR):
+#   - rollout_pct: 0.0  → blocks all approvals for THIS niche only
+#   - enabled: false    → soft disable
+#   - GENLAB_AUTO_APPROVE_DISABLED=1 in /opt/genlab/.env → global kill
+#   - touch /opt/genlab/.runtime/auto_approve_kill_switch → file flag
+
+auto_publish:
+  enabled: false
+  min_confidence: 0.85
+  max_approvals_per_pass: 3
+  rollout_pct: 0.0
