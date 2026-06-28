@@ -163,7 +163,15 @@ tmdb_trailers:
 
 rate_limit_per_hour: 200
 
-# Reddit video fetcher (genlab_core.intel.reddit_fetcher)
+# Reddit video fetcher (genlab_core.intel.reddit_fetcher) —
+# CURRENTLY INACTIVE (PR AE, 2026-06-29). Production path is the
+# ``reddit:`` block below, consumed by FetchRedditClips. The
+# genlab_core.intel.reddit_fetcher module has no production callers
+# (verified by grep on 2026-06-29, matches PR #643 audit for gaming)
+# and the OAuth credentials it requires (REDDIT_CLIENT_ID /
+# REDDIT_CLIENT_SECRET) are not provisioned. Kept here for
+# documentation only; do NOT add subs here expecting them to be
+# polled. Add to the ``reddit:`` block below instead.
 reddit_sources:
   - subreddit: r/movies
     min_score: 5000
@@ -511,11 +519,63 @@ content_filter:
     - game studio
     - gamescom
     - esports
+
+    # PR AE drift guards (2026-06-29) — reddit fetcher additions
+    # (r/movies, r/movieclips, r/MovieReactions, r/Cinemagraphs)
+    # surface lots of off-niche text-discussion / merch / talk
+    # content that wedges past TMDB trailer-dominated days. These
+    # mirror the gaming PR #643 drift-guard pattern. Each one
+    # corresponds to a specific reddit-drift failure mode:
+    #   * "spoiler thread" — r/movies' #1 text-only category
+    #   * "cast announcement" — non-video Variety/Deadline
+    #     re-share posts that hit top of day
+    #   * "merchandise" — off-niche commerce content (Funko, etc.)
+    #   * "fan interview" — talk content, not movie-moment content
+    #     (kept "interview" alone OFF negative_keywords because
+    #     it would reject legitimate "director interview about
+    #     scene X" videos; r/movies fan-interview drift is narrower)
+    #   * "casting news" — text-discussion drift on r/movies/r/marvelstudios
+    #   * "first look at" — often image-only thumbnails not videos
+    - spoiler thread
+    - cast announcement
+    - merchandise
+    - fan interview
+    - casting news
 reddit:
   # FetchRedditClips stage — film discourse subs surface viral clips
   # within minutes of premieres + reaction videos. r/movieclips and
   # r/cinematography are the gold for cinematic moments; r/movies
   # has volume but more text.
+  #
+  # Why this list matters (2026-06-29 — PR AE):
+  # Today's movies content-fit analysis: movies' bottleneck is that
+  # trailers ≠ viral content. Viral movie content is moments,
+  # reactions, theories. The pipeline today leans on TMDB trending +
+  # studio YouTube feeds, both of which are trailer-dominated. Of the
+  # 12 missing-media failures Apr-Jun (DEEP_AUDIT data) every one was
+  # a pre-order trailer for an unreleased movie — no real clip to
+  # source. That mirrors the gaming bottleneck PR #643 (today) fixed
+  # for CriticalRush: when trending = pre-order, the clip sourcer
+  # correctly refuses Pexels stock-footage fallback (clip_sourcer.py
+  # :932-937) and we hit 0-blueprint days.
+  #
+  # Reddit video subs are the rescue path. Every sub below is one
+  # where THE POST IS A CLIP / SHOT, so FetchRedditClips gives the
+  # downstream stages real playable content even when TMDB is
+  # trailer-only:
+  #   * movieclips — Movieclips-style scene resharing
+  #   * MovieDetails — moments + behind-the-scenes (high upvote
+  #     density on video posts)
+  #   * MovieReactions — reaction-shot compilations (NEW PR AE)
+  #   * Cinemagraphs — looping movie GIFs/videos (NEW PR AE,
+  #     low volume but ~100% video-only by sub rules)
+  #   * cinematography — cinematic shots / DoP analysis with clips
+  #   * marvelstudios / DC_Cinematic — franchise-thread subs that
+  #     surface viral moments within minutes of trailer drops
+  #   * horror — genre-thread sub, high clip density for jump-scares
+  #   * movies / boxoffice — discussion-first subs (lower video
+  #     density but high signal); negative_keywords below filter
+  #     "spoiler thread" / "cast announcement" drift
   enabled: true
   listing: top
   time_window: day
@@ -524,8 +584,12 @@ reddit:
     - name: "movieclips"
     - name: "cinematography"
     - name: "MovieDetails"
+    - name: "MovieReactions"
+    - name: "Cinemagraphs"
     - name: "movies"
     - name: "boxoffice"
     - name: "marvelstudios"
     - name: "DC_Cinematic"
     - name: "horror"
+  velocity_window_hours: 6
+  fetch_interval_minutes: 30
