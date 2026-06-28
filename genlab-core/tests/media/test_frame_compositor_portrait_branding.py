@@ -1,22 +1,25 @@
-"""Pins for RENDER #4 — portrait branding richness, opt-in via visuals.yaml.
+"""Pins for RENDER #4 — portrait branding richness via visuals.yaml.
 
-Default behavior (all 3 flags False) is byte-identical to pre-RENDER-#4
-portrait renders: logo only, no text. Each flag turns on its overlay
-independently so the operator can ship logo+name, logo+hook, etc. as
-creative tests without touching the others.
+AUTONOMY-GAP Q3 (2026-06-27): `show_name` + `show_handle` defaults
+flipped True → portrait reels now render name + handle by default for
+brand parity with landscape / square. `show_hook` remains False (hook
+overlay can cover content; opt-in creative-test variant). Niches can
+still set `show_name: false` / `show_handle: false` to revert to the
+older logo-only treatment.
 
 What the tests pin:
-  1. **Default = unchanged** — the headline pin: no flags → no drawtext
-     in the filtergraph (only the logo overlay)
-  2. Each flag adds exactly its overlay (name → drawtext fontfile + name
-     text; handle → drawtext fontfile + handle text; hook → wrapped
-     drawtext lines)
-  3. Combined flags layer in order: name first, then handle (positioned
-     below name when name is on), then hook
-  4. Y-coordinate adjusts: handle moves down when name is also on
-  5. visuals.yaml `portrait_branding:` block loads correctly via
-     from_visuals_yaml (with all three keys)
-  6. Missing block → defaults preserved (False)
+  1. **Default behavior**: name + handle drawtext in the filtergraph,
+     hook absent (no overlap with content)
+  2. Each opt-OUT flag removes exactly its overlay (show_name: false →
+     no channel name; show_handle: false → no handle)
+  3. show_hook=True adds wrapped drawtext lines for the hook
+  4. Combined flags layer in order: name → handle → hook
+  5. Y-coordinate adjusts: handle moves down when name is also on
+  6. Logo overlay is preserved alongside any text overlays (regression
+     pin — branding text must not displace the R-26 logo invariant)
+  7. visuals.yaml `portrait_branding:` block loads correctly via
+     from_visuals_yaml (with all three keys, including opt-OUT)
+  8. Missing block → defaults inherited (name + handle ON, hook OFF)
 """
 
 from __future__ import annotations
@@ -50,14 +53,20 @@ def portrait_info() -> VideoInfo:
 
 
 def _make_branding(logo_path: Path, **flag_overrides) -> ChannelBranding:
+    """Build a ChannelBranding for portrait tests.
+
+    Flag overrides default to the dataclass defaults (name=True,
+    handle=True, hook=False) — AUTONOMY-GAP Q3. Pass explicit kwargs
+    to opt OUT or to flip the hook flag on for creative-test pins.
+    """
     return ChannelBranding(
         niche_id="test",
         channel_name="TestChannel",
         handle="@testchannel",
         accent_color="#FF4500",
         logo_path=str(logo_path),
-        portrait_show_name=flag_overrides.get("show_name", False),
-        portrait_show_handle=flag_overrides.get("show_handle", False),
+        portrait_show_name=flag_overrides.get("show_name", True),
+        portrait_show_handle=flag_overrides.get("show_handle", True),
         portrait_show_hook=flag_overrides.get("show_hook", False),
     )
 
@@ -68,12 +77,17 @@ def _get_filtergraph(cmd: list[str]) -> str:
     return cmd[idx + 1]
 
 
-class TestDefaultsPreserveExistingBehavior:
-    """The headline RENDER #4 safety invariant: with no YAML changes,
-    portrait renders are exactly what they were before."""
+class TestPortraitDefaultsRenderNameAndHandle:
+    """AUTONOMY-GAP Q3 (2026-06-27): with no YAML overrides, portrait
+    reels now render logo + name + handle by default — brand parity
+    with landscape / square. Hook stays off (creative-test variant)."""
 
-    def test_no_flags_no_drawtext_in_filtergraph(self, logo: Path, portrait_info: VideoInfo):
-        branding = _make_branding(logo)  # all defaults False
+    def test_portrait_cmd_includes_branding_filter(self, logo: Path, portrait_info: VideoInfo):
+        """Default portrait filtergraph carries the name + handle
+        drawtext filters. Headline pin for the AUTONOMY-GAP Q3 fix —
+        mirrors the unconditional ``_build_branding_filters`` call
+        that landscape / square layouts have always had."""
+        branding = _make_branding(logo)  # defaults: name + handle ON, hook OFF
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
             "src.mp4",
@@ -87,15 +101,72 @@ class TestDefaultsPreserveExistingBehavior:
             fps=30,
         )
         graph = _get_filtergraph(cmd)
-        # Only the logo path — NO drawtext anywhere in the filtergraph.
-        # This is the byte-identical-to-before invariant.
-        assert "drawtext" not in graph, (
-            "Portrait defaults must NOT add drawtext — flip a "
-            "portrait_show_* flag in visuals.yaml to opt in."
+        # Name + handle drawtext present by default
+        assert "drawtext" in graph
+        assert "TestChannel" in graph
+        assert "@testchannel" in graph
+        # Hook drawtext stays absent at defaults (creative-test variant)
+        assert "Some hook" not in graph
+        # Filtergraph still terminates correctly
+        assert "[out]" in graph
+
+    def test_portrait_logo_still_present_after_branding_added(
+        self, logo: Path, portrait_info: VideoInfo
+    ):
+        """Regression pin: the R-26 logo invariant survives the
+        AUTONOMY-GAP Q3 default-flip. Branding text must layer ON TOP
+        of the logo overlay, not displace it."""
+        branding = _make_branding(logo)  # defaults: name + handle ON
+        comp = FrameCompositor(branding)
+        cmd = comp._build_cmd_portrait(
+            "src.mp4",
+            "h",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
         )
-        # Logo overlay still present
+        graph = _get_filtergraph(cmd)
+        # R-26 invariants — all still present
+        assert "[1:v]" in graph  # logo input wired in
+        assert "scale=60:60" in graph  # LOGO_SIZE x LOGO_SIZE
+        assert "overlay=45:70" in graph  # P_LOGO_X, P_LOGO_Y
+        # Logo input file path appears in the input args
+        assert str(logo) in cmd
+        # Logo overlay precedes the name drawtext in the filtergraph
+        logo_idx = graph.find("overlay=45:70")
+        name_idx = graph.find("TestChannel")
+        assert logo_idx != -1 and name_idx != -1
+        assert logo_idx < name_idx, (
+            "Logo overlay must come before name drawtext so the text "
+            "layers on top of the logo, not under it."
+        )
+
+    def test_explicit_opt_out_returns_to_logo_only(self, logo: Path, portrait_info: VideoInfo):
+        """A niche that prefers the older logo-only treatment can opt
+        OUT of both defaults via visuals.yaml — the escape hatch must
+        keep working after AUTONOMY-GAP Q3."""
+        branding = _make_branding(logo, show_name=False, show_handle=False)
+        comp = FrameCompositor(branding)
+        cmd = comp._build_cmd_portrait(
+            "src.mp4",
+            "Some hook",
+            "out.mp4",
+            portrait_info,
+            duration=15.0,
+            trim_start=0.0,
+            crf=20,
+            preset="fast",
+            fps=30,
+        )
+        graph = _get_filtergraph(cmd)
+        # No text overlays
+        assert "drawtext" not in graph
+        # Logo still overlaid (R-26 invariant)
         assert "overlay=45:70" in graph
-        # Final out label still wired correctly
         assert "[out]" in graph
 
 
@@ -123,8 +194,9 @@ class TestShowName:
 
     def test_name_skipped_when_channel_name_empty(self, logo: Path, portrait_info: VideoInfo):
         """Even with flag on, an empty channel_name must not render an
-        empty drawtext (which FFmpeg would error on)."""
-        branding = _make_branding(logo, show_name=True)
+        empty drawtext (which FFmpeg would error on). Handle disabled
+        here so the assertion only covers the name path."""
+        branding = _make_branding(logo, show_name=True, show_handle=False)
         branding.channel_name = ""
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
@@ -162,8 +234,10 @@ class TestShowHandle:
 
     def test_handle_y_moves_down_when_name_also_on(self, logo: Path, portrait_info: VideoInfo):
         """When name AND handle are both on, handle stacks below name —
-        same pattern as landscape/square layouts."""
-        branding_name_only = _make_branding(logo, show_handle=True)
+        same pattern as landscape/square layouts. The ``handle alone''
+        case has to explicitly disable show_name because that flag now
+        defaults True after AUTONOMY-GAP Q3."""
+        branding_name_only = _make_branding(logo, show_name=False, show_handle=True)
         branding_both = _make_branding(logo, show_name=True, show_handle=True)
 
         comp_solo = FrameCompositor(branding_name_only)
@@ -227,8 +301,10 @@ class TestShowHook:
 
     def test_long_hook_wraps_to_multiple_drawtext_lines(self, logo: Path, portrait_info: VideoInfo):
         """Hook wrapping reuses _wrap_hook (≤2 lines, ≤35 chars each).
-        Long hook → 2 drawtext filters, each with its own y= offset."""
-        branding = _make_branding(logo, show_hook=True)
+        Long hook → 2 drawtext filters, each with its own y= offset.
+        Name + handle disabled here so the drawtext-count assertion
+        isolates the hook overlay path."""
+        branding = _make_branding(logo, show_name=False, show_handle=False, show_hook=True)
         comp = FrameCompositor(branding)
         long_hook = "This is a deliberately long hook text intended to wrap to two lines"
         cmd = comp._build_cmd_portrait(
@@ -245,11 +321,14 @@ class TestShowHook:
         graph = _get_filtergraph(cmd)
         # Two drawtext filters → at least two `text=` occurrences in the graph
         drawtext_count = graph.count("drawtext=fontfile")
-        # When show_hook is the only flag → exactly the hook drawtexts
+        # With name/handle off, only the hook drawtexts remain
         assert drawtext_count >= 2
 
     def test_hook_skipped_when_empty(self, logo: Path, portrait_info: VideoInfo):
-        branding = _make_branding(logo, show_hook=True)
+        """Empty hook text + hook flag on must not render an empty
+        drawtext. Name + handle disabled so the assertion isolates the
+        hook path."""
+        branding = _make_branding(logo, show_name=False, show_handle=False, show_hook=True)
         comp = FrameCompositor(branding)
         cmd = comp._build_cmd_portrait(
             "src.mp4",
@@ -323,10 +402,11 @@ class TestYAMLLoading:
         assert branding.portrait_show_handle is False
         assert branding.portrait_show_hook is True
 
-    def test_visuals_yaml_without_portrait_branding_defaults_to_false(self, tmp_path: Path):
-        """Critical: existing visuals.yaml files (no portrait_branding
-        block) load with all flags False → unchanged portrait renders.
-        This is the migration-safety pin."""
+    def test_visuals_yaml_without_portrait_branding_inherits_defaults(self, tmp_path: Path):
+        """AUTONOMY-GAP Q3 (2026-06-27): existing visuals.yaml files
+        with no portrait_branding block now inherit name=True +
+        handle=True + hook=False — brand parity with landscape /
+        square without per-niche YAML updates."""
         logo = tmp_path / "logo.png"
         logo.write_bytes(b"\x89PNG" + b"\x00" * 64)
         yaml_path = tmp_path / "visuals.yaml"
@@ -338,13 +418,14 @@ class TestYAMLLoading:
             "accent_color: '#FF0000'\n"
         )
         branding = ChannelBranding.from_visuals_yaml(str(yaml_path))
-        assert branding.portrait_show_name is False
-        assert branding.portrait_show_handle is False
+        assert branding.portrait_show_name is True
+        assert branding.portrait_show_handle is True
         assert branding.portrait_show_hook is False
 
     def test_visuals_yaml_with_non_dict_portrait_block_defaults(self, tmp_path: Path):
-        """Defensive: a YAML typo like `portrait_branding: true` shouldn't
-        crash from_visuals_yaml — fall back to safe defaults."""
+        """Defensive: a YAML typo like `portrait_branding: true`
+        shouldn't crash from_visuals_yaml — fall back to dataclass
+        defaults (name + handle ON, hook OFF, post AUTONOMY-GAP Q3)."""
         logo = tmp_path / "logo.png"
         logo.write_bytes(b"\x89PNG" + b"\x00" * 64)
         yaml_path = tmp_path / "visuals.yaml"
@@ -356,6 +437,29 @@ class TestYAMLLoading:
             "accent_color: '#FF0000'\n"
             "branding:\n"
             "  portrait_branding: true\n"  # invalid shape
+        )
+        branding = ChannelBranding.from_visuals_yaml(str(yaml_path))
+        assert branding.portrait_show_name is True
+        assert branding.portrait_show_handle is True
+        assert branding.portrait_show_hook is False
+
+    def test_visuals_yaml_can_opt_out_of_defaults(self, tmp_path: Path):
+        """AUTONOMY-GAP Q3 escape hatch: a niche that wants the older
+        logo-only treatment must be able to explicitly opt OUT via
+        the same YAML block."""
+        logo = tmp_path / "logo.png"
+        logo.write_bytes(b"\x89PNG" + b"\x00" * 64)
+        yaml_path = tmp_path / "visuals.yaml"
+        yaml_path.write_text(
+            "niche_id: test\n"
+            f"logo_path: {logo}\n"
+            "channel_name: TestCh\n"
+            "handle: '@testch'\n"
+            "accent_color: '#FF0000'\n"
+            "branding:\n"
+            "  portrait_branding:\n"
+            "    show_name: false\n"
+            "    show_handle: false\n"
         )
         branding = ChannelBranding.from_visuals_yaml(str(yaml_path))
         assert branding.portrait_show_name is False

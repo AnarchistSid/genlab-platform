@@ -15,9 +15,12 @@ LANDSCAPE (source aspect ratio >= 1.33):
   Black fill above branding and below video.
 
 PORTRAIT (source aspect ratio <= 0.75):
-  Clean full-screen video — fills entire 1080x1920 canvas.
-  NO branding, NO hook overlay, NO accent line burned into video.
-  Branding comes from post caption text only.
+  Full-screen video — fills entire 1080x1920 canvas.
+  Logo overlaid top-left (R-26). Channel name + handle drawn next
+  to the logo by default (AUTONOMY-GAP Q3) for brand parity with
+  landscape / square. Hook overlay stays opt-in via visuals.yaml
+  `portrait_branding.show_hook` — can cover content. Niches can
+  opt OUT of name / handle via the same block.
 
 SQUARE (source aspect ratio 0.75 to 1.33):
   Video 1080x1080, VERTICALLY CENTERED at y=420.
@@ -74,9 +77,10 @@ L_VIDEO_Y = (CANVAS_H - L_VIDEO_H) // 2  # 656 — centered vertically
 L_HOOK_Y = L_VIDEO_Y - 120  # hook text above video with 16px clear gap
 L_LOGO_Y = L_HOOK_Y - 150  # logo/name above hook with breathing room
 
-# Layout B: Portrait — clean full-screen video, NO branding/hook overlay
-# Portrait videos fill the entire 1080x1920 canvas with zero overlays.
-# Branding comes from the caption/post text, not burned into the video.
+# Layout B: Portrait — full-bleed video with logo + name + handle overlaid
+# top-left. R-26 added the logo; AUTONOMY-GAP Q3 (2026-06-27) added the
+# name + handle defaults so portrait reels match landscape / square
+# branding by default. Hook overlay remains opt-in per niche.
 
 # Layout C: Square — video vertically centered, branding above
 S_VIDEO_H = 1080  # 1080x1080 square video
@@ -149,8 +153,7 @@ class ChannelBranding:
 
     # RENDER #4 (2026-06-13): portrait branding richness — opt-in per
     # niche so the operator can dial in the aesthetic without code changes.
-    # All three default False so existing portrait renders are byte-
-    # identical to pre-RENDER-#4 (logo only, no text). YAML shape:
+    # YAML shape:
     #
     #     branding:
     #       portrait_branding:
@@ -160,8 +163,18 @@ class ChannelBranding:
     #
     # Each is independent — operator can ship logo+name (handle off) or
     # logo+hook (name + handle off) as a creative-test variant.
-    portrait_show_name: bool = False
-    portrait_show_handle: bool = False
+    #
+    # AUTONOMY-GAP Q3 (2026-06-27): defaults for `show_name` and
+    # `show_handle` flipped True → portrait reels now ship with the same
+    # name + handle treatment as landscape / square by default, closing
+    # the brand-inconsistency gap noted in AUTONOMY-GAP-ANALYSIS.md Q3
+    # (Layout B previously rendered logo-only because no niche set the
+    # flags). `show_hook` stays False — hook overlay on portrait can
+    # cover content and is a creative-test variant, not a brand standard.
+    # Niches that prefer the older logo-only look can still opt OUT by
+    # setting `show_name: false` / `show_handle: false` in visuals.yaml.
+    portrait_show_name: bool = True
+    portrait_show_handle: bool = True
     portrait_show_hook: bool = False
 
     def __post_init__(self):
@@ -203,8 +216,10 @@ class ChannelBranding:
             raw_logo = str((niche_root / raw_logo).resolve())
 
         # RENDER #4: read the per-niche portrait branding flags. Block
-        # defaults to {} so a missing visuals.yaml `portrait_branding:` key
-        # produces the safe default (all flags False).
+        # defaults to {} so a missing visuals.yaml `portrait_branding:`
+        # key inherits the dataclass defaults — see AUTONOMY-GAP Q3:
+        # name + handle default ON for brand parity with landscape /
+        # square; hook stays off (creative-test variant).
         portrait_block = (
             fl_branding.get("portrait_branding") or branding.get("portrait_branding") or {}
         )
@@ -230,8 +245,8 @@ class ChannelBranding:
                 fl_branding.get("niche_id") or branding.get("niche_id") or cfg.get("niche_id", "")
             ),
             ffmpeg=ffmpeg,
-            portrait_show_name=bool(portrait_block.get("show_name", False)),
-            portrait_show_handle=bool(portrait_block.get("show_handle", False)),
+            portrait_show_name=bool(portrait_block.get("show_name", True)),
+            portrait_show_handle=bool(portrait_block.get("show_handle", True)),
             portrait_show_hook=bool(portrait_block.get("show_hook", False)),
         )
 
@@ -656,10 +671,13 @@ class FrameCompositor:
         subtle dark backing keeps the logo legible over bright footage. The
         logo file is guaranteed present by compose()'s guard.
 
-        RENDER #4 (2026-06-13): name / handle / hook overlays are opt-in
-        per-niche via visuals.yaml `portrait_branding:` flags. Default is
-        logo only (current behavior). When the operator turns a flag on
-        the corresponding drawtext joins the filtergraph after the logo
+        RENDER #4 (2026-06-13): name / handle / hook overlays are
+        toggleable per-niche via visuals.yaml `portrait_branding:` flags.
+        AUTONOMY-GAP Q3 (2026-06-27): show_name + show_handle defaults
+        flipped to True so portrait reels match landscape / square brand
+        treatment out of the box; show_hook stays False (content-cover
+        risk, creative-test variant). When a flag is on, the
+        corresponding drawtext joins the filtergraph after the logo
         overlay — order: name → handle → hook.
         """
         dur_flags = self._duration_flags(duration)
