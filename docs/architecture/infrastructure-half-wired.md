@@ -2,9 +2,10 @@
 
 A reference document — not a one-off session writeup. **Read this before
 any deep-dive audit of Gen Lab.** It defines a recurring failure mode,
-catalogs the nine instances we've found and fixed (mostly during the
-2026-06-14 session), describes the consistent fix-shape, and gives an
-8-question checklist for finding more.
+catalogs the eleven instances we've found and fixed (nine during the
+2026-06-14 session, two more during the 2026-06-25 prod audit),
+describes the consistent fix-shape, and gives an 8-question checklist
+for finding more.
 
 ---
 
@@ -32,7 +33,7 @@ LLM/API spend, 0 posts in the most-recent 3-week window.
 
 ---
 
-## Nine instances we've found and fixed in this codebase
+## Eleven instances we've found and fixed in this codebase
 
 Each row follows the same shape: a component built well, an
 integration left half-wired, the operational symptom that surfaced
@@ -49,6 +50,8 @@ the gap, the fix.
 | 7 | **_next_available_slot** — collision check counted every existing record's `scheduled_for` as occupied including the record being re-scheduled itself | All afternoon-pipeline approvals silently shifted +1 day (movies, sports, ai_creators, anime — gaming immune by accidental timing) | PR #191 — `exclude_record_id` parameter |
 | 8 | **`shared_sources.yaml`** — 711 source entries kept being fetched at full cadence regardless of whether downstream pipelines could ever use them | 119 sources at 0% claim rate over 14 days; ~574 wasted fetches/day | PR #193 — `FeedHealthTracker.refresh_zero_claim_disables` |
 | 9 | **bootstrap_product_embeddings.py** — 256 LOC of careful design that crashed on line 222 with `TypeError: 'bool' object is not callable` | The PA-API embedding bootstrap was unrunnable from day-one; `product_embeddings` table 0 rows for weeks | PR #194 — call `available` as `@property` (no parens) + fix misleading error message |
+| 10 | **engagement_rate=0 for 99.4% of rows ("Intelligent Fog")** — `analytics_store.py:214` did `engagement = insights.get("engagement", 0) or 0` but platform fetchers never returned an `"engagement"` key, so `engagement_rate = 0/reach = 0.0` for every record. Bandit + classifier silently trained on zero-reward signal for ~16 days (since commit `f32b6189`, 2026-06-09). Discovered: 2026-06-25 prod audit | Top Performers cards all showed 0.0% eng, "Avg Reward 0.07" was a data-quality artifact, LinUCB posteriors corrupted, XGBoost hook classifier ≈ predicts 0 for everything | Fix triple: PR #588 (one-line key fix + backfill SQL) + PR #589 (SKIPPED surfacing in metrics endpoint) + PR #602 (verify harness) + PR #614 (nightly drift detector) |
+| 11 | **Dashboard 0.0.0 version invisibility** — vite config had no build-time `VITE_APP_VERSION` injection + backend hardcoded `"2.0.0"`. Combined with no CI deploy automation (`scripts/deploy.sh` existed but no trigger glue), 9 merged PRs sat invisible on prod for days. Discovered: 2026-06-25 prod audit | Operator looked at the prod dashboard, saw "0.0.0" + "Server unreachable" + stale build, had no way to tell which commit was actually serving | Fix triple: PR #592 (5-layer wire: deploy.sh → review_server.py → vite.config.ts → settings.tsx → wrapper.sh) + PR #603 (move version.env from `/etc/genlab/` to `/opt/genlab/.version.env` after first prod run hit `EACCES`) |
 
 ---
 
@@ -182,6 +185,10 @@ Future Claude session (or operator) auditing Gen Lab:
 
 ---
 
-**Last updated:** 2026-06-14, after the session that shipped instances
-#4 through #9. Will need a refresh when the next session finds more
+**Last updated:** 2026-06-28, after the doc-hygiene sweep that appended
+instances #10 (engagement_rate=0 "Intelligent Fog") and #11 (Dashboard
+0.0.0 version invisibility), both surfaced by the 2026-06-25 prod audit
+and fixed in the 2026-06-26 deploy/learning-engines sprints. Previous
+update: 2026-06-14, after the session that shipped instances #4
+through #9. Will need a refresh when the next session finds more
 (it will).

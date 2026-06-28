@@ -111,9 +111,10 @@ firebase-debug.log
 # JSONL pipeline logs
 *.jsonl
 
-# Audit/status reports (generated, not source)
-DEEP_AUDIT_*.md
-STATUS_REPORT_*.md
+# Audit/status reports (generated, not source) — root-anchored so
+# historical snapshots can be committed under docs/archive/.
+/DEEP_AUDIT_*.md
+/STATUS_REPORT_*.md
 
 # LaunchAgent plists (machine-specific)
 genlab-core/runbooks/*.plist
