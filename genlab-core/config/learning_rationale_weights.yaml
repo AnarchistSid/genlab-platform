@@ -1,0 +1,83 @@
+# Per-rationale reward multipliers for operator-reject events.
+#
+# When the operator rejects a blueprint and the rationale classifier
+# (genlab_core.learning.rationale_classifier — PR #607) tags it with one
+# of the canonical 6 categories, the bandit updater should weight the
+# resulting negative reward DIFFERENTLY depending on WHY the rejection
+# happened — not just THAT it happened.
+#
+# Today's reward_shaper computes reward as a function of engagement
+# metrics only. When the loop is extended to operator-reject signals
+# (PR AA), this table tells the bandit how to apportion blame across
+# arm kinds. A hook-arm rejection on `weak_hook` is strong negative
+# evidence that the hook arm was wrong; the same rejection on
+# `bad_fit` is evidence the SOURCE was wrong — the hook arm was
+# blameless.
+#
+# Categories MUST match the canonical 6 from
+# genlab_core.learning.rationale_classifier.CANONICAL_CATEGORIES:
+#   weak_hook, too_generic, unsupported_claim, bad_fit, too_long, low_value
+# Any new category landing in the classifier MUST land here too.
+#
+# The `default` block is used when:
+#   - rationale is None (no operator-click logged)
+#   - rationale is "uncategorized" (classifier confidence below threshold)
+#   - rationale is anything not in the canonical 6 (defensive)
+#
+# Multipliers are designed so that base_reward * multiplier stays
+# bounded. base_reward for a rejection is expected to be negative
+# (e.g. -1.0). Multipliers that AMPLIFY the negative are <  -1.0;
+# multipliers that DAMPEN the negative are between -1.0 and 0.
+#
+# Use GENLAB_RATIONALE_WEIGHTED_REWARD_ENABLED=1 (strict string "1")
+# to activate. Default OFF until calibration data confirms the
+# directionality matches operator intent across niches.
+#
+# See PR AA for design rationale.
+
+rationale_weights:
+  # Hook craft was the problem — strong neg signal on hook arm,
+  # softer on style (a different hook style might still have worked).
+  weak_hook:
+    hook_arm_multiplier: -2.0
+    style_arm_multiplier: -0.5
+
+  # Template/structure stale on BOTH dimensions — neither arm
+  # broke through. Moderate negative on both.
+  too_generic:
+    hook_arm_multiplier: -1.5
+    style_arm_multiplier: -1.5
+
+  # Claim quality is hook-craft (the hook said something the story
+  # doesn't support). Style is blameless.
+  unsupported_claim:
+    hook_arm_multiplier: -1.8
+    style_arm_multiplier: -0.3
+
+  # Upstream source mismatch — the hook arm and style arm picked
+  # the right craft FOR THE STORY, but the story was wrong for
+  # the niche. Dampen both heavily; the bandit shouldn't learn
+  # to avoid arms that were blameless.
+  bad_fit:
+    hook_arm_multiplier: -0.2
+    style_arm_multiplier: -0.2
+
+  # Length issue is more hook-arm (the hook is what got too long)
+  # than style. Style might still adapt; hook needs to learn brevity.
+  too_long:
+    hook_arm_multiplier: -1.0
+    style_arm_multiplier: -0.5
+
+  # Content technically valid but unlikely to engage — mixed signal.
+  # Moderate negative on both arms.
+  low_value:
+    hook_arm_multiplier: -0.5
+    style_arm_multiplier: -0.5
+
+# Fallback when rationale is None / "uncategorized" / unknown.
+# Matches the pre-PR-AA behaviour (rejection = -1.0 × on both arms),
+# so when the classifier hasn't produced a high-confidence verdict
+# the bandit sees the same signal it always did.
+default:
+  hook_arm_multiplier: -1.0
+  style_arm_multiplier: -1.0
