@@ -671,9 +671,9 @@ def test_auto_resolve_cooldown_param_default_is_30():
     operator at least 30 min to see the alert before it self-clears
     (2× the timer interval, balancing awareness vs banner-cleanup
     latency)."""
-    from genlab_core.monitoring import anthropic_credit_monitor
-
     import inspect
+
+    from genlab_core.monitoring import anthropic_credit_monitor
 
     sig = inspect.signature(anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion)
     cooldown_param = sig.parameters.get("resolve_cooldown_minutes")
