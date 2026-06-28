@@ -1,0 +1,55 @@
+[Unit]
+Description=GenLab Anthropic Credit Monitor — surface credit-balance exhaustion as a CRITICAL alert
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-28 — detect Anthropic credit exhaustion before it becomes a
+# content-empty day.
+#
+# Background: on 2026-06-28 the prod Anthropic API key returned
+#   {"error":{"message":"Your credit balance is too low to access the
+#    Anthropic API. Please go to Plans & Billing to upgrade or
+#    purchase credits."}}
+# for the rest of the day. Symptom: gaming/sports/movies pipelines
+# silently produced 0 blueprints because ai_creators + anime had
+# already consumed the remaining credit earlier in the schedule. The
+# only reason the operator noticed was a manual trace through the
+# zero_blueprints alert on gaming.
+#
+# What this does:
+#   1. Run `journalctl --since "60 minutes ago"` and count
+#      occurrences of "credit balance is too low" (literal phrase
+#      from the Anthropic error body)
+#   2. If matches > 0 AND no UNRESOLVED 'anthropic_credit_exhausted'
+#      row exists in the last 24h → INSERT a CRITICAL row in
+#      pipeline_alerts
+#   3. Mission Control's CriticalAlertsBanner picks up the row on
+#      the next dashboard poll
+#
+# Safety knobs:
+#   1. Dedupe by check_name='anthropic_credit_exhausted' + 24h +
+#      UNRESOLVED — operator who marked the previous incident
+#      resolved sees a NEW row on the next occurrence (correct
+#      behavior; resolved row is a closed historical incident)
+#   2. Fail-OPEN throughout — scan errors, DB errors, dedupe-SELECT
+#      errors all log WARNING and count toward `errors` but never
+#      raise (alternative would risk silencing the very signal we're
+#      trying to surface)
+#   3. CLI ALWAYS exits 0 — see CLI docstring for why a non-zero
+#      exit would chain into a confusing systemd_unit_failed alert
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/anthropic_credit_monitor.py
+TimeoutSec=60
+# Single-shot — no restart-on-failure. If the sweep fails the next
+# 15-min fire will catch up; cumulative miss is operationally fine
+# because credit-low events linger in journalctl for the rest of the
+# 60-min lookback window.
+
+[Install]
+WantedBy=multi-user.target
