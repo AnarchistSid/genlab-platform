@@ -89,6 +89,24 @@ def register_pending_feedback(
                 platform=plat,
             )
 
+            # PR U (2026-06-28): IPS propensity wire-through. The
+            # LinUCB picker in push_to_backlog._classify_arm_with_
+            # propensity writes ``bandit_propensity`` into fields when
+            # it actually runs (opt-in env on + LinUCB arms + warm
+            # enough). When fields lacks the key, propensity stays
+            # None — downstream IPS replay treats NULL as "not
+            # applicable" and excludes the row cleanly.
+            #
+            # Temperature pairs with propensity: only set when
+            # propensity is set, and uses the SAME default that
+            # ``linucb_picker._DETERMINISTIC_TEMPERATURE`` writes (0.5
+            # — matches LinUCBBandit.DEFAULT_TEMPERATURE so IPS replay
+            # reads both producers under one convention). Keeping
+            # them paired guarantees IPS can always reconstruct the
+            # selection distribution from the persisted propensity.
+            arm_propensity = fields.get("bandit_propensity")
+            arm_temperature = 0.5 if arm_propensity is not None else None
+
             task = PendingFeedbackTask(
                 content_id=candidate_id or record_id[:16],
                 platform=plat,
@@ -100,6 +118,8 @@ def register_pending_feedback(
                 hook_length=len(fields.get("hook", "")),
                 bandit_arm=fields.get("arm_id", ""),
                 bandit_context=bandit_ctx,
+                propensity=arm_propensity,
+                temperature=arm_temperature,
             )
             fb_store.create(task)
     except Exception as e:

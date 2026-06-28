@@ -63,6 +63,24 @@ logger = logging.getLogger(__name__)
 # the identity and theta has meaningful direction.
 _DEFAULT_MIN_OBS: Final[int] = 10
 
+# Softmax temperature for the propensity-aware variant. Matches
+# ``LinUCBBandit.DEFAULT_TEMPERATURE`` in ``learning/linucb.py`` (0.5)
+# so the propensity values logged by ``pick_best_arm_with_propensity``
+# are interpretable under the SAME convention as
+# ``LinUCBBandit.select_with_propensity``. If one drifts, IPS replay
+# can't recover meaningful counterfactual estimates across decisions
+# made via the two paths. Pinned in
+# ``tests/test_linucb_picker_propensity.py::test_pick_with_propensity_
+# temperature_default_matches_linucb_bandit``.
+_DETERMINISTIC_TEMPERATURE: Final[float] = 0.5
+
+# Floor on per-arm propensity. IPS weights are 1/p, so a near-zero
+# propensity becomes an outlier that dominates the estimator (the
+# variance-explosion risk Move #8 flags). Matches ``_MIN_PROPENSITY``
+# in ``learning/linucb.py`` — both clamps must use the same floor so
+# downstream IPS replay treats decisions from both paths uniformly.
+_MIN_PROPENSITY: Final[float] = 1e-6
+
 
 def is_enabled() -> bool:
     """Single source of truth for the opt-in flag.
@@ -171,6 +189,116 @@ def pick_best_arm(
         {k: round(v, 4) for k, v in scores.items()},
     )
     return best_arm
+
+
+def pick_best_arm_with_propensity(
+    matches: list[str],
+    context: np.ndarray | list[float],
+    linucb_arms: dict[str, LinUCBArm],
+    *,
+    min_obs: int = _DEFAULT_MIN_OBS,
+    temperature: float = _DETERMINISTIC_TEMPERATURE,
+) -> tuple[str | None, float | None]:
+    """Return ``(arm_id, propensity)`` — the IPS-aware variant of
+    :func:`pick_best_arm`.
+
+    The arm-selection rule (argmax UCB) is IDENTICAL to
+    :func:`pick_best_arm`. The only addition is computing
+    ``p(arm | context)`` as the **softmax weight** of the picked arm,
+    matching the convention used by
+    :meth:`learning.linucb.LinUCBBandit.select_with_propensity`
+    so a future IPS replay can reweight decisions made via this
+    picker and decisions made via the LinUCBBandit's direct path
+    under the SAME formula.
+
+    Cold-start contract: returns ``(None, None)`` if ANY arm in
+    ``matches`` lacks a model OR has ``n_obs < min_obs`` — caller falls
+    back to Thompson-boost (which has no propensity concept), so both
+    halves of the tuple stay ``None`` together.
+
+    Single-candidate short-circuit: ``len(matches) == 1`` returns
+    ``(matches[0], 1.0)`` — the only candidate is trivially picked
+    with probability 1 regardless of LinUCB state. Saves a numpy
+    import + a predict() call in the common case.
+
+    Floor: each arm's softmax weight is clamped to ``_MIN_PROPENSITY``
+    so a dominated arm never reports a propensity of 0.0. This bounds
+    the 1/p IPS weight and matches the convention from
+    :func:`learning.linucb.compute_softmax_probabilities`.
+
+    Pure function — no I/O, no env reads. Caller gates entry via
+    :func:`is_enabled` exactly as it does for :func:`pick_best_arm`.
+    """
+    if not matches:
+        return None, None
+    if len(matches) == 1:
+        # Single-candidate short-circuit. Propensity = 1.0 because the
+        # selection is degenerate — no probability mass to distribute.
+        return matches[0], 1.0
+
+    scores: dict[str, float] = {}
+    for arm_id in matches:
+        s = score_arm(arm_id, context, linucb_arms, min_obs=min_obs)
+        if s is None:
+            # Cold-start signal — collapses BOTH halves of the tuple so
+            # the caller treats it identically to a missing arm in the
+            # non-propensity path. Returning (arm, None) would let the
+            # caller mistakenly believe IPS data was available.
+            logger.debug(
+                "[linucb_picker] cold-start fallback (with_propensity): "
+                "arm %s missing or under-observed",
+                arm_id,
+            )
+            return None, None
+        scores[arm_id] = s
+
+    # Lazy numpy import (mirrors score_arm — keeps the module loadable
+    # in environments that don't have numpy until a scoring path runs).
+    try:
+        import numpy as np
+    except ImportError:
+        # Falls back to the non-propensity argmax path; caller treats
+        # this as cold-start (no IPS data) so degraded environments
+        # never publish bogus propensity values.
+        logger.debug("[linucb_picker] numpy unavailable — propensity unsupported")
+        return None, None
+
+    # Softmax over UCB scores, numerically stable (subtract max before
+    # exp). Mirrors learning/linucb.py.compute_softmax_probabilities
+    # but inlined to avoid the dict→dict round-trip + to keep the
+    # picker module dependency-free apart from numpy.
+    arm_ids = list(scores.keys())
+    raw = np.array([scores[a] for a in arm_ids], dtype=np.float64)
+    shifted = (raw - raw.max()) / temperature
+    exp_vals = np.exp(shifted)
+    total = exp_vals.sum()
+    if not np.isfinite(total) or total <= 0.0:
+        # Degenerate: uniform distribution. Shouldn't happen with finite
+        # scores + positive temperature; the IPS estimator downstream is
+        # safer with a defined fallback than a NaN.
+        probs = np.full_like(exp_vals, 1.0 / len(arm_ids))
+    else:
+        probs = exp_vals / total
+    # Floor the per-arm propensity. The renormalisation drift introduced
+    # by clamping near-zero values is bounded by len(matches) *
+    # _MIN_PROPENSITY which for any plausible matches count (≤10) is
+    # less than 1e-5 — well below IPS estimator precision.
+    probs = np.maximum(probs, _MIN_PROPENSITY)
+
+    # Pick the arm with the highest UCB score (argmax — same rule as
+    # pick_best_arm). Determinism on ties via sorted-by-arm-id, also
+    # mirroring pick_best_arm. Propensity returned is the picked arm's
+    # softmax weight (the clamped value, NOT the renormalised value —
+    # matches the LinUCBBandit convention).
+    best_arm = max(sorted(scores), key=lambda a: scores[a])
+    best_propensity = float(probs[arm_ids.index(best_arm)])
+    logger.debug(
+        "[linucb_picker] picked %s with propensity=%.6f from %d candidates",
+        best_arm,
+        best_propensity,
+        len(matches),
+    )
+    return best_arm, best_propensity
 
 
 def _format_arm_state(arm: Any) -> str:

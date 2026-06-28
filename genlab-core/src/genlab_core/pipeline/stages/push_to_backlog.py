@@ -698,7 +698,48 @@ def _classify_arm(
     active_experiment=None,
     experiment_assignment_id: str = "",
 ) -> str:
-    """Classify content into a bandit arm_id.
+    """Backward-compat wrapper around :func:`_classify_arm_with_propensity`.
+
+    Returns just the arm_id, dropping the IPS propensity. Production
+    code paths now call :func:`_classify_arm_with_propensity` directly
+    so they can persist propensity into the blueprint fields dict; this
+    wrapper preserves the ``str``-only signature for the 20+ test
+    callers in ``tests/test_classify_arm_*.py`` that pre-date the IPS
+    wire-up.
+
+    See :func:`_classify_arm_with_propensity` for the full behavior
+    contract.
+    """
+    arm_id, _propensity = _classify_arm_with_propensity(
+        niche_id,
+        story,
+        content,
+        arm_boosts=arm_boosts,
+        arm_n_obs=arm_n_obs,
+        _rng=_rng,
+        linucb_arms=linucb_arms,
+        context=context,
+        _random_control_rng=_random_control_rng,
+        active_experiment=active_experiment,
+        experiment_assignment_id=experiment_assignment_id,
+    )
+    return arm_id
+
+
+def _classify_arm_with_propensity(
+    niche_id: str,
+    story: dict,
+    content: dict,
+    arm_boosts: dict[str, float] | None = None,
+    arm_n_obs: dict[str, int] | None = None,
+    _rng=None,
+    linucb_arms: dict | None = None,
+    context=None,
+    _random_control_rng=None,
+    active_experiment=None,
+    experiment_assignment_id: str = "",
+) -> tuple[str | None, float | None]:
+    """Classify content into a bandit arm_id, with optional IPS propensity.
 
     Keyword matching picks the candidate set: any arm whose keyword
     list intersects the story+hook+summary text is a contender. When
@@ -762,6 +803,24 @@ def _classify_arm(
     statistical signal on a specific hypothesis. Falls through to the
     rest of the chain when ``assign_to_experiment`` returns None
     (inactive experiment, invalid allocation, etc.).
+
+    2026-06-28 IPS propensity wire-through (PR U)
+    ---------------------------------------------
+    Returns ``(arm_id, propensity)`` so the caller can persist the
+    propensity into the ``pending_feedback.propensity`` column shipped
+    by PR #634. ``propensity`` is non-None only when the LinUCB picker
+    path actually ran AND returned an arm (i.e. opt-in env on +
+    linucb_arms + context + no cold-start). Single-candidate short-
+    circuit returns ``(arm, 1.0)`` because the pick is trivially
+    deterministic. All other paths — active experiment, force-explore,
+    no-match default, Thompson-boost fallback, random-control override
+    — return ``(arm, None)`` because they have no IPS-compatible
+    selection-probability concept (random-control has its OWN selection
+    probability that lives in ``ExperimentationSelection``, not here).
+
+    The backward-compat wrapper :func:`_classify_arm` drops the
+    propensity so the 20+ test callers that pre-date the wire-up don't
+    need updating.
     """
     text = f"{story.get('title', '')} {content.get('hook', '')} {story.get('summary', '')}".lower()
 
@@ -821,7 +880,14 @@ def _classify_arm(
                             "[classify_arm] episodic experiment_assignment emit failed: %s",
                             exc,
                         )
-                    return sel.arm_id
+                    # Active-experiment path: propensity is None — the
+                    # experiment's deterministic-bucket assignment has
+                    # its own (declared in YAML) allocation probability
+                    # that doesn't map onto the LinUCB softmax IPS
+                    # convention. Keeping propensity=None here makes
+                    # downstream IPS replay exclude experiment rows
+                    # cleanly (NULL is the "not applicable" sentinel).
+                    return sel.arm_id, None
         except Exception as exc:  # noqa: BLE001 — fail-open to bandit chain
             logger.debug(
                 "[classify_arm] experiment assignment error, falling through: %s",
@@ -835,7 +901,13 @@ def _classify_arm(
     if arm_n_obs is not None:
         forced = _maybe_force_explore_style_arm(niche_id, arm_n_obs, _rng=_rng)
         if forced is not None:
-            return forced
+            # Force-explore is a uniform pick over unobserved style:*
+            # arms. The selection probability IS knowable (1/count) but
+            # the rest of the IPS infrastructure only treats LinUCB-
+            # path propensities; surfacing a non-LinUCB propensity here
+            # would mix conventions. Keep None until force-explore gets
+            # its own IPS treatment.
+            return forced, None
 
     matches: list[str] = []
     for arm_id, keywords in _ARM_KEYWORDS.get(niche_id, []):
@@ -843,14 +915,21 @@ def _classify_arm(
             matches.append(arm_id)
 
     if not matches:
-        return _NICHE_ARM_DEFAULTS.get(niche_id, "default")
+        return _NICHE_ARM_DEFAULTS.get(niche_id, "default"), None
     if len(matches) == 1:
-        return matches[0]
+        # Single-candidate short-circuit. Propensity = 1.0 because the
+        # selection is trivially deterministic regardless of which
+        # policy was active. Mirrors pick_best_arm_with_propensity's
+        # convention.
+        return matches[0], 1.0
 
     # Compute the bandit pick. The three-path structure (LinUCB →
     # Thompson → first-match) converges to a single ``bandit_pick``
     # variable so the I1 random-control wrap below has one input.
+    # ``bandit_propensity`` rides alongside — only the LinUCB path
+    # produces a non-None value.
     bandit_pick: str | None = None
+    bandit_propensity: float | None = None
 
     # LinUCB-driven tie-break first (Lever I2 wiring). Opt-in: env
     # flag must be set AND caller must pass both linucb_arms + context.
@@ -861,14 +940,24 @@ def _classify_arm(
             from genlab_core.learning import linucb_picker
 
             if linucb_picker.is_enabled():
-                bandit_pick = linucb_picker.pick_best_arm(matches, context, linucb_arms)
+                # PR U (2026-06-28): use the propensity-aware variant
+                # so the IPS column on pending_feedback gets populated.
+                # The arm-selection rule is identical to pick_best_arm
+                # — only the (arm, propensity) tuple-return differs.
+                bandit_pick, bandit_propensity = linucb_picker.pick_best_arm_with_propensity(
+                    matches, context, linucb_arms
+                )
         except Exception as exc:  # noqa: BLE001 — fail-open to Thompson
             logger.debug("[classify_arm] LinUCB picker error, falling back: %s", exc)
             bandit_pick = None
+            bandit_propensity = None
 
     # Thompson-boost tie-break (today's logic) when LinUCB didn't run
     # or returned None (cold-start). Falls back to the first match if
-    # no boost data is available for the matched arms.
+    # no boost data is available for the matched arms. Thompson has no
+    # IPS-compatible propensity concept (its sampling distribution
+    # changes shape on every call as the posteriors update), so
+    # bandit_propensity stays None down this branch.
     if bandit_pick is None:
         if not arm_boosts:
             bandit_pick = matches[0]
@@ -880,6 +969,10 @@ def _classify_arm(
     # from ``matches`` — generates counterfactual data so the bandit
     # eventually learns whether arm B would have worked when arm A
     # was always chosen. Opt-in via GENLAB_EXPERIMENTATION_ENABLED=1.
+    # When the random-control fires, propensity collapses to None — the
+    # override's selection probability is independent of the LinUCB
+    # softmax weight and a downstream IPS estimator would treat the
+    # two propensity flavors uniformly if we mixed them here.
     try:
         from genlab_core.learning import experimentation
 
@@ -895,11 +988,16 @@ def _classify_arm(
                     bandit_pick,
                     sel.arm_id,
                 )
-            return sel.arm_id
+                # Random-control wins — propensity drops to None
+                # because the LinUCB pick was discarded.
+                return sel.arm_id, None
+            # Random-control didn't override: the bandit pick stands.
+            # Preserve the LinUCB propensity (or None if Thompson ran).
+            return sel.arm_id, bandit_propensity
     except Exception as exc:  # noqa: BLE001 — fail-open to bandit pick
         logger.debug("[classify_arm] experimentation wrap error, using bandit pick: %s", exc)
 
-    return bandit_pick
+    return bandit_pick, bandit_propensity
 
 
 def _maybe_force_explore_style_arm(
@@ -1654,7 +1752,15 @@ class PushToBacklog:
             # assigned arm BEFORE force-explore/keyword/LinUCB when an
             # experiment is registered + active. None active → bandit
             # chain runs normally.
-            arm_id = _classify_arm(
+            # PR U (2026-06-28): use the propensity-aware variant so
+            # the LinUCB pick's softmax weight rides through into the
+            # blueprint fields → pending_feedback.propensity column
+            # (storage shipped by PR #634). arm_propensity is non-None
+            # only when the LinUCB picker actually fired AND returned
+            # an arm; otherwise None (Thompson fallback, no-match
+            # default, force-explore, active-experiment, random-control
+            # override — all return propensity=None).
+            arm_id, arm_propensity = _classify_arm_with_propensity(
                 niche_id,
                 story,
                 content,
@@ -1882,6 +1988,18 @@ class PushToBacklog:
                     # to style:{name} alongside the content_type arm.
                     if story.get("hook_style"):
                         fields["hook_style"] = story["hook_style"]
+
+                    # PR U (2026-06-28): IPS propensity from the LinUCB
+                    # picker (PR #634 storage column). Only written when
+                    # the LinUCB path actually produced a softmax weight
+                    # — all other branches of _classify_arm_with_
+                    # propensity return None, which is the "not
+                    # applicable" sentinel downstream IPS replay uses to
+                    # exclude rows. Rides through here →
+                    # register_pending_feedback → PendingFeedbackTask
+                    # → pending_feedback.propensity column.
+                    if arm_propensity is not None:
+                        fields["bandit_propensity"] = arm_propensity
 
                     # LinUCB context fields — store for publish-time context building.
                     # R-18: composite_score/score added so the trending-score dim
