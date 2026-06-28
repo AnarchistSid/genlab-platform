@@ -201,6 +201,79 @@ def _has_recent_unresolved_alert(conn) -> bool:
         return False
 
 
+def _auto_resolve_stale_alerts(
+    conn,
+    *,
+    cooldown_minutes: int,
+    dry_run: bool,
+) -> int:
+    """Auto-resolve unresolved credit-exhaustion alerts older than the
+    cooldown window. Called only when the journal scan finds 0 matches
+    — the absence of new errors means credit has been topped up. The
+    cooldown gives the operator a chance to see the alert before it
+    self-clears (prevents flapping during a brief transient).
+
+    Returns the number of rows resolved (0 if dry_run, or on error).
+    Fail-OPEN on every external call — a failed auto-resolve leaves
+    the operator-visible alert intact, which is the safer state.
+    """
+    try:
+        if dry_run:
+            # Count what WOULD be resolved without executing the UPDATE.
+            rows = conn.execute(
+                """
+                SELECT id
+                FROM pipeline_alerts
+                WHERE check_name = 'anthropic_credit_exhausted'
+                  AND resolved_at IS NULL
+                  AND created_at < NOW() - make_interval(mins => %s)
+                """,
+                (cooldown_minutes,),
+            ).fetchall()
+            return len(rows)
+
+        from datetime import UTC, datetime
+
+        ts = datetime.now(UTC).strftime("%Y-%m-%d")
+        note = (
+            f"\n\n[AUTO-RESOLVED {ts}: monitor scanned recent journalctl "
+            "and found 0 credit-low matches; credit appears restored.]"
+        )
+        cursor = conn.execute(
+            """
+            UPDATE pipeline_alerts
+            SET resolved_at = NOW(),
+                message = message || %s
+            WHERE check_name = 'anthropic_credit_exhausted'
+              AND resolved_at IS NULL
+              AND created_at < NOW() - make_interval(mins => %s)
+            """,
+            (note, cooldown_minutes),
+        )
+        # psycopg autocommits in 'autocommit' mode; if not, explicitly
+        # commit here. The _connect() helper opens transaction mode by
+        # default, so commit is required.
+        try:
+            conn.commit()
+        except Exception:
+            pass  # already-autocommit mode, no-op
+        count = cursor.rowcount or 0
+        if count > 0:
+            logger.info(
+                "[anthropic_credit_monitor] auto-resolved %d stale credit-low "
+                "alert(s) (older than %dm, no new matches in scan window)",
+                count,
+                cooldown_minutes,
+            )
+        return count
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning(
+            "[anthropic_credit_monitor] auto-resolve failed: %s (alert left intact)",
+            exc,
+        )
+        return 0
+
+
 def _build_message(
     *,
     matches: int,
@@ -237,10 +310,14 @@ def scan_and_alert_on_credit_exhaustion(
     *,
     window_minutes: int = 60,
     dry_run: bool = False,
+    resolve_cooldown_minutes: int = 30,
 ) -> dict[str, Any]:
     """Scan recent journalctl output for the Anthropic credit-low
     pattern; if matched and no alert already fired today, write a
-    CRITICAL row to ``pipeline_alerts``.
+    CRITICAL row to ``pipeline_alerts``. When NO matches are found
+    AND an unresolved alert exists older than ``resolve_cooldown_minutes``,
+    auto-resolve it — the absence of new errors means credit was
+    topped up and the operator no longer needs the banner.
 
     Parameters
     ----------
@@ -250,15 +327,21 @@ def scan_and_alert_on_credit_exhaustion(
         from a missed fire (e.g. post-reboot catchup) without
         re-detecting events the dedupe layer already handled.
     dry_run : bool, default False
-        When True, the scan runs but no DB INSERT is executed.
-        Returned ``alert_written`` reflects what WOULD have been
-        written.
+        When True, the scan runs but no DB INSERT or UPDATE is
+        executed. Returned ``alert_written`` / ``alerts_resolved``
+        reflect what WOULD have happened.
+    resolve_cooldown_minutes : int, default 30
+        Minimum alert age before auto-resolution fires. Prevents
+        flapping during transient credit dips — the operator gets at
+        least 30 minutes to see the alert before it self-clears.
+        Default 30 = 2× the timer interval, balancing operator
+        awareness against banner-cleanup latency.
 
     Returns
     -------
     dict
         ``{"matches_found": int, "alert_written": bool,
-        "dedupe_skip": bool, "errors": int}``
+        "dedupe_skip": bool, "alerts_resolved": int, "errors": int}``
 
     Notes
     -----
@@ -268,6 +351,7 @@ def scan_and_alert_on_credit_exhaustion(
         "matches_found": 0,
         "alert_written": False,
         "dedupe_skip": False,
+        "alerts_resolved": 0,
         "errors": 0,
     }
 
@@ -285,22 +369,43 @@ def scan_and_alert_on_credit_exhaustion(
 
     summary["matches_found"] = matches
 
-    if matches == 0:
-        logger.debug(
-            "[anthropic_credit_monitor] no credit-low entries in last %dm",
-            window_minutes,
-        )
-        return summary
-
-    # ── 2. dedupe + write ──────────────────────────────────────────
+    # ── 2. branch: 0 matches → auto-resolve path; >0 matches → write path ──
     conn_cm = _connect()
     if conn_cm is None:
         # No DB — log + early-return. The timer's next fire will
         # retry. We DO NOT increment errors here because absence of a
         # DSN is a configuration state, not an error per se (mirrors
         # alert_auto_resolver behavior).
+        if matches == 0:
+            logger.debug(
+                "[anthropic_credit_monitor] no credit-low entries in last %dm "
+                "(DB unavailable; no auto-resolve attempted)",
+                window_minutes,
+            )
         return summary
 
+    if matches == 0:
+        # 0 matches AND DB available → try auto-resolve stale alerts.
+        # Credit appears restored (no new errors in the scan window);
+        # any existing unresolved alert older than the cooldown is
+        # safe to clear automatically.
+        try:
+            with conn_cm as conn:
+                resolved = _auto_resolve_stale_alerts(
+                    conn,
+                    cooldown_minutes=resolve_cooldown_minutes,
+                    dry_run=dry_run,
+                )
+                summary["alerts_resolved"] = resolved
+        except Exception as exc:  # noqa: BLE001 — fail-open
+            logger.warning(
+                "[anthropic_credit_monitor] auto-resolve DB session failed: %s",
+                exc,
+            )
+            summary["errors"] = 1
+        return summary
+
+    # ── 3. dedupe + write (matches > 0 path) ───────────────────────
     try:
         with conn_cm as conn:
             if _has_recent_unresolved_alert(conn):

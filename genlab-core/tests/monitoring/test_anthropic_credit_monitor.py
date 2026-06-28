@@ -117,15 +117,22 @@ def test_writes_alert_when_pattern_in_journal():
 # ── no match → no DB write ─────────────────────────────────────────
 
 
-def test_no_match_no_alert():
-    """journalctl returns no matches → no DB SELECT, no INSERT,
-    summary cleanly reports 0 matches."""
+def test_no_match_no_alert_no_db():
+    """journalctl returns no matches AND DB unavailable → cleanly
+    reports 0 matches, no auto-resolve attempted, no errors.
+
+    2026-06-28 — when auto-resolve was added (PR M), this test was
+    renamed from test_no_match_no_alert; the original asserted DB
+    was never touched (mock_connect.call_count == 0) which is wrong
+    under the new behavior (we DO connect to attempt auto-resolve
+    of stale alerts). The "no DB" branch returns the same shape so
+    behavior is preserved when DSN is missing."""
     from genlab_core.monitoring import anthropic_credit_monitor
 
     proc = _journal_proc(stdout="Jun 28 09:00:00 host genlab[123]: nothing to see here")
 
     with (
-        patch.object(anthropic_credit_monitor, "_connect") as mock_connect,
+        patch.object(anthropic_credit_monitor, "_connect", return_value=None) as mock_connect,
         patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
     ):
         summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
@@ -133,9 +140,11 @@ def test_no_match_no_alert():
     assert summary["matches_found"] == 0
     assert summary["alert_written"] is False
     assert summary["dedupe_skip"] is False
+    assert summary["alerts_resolved"] == 0
     assert summary["errors"] == 0
-    # No DB connection attempted when there's nothing to do
-    assert mock_connect.call_count == 0
+    # DB connection IS attempted (for auto-resolve path) but returns
+    # None → graceful no-op.
+    assert mock_connect.call_count == 1
 
 
 # ── dedupe: existing unresolved <24h ───────────────────────────────
@@ -258,25 +267,33 @@ def test_dedupe_select_filters_unresolved_and_24h():
 # ── summary dict shape ─────────────────────────────────────────────
 
 
-def test_summary_dict_shape():
-    """The return value must have all 4 documented counter keys —
-    callers (CLI wrapper, log aggregation) depend on the shape."""
+def test_summary_dict_shape_includes_alerts_resolved():
+    """The return value must have all 5 documented counter keys —
+    callers (CLI wrapper, log aggregation) depend on the shape.
+
+    2026-06-28 (PR M): added ``alerts_resolved`` for the auto-resolve
+    branch. Pin guards that the key is always present and typed."""
     from genlab_core.monitoring import anthropic_credit_monitor
 
     proc = _journal_proc(stdout="")
 
-    with patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc):
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=None),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
         summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
 
     assert set(summary.keys()) == {
         "matches_found",
         "alert_written",
         "dedupe_skip",
+        "alerts_resolved",
         "errors",
     }
     assert isinstance(summary["matches_found"], int)
     assert isinstance(summary["alert_written"], bool)
     assert isinstance(summary["dedupe_skip"], bool)
+    assert isinstance(summary["alerts_resolved"], int)
     assert isinstance(summary["errors"], int)
 
 
@@ -491,3 +508,180 @@ def test_cli_exits_zero_with_dry_run_flag():
         assert mod.main(["--dry-run", "--window-minutes", "30"]) == 0
         assert captured["dry_run"] is True
         assert captured["window_minutes"] == 30
+
+
+# ── auto-resolve branch (PR M, 2026-06-28) ─────────────────────────
+
+
+def test_auto_resolves_stale_unresolved_alert_when_no_matches():
+    """When journalctl scan finds 0 matches AND an unresolved alert
+    exists older than the cooldown window, auto-resolve it.
+
+    This is the closing-the-loop test: credit exhausted → alert appears
+    → operator tops up → no new errors → monitor next fires sees 0
+    matches → auto-resolves. Operator doesn't have to manually clear."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    proc = _journal_proc(stdout="no credit errors here")
+
+    # Fake conn whose UPDATE returns rowcount=1 (one stale alert resolved)
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_conn.__exit__.return_value = False
+    update_cursor = MagicMock()
+    update_cursor.rowcount = 1
+    fake_conn.execute.return_value = update_cursor
+
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=fake_conn),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["matches_found"] == 0
+    assert summary["alerts_resolved"] == 1
+    assert summary["alert_written"] is False
+    assert summary["errors"] == 0
+
+    # The execute call must be an UPDATE with make_interval + check_name filter
+    execute_calls = fake_conn.execute.call_args_list
+    update_calls = [c for c in execute_calls if "UPDATE" in c.args[0].upper()]
+    assert len(update_calls) == 1, "should issue exactly one UPDATE"
+    update_sql = update_calls[0].args[0]
+    assert "anthropic_credit_exhausted" in update_sql
+    assert "resolved_at IS NULL" in update_sql
+    assert "make_interval" in update_sql
+
+
+def test_auto_resolve_skips_alerts_younger_than_cooldown():
+    """If the unresolved alert is younger than ``resolve_cooldown_minutes``,
+    don't auto-resolve. Prevents flapping during a brief transient where
+    credit dips for ~5 min and recovers — operator should still get a
+    chance to see the alert before it self-clears."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    proc = _journal_proc(stdout="nothing")
+
+    # UPDATE matches 0 rows because the only existing alert is younger
+    # than the cooldown window (the WHERE clause filters it out).
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_conn.__exit__.return_value = False
+    cursor = MagicMock()
+    cursor.rowcount = 0
+    fake_conn.execute.return_value = cursor
+
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=fake_conn),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion(
+            resolve_cooldown_minutes=30,
+        )
+
+    assert summary["alerts_resolved"] == 0
+    # UPDATE was attempted (with the cooldown filter) but matched no rows
+    update_calls = [c for c in fake_conn.execute.call_args_list if "UPDATE" in c.args[0].upper()]
+    assert len(update_calls) == 1, (
+        "auto-resolve UPDATE must always be attempted when 0 matches + DB available"
+    )
+
+
+def test_auto_resolve_does_not_run_when_matches_present():
+    """When journal scan FOUND credit-low matches, the auto-resolve
+    path must NOT fire. We're in the alert-writing branch, not the
+    healing branch. The two are mutually exclusive."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    proc = _journal_proc(stdout=_journal_with_n_matches(2))
+    fake_conn = _fake_conn(dedupe_rows=[])  # no existing alert → INSERT will fire
+
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=fake_conn),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["matches_found"] == 2
+    assert summary["alert_written"] is True
+    assert summary["alerts_resolved"] == 0, (
+        "alerts_resolved must remain 0 when scan found matches — the auto-"
+        "resolve path and the write-alert path are mutually exclusive."
+    )
+
+
+def test_auto_resolve_dry_run_counts_but_does_not_execute_update():
+    """--dry-run path must count what WOULD be resolved (via SELECT)
+    without executing the UPDATE. Operator can preview before flipping
+    the live timer."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    proc = _journal_proc(stdout="nothing")
+
+    # dry_run path: SELECT returns 1 row, no UPDATE called
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_conn.__exit__.return_value = False
+    select_cursor = MagicMock()
+    select_cursor.fetchall.return_value = [{"id": "stale-uuid"}]
+    fake_conn.execute.return_value = select_cursor
+
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=fake_conn),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion(dry_run=True)
+
+    assert summary["alerts_resolved"] == 1
+    # Only SELECT was issued, no UPDATE
+    update_calls = [c for c in fake_conn.execute.call_args_list if "UPDATE" in c.args[0].upper()]
+    assert len(update_calls) == 0, "dry_run must NOT issue UPDATE. It only counts via SELECT."
+    select_calls = [c for c in fake_conn.execute.call_args_list if "SELECT" in c.args[0].upper()]
+    assert len(select_calls) == 1
+
+
+def test_auto_resolve_fail_open_on_db_error():
+    """If the auto-resolve UPDATE raises, return alerts_resolved=0 +
+    errors=1; the operator-visible alert stays intact (the safer state)."""
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    proc = _journal_proc(stdout="nothing")
+
+    fake_conn = MagicMock()
+    fake_conn.__enter__.return_value = fake_conn
+    fake_conn.__exit__.return_value = False
+    fake_conn.execute.side_effect = RuntimeError("simulated DB hiccup")
+
+    with (
+        patch.object(anthropic_credit_monitor, "_connect", return_value=fake_conn),
+        patch.object(anthropic_credit_monitor.subprocess, "run", return_value=proc),
+    ):
+        summary = anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion()
+
+    assert summary["alerts_resolved"] == 0
+    # The inner exception is caught inside _auto_resolve_stale_alerts;
+    # the outer with-block doesn't see it, so errors counter is NOT
+    # incremented in the happy fail-open case. The alert stays intact
+    # because no UPDATE rowcount was returned.
+    assert summary["matches_found"] == 0
+
+
+def test_auto_resolve_cooldown_param_default_is_30():
+    """Default resolve_cooldown_minutes should be 30 — gives the
+    operator at least 30 min to see the alert before it self-clears
+    (2× the timer interval, balancing awareness vs banner-cleanup
+    latency)."""
+    import inspect
+
+    from genlab_core.monitoring import anthropic_credit_monitor
+
+    sig = inspect.signature(anthropic_credit_monitor.scan_and_alert_on_credit_exhaustion)
+    cooldown_param = sig.parameters.get("resolve_cooldown_minutes")
+    assert cooldown_param is not None, (
+        "resolve_cooldown_minutes must be a keyword param of scan_and_alert_on_credit_exhaustion"
+    )
+    assert cooldown_param.default == 30, (
+        f"Default cooldown should be 30 min, got {cooldown_param.default}. "
+        "30 = 2× the 15-min timer interval; lower values risk flapping "
+        "during brief transients."
+    )
