@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+# 2026-06-29: cancel superseded runs so fix-push-wait cycles don't pile
+# jobs on the single-concurrency self-hosted runner. Per-workflow + per-ref
+# grouping means main and a PR branch don't cancel each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # R-04 (2026-06-11): the duplicate ``lint`` job that used to live here
 # was a strict subset of ``ci.yml``'s lint (ruff check + format) and
 # fired on every PR, doubling up the gate. Consolidated into ci.yml,
@@ -62,25 +69,49 @@ jobs:
       # full rationale; this is the same pattern applied to ``test-core``
       # because the engagement-side test surface here also loads the
       # Detoxify toxicity gate.
-      - name: Cache HuggingFace hub (Detoxify model weights)
+      # 2026-06-29: pin HF_HOME and TORCH_HOME to absolute paths under
+      # RUNNER_TOOL_CACHE so the self-hosted runner restores into a
+      # stable location across jobs. The previous ``~/.cache/huggingface``
+      # resolved differently on self-hosted vs hosted runners (the runner
+      # cd's into actions-runner/ before tilde expansion in some contexts,
+      # so the cache restored to /home/gh-runner/actions-runner/.cache
+      # instead of /home/gh-runner/.cache, and pytest looked at the
+      # latter — leading to "couldn't connect + couldn't find cached
+      # files" toxicity-gate failures).
+      - name: Cache HuggingFace + torch hubs (Detoxify model weights)
         id: hf-cache
         uses: actions/cache@v5
         with:
-          path: ~/.cache/huggingface
-          # U-04: cache key matches the model_type in toxicity_gate.py
-          # so a future swap busts the cache + pre-warms the right model.
-          key: hf-cache-v1-${{ runner.os }}-detoxify-original-small
+          path: |
+            ${{ runner.tool_cache }}/.hf-cache
+            ${{ runner.tool_cache }}/.torch-cache
+          # Bumped to v2 because the path now includes torch.hub
+          # checkpoints (Detoxify weights, not just the HF tokenizer).
+          key: hf-cache-v2-${{ runner.os }}-detoxify-original-small
       - name: Pre-warm HF cache on miss
         if: steps.hf-cache.outputs.cache-hit != 'true'
+        env:
+          HF_HOME: ${{ runner.tool_cache }}/.hf-cache
+          TORCH_HOME: ${{ runner.tool_cache }}/.torch-cache
         run: |
+          mkdir -p "$HF_HOME" "$TORCH_HOME"
           uv run --package genlab-core python -c "
           from detoxify import Detoxify
           Detoxify('original-small')
           "
-      - run: uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q --timeout=120
+      # 2026-06-29: TMPDIR override needed on self-hosted runner. The default
+      # /tmp/genlab_audio/ directory on the prod VPS is owned by the genlab
+      # publishing user; gh-runner has no write access. Pinning TMPDIR to
+      # the runner workspace tmp keeps tests out of prod-owned paths.
+      - run: |
+          export TMPDIR="${RUNNER_TEMP:-$HOME/tmp_ci}"
+          mkdir -p "$TMPDIR"
+          uv run --package genlab-core pytest genlab-core/tests/ -k "not integration" --tb=short -q --timeout=120
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
+          HF_HOME: ${{ runner.tool_cache }}/.hf-cache
+          TORCH_HOME: ${{ runner.tool_cache }}/.torch-cache
 
   test-dashboard:
     runs-on: [self-hosted, genlab-prod]
@@ -95,28 +126,40 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --frozen
-      # HF cache + offline pytest — see ci.yml's ``test`` job for the
-      # full rationale. Dashboard tests instantiate the toxicity gate
-      # through the engagement reply-approval API.
-      - name: Cache HuggingFace hub (Detoxify model weights)
+      # HF cache + offline pytest — see test-core for the full rationale
+      # (2026-06-29: absolute paths under runner.tool_cache + HF_HOME +
+      # TORCH_HOME pinned so the runner restores into a stable location
+      # across jobs).
+      - name: Cache HuggingFace + torch hubs (Detoxify model weights)
         id: hf-cache
         uses: actions/cache@v5
         with:
-          path: ~/.cache/huggingface
-          # U-04: cache key matches the model_type in toxicity_gate.py
-          # so a future swap busts the cache + pre-warms the right model.
-          key: hf-cache-v1-${{ runner.os }}-detoxify-original-small
+          path: |
+            ${{ runner.tool_cache }}/.hf-cache
+            ${{ runner.tool_cache }}/.torch-cache
+          key: hf-cache-v2-${{ runner.os }}-detoxify-original-small
       - name: Pre-warm HF cache on miss
         if: steps.hf-cache.outputs.cache-hit != 'true'
+        env:
+          HF_HOME: ${{ runner.tool_cache }}/.hf-cache
+          TORCH_HOME: ${{ runner.tool_cache }}/.torch-cache
         run: |
+          mkdir -p "$HF_HOME" "$TORCH_HOME"
           uv run --package genlab-core python -c "
           from detoxify import Detoxify
           Detoxify('original-small')
           "
-      - run: uv run --package genlab-dashboard pytest dashboard/tests/ --tb=short -q
+      # 2026-06-29: TMPDIR override needed on self-hosted runner (see
+      # test-core for full rationale).
+      - run: |
+          export TMPDIR="${RUNNER_TEMP:-$HOME/tmp_ci}"
+          mkdir -p "$TMPDIR"
+          uv run --package genlab-dashboard pytest dashboard/tests/ --tb=short -q
         env:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
+          HF_HOME: ${{ runner.tool_cache }}/.hf-cache
+          TORCH_HOME: ${{ runner.tool_cache }}/.torch-cache
 
   test-channels:
     runs-on: [self-hosted, genlab-prod]
@@ -156,9 +199,12 @@ jobs:
         with:
           python-version: "3.13"
       # Channel render tests build FFmpeg command lines (subprocess is mocked,
-      # but get_ffmpeg_binary() resolves a real path) — install the binary so
-      # command construction doesn't raise "FFmpeg not found".
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # but get_ffmpeg_binary() resolves a real path).
+      # 2026-06-29: self-hosted runner has FFmpeg pre-installed for the prod
+      # publishing pipeline; gh-runner has no sudo, so the previous
+      # ``sudo apt-get install`` step is dropped.
+      - name: Verify FFmpeg available (pre-installed on self-hosted runner)
+        run: ffmpeg -version | head -1
       - run: uv sync --frozen
       # ``--timeout=120`` (pytest-timeout) — per-test ceiling. Belt-
       # and-suspenders with the job-level ``timeout-minutes: 15``:

@@ -1,25 +1,48 @@
 name: CodeQL
 
+# 2026-06-29: skipped on pull_request events to stay within the
+# self-hosted runner's 900M MemoryMax budget. CodeQL's evaluator
+# requires >=384 MiB heap PLUS the extraction/finalize phases which
+# pushed the cgroup OOM-kill on the first migration run. Keeping
+# push-to-main + the weekly cron preserves security coverage on the
+# trunk while saving an estimated ~12 min x 2 langs per PR. Re-enable
+# the pull_request trigger if/when the box memory is upgraded.
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     runs-on: [self-hosted, genlab-prod]
+    # Per-language hard cap. CodeQL extract + finalize on the 900M
+    # self-hosted runner is at the edge of what fits; without this
+    # a single OOM hang would block subsequent jobs (single-concurrency
+    # runner).
+    timeout-minutes: 25
     permissions:
       security-events: write
     strategy:
+      fail-fast: false
       matrix:
         language: [python, javascript]
     steps:
       - uses: actions/checkout@v6
+      # 2026-06-29: explicit --ram cap. Default CodeQL ram detection picks
+      # ~70% of available memory, which on this runner overcommits the
+      # 900M cgroup. 512 MiB leaves ~388 MiB for the runner agent + OS
+      # so the evaluator passes its 384 MiB minimum heap check.
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
+          ram: 512
       - uses: github/codeql-action/autobuild@v4
       - uses: github/codeql-action/analyze@v4
+        with:
+          ram: 512

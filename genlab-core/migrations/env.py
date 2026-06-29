@@ -15,6 +15,22 @@ config = context.config
 pg_password = os.environ.get("POSTGRES_PASSWORD", "genlab_dev")
 config.set_section_option(config.config_ini_section, "POSTGRES_PASSWORD", pg_password)
 
+# 2026-06-29: allow DATABASE_URL to fully override the sqlalchemy.url ini
+# value. Needed for the self-hosted CI runner — prod's postgres binds the
+# host's :5432 (genlab-postgres docker container), so the GH Actions
+# service container has to publish on :15432 to avoid a conflict; the
+# `alembic.ini` URL is hardcoded to :5432 and was attempting to connect
+# to prod's DB (auth failed because the password differs). With this
+# override, the CI step sets ``DATABASE_URL=postgresql+psycopg://...:15432/...``
+# and the migration applies against the ephemeral CI postgres.
+_db_url_override = os.environ.get("DATABASE_URL")
+if _db_url_override:
+    # SQLAlchemy expects the ``+psycopg`` dialect prefix (psycopg3); upgrade
+    # bare ``postgresql://`` URLs from libpq-style env values transparently.
+    if _db_url_override.startswith("postgresql://"):
+        _db_url_override = "postgresql+psycopg://" + _db_url_override[len("postgresql://") :]
+    config.set_main_option("sqlalchemy.url", _db_url_override)
+
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
