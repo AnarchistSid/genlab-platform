@@ -64,6 +64,22 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+      # 2026-06-29: pre-step disk hygiene for the test-core matrix. The
+      # self-hosted runner starts at ~90-93% disk usage; the previous
+      # matrix entry's leftover ``.venv`` (2.3 GB) plus a saturated uv
+      # cache (~4 GB) leaves <500 MB free before ``uv sync`` allocates
+      # the new venv. ``uv cache prune --ci`` drops pre-built wheels
+      # (keeps source dists). Also wipe the prior matrix entry's venv
+      # so ``uv sync`` doesn't try to mutate a Python 3.13 tree under a
+      # Python 3.12 interpreter. Mirrored on the post-pytest "Free disk
+      # for next matrix entry" step below so the last entry leaves the
+      # runner clean for the next workflow run too.
+      - name: Free disk before matrix entry
+        run: |
+          rm -rf .venv genlab-core/.venv 2>/dev/null || true
+          rm -rf .pytest_cache genlab-core/.pytest_cache 2>/dev/null || true
+          uv cache prune --ci 2>&1 | tail -5 || true
+          df -h / | tail -1
       - run: uv sync --frozen
       # HF cache + offline pytest — see ci.yml's ``test`` job for the
       # full rationale; this is the same pattern applied to ``test-core``
@@ -112,6 +128,23 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
           HF_HOME: ${{ runner.tool_cache }}/.hf-cache
           TORCH_HOME: ${{ runner.tool_cache }}/.torch-cache
+      # 2026-06-29: free disk between matrix entries. The self-hosted runner
+      # has ~3-4 GB free at the start of a Test & Lint run. Each matrix entry
+      # (3.12, 3.13, 3.14) builds a fresh ~2.3 GB ``.venv`` and writes wheels
+      # into the shared uv cache (~4 GB at saturation). Without this step the
+      # 2nd and 3rd matrix entries hit ``OSError: [Errno 28] No space left on
+      # device`` mid-pytest (observed 2026-06-29: 3.13 passed, 3.12 + 3.14
+      # both failed with hundreds of __pycache__ write errors). ``if: always()``
+      # so the cleanup still runs when pytest fails — otherwise a failed
+      # 3.12 entry leaves no headroom for the 3.14 entry to even start.
+      - name: Free disk for next matrix entry
+        if: always()
+        run: |
+          rm -rf .venv genlab-core/.venv 2>/dev/null || true
+          rm -rf .pytest_cache genlab-core/.pytest_cache 2>/dev/null || true
+          find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+          uv cache prune --ci 2>&1 | tail -5 || true
+          df -h / | tail -1
 
   test-dashboard:
     runs-on: [self-hosted, genlab-prod]
@@ -278,16 +311,21 @@ jobs:
           {
             echo "## mypy report (informational)"
             echo
-            echo "Full output saved as a build artifact. Top of report:"
+            echo "Tail of report (last 60 lines):"
             echo
             echo '```'
-            tail -30 mypy-report.txt 2>/dev/null || echo "(no report generated)"
+            tail -60 mypy-report.txt 2>/dev/null || echo "(no report generated)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload full mypy report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mypy-report
-          path: mypy-report.txt
-          retention-days: 14
+      # 2026-06-29: artifact upload removed. The GitHub Actions artifact
+      # storage quota for this account is exhausted (``Failed to
+      # CreateArtifact: Artifact storage quota has been hit``), so every
+      # upload was failing and turning the whole job red even though
+      # ``continue-on-error`` was set at both job + step level above —
+      # the artifact upload step did not inherit that flag and its
+      # ``Failed to CreateArtifact`` exit code is what GH used for the
+      # job conclusion. The tail-60 in the summary above is sufficient
+      # operator visibility for an informational/non-gating type-check
+      # job; flip to a hard gate (and reinstate uploads) once the
+      # storage quota is paid down or expires (recalculated every 6-12h
+      # per GH's billing docs).
