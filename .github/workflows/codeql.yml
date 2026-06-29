@@ -1,12 +1,24 @@
 name: CodeQL
 
-# 2026-06-29: skipped on pull_request events to stay within the
-# self-hosted runner's 900M MemoryMax budget. CodeQL's evaluator
-# requires >=384 MiB heap PLUS the extraction/finalize phases which
-# pushed the cgroup OOM-kill on the first migration run. Keeping
-# push-to-main + the weekly cron preserves security coverage on the
-# trunk while saving an estimated ~12 min x 2 langs per PR. Re-enable
-# the pull_request trigger if/when the box memory is upgraded.
+# 2026-06-29: DISABLED on the self-hosted runner. CodeQL's evaluator
+# enforces a hardcoded >=384 MiB heap minimum and trace-extraction
+# adds ~200 MiB of JVM + tracer overhead. The runner's 900M MemoryMax
+# cgroup cap (set so CI never compounds memory pressure on the prod
+# publishing pipeline) cannot accommodate that even with --ram=512 or
+# --ram=700. Symptom on first migration: "A fatal error occurred:
+# Evaluator heap must be at least 384.00 MiB" on both python + js
+# matrix legs; python additionally stalled at the trace-command step
+# for >5min without progress before being cancelled.
+#
+# What we kept: workflow file + matrix shape so re-enabling is a
+# single ``workflow_dispatch`` toggle once a future runner upgrade
+# allows it. The if: condition on the analyze job skips both matrix
+# legs in all event contexts; only an explicit ``gh workflow run
+# codeql.yml`` (which still hits the runner) attempts execution.
+#
+# Re-enable plan: when the Hetzner VPS gets a memory bump or when
+# CodeQL ships smaller-footprint evaluator binaries, delete the
+# ``if: ${{ false }}`` line + drop this banner.
 on:
   push:
     branches: [main]
@@ -21,11 +33,11 @@ concurrency:
 jobs:
   analyze:
     runs-on: [self-hosted, genlab-prod]
-    # Per-language hard cap. CodeQL extract + finalize on the 900M
-    # self-hosted runner is at the edge of what fits; without this
-    # a single OOM hang would block subsequent jobs (single-concurrency
-    # runner).
+    # Hard cap so a future OOM hang cannot block subsequent jobs on
+    # the single-concurrency runner.
     timeout-minutes: 25
+    # Disabled: see banner. Remove this line to re-enable.
+    if: ${{ false }}
     permissions:
       security-events: write
     strategy:
@@ -34,15 +46,11 @@ jobs:
         language: [python, javascript]
     steps:
       - uses: actions/checkout@v6
-      # 2026-06-29: explicit --ram cap. Default CodeQL ram detection picks
-      # ~70% of available memory, which on this runner overcommits the
-      # 900M cgroup. 512 MiB leaves ~388 MiB for the runner agent + OS
-      # so the evaluator passes its 384 MiB minimum heap check.
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          ram: 512
+          ram: 700
       - uses: github/codeql-action/autobuild@v4
       - uses: github/codeql-action/analyze@v4
         with:
-          ram: 512
+          ram: 700
