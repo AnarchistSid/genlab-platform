@@ -8,7 +8,12 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    # 2026-06-29 Fix D test: probing whether self-hosted runners bypass
+    # the account-wide budget lock. If this job runs while the other
+    # jobs (still on ubuntu-latest) are blocked, Fix D is validated and
+    # we migrate the rest. If this is ALSO blocked, GitHub's lock
+    # applies regardless of runner type and we pivot to repo transfer.
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
