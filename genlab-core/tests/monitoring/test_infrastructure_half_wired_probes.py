@@ -48,30 +48,48 @@ def _patch_engagement_connect(cm):
 
 class TestEngagementHealth:
     def test_healthy_no_alerts(self):
-        """Rows exist + writes in last 24h + recent completion → no alert."""
-        # (total, last_24h, latest_completed)
+        """Rows exist + writes in last 48h + recent activity + recent completion → no alert."""
+        # (total, last_48h_writes, latest_any_activity, latest_completed)
         recent = datetime.now(UTC) - timedelta(hours=2)
-        cm = _fake_pg_connect((50, 5, recent))
+        cm = _fake_pg_connect((50, 5, recent, recent))
         with _patch_engagement_connect(cm):
             alerts = check_engagement_health()
         assert alerts == []
 
-    def test_no_writes_in_24h_with_existing_rows_warns(self):
+    def test_no_writes_no_activity_for_48h_warns(self):
         """The exact 2026-05-21 outage shape: poller stopped writing
-        but the table still has historical rows."""
-        cm = _fake_pg_connect((50, 0, None))
+        and worker has done zero UPDATEs in 48h. Both gates must fire
+        under the new logic before we surface an alert."""
+        very_old = datetime.now(UTC) - timedelta(hours=72)
+        cm = _fake_pg_connect((50, 0, very_old, None))
         with _patch_engagement_connect(cm):
             alerts = check_engagement_health()
         assert len(alerts) >= 1
         assert any(a.check == "engagement_no_recent_writes" for a in alerts)
         no_writes = [a for a in alerts if a.check == "engagement_no_recent_writes"][0]
         assert no_writes.severity == "warning"
-        assert "AGENT_ROOT" in no_writes.message  # actionable hint
+        # New operator-friendly message: contains the journalctl one-liner
+        # so the operator can distinguish "poller dead" from "worker stuck"
+        # without re-reading the docstring.
+        assert "journalctl -u genlab-engagement-poller.service" in no_writes.message
+
+    def test_no_writes_but_recent_worker_activity_silent(self):
+        """2026-06-29 false-positive shape: pending_engagement has had
+        zero new INSERTs in 48h (every fetched comment is a dedup hit —
+        ``_has_replied()`` short-circuits before write), BUT the worker
+        is still doing UPDATEs (or recent activity exists). This is the
+        legitimate steady state and MUST NOT alert."""
+        recent_update = datetime.now(UTC) - timedelta(hours=2)
+        cm = _fake_pg_connect((50, 0, recent_update, None))
+        with _patch_engagement_connect(cm):
+            alerts = check_engagement_health()
+        assert not any(a.check == "engagement_no_recent_writes" for a in alerts)
 
     def test_completions_stalled_48h_warns(self):
         """Producer firing but consumer wedged on poison message."""
         old = datetime.now(UTC) - timedelta(hours=72)
-        cm = _fake_pg_connect((100, 10, old))
+        recent = datetime.now(UTC) - timedelta(hours=2)
+        cm = _fake_pg_connect((100, 10, recent, old))
         with _patch_engagement_connect(cm):
             alerts = check_engagement_health()
         stalled = [a for a in alerts if a.check == "engagement_completion_stalled"]
@@ -82,7 +100,7 @@ class TestEngagementHealth:
     def test_empty_table_no_alerts(self):
         """Fresh deployment / brand new install — table exists but empty.
         No alert (we don't want to false-alarm on initial state)."""
-        cm = _fake_pg_connect((0, 0, None))
+        cm = _fake_pg_connect((0, 0, None, None))
         with _patch_engagement_connect(cm):
             alerts = check_engagement_health()
         assert alerts == []
