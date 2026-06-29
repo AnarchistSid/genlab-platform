@@ -1,0 +1,45 @@
+[Unit]
+Description=GenLab Disk Cleanup — periodic prune to prevent disk-full on prod VPS
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as ROOT (not the usual genlab user) because the cleanup touches
+# /home/gh-runner/, /var/log, /tmp, and the docker socket — each owned
+# by a different user. The script itself is conservative (best-effort,
+# no rm -rf of anything not explicitly opt-in).
+User=root
+Group=root
+# 2026-06-29: shipped after disk hit 412 MB free (99%) during the
+# self-hosted CI runner roll-out. Each CI run accumulates ~1-2 GB of
+# uv cache + downloaded HF model weights + runner workspace state.
+# Docker prune wasn't being run anywhere. Without periodic cleanup
+# the box would hit disk-full → prod writes start failing within days.
+#
+# This timer runs every 6 hours (4 fires per day) — frequent enough
+# that even a busy CI day stays under 80% disk, infrequent enough
+# that the prune cost (docker prune walks all images) is amortized.
+#
+# Safe to run during pipeline / publish windows because:
+#   - apt-clean, journalctl, log rotation, /tmp prune are non-blocking
+#   - docker prune only touches stopped/dangling (prod containers
+#     stay up)
+#   - uv cache prune only touches the gh-runner user's cache, not
+#     the prod genlab venv at /opt/genlab/.venv/
+#   - rm of old genlab pipeline runs respects CLEANUP_KEEP_DAYS=3
+#     default (same as cleanup_artifacts.py convention)
+#
+# Failure modes:
+#   - Script always exits 0 — single-section failures log WARNING
+#     but never abort. Systemd sees green even if (e.g.) docker
+#     daemon is briefly down.
+#   - Output goes to journalctl (visible via
+#     `journalctl -u genlab-disk-cleanup.service`).
+ExecStart=/opt/genlab/scripts/disk_cleanup.sh
+TimeoutSec=600
+# Keep tmp+log volume small enough that this never approaches
+# timeout under normal use. 600s = 10 min headroom for slow
+# docker prune on a heavily-fragmented disk.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab Disk Cleanup Timer — prune caches + old artifacts every 6 hours
+
+[Timer]
+# Every 6 hours, offset 17 minutes off the hour so we don't pile up
+# with hourly metric_collector (00:00) or 6-hour timers landing on
+# even multiples. 17 is prime + far from any production cadence.
+#
+# 4 fires per day:
+#   * 00:17 UTC = 05:47 IST — before morning pipeline cluster
+#   * 06:17 UTC = 11:47 IST — after morning pipelines complete
+#   * 12:17 UTC = 17:47 IST — mid-afternoon, after publishes
+#   * 18:17 UTC = 23:47 IST — late evening, before next cycle
+#
+# Why not hourly: docker prune walks every image; running 4x/day is
+# enough to prevent the 99%-disk crisis we hit on 2026-06-29 without
+# burning IOPS during steady-state.
+OnCalendar=*-*-* 00,06,12,18:17:00 UTC
+# Catch-up after reboot. The cleanup is idempotent — running 4
+# windows back-to-back after a long downtime just reclaims what was
+# accumulating during the downtime.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
