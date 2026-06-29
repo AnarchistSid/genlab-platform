@@ -35,6 +35,14 @@ engagement = [
     "dramatiq[redis]>=2.0",
     "redis>=5.0",
     "detoxify>=0.5.1",
+    # 2026-06-29: declare torch as a DIRECT dep so the workspace-root
+    # `[tool.uv.sources]` torch->pytorch-cpu override actually applies.
+    # detoxify pulls torch transitively; without a direct declaration uv
+    # resolved torch via the default index and pulled +cu12 (~8 GB of NVIDIA
+    # CUDA wheels). Both prod and CI run on CPU-only Xeon — the CPU wheel
+    # is functionally identical for our use case (detoxify inference on
+    # short comment strings) and ~200 MB instead of ~8 GB.
+    "torch>=2.0.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",

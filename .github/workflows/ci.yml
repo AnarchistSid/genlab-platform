@@ -8,11 +8,10 @@ on:
 
 jobs:
   lint:
-    # 2026-06-29 Fix D test: probing whether self-hosted runners bypass
-    # the account-wide budget lock. If this job runs while the other
-    # jobs (still on ubuntu-latest) are blocked, Fix D is validated and
-    # we migrate the rest. If this is ALSO blocked, GitHub's lock
-    # applies regardless of runner type and we pivot to repo transfer.
+    # 2026-06-29 (Fix D): runs on the self-hosted runner on the prod VPS.
+    # Bypasses the account-wide GitHub Actions budget lock at $0/month
+    # cost. Resource caps (MemoryMax=1.5G, OOMScoreAdjust=+1000) on the
+    # systemd unit prevent CI from impacting prod publishing.
     runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +33,7 @@ jobs:
       - run: uv run --package genlab-core --with import-linter lint-imports --config genlab-core/.importlinter
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     services:
       postgres:
         image: postgres:16-alpine
@@ -104,7 +103,7 @@ jobs:
   # migrated schema. It is the safety net that makes future schema migrations
   # CI-validatable.
   test-storage:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     services:
       postgres:
         # pgvector image (superset of postgres:16) so the migration chain's
@@ -177,7 +176,7 @@ jobs:
   # tests assert on). Deselected here with a clear pointer; remove the
   # deselects in a follow-up the moment #128 merges.
   integration:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -204,7 +203,7 @@ jobs:
           GENLAB_USE_POSTGRES: "false"
 
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
         with:

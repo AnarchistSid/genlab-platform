@@ -8,6 +8,21 @@ override-dependencies = ["text-unidecode ; python_version < '0'"]
 # of YouTube downloads as of 2026-06-08.
 prerelease = "allow"
 
+# 2026-06-29: pin torch to the CPU-only wheel index. detoxify (engagement
+# toxicity gate) pulls torch as a transitive dep. The default index ships
+# the +cu12 build which pulls ~8 GB of NVIDIA CUDA wheels (nccl, cublas,
+# cudnn, cusparse, cusolver, cufft, etc.). Neither prod (Hetzner Xeon, no
+# GPU) nor CI (self-hosted runner on same Xeon) has CUDA, so the wheels are
+# wasted bandwidth + disk. The CPU wheel is ~200 MB. Functionally identical
+# for our use case (detoxify inference on short comment strings).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
 [tool.uv.workspace]
 members = [
     "genlab-core",
