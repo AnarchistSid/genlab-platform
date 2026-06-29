@@ -1787,9 +1787,17 @@ def check_engagement_health() -> list[Alert]:
 
     Three signals:
 
-      * **pending_engagement table is fresh** — at least 1 row in the
-        last 24h with status != 'COMPLETED'. Absence means the poller
-        isn't writing, OR every comment fired produced no reply.
+      * **pending_engagement is alive** — alert ONLY when there are
+        zero new writes in the last 48h AND the worker has done no
+        UPDATE activity in 48h (the second gate distinguishes "poller
+        dead" from "poller alive but every fetched comment is a dedup
+        hit"). The dedup-hit steady state is HEALTHY: ``_has_replied()``
+        in ``comment_processor`` short-circuits BEFORE
+        ``bl.write_pending_engagement()``, so a running poller against
+        a saturated thread legitimately produces zero new rows for
+        days. Widened from 24h→48h to absorb weekend lulls. See
+        2026-06-29 investigation for the false-positive that motivated
+        the gate.
       * **DLQ is bounded** — if a Dramatiq dead-letter-queue table
         exists, count rows; alert if >10 accumulated (suggests workers
         are crashing on every task).
@@ -1808,38 +1816,63 @@ def check_engagement_health() -> list[Alert]:
 
         with pg_connect(os.environ.get("DATABASE_URL", ""), niche_id="all") as conn:
             with conn.cursor() as cur:
-                # Signal 1: pending_engagement freshness
+                # Signal 1: pending_engagement freshness — widened to
+                # 48h AND gated on "no worker UPDATE activity" so a
+                # dedup-hit steady state (poller alive, worker idle on
+                # already-replied comments) is not a false positive.
+                # ``latest_any_activity`` covers worker UPDATEs as well
+                # as inserts; if it's recent the poller IS reaching the
+                # DB even when no rows are being created.
                 cur.execute("""
                     SELECT
                         COUNT(*) AS total,
-                        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS last_24h,
+                        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '48 hours') AS last_48h_writes,
+                        MAX(updated_at) AS latest_any_activity,
                         MAX(updated_at) FILTER (WHERE status = 'COMPLETED') AS latest_completed
                     FROM pending_engagement
                 """)
                 row = cur.fetchone()
                 if row is None:
                     return alerts
-                total, last_24h, latest_completed = row
+                total, last_48h_writes, latest_any_activity, latest_completed = row
 
-                if last_24h == 0 and total > 0:
+                from datetime import datetime as _dt
+
+                worker_idle_48h = True
+                if isinstance(latest_any_activity, _dt):
+                    activity_age_hours = (
+                        datetime.now(UTC) - latest_any_activity
+                    ).total_seconds() / 3600
+                    worker_idle_48h = activity_age_hours > 48
+
+                if last_48h_writes == 0 and total > 0 and worker_idle_48h:
                     alerts.append(
                         Alert(
                             check="engagement_no_recent_writes",
                             severity="warning",
                             message=(
-                                f"No pending_engagement writes in the last 24h "
-                                f"(total table size: {total}). "
-                                "The poller may be silent — check AGENT_ROOT env var on "
-                                "genlab-engagement-poller.service + journalctl for tracebacks."
+                                f"No pending_engagement writes in 48h AND no worker UPDATEs in 48h "
+                                f"(total table size: {total}). This is BEYOND steady-state dedup — "
+                                f"either the engagement-poller is silent OR the Dramatiq worker is "
+                                f"stuck. To distinguish: "
+                                f"`journalctl -u genlab-engagement-poller.service --since '2 hours ago' | grep '\\[POLLER\\]'` "
+                                f"— empty output = poller dead (check AGENT_ROOT + tracebacks); "
+                                f"non-empty = poller alive, check worker journal."
                             ),
-                            details={"total": int(total), "last_24h_writes": int(last_24h)},
+                            details={
+                                "total": int(total),
+                                "last_48h_writes": int(last_48h_writes),
+                                "latest_any_activity": (
+                                    latest_any_activity.isoformat()
+                                    if isinstance(latest_any_activity, _dt)
+                                    else None
+                                ),
+                            },
                         )
                     )
 
                 # Signal 3: completions stalled
                 if latest_completed is not None:
-                    from datetime import datetime as _dt
-
                     if isinstance(latest_completed, _dt):
                         age_hours = (datetime.now(UTC) - latest_completed).total_seconds() / 3600
                         if age_hours > 48:

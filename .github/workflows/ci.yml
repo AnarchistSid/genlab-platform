@@ -8,7 +8,11 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    # 2026-06-29 (Fix D): runs on the self-hosted runner on the prod VPS.
+    # Bypasses the account-wide GitHub Actions budget lock at $0/month
+    # cost. Resource caps (MemoryMax=1.5G, OOMScoreAdjust=+1000) on the
+    # systemd unit prevent CI from impacting prod publishing.
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -29,7 +33,7 @@ jobs:
       - run: uv run --package genlab-core --with import-linter lint-imports --config genlab-core/.importlinter
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     services:
       postgres:
         image: postgres:16-alpine
@@ -37,7 +41,7 @@ jobs:
           POSTGRES_USER: genlab
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
           POSTGRES_DB: genlab
-        ports: ["5432:5432"]
+        ports: ["15432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -99,7 +103,7 @@ jobs:
   # migrated schema. It is the safety net that makes future schema migrations
   # CI-validatable.
   test-storage:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     services:
       postgres:
         # pgvector image (superset of postgres:16) so the migration chain's
@@ -110,7 +114,7 @@ jobs:
           POSTGRES_USER: genlab
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'ci_test_password' }}
           POSTGRES_DB: genlab
-        ports: ["5432:5432"]
+        ports: ["15432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -142,7 +146,7 @@ jobs:
           uv run --package genlab-core python - <<'PY'
           import os, psycopg
           su = os.environ["POSTGRES_PASSWORD"]
-          with psycopg.connect(f"postgresql://genlab:{su}@localhost:5432/genlab", autocommit=True) as conn:
+          with psycopg.connect(f"postgresql://genlab:{su}@localhost:15432/genlab", autocommit=True) as conn:
               cur = conn.cursor()
               cur.execute("DROP ROLE IF EXISTS genlab_app")
               cur.execute("CREATE ROLE genlab_app LOGIN PASSWORD 'app_test_password'")
@@ -160,7 +164,7 @@ jobs:
           GENLAB_TEST_PG_USER: genlab_app
           GENLAB_TEST_PG_PASSWORD: app_test_password
           GENLAB_USE_POSTGRES: "true"
-          DATABASE_URL: postgresql://genlab_app:app_test_password@localhost:5432/genlab
+          DATABASE_URL: postgresql://genlab_app:app_test_password@localhost:15432/genlab
 
   # R-04: surface the 40 integration smoke tests that were silently
   # deselected by ``addopts = "-m 'not integration'"`` in
@@ -172,7 +176,7 @@ jobs:
   # tests assert on). Deselected here with a clear pointer; remove the
   # deselects in a follow-up the moment #128 merges.
   integration:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -199,7 +203,7 @@ jobs:
           GENLAB_USE_POSTGRES: "false"
 
   secret-scan:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
         with:

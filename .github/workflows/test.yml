@@ -14,7 +14,7 @@ on:
 # ``test-frontend`` here — those are this workflow's unique gates.
 jobs:
   test-core:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     # 2026-06-18: 20-min job cap. test-core runs 4200+ tests across
     # a 3-version matrix; baseline ~2 minutes. 20min = ~10× headroom
     # for runner slowness, prevents indefinite hangs on a Postgres
@@ -41,7 +41,7 @@ jobs:
           POSTGRES_PASSWORD: genlab_test
           POSTGRES_DB: genlab_test
         ports:
-          - 5432:5432
+          - 15432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -83,7 +83,7 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
 
   test-dashboard:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -119,7 +119,7 @@ jobs:
           TRANSFORMERS_OFFLINE: "1"
 
   test-channels:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     # 2026-06-18: hard 15-minute cap. The chronic
     # ``test-channels (clutchwire|blackbox-brief|criticalrush)`` flake
     # observed 6+ times in one day hangs FOREVER without this — GitHub
@@ -173,7 +173,7 @@ jobs:
   # in CI before, so frontend regressions shipped silently. (eslint — 57 known
   # errors — is a separate triage task, not gated here yet.)
   test-frontend:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -205,7 +205,7 @@ jobs:
   # error count is low enough, flip ``continue-on-error`` to ``false``
   # (or remove it) to turn this into a hard gate.
   mypy-check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, genlab-prod]
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
