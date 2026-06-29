@@ -41,7 +41,7 @@ jobs:
           POSTGRES_PASSWORD: genlab_test
           POSTGRES_DB: genlab_test
         ports:
-          - 5432:5432
+          - 15432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
