@@ -159,7 +159,17 @@ class TestEgressPolicyConstruction:
         assert rules[1].target == "*.steampowered.com"
 
 
-@pytest.mark.skipif(not _server_running(), reason="OpenSandbox server not running")
+# 2026-06-29: ``_opensandbox_available`` guard added so this class skips when
+# the `opensandbox` Python package isn't installed even if SOMETHING is
+# answering on 127.0.0.1:8080. On the self-hosted runner the operator's
+# AspireHub service co-tenants on :8080 and returns 200 for /health, which
+# caused this class to attempt to construct ``SandboxedFFmpegRunner``
+# without the opensandbox package — raising ``RuntimeError: opensandbox
+# package not installed`` inside the test.
+@pytest.mark.skipif(
+    not _opensandbox_available or not _server_running(),
+    reason="OpenSandbox server not running (or opensandbox package not installed)",
+)
 class TestSandboxedFFmpegRunnerIntegration:
     """Integration tests that create real sandboxes."""
 
