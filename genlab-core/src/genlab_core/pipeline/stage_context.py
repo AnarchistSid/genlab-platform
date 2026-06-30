@@ -49,7 +49,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
-    from genlab_core.http.backlog_client import BacklogClient
     from genlab_core.observability.metrics_writer import PipelineMetrics
 
 
@@ -96,9 +95,22 @@ class StageContext(TypedDict, total=False):
     # ── Populated by specific stages (each stage that uses one is
     #    responsible for setting it on the way through) ──────────────
     sources_config: dict[str, Any]
-    backlog_client: BacklogClient | None
+    # 2026-06-30 — intentionally unpopulated by the runner. Consumer
+    # falls back to ``context["niche_root"] / config / lists_config.yaml``
+    # if absent — see ``push_to_backlog.py:1078-1087``. Declared here as
+    # the contract: callers may inject an explicit override in tests or
+    # niche-specific stages, but the runner does not.
     backlog_config_path: str
     clip_index: dict[str, Any]
+    # 2026-06-30 — intentionally unpopulated by the runner. Consumer
+    # falls back to ``_DEFAULT_APP_IDS[:max_games]`` if absent — see
+    # ``fetch_steam_trailers.py:99``. Declared here so a future
+    # niche-specific gaming discovery stage can inject the real
+    # trending IDs upstream of FetchSteamTrailers.
     trending_steam_app_ids: list[str]
+    # 2026-06-30 — intentionally unpopulated by the runner. Consumer
+    # falls back to ``_DEFAULT_GAME_IDS[:max_games]`` if absent — see
+    # ``fetch_twitch_clips.py:235``. Same shape as
+    # ``trending_steam_app_ids``.
     trending_game_ids: list[str]
     existing_titles: list[str]
