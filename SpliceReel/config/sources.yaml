@@ -156,10 +156,21 @@ youtube_channels:
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UCE0Wkd9Jcn2-TNo5G8bLQrA
     # handle: @rottentomatoes
 
+# 2026-06-30: TMDB trailer enrichment expanded. Previously dead because
+# sources_config wasn't populated (fixed in commit 2ac8dbb2) AND this
+# block lacked the max_movies/lookback fields the FetchTMDBTrailers
+# stage needed. TMDB returns YouTube video IDs directly (~1 unit per
+# 50 items) — 50× more quota-efficient than YouTube search (100 units
+# per query).
 tmdb_trailers:
   enabled: true
   prefer_official: true
   types: ["Trailer", "Teaser"]
+  max_movies: 20
+  # Lookback for "now playing" / "popular" / "upcoming" lists
+  lookback_days: 14
+  # Filter trailers to only those with verified YouTube IDs
+  require_youtube_id: true
 
 rate_limit_per_hour: 200
 

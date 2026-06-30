@@ -97,6 +97,21 @@ youtube_channels:
     weight: 0.85
     url: https://www.youtube.com/feeds/videos.xml?channel_id=UC9Ryt3XOGYBoAJVsBHNGDzA
     # handle: @theoreticallymedia
+  # --- Added 2026-06-30 — AI creator SHOWCASE channels ---
+  # These channels POST AI-generated content (vs the existing list
+  # which mostly EXPLAINS AI tools). Resolves the operator's question
+  # "why isn't BlackboxBrief producing more AI-generated content like
+  # the Jim Carrey mask video" — these are the channels that produce
+  # exactly that type of content.
+  # Channel IDs resolved via youtube.com/@handle externalId scrape.
+  # PixelDojo AI handle could not be cleanly resolved — left out for
+  # operator to add later (per partial-ship policy).
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCEAbqW0HFB_UxZoUDO0kJBw"
+    name: "Aitrepreneur"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UClnFtyUEaxQOCd1s5NKYGFA"
+    name: "Curious Refuge"
+  - url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC1kNX-sPGsy6fb94OgFHi1A"
+    name: "AI War"
 
 google_trends:
   stub_mode: false
@@ -206,6 +221,24 @@ sources:
     creator_source: true
     media_required: true
     creator_tags: ["midjourney", "viral"]
+    enabled: true
+    requires_auth: false
+
+  # Split per 2026-06-30 audit: r/midjourney is ~80% IMAGES, ~20% videos.
+  # media_required: true on RSS filters by <enclosure> tag (video only) →
+  # ~150 monthly AI-art posts get silently dropped. This image-allowed
+  # source recovers them; downstream RenderTextOverlays + frame_compositor
+  # handle still-image input via the existing portrait layout
+  # (frame_compositor.py).
+  - source_id: "SRC_REDDIT_MIDJOURNEY_IMAGE_TOP_MONTH"
+    platform: "reddit"
+    url: "https://www.reddit.com/r/midjourney/top/.rss?t=week"
+    type: "rss"
+    priority: 0.80  # lower than the video-only sister (0.90)
+    content_type: "showcase"
+    creator_source: true
+    media_required: false  # accepts image posts
+    creator_tags: ["midjourney", "ai_art", "image"]
     enabled: true
     requires_auth: false
 
@@ -897,6 +930,21 @@ content_filter:
     - plugin
     - extension
     - integration
+    # --- Added 2026-06-30 — AI-generated content descriptors ---
+    # Showcase content titles ("Jim Carrey AI mask deepfake", "Insane
+    # AI portrait series") frequently lack tool names (sora/runway/kling)
+    # so relied on these descriptors to score above 0.30 relevance threshold.
+    # Previously missing → showcase content scored 0.17-0.33 (marginal)
+    # vs news content scoring 0.50+ (comfortable).
+    # NOTE: deepfake + ai art already present above; not re-listed here.
+    - "ai-generated"
+    - "ai generated"
+    - "veo"
+    - "imagen"
+    - "flux"
+    - "ai portrait"
+    - "ai animation"
+    - "synthetic media"
   negative_keywords:
     - cooking
     - beauty
