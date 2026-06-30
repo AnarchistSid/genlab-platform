@@ -1,0 +1,23 @@
+[Unit]
+Description=GenLab Bandit Validation Timer — daily rank-correlation snapshot
+
+[Timer]
+# 03:30 UTC = 09:00 IST = just before operator's morning Mission
+# Control review. The fresh interpretation row is the latest entry
+# the dashboard sees when operator opens the laptop.
+#
+# Slot rationale (avoids the cluster around 02:00-03:30 UTC):
+#   * 02:00 UTC — niche_pause_sweeper (DELETE on niche_pauses)
+#   * 03:00 UTC — gate_tuner (UPDATE on auto_approval_thresholds)
+#   * 03:30 UTC — bandit_validation (this — INSERT on bandit_validation)
+#                 also compliance_digest_sender at 03:30 (different
+#                 table, different code path — no contention)
+#
+# RandomizedDelaySec adds 0-5 min jitter so if 03:30 UTC has multiple
+# units, they don't all hit Postgres at the exact same second.
+OnCalendar=*-*-* 03:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

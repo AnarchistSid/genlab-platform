@@ -1,0 +1,42 @@
+[Unit]
+Description=GenLab Bandit Validation — daily rank-correlation snapshot per niche
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-30 — activates the bandit_validation harness shipped in the
+# "make the agent actually intelligent" Stage 1 sprint.
+#
+# What it does: for each of the 5 niches, computes Spearman + Pearson
+# correlation between the bandit's per-source posterior mean and the
+# 48h viral_score of posts published in the last 14 days, then writes
+# one row to ``bandit_validation`` (migration w4r5s6t7u8v9). The
+# interpretation field ("bandit useful" / "developing" / "bandit
+# ineffective" / "low signal") is the headline operator signal.
+#
+# Schedule rationale (see .timer): 09:00 IST = 03:30 UTC, just before
+# operator's morning Mission Control review so the fresh interpretation
+# row is the latest entry the dashboard sees. The 03:30 UTC slot
+# specifically avoids 02:00 UTC (niche_pause_sweeper) + 03:00 UTC
+# (gate_tuner) + 03:30 UTC (compliance_digest_sender).
+#
+# Exit code semantics: 0 = all 5 niches persisted successfully.
+# 1 = at least one persist failed (DB error, scipy missing, etc).
+# systemctl status surfaces failures; no notification on success
+# (the dashboard row IS the success indicator).
+#
+# Failure mode: each niche compute is independent — one bad niche
+# never skips the others. The cron is purely an OBSERVATION harness;
+# missing a day or two is operationally fine (the dashboard's
+# 3-day-ineffective alert tolerates gaps).
+ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.learning.bandit_validation
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
