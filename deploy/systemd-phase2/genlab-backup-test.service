@@ -1,0 +1,29 @@
+[Unit]
+Description=GenLab — weekly backup-restore dry-run validation
+After=network-online.target docker.service genlab-pg-backup.service
+# Don't run if the backup itself just failed (no point validating a
+# missing file); the alerting on genlab-pg-backup.service handles that
+# scenario. Wants= rather than Requires= so a manual `systemctl start
+# genlab-backup-test.service` still works even when the backup hasn't
+# run today.
+Wants=genlab-pg-backup.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=HOME=/opt/genlab
+ExecStart=/bin/bash /opt/genlab/scripts/test_backup_restore.sh
+# 5-minute cap — the COPY-extract + TEMP-table load on the
+# 2026-06-29-size backup (1951 blueprints) finishes in <10s. 5 minutes
+# is generous headroom for backup growth.
+TimeoutSec=300
+# A failed test fires the existing failure_alert path via the
+# OnFailure unit (set up alongside other genlab-* timer units).
+# Exit codes from the script:
+#   0 = backup is valid
+#   1 = backup missing / empty / load failed
+#   2 = unexpected error
+OnFailure=genlab-service-failure-alert@%n.service

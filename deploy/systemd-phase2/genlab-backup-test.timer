@@ -1,0 +1,12 @@
+[Unit]
+Description=GenLab — weekly backup-restore dry-run validation (timer)
+
+[Timer]
+# Sundays 22:30 UTC = Mondays 04:00 IST. Comfortably after the daily
+# 01:00 UTC pg_backup completes (~5 min) AND on a low-publishing day
+# (weekend = lower YouTube quota pressure if anything goes sideways).
+OnCalendar=Sun *-*-* 22:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
