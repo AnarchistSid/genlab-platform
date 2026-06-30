@@ -10,6 +10,7 @@ import {
   BarChart3,
   Brain,
   Calendar,
+  CheckSquare,
   ClipboardCheck,
   Compass,
   ListChecks,
@@ -51,6 +52,16 @@ export const navItems: NavItem[] = [
     icon: ClipboardCheck,
     label: "Content Review",
     shortcut: "G C",
+  },
+  // Phase 2 O1 (2026-06-30): surfaced in sidebar so operators can find
+  // the bulk-approve workflow. Previously only reachable via the URL
+  // or command palette — the #1 daily-friction wire described in the
+  // operator-context note ("operator must click" stays dormant).
+  {
+    to: "/bulk-review",
+    icon: CheckSquare,
+    label: "Bulk Review",
+    shortcut: "G B",
   },
   { to: "/learning", icon: Brain, label: "Learning", shortcut: "G L" },
   {

@@ -24,6 +24,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/health": "System Health",
   "/settings": "Settings",
   "/focus-review": "Focus Review",
+  "/bulk-review": "Bulk Review",
   "/stories": "Stories",
 };
 
@@ -46,12 +47,15 @@ function Breadcrumb({ selectedNiche }: { selectedNiche: { displayName: string; a
   );
 }
 
-// 5 primary tabs shown in the mobile bottom tab bar
+// 5 primary tabs shown in the mobile bottom tab bar.
+// Phase 2 O1 (2026-06-30): bulk-review added at index 7 shifted
+// Learning/Engagement to indexes 8/9 — find-by-label is robust to
+// future re-orders (no more silent index-bug risk).
 const MOBILE_TABS = [
   navItems[0], // Mission Control — Compass
   navItems[1], // Analytics — BarChart3
-  navItems[7], // Learning — Brain
-  navItems[8], // Engagement — MessageCircle
+  navItems.find((n) => n.label === "Learning")!,
+  navItems.find((n) => n.label === "Engagement")!,
   { to: "/settings", icon: Settings, label: "Settings", shortcut: "" },
 ];
 

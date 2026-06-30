@@ -7,6 +7,7 @@ import {
   BarChart3,
   Brain,
   Calendar,
+  CheckSquare,
   ClipboardCheck,
   Layers,
   MessageCircle,
@@ -79,6 +80,18 @@ export function buildCommandRegistry(deps: CommandRegistryDeps): Command[] {
       shortcut: "G F",
       keywords: "review approve reject tinder",
       action: () => navigate("/focus-review"),
+    },
+    // Phase 2 O1 (2026-06-30): make bulk-review reachable from the
+    // command palette so the operator's #1 daily-friction wire
+    // (approve N at a time, keyboard-driven) becomes discoverable.
+    {
+      id: "nav:bulk-review",
+      group: "navigation",
+      label: "Bulk Review",
+      icon: CheckSquare,
+      shortcut: "G B",
+      keywords: "bulk batch approve review marathon multi-select",
+      action: () => navigate("/bulk-review"),
     },
     {
       id: "nav:pipeline",
