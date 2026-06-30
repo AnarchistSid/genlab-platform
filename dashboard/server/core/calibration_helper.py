@@ -173,5 +173,28 @@ def log_calibration_for_action(
             action_taken_source=action_source,
             feedback_category=feedback_category,
         )
+
+        # Per-post decision trace wire-point #2 (2026-06-30): mirror the
+        # (gate verdict, operator action) pair into post_decision_trace
+        # so downstream analysis reads from ONE table instead of joining
+        # auto_approval_calibration + blueprints + publishing_analytics.
+        # Strictly additive — the existing calibration_logger.log call
+        # above remains the source of truth for AUTO #2 readiness; this
+        # is the same data shaped for trace-table consumers. Fail-OPEN
+        # so trace failures NEVER block operator review.
+        try:
+            from genlab_core.learning.post_decision_trace import (
+                record_operator_decision,
+            )
+
+            record_operator_decision(
+                blueprint_id=record_id,
+                niche_id=niche_id,
+                gate_verdict=(decision.approved if decision is not None else None),
+                gate_confidence=(decision.confidence if decision is not None else None),
+                operator_action=operator_action,
+            )
+        except Exception as trace_exc:  # noqa: BLE001 — never block caller
+            logger.debug("[trace] operator-decision wire skipped: %s", trace_exc)
     except Exception as cal_exc:  # noqa: BLE001 — never block caller
         logger.debug("[calibration] skipped (non-fatal): %s", cal_exc)

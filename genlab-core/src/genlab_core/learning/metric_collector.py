@@ -1065,6 +1065,47 @@ def process_pending_task(
                 exc,
             )
 
+    # Per-post decision trace wire-point #3 (2026-06-30): enrich the
+    # post_decision_trace row at engagement-window completion. Only the
+    # field that matches the current window is set; the COALESCE in the
+    # UPSERT preserves any prior-window data already stored. Computed
+    # reward is only known at the 48h window — at 24h/168h we leave it
+    # NULL so the prior 48h-window write is preserved. Fail-OPEN — trace
+    # writes NEVER block window processing.
+    try:
+        from genlab_core.learning.post_decision_trace import (
+            record_engagement_window,
+        )
+
+        _reach = None
+        if metrics:
+            _reach = metrics.get("reach") or metrics.get("impressions") or metrics.get("views")
+            if _reach is not None:
+                try:
+                    _reach = int(_reach)
+                except (TypeError, ValueError):
+                    _reach = None
+        _likes = None
+        if metrics and "likes" in metrics:
+            try:
+                _likes = int(metrics.get("likes") or 0)
+            except (TypeError, ValueError):
+                _likes = None
+
+        record_engagement_window(
+            blueprint_id=task_record.content_id,
+            niche_id=task_record.niche_id,
+            published_at=(
+                task_record.published_at.isoformat() if task_record.published_at else None
+            ),
+            engagement_reach_24h=_reach if window == "24h" else None,
+            engagement_reach_168h=_reach if window == "168h" else None,
+            engagement_likes=_likes,
+            computed_reward=reward_48h,
+        )
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug("[metric_collector] decision-trace wire failed: %s", exc)
+
     store.update_window(task_record, window, reward_48h=reward_48h)
     return True
 

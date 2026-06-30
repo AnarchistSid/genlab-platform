@@ -2234,6 +2234,47 @@ class PushToBacklog:
                             fields["status"],
                         )
 
+                        # Per-post decision trace wire-point #1 (2026-06-30):
+                        # capture the bandit decision (arm + per-source
+                        # posterior mean + IPS propensity) so future
+                        # analysis (drift detection, bandit_validation,
+                        # AUTO #2 readiness) can read all 3 lifecycle
+                        # events from a single canonical table instead of
+                        # re-joining blueprints + auto_approval_calibration
+                        # + publishing_analytics + analytics. Fail-OPEN —
+                        # trace write failures NEVER block blueprint
+                        # creation (the trace table is an analytics
+                        # sidecar, not a correctness store).
+                        try:
+                            from genlab_core.learning.post_decision_trace import (
+                                record_bandit_pick,
+                            )
+                            from genlab_core.learning.source_performance import (
+                                get_source_performance,
+                            )
+
+                            # Bandit predicted score = per-source arm's
+                            # Beta posterior mean. None when the source
+                            # has no history (cold-start) — trace will
+                            # show NULL, which downstream analysis can
+                            # filter out as "no prior signal".
+                            _src = story.get("source", "") or fields.get("source", "")
+                            _src_score: float | None = None
+                            if _src:
+                                _src_perf = get_source_performance(niche_id=niche_id, source=_src)
+                                if _src_perf is not None:
+                                    _src_score = _src_perf.reward_mean
+
+                            record_bandit_pick(
+                                blueprint_id=fields.get("candidate_id", ""),
+                                niche_id=niche_id,
+                                bandit_arm_id=arm_id or "",
+                                bandit_predicted_score=_src_score,
+                                bandit_confidence=arm_propensity,
+                            )
+                        except Exception as exc:  # noqa: BLE001 — fail-open
+                            logger.debug("[PUSH] decision-trace wire failed: %s", exc)
+
                     # Record CTA variant assignment to ab_tests (2026-06-16
                     # producer wire — closes the half-wired ab_tests table
                     # surfaced by the docs audit). Best-effort: any DB
