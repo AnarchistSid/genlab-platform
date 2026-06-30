@@ -167,4 +167,9 @@ export const queryKeys = {
     proposals: (nicheId: string, windowDays: number) =>
       ["source-discovery", "proposals", nicheId, windowDays] as const,
   },
+  /** Source-performance bandit-arms data (per-niche per-source). */
+  sourcePerformance: {
+    list: (nicheId: string, topN: number) =>
+      ["source-performance", nicheId, topN] as const,
+  },
 };

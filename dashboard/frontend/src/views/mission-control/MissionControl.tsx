@@ -36,6 +36,7 @@ import { ComplianceStatsCard } from "./ComplianceStatsCard";
 import { PerPlatformHealthCard } from "./PerPlatformHealthCard";
 import { BanditPlatformDivergenceCard } from "./BanditPlatformDivergenceCard";
 import { SourceDiscoveryCard } from "./SourceDiscoveryCard";
+import { SourcePerformanceCard } from "./SourcePerformanceCard";
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -337,6 +338,16 @@ export default function MissionControl() {
                 ranked list. Zero-state for days until source data
                 accumulates from new trending fetches. */}
             <SourceDiscoveryCard />
+            {/* Phase 2 L1 (2026-06-30): operator's window into the
+                source-performance bandit arms shipped in PR #571 +
+                activated in PR #571b. Sibling to SourceDiscoveryCard
+                but answers a different question: SourceDiscoveryCard
+                says "which channels deserve to be added"; this one
+                says "which existing sources is the bandit favouring?"
+                Per-niche selector + top 10 by Beta posterior mean +
+                95% CI bands. Trusted (n_plays ≥ 10) / Insufficient
+                data split prevents acting on single-play noise. */}
+            <SourcePerformanceCard />
           </div>
         </div>
       )}

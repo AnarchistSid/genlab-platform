@@ -1026,6 +1026,43 @@ export interface SourceDiscoveryProposalsResponse {
   warning?: string;
 }
 
+// ── Source-performance bandit arms (Phase 2 L1, 2026-06-30) ──────
+//
+// Distinct from `SourcePerformanceResponse` in api/client.ts which
+// surfaces the /sources/performance endpoint (per-source fetch-vs-
+// claim diagnostic). This is the bandit-arms reward signal — answers
+// "which sources is the bandit favouring?" via Beta posteriors.
+
+/**
+ * Per-source bandit arm row from /api/v1/source-performance.
+ *
+ * Mirrors genlab_core.learning.source_performance.SourcePerformance
+ * (frozen dataclass) extended with CI bounds for the dashboard UI.
+ * The bandit arm IS the source — each (niche, source) pair gets one
+ * Beta(alpha, beta) posterior in bandit_arms with arm_id = "source:X".
+ */
+export interface SourcePerformanceArm {
+  arm_id: string;
+  source: string;
+  niche_id: string;
+  n_plays: number;
+  alpha: number;
+  beta: number;
+  reward_mean: number;
+  /** 95% Beta CI lower bound (normal-approx, clamped to [0, 1]). */
+  reward_ci_lower: number;
+  /** 95% Beta CI upper bound (normal-approx, clamped to [0, 1]). */
+  reward_ci_upper: number;
+}
+
+export interface SourcePerformanceBanditResponse {
+  niche_id: string;
+  top_n: number;
+  sources: SourcePerformanceArm[];
+  /** Present when the core build lacks source_performance module. */
+  warning?: string;
+}
+
 // ── Compliance Stats (Mission Control dashboard, PR after #581) ──
 
 /**

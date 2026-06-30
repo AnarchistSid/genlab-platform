@@ -48,6 +48,7 @@ import type {
   PerNichePlatformHealthResponse,
   BanditPlatformDivergenceResponse,
   SourceDiscoveryProposalsResponse,
+  SourcePerformanceBanditResponse,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -888,6 +889,37 @@ export const sourceDiscovery = {
         return envelope.data;
       }
       return d as SourceDiscoveryProposalsResponse;
+    }),
+};
+
+// Phase 2 L1 — Source-performance bandit-arms data. Surfaces the
+// per-source Beta posteriors collected by source_performance.py +
+// activated in PR #571b (commit fa317889). Lets operators answer
+// "does YouTube showcase outperform news?" without writing SQL.
+//
+// NOTE: distinct from the older `sources.performance` (above), which
+// surfaces /sources/performance — the per-source fetch-vs-claim
+// diagnostic. This one is the bandit-arms reward signal.
+export const sourcePerformanceBandit = {
+  list: (nicheId: string, topN: number = 20) =>
+    get<
+      | SourcePerformanceBanditResponse
+      | { data: SourcePerformanceBanditResponse }
+    >("/source-performance", {
+      niche_id: nicheId,
+      top_n: String(topN),
+    }).then((d): SourcePerformanceBanditResponse => {
+      const envelope = d as { data?: SourcePerformanceBanditResponse };
+      if (
+        envelope &&
+        typeof envelope === "object" &&
+        "data" in envelope &&
+        envelope.data &&
+        typeof envelope.data === "object"
+      ) {
+        return envelope.data;
+      }
+      return d as SourcePerformanceBanditResponse;
     }),
 };
 
