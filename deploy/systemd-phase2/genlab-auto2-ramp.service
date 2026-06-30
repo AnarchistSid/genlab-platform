@@ -1,0 +1,71 @@
+[Unit]
+Description=GenLab AUTO #2 Auto-Ramp — weekly +10% rollout_pct per qualifying niche
+After=network-online.target postgresql.service
+# Fire the systemd failure-alert template on any non-zero exit so the
+# Mission Control banner picks it up within ~5 min. The script
+# itself returns 0 even on per-niche skips; non-zero means an
+# uncaught Python exception (logic bug, ruamel missing, etc.) —
+# operator should investigate the journal immediately.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_ROOT=/opt/genlab
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+# 2026-06-30 — operator decision #3: auto-ramp AUTO #2 rollout_pct by
+# +10% per week for any niche whose bandit_validation harness reports
+# 'bandit useful' AND auto_approval_calibration agreement > 90%.
+#
+# Why this exists
+# ---------------
+# Pre-this-cron, every rollout_pct bump required cutting a PR per
+# niche per week (see the AUTO #2 ramp ladder commented in each
+# niche's publishing.yaml). The operator runs Gen Lab + AspireHub
+# in parallel and the "click manually" step regularly stays at the
+# Week-1 value for weeks past the ladder schedule. This cron is
+# the autonomous version of that PR cadence — qualifying niches
+# ramp without human intervention; non-qualifying ones get logged
+# and skipped (operator sees the reason in the journal).
+#
+# Safety knobs (in order of severity)
+# -----------------------------------
+#   1. Per-script cap: --max-rollout-pct 0.50. The cron NEVER bumps
+#      a niche past 0.50; manual operator action required for 0.50
+#      → 1.0. This bounds total exposure under any pathological
+#      condition.
+#   2. Per-run cap: MAX_RAMPS_PER_RUN = 2 in auto_ramp_auto2.py. If
+#      5 niches qualify simultaneously the cron ramps only the 2
+#      with the highest sample_count — others wait for next week.
+#   3. Validation freshness: ramp refuses if the latest
+#      bandit_validation row is older than 48h. Stale signal is
+#      worse than no signal.
+#   4. Audit log: every actual ramp appends a row to
+#      .tmp/auto2_ramp_log.jsonl with before/after pct + the
+#      qualifying numbers. Operator can reconstruct any rollback.
+#
+# Kill switch (if a ramp produces bad results)
+# --------------------------------------------
+#   * Disable the timer: systemctl disable --now genlab-auto2-ramp.timer
+#   * Edit the relevant publishing.yaml to revert rollout_pct
+#     (the comments in publishing.yaml document the ladder values).
+#   * Optional global kill: GENLAB_AUTO_APPROVE_DISABLED=1 in
+#     /opt/genlab/.env disables all auto-approval enforcement.
+#
+# Schedule rationale (see .timer): 09:30 UTC Mondays = 15:00 IST.
+# The 1-week cadence matches each ramp-ladder step documented in
+# publishing.yaml so a niche that qualifies for 4 consecutive
+# Mondays lands at 0.50 (operator-cap) by Week 5. Monday afternoon
+# IST gives the operator ~1 day of in-week visibility before the
+# next prod weekend.
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/auto_ramp_auto2.py --apply
+TimeoutSec=300
+# Single-shot; cumulative miss is fine (the next week will catch
+# any qualifying niches — no urgency on either-direction signal).
+
+[Install]
+WantedBy=multi-user.target

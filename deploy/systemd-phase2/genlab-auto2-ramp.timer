@@ -1,0 +1,24 @@
+[Unit]
+Description=GenLab AUTO #2 Auto-Ramp Timer — weekly +10% per qualifying niche
+
+[Timer]
+# 09:30 UTC Mondays = 15:00 IST. Late-morning IST gives the operator
+# the rest of the workday to spot a bad ramp via Mission Control
+# before evening. Avoids 09:00 IST (auto-approver cron — different
+# table, same DB).
+#
+# Why Monday: matches the ramp-ladder cadence operators ALREADY use
+# in the publishing.yaml runbook ("Week 1 / Week 2 / Week 3 / Week 4").
+# A Monday fire cleanly inaugurates each week's possible ramp; the
+# rest of the week gives the calibration + validation data time to
+# re-stabilize at the new rollout_pct before the next Monday.
+OnCalendar=Mon *-*-* 09:30:00 UTC
+Persistent=true
+# Small jitter so if other 09:30 UTC units exist they don't all hit
+# at the same second. The bandit_validation timer at 03:30 UTC is
+# the only other cron with this exact minute mark elsewhere — no
+# table overlap, but the jitter keeps psycopg pools tidy.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
