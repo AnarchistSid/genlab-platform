@@ -1010,3 +1010,14 @@ reddit:
     - name: "LocalLLaMA"
     - name: "artificial"
     - name: "StableDiffusion"
+    # Added 2026-06-30 — AI-generated VIDEO content (Sora/Runway/Midjourney/
+    # Kling outputs). These subs are where the high-engagement viral
+    # AI-generated content originates (e.g. the "Jim Carrey mask" type
+    # deepfake clips). Discussion subs above are good for AI NEWS; these
+    # are good for AI ART/VIDEO performance.
+    - name: "aivideo"
+    - name: "AiVideos"
+    - name: "SoraAI"
+    - name: "runwayml"
+    - name: "midjourney"
+    - name: "kling"

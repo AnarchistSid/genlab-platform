@@ -56,6 +56,38 @@ from genlab_core.pipeline.stage_runner import Stage, StageRunnerFactory
 logger = logging.getLogger(__name__)
 
 
+def _load_sources_yaml(niche_root: str | Path) -> dict[str, Any]:
+    """Load the niche's sources.yaml into a dict for context['sources_config'].
+
+    Multiple fetcher stages (FetchRedditClips, FetchScorebat,
+    FetchTMDBTrailers, FetchAnimePromos, FetchTwitchClips,
+    FetchSteamTrailers) read niche-specific source config from
+    context['sources_config']. Before this loader, that key was
+    declared in stage_context.py but never populated → every one
+    of those stages silently returned early on empty config →
+    pipelines ran on YouTube-only data and Reddit/etc. sources
+    were dead.
+
+    Fail-OPEN: yaml parse errors return {} so the pipeline continues
+    (worst case: same as before the fix — stages no-op).
+    """
+    import yaml as _yaml
+
+    sources_path = Path(str(niche_root)) / "config" / "sources.yaml"
+    if not sources_path.exists():
+        return {}
+    try:
+        with open(sources_path) as f:
+            return _yaml.safe_load(f) or {}
+    except Exception as exc:
+        logger.warning(
+            "[pipeline_runner] failed to load sources.yaml at %s: %s",
+            sources_path,
+            exc,
+        )
+        return {}
+
+
 class _NicheLockError(RuntimeError):
     """Raised when a niche lock is already held by another process."""
 
@@ -310,6 +342,15 @@ class GenericPipelineRunner:
                 "run_stats": ctx.run_stats,
                 "feature_flags": ctx.feature_flags,
                 "niche_config": ctx.niche_config,
+                # 2026-06-30 — populate sources_config from
+                # <niche_root>/config/sources.yaml. Before this, the
+                # key was declared in stage_context.py but never
+                # populated, so FetchRedditClips, FetchScorebat,
+                # FetchTMDBTrailers, FetchAnimePromos, FetchTwitchClips,
+                # and FetchSteamTrailers all read {} and silently
+                # no-op'd (0.0000s stage_timing on prod). See
+                # ``_load_sources_yaml`` docstring above.
+                "sources_config": _load_sources_yaml(niche_root),
                 # 2026-06-22 — working memory for within-run cross-
                 # stage coordination. Stages append via
                 # ``reasoning_trace.append_trace(context, ...)``;
