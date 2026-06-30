@@ -10,14 +10,14 @@ See docs/STRATEGIST-SPEC.md §4 for the full design.
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class StrategicPhase(str, Enum):
+class StrategicPhase(StrEnum):
     """The 5 strategic phases a niche can be in.
 
     Phases are detected from channel state and drive PhaseConfig (which in turn
@@ -31,7 +31,7 @@ class StrategicPhase(str, Enum):
     DEFEND = "DEFEND"  # plateaued — diversify formats + platforms
 
 
-class ProposalType(str, Enum):
+class ProposalType(StrEnum):
     """The 7 proposal types the Strategist may emit.
 
     Type-whitelist is a hard safety boundary: the Strategist cannot propose
@@ -48,19 +48,19 @@ class ProposalType(str, Enum):
     MANUAL_ACTION = "manual_action"  # requires operator do something the system can't
 
 
-class ProposalRisk(str, Enum):
+class ProposalRisk(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
 
-class ProposalUrgency(str, Enum):
+class ProposalUrgency(StrEnum):
     SHIP_NOW = "ship_now"
     THIS_WEEK = "this_week"
     NEXT_SPRINT = "next_sprint"
 
 
-class HypothesisConfidence(str, Enum):
+class HypothesisConfidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"

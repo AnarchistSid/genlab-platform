@@ -18,12 +18,15 @@ See docs/STRATEGIST-SPEC.md for the full design.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Protocol
+from typing import Any, Protocol
 
-from genlab_core.intelligence.proposal_schema import StrategistReport
+from pydantic import ValidationError
+
+from genlab_core.intelligence.proposal_schema import SCHEMA_VERSION, StrategistReport
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +34,21 @@ logger = logging.getLogger(__name__)
 class StateCollector(Protocol):
     """Pluggable input source. Real implementation queries Postgres; tests inject mocks."""
 
-    def collect(self, niche_id: str, week_of: date) -> dict: ...
+    def collect(self, niche_id: str, week_of: date) -> dict[str, Any]: ...
 
 
 class LLMClient(Protocol):
-    """Pluggable LLM. Real implementation calls Anthropic; tests inject canned JSON."""
+    """Pluggable LLM. Real implementation calls Anthropic; tests inject canned JSON.
 
-    def generate_report(self, system_prompt: str, user_prompt: str) -> str: ...
+    Returns an object with a `.text` attribute (the raw model output) and
+    `.cost_usd` (telemetry). Mocks can return any object satisfying that shape.
+    """
+
+    def generate_report(self, system_prompt: str, user_prompt: str) -> Any: ...
 
 
 class ReportPersister(Protocol):
-    """Pluggable persistence. Real implementation writes Postgres; tests use in-memory."""
+    """Pluggable persistence. Real implementation writes Postgres / JSONL; tests in-memory."""
 
     def persist(self, report: StrategistReport) -> None: ...
 
@@ -52,21 +59,37 @@ class StrategistConfig:
 
     cost_cap_per_run_usd: float = 1.50  # hard fail-soft cap per (niche, week)
     max_input_tokens: int = 20_000
-    schema_version: int = 1
+    schema_version: int = SCHEMA_VERSION
     require_min_evidence_count: int = 2  # reject proposals with < N evidence items
+
+
+@dataclass
+class RunOutcome:
+    """Telemetry captured per run — surfaced to logs + future metrics dashboard."""
+
+    niche_id: str
+    week_of: date
+    status: str  # 'persisted' | 'state_collect_failed' | 'llm_call_failed'
+    #   | 'validation_failed' | 'persist_failed'
+    cost_usd: float = 0.0
+    duration_sec: float = 0.0
+    error: str | None = None
+    report_id: str | None = None
+    proposals_count: int = 0
+    hypotheses_count: int = 0
 
 
 class Strategist:
     """Orchestrates a weekly Strategist run for one niche.
 
-    Public surface is one method: `run_for_niche(niche_id, week_of)`.
+    Public surface: `run_for_niche(niche_id, week_of)`.
 
-    Failure modes (all fail-soft, return None and log):
-    - State collector raises → skip this run, log error
+    Failure modes (all fail-soft, return RunOutcome with status set):
+    - State collector raises → status='state_collect_failed', log + skip
     - LLM returns malformed JSON → retry once with stricter prompt, then skip
     - Validated report has cost > cap → persist with `flagged_cost=True`,
       operator decides whether to act
-    - Persistence fails → log + return the report so caller can retry
+    - Persistence fails → log + return outcome so caller can retry
     """
 
     def __init__(
@@ -81,26 +104,126 @@ class Strategist:
         self.persister = persister
         self.config = config or StrategistConfig()
 
-    def run_for_niche(self, niche_id: str, week_of: date) -> StrategistReport | None:
-        """Execute one Strategist cycle. Returns the persisted report or None on failure."""
+    def run_for_niche(self, niche_id: str, week_of: date) -> RunOutcome:
+        """Execute one Strategist cycle.
+
+        Always returns a RunOutcome (never raises). Failure modes are surfaced
+        via outcome.status so the caller / cron wrapper can log telemetry +
+        alert without each call needing its own try/except.
+        """
+        from time import monotonic
+
+        # Lazy import to avoid pulling prompts into test envs that don't need them
+        from genlab_core.intelligence.prompts import build_user_prompt, get_system_prompt
+
+        outcome = RunOutcome(niche_id=niche_id, week_of=week_of, status="started")
+        t0 = monotonic()
         logger.info("strategist.run.start niche=%s week_of=%s", niche_id, week_of)
 
+        # === Stage 1: collect state ===
         try:
             state = self.collector.collect(niche_id, week_of)
         except Exception as exc:
             logger.exception("strategist.state_collect_failed niche=%s err=%s", niche_id, exc)
+            outcome.status = "state_collect_failed"
+            outcome.error = str(exc)
+            outcome.duration_sec = round(monotonic() - t0, 2)
+            return outcome
+
+        # === Stage 2: build prompts + call LLM ===
+        user_prompt = build_user_prompt(state, schema_version=self.config.schema_version)
+        system_prompt = get_system_prompt()
+
+        try:
+            call_result = self.llm.generate_report(system_prompt, user_prompt)
+            cost = getattr(call_result, "cost_usd", 0.0)
+            outcome.cost_usd = cost
+            if cost > self.config.cost_cap_per_run_usd:
+                logger.warning(
+                    "strategist.cost_cap_exceeded niche=%s cost=$%.2f cap=$%.2f",
+                    niche_id,
+                    cost,
+                    self.config.cost_cap_per_run_usd,
+                )
+                # Continue anyway — operator decides whether to ack
+            raw_text = getattr(call_result, "text", str(call_result))
+        except Exception as exc:
+            logger.exception("strategist.llm_call_failed niche=%s err=%s", niche_id, exc)
+            outcome.status = "llm_call_failed"
+            outcome.error = str(exc)
+            outcome.duration_sec = round(monotonic() - t0, 2)
+            return outcome
+
+        # === Stage 3: parse + validate JSON ===
+        report = self._parse_report(raw_text, niche_id, week_of)
+        if report is None:
+            outcome.status = "validation_failed"
+            outcome.error = "LLM output did not validate against schema"
+            outcome.duration_sec = round(monotonic() - t0, 2)
+            return outcome
+
+        outcome.proposals_count = len(report.proposals)
+        outcome.hypotheses_count = len(report.causal_hypotheses)
+
+        # === Stage 4: persist ===
+        try:
+            self.persister.persist(report)
+        except Exception as exc:
+            logger.exception("strategist.persist_failed niche=%s err=%s", niche_id, exc)
+            outcome.status = "persist_failed"
+            outcome.error = str(exc)
+            outcome.duration_sec = round(monotonic() - t0, 2)
+            return outcome
+
+        outcome.status = "persisted"
+        outcome.report_id = str(report.id)
+        outcome.duration_sec = round(monotonic() - t0, 2)
+        logger.info(
+            "strategist.run.complete niche=%s phase=%s proposals=%d cost=$%.4f t=%.2fs",
+            niche_id,
+            report.detected_phase.value,
+            outcome.proposals_count,
+            outcome.cost_usd,
+            outcome.duration_sec,
+        )
+        return outcome
+
+    def _parse_report(self, raw_text: str, niche_id: str, week_of: date) -> StrategistReport | None:
+        """Strip markdown fences if present, parse JSON, validate against schema.
+
+        Returns None on any failure; caller marks outcome.status appropriately.
+        """
+        text = raw_text.strip()
+        # Defense against LLM ignoring "JSON only" rule and wrapping in fences
+        if text.startswith("```"):
+            lines = text.split("\n")
+            # Drop opening fence + optional language tag, drop closing fence
+            text = "\n".join(lines[1:-1]) if len(lines) >= 2 else text
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            logger.error(
+                "strategist.json_decode_failed niche=%s err=%s preview=%s",
+                niche_id,
+                exc,
+                text[:200],
+            )
             return None
 
-        # PR Strategist-1 stops here. PR Strategist-2 will add:
-        #   - prompts.build_user_prompt(state, schema_version)
-        #   - self.llm.generate_report(system_prompt, user_prompt)
-        #   - StrategistReport.model_validate_json(llm_output)
-        #   - self.persister.persist(report)
-        raise NotImplementedError(
-            "Strategist execution body lands in PR Strategist-1; this is the "
-            "skeleton shipped 2026-06-30 to lock the interfaces. See "
-            "docs/STRATEGIST-SPEC.md §8 for the implementation plan."
-        )
+        # Inject the trusted (niche_id, week_of) — never trust the LLM with
+        # routing fields. The LLM produces analysis; the orchestrator owns identity.
+        payload["niche_id"] = niche_id
+        payload["week_of"] = week_of.isoformat()
+
+        try:
+            return StrategistReport.model_validate(payload)
+        except ValidationError as exc:
+            logger.error(
+                "strategist.schema_validation_failed niche=%s err=%s",
+                niche_id,
+                exc,
+            )
+            return None
 
 
 def week_of(d: datetime | date | None = None) -> date:
