@@ -193,3 +193,116 @@ def test_source_performance_returns_500_when_library_raises():
         with app.test_client() as c:
             r = c.get("/api/v1/source-performance?niche_id=ai_creators")
     assert r.status_code == 500
+
+
+# ── per-platform filter (2026-06-30) ─────────────────────────────
+
+
+def test_source_performance_platform_filter_passes_through():
+    """``?platform=instagram`` reaches the library as a kwarg so the
+    SQL filters to per-platform arms only. Endpoint surfaces the
+    filter back in the response for the dashboard to render."""
+    app = _make_app()
+    with patch(
+        "genlab_core.learning.source_performance.list_source_performance",
+        return_value=[],
+    ) as mock_list:
+        with app.test_client() as c:
+            r = c.get("/api/v1/source-performance?niche_id=ai_creators&platform=instagram")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["platform"] == "instagram"
+    # Library called with the platform kwarg, not as positional
+    mock_list.assert_called_once_with("ai_creators", platform="instagram")
+
+
+def test_source_performance_invalid_platform_returns_400():
+    """Typo'd ?platform= → 400 instead of silently empty result
+    (which is what unknown platform would produce via LIKE)."""
+    app = _make_app()
+    with app.test_client() as c:
+        r = c.get("/api/v1/source-performance?niche_id=ai_creators&platform=instagra")
+    assert r.status_code == 400
+    assert "Unknown platform" in (r.get_json() or {}).get("error", "")
+
+
+def test_source_performance_empty_platform_treated_as_no_filter():
+    """Empty ``?platform=`` (operator left field blank in URL) →
+    treated as "no filter," not validation error. Lets the dashboard
+    pass URL params blindly."""
+    app = _make_app()
+    with patch(
+        "genlab_core.learning.source_performance.list_source_performance",
+        return_value=[],
+    ) as mock_list:
+        with app.test_client() as c:
+            r = c.get("/api/v1/source-performance?niche_id=ai_creators&platform=")
+    assert r.status_code == 200
+    body = r.get_json()["data"]
+    assert body["platform"] is None
+    mock_list.assert_called_once_with("ai_creators", platform=None)
+
+
+def test_source_performance_response_carries_platform_field_on_dto():
+    """The serialised DTO MUST surface the per-platform `platform`
+    field + composed `arm_id` so dashboard consumers can distinguish
+    aggregated vs per-platform arms without re-deriving."""
+    from genlab_core.learning.source_performance import SourcePerformance
+
+    fake = [
+        SourcePerformance(
+            niche_id="ai_creators",
+            source="youtube_trending",
+            platform="instagram",
+            alpha=8.0,
+            beta=2.0,
+            n_plays=10,
+            reward_mean=0.8,
+        ),
+        SourcePerformance(
+            niche_id="ai_creators",
+            source="youtube_trending",
+            alpha=5.0,
+            beta=5.0,
+            n_plays=10,
+            reward_mean=0.5,
+        ),
+    ]
+    app = _make_app()
+    with patch(
+        "genlab_core.learning.source_performance.list_source_performance",
+        return_value=fake,
+    ):
+        with app.test_client() as c:
+            r = c.get("/api/v1/source-performance?niche_id=ai_creators")
+    assert r.status_code == 200
+    sources = r.get_json()["data"]["sources"]
+    assert len(sources) == 2
+    # Per-platform row carries platform + composed arm_id
+    assert sources[0]["platform"] == "instagram"
+    assert sources[0]["arm_id"] == "source:youtube_trending__instagram"
+    # Aggregated (legacy) row has platform=None + legacy arm_id
+    assert sources[1]["platform"] is None
+    assert sources[1]["arm_id"] == "source:youtube_trending"
+
+
+def test_source_performance_falls_back_to_legacy_signature_on_typeerror():
+    """Defensive: if the core library hasn't yet shipped the platform
+    kwarg (mid-deploy partial rollout), the endpoint MUST fall back to
+    the no-kwarg signature rather than 500. Pre-PR-571b deploys must
+    keep rendering the card."""
+    app = _make_app()
+
+    def _legacy_signature(niche_id, platform=None):
+        if platform is not None:
+            raise TypeError("list_source_performance() got an unexpected keyword 'platform'")
+        return []
+
+    with patch(
+        "genlab_core.learning.source_performance.list_source_performance",
+        side_effect=_legacy_signature,
+    ):
+        with app.test_client() as c:
+            r = c.get("/api/v1/source-performance?niche_id=ai_creators&platform=instagram")
+    # Falls back to legacy signature → empty result + 200
+    assert r.status_code == 200

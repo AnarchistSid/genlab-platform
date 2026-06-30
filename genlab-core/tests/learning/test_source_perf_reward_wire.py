@@ -46,6 +46,7 @@ def test_helper_calls_record_source_outcome_with_correct_args():
         niche_id="gaming",
         source="youtube_trending",
         reward=0.7,
+        platform=None,
     )
 
 
@@ -221,6 +222,7 @@ def test_helper_strips_whitespace_from_source():
         niche_id="gaming",
         source="youtube_trending",
         reward=0.5,
+        platform=None,
     )
 
 

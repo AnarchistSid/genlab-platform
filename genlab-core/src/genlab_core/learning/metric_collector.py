@@ -385,13 +385,32 @@ def _update_source_arm_reward(
     niche_id: str,
     blueprint_id: str,
     reward: float,
+    platform: str | None = None,
 ) -> bool:
     """PR #571b (2026-06-25): per-source bandit arm update at the 48h
     reward-window close.
 
     Looks up the blueprint's `source` column (lazy DB query), then
     calls record_source_outcome to apply the Bayesian Beta update to
-    the (niche, source) arm.
+    the (niche, source[, platform]) arm.
+
+    Per-platform split (2026-06-30)
+    -------------------------------
+    When ``platform`` is provided (e.g. ``"instagram"``), the update
+    targets the per-platform arm ``source:<source>__<platform>``. When
+    None (legacy callers), targets the aggregated ``source:<source>``
+    arm — the original PR #571b behaviour.
+
+    The 2026-06-30 split was driven by pending_feedback data showing
+    Facebook avg reward (0.114, n=74) is 38× YouTube avg reward
+    (0.003, n=22) for the SAME source mix. Aggregating across
+    platforms destroys that signal — the bandit can never learn that
+    a source is great for Facebook but terrible for YouTube.
+
+    The live wire at ``process_pending_task`` calls this helper once
+    per pending_feedback row (i.e. once per (blueprint, platform) pair)
+    so the per-platform iteration happens implicitly via the outer
+    feedback-collection loop, not via per-platform iteration here.
 
     Returns True on successful update, False on:
       * blueprint_id missing
@@ -404,7 +423,7 @@ def _update_source_arm_reward(
 
     Lazy imports keep the metric_collector module load-cost low; the
     per-source machinery only imports when this function fires (once
-    per blueprint per 48h, not per request).
+    per blueprint per platform per 48h, not per request).
     """
     if not blueprint_id:
         return False
@@ -426,6 +445,7 @@ def _update_source_arm_reward(
             niche_id=niche_id,
             source=source,
             reward=reward,
+            platform=platform,
         )
     except Exception as exc:  # noqa: BLE001 — best-effort
         logger.debug(
@@ -928,14 +948,28 @@ def process_pending_task(
         # bandit arm with the 48h reward signal. Requires looking up
         # the blueprint's `source` column — done lazily so the cost
         # is paid only on reward-window completion (~1 query per
-        # blueprint per 48h, not per request). Fail-OPEN: a missed
-        # update just means the source's posterior is one observation
-        # behind reality.
+        # blueprint per platform per 48h, not per request). Fail-OPEN:
+        # a missed update just means the source's posterior is one
+        # observation behind reality.
+        #
+        # 2026-06-30 per-platform split: pass ``task_record.platform``
+        # so the per-platform arm (``source:<source>__<platform>``) is
+        # updated instead of the legacy aggregated arm
+        # (``source:<source>``). Driver: pending_feedback data showed
+        # 38× Facebook↔YouTube reward asymmetry on the same blueprints
+        # — aggregating across platforms destroys that signal. The
+        # outer feedback-collection loop calls ``process_pending_task``
+        # once per (blueprint, platform) row so per-platform iteration
+        # is implicit; we just pass through the platform we already
+        # have on ``task_record``. The 4 existing aggregated arms are
+        # NEVER mutated by this code path — they sit as legacy
+        # historical record alongside the new per-platform arms.
         try:
             _update_source_arm_reward(
                 niche_id=task_record.niche_id,
                 blueprint_id=task_record.content_id,
                 reward=reward_48h,
+                platform=task_record.platform,
             )
         except Exception as exc:  # noqa: BLE001 — fail-open
             logger.debug("[metric_collector] per-source arm update skipped: %s", exc)

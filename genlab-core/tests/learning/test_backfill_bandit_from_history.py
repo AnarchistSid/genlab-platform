@@ -93,9 +93,11 @@ def test_process_rows_dry_run_does_not_call_record_source_outcome():
     mock_record.assert_not_called()
     assert summary["total"] == 2
     assert summary["errors"] == 0
-    # Per-arm reward distribution still computed
-    assert ("gaming", "youtube_trending") in summary["arm_rewards"]
-    assert ("gaming", "youtube_search") in summary["arm_rewards"]
+    # Per-arm reward distribution still computed. 2026-06-30 key shape
+    # is (niche, source, platform_or_None); default per_platform=False
+    # → platform=None component preserves the aggregated grouping.
+    assert ("gaming", "youtube_trending", None) in summary["arm_rewards"]
+    assert ("gaming", "youtube_search", None) in summary["arm_rewards"]
 
 
 def test_process_rows_apply_calls_record_source_outcome_once_per_row():
@@ -159,7 +161,10 @@ def _patch_psycopg(rows: list[dict]) -> MagicMock:
 
 def test_main_dry_run_default_does_not_apply(monkeypatch):
     """Calling main() with no args defaults to dry-run; no
-    record_source_outcome call, no UPDATE issued."""
+    record_source_outcome call, no UPDATE issued. Pinned with
+    --skip-per-platform so the test isolates the aggregated-pass
+    contract from PR #571b; the per-platform pass is verified in
+    its own test below."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
@@ -168,7 +173,7 @@ def test_main_dry_run_default_does_not_apply(monkeypatch):
         patch("psycopg.connect", return_value=conn),
         patch("genlab_core.learning.source_performance.record_source_outcome") as mock_record,
     ):
-        rc = mod.main([])
+        rc = mod.main(["--skip-per-platform"])
 
     assert rc == 0
     mock_record.assert_not_called()
@@ -176,7 +181,9 @@ def test_main_dry_run_default_does_not_apply(monkeypatch):
 
 def test_main_apply_writes_and_stamps(monkeypatch):
     """--apply mode: record_source_outcome is called AND the
-    UPDATE ... extra->>'bandit_backfilled_at' SQL runs."""
+    UPDATE ... extra->>'bandit_backfilled_at' SQL runs.
+    Pinned with --skip-per-platform to isolate the aggregated-pass
+    contract — per-platform behaviour has its own test."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
@@ -190,10 +197,13 @@ def test_main_apply_writes_and_stamps(monkeypatch):
             return_value=True,
         ) as mock_record,
     ):
-        rc = mod.main(["--apply"])
+        rc = mod.main(["--apply", "--skip-per-platform"])
 
     assert rc == 0
     assert mock_record.call_count == 1
+    # Aggregated pass calls record_source_outcome WITHOUT platform
+    # (legacy aggregated arm path)
+    assert mock_record.call_args.kwargs.get("platform") is None
     conn.commit.assert_called_once()  # UPDATE committed
     # Verify the UPDATE SQL ran — the conn.cursor was called multiple
     # times (once for SELECT, once for UPDATE)
@@ -203,7 +213,8 @@ def test_main_apply_writes_and_stamps(monkeypatch):
 def test_main_idempotency_second_run_finds_no_rows(monkeypatch):
     """The WHERE clause's `(extra->>'bandit_backfilled_at') IS NULL`
     filter means a second run after --apply returns zero candidate
-    rows. We simulate this by returning [] from the SELECT."""
+    rows. We simulate this by returning [] from the SELECT.
+    Pinned with --skip-per-platform so both passes don't both query."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
@@ -212,7 +223,7 @@ def test_main_idempotency_second_run_finds_no_rows(monkeypatch):
         patch("psycopg.connect", return_value=conn),
         patch("genlab_core.learning.source_performance.record_source_outcome") as mock_record,
     ):
-        rc = mod.main(["--apply"])
+        rc = mod.main(["--apply", "--skip-per-platform"])
 
     assert rc == 0
     mock_record.assert_not_called()
@@ -222,7 +233,8 @@ def test_main_idempotency_second_run_finds_no_rows(monkeypatch):
 def test_main_refuses_large_batch_without_force(monkeypatch):
     """--apply with >MAX_APPLY_WITHOUT_FORCE rows returns rc=2 +
     no record_source_outcome calls — safety gate fires before
-    any state mutation."""
+    any state mutation. Pinned with --skip-per-platform so the
+    safety gate fires on the aggregated pass alone."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
@@ -235,14 +247,15 @@ def test_main_refuses_large_batch_without_force(monkeypatch):
         patch("psycopg.connect", return_value=conn),
         patch("genlab_core.learning.source_performance.record_source_outcome") as mock_record,
     ):
-        rc = mod.main(["--apply"])
+        rc = mod.main(["--apply", "--skip-per-platform"])
 
     assert rc == 2
     mock_record.assert_not_called()
 
 
 def test_main_large_batch_with_explicit_flag_proceeds(monkeypatch):
-    """--apply --yes-large-batch overrides the safety gate."""
+    """--apply --yes-large-batch overrides the safety gate.
+    Pinned with --skip-per-platform so call count is unambiguous."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
@@ -258,7 +271,7 @@ def test_main_large_batch_with_explicit_flag_proceeds(monkeypatch):
             return_value=True,
         ) as mock_record,
     ):
-        rc = mod.main(["--apply", "--yes-large-batch"])
+        rc = mod.main(["--apply", "--yes-large-batch", "--skip-per-platform"])
 
     assert rc == 0
     assert mock_record.call_count == len(big)
@@ -275,13 +288,14 @@ def test_main_no_database_url_returns_error(monkeypatch):
 
 def test_main_niche_filter_threads_through(monkeypatch):
     """--niche-id <id> adds the niche_id parameter to the SQL.
-    We assert it via the cursor.execute call args."""
+    We assert it via the cursor.execute call args. Pinned with
+    --skip-per-platform so only the aggregated SELECT runs."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
     conn = _patch_psycopg([])
     with patch("psycopg.connect", return_value=conn):
-        mod.main(["--niche-id", "movies"])
+        mod.main(["--niche-id", "movies", "--skip-per-platform"])
 
     # First cursor was the SELECT; inspect its execute call
     cur = conn.cursor.return_value
@@ -292,13 +306,14 @@ def test_main_niche_filter_threads_through(monkeypatch):
 
 
 def test_main_since_flag_threads_through(monkeypatch):
-    """--since YYYY-MM-DD becomes the first SQL parameter."""
+    """--since YYYY-MM-DD becomes the first SQL parameter.
+    Pinned with --skip-per-platform so the SELECT runs once."""
     monkeypatch.setenv("DATABASE_URL", "postgresql://test/test")
     from genlab_core.scripts import backfill_bandit_from_history as mod
 
     conn = _patch_psycopg([])
     with patch("psycopg.connect", return_value=conn):
-        mod.main(["--since", "2026-06-25"])
+        mod.main(["--since", "2026-06-25", "--skip-per-platform"])
 
     cur = conn.cursor.return_value
     sql, params = cur.execute.call_args.args
