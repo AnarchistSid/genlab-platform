@@ -268,6 +268,161 @@ def check_source_starvation(reports: list[dict], niche_id: str) -> list[Alert]:
     return alerts
 
 
+# Fetcher stages that read context['sources_config'] (or any other
+# StageContext field that, if unpopulated, makes the stage silently
+# no-op). Diagnostic signature: stage_timing < 0.001s in metrics.jsonl
+# across multiple consecutive runs. See COMMIT 3 / B2 in the 2026-06-30
+# Phase 1 hardening plan, and the sources_config postmortem in
+# pipeline_runner._load_sources_yaml's docstring.
+_FETCHER_STAGES_TO_MONITOR = (
+    "FetchTrendingVideos",
+    "FetchRedditClips",
+    "FetchScoreBatHighlights",
+    "FetchScorebat",  # alias used by some niches
+    "FetchTMDBTrailers",
+    "FetchAnimePromos",
+    "FetchTwitchClips",
+    "FetchSteamTrailers",
+)
+
+# A stage is considered "silently no-opping" if its duration falls
+# below this threshold. The sources_config bug produced 0.0000s; a
+# real fetcher with any HTTP work or YAML parse takes at least 5-10ms.
+# 1ms is a very loose floor that only fires on truly-instant returns.
+_SILENT_FAILURE_DURATION_MS = 1.0
+
+# Number of consecutive runs the stage must appear silent before
+# alerting. One off-run can be a legitimate cache hit or empty-source
+# upstream; three consecutive zero-time runs is the actionable signal.
+_SILENT_FAILURE_CONSECUTIVE_RUNS = 3
+
+
+def _load_recent_metrics(niche_id: str, max_runs: int = 10) -> list[tuple[str, list[dict]]]:
+    """Load metrics.jsonl files for the most-recent N runs of a niche.
+
+    Returns a list of ``(run_dir_name, entries)`` tuples ordered from
+    NEWEST to OLDEST. Each ``entries`` list contains the parsed JSONL
+    lines from that run's ``metrics.jsonl`` (the pipeline summary
+    line with ``_type=pipeline_summary`` is filtered OUT — we only
+    care about per-stage measurements here).
+
+    Returns an empty list if RUNS_DIR doesn't exist or no runs match.
+    """
+    if not RUNS_DIR.exists():
+        return []
+    prefix = f"{niche_id}_"
+    out: list[tuple[str, list[dict]]] = []
+    for d in sorted(RUNS_DIR.iterdir(), reverse=True):
+        if not d.name.startswith(prefix) or not d.is_dir():
+            continue
+        mpath = d / "metrics.jsonl"
+        if not mpath.exists():
+            continue
+        entries: list[dict] = []
+        try:
+            for line in mpath.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                # Skip the pipeline summary footer line
+                if obj.get("_type") == "pipeline_summary":
+                    continue
+                entries.append(obj)
+        except (OSError, ValueError):
+            continue
+        out.append((d.name, entries))
+        if len(out) >= max_runs:
+            break
+    return out
+
+
+def check_fetcher_stage_silent_failures(niche_id: str) -> list[Alert]:
+    """Detect fetcher stages running in <1ms across multiple consecutive runs.
+
+    Catches the bug class shipped + fixed in PR ``2ac8dbb2``: a fetcher
+    stage that reads a StageContext key the runner never populated will
+    early-return on the empty dict, reporting near-zero duration in
+    ``metrics.jsonl``. The original bug went undetected for weeks
+    because each individual stage skip is silent — the YouTube fetcher
+    kept working so pipelines kept producing blueprints, just from a
+    single source.
+
+    A stage fires this check when it appears in ``metrics.jsonl`` with
+    ``duration_ms < 1.0`` across the most-recent
+    ``_SILENT_FAILURE_CONSECUTIVE_RUNS`` (=3) runs in a row. A single
+    fast run is normal (cache hit, empty upstream); three in a row is
+    the actionable signal.
+
+    Stages not present in a run's metrics are NOT counted as "silent" —
+    a niche that doesn't run FetchRedditClips at all should not alert
+    on its absence. Only when the stage HAS run and reported
+    near-zero duration do we treat it as suspicious.
+
+    Returns a list of warning alerts (one per suspect stage per niche).
+    """
+    runs = _load_recent_metrics(niche_id, max_runs=_SILENT_FAILURE_CONSECUTIVE_RUNS)
+    if len(runs) < _SILENT_FAILURE_CONSECUTIVE_RUNS:
+        # Not enough data yet — a new niche or a freshly-rolled VPS
+        # won't have history. Don't false-alarm.
+        return []
+
+    alerts: list[Alert] = []
+    for stage_name in _FETCHER_STAGES_TO_MONITOR:
+        # For each stage: count how many of the last N runs report
+        # this stage with duration < threshold AND status == "ok"
+        # (an error counts as a legitimate non-silent run).
+        silent_run_count = 0
+        runs_with_stage = 0
+        sample_durations: list[float] = []
+        for _run_name, entries in runs:
+            stage_entries = [e for e in entries if e.get("stage") == stage_name]
+            if not stage_entries:
+                continue
+            runs_with_stage += 1
+            # Use the LAST occurrence per run (a stage typically only
+            # runs once per pipeline, but if duplicated, the last
+            # measurement is the most-recent state).
+            entry = stage_entries[-1]
+            duration = float(entry.get("duration_ms", 0.0))
+            status = entry.get("status", "ok")
+            sample_durations.append(duration)
+            if status == "ok" and duration < _SILENT_FAILURE_DURATION_MS:
+                silent_run_count += 1
+
+        # Only alert if the stage was present in ALL N runs AND silent
+        # in ALL N runs. Partial coverage isn't actionable.
+        if (
+            runs_with_stage >= _SILENT_FAILURE_CONSECUTIVE_RUNS
+            and silent_run_count >= _SILENT_FAILURE_CONSECUTIVE_RUNS
+        ):
+            alerts.append(
+                Alert(
+                    check="fetcher_silent_no_op",
+                    severity="warning",
+                    message=(
+                        f"Fetcher stage {stage_name} returned in <1ms across "
+                        f"{silent_run_count} consecutive runs — likely silent "
+                        "no-op (sources_config-style bug). Inspect "
+                        "context inputs the stage reads; verify the runner "
+                        "populates them. See "
+                        "docs/architecture/stage_context_population_audit.md"
+                    ),
+                    niche_id=niche_id,
+                    details={
+                        "stage": stage_name,
+                        "consecutive_runs": silent_run_count,
+                        "runs_inspected": len(runs),
+                        "sample_durations_ms": sample_durations,
+                    },
+                )
+            )
+    return alerts
+
+
 def check_bandit_staleness(niche_id: str) -> list[Alert]:
     """Check if bandit arms haven't been updated recently."""
     alerts = []
@@ -1993,6 +2148,11 @@ def run_all_checks(niche_id: str | None = None) -> list[Alert]:
         all_alerts.extend(check_zero_blueprints(reports, nid))
         all_alerts.extend(check_qc_collapse(reports, nid))
         all_alerts.extend(check_source_starvation(reports, nid))
+        # 2026-06-30 (COMMIT 3 / B2): detect silent-no-op fetchers
+        # (sources_config-style bug). Reads .tmp/runs/*/metrics.jsonl
+        # for each niche, fires warning if a fetcher stage reports
+        # duration_ms < 1.0 across 3 consecutive runs.
+        all_alerts.extend(check_fetcher_stage_silent_failures(nid))
         all_alerts.extend(check_bandit_staleness(nid))
         all_alerts.extend(check_bandit_posterior_drift(nid))
         all_alerts.extend(check_missing_media(nid))
