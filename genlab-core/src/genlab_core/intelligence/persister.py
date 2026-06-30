@@ -1,20 +1,21 @@
 """StrategistReport persisters.
 
 Two implementations:
-1. JsonlPersister — writes one JSON line per report to a file. Used for
-   PR Strategist-1 to defer the alembic migration risk; reports are still
-   durable + grep-able + recoverable.
-2. PostgresPersister — placeholder shipping in PR Strategist-1b (a small
-   follow-up commit) after alembic head state is verified.
+1. JsonlPersister — writes one JSON line per report to a file. Useful for
+   local dev / offline replay; reports are durable, grep-able, recoverable.
+2. PostgresPersister — writes to the `strategist_reports` table created
+   in migration y6t7u8v9w0x1. Production default.
 
 Both implement the ReportPersister Protocol from strategist.py.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from pathlib import Path
+from typing import Any
 
 from genlab_core.intelligence.proposal_schema import StrategistReport
 
@@ -64,3 +65,145 @@ class JsonlPersister:
                 except Exception as exc:
                     logger.warning("persister.skip_malformed_line err=%s line=%s", exc, line[:80])
         return sorted(reports, key=lambda r: r.run_at, reverse=True)
+
+
+class PostgresPersister:
+    """Persist StrategistReports to the strategist_reports table.
+
+    Pass a psycopg connection (real or mock). The persister does not own
+    the connection lifecycle — caller manages connect/close. This makes
+    testing simple (inject mock) and matches the pattern used elsewhere
+    in genlab-core (see source_performance.py).
+
+    Idempotency: ON CONFLICT (niche_id, week_of) DO UPDATE — re-running
+    Strategist for the same week overwrites the previous report. The
+    `week_unique_per_niche` UNIQUE constraint from the migration enforces
+    this at the DB level.
+    """
+
+    UPSERT_SQL = """
+        INSERT INTO strategist_reports (
+          id, niche_id, week_of, run_at,
+          inputs_json, detected_phase, phase_evidence,
+          proposals, causal_hypotheses, universal_playbook_proposals,
+          weekly_summary, cost_usd, input_tokens, output_tokens
+        ) VALUES (
+          %(id)s, %(niche_id)s, %(week_of)s, %(run_at)s,
+          %(inputs_json)s, %(detected_phase)s, %(phase_evidence)s,
+          %(proposals)s, %(causal_hypotheses)s, %(universal_playbook_proposals)s,
+          %(weekly_summary)s, %(cost_usd)s, %(input_tokens)s, %(output_tokens)s
+        )
+        ON CONFLICT (niche_id, week_of) DO UPDATE SET
+          run_at = EXCLUDED.run_at,
+          inputs_json = EXCLUDED.inputs_json,
+          detected_phase = EXCLUDED.detected_phase,
+          phase_evidence = EXCLUDED.phase_evidence,
+          proposals = EXCLUDED.proposals,
+          causal_hypotheses = EXCLUDED.causal_hypotheses,
+          universal_playbook_proposals = EXCLUDED.universal_playbook_proposals,
+          weekly_summary = EXCLUDED.weekly_summary,
+          cost_usd = EXCLUDED.cost_usd,
+          input_tokens = EXCLUDED.input_tokens,
+          output_tokens = EXCLUDED.output_tokens
+    """
+
+    def __init__(self, conn, inputs_snapshot: dict[str, Any] | None = None):
+        self._conn = conn
+        # The Strategist passes its collected state via the constructor or per-call;
+        # PR Strategist-2 will refactor to pass via persist() args directly. For
+        # PR Strategist-1b this stays simple — inputs default to empty dict.
+        self._inputs = inputs_snapshot or {}
+
+    def persist(self, report: StrategistReport) -> None:
+        """UPSERT the report. Telemetry (cost, tokens) is None at this layer —
+        the AnthropicStrategistClient captures it but doesn't pipe it through;
+        PR Strategist-2 will wire that."""
+        params = {
+            "id": str(report.id),
+            "niche_id": report.niche_id,
+            "week_of": report.week_of,
+            "run_at": report.run_at,
+            "inputs_json": json.dumps(self._inputs),
+            "detected_phase": report.detected_phase.value,
+            "phase_evidence": report.phase_evidence,
+            "proposals": report.model_dump_json(include={"proposals"}),
+            "causal_hypotheses": report.model_dump_json(include={"causal_hypotheses"}),
+            "universal_playbook_proposals": report.model_dump_json(
+                include={"universal_playbook_proposals"}
+            ),
+            "weekly_summary": report.weekly_summary,
+            "cost_usd": None,
+            "input_tokens": None,
+            "output_tokens": None,
+        }
+        # Extract the inner arrays from the JSON dumps — model_dump_json with
+        # include= returns the wrapping object; we want the inner list as JSONB.
+        params["proposals"] = json.dumps([p.model_dump(mode="json") for p in report.proposals])
+        params["causal_hypotheses"] = json.dumps(
+            [h.model_dump(mode="json") for h in report.causal_hypotheses]
+        )
+        params["universal_playbook_proposals"] = json.dumps(
+            [p.model_dump(mode="json") for p in report.universal_playbook_proposals]
+        )
+        self._conn.execute(self.UPSERT_SQL, params)
+        self._conn.commit()
+        logger.info(
+            "strategist.persisted_pg niche=%s week_of=%s id=%s",
+            report.niche_id,
+            report.week_of,
+            report.id,
+        )
+
+    def get_latest(self, niche_id: str) -> StrategistReport | None:
+        """Fetch the most recent report for a niche, or None if no rows."""
+        cur = self._conn.execute(
+            """
+            SELECT id, niche_id, week_of, run_at, detected_phase, phase_evidence,
+                   proposals, causal_hypotheses, universal_playbook_proposals,
+                   weekly_summary
+            FROM strategist_reports
+            WHERE niche_id = %s
+            ORDER BY run_at DESC
+            LIMIT 1
+            """,
+            (niche_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return self._row_to_report(row)
+
+    def list_unreviewed(self, limit: int = 20) -> list[StrategistReport]:
+        """Reports the operator hasn't reviewed yet, newest first. Used by
+        the dashboard banner (PR Strategist-2) to surface pending work."""
+        cur = self._conn.execute(
+            """
+            SELECT id, niche_id, week_of, run_at, detected_phase, phase_evidence,
+                   proposals, causal_hypotheses, universal_playbook_proposals,
+                   weekly_summary
+            FROM strategist_reports
+            WHERE reviewed_at IS NULL
+            ORDER BY run_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [self._row_to_report(r) for r in cur.fetchall()]
+
+    @staticmethod
+    def _row_to_report(row) -> StrategistReport:
+        """Hydrate a DB row back into a StrategistReport. Tolerant of dict-row
+        OR positional-row factories — works with either psycopg row_factory."""
+        get = (lambda k, i: row.get(k)) if hasattr(row, "get") else (lambda k, i: row[i])
+        return StrategistReport(
+            id=get("id", 0),
+            niche_id=get("niche_id", 1),
+            week_of=get("week_of", 2),
+            run_at=get("run_at", 3),
+            detected_phase=get("detected_phase", 4),
+            phase_evidence=get("phase_evidence", 5),
+            proposals=get("proposals", 6) or [],
+            causal_hypotheses=get("causal_hypotheses", 7) or [],
+            universal_playbook_proposals=get("universal_playbook_proposals", 8) or [],
+            weekly_summary=get("weekly_summary", 9),
+        )
