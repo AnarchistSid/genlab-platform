@@ -328,6 +328,185 @@ class TestBuildContentContext:
         assert ctx.dtype == np.float64
 
 
+class TestContentTypeShowcaseFeature:
+    """Phase 2 L2 (2026-06-30) — dim 12 (content_type_showcase) wires
+    content type into the LinUCB feature vector so the bandit can
+    learn cross-platform asymmetry (e.g. showcase on Instagram vs X)
+    instead of averaging it away across an entire arm.
+
+    The feature is binary:
+      - 1.0 when content_type == "showcase" (case-insensitive)
+      - 0.0 otherwise (including unset)
+
+    Source resolution: top-level ``content_type`` ≻
+    ``gallery_metadata.content_type`` ≻ ``source_config.content_type``
+    ≻ "" (default 0.0).
+    """
+
+    def test_dim_12_is_one_for_top_level_showcase(self):
+        story = {"content_type": "showcase"}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_is_zero_for_top_level_news(self):
+        story = {"content_type": "news"}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(0.0)
+
+    def test_dim_12_is_zero_when_content_type_unset(self):
+        ctx = build_content_context({}, "ai_creators")
+        assert ctx[12] == pytest.approx(0.0)
+
+    def test_dim_12_reads_gallery_metadata(self):
+        """pixwith / gallery scrapers nest content_type under
+        gallery_metadata. The feature extractor must look there."""
+        story = {"gallery_metadata": {"content_type": "showcase"}}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_reads_source_config(self):
+        """When the source YAML metadata is carried alongside the
+        entry, content_type may live in source_config."""
+        story = {"source_config": {"content_type": "showcase"}}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_case_insensitive(self):
+        story = {"content_type": "SHOWCASE"}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_whitespace_trimmed(self):
+        story = {"content_type": "  showcase  "}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_top_level_beats_gallery_metadata(self):
+        """When both top-level and gallery_metadata set content_type,
+        top-level wins (more specific in the story dict's flat shape)."""
+        story = {
+            "content_type": "news",
+            "gallery_metadata": {"content_type": "showcase"},
+        }
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(0.0)
+
+    def test_dim_12_malformed_content_type_falls_through(self):
+        """Non-string content_type (None, dict, list) should not crash
+        — falls through to "" → 0.0."""
+        story = {"content_type": None, "gallery_metadata": {"content_type": "showcase"}}
+        ctx = build_content_context(story, "ai_creators")
+        # None at top level skipped → gallery_metadata wins
+        assert ctx[12] == pytest.approx(1.0)
+
+    def test_dim_12_unknown_content_type_is_zero(self):
+        """content_type values other than "showcase" produce 0.0 (we
+        could add more buckets in future dims — for now binary)."""
+        story = {"content_type": "tutorial"}
+        ctx = build_content_context(story, "ai_creators")
+        assert ctx[12] == pytest.approx(0.0)
+
+    def test_context_dim_is_13(self):
+        """Pin the constant — anything that depends on CONTEXT_DIM
+        (metric_collector shape-guard, push_to_backlog LinUCBArm
+        construction, etc.) must read 13 now."""
+        from genlab_core.learning.linucb import CONTEXT_DIM
+
+        assert CONTEXT_DIM == 13
+
+
+class TestLegacyArmDimensionMigration:
+    """Phase 2 L2 (2026-06-30) — the bandit_arms table has rows whose
+    linucb_state JSONB carries 12-D A matrices from before this change.
+    from_dict() must pad them up to 13-D so the bandit continues to
+    learn from prior data instead of resetting every arm.
+    """
+
+    def _legacy_12d_dict(self, n_obs: int = 5):
+        """Construct a serialized 12-D arm with non-trivial state."""
+        arm = LinUCBArm(d=12, alpha=1.0)
+        x = np.array([0.5] * 12)
+        for _ in range(n_obs):
+            arm.update(x, reward=0.7)
+        return arm.to_dict()
+
+    def test_from_dict_pads_legacy_12d_to_13d(self):
+        legacy = self._legacy_12d_dict(n_obs=5)
+        restored = LinUCBArm.from_dict(legacy)
+        # A is now 13×13, b is length 13
+        assert restored.A.shape == (CONTEXT_DIM, CONTEXT_DIM)
+        assert restored.b.shape == (CONTEXT_DIM,)
+        # n_obs preserved — we did NOT reset the arm
+        assert restored.n_obs == 5
+
+    def test_pad_preserves_original_12_dimensions(self):
+        """The padded arm's first 12 dims must match the legacy arm
+        bit-for-bit — we only added the new 13th."""
+        legacy = self._legacy_12d_dict(n_obs=10)
+        # Reconstruct what the legacy arm WOULD predict on a 12-D
+        # context to compare
+        legacy_arm = LinUCBArm(d=12, alpha=1.0)
+        legacy_arm.A = np.array(legacy["A_matrix"])
+        legacy_arm.b = np.array(legacy["b_vector"])
+        legacy_arm.n_obs = legacy["n_obs"]
+
+        restored = LinUCBArm.from_dict(legacy)
+        # Slice the first 12 rows/cols of the padded matrix
+        np.testing.assert_array_almost_equal(restored.A[:12, :12], legacy_arm.A)
+        np.testing.assert_array_almost_equal(restored.b[:12], legacy_arm.b)
+
+    def test_pad_new_dim_starts_fresh(self):
+        """The new (13th) row/col of A should be the identity baseline
+        (matches what a fresh LinUCBArm(d=13) would have); the new
+        b entry should be 0.0."""
+        legacy = self._legacy_12d_dict(n_obs=3)
+        restored = LinUCBArm.from_dict(legacy)
+        # A[12, 12] == 1.0 (identity baseline)
+        assert restored.A[12, 12] == pytest.approx(1.0)
+        # Off-diagonals for the new dim are 0
+        assert np.all(restored.A[12, :12] == 0.0)
+        assert np.all(restored.A[:12, 12] == 0.0)
+        # b[12] is 0.0
+        assert restored.b[12] == pytest.approx(0.0)
+
+    def test_padded_arm_can_update_with_13d_context(self):
+        """The whole point of padding: the restored arm must accept a
+        13-D context vector in subsequent updates without crashing."""
+        legacy = self._legacy_12d_dict(n_obs=5)
+        restored = LinUCBArm.from_dict(legacy)
+        x = np.array([0.5] * 13)  # 13-D, includes new content_type dim
+        restored.update(x, reward=0.5)  # should not raise
+        assert restored.n_obs == 6
+        assert restored.A.shape == (CONTEXT_DIM, CONTEXT_DIM)
+
+    def test_padded_arm_predict_with_13d_context(self):
+        legacy = self._legacy_12d_dict(n_obs=5)
+        restored = LinUCBArm.from_dict(legacy)
+        x = np.array([0.5] * 13)
+        score = restored.predict(x)
+        assert np.isfinite(score)
+
+    def test_already_13d_arm_passes_through_unchanged(self):
+        """A fresh 13-D arm's serialized state should round-trip with
+        no padding (no shape change, no log warning)."""
+        arm = LinUCBArm(d=CONTEXT_DIM, alpha=1.0)
+        arm.update(np.array([0.5] * CONTEXT_DIM), reward=0.5)
+        restored = LinUCBArm.from_dict(arm.to_dict())
+        assert restored.A.shape == (CONTEXT_DIM, CONTEXT_DIM)
+        np.testing.assert_array_almost_equal(restored.A, arm.A)
+        np.testing.assert_array_almost_equal(restored.b, arm.b)
+
+    def test_larger_than_current_dim_does_not_truncate(self):
+        """If a rollback ever happens (CONTEXT_DIM decreased), the
+        stored larger state is preserved as-is. The caller's downstream
+        shape-guard handles the mismatch — we never silently truncate."""
+        oversized = LinUCBArm(d=15, alpha=1.0)
+        oversized.update(np.array([0.5] * 15), reward=0.5)
+        restored = LinUCBArm.from_dict(oversized.to_dict())
+        # Stored shape preserved, NOT truncated to CONTEXT_DIM=13
+        assert restored.A.shape == (15, 15)
+
+
 class TestR18PredictTrainParity:
     """R-18: the vector the bandit PREDICTS on (built from the nested story at
     selection time) must equal the vector it TRAINS on (rebuilt from the flat

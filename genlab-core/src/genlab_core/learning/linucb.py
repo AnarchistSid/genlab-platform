@@ -55,8 +55,16 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Context feature dimensionality (expanded from 6 to 12 — Break 12 fix)
-CONTEXT_DIM = 12
+# Context feature dimensionality (12 → 13 — Phase 2 L2, 2026-06-30:
+# content_type_showcase as a binary feature so the bandit can learn
+# "showcase on Instagram outperforms showcase on X" instead of
+# averaging across content types).
+CONTEXT_DIM = 13
+
+# Previous dimensionality. Used by from_dict to detect legacy serialized
+# arms + pad them up to CONTEXT_DIM without resetting prior learning on
+# the original 12 dims.
+_LEGACY_CONTEXT_DIM = 12
 
 # Minimum observations before LinUCB predictions are trusted.
 # Below this threshold, fall back to Thompson Sampling.
@@ -263,12 +271,74 @@ class LinUCBArm:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> LinUCBArm:
-        """Restore arm state from a serialized dict."""
+        """Restore arm state from a serialized dict.
+
+        Phase 2 L2 (2026-06-30) — dimension migration: when the
+        serialized state has a smaller A matrix than CONTEXT_DIM (e.g.
+        legacy 12-D arms after the 13-D bump for content_type_showcase),
+        pad A and b with identity / zeros so the arm continues to be
+        usable WITHOUT losing the prior 12 dimensions' learning. The
+        new dimension starts fresh (zero entries in b, identity row/col
+        in A) — exactly what we want: the bandit learns the new feature
+        from scratch but keeps its existing posterior on the old ones.
+
+        Larger-than-current state is left alone (no truncation) — that
+        path indicates a rollback to a smaller CONTEXT_DIM, which would
+        need explicit operator intent. We log a warning + return the
+        arm as-is; the caller's downstream predict/update will mismatch
+        and fall through the metric_collector's existing shape-guard.
+        """
         A = np.array(data["A_matrix"], dtype=np.float64)
-        d = A.shape[0]
+        b = np.array(data["b_vector"], dtype=np.float64)
+        d_stored = A.shape[0]
+
+        # ONLY pad legacy production arms (_LEGACY_CONTEXT_DIM == 12).
+        # Don't pad arbitrary smaller arms — unit-test scenarios use
+        # d=2, d=3 etc. and expect round-trip with no shape change.
+        # The legacy production state is exactly 12-D from before this
+        # PR; that's the only dim we migrate.
+        if d_stored == _LEGACY_CONTEXT_DIM and CONTEXT_DIM > _LEGACY_CONTEXT_DIM:
+            # Pad up: extend A with identity rows/cols (matches
+            # __init__'s np.eye(d) baseline so the new dimension's
+            # contribution to x^T A^{-1} x starts at 1.0 — same as a
+            # fresh arm). Extend b with zeros.
+            pad = CONTEXT_DIM - d_stored
+            A_new = np.eye(CONTEXT_DIM, dtype=np.float64)
+            A_new[:d_stored, :d_stored] = A
+            b_new = np.zeros(CONTEXT_DIM, dtype=np.float64)
+            b_new[:d_stored] = b
+            logger.info(
+                "[LinUCB] padded legacy %d-D arm state to %d-D (n_obs=%d) — "
+                "prior dims preserved, new %d dim(s) start fresh",
+                d_stored,
+                CONTEXT_DIM,
+                data.get("n_obs", 0),
+                pad,
+            )
+            A = A_new
+            b = b_new
+            d = CONTEXT_DIM
+        elif d_stored > CONTEXT_DIM:
+            # Stored state is BIGGER than current CONTEXT_DIM — likely a
+            # rollback. We DON'T silently truncate (would lose data the
+            # operator may want back if they re-upgrade); we keep the
+            # arm at its stored shape and let the caller deal with the
+            # shape mismatch downstream. Logged loudly so an ops dump
+            # surfaces this.
+            logger.warning(
+                "[LinUCB] serialized arm has %d-D state but CONTEXT_DIM=%d "
+                "(rollback?). Restoring at stored shape; predict/update will "
+                "fall through metric_collector's shape-guard.",
+                d_stored,
+                CONTEXT_DIM,
+            )
+            d = d_stored
+        else:
+            d = d_stored
+
         arm = cls(d=d, alpha=data.get("alpha", 1.0))
         arm.A = A
-        arm.b = np.array(data["b_vector"], dtype=np.float64)
+        arm.b = b
         arm.n_obs = data.get("n_obs", 0)
         # Don't pre-compute the inverse here — let the first predict
         # trigger it lazily. Restored arms are sometimes loaded but
@@ -391,14 +461,42 @@ _NICHE_ENCODING: dict[str, float] = {
 }
 
 
+def _extract_content_type(story: dict[str, Any]) -> str:
+    """Best-effort extraction of content_type from a story dict.
+
+    Looks in three places (in order):
+      1. Top-level ``content_type`` (set by some sources directly)
+      2. ``gallery_metadata.content_type`` (pixwith / gallery scrapers)
+      3. ``source_config.content_type`` (when source YAML metadata is
+         carried alongside the entry)
+
+    Returns the lowercased string, or "" when unset. Caller decides
+    whether to map to the showcase binary feature.
+    """
+    ct = story.get("content_type")
+    if isinstance(ct, str) and ct:
+        return ct.strip().lower()
+    gm = story.get("gallery_metadata") or {}
+    if isinstance(gm, dict):
+        ct = gm.get("content_type")
+        if isinstance(ct, str) and ct:
+            return ct.strip().lower()
+    sc = story.get("source_config") or {}
+    if isinstance(sc, dict):
+        ct = sc.get("content_type")
+        if isinstance(ct, str) and ct:
+            return ct.strip().lower()
+    return ""
+
+
 def build_content_context(
     story: dict[str, Any],
     niche_id: str,
     now: datetime | None = None,
 ) -> np.ndarray:
-    """Build a 12-dimensional context feature vector for LinUCB.
+    """Build a 13-dimensional context feature vector for LinUCB.
 
-    Dimensions (expanded from 6 — Break 12 fix):
+    Dimensions (expanded from 12 — Phase 2 L2, 2026-06-30):
         0: day_of_week [0, 1]
         1: hour_utc [0, 1]
         2: source_type [0, 1]
@@ -411,6 +509,15 @@ def build_content_context(
         9: caption_length [0, 1] — chars / 200
        10: hashtag_count [0, 1] — count / 10
        11: trending_score [0, 1] — composite score
+       12: content_type_showcase [0, 1] — binary, 1.0 if content_type=="showcase"
+
+    Why content_type as a feature (not an arm): the bandit already
+    splits arms on content_type (showcase / news / etc.), so each arm
+    sees only its own type at training time. To learn cross-cutting
+    effects like "showcase on Instagram outperforms showcase on X" we
+    need showcase as a CONTEXTUAL feature WITHIN the arm's reward
+    model — the LinUCB theta vector then captures the per-arm
+    sensitivity to showcase-vs-not.
 
     Returns:
         np.ndarray of shape (CONTEXT_DIM,) with float64 values in [0, 1].
@@ -440,6 +547,8 @@ def build_content_context(
     if isinstance(hashtags, str):
         hashtags = hashtags.split()
 
+    content_type = _extract_content_type(story)
+
     return np.array(
         [
             now.weekday() / 6.0,
@@ -456,6 +565,7 @@ def build_content_context(
             min(len(caption) / 200.0, 1.0),
             min(len(hashtags) / 10.0, 1.0),
             min(story.get("composite_score", story.get("score", 0.5)), 1.0),
+            1.0 if content_type == "showcase" else 0.0,
         ],
         dtype=np.float64,
     )

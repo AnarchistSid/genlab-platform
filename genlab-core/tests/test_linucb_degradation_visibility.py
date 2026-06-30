@@ -159,7 +159,12 @@ class TestBanditUpdaterRecordsDegradation:
         # operators can debug the producer.
         msg = linucb_warnings[0].getMessage()
         assert "6" in msg, f"Expected actual dim (6) in warning: {msg}"
-        assert "12" in msg, f"Expected expected dim (CONTEXT_DIM=12) in warning: {msg}"
+        # The expected dim should be CONTEXT_DIM (currently 13 after
+        # Phase 2 L2 added content_type_showcase). Read it dynamically
+        # so this test doesn't break when CONTEXT_DIM changes again.
+        from genlab_core.learning.linucb import CONTEXT_DIM
+
+        assert str(CONTEXT_DIM) in msg, f"Expected CONTEXT_DIM={CONTEXT_DIM} in warning: {msg}"
         assert "gaming" in msg, f"Expected niche_id in warning: {msg}"
 
     def test_context_build_exception_counts_and_warns(self, caplog):
