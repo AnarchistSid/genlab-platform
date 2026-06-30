@@ -132,8 +132,17 @@ def run_repair() -> tuple[bool, str]:
 def mark_alerts_resolved(conn, alert_ids: list[str], resolution_note: str) -> int:
     """Atomically mark the alerts resolved with an audit trail.
 
-    Updates resolved_at + resolved_note so the dashboard shows what
+    Updates resolved_at + auto_fix_result so the dashboard shows what
     auto-resolved them (operator can audit retrospectively).
+
+    NOTE: ``auto_fix_result`` is the actual column on ``pipeline_alerts``
+    (see migration ``k1f2g3h4i5j6_adopt_content_pool_pipeline_alerts``
+    line 93). A pre-2026-06-30 version of this script referenced a
+    non-existent column, which crashed the script on every run with
+    ``psycopg.errors.UndefinedColumn`` and fired a daily
+    ``systemd_unit_failed`` critical alert. The schema-pin test in
+    ``genlab-core/tests/test_auto_repair_permissions.py`` guards against
+    regression.
     """
     if not alert_ids:
         return 0
@@ -143,7 +152,7 @@ def mark_alerts_resolved(conn, alert_ids: list[str], resolution_note: str) -> in
             """
             UPDATE pipeline_alerts
             SET resolved_at = NOW(),
-                resolved_note = %s
+                auto_fix_result = %s
             WHERE id = ANY(%s::uuid[])
               AND resolved_at IS NULL
             """,

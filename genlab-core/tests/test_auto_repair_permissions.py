@@ -116,3 +116,45 @@ class TestSystemdUnits:
         window by the timer interval."""
         content = (_DEPLOY_DIR / "genlab-permission-auto-repair.timer").read_text()
         assert "Persistent=true" in content
+
+
+class TestMarkAlertsResolvedSQL:
+    """Schema pin: `mark_alerts_resolved` must write to the column that
+    actually exists on `pipeline_alerts`.
+
+    Backstory: a pre-2026-06-30 version of this script set ``resolved_note``,
+    but the column on `pipeline_alerts` (per migration
+    ``k1f2g3h4i5j6_adopt_content_pool_pipeline_alerts``) is
+    ``auto_fix_result``. The mismatch crashed the script on every run with
+    ``psycopg.errors.UndefinedColumn`` and fired a daily
+    ``systemd_unit_failed`` critical alert. These pins guard against
+    regression to the wrong column name.
+    """
+
+    def test_no_reference_to_nonexistent_resolved_note_column(self):
+        """Pin: the literal string ``resolved_note`` must NOT appear in
+        the script source. That column does not exist on `pipeline_alerts`
+        and referencing it crashes the UPDATE."""
+        source = _SCRIPT.read_text()
+        # Tokenize check — exact column-name boundary, not substring match
+        # (so prose in a docstring saying e.g. "the old `resolved_note`" in
+        # an explanatory comment would still fail this pin, which is what
+        # we want: zero references after the fix lands).
+        assert "resolved_note" not in source, (
+            "scripts/auto_repair_permissions.py must not reference "
+            "`resolved_note` — the actual column on `pipeline_alerts` is "
+            "`auto_fix_result`. See migration "
+            "k1f2g3h4i5j6_adopt_content_pool_pipeline_alerts:93."
+        )
+
+    def test_update_statement_uses_auto_fix_result(self):
+        """Pin: the UPDATE statement must target the real column,
+        ``auto_fix_result``. Without this, the script writes only
+        ``resolved_at`` and loses the audit trail (which run/note
+        auto-resolved the alert)."""
+        source = _SCRIPT.read_text()
+        assert "auto_fix_result = %s" in source, (
+            "UPDATE pipeline_alerts must SET auto_fix_result = %s — that's "
+            "the real column for the audit note. See migration "
+            "k1f2g3h4i5j6_adopt_content_pool_pipeline_alerts:93."
+        )
