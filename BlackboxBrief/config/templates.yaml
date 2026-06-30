@@ -300,6 +300,27 @@ hooks:
         - "Someone recreated {topic} with AI"
         - "This creator made a full {topic} with {product}"
         - "Creators are using {product} to make {topic}"
+    # Phase 2 C1 (2026-06-30): visual-first hook templates for
+    # content sourced from showcase feeds (sources.yaml content_type:
+    # showcase). These run when _classify_story returns "showcase",
+    # which fires when the source itself declares the content as a
+    # creator-showcase reel — irrespective of title keywords.
+    #
+    # Visual-first patterns: tell the viewer this is a video and
+    # something visually compelling is happening, not news.
+    # Placeholders {duration}/{tool}/{output_type} resolve via the
+    # extra extractors in bb_strategies/hooks.py.
+    showcase:
+      formulas:
+        - "Watch this {duration}s {tool} {output_type}"
+        - "Spot the difference: real vs AI"
+        - "{tool} just made this in {duration}s"
+        - "This isn't real — it's {tool}"
+        - "Here's {topic} made entirely with AI"
+        - "AI made this and it's wild"
+        - "You won't believe this was AI-generated"
+        - "{product} created this {output_type} from scratch"
+        - "Watch AI build this {output_type} live"
     milestone:
       formulas:
         - "{product} hit {number}"

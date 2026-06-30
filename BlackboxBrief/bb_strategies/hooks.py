@@ -41,7 +41,16 @@ _VIRAL_KEYWORDS = {"viral", "views", "trending", "broke", "insane", "wild", "unr
 class BBHookStrategy(BaseHookStrategy):
     """Generate hooks for AI creator content.
 
-    Categories: tool_launch, creator_showcase, controversy, demo_viral, default.
+    Categories: showcase, tool_launch, creator_showcase, controversy,
+    demo_viral, default.
+
+    Phase 2 C1 (2026-06-30): added ``showcase`` category that fires
+    when the SOURCE declared content_type=showcase (independent of
+    title keywords). Visual-first templates ("Watch this Xs Y output",
+    "Spot the difference: real vs AI", etc.) so the operator's
+    sources.yaml curation flows through to the hook style. Previously
+    showcase content fell through to text-keyword classifiers and got
+    news-style hooks ("OpenAI released X") that don't match the visual.
     """
 
     _title_fallback_label = "AI moment"
@@ -50,7 +59,22 @@ class BBHookStrategy(BaseHookStrategy):
         super().__init__(niche_id="ai_creators", niche_root=BB_ROOT)
 
     def _classify_story(self, story: dict) -> str:
-        """Classify AI story into a hook category."""
+        """Classify AI story into a hook category.
+
+        Phase 2 C1: content_type takes precedence over text-keyword
+        classification. When the source declares content_type=showcase
+        (via sources.yaml), we trust that more than guessing from the
+        title — the source operator KNOWS the content type, the
+        title-keyword heuristic only GUESSES.
+        """
+        # Phase 2 C1: source-declared content_type wins. Looks in the
+        # same three places as build_content_context (top-level,
+        # gallery_metadata, source_config) so wherever the fetcher
+        # stamped it gets picked up.
+        content_type = _extract_content_type(story)
+        if content_type == "showcase":
+            return "showcase"
+
         title = (story.get("title") or "").lower()
         summary = (story.get("summary") or "").lower()
         text = f"{title} {summary}"
@@ -79,6 +103,10 @@ class BBHookStrategy(BaseHookStrategy):
         product = _extract_product(title)
         topic = _shorten_title(title)
 
+        # Phase 2 C1 (2026-06-30): {duration}, {tool}, {output_type}
+        # added for the showcase hook templates. Each has a sensible
+        # fallback so showcase formulas don't get filtered out for
+        # missing placeholders on a cold-start day.
         replacements = {
             "company": company,
             "product": product,
@@ -88,6 +116,9 @@ class BBHookStrategy(BaseHookStrategy):
             "comparison": _extract_comparison(title),
             "number": _extract_number(title),
             "metric": "hours",
+            "duration": _extract_duration(story),
+            "tool": _extract_tool(story, product, company),
+            "output_type": _extract_output_type(story, title),
         }
 
         result = formula
@@ -202,3 +233,100 @@ def _shorten_title(title: str) -> str:
     """Shorten title to 6 words max."""
     words = title.split()[:6]
     return " ".join(words)
+
+
+# ── Phase 2 C1: showcase-template extractors ──────────────────────
+
+
+def _extract_content_type(story: dict) -> str:
+    """Best-effort extraction of content_type from a story.
+
+    Mirrors genlab_core.learning.linucb._extract_content_type so the
+    classifier and the LinUCB feature read the SAME signal. Looks in:
+      1. Top-level ``content_type``
+      2. ``gallery_metadata.content_type``
+      3. ``source_config.content_type``
+    Returns lowercased string or "" when unset.
+    """
+    ct = story.get("content_type")
+    if isinstance(ct, str) and ct:
+        return ct.strip().lower()
+    gm = story.get("gallery_metadata") or {}
+    if isinstance(gm, dict):
+        ct = gm.get("content_type")
+        if isinstance(ct, str) and ct:
+            return ct.strip().lower()
+    sc = story.get("source_config") or {}
+    if isinstance(sc, dict):
+        ct = sc.get("content_type")
+        if isinstance(ct, str) and ct:
+            return ct.strip().lower()
+    return ""
+
+
+def _extract_duration(story: dict) -> str:
+    """Extract a duration string like "30" for showcase hook templates.
+
+    Prefers ``duration_seconds`` from the story (set by the YouTube/
+    pytrends fetcher). Falls back to "30" — a sensible default for
+    short-form video. Returns the number as a string (formula does
+    "{duration}s ..." so we don't double-format the 's' suffix).
+    """
+    d = story.get("duration_seconds")
+    if isinstance(d, int | float) and d > 0:
+        # Round to nearest 5s for nicer copy ("30s" not "27s")
+        rounded = max(5, int(round(d / 5.0)) * 5)
+        return str(rounded)
+    return "30"
+
+
+def _extract_tool(story: dict, product: str, company: str) -> str:
+    """Pick the best 'tool' name to slot into showcase hooks.
+
+    Preference order:
+      1. Known product extracted from title (e.g. "Sora", "Midjourney")
+      2. Known company extracted from title (e.g. "OpenAI")
+      3. ``gallery_metadata.model`` (pixwith stamps the model name)
+      4. "AI" as a safe fallback so the hook still reads naturally
+    """
+    if product:
+        return product
+    if company:
+        return company
+    gm = story.get("gallery_metadata") or {}
+    if isinstance(gm, dict):
+        model = gm.get("model")
+        if isinstance(model, str) and model.strip():
+            return model.strip()
+    return "AI"
+
+
+_OUTPUT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "video": ("video", "clip", "reel", "short", "film", "animation"),
+    "image": ("image", "picture", "render", "art", "artwork", "photo"),
+    "song": ("song", "music", "track", "audio", "voice"),
+    "app": ("app", "website", "site", "demo", "tool"),
+}
+
+
+def _extract_output_type(story: dict, title: str) -> str:
+    """Heuristically pick "video"/"image"/"song"/"app"/"output" for the
+    {output_type} placeholder in showcase hooks.
+
+    Looks in title + gallery_metadata.content_type (pixwith uses values
+    like "ai_video" or "image"). Falls back to "output" — generic but
+    natural in "Watch this 30s Sora output".
+    """
+    title_lower = title.lower()
+    for output_type, keywords in _OUTPUT_TYPE_KEYWORDS.items():
+        if any(kw in title_lower for kw in keywords):
+            return output_type
+    gm = story.get("gallery_metadata") or {}
+    if isinstance(gm, dict):
+        ct = gm.get("content_type")
+        if isinstance(ct, str) and ct:
+            ct_lower = ct.lower().replace("_", " ")
+            for output_type, keywords in _OUTPUT_TYPE_KEYWORDS.items():
+                if any(kw in ct_lower for kw in keywords):
+                    return output_type
+    return "output"
