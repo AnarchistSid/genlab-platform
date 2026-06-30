@@ -204,6 +204,18 @@ fi
 log "New HEAD: $HEAD_AFTER ✓"
 
 # ----------------------------------------------------------------------------
+# Phase 5.5 — Restore +x bit on shell scripts
+# ----------------------------------------------------------------------------
+# Discovered 2026-06-30: git stores the executable bit but a fresh
+# `git pull` against files whose mode was lost (e.g. scp'd onto prod
+# earlier without -p) can leave the working copy without +x. Symptom
+# was disk_cleanup.sh failing with exit 203 (EXEC) on first systemd
+# fire after deploy. Single chmod on the scripts/*.sh glob is
+# idempotent + safe (root or genlab can run; both are owners here).
+log "Restoring +x bit on shell scripts in scripts/..."
+chmod +x scripts/*.sh 2>&1 | tee -a "$LOG" || true
+
+# ----------------------------------------------------------------------------
 # Phase 6 — Migrate (unless --skip-migrate)
 # ----------------------------------------------------------------------------
 if [[ "$SKIP_MIGRATE" -eq 1 ]]; then
