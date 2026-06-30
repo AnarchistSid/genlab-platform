@@ -203,7 +203,18 @@ def match_product(
     niche_max_price = (catalog.get("niches") or {}).get(niche_id, {}).get(
         "max_price_inr"
     ) or _DEFAULT_MAX_PRICE_INR
-    enabled = [p for p in raw_niche_products if p.get("enabled", True)]
+    # 2026-06-30 (OPS #2 + #6): products flagged ``source_tool: true``
+    # are owned by the niche's PlatformAdaptation strategy
+    # (BlackboxBrief's source-tool detector) — they should NEVER be
+    # matched by the generic content-keyword path. Their keywords
+    # exist so the catalog stays self-documenting + so the dashboard's
+    # link-in-bio surface can index them, but generic matching against
+    # the post copy ("the new midjourney v7 looks crazy") would lock
+    # them in via the generic stage and prevent the source-detector
+    # from gating attachment on the SOURCE video's tool name.
+    enabled = [
+        p for p in raw_niche_products if p.get("enabled", True) and not p.get("source_tool", False)
+    ]
     niche_products = _price_filter(enabled, niche_max_price)
     if len(niche_products) < len(enabled):
         logger.debug(

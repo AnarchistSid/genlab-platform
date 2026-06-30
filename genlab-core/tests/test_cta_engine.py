@@ -316,6 +316,57 @@ class TestNoProduct:
         fields = inject_cta({"facebook_content": original}, story)
         assert fields["facebook_content"] == original
 
+
+class TestSkipCtaInjectFlag:
+    """OPS #2 + #6 (2026-06-30) — source-tool path bypass.
+
+    BlackboxBrief's source-tool detector appends its OWN
+    "Made with <Tool> — <link>" disclosure directly to every
+    platform caption, then sets ``story["_skip_cta_inject"] = True``
+    so the generic bandit-CTA layer below short-circuits. These
+    tests pin that behavior so a future change can't silently
+    re-enable double-CTA stacking on source-tool blueprints.
+    """
+
+    def test_flag_set_skips_all_platforms(self):
+        story = _make_story()
+        story["_skip_cta_inject"] = True
+        original_fields = {
+            "caption": "Made with Runway — https://runwayml.com",
+            "youtube_content": "YouTube description body.",
+            "facebook_content": "Facebook body.",
+            "twitter_content": "Tweet body.",
+        }
+        fields = inject_cta(dict(original_fields), story)
+        # Every field unchanged — no bandit CTA layered on top.
+        assert fields == original_fields
+
+    def test_flag_false_does_not_skip(self):
+        story = _make_story()
+        story["_skip_cta_inject"] = False
+        fields = inject_cta({"caption": "Plain copy."}, story)
+        # Normal injection happens — caption now carries a CTA.
+        assert "PS5 Console" in fields["caption"] or "link in bio" in fields["caption"].lower()
+
+    def test_flag_absent_does_not_skip(self):
+        story = _make_story()
+        # No _skip_cta_inject key at all.
+        fields = inject_cta({"caption": "Plain copy."}, story)
+        assert "PS5 Console" in fields["caption"] or "link in bio" in fields["caption"].lower()
+
+    def test_made_with_in_caption_skips_instagram_injection(self):
+        """Belt + suspenders: even WITHOUT the flag, an existing
+        ``Made with`` token in the caption tells the Instagram branch
+        not to layer a second CTA. This catches the re-run case
+        where ``_skip_cta_inject`` is somehow not preserved on the
+        story dict but the disclosure already landed in the caption.
+        """
+        story = _make_story()
+        caption_with_disclosure = "wild ai demo\n\nMade with Runway — https://runwayml.com"
+        fields = inject_cta({"caption": caption_with_disclosure}, story)
+        # No "link in bio" or generic CTA appended.
+        assert fields["caption"] == caption_with_disclosure
+
     def test_returns_same_dict_object(self):
         """inject_cta returns the same dict instance it received."""
         story = _make_story()

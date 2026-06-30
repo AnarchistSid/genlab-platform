@@ -1279,6 +1279,86 @@ niches:
           commission_pct: 20.0
       image_url: https://runwayml.com/favicon.ico
       price_inr: 1250
+    # ── Source-tool affiliate entries (OPS #2 + #6, 2026-06-30) ────────
+    # These products are matched by BlackboxBrief's PlatformAdaptation
+    # strategy ONLY when the SOURCE video's title/description/tags
+    # explicitly name the tool. They are NOT picked up by the generic
+    # keyword-based AffiliateMatch stage (the ``source_tool: true``
+    # marker excludes them from the generic enabled-product pool;
+    # see ``affiliate_matcher.match_product``). Disclosure is appended
+    # as "Made with <Tool> — <link>" — soft, honest, creator-norm
+    # (NOT a hard "🔗 buy now" CTA).
+    #
+    # URLs are placeholders until operator obtains real referral codes.
+    # The Sora URL is the canonical OpenAI product page (no consumer
+    # affiliate program exists at time of writing); kept in this slot
+    # so the disclosure remains honest and re-attribution to a real
+    # PartnerStack/etc affiliate is a single YAML edit.
+    #
+    # Why separate entries (vs. flipping ``Runway ML`` above to enable):
+    # the existing Runway ML entry is keyword-matched by the GENERIC
+    # AffiliateMatch stage. The new ``Runway`` (source_tool) entry is
+    # matched ONLY when the source-video metadata names the tool. The
+    # two paths answer different questions: generic = "what is this
+    # content about?", source-tool = "what tool produced the clip?".
+    - name: Runway
+      enabled: true
+      source_tool: true
+      tool_keyword: runway
+      disclosure_template: "Made with Runway — {url}"
+      keywords:
+      - runway
+      - runway ml
+      - runwayml
+      - gen-3
+      - gen 3
+      - runway gen
+      category: tool
+      niches:
+      - ai_creators
+      networks:
+        direct:
+          url: https://runwayml.com/?via=genlab
+          commission_pct: 0.0
+      image_url: https://runwayml.com/favicon.ico
+      price_inr: 1500
+    - name: Sora
+      enabled: true
+      source_tool: true
+      tool_keyword: sora
+      disclosure_template: "Made with Sora — {url}"
+      keywords:
+      - sora
+      - openai sora
+      - sora video
+      category: tool
+      niches:
+      - ai_creators
+      networks:
+        direct:
+          url: https://openai.com/sora?via=genlab
+          commission_pct: 0.0
+      image_url: https://openai.com/favicon.ico
+      price_inr: 1680
+    - name: Midjourney
+      enabled: true
+      source_tool: true
+      tool_keyword: midjourney
+      disclosure_template: "Made with Midjourney — {url}"
+      keywords:
+      - midjourney
+      - mj
+      - midjourney v6
+      - midjourney v7
+      category: tool
+      niches:
+      - ai_creators
+      networks:
+        direct:
+          url: https://midjourney.com/?ref=genlab
+          commission_pct: 0.0
+      image_url: https://midjourney.com/favicon.ico
+      price_inr: 800
     - name: Canva Pro
       enabled: false
       keywords:

@@ -258,6 +258,19 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     if not product_name:
         return fields
 
+    # 2026-06-30 (OPS #2 + #6): the BlackboxBrief source-tool path
+    # appends the "Made with <Tool> — <link>" disclosure DIRECTLY to
+    # every platform caption before push_to_backlog runs. When that
+    # path fires it sets ``story["_skip_cta_inject"] = True`` so the
+    # generic bandit-CTA layer below short-circuits — without this
+    # gate the post would carry both the source-tool disclosure and
+    # a generic "🔗 Get Runway 👇" CTA across IG / FB first-comment /
+    # YouTube description, which is the dropshipper-stack shape the
+    # rest of this function works hard to avoid (already_disclosed +
+    # link-in-bio + made-with checks).
+    if story.get("_skip_cta_inject"):
+        return fields
+
     bandit = _get_bandit()
 
     # Track selected variant arm_ids per platform for attribution
@@ -266,8 +279,22 @@ def inject_cta(fields: dict[str, Any], story: dict[str, Any]) -> dict[str, Any]:
     # ── Instagram caption ──────────────────────────────────────────────────────
     caption: str = fields.get("caption", "") or ""
     if caption:
-        # Check for existing affiliate CTA to avoid duplication
-        if "link in bio" in caption.lower() or "1st comment" in caption.lower():
+        # Check for existing affiliate CTA to avoid duplication.
+        # 2026-06-30 (OPS #2 + #6): "made with " covers the
+        # BlackboxBrief source-tool disclosure path
+        # (bb_strategies.affiliate_match.apply_source_tool_disclosure)
+        # which appends "Made with <Tool> — <link>" directly to the
+        # caption BEFORE this stage runs. Without this token in the
+        # skip-check, both the source-tool disclosure AND a generic
+        # bandit CTA would land in the same caption — exactly the
+        # double-CTA dropshipper shape the rest of this function
+        # works hard to avoid.
+        caption_lower = caption.lower()
+        if (
+            "link in bio" in caption_lower
+            or "1st comment" in caption_lower
+            or "made with " in caption_lower
+        ):
             pass  # CTA already present, skip injection
         else:
             hashtag_match = re.search(r"((?:\s*#\w+)+\s*)$", caption)
