@@ -369,6 +369,16 @@ class GenericPipelineRunner:
 
             metrics = PipelineMetrics(niche_id=niche_id, run_id=run_id)
             metrics.mark_pipeline_start()
+            # C3 (2026-06-30): expose the metrics object on the stage
+            # context so filter stages can call
+            # ``context["metrics"].record_filter_drops(stage_name, before,
+            # after)`` for per-content_type drop tracking. Stages
+            # defensively check ``context.get("metrics")`` since the key
+            # is unset when running tests that build a context dict by
+            # hand. The same object is still threaded into the
+            # StageRunnerFactory for stage timing — single source of
+            # truth.
+            context_dict["metrics"] = metrics
             runner_factory = StageRunnerFactory(
                 genlab_root=self._genlab_root,
                 stage_log_filter=stage_filter,

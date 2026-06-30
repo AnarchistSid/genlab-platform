@@ -83,6 +83,7 @@ class RelevanceGate:
 
         rf = RelevanceFilter(niche_id, filter_cfg)
         before = len(stories)
+        before_stories = list(stories)
         kept = rf.filter(stories)
         dropped = before - len(kept)
 
@@ -93,6 +94,21 @@ class RelevanceGate:
             "dropped_count": dropped,
             "threshold": filter_cfg.get("relevance_threshold", 0.3),
         }
+
+        # C3 (2026-06-30): record per-content_type drop counts so the
+        # operator can see "showcase items hit by RelevanceGate at 67%
+        # rate while news items hit at 12% rate" — actionable signal
+        # for tuning positive_keywords by content type.
+        metrics = context.get("metrics")
+        if metrics is not None:
+            try:
+                metrics.record_filter_drops(
+                    self.__class__.__name__,
+                    before_stories,
+                    kept,
+                )
+            except Exception as exc:  # noqa: BLE001 — observability is never critical-path
+                logger.debug("[RelevanceGate] record_filter_drops failed: %s", exc)
 
         if dropped:
             logger.info(

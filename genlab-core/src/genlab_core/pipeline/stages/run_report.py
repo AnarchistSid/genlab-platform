@@ -292,6 +292,19 @@ class RunReport:
         else:
             status = "success"
 
+        # C3 (2026-06-30): per-stage drop counts BY content_type.
+        # Pulled directly from PipelineMetrics (if the runner threaded
+        # it onto the context). Empty dict when no filter stage called
+        # record_filter_drops — preserves backward compat for runs that
+        # predate the wiring.
+        filter_drops_by_content_type: dict = {}
+        pipeline_metrics = context.get("metrics")
+        if pipeline_metrics is not None:
+            try:
+                filter_drops_by_content_type = pipeline_metrics.filter_drops_by_content_type
+            except Exception:  # noqa: BLE001 — observability never blocks the report
+                filter_drops_by_content_type = {}
+
         report = {
             "run_id": run_id,
             "niche_id": niche_id,
@@ -309,6 +322,12 @@ class RunReport:
                 "insights": insights,
                 "publishing": publishing,
                 "express_lane": express,
+                # C3 (2026-06-30): per-content_type drop accounting at
+                # every filter stage (RelevanceGate, VideoGate,
+                # PushToBacklog dedup). Empty {} when stages haven't
+                # been wired yet OR when no metrics object was plumbed
+                # into the run context.
+                "filter_drops_by_content_type": filter_drops_by_content_type,
             },
             # R-27: ``cost`` carries ``total_usd``, ``by_category``,
             # ``budget_remaining_pct``, and ``entry_count``. Empty dict

@@ -71,11 +71,120 @@ class PipelineMetrics:
         self._entries: list[StageMetric] = []
         self._pipeline_start: float | None = None
         self._pipeline_end: float | None = None
+        # C3 (2026-06-30): per-stage drop counts BY content_type. Lets
+        # operators see "RelevanceGate dropped 8 of 12 showcase items
+        # but only 1 of 8 news items" — actionable signal vs the
+        # current aggregated "RelevanceGate dropped 9 of 23 stories".
+        # Shape: {stage_name: {content_type: {before, after, dropped}}}
+        self._filter_drops_by_content_type: dict[str, dict[str, dict[str, int]]] = {}
 
     @property
     def entries(self) -> list[StageMetric]:
         """Read-only access to recorded entries (for testing / inspection)."""
         return list(self._entries)
+
+    @property
+    def filter_drops_by_content_type(self) -> dict[str, dict[str, dict[str, int]]]:
+        """Read-only access to per-stage per-content_type drop counts.
+
+        Shape::
+
+            {
+              "RelevanceGate": {
+                "showcase": {"before": 12, "after": 4, "dropped": 8},
+                "news":     {"before":  8, "after": 7, "dropped": 1},
+                "unknown":  {"before":  3, "after": 3, "dropped": 0},
+              },
+              "VideoGate":     {...},
+              "PushToBacklog": {...},
+            }
+
+        Empty dict when no stages have called ``record_filter_drops``.
+        """
+        # Deep copy so consumers can't mutate internal state.
+        return {
+            stage: {ct: dict(counts) for ct, counts in by_type.items()}
+            for stage, by_type in self._filter_drops_by_content_type.items()
+        }
+
+    def record_filter_drops(
+        self,
+        stage_name: str,
+        before: list[Any],
+        after: list[Any],
+    ) -> None:
+        """Record per-content_type drop counts for a filter stage.
+
+        Counts ``before`` and ``after`` lists by each item's
+        ``content_type`` field (defaulting to ``"unknown"`` when missing
+        or non-truthy), then stores the diff in
+        ``filter_drops_by_content_type[stage_name]``.
+
+        Stages don't need to know HOW the count is bucketed — they just
+        hand over the input + output lists and the writer does the math.
+        Idempotent + last-write-wins per stage name; safe to call once
+        per stage execution. Calling twice with the same stage_name
+        OVERWRITES the previous record (matches the semantic of "this
+        stage just ran; here are its drops").
+
+        Items can be dicts (the common case in the pipeline — stories
+        are dicts) OR objects with a ``content_type`` attribute (future-
+        proofing for typed StoryCandidate migration). Anything else
+        buckets as ``"unknown"``.
+
+        Parameters
+        ----------
+        stage_name:
+            Stage class name (e.g. ``"RelevanceGate"``). Used as the
+            top-level key in the output dict.
+        before:
+            Stories / items entering the stage. ``len(before)`` becomes
+            the ``before`` count for each content_type bucket.
+        after:
+            Stories / items leaving the stage (after filtering /
+            deduping). ``len(after)`` becomes the ``after`` count.
+            ``dropped = before - after`` per bucket.
+        """
+
+        def _content_type_of(item: Any) -> str:
+            """Extract content_type defensively, defaulting to 'unknown'."""
+            if isinstance(item, dict):
+                ct = item.get("content_type")
+            else:
+                ct = getattr(item, "content_type", None)
+            if not ct or not isinstance(ct, str):
+                return "unknown"
+            return ct
+
+        before_counts: dict[str, int] = {}
+        for item in before:
+            ct = _content_type_of(item)
+            before_counts[ct] = before_counts.get(ct, 0) + 1
+
+        after_counts: dict[str, int] = {}
+        for item in after:
+            ct = _content_type_of(item)
+            after_counts[ct] = after_counts.get(ct, 0) + 1
+
+        # Union of seen content_types so buckets present in only one
+        # list (e.g. all 'news' items dropped → 'news' only in before)
+        # still appear with after=0.
+        all_types = set(before_counts) | set(after_counts)
+        by_type: dict[str, dict[str, int]] = {}
+        for ct in all_types:
+            b = before_counts.get(ct, 0)
+            a = after_counts.get(ct, 0)
+            by_type[ct] = {
+                "before": b,
+                "after": a,
+                "dropped": max(0, b - a),
+            }
+        self._filter_drops_by_content_type[stage_name] = by_type
+        logger.debug(
+            "Recorded filter drops for %s: %d content_type bucket(s)",
+            stage_name,
+            len(by_type),
+        )
 
     def record_stage(
         self,

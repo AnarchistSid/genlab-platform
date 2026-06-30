@@ -106,6 +106,12 @@ class VideoGate:
         clips = clip_index.get("clips", {})
         stories = context.get("stories", [])
 
+        # C3 (2026-06-30): snapshot the input list BEFORE any mutation
+        # so per-content_type drop accounting compares like-for-like.
+        # Shallow copy is enough — content_type is read from each dict's
+        # surface, not mutated by the gate.
+        before_stories_snapshot = list(stories)
+
         passed = 0
         skipped = 0
 
@@ -249,6 +255,20 @@ class VideoGate:
             "passed": passed,
             "skipped": skipped,
         }
+
+        # C3 (2026-06-30): per-content_type drop accounting. "after"
+        # reflects context["stories"] post _skip_llm pruning (the
+        # active list downstream stages will iterate). Fail-OPEN.
+        metrics = context.get("metrics")
+        if metrics is not None:
+            try:
+                metrics.record_filter_drops(
+                    self.__class__.__name__,
+                    before_stories_snapshot,
+                    context.get("stories", []),
+                )
+            except Exception as exc:  # noqa: BLE001 — observability is never critical-path
+                logger.debug("VideoGate: record_filter_drops failed: %s", exc)
 
         # 2026-06-22 — VideoGate writes to BOTH sinks (sibling PRs
         # landed together as Month-1 Week-1 trio). They serve different

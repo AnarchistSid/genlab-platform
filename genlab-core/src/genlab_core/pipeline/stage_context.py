@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from genlab_core.http.backlog_client import BacklogClient
+    from genlab_core.observability.metrics_writer import PipelineMetrics
 
 
 class StageContext(TypedDict, total=False):
@@ -83,6 +84,14 @@ class StageContext(TypedDict, total=False):
     # for the append_trace helper. List of
     # {stage, decision, confidence, reasons, entity_id, metadata}.
     reasoning_trace: list[dict[str, Any]]
+    # C3 (2026-06-30) — PipelineMetrics instance for per-stage timing
+    # AND per-content_type drop tracking via record_filter_drops.
+    # Same object that's threaded into StageRunnerFactory; surfaced
+    # here so filter stages can call
+    # ``context["metrics"].record_filter_drops(...)`` without an extra
+    # plumbing layer. Stages defensively check ``context.get("metrics")``
+    # since tests may build a context dict without seeding it.
+    metrics: PipelineMetrics
 
     # ── Populated by specific stages (each stage that uses one is
     #    responsible for setting it on the way through) ──────────────

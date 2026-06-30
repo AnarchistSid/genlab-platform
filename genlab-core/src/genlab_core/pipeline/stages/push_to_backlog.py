@@ -1485,6 +1485,13 @@ class PushToBacklog:
 
         cross_niche_drops = 0
         skip_llm_drops = 0
+        # C3 (2026-06-30): per-content_type drop accounting for the
+        # PushToBacklog dedup pass. "kept" = stories that survived
+        # _skip_llm, cross-niche source guard, URL dedup, story_id
+        # dedup, and title similarity dedup — i.e. cleared the dedup
+        # funnel and proceeded to upsert. Diff vs the original stories
+        # list shows where the dedup pressure landed by content_type.
+        kept_for_drop_accounting: list[dict[str, Any]] = []
         for story in stories:
             title = sanitize_for_graph_api(story.get("title", "Unknown"))
             source_url = story.get("source_url", "")
@@ -1572,6 +1579,12 @@ class PushToBacklog:
             # Track URL hash so future stories with same URL are skipped
             if url_hash:
                 seen_urls.add(url_hash)
+
+            # C3 (2026-06-30): record that this story cleared the dedup
+            # funnel. Anything reaching this point passed _skip_llm,
+            # cross-niche guard, URL dedup, story_id dedup, and title
+            # similarity. Used by record_filter_drops below.
+            kept_for_drop_accounting.append(story)
 
             # Upsert story — the find_story_by_story_id delegator is now
             # safe on both SharePoint and Postgres paths (fix #2 of the
@@ -2300,4 +2313,19 @@ class PushToBacklog:
             video_dedup_skipped,
             len(errors),
         )
+
+        # C3 (2026-06-30): emit per-content_type dedup drop counts.
+        # "before" = the stories list as PushToBacklog received it
+        # (already post-VideoGate); "after" = stories that cleared
+        # the dedup funnel. Fail-OPEN.
+        metrics = context.get("metrics")
+        if metrics is not None:
+            try:
+                metrics.record_filter_drops(
+                    self.__class__.__name__,
+                    stories,
+                    kept_for_drop_accounting,
+                )
+            except Exception as exc:  # noqa: BLE001 — observability is never critical-path
+                logger.debug("[PUSH] record_filter_drops failed: %s", exc)
         return context
