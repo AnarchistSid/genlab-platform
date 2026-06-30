@@ -139,7 +139,7 @@ def _build_query(since: str, niche_id: str | None) -> tuple[str, list]:
             a.extra            AS a_extra
         FROM publishing_analytics pa
         INNER JOIN blueprints b
-            ON pa.candidate_id = b.candidate_id
+            ON pa.blueprint_id = b.id
            AND pa.niche_id = b.niche_id
         LEFT JOIN analytics a
             ON a.post_id = (pa.platform || ':' || pa.post_id)

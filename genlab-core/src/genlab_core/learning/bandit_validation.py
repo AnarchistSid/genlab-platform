@@ -207,7 +207,7 @@ def _fetch_paired_data(conn, niche_id: str, days: int) -> tuple[list[float], lis
             COALESCE((a.extra->>'viral_score')::float, 0.0) AS actual_engagement
         FROM publishing_analytics pa
         INNER JOIN blueprints b
-            ON pa.candidate_id = b.candidate_id
+            ON pa.blueprint_id = b.id
            AND pa.niche_id = b.niche_id
         INNER JOIN bandit_arms ba
             ON ba.niche_id = pa.niche_id
