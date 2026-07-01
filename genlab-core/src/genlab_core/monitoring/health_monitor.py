@@ -1229,36 +1229,56 @@ def check_disk() -> list[Alert]:
     Thresholds are read from ``alerting.yaml`` (audit M-1). The warning
     threshold maps to ``thresholds.disk_usage_pct``; critical fires +10
     points above it. Operators can tune without a deploy.
+
+    2026-07-01 fix: previously ran ``df / /mnt/genlab-media`` in ONE
+    subprocess call. On hosts without ``/mnt/genlab-media`` (all current
+    prod — Hetzner VPS with no separate media mount), df errored on the
+    whole command, the exception got logged at DEBUG, and check_disk
+    silently returned zero alerts. Prod PG then crashed at 100% disk on
+    2026-07-01 with no advance warning. Now each mount is queried
+    independently so a missing mount doesn't hide pressure on ``/``.
+    Also uses ``shutil.disk_usage`` which is more portable than parsing
+    df output and doesn't need a subprocess round-trip.
     """
+    import shutil
+
     from genlab_core.monitoring.alerting_config import get_alerting_config
 
     cfg = get_alerting_config().thresholds
     warn_pct = cfg.disk_usage_pct  # was hardcoded 85
     crit_pct = min(100, warn_pct + 10)  # was hardcoded 90
 
-    alerts = []
-    try:
-        result = subprocess.run(
-            ["df", "--output=pcent,target", "/", "/mnt/genlab-media"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        for line in result.stdout.strip().split("\n")[1:]:
-            parts = line.strip().split()
-            if len(parts) >= 2:
-                pct = int(parts[0].replace("%", ""))
-                mount = parts[1]
-                if pct > warn_pct:
-                    alerts.append(
-                        Alert(
-                            check="disk_pressure",
-                            severity="critical" if pct > crit_pct else "warning",
-                            message=f"{mount} at {pct}% usage",
-                        )
-                    )
-    except Exception as e:
-        logger.debug("Disk check failed: %s", e)
+    alerts: list[Alert] = []
+    # Query each mount INDEPENDENTLY — one missing mount must never hide
+    # pressure on the others. This was the 2026-07-01 crash root cause.
+    for mount in ("/", "/mnt/genlab-media"):
+        try:
+            total, used, _free = shutil.disk_usage(mount)
+        except (FileNotFoundError, PermissionError):
+            # Mount doesn't exist or unreadable — skip silently. On this
+            # host it might be an optional media volume; on others it
+            # might not be provisioned yet.
+            continue
+        except Exception as exc:
+            # Log-but-continue: one weird mount shouldn't block others.
+            logger.warning("check_disk: disk_usage(%r) failed: %s", mount, exc)
+            continue
+        pct = int(used * 100 / total) if total > 0 else 0
+        if pct > warn_pct:
+            alerts.append(
+                Alert(
+                    check="disk_pressure",
+                    severity="critical" if pct > crit_pct else "warning",
+                    message=f"{mount} at {pct}% usage",
+                    details={"mount": mount, "usage_pct": pct},
+                    auto_fix=(
+                        "Run /opt/genlab/scripts/disk_cleanup.sh (frees ~10 GB "
+                        "from gh-runner cache + docker prune)"
+                        if mount == "/"
+                        else ""
+                    ),
+                )
+            )
     return alerts
 
 

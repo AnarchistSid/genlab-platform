@@ -110,6 +110,15 @@ before the sweeper undoes them.
   `MISSING_RENDER` (2026-07-01 fix, PR after `ea8d4fa4`). Publisher writes
   a SKIPPED row to publishing_analytics; retries don't fire because
   `should_retry(MISSING_RENDER)` is False.
+- **`priority_score` below the niche's `score_floor` (default 0.3)** —
+  the `score_floor_gate` in `genlab_core.platforms.gatekeeper` blocks
+  publish with reason "Score X below floor Y". Blueprint STAYS
+  VISUAL_READY (no FAILED row written), which looks like "publisher
+  ignored it." Learned 2026-07-01: manual rescheduling picked a
+  gaming blueprint at score=0.2732 that then silently score-gated at
+  publisher time. Verify score ≥ floor BEFORE manual scheduling. Per-niche
+  override lives at `niche_config.publishing.score_floor` in each
+  channel's niche.yaml.
 - Publisher fires at 06:30 UTC (12:00 IST) primary + 10:30 UTC (16:00 IST)
   retry window daily. Slots at 06:00 UTC also picked up in the primary run.
 
@@ -131,7 +140,10 @@ SET scheduled_for = NULL,
 WHERE id = ANY(ARRAY['<uuid1>', '<uuid2>']::uuid[]);
 
 -- Reassign a broken slot to a fresh blueprint (this is the pattern
--- Round-2 used tonight)
+-- Round-2 used tonight).
+-- IMPORTANT: check score BEFORE scheduling — the publisher's
+-- score_floor_gate will silently reject anything below 0.3 (default).
+-- The blueprint stays VISUAL_READY but never actually publishes.
 UPDATE blueprints
 SET scheduled_for = '2026-07-01 06:30:00+00'::timestamptz,
     action_taken = 'approved',
@@ -141,7 +153,9 @@ SET scheduled_for = '2026-07-01 06:30:00+00'::timestamptz,
       'manually_scheduled_by', '<operator|script name>',
       'manually_scheduled_reason', '<short reason>'
     )
-WHERE id = '<fresh-bp-uuid>' AND status = 'VISUAL_READY';
+WHERE id = '<fresh-bp-uuid>'
+  AND status = 'VISUAL_READY'
+  AND priority_score >= 0.30;  -- ← the safety guard learned 2026-07-01
 
 -- Verify slots for a date range
 SELECT niche_id, scheduled_for, status, action_taken,

@@ -75,25 +75,86 @@ class TestHealthMonitorWiring:
 
     def test_check_disk_reads_threshold_from_alerting_yaml(self, monkeypatch) -> None:
         """A tighter disk threshold (60%) must change the warn boundary
-        without a code change."""
+        without a code change.
+
+        2026-07-01 rewrite: check_disk now uses shutil.disk_usage instead
+        of subprocess df. Test updated to mock that.
+        """
         from genlab_core.monitoring import health_monitor
 
-        # Simulate df output showing /var at 65% used.
-        df_output = "Use% Mounted on\n65% /\n10% /mnt/genlab-media\n"
+        # / at 65%, /mnt/genlab-media at 10%
+        def _fake_disk_usage(path):
+            from shutil import _ntuple_diskusage
 
-        class _R:
-            stdout = df_output
+            if path == "/":
+                return _ntuple_diskusage(total=100, used=65, free=35)
+            return _ntuple_diskusage(total=100, used=10, free=90)
 
         with (
-            patch.object(health_monitor.subprocess, "run", return_value=_R()) as _,
+            patch("shutil.disk_usage", side_effect=_fake_disk_usage),
             patch("genlab_core.monitoring.alerting_config.get_alerting_config") as mock_cfg,
         ):
             mock_cfg.return_value = AlertingConfig(thresholds=Thresholds(disk_usage_pct=60))
             alerts = health_monitor.check_disk()
+
         # 65% > 60% warn → warning alert for /
-        assert len(alerts) >= 1
+        assert len(alerts) == 1
         assert alerts[0].severity == "warning"
         assert "/" in alerts[0].message
+
+    def test_check_disk_missing_mount_does_not_hide_pressure_on_root(self, monkeypatch) -> None:
+        """The 2026-07-01 crash regression pin.
+
+        On the Hetzner VPS, /mnt/genlab-media doesn't exist. Previously
+        check_disk ran `df / /mnt/genlab-media` in one subprocess; df
+        errored on the missing mount, exception logged at DEBUG, and
+        check_disk silently returned zero alerts even when / was full.
+
+        Prod PG crashed at 100% disk with no advance warning as a result.
+        This test locks in the fix: each mount queried independently, so
+        a missing /mnt/genlab-media never hides a full /.
+        """
+        from genlab_core.monitoring import health_monitor
+
+        def _fake_disk_usage(path):
+            if path == "/mnt/genlab-media":
+                raise FileNotFoundError(path)
+            from shutil import _ntuple_diskusage
+
+            # / at 95% — should ABSOLUTELY fire critical
+            return _ntuple_diskusage(total=100, used=95, free=5)
+
+        with (
+            patch("shutil.disk_usage", side_effect=_fake_disk_usage),
+            patch("genlab_core.monitoring.alerting_config.get_alerting_config") as mock_cfg,
+        ):
+            mock_cfg.return_value = AlertingConfig(thresholds=Thresholds(disk_usage_pct=80))
+            alerts = health_monitor.check_disk()
+
+        assert len(alerts) == 1, "critical / pressure MUST fire even when /mnt/genlab-media missing"
+        assert alerts[0].severity == "critical"
+        assert alerts[0].check == "disk_pressure"
+        assert "/" in alerts[0].message
+        # Auto-fix pointer for operator convenience — added 2026-07-01
+        assert "disk_cleanup.sh" in alerts[0].auto_fix
+
+    def test_check_disk_no_alert_when_all_mounts_healthy(self, monkeypatch) -> None:
+        """Complements the pressure tests: verify no false-positive when
+        everything is genuinely fine."""
+        from genlab_core.monitoring import health_monitor
+
+        def _fake_disk_usage(path):
+            from shutil import _ntuple_diskusage
+
+            return _ntuple_diskusage(total=100, used=30, free=70)
+
+        with (
+            patch("shutil.disk_usage", side_effect=_fake_disk_usage),
+            patch("genlab_core.monitoring.alerting_config.get_alerting_config") as mock_cfg,
+        ):
+            mock_cfg.return_value = AlertingConfig(thresholds=Thresholds(disk_usage_pct=80))
+            alerts = health_monitor.check_disk()
+        assert alerts == []
 
     def test_check_swap_reads_warning_mb_from_alerting_yaml(self, monkeypatch) -> None:
         from genlab_core.monitoring import health_monitor

@@ -60,14 +60,19 @@ find /var/log -name "*.gz" -mtime +14 -delete 2>/dev/null || true
 find /var/log -name "*.1" -mtime +14 -delete 2>/dev/null || true
 find /var/log/genlab -name "*.log.*" -mtime +7 -delete 2>/dev/null || true
 
-# 4) GH Actions runner — uv cache + tool cache + old per-job _temp dirs
-# All under /home/gh-runner/, NEVER /opt/genlab/. The uv cache is fine
-# to nuke — uv re-fetches on next sync. Tool cache (Python downloads
-# etc.) re-downloads via setup-python on next run.
-if [ -d /home/gh-runner/.cache/uv ]; then
-    log "clearing gh-runner uv cache..."
-    find /home/gh-runner/.cache/uv -mindepth 1 -delete 2>/dev/null || \
-        log "WARNING: gh-runner uv cache prune partial"
+# 4) GH Actions runner — cache + tool cache + old per-job _temp dirs
+# All under /home/gh-runner/, NEVER /opt/genlab/. Any cache subdir here
+# is fine to nuke — CI jobs re-fetch on next sync.
+#
+# 2026-07-01: prod PG crashed today when /home/gh-runner/.cache grew
+# to 7.3 GB (uv + pip + pnpm etc.) and filled /. The prior version only
+# pruned .cache/uv — expanded here to the whole .cache directory since
+# CI runners self-repair caches on next invocation.
+if [ -d /home/gh-runner/.cache ]; then
+    cache_size_kb=$(du -sk /home/gh-runner/.cache 2>/dev/null | cut -f1)
+    log "clearing gh-runner .cache (${cache_size_kb} KB before)..."
+    find /home/gh-runner/.cache -mindepth 1 -delete 2>/dev/null || \
+        log "WARNING: gh-runner .cache prune partial"
 fi
 if [ -d /home/gh-runner/.local/share/uv ]; then
     log "clearing gh-runner uv state..."
