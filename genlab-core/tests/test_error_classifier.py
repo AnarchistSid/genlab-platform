@@ -208,3 +208,49 @@ def test_clearly_pre_send_failures_not_ambiguous():
 def test_empty_error_not_ambiguous():
     # Preserve the "prefer retry" default for vague/empty pre-send errors.
     assert is_ambiguous_failure("") is False
+
+
+# ---------------------------------------------------------------------------
+# MISSING_RENDER — 2026-07-01 disk-cleanup-cascade class
+#
+# The exact error string payload_builder.py raises:
+#   "No valid media files for video publish (niche=movies, format=reel,
+#    original_paths=['/opt/genlab/.tmp/runs/movies_20260618_082904/...'])"
+# ---------------------------------------------------------------------------
+
+
+def test_classify_no_valid_media_files_is_missing_render():
+    """The exact payload_builder.py error string classifies as MISSING_RENDER,
+    NOT CONTENT — so parallel_publish downshifts to SKIPPED not FAILED."""
+    err = (
+        "No valid media files for video publish (niche=movies, format=reel, "
+        "original_paths=['/opt/genlab/.tmp/runs/movies_20260618_082904/visuals/..."
+        "/reel.mp4'])"
+    )
+    assert classify(err) == "MISSING_RENDER"
+
+
+def test_classify_missing_render_beats_content_pattern():
+    """Even though CONTENT has 'media.*not.*found' and 'No media paths', the
+    specific 'No valid media files' phrase MUST classify as MISSING_RENDER
+    (priority ordering ensures this)."""
+    assert classify("No valid media files") == "MISSING_RENDER"
+
+
+def test_classify_priority_missing_render_over_transient():
+    """A missing-render error with a timeout mention still goes MISSING_RENDER."""
+    assert classify("No valid media files, connection timed out during upload") == "MISSING_RENDER"
+
+
+def test_should_retry_missing_render():
+    """MISSING_RENDER is NOT retryable — no platform recovery will make the
+    deleted files exist. Blueprint needs re-render, not another publish attempt."""
+    assert should_retry("MISSING_RENDER") is False
+
+
+def test_missing_render_distinct_from_content_generic_file_not_found():
+    """A generic 'file not found' from a platform (e.g. Instagram rejecting an
+    upload) is still CONTENT — it's platform-side, not the disk-cleanup class.
+    Only the specific 'No valid media files' phrase from payload_builder.py
+    is MISSING_RENDER."""
+    assert classify("file not found: /tmp/video.mp4") == "CONTENT"

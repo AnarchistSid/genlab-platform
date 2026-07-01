@@ -187,7 +187,16 @@ def execute_parallel_publish(
             # them; only the analytics row is downshifted to SKIPPED.
             if result.success:
                 analytics_status = "SUCCESS"
-            elif error_class in ("CREDENTIAL", "QUOTA"):
+            elif error_class in ("CREDENTIAL", "QUOTA", "MISSING_RENDER"):
+                # MISSING_RENDER added 2026-07-01 after the disk-cleanup
+                # cascade incident: blueprints whose visual files got
+                # nuked kept failing the publisher window at 06:30 UTC AND
+                # again at the 10:30 UTC retry, producing 6 FAILED rows
+                # per affected niche per day. Downshifting to SKIPPED
+                # (like CREDENTIAL/QUOTA) surfaces the real class of
+                # issue (a data-side render problem, not a platform
+                # outage) in the health dashboard without polluting the
+                # platform-failure rate.
                 analytics_status = "SKIPPED"
             else:
                 analytics_status = "FAILED"

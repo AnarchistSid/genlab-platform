@@ -5,6 +5,13 @@ Categories:
   QUOTA — retry next day (rate limit, quota exceeded)
   CREDENTIAL — don't retry, needs human (token expired, 401)
   CONTENT — don't retry, content issue (too large, format rejected)
+  MISSING_RENDER — visual files missing on disk (2026-07-01 disk cascade class).
+    Distinguished from CONTENT because it is a RENDER-side failure (files
+    got cleaned up, blueprint references stale paths, DR-restored bp lost
+    its media) — NOT a content-format issue. Downshifted to SKIPPED in
+    publishing_analytics because the loud "FAILED" signal would drown out
+    genuine platform breakage, and the retry pass shouldn't waste attempts
+    on a blueprint whose files simply do not exist.
   PERMANENT — don't retry ever (account suspended)
 """
 
@@ -65,7 +72,17 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
             # X/Twitter-specific
             r"DuplicateContent",
             r"duplicate.*content",
-            # No valid media
+        ]
+    ],
+    # 2026-07-01: split "No valid media files" from CONTENT into its own
+    # class. Downstream (parallel_publish) treats this as SKIPPED (like
+    # CREDENTIAL/QUOTA) instead of FAILED — the disk-cleanup-cascade
+    # incident showed that FAILED-marking these publishes wasted retry
+    # attempts and polluted the health dashboard for a data-side issue
+    # (missing renders) that no platform recovery can fix.
+    "MISSING_RENDER": [
+        re.compile(p, re.I)
+        for p in [
             r"No valid media files",
         ]
     ],
@@ -102,14 +119,17 @@ _PATTERNS: dict[str, list[re.Pattern]] = {
 def classify(error_message: str, platform: str = "") -> str:
     """Classify a publish error message.
 
-    Returns one of: TRANSIENT, QUOTA, CREDENTIAL, CONTENT, PERMANENT.
-    Checks patterns in priority order (CREDENTIAL > QUOTA > CONTENT > TRANSIENT).
+    Returns one of: TRANSIENT, QUOTA, CREDENTIAL, CONTENT, MISSING_RENDER,
+    PERMANENT. Checks patterns in priority order
+    (CREDENTIAL > QUOTA > MISSING_RENDER > CONTENT > TRANSIENT). MISSING_RENDER
+    is checked before CONTENT so the specific "No valid media files" pattern
+    isn't accidentally caught by CONTENT's broader "media.*not.*found" pattern.
     Falls back to TRANSIENT for unrecognized errors (prefer retry over abandon).
     """
     if not error_message:
         return "TRANSIENT"
 
-    for category in ("CREDENTIAL", "QUOTA", "CONTENT", "TRANSIENT"):
+    for category in ("CREDENTIAL", "QUOTA", "MISSING_RENDER", "CONTENT", "TRANSIENT"):
         for pattern in _PATTERNS[category]:
             if pattern.search(error_message):
                 return category
