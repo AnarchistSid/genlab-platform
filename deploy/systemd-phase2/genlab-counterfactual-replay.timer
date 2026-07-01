@@ -1,0 +1,18 @@
+[Unit]
+Description=GenLab Counterfactual Replay Timer — monthly on 1st @ 04:30 UTC
+
+[Timer]
+# Monthly cadence. Longer than the daily Bayesian/conformal refits
+# because DR estimation gains stability from more data, not from
+# more-frequent recomputation. First of each month at 04:30 UTC
+# (= 10:00 IST) — after the 04:00 late-reward run finishes so any
+# late-window reward corrections are included in the DR data.
+OnCalendar=*-*-01 04:30:00 UTC
+# Persistent — catch-up after reboot / downtime. A missed monthly
+# run is acceptable (the artifact just reflects "up to last run");
+# a caught-up run corrects the picture.
+Persistent=true
+Unit=genlab-counterfactual-replay.service
+
+[Install]
+WantedBy=timers.target

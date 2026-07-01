@@ -1,0 +1,43 @@
+[Unit]
+Description=GenLab Counterfactual Replay — monthly IPS + DR estimator run
+Documentation=file:///opt/genlab/scripts/run_counterfactual_replay.py
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# Intervention 7 (2026-07-01) — activates the doubly-robust reward
+# estimator over pending_feedback. Reads the propensity column (PR
+# #634/#636 producer), fits a Ridge reward model on
+# (LinUCB context ⊕ arm one-hot) → reward, and computes per-arm
+# "always pick this arm" reward estimates. Writes JSON artifact to
+# $GENLAB_TMP/counterfactual-replay/ for downstream Strategist /
+# dashboard consumption.
+#
+# Two-mode behaviour:
+#   * GENLAB_COUNTERFACTUAL_REPLAY_ENABLED unset/false → runs the
+#     IPS path only + logs "DR disabled". Artifact still written so
+#     the historical trend is captured for later analysis.
+#   * GENLAB_COUNTERFACTUAL_REPLAY_ENABLED=true → fits Ridge and
+#     populates dr_reward / direct_method / ips_correction per arm.
+#
+# 30-day window keeps the Ridge fit stable while adapting to
+# strategy shifts. All 5 niches processed in a single invocation
+# via --niche all (cross-niche replay is admin-RLS gated so the
+# genlab user gets the aggregate view).
+#
+# Exit 0 always — an empty dataset is a valid state (early days,
+# quiet period). Rely on logs / artifact-presence monitoring for
+# visibility, not systemd status.
+ExecStart=/opt/genlab/.venv/bin/python -m scripts.run_counterfactual_replay \
+    --niche all --window-days 30
+TimeoutSec=900
+
+[Install]
+WantedBy=multi-user.target

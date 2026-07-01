@@ -10,11 +10,42 @@ Covers:
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 from genlab_core.learning import late_reward
+
+
+class TestPercentileTargetsWireGap:
+    """Batch C gap-fill (2026-07-01): late_reward MUST pass
+    ``percentile_targets_fn`` when it constructs its own RewardShaper.
+
+    Prod metric_collector wires percentile targets on the 48h reward
+    compute. If late_reward's default shaper omitted it, ``reward_late``
+    would use hardcoded targets while ``reward_48h`` used percentile
+    targets — the ``delta`` between them would measure target-shape
+    difference, not actual late-window engagement lift.
+
+    Source pin only — end-to-end behavior is covered by
+    test_percentile_targets.py + test_metric_collector.py.
+    """
+
+    def test_default_shaper_wires_percentile_targets_fn(self):
+        src = inspect.getsource(late_reward.recompute_late_reward)
+        assert "get_percentile_target" in src, (
+            "recompute_late_reward's default RewardShaper construction "
+            "must import get_percentile_target. Dropping the import "
+            "silently regresses to hardcoded-target reward computation "
+            "which makes ``delta = reward_late - reward_48h`` meaningless."
+        )
+        assert "percentile_targets_fn=get_percentile_target" in src, (
+            "recompute_late_reward's default RewardShaper must be "
+            "constructed with ``percentile_targets_fn=get_percentile_target``. "
+            "Without this kwarg the shaper.__init__ default of None is used "
+            "and the percentile-relative path is silently skipped."
+        )
 
 
 class TestFeatureFlag:

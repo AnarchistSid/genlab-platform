@@ -79,7 +79,7 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +131,13 @@ class DecisionRecord:
     loaded so the operator can see "n_decisions vs n_with_reward"
     in the output, but they're excluded from the IPS sum itself —
     you can't IPS-correct an outcome you don't have.
+
+    ``context`` is the LinUCB context vector recorded at decision
+    time (``bandit_context['linucb_context']`` in the JSONB column).
+    Intervention 7 (2026-07-01) reads this to fit a reward model
+    for the doubly-robust estimator. Rows that predate LinUCB
+    (Thompson-only) or the ``linucb_context`` field carry ``None``
+    and are dropped from the DR sum but kept in the IPS sum.
     """
 
     decision_id: str
@@ -140,6 +147,7 @@ class DecisionRecord:
     reward: float | None
     decided_at: datetime
     platform: str
+    context: tuple[float, ...] | None = None
 
 
 @dataclass
@@ -167,16 +175,33 @@ class IPSEstimate:
 
 @dataclass
 class DREstimate:
-    """Doubly-robust estimator placeholder.
+    """Doubly-robust "always-pick-this-arm" reward estimate.
 
-    Filled with ``None`` for every arm in v1 (see module docstring).
-    Kept as a typed dataclass so callers can wire the field through
-    without refactoring once a reward-model surface exists.
+    Intervention 7 (2026-07-01) fills this in via a Ridge reward model
+    over the LinUCB context vector. Prior to that PR this was a stub
+    (``dr_reward = None`` for every arm). See :func:`compute_doubly_robust_per_arm`
+    for the estimator formula.
+
+    * ``dr_reward``  — DR value of always-pick-this-arm policy. None
+      when Ridge is unavailable, the context is missing for too many
+      rows, or the arm's sub-population is too small to correct.
+    * ``direct_method``  — First term of the DR formula
+      ``E[μ̂(a, x)]``, i.e. the reward-model average over ALL rows'
+      contexts if we'd chosen this arm everywhere. Surfaced to help
+      operators sanity-check the DR value.
+    * ``ips_correction``  — Second term, ``(1/N) Σ_{i: a_i=a}
+      (r_i - μ̂(a, x_i)) / p_i``. Large magnitude here means the
+      DR value differs sharply from the pure direct-method estimate.
+    * ``n_used``  — Rows that contributed to the estimator (had
+      reward + context + non-null propensity).
     """
 
     arm_id: str
     dr_reward: float | None
-    note: str = "DR not implemented in v1 (requires reward model)"
+    direct_method: float | None = None
+    ips_correction: float | None = None
+    n_used: int = 0
+    note: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +283,12 @@ def _query_pending_feedback(
         params.append(since)
 
     where_sql = " AND ".join(where_clauses)
+    # ``bandit_context`` is the JSONB column that carries the LinUCB
+    # feature vector at decision time under key ``linucb_context``.
+    # Intervention 7 (DR estimator) reads it to fit the reward model.
+    # Callers that don't need DR (dashboard IPS view) still receive it
+    # — the psycopg overhead of one small JSONB column is negligible
+    # and centralising the query keeps loaders consistent.
     sql = f"""
         SELECT id::text AS id,
                niche_id,
@@ -265,7 +296,8 @@ def _query_pending_feedback(
                platform,
                propensity,
                reward_48h,
-               publish_time
+               publish_time,
+               bandit_context
         FROM pending_feedback
         WHERE {where_sql}
         ORDER BY publish_time DESC NULLS LAST
@@ -307,6 +339,21 @@ def _row_to_decision(row: dict[str, Any]) -> DecisionRecord:
         # Rows without publish_time can't be ordered or windowed; skip.
         raise ValueError("row has no publish_time")
 
+    # Best-effort parse of bandit_context.linucb_context. Malformed /
+    # missing / wrong-shape → context stays None; the DR estimator
+    # drops such rows from its sum but the IPS estimator still uses
+    # them. Never raise — a bad JSON payload on one row shouldn't
+    # torpedo the whole replay run.
+    context: tuple[float, ...] | None = None
+    bctx = row.get("bandit_context")
+    if isinstance(bctx, dict):
+        raw_ctx = bctx.get("linucb_context")
+        if isinstance(raw_ctx, list):
+            try:
+                context = tuple(float(v) for v in raw_ctx)
+            except (TypeError, ValueError):
+                context = None
+
     return DecisionRecord(
         decision_id=str(row.get("id", "")),
         niche_id=str(row.get("niche_id", "")),
@@ -315,6 +362,7 @@ def _row_to_decision(row: dict[str, Any]) -> DecisionRecord:
         reward=reward,
         decided_at=decided_at,
         platform=str(row.get("platform") or ""),
+        context=context,
     )
 
 
@@ -450,28 +498,240 @@ def _effective_sample_size(weights: list[float]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Doubly-robust estimator (v1 stub)
+# Doubly-robust estimator (v2 — Intervention 7, 2026-07-01)
 # ---------------------------------------------------------------------------
+
+
+# Minimum rows with reward + context needed before the Ridge reward
+# model can be fit reliably. Below this, the DR estimator returns
+# stub values (``dr_reward=None``) and the operator sees "insufficient
+# data for DR" in the note.
+_MIN_ROWS_FOR_REWARD_MODEL: Final = 30
+
+# Ridge regularisation. High-ish because we're fitting on small samples
+# (~50-500 rows per replay) with correlated features (weekday_sin ↔
+# weekday_cos, hour_sin ↔ hour_cos). Prefer shrinkage-toward-zero over
+# picking up spurious signal.
+_RIDGE_ALPHA: Final = 1.0
+
+
+def _integration_enabled() -> bool:
+    """Exact-match feature flag. ``GENLAB_COUNTERFACTUAL_REPLAY_ENABLED``
+    must be literally ``true`` / ``TRUE`` / ``True`` to activate the
+    real DR estimator. Any other value (``1``, ``yes``, empty, unset,
+    typos) keeps the stub behavior — the same fail-closed pattern used
+    across the rest of the learning package."""
+    return os.environ.get("GENLAB_COUNTERFACTUAL_REPLAY_ENABLED", "") in ("true", "TRUE", "True")
+
+
+def _fit_reward_model(
+    scored_decisions: list[DecisionRecord],
+    all_arms: list[str],
+) -> tuple[Any, list[str]] | None:
+    """Fit a Ridge reward model over (context ⊕ arm_one_hot) → reward.
+
+    Returns the fitted sklearn Ridge object plus the arm-ordering used
+    for the one-hot encoding, or ``None`` when sklearn/numpy is
+    unavailable or the sample is too small.
+
+    Pooling model. One shared Ridge over ALL arms rather than a Ridge
+    per arm: shrinkage handles cold arms (they inherit context->reward
+    behaviour from the pooled data) and we still get arm-specific
+    intercepts via the one-hot dummies.
+    """
+    if len(scored_decisions) < _MIN_ROWS_FOR_REWARD_MODEL:
+        return None
+    try:
+        import numpy as np
+        from sklearn.linear_model import Ridge
+    except ImportError:
+        logger.warning(
+            "[ips_replay] Ridge reward model unavailable — sklearn/numpy not "
+            "installed. DR falls back to stub behavior (``dr_reward=None``)."
+        )
+        return None
+
+    arm_order = sorted(all_arms)
+    arm_to_idx = {a: i for i, a in enumerate(arm_order)}
+    ctx_dim = len(scored_decisions[0].context) if scored_decisions[0].context else 0
+    n_arms = len(arm_order)
+
+    X = np.zeros((len(scored_decisions), ctx_dim + n_arms), dtype=np.float64)
+    y = np.zeros(len(scored_decisions), dtype=np.float64)
+    for i, d in enumerate(scored_decisions):
+        if d.context is not None:
+            X[i, :ctx_dim] = d.context
+        X[i, ctx_dim + arm_to_idx[d.arm_id]] = 1.0
+        # d.reward guaranteed non-None by caller (filters before calling).
+        y[i] = d.reward if d.reward is not None else 0.0
+
+    model = Ridge(alpha=_RIDGE_ALPHA, fit_intercept=True)
+    model.fit(X, y)
+    return (model, arm_order)
+
+
+def _predict_reward(
+    model: Any,
+    arm_order: list[str],
+    arm_id: str,
+    context: tuple[float, ...],
+    ctx_dim: int,
+) -> float:
+    """μ̂(arm, context) — reward-model prediction for a specific arm at
+    a specific context. Used by the DR sum inner loop."""
+    import numpy as np
+
+    x = np.zeros(ctx_dim + len(arm_order), dtype=np.float64)
+    x[:ctx_dim] = context
+    try:
+        arm_idx = arm_order.index(arm_id)
+    except ValueError:
+        # Arm not seen at fit time → prediction defaults to the
+        # intercept + context term. sklearn accepts the zero one-hot
+        # row without complaint; the prediction is a "pooled" reward
+        # for that context.
+        arm_idx = -1
+    if arm_idx >= 0:
+        x[ctx_dim + arm_idx] = 1.0
+    return float(model.predict(x.reshape(1, -1))[0])
 
 
 def compute_doubly_robust_per_arm(
     decisions: list[DecisionRecord],
+    *,
+    min_decisions: int = MIN_DECISIONS_FOR_ESTIMATE,
+    min_propensity: float = MIN_PROPENSITY,
 ) -> dict[str, DREstimate]:
-    """Stub: returns ``dr_reward=None`` for every arm in v1.
+    """Doubly-robust "always-pick-this-arm" reward estimate per arm.
 
-    DR requires a fitted ``reward_model(arm, context) -> reward`` per
-    arm. The :mod:`learning.hook_classifier` XGBoost model is the
-    closest candidate but its output is a binary "good hook" label,
-    not a calibrated reward in [0, 1]. Wiring it as the DR control
-    variate without recalibration would bias the DR estimator more
-    than IPS biases itself.
+    For each arm ``a`` in the observed arm set, estimates the reward
+    of a policy that would ALWAYS pick ``a`` (across all observed
+    contexts) using the DR formula:
 
-    Kept as a typed surface so the dashboard / CLI can render a
-    "DR — coming soon" column without an extra refactor when the
-    reward model lands.
+    .. math::
+
+        V(π_a) = \\frac{1}{N} \\sum_i \\left[
+            \\hat μ(a, x_i)
+            + \\mathbf{1}\\{a_i = a\\}
+            \\cdot \\frac{r_i - \\hat μ(a, x_i)}{p_i}
+        \\right]
+
+    where :math:`\\hat μ` is a Ridge regression on
+    ``(context ⊕ arm_one_hot) → reward`` fit over rows with a closed
+    48h window AND a populated context vector.
+
+    Guardrails:
+
+    * Feature-flagged behind ``GENLAB_COUNTERFACTUAL_REPLAY_ENABLED``.
+      When off, returns the historical stub (dr_reward=None) so the
+      shipped dashboard behavior is preserved.
+    * When sklearn / numpy is unavailable, or when < 30 rows carry
+      both reward + context, falls back to the stub.
+    * Importance weight truncation uses the same ``min_propensity``
+      floor as :func:`compute_ips_per_arm` — a rare-arm decision with
+      near-zero propensity can't dominate the DR sum.
+    * ``n_used`` counts only rows that contributed to the DR sum
+      (had reward + context + non-null propensity).
+
+    Args:
+        decisions: Output of :func:`load_decisions`.
+        min_decisions: Per-arm minimum for a non-None ``dr_reward``.
+            Below this the arm still appears in the mapping but the
+            estimate is None with a descriptive ``note``.
+        min_propensity: Weight-truncation floor (default 1e-3).
+
+    Returns:
+        Mapping ``arm_id -> DREstimate``. Empty input → empty mapping.
     """
-    arms = {d.arm_id for d in decisions}
-    return {arm: DREstimate(arm_id=arm, dr_reward=None) for arm in arms}
+    if not decisions:
+        return {}
+
+    all_arms = sorted({d.arm_id for d in decisions})
+
+    # When the flag is off, mimic the shipped stub so no downstream
+    # dashboard code observes a behavior change until the operator
+    # opts in.
+    if not _integration_enabled():
+        return {
+            arm: DREstimate(arm_id=arm, dr_reward=None, note="flag off (default stub)")
+            for arm in all_arms
+        }
+
+    # Only rows with BOTH reward + context can contribute to model fit
+    # AND to the DR sum. Rows missing either are excluded from the
+    # numerator/denominator but their arm still appears in the output.
+    scored = [d for d in decisions if d.reward is not None and d.context is not None]
+    if not scored:
+        return {
+            arm: DREstimate(arm_id=arm, dr_reward=None, note="no rows with reward+context")
+            for arm in all_arms
+        }
+
+    fit = _fit_reward_model(scored, all_arms)
+    if fit is None:
+        return {
+            arm: DREstimate(
+                arm_id=arm,
+                dr_reward=None,
+                note=(
+                    f"insufficient data or sklearn missing "
+                    f"(need ≥{_MIN_ROWS_FOR_REWARD_MODEL} rows w/ ctx, have {len(scored)})"
+                ),
+            )
+            for arm in all_arms
+        }
+    model, arm_order = fit
+    ctx_dim = len(scored[0].context) if scored[0].context else 0
+
+    results: dict[str, DREstimate] = {}
+    N = len(scored)
+
+    # Pre-compute μ̂(a, x_i) for every (arm, i) pair. ctx_dim + n_arms
+    # is small (< 30) and len(scored) is < 5000 in practice — matrix
+    # of size N × A × 1 fits easily. If this ever gets big enough
+    # to matter, vectorise via model.predict on a stacked feature
+    # matrix rather than the inner loop.
+    for arm in all_arms:
+        # Direct method: μ̂(arm, x_i) averaged over ALL scored rows'
+        # contexts (this is the "what would arm A pay across the
+        # decisions we actually made" baseline).
+        dm_sum = 0.0
+        for d in scored:
+            dm_sum += _predict_reward(model, arm_order, arm, d.context, ctx_dim)
+        direct_method = dm_sum / N
+
+        # IPS correction: only rows where this arm was actually chosen
+        # contribute. The correction is (r - μ̂) / p, weight-truncated.
+        arm_rows = [d for d in scored if d.arm_id == arm]
+        n_used = len(arm_rows)
+        if n_used < min_decisions:
+            results[arm] = DREstimate(
+                arm_id=arm,
+                dr_reward=None,
+                direct_method=direct_method,
+                ips_correction=None,
+                n_used=n_used,
+                note=f"n_used={n_used} < min_decisions={min_decisions}",
+            )
+            continue
+
+        ips_sum = 0.0
+        for d in arm_rows:
+            p = max(d.propensity, min_propensity)
+            mu_hat = _predict_reward(model, arm_order, arm, d.context, ctx_dim)
+            ips_sum += (d.reward - mu_hat) / p if d.reward is not None else 0.0
+        ips_correction = ips_sum / N
+
+        results[arm] = DREstimate(
+            arm_id=arm,
+            dr_reward=direct_method + ips_correction,
+            direct_method=direct_method,
+            ips_correction=ips_correction,
+            n_used=n_used,
+            note="",
+        )
+
+    return results
 
 
 __all__ = [

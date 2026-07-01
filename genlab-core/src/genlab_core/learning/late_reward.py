@@ -165,13 +165,27 @@ def recompute_late_reward(
         return None
 
     # Compute late reward via same shaper the 48h path uses. Injectable.
+    #
+    # Intervention 10 (2026-07-01): must pass ``percentile_targets_fn``
+    # to keep the late-window reward comparable to the 48h reward. Prod
+    # metric_collector wires percentile targets on the 48h compute (see
+    # ``learning/metric_collector.py:1218``). If this shaper omitted it,
+    # reward_late would use hardcoded targets (e.g. YT views=200) while
+    # reward_48h uses percentile-relative — the ``delta = reward_late -
+    # reward_48h`` would then measure the target-shape delta, not the
+    # actual engagement lift, making late_reward_deltas ~meaningless.
     if shaper is None:
         from genlab_core.learning.metric_collector import (
             get_channel_metrics as _channel_fn,
         )
+        from genlab_core.learning.percentile_targets import get_percentile_target
         from genlab_core.learning.reward_shaper import RewardShaper
 
-        shaper = RewardShaper(channel_metrics_fn=_channel_fn, niche_id=niche_id or "")
+        shaper = RewardShaper(
+            channel_metrics_fn=_channel_fn,
+            percentile_targets_fn=get_percentile_target,
+            niche_id=niche_id or "",
+        )
     try:
         reward_late = shaper.compute_reward(platform=platform, metrics=metrics)
     except Exception as exc:
