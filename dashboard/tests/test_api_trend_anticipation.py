@@ -113,3 +113,47 @@ class TestGetLatest:
         resp = client.get("/api/v1/trend-anticipation/latest?niche_id=movies")
         assert resp.status_code == 200
         assert resp.get_json()["data"] is None
+
+
+class TestGetAccuracy:
+    """Session 3b — the ``/accuracy`` endpoint mirrors the ``/latest``
+    shape but reads from a different artifact dir. Same defensive
+    contract: never 500, null-data on cold start."""
+
+    def _write_accuracy(self, root: Path, niche_id: str, payload: dict) -> Path:
+        stamp = datetime.now(UTC).strftime("%Y%m%d")
+        dest = root / "anticipation-accuracy"
+        dest.mkdir(parents=True, exist_ok=True)
+        path = dest / f"{stamp}-{niche_id}.json"
+        path.write_text(json.dumps(payload))
+        return path
+
+    def test_returns_payload_when_measurement_exists(self, client, tmp_path):
+        payload = {
+            "niche_id": "gaming",
+            "spearman_r": 0.62,
+            "p_value": 0.03,
+            "n_topics": 8,
+            "artifact_date": "20260701",
+            "measured_at": "2026-07-08T05:00:00+00:00",
+            "reasons": [],
+        }
+        self._write_accuracy(tmp_path, "gaming", payload)
+        resp = client.get("/api/v1/trend-anticipation/accuracy?niche_id=gaming")
+        assert resp.status_code == 200
+        data = resp.get_json()["data"]
+        assert data["spearman_r"] == pytest.approx(0.62)
+        assert data["n_topics"] == 8
+
+    def test_data_null_when_no_measurement(self, client):
+        resp = client.get(
+            "/api/v1/trend-anticipation/accuracy?niche_id=movies"
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["data"] is None
+
+    def test_400_on_invalid_niche(self, client):
+        resp = client.get(
+            "/api/v1/trend-anticipation/accuracy?niche_id=notaniche"
+        )
+        assert resp.status_code == 400

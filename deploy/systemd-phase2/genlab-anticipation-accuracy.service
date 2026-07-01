@@ -1,0 +1,41 @@
+[Unit]
+Description=GenLab Anticipation Accuracy — weekly Spearman validation of anticipation scores
+Documentation=file:///opt/genlab/scripts/measure_anticipation_accuracy.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# Intervention 5 Session 3b (2026-07-01) — weekly retrospective
+# validation of the anticipation composite_score. For each niche,
+# loads the anticipation artifact from 7 days ago, re-fetches
+# pytrends interest for each ranked topic, and computes Spearman r
+# between predicted score and observed peak intensity.
+#
+# Answers the fundamental validity question: is the anticipation
+# score actually predicting future peaks? If r ≥ 0.4 sustained
+# across multiple weeks, the operator can safely flip
+# GENLAB_TREND_ANTICIPATION_ENABLED=true to activate pipeline
+# steering. If r ≈ 0 or negative, the composite weights need
+# re-tuning.
+#
+# Flag-gated by GENLAB_ANTICIPATION_ACCURACY_ENABLED — off by
+# default. When off, the runner writes empty measurements
+# indicating "measurement disabled" so the dashboard can render
+# that state without special-casing.
+#
+# File-path invocation — scripts/ is not a Python package. Same
+# fix pattern as genlab-late-reward.service, caught by
+# test_systemd_module_drift.py.
+ExecStart=/opt/genlab/.venv/bin/python scripts/measure_anticipation_accuracy.py \
+    --niche all --lookback-days 7
+TimeoutSec=1800
+
+[Install]
+WantedBy=multi-user.target

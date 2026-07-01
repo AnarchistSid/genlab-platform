@@ -1346,3 +1346,17 @@ export interface TrendAnticipationArtifact {
   flag_enabled: boolean;
   ranking: AnticipationScore[];
 }
+
+// Session 3b (2026-07-01) — accuracy measurement.
+// Mirrors ``genlab_core.intel.anticipation_accuracy.AccuracyMeasurement``.
+// `spearman_r` is null when the measurement is undefined (constant
+// input, scipy missing, < 2 topics). Frontend renders that as "—".
+export interface AnticipationAccuracy {
+  niche_id: string;
+  spearman_r: number | null;
+  p_value: number | null;
+  n_topics: number;
+  artifact_date: string;
+  measured_at: string;
+  reasons: string[];
+}

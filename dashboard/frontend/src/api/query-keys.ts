@@ -117,6 +117,10 @@ export const queryKeys = {
      *  03:30 UTC. */
     latest: (nicheId: string) =>
       ["trend-anticipation", "latest", nicheId] as const,
+    /** Session 3b — per-niche accuracy measurement cache key.
+     *  Polled hourly; artifact rewrites weekly on Monday 05:00 UTC. */
+    accuracy: (nicheId: string) =>
+      ["trend-anticipation", "accuracy", nicheId] as const,
   },
   revenue: {
     summary: () => ["revenue", "summary"] as const,

@@ -1122,6 +1122,16 @@ export const trendAnticipation = {
       (d) =>
         unwrapEnvelope<import("./types").TrendAnticipationArtifact>(d),
     ),
+
+  /** Session 3b: fetch this week's accuracy measurement for one
+   *  niche. Returns null when the weekly runner hasn't fired yet
+   *  or when the measurement is env-flag-disabled. */
+  accuracy: (nicheId: string) =>
+    get<{
+      data: import("./types").AnticipationAccuracy | null;
+    }>("/trend-anticipation/accuracy", { niche_id: nicheId }).then(
+      (d) => unwrapEnvelope<import("./types").AnticipationAccuracy>(d),
+    ),
 };
 
 export const strategist = {

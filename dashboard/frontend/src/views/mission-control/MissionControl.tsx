@@ -32,6 +32,7 @@ import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
+import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -315,6 +316,15 @@ export default function MissionControl() {
                 cadence — Strategist for the weekly meta-strategy,
                 TrendAnticipation for the daily topic-selection input. */}
             <TrendAnticipationCard />
+            {/* Session 3b (2026-07-01): Anticipation accuracy — weekly
+                Spearman validation that answers "is the anticipation
+                score ACTUALLY predicting peaks?". Companion to the
+                daily rankings card. Placed next to it so the operator
+                reads them together: forward-looking ranking + backward-
+                looking validation. Ready/learning/not-predictive badge
+                is the operator's go/wait/rollback signal for flipping
+                pipeline steering on. */}
+            <TrendAnticipationAccuracyCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

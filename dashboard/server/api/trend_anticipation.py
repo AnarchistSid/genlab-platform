@@ -121,3 +121,76 @@ def get_latest():
             }
         )
     return jsonify({"status": "success", "data": artifact})
+
+
+def _accuracy_root() -> Path:
+    """Session 3b path for the accuracy runner's artifacts."""
+    tmp = os.environ.get("GENLAB_TMP")
+    root = Path(tmp) if tmp else Path.cwd() / ".tmp"
+    return root / "anticipation-accuracy"
+
+
+@bp.route("/accuracy", methods=["GET"])
+def get_accuracy():
+    """Return today's Spearman accuracy measurement for one niche.
+
+    Session 3b (2026-07-01). Reads the artifact written by
+    ``scripts/measure_anticipation_accuracy.py`` (fires weekly on
+    Mondays at 05:00 UTC via ``genlab-anticipation-accuracy.timer``).
+    The measurement compares composite scores from 7 days ago with
+    observed peak intensity now — answers "is the anticipation score
+    actually predicting future peaks?"
+
+    Response shape:
+
+        {
+          "status": "success",
+          "data": {
+            "niche_id": "gaming",
+            "spearman_r": 0.62,
+            "p_value": 0.03,
+            "n_topics": 8,
+            "artifact_date": "20260701",
+            "measured_at": "2026-07-08T05:00:00+00:00",
+            "reasons": []
+          }
+        }
+
+    ``data`` is null when the accuracy runner hasn't fired for today
+    yet, when the measurement is disabled, or when there's no
+    artifact to measure against. Frontend renders "No measurement
+    yet" defensively.
+    """
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if niche_id not in _VALID_NICHES:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": f"Invalid niche_id (allowed: {sorted(_VALID_NICHES)})",
+                }
+            ),
+            400,
+        )
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    path = _accuracy_root() / f"{stamp}-{niche_id}.json"
+    if not path.exists():
+        return jsonify(
+            {
+                "status": "success",
+                "data": None,
+                "message": f"No accuracy measurement for {niche_id} today",
+            }
+        )
+    try:
+        payload = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning(
+            "trend_anticipation.accuracy: %s/%s malformed: %s",
+            stamp,
+            niche_id,
+            exc,
+        )
+        return jsonify({"status": "success", "data": None})
+    return jsonify({"status": "success", "data": payload})

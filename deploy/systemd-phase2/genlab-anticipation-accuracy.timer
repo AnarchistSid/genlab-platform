@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab Anticipation Accuracy Timer — Mondays 05:00 UTC weekly
+
+[Timer]
+# Monday 05:00 UTC (10:30 IST). Weekly cadence — the underlying
+# accuracy signal only shifts as new artifacts accumulate + peaks
+# materialise. Running daily would spend pytrends quota re-fetching
+# the same historical topics. Monday morning so the operator's
+# weekly review consumes fresh data.
+#
+# Sits after the 03:30 UTC anticipation runner + the 04:00 UTC late-
+# reward run, giving those upstream tasks time to complete without
+# resource contention on the 4 GB VPS.
+OnCalendar=Mon *-*-* 05:00:00 UTC
+Persistent=true
+Unit=genlab-anticipation-accuracy.service
+
+[Install]
+WantedBy=timers.target
