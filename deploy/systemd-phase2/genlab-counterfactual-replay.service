@@ -35,7 +35,12 @@ Environment=GENLAB_TMP=/opt/genlab/.tmp
 # Exit 0 always — an empty dataset is a valid state (early days,
 # quiet period). Rely on logs / artifact-presence monitoring for
 # visibility, not systemd status.
-ExecStart=/opt/genlab/.venv/bin/python -m scripts.run_counterfactual_replay \
+# File-path invocation — ``scripts/`` is not a Python package (no
+# ``__init__.py``), so ``-m scripts.run_counterfactual_replay`` fails
+# module import. See sibling ``genlab-late-reward.service`` for the
+# same pattern and the ``test_systemd_module_drift`` regression it
+# guards against.
+ExecStart=/opt/genlab/.venv/bin/python scripts/run_counterfactual_replay.py \
     --niche all --window-days 30
 TimeoutSec=900
 

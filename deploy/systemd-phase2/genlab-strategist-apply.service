@@ -16,7 +16,11 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
 Environment=UV_FROZEN=1
 TimeoutStartSec=5min
-ExecStart=/usr/local/bin/uv run python -m scripts.apply_strategist_actions
+# File-path invocation — see sibling ``genlab-late-reward.service``
+# for the same fix. ``scripts/`` is not a Python package (no
+# ``__init__.py``), so ``-m scripts.apply_strategist_actions`` fails
+# at import — caught by ``test_systemd_module_drift.py``.
+ExecStart=/usr/local/bin/uv run python scripts/apply_strategist_actions.py
 StandardOutput=journal
 StandardError=journal
 

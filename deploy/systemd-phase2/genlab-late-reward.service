@@ -14,7 +14,13 @@ Environment=GENLAB_PROJECT_ROOT=/opt/genlab
 Environment=HOME=/opt/genlab
 Environment=UV_FROZEN=1
 TimeoutStartSec=15min
-ExecStart=/usr/local/bin/uv run python -m scripts.recompute_late_rewards
+# 2026-07-01: switched from ``-m scripts.recompute_late_rewards`` to
+# a direct file path. ``scripts/`` is not a Python package (no
+# ``__init__.py``) and Batch A shipped this unit with the ``-m`` form
+# which fails module-import at CI time (test_systemd_module_drift
+# catches it). File-path invocation is idiomatic for standalone
+# scripts and matches how the operator would run this by hand.
+ExecStart=/usr/local/bin/uv run python scripts/recompute_late_rewards.py
 StandardOutput=journal
 StandardError=journal
 

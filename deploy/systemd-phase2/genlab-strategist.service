@@ -18,7 +18,11 @@ Environment=UV_FROZEN=1
 # Strategist calls the LLM at most once per niche per week, so a
 # generous timeout is fine — it's not going to hog resources.
 TimeoutStartSec=15min
-ExecStart=/usr/local/bin/uv run python -m scripts.run_strategist
+# File-path invocation — see sibling ``genlab-late-reward.service``
+# for the same fix. ``scripts/`` is not a Python package (no
+# ``__init__.py``), so ``-m scripts.run_strategist`` fails at import
+# time — caught by ``test_systemd_module_drift.py``.
+ExecStart=/usr/local/bin/uv run python scripts/run_strategist.py
 StandardOutput=journal
 StandardError=journal
 
