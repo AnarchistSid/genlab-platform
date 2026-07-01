@@ -57,42 +57,76 @@ class PostgresStateCollector:
 
     # ----- per-section best-effort queries -----
 
-    def _channel_metrics(self, niche_id: str) -> dict[str, Any]:
-        """Pulls follower count + engagement + watch time from analytics table.
+    def _safe(self, label: str, fn):
+        """Wrapper that rolls back the transaction on failure so subsequent
+        per-section queries can still succeed.
 
-        Returns: follower_count, engagement_rate_7d, watch_time_avg_7d, n_publishes_7d,
-        plus _delta_4w deltas. All keys nullable.
+        psycopg's default behavior: if any query in a transaction fails, the
+        transaction is aborted and every subsequent query returns "current
+        transaction is aborted, commands ignored". Without a rollback, one
+        broken query cascades into failing all downstream queries — the
+        entire state collection gets marked "unknown" even for niches
+        whose data is fine.
         """
         try:
-            cur = self._conn.execute(
+            return fn()
+        except Exception as exc:
+            logger.warning("state_collector.%s_failed err=%s", label, exc)
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+            return None
+
+    def _channel_metrics(self, niche_id: str) -> dict[str, Any]:
+        """Aggregate the analytics table by metric_type for follower/engagement/watch.
+
+        The analytics table is EAV-style: each row is one (post_id, platform,
+        metric_type, value, collected_at) tuple. So follower_count etc. are
+        stored as separate rows tagged with metric_type='follower_count', not
+        as columns of the table. This aggregates the last 7 days across all
+        rows of each metric type.
+
+        Returns keys: follower_count, engagement_rate_7d, watch_time_avg_7d,
+        n_publishes_7d. All nullable.
+        """
+        result = self._safe(
+            "channel_metrics",
+            lambda: self._conn.execute(
                 """
                 SELECT
-                  MAX(follower_count) AS followers,
-                  AVG(engagement_rate) FILTER (WHERE collected_at >= NOW() - INTERVAL '7 days') AS er7d,
-                  AVG(watch_time_sec) FILTER (WHERE collected_at >= NOW() - INTERVAL '7 days') AS wt7d,
-                  COUNT(*) FILTER (WHERE collected_at >= NOW() - INTERVAL '7 days') AS n7d
+                  MAX(value) FILTER (WHERE metric_type = 'follower_count') AS followers,
+                  AVG(value) FILTER (
+                    WHERE metric_type = 'engagement_rate'
+                      AND collected_at >= NOW() - INTERVAL '7 days'
+                  ) AS er7d,
+                  AVG(value) FILTER (
+                    WHERE metric_type = 'watch_time_sec'
+                      AND collected_at >= NOW() - INTERVAL '7 days'
+                  ) AS wt7d,
+                  COUNT(DISTINCT post_id) FILTER (
+                    WHERE collected_at >= NOW() - INTERVAL '7 days'
+                  ) AS n7d
                 FROM analytics
                 WHERE niche_id = %s
                 """,
                 (niche_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {}
-            return {
-                "follower_count": row.get("followers") if hasattr(row, "get") else row[0],
-                "engagement_rate_7d": (row.get("er7d") if hasattr(row, "get") else row[1]),
-                "watch_time_avg_7d": (row.get("wt7d") if hasattr(row, "get") else row[2]),
-                "n_publishes_7d": row.get("n7d") if hasattr(row, "get") else row[3],
-            }
-        except Exception as exc:
-            logger.warning("state_collector.channel_metrics_failed niche=%s err=%s", niche_id, exc)
+            ).fetchone(),
+        )
+        if not result:
             return {}
+        return {
+            "follower_count": result.get("followers") if hasattr(result, "get") else result[0],
+            "engagement_rate_7d": result.get("er7d") if hasattr(result, "get") else result[1],
+            "watch_time_avg_7d": result.get("wt7d") if hasattr(result, "get") else result[2],
+            "n_publishes_7d": result.get("n7d") if hasattr(result, "get") else result[3],
+        }
 
     def _bandit_state(self, niche_id: str) -> dict[str, Any]:
-        """Top + bottom arms from bandit_arms; computes mean reward from Beta(α, β)."""
-        try:
-            cur = self._conn.execute(
+        """Top arms from bandit_arms; computes mean reward from Beta(α, β)."""
+        rows = self._safe(
+            "bandit_state",
+            lambda: self._conn.execute(
                 """
                 SELECT arm_id, n_plays, alpha, beta
                 FROM bandit_arms
@@ -101,52 +135,55 @@ class PostgresStateCollector:
                 LIMIT 30
                 """,
                 (niche_id,),
+            ).fetchall(),
+        )
+        arms = []
+        for row in rows or []:
+            alpha = row.get("alpha", 1.0) if hasattr(row, "get") else row[2]
+            beta = row.get("beta", 1.0) if hasattr(row, "get") else row[3]
+            # Beta(α, β) mean is α / (α + β)
+            mean = float(alpha) / (float(alpha) + float(beta)) if (alpha + beta) > 0 else 0.0
+            arms.append(
+                {
+                    "arm_id": row.get("arm_id") if hasattr(row, "get") else row[0],
+                    "n_plays": row.get("n_plays") if hasattr(row, "get") else row[1],
+                    "reward": round(mean, 4),
+                }
             )
-            arms = []
-            for row in cur.fetchall():
-                alpha = row.get("alpha", 1.0) if hasattr(row, "get") else row[2]
-                beta = row.get("beta", 1.0) if hasattr(row, "get") else row[3]
-                # Beta(α, β) mean is α / (α + β)
-                mean = float(alpha) / (float(alpha) + float(beta)) if (alpha + beta) > 0 else 0.0
-                arms.append(
-                    {
-                        "arm_id": row.get("arm_id") if hasattr(row, "get") else row[0],
-                        "n_plays": row.get("n_plays") if hasattr(row, "get") else row[1],
-                        "reward": round(mean, 4),
-                    }
-                )
-            return {"bandit_state": arms}
-        except Exception as exc:
-            logger.warning("state_collector.bandit_state_failed niche=%s err=%s", niche_id, exc)
-            return {"bandit_state": []}
+        return {"bandit_state": arms}
 
     def _validation_state(self, niche_id: str) -> dict[str, Any]:
-        try:
-            cur = self._conn.execute(
+        """Read the latest bandit_validation row for a niche.
+
+        Real column names (verified via information_schema 2026-07-01):
+        `spearman` (not spearman_correlation), `computed_at` (not run_at).
+        The v1 schema-guess was wrong; this is the corrected version.
+        """
+        row = self._safe(
+            "validation",
+            lambda: self._conn.execute(
                 """
-                SELECT spearman_correlation AS sp, interpretation
+                SELECT spearman, interpretation
                 FROM bandit_validation
                 WHERE niche_id = %s
-                ORDER BY run_at DESC LIMIT 1
+                ORDER BY computed_at DESC LIMIT 1
                 """,
                 (niche_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {}
-            return {
-                "spearman_7d": row.get("sp") if hasattr(row, "get") else row[0],
-                "validation_interpretation": (
-                    row.get("interpretation") if hasattr(row, "get") else row[1]
-                ),
-            }
-        except Exception as exc:
-            logger.warning("state_collector.validation_failed niche=%s err=%s", niche_id, exc)
+            ).fetchone(),
+        )
+        if not row:
             return {}
+        return {
+            "spearman_7d": row.get("spearman") if hasattr(row, "get") else row[0],
+            "validation_interpretation": (
+                row.get("interpretation") if hasattr(row, "get") else row[1]
+            ),
+        }
 
     def _calibration_state(self, niche_id: str) -> dict[str, Any]:
-        try:
-            cur = self._conn.execute(
+        row = self._safe(
+            "calibration",
+            lambda: self._conn.execute(
                 """
                 SELECT
                   COUNT(*) AS n,
@@ -155,19 +192,16 @@ class PostgresStateCollector:
                 WHERE niche_id = %s
                 """,
                 (niche_id,),
-            )
-            row = cur.fetchone()
-            if not row:
-                return {}
-            n = row.get("n") if hasattr(row, "get") else row[0]
-            agree = row.get("agree") if hasattr(row, "get") else row[1]
-            return {
-                "calibration_n_rows": n,
-                "calibration_agreement_pct": round(float(agree) * 100, 1) if agree else None,
-            }
-        except Exception as exc:
-            logger.warning("state_collector.calibration_failed niche=%s err=%s", niche_id, exc)
+            ).fetchone(),
+        )
+        if not row:
             return {}
+        n = row.get("n") if hasattr(row, "get") else row[0]
+        agree = row.get("agree") if hasattr(row, "get") else row[1]
+        return {
+            "calibration_n_rows": n,
+            "calibration_agreement_pct": round(float(agree) * 100, 1) if agree else None,
+        }
 
     def _cost_state(self, niche_id: str) -> dict[str, Any]:
         # Cost tracking is half-wired (Blind Spot #1) — return None for now;
@@ -175,63 +209,76 @@ class PostgresStateCollector:
         return {"cost_per_blueprint": None, "cost_per_published": None}
 
     def _recent_publishes(self, niche_id: str, week_of: date) -> list[dict[str, Any]]:
-        """Top 5 + bottom 5 + random 5 publishes from the analyzed week."""
-        try:
-            since = (week_of - timedelta(days=7)).isoformat()
-            cur = self._conn.execute(
+        """Recent publishes for the analyzed week.
+
+        publishing_analytics doesn't have an engagement_score column — actual
+        columns are (blueprint_id, platform, status, published_at, error_message,
+        extra). We surface published_at + platform + status and let the LLM
+        infer performance from context. The Strategist prompt's bandit_state
+        section carries the reward-side signal.
+        """
+        since = (week_of - timedelta(days=7)).isoformat()
+        rows = self._safe(
+            "publishes",
+            lambda: self._conn.execute(
                 """
-                SELECT b.id AS blueprint_id, pa.platform, pa.engagement_score AS reward,
-                       b.hook_text
+                SELECT b.id AS blueprint_id, pa.platform, pa.status, b.hook_text
                 FROM publishing_analytics pa
                 JOIN blueprints b ON b.id = pa.blueprint_id
-                WHERE b.niche_id = %s AND pa.published_at >= %s
-                ORDER BY pa.engagement_score DESC NULLS LAST
+                WHERE b.niche_id = %s
+                  AND pa.published_at >= %s
+                  AND pa.status = 'SUCCESS'
+                ORDER BY pa.published_at DESC
                 LIMIT 15
                 """,
                 (niche_id, since),
-            )
-            return [
-                {
-                    "blueprint_id": str(r.get("blueprint_id") if hasattr(r, "get") else r[0]),
-                    "platform": r.get("platform") if hasattr(r, "get") else r[1],
-                    "reward": r.get("reward") if hasattr(r, "get") else r[2],
-                    "hook_text": r.get("hook_text") if hasattr(r, "get") else r[3],
-                }
-                for r in cur.fetchall()
-            ]
-        except Exception as exc:
-            logger.warning("state_collector.publishes_failed niche=%s err=%s", niche_id, exc)
-            return []
+            ).fetchall(),
+        )
+        return [
+            {
+                "blueprint_id": str(r.get("blueprint_id") if hasattr(r, "get") else r[0]),
+                "platform": r.get("platform") if hasattr(r, "get") else r[1],
+                "reward": r.get("status") if hasattr(r, "get") else r[2],  # SUCCESS marker
+                "hook_text": r.get("hook_text") if hasattr(r, "get") else r[3],
+            }
+            for r in rows or []
+        ]
 
     def _cross_niche_summary(self, exclude: str) -> dict[str, str]:
-        """One-line summary per OTHER niche so the LLM can spot cross-niche patterns."""
-        try:
-            cur = self._conn.execute(
+        """One-line summary per OTHER niche so the LLM can spot cross-niche patterns.
+
+        Uses the same EAV-aware aggregation as _channel_metrics.
+        """
+        rows = self._safe(
+            "cross_niche",
+            lambda: self._conn.execute(
                 """
                 SELECT niche_id,
-                       MAX(follower_count) AS followers,
-                       AVG(engagement_rate) FILTER (WHERE collected_at >= NOW() - INTERVAL '7 days') AS er
+                       MAX(value) FILTER (WHERE metric_type = 'follower_count') AS followers,
+                       AVG(value) FILTER (
+                         WHERE metric_type = 'engagement_rate'
+                           AND collected_at >= NOW() - INTERVAL '7 days'
+                       ) AS er
                 FROM analytics
                 WHERE niche_id != %s
                 GROUP BY niche_id
                 """,
                 (exclude,),
-            )
-            out = {}
-            for r in cur.fetchall():
-                niche = r.get("niche_id") if hasattr(r, "get") else r[0]
-                followers = r.get("followers") if hasattr(r, "get") else r[1]
-                er = r.get("er") if hasattr(r, "get") else r[2]
-                out[niche] = f"followers={followers} er7d={er}"
-            return out
-        except Exception as exc:
-            logger.warning("state_collector.cross_niche_failed err=%s", exc)
-            return {}
+            ).fetchall(),
+        )
+        out: dict[str, str] = {}
+        for r in rows or []:
+            niche = r.get("niche_id") if hasattr(r, "get") else r[0]
+            followers = r.get("followers") if hasattr(r, "get") else r[1]
+            er = r.get("er") if hasattr(r, "get") else r[2]
+            out[niche] = f"followers={followers} er7d={er}"
+        return out
 
     def _active_findings(self, niche_id: str) -> list[dict[str, Any]]:
         """Pulls active learning_findings — empty list if table doesn't exist yet."""
-        try:
-            cur = self._conn.execute(
+        rows = self._safe(
+            "active_findings",
+            lambda: self._conn.execute(
                 """
                 SELECT finding_text, evidence_count
                 FROM learning_findings
@@ -239,23 +286,22 @@ class PostgresStateCollector:
                 ORDER BY evidence_count DESC LIMIT 10
                 """,
                 (niche_id,),
-            )
-            return [
-                {
-                    "finding_text": r.get("finding_text") if hasattr(r, "get") else r[0],
-                    "evidence_count": r.get("evidence_count") if hasattr(r, "get") else r[1],
-                }
-                for r in cur.fetchall()
-            ]
-        except Exception:
-            # Table doesn't exist yet — that's expected pre-migration.
-            return []
+            ).fetchall(),
+        )
+        return [
+            {
+                "finding_text": r.get("finding_text") if hasattr(r, "get") else r[0],
+                "evidence_count": r.get("evidence_count") if hasattr(r, "get") else r[1],
+            }
+            for r in rows or []
+        ]
 
     def _last_week_outcomes(self, niche_id: str, week_of: date) -> list[dict[str, Any]]:
         """Prior week's Strategist proposals + operator decisions. Empty on first run."""
-        try:
-            last_week = (week_of - timedelta(days=7)).isoformat()
-            cur = self._conn.execute(
+        last_week = (week_of - timedelta(days=7)).isoformat()
+        row = self._safe(
+            "last_week_outcomes",
+            lambda: self._conn.execute(
                 """
                 SELECT proposals, proposals_accepted, proposals_rejected
                 FROM strategist_reports
@@ -263,12 +309,9 @@ class PostgresStateCollector:
                 LIMIT 1
                 """,
                 (niche_id, last_week),
-            )
-            row = cur.fetchone()
-            if not row:
-                return []
-            # Just summarize; full structure is in DB
-            return [{"proposal_summary": "see prior report", "operator_action": "see prior report"}]
-        except Exception:
-            # Table doesn't exist yet — first-run case.
+            ).fetchone(),
+        )
+        if not row:
             return []
+        # Just summarize; full structure is in DB
+        return [{"proposal_summary": "see prior report", "operator_action": "see prior report"}]
