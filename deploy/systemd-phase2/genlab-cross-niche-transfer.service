@@ -1,0 +1,30 @@
+[Unit]
+Description=GenLab Cross-Niche Transfer — weekly hierarchical Bayesian prior refit
+Documentation=file:///opt/genlab/scripts/refit_cross_niche_priors.py
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# Intervention 2 (2026-07-01) — weekly empirical-Bayes fit of
+# cross-niche style priors from bandit_arms posteriors. Persists
+# JSON artifact consumed by ``get_transferred_prior`` at new-arm
+# instantiation time.
+#
+# NEW arms created after the refit inherit the transferred prior
+# (when ``GENLAB_CROSS_NICHE_TRANSFER_ENABLED=true`` at consumer
+# side). Already-instantiated arms are unaffected — this is a
+# cold-start acceleration, not a steady-state retrain.
+#
+# File-path invocation per the 014391f3 fix pattern.
+ExecStart=/opt/genlab/.venv/bin/python scripts/refit_cross_niche_priors.py
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target

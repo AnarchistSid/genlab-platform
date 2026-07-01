@@ -1,0 +1,15 @@
+[Unit]
+Description=GenLab Cross-Niche Transfer Timer — Mondays 05:30 UTC weekly
+
+[Timer]
+# Monday 05:30 UTC (11:00 IST) — 30 minutes after the anticipation-
+# accuracy runner. Same rationale for the weekly cadence: the
+# underlying signal (cross-niche variance across style posteriors)
+# only shifts as new observations accumulate; recomputing daily
+# would burn cycles without producing meaningfully different priors.
+OnCalendar=Mon *-*-* 05:30:00 UTC
+Persistent=true
+Unit=genlab-cross-niche-transfer.service
+
+[Install]
+WantedBy=timers.target
