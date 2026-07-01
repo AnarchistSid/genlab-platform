@@ -1,5 +1,10 @@
 """Auto-approval enforcement worker.
 
+See ``docs/SCHEDULING-CONTRACT.md`` for the three-field contract
+(status × action_taken × scheduled_for) this module operates on. In
+particular: setting action_taken='approved' on a VISUAL_READY blueprint
+without a slot makes it re-eligible for auto-scheduling within ~1h.
+
 AUTO #2 (2026-06-13): the second half of the autonomous-agent loop.
 AUTO #1 ships the observation surface (gate + calibration logger +
 Mission Control card). This module ships the enforcement worker that

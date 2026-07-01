@@ -1,0 +1,18 @@
+[Unit]
+Description=GenLab visual backup daily — 07:00 UTC (12:30 IST)
+Documentation=file:///opt/genlab/scripts/backup_visual_assets.sh
+
+[Timer]
+# 07:00 UTC = 12:30 IST. Chosen so:
+#   * Runs AFTER the 06:30 UTC publisher window (12:00 IST) → captures
+#     the day's newly-rendered content that just published
+#   * Runs BEFORE the 08:00 UTC pipeline-fire wave (13:30 IST movies /
+#     15:30 UTC sports) → doesn't compete with FFmpeg for I/O
+#   * PG backup fires at 01:00 UTC daily; we're 6h later so any
+#     "restore from today's backup" op naturally uses matching bases
+OnCalendar=*-*-* 07:00:00 UTC
+Persistent=true
+Unit=genlab-visual-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,30 @@
+[Unit]
+Description=GenLab visual asset backup — daily rendered .mp4 snapshot
+After=network-online.target genlab-postgres.service
+# Fire AFTER pg-backup so both DB + files land in the same daily window
+After=genlab-pg-backup.service
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+# 14-day retention × ~50 MB/render × 5 renders/niche/day × 5 niches
+# = ~17 GB steady state. Hardlink dedup keeps it much smaller in
+# practice (unchanged files across days share bytes).
+TimeoutStartSec=30min
+ExecStart=/opt/genlab/scripts/backup_visual_assets.sh --apply
+StandardOutput=journal
+StandardError=journal
+
+# Runs as root because /opt/genlab/.backups/ is root-owned + the S3 sync
+# (when enabled) needs to be able to read the aws CLI cache which lives
+# at /root/.aws/credentials on the box.
+MemoryMax=256M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target

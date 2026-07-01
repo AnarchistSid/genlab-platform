@@ -1,5 +1,9 @@
 """CLI entrypoint for the niche_pause expired-row sweeper.
 
+See ``docs/SCHEDULING-CONTRACT.md`` for the auto-scheduling contract
+this sweeper enforces (approved blueprints without scheduled_for get
+slot assignment on the next daily fire at 02:00 UTC).
+
 Designed to be wired as a systemd timer (daily at low-traffic
 hours). The library function ``niche_pause.sweep_expired_pauses``
 returns a count + logs; this module turns that into a CLI with

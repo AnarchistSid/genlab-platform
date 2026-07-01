@@ -1,0 +1,18 @@
+[Unit]
+Description=GenLab Strategist weekly cadence — Sunday 02:00 UTC
+Documentation=file:///opt/genlab/docs/STRATEGIST-SPEC.md
+
+[Timer]
+# Sunday 02:00 UTC = 07:30 IST. Chosen so operator has the report
+# waiting when they start Monday review. Wait until Sunday 02:00
+# ensures the previous week's engagement data has settled (posts
+# from Saturday have their 48h reward window still open, but the
+# earlier days of the week are complete).
+OnCalendar=Sun 02:00:00 UTC
+# Skip re-running if we missed a firing (e.g. VPS was down).
+# Persistent=false is the default — this makes it explicit.
+Persistent=false
+Unit=genlab-strategist.service
+
+[Install]
+WantedBy=timers.target
