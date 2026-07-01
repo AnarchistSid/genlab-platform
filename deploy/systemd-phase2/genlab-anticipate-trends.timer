@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab Trend Anticipation Timer — daily 03:30 UTC before pipeline runs
+
+[Timer]
+# 03:30 UTC = 09:00 IST — slot is deliberately AFTER the 04:00 UTC
+# late-reward run (so any late-reward corrections finish first) and
+# BEFORE the earliest per-niche pipeline runs (06:30 UTC). This lets
+# today's pipeline read today's anticipation artifact when it
+# constructs its candidate list — a future Session 2/3 PR wires the
+# read side; the flag GENLAB_TREND_ANTICIPATION_ENABLED gates it.
+OnCalendar=*-*-* 03:30:00 UTC
+# Persistent — catch-up after reboot / downtime. A missed daily run
+# just means today's ranking uses yesterday's numbers (still
+# directionally useful).
+Persistent=true
+Unit=genlab-anticipate-trends.service
+
+[Install]
+WantedBy=timers.target

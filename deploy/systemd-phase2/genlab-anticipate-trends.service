@@ -1,0 +1,36 @@
+[Unit]
+Description=GenLab Trend Anticipation — daily rank of upcoming topics per niche
+Documentation=file:///opt/genlab/scripts/anticipate_trends.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# Intervention 5 Session 1 (2026-07-01) — daily trend anticipation.
+# Fetches currently-trending topics per niche + ranks by anticipation
+# score (search-velocity 2nd-derivative today; creator_pickup +
+# social_velocity + news_lead land in follow-up sessions). Writes
+# ranked artifact to $GENLAB_TMP/trend-anticipation/YYYYMMDD-<niche>.json
+# for downstream pipeline consumption.
+#
+# Session 1 ships in observation-only mode: the artifact is written
+# but the pipeline doesn't read it yet. GENLAB_TREND_ANTICIPATION_ENABLED
+# guards the future read side. Ranking history accumulates so future
+# work can validate the score against observed peak times before the
+# pipeline steers on it.
+#
+# File-path invocation — scripts/ is not a Python package. See
+# genlab-late-reward.service for the sibling gotcha and
+# test_systemd_module_drift.py for the CI regression pin.
+ExecStart=/opt/genlab/.venv/bin/python scripts/anticipate_trends.py \
+    --niche all --top-n 5
+TimeoutSec=900
+
+[Install]
+WantedBy=multi-user.target
