@@ -231,3 +231,65 @@ class TestRawMetricsExposure:
             resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
             data = resp.get_json()["data"]
             assert data["raw_metrics"]["has_video"] is False
+
+
+class TestEnsemblePayload:
+    """Intervention 6 (2026-07-01): the preview response now carries
+    an ``ensemble`` payload alongside the rule gate's verdict. Pins:
+
+    1. Flag off (default) → ``ensemble.recommendation == "disabled"``
+       and ``ensemble.score is None``. Frontend must be able to render
+       an "N/A" state without special-casing.
+    2. Payload shape is stable — ``score``, ``disagreement``,
+       ``n_voters``, ``recommendation``, ``votes``, ``reasons`` keys
+       are all present.
+    3. Rule gate fields are unchanged when the ensemble payload lands
+       — the ensemble is ADDITIVE, not a replacement.
+    """
+
+    def test_ensemble_payload_present_when_flag_off(self, client, monkeypatch):
+        monkeypatch.delenv("GENLAB_ENSEMBLE_DECISION_ENABLED", raising=False)
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = _stub_blueprint()
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            assert resp.status_code == 200
+            data = resp.get_json()["data"]
+            assert "ensemble" in data
+            ens = data["ensemble"]
+            assert ens["recommendation"] == "disabled"
+            assert ens["score"] is None
+            assert ens["n_voters"] == 0
+            assert ens["votes"] == []
+
+    def test_ensemble_payload_shape_stable(self, client, monkeypatch):
+        monkeypatch.delenv("GENLAB_ENSEMBLE_DECISION_ENABLED", raising=False)
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = _stub_blueprint()
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            ens = resp.get_json()["data"]["ensemble"]
+            # Frontend contract: these keys are always present so
+            # rendering doesn't need a dozen ``ens?.foo`` optional
+            # chains. Missing keys silently regress the UI.
+            for key in (
+                "score",
+                "disagreement",
+                "n_voters",
+                "recommendation",
+                "votes",
+                "reasons",
+            ):
+                assert key in ens, f"ensemble payload missing '{key}'"
+
+    def test_rule_gate_verdict_unchanged_by_ensemble(self, client, monkeypatch):
+        """The ensemble is ADDITIVE. Rule gate fields must not shift
+        because of it, or existing dashboards that only read
+        ``approved`` / ``confidence`` would regress."""
+        monkeypatch.delenv("GENLAB_ENSEMBLE_DECISION_ENABLED", raising=False)
+        with patch("server.api.blueprints._get_client") as mock_client:
+            mock_client.return_value.blueprints.get.return_value = _stub_blueprint()
+            resp = client.get("/api/v1/blueprints/12345/auto-approval-preview")
+            data = resp.get_json()["data"]
+            assert data["approved"] is True
+            assert 0.0 <= data["confidence"] <= 1.0
+            assert "passed_checks" in data
+            assert "failed_checks" in data

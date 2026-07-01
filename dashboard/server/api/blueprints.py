@@ -1143,6 +1143,42 @@ def auto_approval_preview(record_id):
         ),
     }
 
+    # Intervention 6 (2026-07-01): additive ensemble telemetry. When
+    # ``GENLAB_ENSEMBLE_DECISION_ENABLED=true``, surface the ensemble
+    # verdict alongside the rule gate's. The two are INDEPENDENT — the
+    # rule gate remains the "hard" verdict; the ensemble surfaces
+    # disagreement between components that the rule gate can't see.
+    # When the ensemble is disabled, the field carries a "disabled"
+    # verdict with ``score=None`` — the frontend renders it as N/A.
+    #
+    # Fail-open: any exception in the ensemble path is logged + swallowed
+    # so a broken ensemble adapter never blocks the preview endpoint.
+    ensemble_payload: dict | None = None
+    try:
+        from genlab_core.scheduling.ensemble_decide import ensemble_decide
+
+        niche_id = (blueprint_dict.get("niche_id") or "").strip()
+        ens = ensemble_decide(blueprint_dict, niche_id)
+        ensemble_payload = {
+            "score": ens.score,
+            "disagreement": ens.disagreement,
+            "n_voters": ens.n_voters,
+            "recommendation": ens.recommendation,
+            "votes": [
+                {
+                    "component": v.component,
+                    "score": v.score,
+                    "weight": v.weight,
+                    "reason": v.reason,
+                }
+                for v in ens.votes
+            ],
+            "reasons": ens.reasons,
+        }
+    except Exception as exc:
+        logger.warning("Ensemble preview failed for %s: %s", record_id, exc)
+        ensemble_payload = {"error": str(exc), "recommendation": "error"}
+
     return api_success(
         data={
             "record_id": record_id,
@@ -1152,6 +1188,7 @@ def auto_approval_preview(record_id):
             "failed_checks": decision.failed_checks,
             "reasons": decision.reasons,
             "raw_metrics": raw_metrics,
+            "ensemble": ensemble_payload,
             # The preview never enforces — make this contract explicit so
             # frontend can show "preview only" copy.
             "would_publish": False,
