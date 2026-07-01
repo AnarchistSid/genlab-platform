@@ -1221,3 +1221,86 @@ export interface NichePauseRecord {
    *  ON CONFLICT clause — repause does NOT reset this). */
   created_at: string | null;
 }
+
+// ───────────────────────────────────────────────────────────────
+// PR Strategist-2b (2026-07-01) — Mission Control card wire.
+//
+// Mirrors ``genlab_core.intelligence.proposal_schema`` — the Strategist
+// LLM's output shape. Keep union literals in sync when the Python
+// enum grows; the dashboard renders phase / proposal type via a lookup
+// table, so an unknown value falls back to raw-string display but
+// doesn't crash the render.
+// ───────────────────────────────────────────────────────────────
+
+export type StrategicPhase =
+  | "BOOTSTRAP"
+  | "GROWTH"
+  | "OPTIMIZE"
+  | "MONETIZE"
+  | "DEFEND";
+
+export type ProposalType =
+  | "phase_shift"
+  | "arm_add"
+  | "gate_threshold"
+  | "reward_weight"
+  | "novelty_rate"
+  | "playbook_update"
+  | "manual_action";
+
+export type ProposalRisk = "low" | "medium" | "high";
+export type ProposalUrgency = "ship_now" | "this_week" | "next_sprint";
+export type HypothesisConfidence = "high" | "medium" | "low";
+
+export interface StrategistProposal {
+  type: ProposalType;
+  target: string;
+  /** Current value or null for pure additions (arm_add). Server sends
+   *  arbitrary JSON — render as JSON.stringify for anything not a
+   *  primitive. */
+  current: unknown;
+  proposed: unknown;
+  reasoning: string;
+  expected_impact: string;
+  risk: ProposalRisk;
+  urgency: ProposalUrgency;
+}
+
+export interface CausalHypothesis {
+  pattern: string;
+  hypothesis: string;
+  confidence: HypothesisConfidence;
+  evidence: string[];
+  testable_prediction: string;
+}
+
+export interface PlaybookProposal {
+  pattern_text: string;
+  evidence_niches: string[];
+  confidence: HypothesisConfidence;
+}
+
+/** Full Strategist report — mirrors StrategistReport.model_dump() on the
+ *  Python side. ``run_at`` and ``week_of`` are ISO-8601 strings; the card
+ *  formats them for display. */
+export interface StrategistReport {
+  id: string;
+  niche_id: string;
+  week_of: string;
+  run_at: string;
+  detected_phase: StrategicPhase;
+  phase_evidence: string;
+  weekly_summary: string;
+  proposals: StrategistProposal[];
+  causal_hypotheses: CausalHypothesis[];
+  universal_playbook_proposals: PlaybookProposal[];
+}
+
+/** Request body for POST /reports/<id>/review. Empty lists mean
+ *  "operator dismissed the report without acting on any proposal" —
+ *  a valid state the server accepts. */
+export interface StrategistReviewRequest {
+  accepted_proposal_indices: number[];
+  rejected_proposal_indices: number[];
+  notes?: string;
+}

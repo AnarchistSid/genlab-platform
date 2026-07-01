@@ -103,6 +103,14 @@ export const queryKeys = {
     hourPosteriors: (nicheId: string) =>
       ["bandit", "hour-posteriors", nicheId] as const,
   },
+  strategist: {
+    /** PR Strategist-2b (2026-07-01) — per-niche latest report cache key.
+     *  Card invalidates on review-mutation success so the "unreviewed"
+     *  badge count updates without a full re-poll. */
+    latest: (nicheId: string) => ["strategist", "latest", nicheId] as const,
+    unreviewed: (limit: number) =>
+      ["strategist", "unreviewed", limit] as const,
+  },
   revenue: {
     summary: () => ["revenue", "summary"] as const,
     clickTrends: () => ["revenue", "click-trends"] as const,

@@ -30,6 +30,7 @@ import { ContentQuality } from "./ContentQuality";
 import { PipelineCountdowns } from "./PipelineCountdowns";
 import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
+import { StrategistReportCard } from "./StrategistReportCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -295,6 +296,16 @@ export default function MissionControl() {
                 flipping GENLAB_OPTIMAL_TIME_BANDIT=1) — same pattern as
                 AutoApprovalCalibrationCard. */}
             <BanditHourHeatmap />
+            {/* PR Strategist-2b (2026-07-01): weekly LLM Strategist reports
+                surface. Completes the Strategist trilogy dashboard wire —
+                Strategist-1 (foundation), Strategist-1b (persister),
+                Strategist-2 (server-side wire), Strategist-3 (integration)
+                had shipped without a React visualization; this card is
+                that. Placed next to BanditHourHeatmap because both are
+                weekly / long-cadence learning surfaces — the operator
+                reads them together to reason about "what should we
+                change this week?" */}
+            <StrategistReportCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

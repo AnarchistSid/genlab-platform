@@ -1059,3 +1059,60 @@ export const schedulingPauses = {
       `/scheduling/pauses/${encodeURIComponent(nicheId)}`,
     ),
 };
+
+// ───────────────────────────────────────────────────────────────
+// PR Strategist-2b (2026-07-01) — Strategist API client.
+//
+// Reads the weekly LLM Strategist reports persisted by PR Strategist-1
+// / -1b and lets the operator accept/reject individual proposals.
+// The `unwrap` helper mirrors the `outreach` module's pattern —
+// server returns `{status, data}` on success; we peel `data`
+// off so callers work with plain objects.
+// ───────────────────────────────────────────────────────────────
+
+/** Peel a server envelope of shape `{status, data}` or return the
+ *  raw object if the envelope is absent. Same defensive pattern
+ *  used across sponsorship / bandit / outreach clients. */
+function unwrapEnvelope<T>(response: unknown): T | null {
+  if (response && typeof response === "object" && "data" in response) {
+    const envelope = response as { data?: T | null };
+    return envelope.data ?? null;
+  }
+  return response as T;
+}
+
+export const strategist = {
+  /** Fetch the latest Strategist report for a niche.
+   *  Returns null when the persister has no rows yet (cold start —
+   *  first Strategist run hasn't fired for this niche). */
+  latest: (nicheId: string) =>
+    get<{ data: import("./types").StrategistReport | null }>(
+      "/strategist/reports/latest",
+      { niche_id: nicheId },
+    ).then((d) => unwrapEnvelope<import("./types").StrategistReport>(d)),
+
+  /** Fetch the queue of reports the operator hasn't reviewed yet.
+   *  Used by a "you have N unreviewed strategist reports" badge in
+   *  a future card iteration; the initial card iteration surfaces
+   *  only the latest-per-niche via `latest()` above. */
+  unreviewed: (limit = 20) =>
+    get<{ data: import("./types").StrategistReport[] }>(
+      "/strategist/reports/unreviewed",
+      { limit: String(limit) },
+    ).then(
+      (d) => unwrapEnvelope<import("./types").StrategistReport[]>(d) ?? [],
+    ),
+
+  /** Record operator's accept/reject decision on a report's proposals.
+   *  Both lists optional per server contract — empty lists mean
+   *  "dismissed the whole report without acting". */
+  review: (
+    reportId: string,
+    body: import("./types").StrategistReviewRequest,
+  ) =>
+    mutate<{ status: string }>(
+      "POST",
+      `/strategist/reports/${encodeURIComponent(reportId)}/review`,
+      body,
+    ),
+};
