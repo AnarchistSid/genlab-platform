@@ -76,3 +76,4 @@ log "complete; disk free: ${free_gb} GB"
 
 # Always exit 0 — a failed cleanup must never mark the job red.
 exit 0
+# hook wire fix — systemd drop-in required (2026-07-01)
