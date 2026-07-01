@@ -96,6 +96,22 @@ class AnthropicStrategistClient:
                     cost,
                     duration,
                 )
+
+                # PR Blind-Spot-1: wire cost_accumulator so the Strategist's
+                # weekly LLM spend shows up in the dashboard cost-per-blueprint
+                # aggregate. Previously tracked only in this module's own log.
+                # Fail-closed: if cost_accumulator can't be imported (e.g.
+                # test env), we log-only and continue — never break the LLM
+                # call over telemetry.
+                try:
+                    from genlab_core.intelligence.cost_accumulator import (
+                        record_anthropic_usage,
+                    )
+
+                    record_anthropic_usage(STRATEGIST_MODEL, response)
+                except Exception as exc:
+                    logger.debug("strategist.cost_track_skip err=%s", exc)
+
                 return CallResult(
                     text=text,
                     model=STRATEGIST_MODEL,

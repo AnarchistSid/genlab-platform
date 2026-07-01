@@ -74,6 +74,46 @@ _HOOK_STYLES: dict[str, str] = {
 }
 
 
+# PR Intervention-3 (2026-07-01): 3 verbal exemplars per style, injected
+# into the system prompt when the bandit picks the style. Turns the
+# writer's arm choice from a suggestion into a mandate — the LLM sees
+# concrete examples of what the requested style looks like, not just
+# an abstract rule.
+#
+# Selection criteria for each exemplar (audit these when adding niches):
+#   * Under 60 chars (real hook length)
+#   * Contains a concrete noun (not abstract)
+#   * Passes the _BANNED_PATTERNS regex
+#   * Represents the style category unambiguously
+_HOOK_STYLE_EXEMPLARS: dict[str, list[str]] = {
+    "question": [
+        "What did Liverpool do to Palace's defense?",
+        "Why does Jean Grey control Scorpion in the new Spider-Man?",
+        "Can an angry bird actually handle parenthood?",
+    ],
+    "bold_claim": [
+        "The animation in Ryu vs Sukuna is on another level",
+        "This is the biggest AI power grab in silicon valley history",
+        "MAPPA just proved they still know how to break your heart",
+    ],
+    "controversy": [
+        "Pixar forgot what made Toy Story work",
+        "Why Fortnite's holding #2 on Twitch rn",
+        "The AI company everyone feared just got scared of itself",
+    ],
+    "revelation": [
+        "What nobody told you about using AI for everything",
+        "Why Pixar waited 9 years to bring Woody back",
+        "The résumé trick ChatGPT does that recruiters never notice",
+    ],
+    "comparison": [
+        "Codex vs every other coding tool: it's not close anymore",
+        "Wrong context vs right context: your coding agent's IQ doubles",
+        "The phone LG built, finished, and then buried",
+    ],
+}
+
+
 def pick_hook_style(niche_id: str) -> str | None:
     """Thompson-sample a hook style for ``niche_id``.
 

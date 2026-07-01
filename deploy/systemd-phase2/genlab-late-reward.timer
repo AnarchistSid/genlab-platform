@@ -1,0 +1,17 @@
+[Unit]
+Description=Late-window reward re-eval daily — 04:00 UTC
+Documentation=file:///opt/genlab/genlab-core/src/genlab_core/learning/late_reward.py
+
+[Timer]
+# 04:00 UTC = 09:30 IST. Sits between:
+#   * 02:00 UTC — Strategist runs Sunday
+#   * 03:00 UTC — Strategist-apply materialises accepted proposals
+#   * 06:30 UTC — Publisher first window
+# So bandit posteriors updated by late-reward deltas are stable before
+# the day's publish decisions consult them.
+OnCalendar=*-*-* 04:00:00 UTC
+Persistent=true
+Unit=genlab-late-reward.service
+
+[Install]
+WantedBy=timers.target

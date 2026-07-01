@@ -298,12 +298,31 @@ def write_video_content(
     # ``written_by == 'llm'`` and never invokes its own style picker. Without
     # this call, the ``style:*`` bandit arms never receive any signal — see
     # 2026-05-20 root cause analysis. None means cold-start / no arms seeded.
-    from genlab_core.writing.llm_hook_generator import _HOOK_STYLES, pick_hook_style
+    from genlab_core.writing.llm_hook_generator import (
+        _HOOK_STYLE_EXEMPLARS,
+        _HOOK_STYLES,
+        pick_hook_style,
+    )
 
     chosen_style = pick_hook_style(niche_id)
     style_hint = ""
     if chosen_style and chosen_style in _HOOK_STYLES:
-        style_hint = f"\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}\n"
+        # PR Intervention-3: strengthen from "STYLE TARGET" (hint) to
+        # "STYLE MANDATE" (constraint) + 3 verbal exemplars. Turns the
+        # writer's arm choice from a suggestion the LLM might drift from
+        # into a specific verbal pattern it can mimic. Enables the
+        # writer→bandit feedback loop: bandit's reward on `style:X`
+        # posterior now reflects actual style-X hook performance rather
+        # than "whatever the LLM felt like writing today."
+        exemplars = _HOOK_STYLE_EXEMPLARS.get(chosen_style, [])
+        exemplar_lines = "\n".join(f"    - {ex!r}" for ex in exemplars[:3])
+        style_hint = (
+            f"\nSTYLE MANDATE ({chosen_style}): {_HOOK_STYLES[chosen_style]}\n"
+            f"  Verbal exemplars (mimic this pattern):\n{exemplar_lines}\n"
+            f"  Your hook MUST embody this style — if you can't fit the\n"
+            f"  story into this pattern naturally, return an empty hook\n"
+            f"  to signal skip. Do NOT force a different style.\n"
+        )
 
     # PR Strategist-3: append operator-approved learning findings (top 5)
     # into the system prompt so the writer leans on causal patterns the

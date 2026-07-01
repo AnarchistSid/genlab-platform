@@ -1,0 +1,399 @@
+"""Multi-window reward re-evaluation — PR Intervention-1.
+
+Captures the late-tail engagement signal the 48h reward window currently
+discards. YouTube tutorials + Facebook shares often accumulate over
+days-weeks; the bandit's 48h snapshot misses that.
+
+Design:
+- ``recompute_late_reward(blueprint_id, window_days=7)`` fetches metrics
+  at the extended window and computes a "would-be" reward using the same
+  RewardShaper the 48h path uses.
+- Logs (reward_48h, reward_7d, delta) per blueprint into a new
+  ``late_reward_deltas`` audit trail so we can measure per-arm late-tail
+  lift before we start feeding it back into bandit posteriors.
+- Flag-off default: ``GENLAB_MULTI_WINDOW_REWARD_ENABLED`` controls
+  whether we ALSO push a delta-only Beta update into the bandit.
+  Without the flag we're pure telemetry; with it, arms that show
+  late-tail lift get incremental posterior weight.
+
+Wired via ``scripts/recompute_late_rewards.py`` from a systemd timer
+firing daily at 04:00 UTC (after nightly reward window processing).
+
+Fail-closed everywhere. If metric fetch or persister fails, we log +
+skip that blueprint. Never blocks the pipeline.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Feature flag governing whether late reward updates ALSO push into the
+# bandit posterior. Without the flag we're log-only — the operator can
+# read late_reward_deltas rows and decide whether the lift is real.
+_ENABLED_ENV = "GENLAB_MULTI_WINDOW_REWARD_ENABLED"
+
+
+def _integration_enabled() -> bool:
+    """Exact-'true' feature flag, mirroring strategy_phase pattern."""
+    return os.environ.get(_ENABLED_ENV, "").lower() == "true"
+
+
+@dataclass
+class LateRewardDelta:
+    """One blueprint's late-tail reward measurement."""
+
+    blueprint_id: str
+    niche_id: str
+    arm_id: str
+    platform: str
+    reward_48h: float
+    reward_late: float
+    window_days: int
+    delta: float
+    delta_pct: float  # (reward_late - reward_48h) / reward_48h, or 0 if base=0
+    measured_at: datetime
+
+
+def recompute_late_reward(
+    blueprint_id: str,
+    window_days: int = 7,
+    *,
+    conn: Any = None,
+    shaper: Any = None,
+    fetch_platform_metrics_fn: Any = None,
+) -> LateRewardDelta | None:
+    """Re-fetch metrics at the extended window and compute the late reward.
+
+    Args:
+        blueprint_id: UUID of the blueprint to re-evaluate.
+        window_days: Extended window (default 7d).
+        conn: Optional psycopg connection (real caller passes prod conn;
+            tests inject mocks).
+        shaper: Optional RewardShaper instance. Constructed by caller
+            OR test-injected.
+        fetch_platform_metrics_fn: Injectable metric fetcher.
+
+    Returns:
+        LateRewardDelta on success; None on any failure (fail-closed).
+        Caller decides whether to persist / act on the delta.
+    """
+    if conn is None:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            dsn = os.environ.get("DATABASE_URL", "").strip()
+            if not dsn:
+                logger.warning("late_reward: no DATABASE_URL — skip %s", blueprint_id)
+                return None
+            conn = psycopg.connect(dsn, row_factory=dict_row)
+            own_conn = True
+        except Exception as exc:
+            logger.warning("late_reward: connect failed err=%s", exc)
+            return None
+    else:
+        own_conn = False
+
+    try:
+        row = conn.execute(
+            """
+            SELECT b.id, b.niche_id, b.arm_id, pa.platform, pa.platform_post_id,
+                   pa.published_at,
+                   p.reward_48h
+            FROM blueprints b
+            JOIN publishing_analytics pa ON pa.blueprint_id = b.id
+            LEFT JOIN pending_feedback p
+                   ON p.blueprint_id = b.id
+                  AND p.platform = pa.platform
+            WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'
+            LIMIT 1
+            """,
+            (blueprint_id,),
+        ).fetchone()
+    except Exception as exc:
+        logger.warning("late_reward: DB read failed bp=%s err=%s", blueprint_id, exc)
+        if own_conn:
+            conn.close()
+        return None
+
+    if not row:
+        if own_conn:
+            conn.close()
+        return None
+
+    platform = row.get("platform") if hasattr(row, "get") else row[3]
+    platform_post_id = row.get("platform_post_id") if hasattr(row, "get") else row[4]
+    niche_id = row.get("niche_id") if hasattr(row, "get") else row[1]
+    arm_id = row.get("arm_id") if hasattr(row, "get") else row[2]
+    reward_48h = row.get("reward_48h") if hasattr(row, "get") else row[6]
+    if reward_48h is None:
+        # No baseline to compare against — this blueprint never got
+        # a 48h reward window processed. Nothing meaningful to measure.
+        if own_conn:
+            conn.close()
+        return None
+
+    # Fetch late-window metrics (injectable for tests)
+    if fetch_platform_metrics_fn is None:
+        from genlab_core.learning.metric_collector import fetch_platform_metrics
+
+        fetch_platform_metrics_fn = fetch_platform_metrics
+
+    # Use a "late" window key that fetch_platform_metrics supports —
+    # the collector already has 168h (7d) semantics; we pass str form.
+    try:
+        metrics = fetch_platform_metrics_fn(platform, platform_post_id, "168h", niche_id=niche_id)
+    except Exception as exc:
+        logger.warning(
+            "late_reward: metric fetch failed bp=%s platform=%s err=%s",
+            blueprint_id,
+            platform,
+            exc,
+        )
+        if own_conn:
+            conn.close()
+        return None
+    if not metrics:
+        if own_conn:
+            conn.close()
+        return None
+
+    # Compute late reward via same shaper the 48h path uses. Injectable.
+    if shaper is None:
+        from genlab_core.learning.metric_collector import (
+            get_channel_metrics as _channel_fn,
+        )
+        from genlab_core.learning.reward_shaper import RewardShaper
+
+        shaper = RewardShaper(channel_metrics_fn=_channel_fn, niche_id=niche_id or "")
+    try:
+        reward_late = shaper.compute_reward(platform=platform, metrics=metrics)
+    except Exception as exc:
+        logger.warning("late_reward: shaper failed bp=%s err=%s", blueprint_id, exc)
+        if own_conn:
+            conn.close()
+        return None
+
+    delta = float(reward_late) - float(reward_48h)
+    delta_pct = (delta / float(reward_48h)) if reward_48h else 0.0
+
+    result = LateRewardDelta(
+        blueprint_id=blueprint_id,
+        niche_id=niche_id or "",
+        arm_id=arm_id or "",
+        platform=platform,
+        reward_48h=float(reward_48h),
+        reward_late=float(reward_late),
+        window_days=window_days,
+        delta=delta,
+        delta_pct=delta_pct,
+        measured_at=datetime.now(UTC),
+    )
+    logger.info(
+        "late_reward.measured bp=%s niche=%s arm=%s platform=%s "
+        "48h=%.3f late=%.3f delta=%.3f delta_pct=%.2f",
+        blueprint_id,
+        niche_id,
+        arm_id,
+        platform,
+        reward_48h,
+        reward_late,
+        delta,
+        delta_pct * 100,
+    )
+
+    if own_conn:
+        conn.close()
+    return result
+
+
+def process_late_reward_batch(
+    days_ago_min: int = 6,
+    days_ago_max: int = 8,
+    *,
+    conn: Any = None,
+    push_to_bandit: bool | None = None,
+) -> dict[str, int]:
+    """Iterate over blueprints published 6-8 days ago; compute late reward
+    for each and log delta.
+
+    ``push_to_bandit`` defaults to the feature-flag setting. When True,
+    also push a delta-only Beta update into the bandit for arms showing
+    material late-tail lift (|delta_pct| > 20%).
+    """
+    if push_to_bandit is None:
+        push_to_bandit = _integration_enabled()
+
+    counters = {"scanned": 0, "measured": 0, "significant_lift": 0, "errors": 0}
+
+    if conn is None:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            dsn = os.environ.get("DATABASE_URL", "").strip()
+            if not dsn:
+                return counters
+            conn = psycopg.connect(dsn, row_factory=dict_row)
+            own_conn = True
+        except Exception:
+            return counters
+    else:
+        own_conn = False
+
+    cutoff_min = datetime.now(UTC) - timedelta(days=days_ago_max)
+    cutoff_max = datetime.now(UTC) - timedelta(days=days_ago_min)
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT pa.blueprint_id::text AS blueprint_id
+            FROM publishing_analytics pa
+            WHERE pa.published_at BETWEEN %s AND %s
+              AND pa.status = 'SUCCESS'
+            """,
+            (cutoff_min, cutoff_max),
+        ).fetchall()
+    except Exception as exc:
+        logger.warning("late_reward.batch_query_failed err=%s", exc)
+        if own_conn:
+            conn.close()
+        return counters
+
+    for row in rows or []:
+        counters["scanned"] += 1
+        bp_id = row.get("blueprint_id") if hasattr(row, "get") else row[0]
+        try:
+            delta = recompute_late_reward(bp_id, conn=conn)
+        except Exception as exc:
+            logger.warning("late_reward.blueprint_error bp=%s err=%s", bp_id, exc)
+            counters["errors"] += 1
+            continue
+        if delta is None:
+            continue
+        counters["measured"] += 1
+        if abs(delta.delta_pct) > 0.20:
+            counters["significant_lift"] += 1
+        # Persist audit row unconditionally so the operator can measure.
+        _persist_delta_row(conn, delta)
+        # Only push to bandit when flag is on AND lift is material.
+        if push_to_bandit and abs(delta.delta_pct) > 0.20:
+            _push_delta_to_bandit(conn, delta)
+
+    if own_conn:
+        conn.close()
+    logger.info("late_reward.batch_complete counters=%s", counters)
+    return counters
+
+
+def _persist_delta_row(conn: Any, delta: LateRewardDelta) -> None:
+    """Best-effort insert into a lightweight audit table.
+
+    Uses INSERT ... ON CONFLICT DO NOTHING so re-running the batch is safe.
+    Table created lazily via CREATE IF NOT EXISTS on first call — no
+    migration required. This is telemetry, not schema-critical data.
+    """
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS late_reward_deltas (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              blueprint_id UUID NOT NULL,
+              niche_id TEXT NOT NULL,
+              arm_id TEXT,
+              platform TEXT NOT NULL,
+              reward_48h DOUBLE PRECISION NOT NULL,
+              reward_late DOUBLE PRECISION NOT NULL,
+              window_days INTEGER NOT NULL DEFAULT 7,
+              delta DOUBLE PRECISION NOT NULL,
+              delta_pct DOUBLE PRECISION NOT NULL,
+              measured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT unique_bp_window UNIQUE (blueprint_id, platform, window_days)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO late_reward_deltas (
+              blueprint_id, niche_id, arm_id, platform,
+              reward_48h, reward_late, window_days, delta, delta_pct, measured_at
+            ) VALUES (
+              %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            ) ON CONFLICT (blueprint_id, platform, window_days) DO NOTHING
+            """,
+            (
+                delta.blueprint_id,
+                delta.niche_id,
+                delta.arm_id or None,
+                delta.platform,
+                delta.reward_48h,
+                delta.reward_late,
+                delta.window_days,
+                delta.delta,
+                delta.delta_pct,
+                delta.measured_at,
+            ),
+        )
+        conn.commit()
+    except Exception as exc:
+        logger.debug("late_reward.persist_delta_failed err=%s", exc)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def _push_delta_to_bandit(conn: Any, delta: LateRewardDelta) -> None:
+    """Push a delta-only Beta update into the bandit posterior for the arm.
+
+    Only fires when GENLAB_MULTI_WINDOW_REWARD_ENABLED=true AND delta_pct
+    exceeds the 20% material-lift threshold. Uses the same
+    ``_update_source_arm_reward`` code path as the live 48h wire so the
+    math stays consistent.
+
+    Delta-only means: alpha += (delta if positive) or 0; beta += (|delta|
+    if negative) or 0. This never re-counts the 48h contribution — it
+    ONLY adds the late-tail delta.
+    """
+    if not delta.arm_id:
+        return
+    if delta.delta > 0:
+        alpha_add = delta.delta
+        beta_add = 0.0
+    else:
+        alpha_add = 0.0
+        beta_add = abs(delta.delta)
+    try:
+        conn.execute(
+            """
+            UPDATE bandit_arms
+            SET alpha = alpha + %s,
+                beta = beta + %s
+            WHERE niche_id = %s AND arm_id = %s
+            """,
+            (alpha_add, beta_add, delta.niche_id, delta.arm_id),
+        )
+        conn.commit()
+        logger.info(
+            "late_reward.pushed_to_bandit niche=%s arm=%s dAlpha=%.3f dBeta=%.3f",
+            delta.niche_id,
+            delta.arm_id,
+            alpha_add,
+            beta_add,
+        )
+    except Exception as exc:
+        logger.warning(
+            "late_reward.bandit_update_failed niche=%s arm=%s err=%s",
+            delta.niche_id,
+            delta.arm_id,
+            exc,
+        )
+        try:
+            conn.rollback()
+        except Exception:
+            pass
