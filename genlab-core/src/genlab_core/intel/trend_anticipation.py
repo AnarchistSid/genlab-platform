@@ -30,19 +30,34 @@ The full research-doc design combines four signals:
         'news_lead':      recent_articles_count(topic, days=3),
     }
 
-Session 1 (this file, 2026-07-01) ships:
-  * ``search_velocity`` — first-order signal via pytrends
-    ``interest_over_time`` + centred finite difference for the 2nd
-    derivative.
-  * ``creator_pickup``, ``social_velocity``, ``news_lead`` — stubs
-    that always return None. Composite scoring RE-normalises weights
-    over available signals so a missing signal doesn't shrink the
-    composite toward 0 (same pattern the reward-shaper's
-    `_weight_redistribution` uses).
+Session 1 (2026-07-01) shipped ``search_velocity`` — first-order
+signal via pytrends ``interest_over_time`` + centred finite
+difference for the 2nd derivative.
 
-Follow-up sessions (2, 3) wire the remaining three signals; the
-weights are per-signal + independent, so each can land without
-disturbing what shipped in Session 1.
+Session 2 (this file, 2026-07-01) wires the two paid signals:
+
+  * ``creator_pickup`` — YouTube Data API v3 ``search.list`` for
+    videos mentioning the topic in the last 7 days. Score maps
+    ``totalResults`` on a log10 scale so a "10 mentions" vs
+    "10,000 mentions" delta stays visible in the [0, 1] range
+    (linear normalisation saturates instantly on hot topics).
+    Gated behind ``GENLAB_ANTICIPATION_YT_ENABLED`` because
+    search.list costs 100 quota units per call — the flag lets
+    the operator activate the paid signal without commiting the
+    daily 10K quota budget.
+
+  * ``social_velocity`` — Reddit OAuth ``/search`` with karma-per-
+    hour aggregate. Gated behind
+    ``GENLAB_ANTICIPATION_REDDIT_ENABLED`` for the same rate-limit
+    respect + operator-consent reason.
+
+``news_lead`` stays stubbed; Session 3 wires it via RSS.
+
+Composite scoring RE-normalises weights over available signals so
+a missing signal doesn't shrink the composite toward 0 (same
+pattern the reward-shaper's ``_weight_redistribution`` uses). All
+four signal slots remain per-signal + independent so each can
+land without disturbing what shipped previously.
 
 Composite → Rank
 ================
@@ -254,27 +269,252 @@ def _signal_search_velocity(topic: str, niche_id: str) -> tuple[float, int] | No
     return _search_velocity_from_series(values)
 
 
-def _signal_creator_pickup(topic: str, niche_id: str) -> float | None:
-    """Creator-pickup signal — counts YouTube creator mentions of
-    the topic in the last 7 days.
+_CACHE_TTL_HOURS: Final[int] = 12
 
-    Session 1: stub returning None. Session 2 will wire the YouTube
-    Data API v3 search endpoint (already used by
-    ``TrendingVideoFetcher``); scope is bounded by the 10K/day quota
-    so the signal fires only for the top-N candidate topics per niche.
+
+def _get_cache():
+    """Cache handle for the two paid signals. Same disk-cache pattern
+    the trending-video fetcher uses. Kept lazy so importing this
+    module doesn't touch the filesystem (matters for the many code
+    paths that import ``trend_anticipation`` for the module-level
+    constants without ever calling a signal function)."""
+    try:
+        from genlab_core.cache.disk_cache import Cache
+
+        return Cache(cache_dir=".tmp/cache/trend_anticipation")
+    except Exception as exc:
+        logger.debug("[trend_anticipation] cache unavailable: %s", exc)
+        return None
+
+
+def _cache_key(prefix: str, topic: str, niche_id: str) -> str:
+    """Compose a safe alphanumeric cache key. The disk-cache validates
+    keys against ``[a-zA-Z0-9_.-]{1,256}``; slugify unsafe chars from
+    the topic so trending phrases like "Zelda: Tears of the Kingdom"
+    still fit."""
+    import re
+
+    slug = re.sub(r"[^a-zA-Z0-9]", "_", topic.lower())[:80]
+    return f"{prefix}_{niche_id}_{slug}"
+
+
+def _signal_creator_pickup(topic: str, niche_id: str) -> float | None:
+    """Creator-pickup — how many YouTube creators posted about the
+    topic in the last 7 days.
+
+    Session 2 (2026-07-01) wires this via YouTube Data API v3
+    ``search.list``. One search costs 100 quota units — daily total
+    if we score top-5 per niche × 5 niches = 25 topics = 2500 units
+    (25% of the 10K daily budget). Cached 12h to smooth reruns.
+
+    Score mapping: ``min(1.0, log10(1 + total_results) / 3.0)``.
+    Rationale: totalResults returned by YouTube search is unbounded,
+    so a linear normaliser saturates instantly on hot topics. Log-
+    scale means:
+
+      * 0 results        → 0.000  (cold)
+      * 10 results       → 0.347  (emerging)
+      * 100 results      → 0.667  (warming)
+      * 1000+ results    → 1.000  (hot / already picked-up)
+
+    Because ``compute_anticipation_score`` prizes ACCELERATION (via
+    the search-velocity 2nd derivative), a HIGH creator_pickup +
+    HIGH search-velocity is the "trend already viral, don't publish
+    here" signal, and a LOW creator_pickup + HIGH search-velocity is
+    the "trend accelerating but no creators yet" signal — exactly
+    what the anticipation intent is looking for.
+
+    Guardrails:
+
+    * ``GENLAB_ANTICIPATION_YT_ENABLED`` — separate opt-in flag so
+      an operator can activate the paid signal without flipping the
+      pipeline-consume flag. Costs quota only when set to ``true``.
+    * Missing ``YOUTUBE_API_KEY`` → None (fail-open).
+    * Any HTTP / parse error → None (silent, DEBUG-logged).
     """
-    return None
+    if os.environ.get("GENLAB_ANTICIPATION_YT_ENABLED", "") not in ("true", "TRUE", "True"):
+        return None
+
+    api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    cache = _get_cache()
+    key = _cache_key("cp", topic, niche_id)
+    if cache is not None:
+        cached = cache.get(key, ttl_hours=_CACHE_TTL_HOURS)
+        if cached is not None and isinstance(cached, (int, float)):
+            return float(cached)
+
+    try:
+        import math
+        from datetime import timedelta
+
+        import requests
+
+        published_after = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # search.list — 100 quota units, one call per topic per 12h.
+        # ``type=video``, ``publishedAfter`` = 7 days ago. The
+        # ``pageInfo.totalResults`` is a coarse UPPER BOUND (YouTube
+        # doesn't guarantee exactness at scale) but consistent enough
+        # for a normalised score.
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part": "id",
+                "q": topic,
+                "type": "video",
+                "publishedAfter": published_after,
+                "maxResults": 1,  # We only need the count, not the results
+                "key": api_key,
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.debug(
+                "[trend_anticipation] YT search returned %d for %r",
+                resp.status_code,
+                topic,
+            )
+            return None
+        total = int(resp.json().get("pageInfo", {}).get("totalResults", 0))
+    except Exception as exc:
+        logger.debug(
+            "[trend_anticipation] YT search failed for %r (%s): %s",
+            topic,
+            niche_id,
+            exc,
+        )
+        return None
+
+    score = min(1.0, math.log10(1 + max(0, total)) / 3.0)
+    if cache is not None:
+        try:
+            cache.set(key, score)
+        except Exception:
+            pass
+    return score
 
 
 def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
-    """Social-velocity signal — Reddit karma rate on posts mentioning
-    the topic.
+    """Social-velocity — Reddit karma per hour on posts mentioning
+    the topic across the last week.
 
-    Session 1: stub. Session 2 will use the existing PRAW integration
-    in ``genlab_core.intel.reddit_fetcher`` to query the niche-relevant
-    subreddits + compute karma velocity over a rolling window.
+    Uses the same OAuth token dance as
+    ``genlab_core.intel.reddit_fetcher`` — same client credentials,
+    same user-agent. ``/api/search`` with the topic + ``t=week``
+    returns recent posts across all subreddits; we filter to the
+    niche-relevant subs later (Session 3 wire) and for now compute
+    the aggregate across the whole result set.
+
+    Score mapping: ``min(1.0, karma_per_hour / 50.0)``. Rationale:
+
+      * 0 karma/h      → 0.00
+      * 25 karma/h     → 0.50 (a real trending post)
+      * 50+ karma/h    → 1.00 (viral)
+
+    50 karma/h is roughly the boundary between "regular Reddit post"
+    and "you'll see this on r/all in the next 6 hours." Tuneable
+    per-niche in a future session once we have observed vs mapped
+    data.
+
+    Guardrails:
+
+    * ``GENLAB_ANTICIPATION_REDDIT_ENABLED`` opt-in flag — respects
+      Reddit rate limits; caller must consciously enable it.
+    * Missing ``REDDIT_CLIENT_ID`` / ``REDDIT_CLIENT_SECRET`` → None.
+    * Cached 12h.
     """
-    return None
+    if os.environ.get("GENLAB_ANTICIPATION_REDDIT_ENABLED", "") not in (
+        "true",
+        "TRUE",
+        "True",
+    ):
+        return None
+
+    client_id = os.environ.get("REDDIT_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        return None
+
+    cache = _get_cache()
+    key = _cache_key("sv", topic, niche_id)
+    if cache is not None:
+        cached = cache.get(key, ttl_hours=_CACHE_TTL_HOURS)
+        if cached is not None and isinstance(cached, (int, float)):
+            return float(cached)
+
+    try:
+        import time as _time_mod
+
+        import requests
+
+        # Reuse the token helper from reddit_fetcher. Lazy import
+        # keeps this module loadable without the reddit_fetcher
+        # module being import-clean (a defensive-imports policy the
+        # intel package follows across files).
+        from genlab_core.intel.reddit_fetcher import (
+            _OAUTH_BASE,
+            _USER_AGENT,
+            _get_access_token,
+        )
+
+        token = _get_access_token(client_id, client_secret)
+        if not token:
+            return None
+
+        headers = {"Authorization": f"Bearer {token}", "User-Agent": _USER_AGENT}
+        resp = requests.get(
+            f"{_OAUTH_BASE}/search",
+            headers=headers,
+            params={
+                "q": topic,
+                "t": "week",
+                "sort": "relevance",
+                "limit": 25,
+                "restrict_sr": "false",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            logger.debug(
+                "[trend_anticipation] Reddit search %d for %r",
+                resp.status_code,
+                topic,
+            )
+            return None
+
+        now = _time_mod.time()
+        karma_per_hour_sum = 0.0
+        n = 0
+        for child in resp.json().get("data", {}).get("children", []):
+            post = child.get("data", {})
+            score = float(post.get("score", 0) or 0)
+            created = float(post.get("created_utc", 0) or 0)
+            if created <= 0:
+                continue
+            hours = max(0.5, (now - created) / 3600.0)
+            karma_per_hour_sum += score / hours
+            n += 1
+        if n == 0:
+            return None
+        mean_kph = karma_per_hour_sum / n
+    except Exception as exc:
+        logger.debug(
+            "[trend_anticipation] Reddit search failed for %r (%s): %s",
+            topic,
+            niche_id,
+            exc,
+        )
+        return None
+
+    signal = min(1.0, max(0.0, mean_kph / 50.0))
+    if cache is not None:
+        try:
+            cache.set(key, signal)
+        except Exception:
+            pass
+    return signal
 
 
 def _signal_news_lead(topic: str, niche_id: str) -> float | None:

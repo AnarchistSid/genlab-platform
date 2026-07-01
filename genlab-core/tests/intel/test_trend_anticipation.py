@@ -141,21 +141,40 @@ class TestCompositeScoring:
         assert score.confidence == pytest.approx(0.5)  # 2 of 4
 
 
-# ── Session-1 stub guards ─────────────────────────────────────────
+# ── Signal opt-in guards (Session 2, 2026-07-01) ──────────────────
 
 
-class TestSession1Stubs:
-    """Pin that the three unwired signals actually return None as
-    documented. If a future session flips them live without updating
-    the tests + weights, this catches the drift."""
+class TestSignalOptInFlags:
+    """Session 2 wires creator_pickup + social_velocity behind their
+    own opt-in env flags so the ordinary daily run doesn't spend
+    YouTube API quota / Reddit rate limit until the operator
+    consciously enables them. Session 3 will do the same for
+    news_lead. These pins guard the guardrails — a future PR that
+    accidentally flips one of them ON by default fails here."""
 
-    def test_creator_pickup_returns_none(self):
+    def test_creator_pickup_off_by_default(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_ANTICIPATION_YT_ENABLED", raising=False)
         assert ta._signal_creator_pickup("test", "gaming") is None
 
-    def test_social_velocity_returns_none(self):
+    def test_creator_pickup_off_when_api_key_missing(self, monkeypatch):
+        """Flag on but YOUTUBE_API_KEY absent → still None (fail-open)."""
+        monkeypatch.setenv("GENLAB_ANTICIPATION_YT_ENABLED", "true")
+        monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
+        assert ta._signal_creator_pickup("test", "gaming") is None
+
+    def test_social_velocity_off_by_default(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_ANTICIPATION_REDDIT_ENABLED", raising=False)
+        assert ta._signal_social_velocity("test", "gaming") is None
+
+    def test_social_velocity_off_when_reddit_creds_missing(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_REDDIT_ENABLED", "true")
+        monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+        monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
         assert ta._signal_social_velocity("test", "gaming") is None
 
     def test_news_lead_returns_none(self):
+        """Still Session-3 territory — the stub guard stays here as a
+        drift-catcher until Session 3 replaces it with real logic."""
         assert ta._signal_news_lead("test", "gaming") is None
 
 
@@ -177,6 +196,172 @@ class TestRankTopics:
         monkeypatch.setattr(ta, "_signal_search_velocity", lambda t, n: (0.5, 0))
         ranked = ta.rank_topics(["a", "b", "c", "d"], "gaming", top_n=2)
         assert len(ranked) == 2
+
+
+# ── Session 2 signals (creator_pickup + social_velocity) ──────────
+
+
+class _FakeResponse:
+    """Minimal requests.Response stand-in. status_code + .json()
+    are the only fields the signals read."""
+
+    def __init__(self, status_code: int, payload: dict):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class TestCreatorPickupSignal:
+    """Guardrails + score-mapping for the YouTube-backed signal."""
+
+    def _prep_env(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_YT_ENABLED", "true")
+        monkeypatch.setenv("YOUTUBE_API_KEY", "fake-key")
+        # Skip caching for these unit tests — force a fresh HTTP hit
+        # so we're actually testing the score-mapping math, not the
+        # cache read path.
+        monkeypatch.setattr(ta, "_get_cache", lambda: None)
+
+    @pytest.mark.parametrize(
+        "total_results,expected_lo,expected_hi",
+        [
+            (0, 0.0, 0.001),  # log10(1) = 0 → 0
+            (10, 0.3, 0.4),  # log10(11)/3 ≈ 0.347
+            (100, 0.65, 0.7),  # log10(101)/3 ≈ 0.669
+            (10_000, 1.0, 1.0),  # saturates at 1.0
+        ],
+    )
+    def test_score_mapping_log_scale(self, monkeypatch, total_results, expected_lo, expected_hi):
+        """The log-scale mapping is what keeps this signal
+        informative across the huge range of YouTube search
+        totalResults. Linear normalisation would saturate at 1.0
+        for anything ≥ ~50 results, losing discrimination between
+        "10 videos" and "10,000 videos" — this pin catches a
+        future edit that reverts to linear."""
+        self._prep_env(monkeypatch)
+
+        def fake_get(*args, **kwargs):
+            return _FakeResponse(200, {"pageInfo": {"totalResults": total_results}})
+
+        monkeypatch.setattr("requests.get", fake_get)
+        score = ta._signal_creator_pickup("test topic", "gaming")
+        assert score is not None
+        assert expected_lo <= score <= expected_hi, (
+            f"total_results={total_results} → score={score:.3f}, "
+            f"expected in [{expected_lo}, {expected_hi}]"
+        )
+
+    def test_http_error_returns_none(self, monkeypatch):
+        """Non-200 response → None (fail-open)."""
+        self._prep_env(monkeypatch)
+
+        def fake_get(*args, **kwargs):
+            return _FakeResponse(403, {})
+
+        monkeypatch.setattr("requests.get", fake_get)
+        assert ta._signal_creator_pickup("t", "gaming") is None
+
+    def test_exception_returns_none(self, monkeypatch):
+        """Network / parse error → None."""
+        self._prep_env(monkeypatch)
+
+        def raiser(*args, **kwargs):
+            raise RuntimeError("simulated network error")
+
+        monkeypatch.setattr("requests.get", raiser)
+        assert ta._signal_creator_pickup("t", "gaming") is None
+
+
+class TestSocialVelocitySignal:
+    """Guardrails + score-mapping for the Reddit-backed signal."""
+
+    def _prep_env(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_REDDIT_ENABLED", "true")
+        monkeypatch.setenv("REDDIT_CLIENT_ID", "fake-id")
+        monkeypatch.setenv("REDDIT_CLIENT_SECRET", "fake-secret")
+        monkeypatch.setattr(ta, "_get_cache", lambda: None)
+        # Stub the OAuth token dance — this test is about the score
+        # math on the search response, not the token endpoint.
+        monkeypatch.setattr(
+            "genlab_core.intel.reddit_fetcher._get_access_token",
+            lambda cid, cs: "fake-token",
+        )
+
+    def test_viral_karma_saturates_at_one(self, monkeypatch):
+        """A post with 1000 karma at 1h old → 1000 karma/h; mapping
+        clamps to 1.0. Reddit signal never overshoots [0, 1]."""
+        self._prep_env(monkeypatch)
+        now = 1_700_000_000.0
+
+        def fake_get(url, **kwargs):
+            return _FakeResponse(
+                200,
+                {
+                    "data": {
+                        "children": [
+                            {
+                                "data": {
+                                    "score": 1000,
+                                    "created_utc": now - 3600,
+                                }
+                            }
+                        ]
+                    }
+                },
+            )
+
+        import time as _t
+
+        monkeypatch.setattr(_t, "time", lambda: now)
+        monkeypatch.setattr("requests.get", fake_get)
+        assert ta._signal_social_velocity("t", "gaming") == pytest.approx(1.0)
+
+    def test_middling_karma_hits_target_score(self, monkeypatch):
+        """25 karma/h → 0.5 by the linear-until-50 mapping. Two
+        posts averaging 25 karma/h should hit exactly 0.5."""
+        self._prep_env(monkeypatch)
+        now = 1_700_000_000.0
+
+        def fake_get(url, **kwargs):
+            return _FakeResponse(
+                200,
+                {
+                    "data": {
+                        "children": [
+                            {"data": {"score": 25, "created_utc": now - 3600}},
+                            {"data": {"score": 25, "created_utc": now - 3600}},
+                        ]
+                    }
+                },
+            )
+
+        import time as _t
+
+        monkeypatch.setattr(_t, "time", lambda: now)
+        monkeypatch.setattr("requests.get", fake_get)
+        assert ta._signal_social_velocity("t", "gaming") == pytest.approx(0.5)
+
+    def test_empty_results_returns_none(self, monkeypatch):
+        """0 posts matching → None (no signal) rather than 0 (which
+        would be indistinguishable from "signal is bearish")."""
+        self._prep_env(monkeypatch)
+
+        def fake_get(url, **kwargs):
+            return _FakeResponse(200, {"data": {"children": []}})
+
+        monkeypatch.setattr("requests.get", fake_get)
+        assert ta._signal_social_velocity("t", "gaming") is None
+
+    def test_http_error_returns_none(self, monkeypatch):
+        self._prep_env(monkeypatch)
+
+        def fake_get(url, **kwargs):
+            return _FakeResponse(429, {})
+
+        monkeypatch.setattr("requests.get", fake_get)
+        assert ta._signal_social_velocity("t", "gaming") is None
 
 
 # ── Persistence ────────────────────────────────────────────────────
