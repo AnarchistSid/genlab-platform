@@ -1,21 +1,22 @@
 [Unit]
-Description=GenLab Disk Cleanup Timer — prune caches + old artifacts every 6 hours
+Description=GenLab Disk Cleanup Timer — prune caches + old artifacts hourly
 
 [Timer]
-# Every 6 hours, offset 17 minutes off the hour so we don't pile up
-# with hourly metric_collector (00:00) or 6-hour timers landing on
-# even multiples. 17 is prime + far from any production cadence.
+# 2026-07-01: tightened from 4x/day → HOURLY after a second-in-one-day
+# 100%-disk crash. Cause: self-hosted CI runner + high-velocity commit
+# window (10+ pushes in ~2 hours) → gh-runner .cache accumulated 11 GB
+# faster than the 6h cleanup could catch. Hourly cadence covers even
+# heavy-CI days without leaving the disk unprotected for hours at a
+# time.
 #
-# 4 fires per day:
-#   * 00:17 UTC = 05:47 IST — before morning pipeline cluster
-#   * 06:17 UTC = 11:47 IST — after morning pipelines complete
-#   * 12:17 UTC = 17:47 IST — mid-afternoon, after publishes
-#   * 18:17 UTC = 23:47 IST — late evening, before next cycle
+# The docker prune inside disk_cleanup.sh is idempotent + fast when
+# there's nothing to reclaim (~50ms). apt/journal steps skip when
+# they were already run recently. Net cost of the hourly cadence:
+# negligible IOPS in steady state, aggressive when needed.
 #
-# Why not hourly: docker prune walks every image; running 4x/day is
-# enough to prevent the 99%-disk crisis we hit on 2026-06-29 without
-# burning IOPS during steady-state.
-OnCalendar=*-*-* 00,06,12,18:17:00 UTC
+# Off-the-hour offset (:17) prevents pile-up with hourly
+# metric_collector (00:00) + other production cadences.
+OnCalendar=*-*-* *:17:00 UTC
 # Catch-up after reboot. The cleanup is idempotent — running 4
 # windows back-to-back after a long downtime just reclaims what was
 # accumulating during the downtime.
