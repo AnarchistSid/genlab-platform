@@ -34,6 +34,7 @@ import {
 import { CarouselViewer } from "@/components/shared/carousel-viewer";
 import { ProgressBar } from "@/components/review/progress-bar";
 import { AutoApprovalBadge } from "@/components/review/auto-approval-badge";
+import { EnsembleBadge } from "@/components/review/ensemble-badge";
 import { cn } from "@/lib/utils";
 import { useFocusReviewQueue } from "@/hooks/use-focus-review";
 import { useNicheStore } from "@/stores/niche-store";
@@ -693,7 +694,16 @@ export function FocusMode() {
               to the counter so the verdict is visible at the moment the
               operator forms their own opinion. */}
           {currentItem?.id && (
-            <AutoApprovalBadge blueprintId={String(currentItem.id)} />
+            <>
+              <AutoApprovalBadge blueprintId={String(currentItem.id)} />
+              {/* Intervention 6 (2026-07-01): ensemble decision badge.
+                  Only renders on `worth_your_look` / `auto_approve` /
+                  `auto_reject` — silently absent on disabled /
+                  insufficient_data / error so the operator's UI doesn't
+                  get cluttered with "N/A" signals while the ensemble is
+                  in the shipping-but-inactive default state. */}
+              <EnsembleBadge blueprintId={String(currentItem.id)} />
+            </>
           )}
 
           {/* Prev/Next mini buttons */}

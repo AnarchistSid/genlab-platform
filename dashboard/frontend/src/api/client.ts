@@ -235,6 +235,32 @@ export interface AutoApprovalPreview {
     has_video: boolean;
     has_hook: boolean;
   };
+  // Intervention 6 (2026-07-01): ensemble decision-making payload.
+  // Optional because the server may not populate it on older cached
+  // rows AND because the ensemble is env-flag-gated OFF by default
+  // (renders as disabled state). The EnsembleBadge component reads
+  // this to surface `worth_your_look` disagreements to the operator.
+  ensemble?: {
+    score: number | null;
+    disagreement: number;
+    n_voters: number;
+    recommendation:
+      | "auto_approve"
+      | "auto_reject"
+      | "worth_your_look"
+      | "route_to_operator"
+      | "disabled"
+      | "insufficient_data"
+      | "error";
+    votes: Array<{
+      component: string;
+      score: number | null;
+      weight: number;
+      reason: string;
+    }>;
+    reasons: string[];
+    error?: string;
+  };
 }
 
 // AUTO #1b: stats response from /api/v1/auto-approval/calibration-stats.

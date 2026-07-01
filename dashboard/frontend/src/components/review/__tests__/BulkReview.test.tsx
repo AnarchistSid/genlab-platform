@@ -70,6 +70,14 @@ vi.mock("@/components/review/auto-approval-badge", () => ({
     <span data-testid={`auto-badge-${blueprintId}`}>badge</span>
   ),
 }));
+// Intervention 6 (2026-07-01): EnsembleBadge renders next to the
+// AutoApprovalBadge in bulk-review. Same reason to stub — the
+// BulkReview render tests don't wire a QueryClient.
+vi.mock("@/components/review/ensemble-badge", () => ({
+  EnsembleBadge: ({ blueprintId }: { blueprintId: string }) => (
+    <span data-testid={`ensemble-badge-${blueprintId}`}>ensemble</span>
+  ),
+}));
 
 // sonner toast — silent stub.
 vi.mock("sonner", () => ({

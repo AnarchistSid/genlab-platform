@@ -81,6 +81,12 @@ vi.mock("react-router-dom", async () => {
 vi.mock("@/components/review/auto-approval-badge", () => ({
   AutoApprovalBadge: () => null,
 }));
+// Intervention 6 (2026-07-01): EnsembleBadge now renders alongside
+// AutoApprovalBadge in Focus Review. Same stub reason — the test
+// isn't wired to serve the preview endpoint.
+vi.mock("@/components/review/ensemble-badge", () => ({
+  EnsembleBadge: () => null,
+}));
 
 vi.mock("@/components/review/scoring-explainer", () => ({
   ScoringExplainer: () => null,

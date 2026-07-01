@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { ArrowRight, Check, X, SkipForward, Eye } from "lucide-react";
 
 import { AutoApprovalBadge } from "@/components/review/auto-approval-badge";
+import { EnsembleBadge } from "@/components/review/ensemble-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useFocusReviewQueue } from "@/hooks/use-focus-review";
@@ -80,6 +81,7 @@ function BulkCard({ blueprint, index, selected, onToggle }: CardProps) {
 
       <div className="flex flex-wrap items-center gap-2">
         <AutoApprovalBadge blueprintId={blueprint.id} />
+        <EnsembleBadge blueprintId={blueprint.id} />
       </div>
     </Card>
   );
