@@ -206,15 +206,30 @@ def _build_bandit_context(
     """
     try:
         from genlab_core.learning.hook_features import build_feature_vector
-        from genlab_core.learning.linucb import build_content_context
+        from genlab_core.learning.linucb import (
+            build_content_context,
+            build_content_context_v2,
+        )
 
         hook_txt = fields.get("hook", "")
         hook_feats = build_feature_vector(hook_txt) if hook_txt else {}
         linucb_ctx = build_content_context(fields, niche_id).tolist()
+        # Intervention 9 (2026-07-01): persist the v2 vector alongside
+        # v1 so ancillary consumers (DR estimator, bandit_validation,
+        # ensemble) can opt into cyclical time features without
+        # blocking on the LinUCB-v2 retrain. Best-effort — a failure
+        # here doesn't compromise the (critical) v1 wire. See
+        # ``learning/linucb.build_content_context_v2`` for the layout.
+        try:
+            linucb_ctx_v2 = build_content_context_v2(fields, niche_id).tolist()
+        except Exception:
+            linucb_ctx_v2 = None
         ctx: dict = {
             "hook_features": hook_feats,
             "linucb_context": linucb_ctx,
         }
+        if linucb_ctx_v2 is not None:
+            ctx["linucb_context_v2"] = linucb_ctx_v2
         extra_arms: list[str] = []
 
         hook_style = fields.get("hook_style", "")

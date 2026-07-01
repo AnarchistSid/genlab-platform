@@ -66,6 +66,45 @@ CONTEXT_DIM = 13
 # the original 12 dims.
 _LEGACY_CONTEXT_DIM = 12
 
+
+# Intervention 9 (2026-07-01) — extended context with cyclical time
+# encoding. The default LinUCB decision path stays at CONTEXT_DIM = 13
+# so 40+ live arms with 13×13 A matrices keep working byte-identical.
+# The v2 encoding is produced by :func:`build_content_context_v2` and
+# consumed by ancillary tools (DR estimator, bandit_validation,
+# ensemble) that benefit from correctly-encoded periodic time features.
+#
+# Dimensionality:
+#   v1 (13-D):  [weekday/6, hour/23, source, ..., content_type_showcase]
+#   v2 (15-D):  [weekday_sin, weekday_cos, hour_sin, hour_cos, source, ...,
+#                content_type_showcase]
+#
+# The four cyclical dims replace the two static-integer time dims in
+# v1. All non-time dims are preserved in order — so a v1→v2 remap is
+# ``v2[:4] = cyclical_time`` + ``v2[4:] = v1[2:]``. This lets a future
+# migration retrain LinUCB on v2 by carrying forward the same
+# non-time coefficients while learning new θ entries for the cyclical
+# time features from scratch.
+EXTENDED_CONTEXT_DIM = 15
+
+
+def _temporal_context_enabled() -> bool:
+    """Exact-match feature flag. When ``GENLAB_TEMPORAL_CONTEXT_ENABLED``
+    is ``true`` / ``TRUE`` / ``True``, ancillary consumers may opt into
+    the v2 (cyclical-time, 15-D) feature vector. The LinUCB decision
+    path is UNAFFECTED by this flag — it always uses the v1 (13-D)
+    vector — because flipping LinUCB's context dimensionality at
+    runtime would invalidate the shipped A/A_inv matrices without a
+    coordinated retrain.
+
+    The flag is here as the coordination point for the future
+    LinUCB-v2 rollout: when a follow-up PR is ready to retrain LinUCB
+    on the v2 vector, it flips this flag AND updates ``CONTEXT_DIM``
+    together.
+    """
+    return os.environ.get("GENLAB_TEMPORAL_CONTEXT_ENABLED", "") in ("true", "TRUE", "True")
+
+
 # Minimum observations before LinUCB predictions are trusted.
 # Below this threshold, fall back to Thompson Sampling.
 MIN_OBS_FOR_LINUCB = 50
@@ -553,6 +592,130 @@ def build_content_context(
         [
             now.weekday() / 6.0,
             now.hour / 23.0,
+            _SOURCE_TYPE_MAP.get(
+                story.get("source_type", story.get("source", "")), _SOURCE_TYPE_DEFAULT
+            ),
+            min(story.get("duration_seconds", 30) / 60.0, 1.0),
+            min(story.get("view_velocity", 0) / 5000.0, 1.0),
+            story.get("relevance_score", story.get("composite_score", 0.5)),
+            min(len(hook) / 60.0, 1.0),
+            _NICHE_ENCODING.get(niche_id, 0.5),
+            1.0 if story.get("affiliate_product") else 0.0,
+            min(len(caption) / 200.0, 1.0),
+            min(len(hashtags) / 10.0, 1.0),
+            min(story.get("composite_score", story.get("score", 0.5)), 1.0),
+            1.0 if content_type == "showcase" else 0.0,
+        ],
+        dtype=np.float64,
+    )
+
+
+# ── Intervention 9 (2026-07-01): cyclical time encoding ─────────────
+
+
+def encode_weekday_cyclical(weekday: int) -> tuple[float, float]:
+    """Return ``(weekday_sin, weekday_cos)`` for a Python weekday int
+    in ``[0, 6]`` (Monday=0).
+
+    The identity ``sin² + cos² == 1`` is preserved for every valid
+    input — the transform is unit-circle-preserving by construction.
+    This is the key reason a bandit learns weekday effects better with
+    cyclical encoding: Sunday(6) and Monday(0) live NEXT to each other
+    on the unit circle even though they're maximally distant on the
+    integer scale.
+
+    The tuple return matches numpy's ``.item()`` convention and keeps
+    the caller free to insert either dim independently — useful for
+    building the v2 vector where the two dims are contiguous but the
+    concatenation point differs by builder.
+    """
+    import math
+
+    theta = 2 * math.pi * weekday / 7.0
+    return math.sin(theta), math.cos(theta)
+
+
+def encode_hour_cyclical(hour: int) -> tuple[float, float]:
+    """Return ``(hour_sin, hour_cos)`` for an integer hour in
+    ``[0, 23]``. Same unit-circle-preserving property as
+    :func:`encode_weekday_cyclical` — hour 23 sits next to hour 0
+    despite the maximally-distant integer coding."""
+    import math
+
+    theta = 2 * math.pi * hour / 24.0
+    return math.sin(theta), math.cos(theta)
+
+
+def build_content_context_v2(
+    story: dict[str, Any],
+    niche_id: str,
+    now: datetime | None = None,
+) -> np.ndarray:
+    """Return the 15-dimensional v2 context vector with cyclical time.
+
+    Layout (indices):
+        0: weekday_sin ∈ [-1, 1]
+        1: weekday_cos ∈ [-1, 1]
+        2: hour_sin    ∈ [-1, 1]
+        3: hour_cos    ∈ [-1, 1]
+        4: source_type       (was v1[2])
+        5: duration_bucket   (was v1[3])
+        6: view_velocity     (was v1[4])
+        7: relevance_score   (was v1[5])
+        8: hook_length       (was v1[6])
+        9: niche_encoding    (was v1[7])
+       10: has_affiliate     (was v1[8])
+       11: caption_length    (was v1[9])
+       12: hashtag_count     (was v1[10])
+       13: trending_score    (was v1[11])
+       14: content_type_showcase (was v1[12])
+
+    Design guarantees:
+
+    * Length == ``EXTENDED_CONTEXT_DIM`` (15). Callers can assert
+      shape without a runtime dim lookup.
+    * Non-time dims (indices 4-14) are byte-identical to v1 dims 2-12.
+      A follow-up LinUCB retrain can carry forward the eleven
+      non-time θ coefficients unchanged; only the new cyclical time
+      dims need to be learned from scratch.
+    * Independent of the ``GENLAB_TEMPORAL_CONTEXT_ENABLED`` flag —
+      the flag gates CONSUMER opt-in, not the builder. Any caller
+      can request the v2 vector; the flag exists so a future
+      LinUCB-v2 rollout has a single coordination point.
+    * Reads the same nested/flat story shape as
+      :func:`build_content_context`. R-18 fix (nested content path
+      vs flat blueprint path) applies here too so v2 doesn't
+      re-introduce the train/predict mismatch v1 had before that
+      fix.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+
+    content = story.get("content", {})
+    if not isinstance(content, dict):
+        content = {}
+    instagram = content.get("instagram", {})
+    if not isinstance(instagram, dict):
+        instagram = {}
+    hook = content.get("hook") or story.get("hook") or story.get("hook_text") or ""
+    caption = (
+        instagram.get("caption") or story.get("caption") or story.get("instagram_caption") or ""
+    )
+    hashtags = story.get("hashtags", [])
+    if isinstance(hashtags, str):
+        hashtags = hashtags.split()
+
+    content_type = _extract_content_type(story)
+
+    weekday_sin, weekday_cos = encode_weekday_cyclical(now.weekday())
+    hour_sin, hour_cos = encode_hour_cyclical(now.hour)
+
+    return np.array(
+        [
+            weekday_sin,
+            weekday_cos,
+            hour_sin,
+            hour_cos,
             _SOURCE_TYPE_MAP.get(
                 story.get("source_type", story.get("source", "")), _SOURCE_TYPE_DEFAULT
             ),

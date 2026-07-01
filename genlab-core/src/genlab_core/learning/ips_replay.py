@@ -339,15 +339,18 @@ def _row_to_decision(row: dict[str, Any]) -> DecisionRecord:
         # Rows without publish_time can't be ordered or windowed; skip.
         raise ValueError("row has no publish_time")
 
-    # Best-effort parse of bandit_context.linucb_context. Malformed /
-    # missing / wrong-shape → context stays None; the DR estimator
-    # drops such rows from its sum but the IPS estimator still uses
-    # them. Never raise — a bad JSON payload on one row shouldn't
-    # torpedo the whole replay run.
+    # Best-effort parse of the LinUCB context. Prefer the v2 vector
+    # (Intervention 9, 2026-07-01: cyclical time encoding — Monday
+    # and Sunday adjacent on the unit circle) when the row carries it;
+    # fall back to v1 for rows persisted before Intervention 9 landed.
+    # Malformed / missing / wrong-shape → context stays None; the DR
+    # estimator drops such rows from its sum but the IPS estimator
+    # still uses them. Never raise — a bad JSON payload on one row
+    # shouldn't torpedo the whole replay run.
     context: tuple[float, ...] | None = None
     bctx = row.get("bandit_context")
     if isinstance(bctx, dict):
-        raw_ctx = bctx.get("linucb_context")
+        raw_ctx = bctx.get("linucb_context_v2") or bctx.get("linucb_context")
         if isinstance(raw_ctx, list):
             try:
                 context = tuple(float(v) for v in raw_ctx)
