@@ -13,7 +13,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from genlab_core.intelligence.proposal_schema import StrategicPhase
 from genlab_core.scheduling import strategy_phase
 

@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Cache TTL — 5 minutes. Balances "operator proposal takes effect quickly"
 # against "we don't hammer the DB on every reward compute."
 _CACHE_TTL_SEC = 300.0
-_cache: dict[str, tuple[float, "PhaseConfig"]] = {}
+_cache: dict[str, tuple[float, PhaseConfig]] = {}
 
 
 def _integration_enabled() -> bool:

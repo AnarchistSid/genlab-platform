@@ -833,7 +833,9 @@ app.register_blueprint(compliance_bp)  # PR #578: /api/v1/compliance/{events,che
 app.register_blueprint(scheduling_pauses_bp)  # PR #577 consumer: /api/v1/scheduling/pauses
 app.register_blueprint(source_discovery_bp)  # PR after #586: /api/v1/source-discovery/proposals
 app.register_blueprint(source_performance_bp)  # Phase 2 L1: /api/v1/source-performance
-app.register_blueprint(strategist_bp)  # PR Strategist-2: /api/v1/strategist/reports/{latest,unreviewed,<id>/review}
+app.register_blueprint(
+    strategist_bp
+)  # PR Strategist-2: /api/v1/strategist/reports/{latest,unreviewed,<id>/review}
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

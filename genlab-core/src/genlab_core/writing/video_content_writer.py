@@ -336,10 +336,7 @@ def write_video_content(
         phase_cfg = get_phase_config(niche_id)
         if phase_cfg.active_findings:
             findings_text = "\n".join(f"  - {f}" for f in phase_cfg.active_findings[:5])
-            findings_hint = (
-                "\nOPERATOR-VALIDATED LEARNINGS (lean on these):\n"
-                f"{findings_text}\n"
-            )
+            findings_hint = f"\nOPERATOR-VALIDATED LEARNINGS (lean on these):\n{findings_text}\n"
     except Exception as exc:
         logger.debug("[%s] Strategist findings injection skipped: %s", niche_id, exc)
 

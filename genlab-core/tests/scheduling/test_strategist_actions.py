@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from genlab_core.scheduling import strategist_actions
 
 
