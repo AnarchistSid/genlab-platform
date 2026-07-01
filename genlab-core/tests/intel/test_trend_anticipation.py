@@ -172,9 +172,8 @@ class TestSignalOptInFlags:
         monkeypatch.delenv("REDDIT_CLIENT_SECRET", raising=False)
         assert ta._signal_social_velocity("test", "gaming") is None
 
-    def test_news_lead_returns_none(self):
-        """Still Session-3 territory — the stub guard stays here as a
-        drift-catcher until Session 3 replaces it with real logic."""
+    def test_news_lead_off_by_default(self, monkeypatch):
+        monkeypatch.delenv("GENLAB_ANTICIPATION_NEWS_ENABLED", raising=False)
         assert ta._signal_news_lead("test", "gaming") is None
 
 
@@ -364,6 +363,61 @@ class TestSocialVelocitySignal:
         assert ta._signal_social_velocity("t", "gaming") is None
 
 
+class TestNewsLeadSignal:
+    """Session 3 — Google News RSS. Zero-auth, zero-API-key, but
+    still flag-gated so an operator opts in consciously."""
+
+    def _prep_env(self, monkeypatch):
+        monkeypatch.setenv("GENLAB_ANTICIPATION_NEWS_ENABLED", "true")
+        monkeypatch.setattr(ta, "_get_cache", lambda: None)
+
+    class _FakeResp:
+        def __init__(self, status_code: int, content: bytes = b""):
+            self.status_code = status_code
+            self.content = content
+
+    @pytest.mark.parametrize(
+        "n_articles,expected_lo,expected_hi",
+        [
+            (0, None, None),  # 0 articles → None (not 0)
+            (5, 0.35, 0.42),  # log10(6)/2 ≈ 0.389
+            (20, 0.6, 0.7),  # log10(21)/2 ≈ 0.661
+            (200, 1.0, 1.0),  # saturates
+        ],
+    )
+    def test_score_mapping_log_scale(self, monkeypatch, n_articles, expected_lo, expected_hi):
+        self._prep_env(monkeypatch)
+
+        # Fake requests.get returns whatever content, and we stub
+        # feedparser.parse to return a fixed entry count. That
+        # decouples the score-mapping pin from feedparser's XML
+        # dance.
+        def fake_requests_get(url, **kwargs):
+            return self._FakeResp(200, b"<rss>ignored</rss>")
+
+        monkeypatch.setattr("requests.get", fake_requests_get)
+
+        def fake_feedparser(content):
+            return {"entries": [{"title": f"a{i}"} for i in range(n_articles)]}
+
+        monkeypatch.setattr("feedparser.parse", fake_feedparser)
+
+        score = ta._signal_news_lead("test", "gaming")
+        if expected_lo is None:
+            assert score is None
+        else:
+            assert score is not None
+            assert expected_lo <= score <= expected_hi
+
+    def test_http_error_returns_none(self, monkeypatch):
+        self._prep_env(monkeypatch)
+        monkeypatch.setattr(
+            "requests.get",
+            lambda url, **kwargs: self._FakeResp(500),
+        )
+        assert ta._signal_news_lead("t", "gaming") is None
+
+
 # ── Persistence ────────────────────────────────────────────────────
 
 
@@ -400,3 +454,152 @@ class TestPersistence:
         assert path.exists()
         payload = json.loads(path.read_text())
         assert payload["ranking"] == []
+
+
+# ── Read side (Session 3 pipeline consumer wire) ──────────────────
+
+
+class TestReadTodaysAnticipation:
+    """The main flag ``GENLAB_TREND_ANTICIPATION_ENABLED`` is the
+    single switch that turns pipeline steering on. When off, the
+    read function returns None regardless of whether an artifact
+    exists — this is the observability-mode contract Session 1
+    established."""
+
+    def _write_artifact(self, tmp_path, niche_id: str, scores: list):
+        """Utility: write a same-day artifact into tmp_path."""
+        from datetime import UTC, datetime
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d")
+        path = tmp_path / f"{stamp}-{niche_id}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "generated_at": "now",
+                    "niche_id": niche_id,
+                    "flag_enabled": True,
+                    "ranking": [s.to_json() for s in scores],
+                }
+            )
+        )
+        return path
+
+    def test_flag_off_returns_none_even_with_artifact(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("GENLAB_TREND_ANTICIPATION_ENABLED", raising=False)
+        score = ta.AnticipationScore(
+            topic="a",
+            niche_id="gaming",
+            composite_score=0.5,
+            signals={},
+            reasons=[],
+        )
+        self._write_artifact(tmp_path, "gaming", [score])
+        assert ta.read_todays_anticipation("gaming", output_dir=tmp_path) is None
+
+    def test_flag_on_no_artifact_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        assert ta.read_todays_anticipation("gaming", output_dir=tmp_path) is None
+
+    def test_flag_on_artifact_present_returns_list(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        score = ta.AnticipationScore(
+            topic="Zelda TOTK 2",
+            niche_id="gaming",
+            composite_score=0.82,
+            signals={"search_velocity": 0.85},
+            confidence=0.75,
+            anticipated_peak_hours_ahead=12,
+            reasons=["stub"],
+        )
+        self._write_artifact(tmp_path, "gaming", [score])
+        result = ta.read_todays_anticipation("gaming", output_dir=tmp_path)
+        assert result is not None
+        assert len(result) == 1
+        assert result[0].topic == "Zelda TOTK 2"
+        assert result[0].composite_score == pytest.approx(0.82)
+        assert result[0].anticipated_peak_hours_ahead == 12
+
+    def test_malformed_artifact_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        from datetime import UTC, datetime
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d")
+        (tmp_path / f"{stamp}-gaming.json").write_text("{corrupt")
+        assert ta.read_todays_anticipation("gaming", output_dir=tmp_path) is None
+
+
+class TestReorderByAnticipation:
+    """The consumer's convenience wrapper. Anticipated topics surface
+    first (highest score → lowest); unanticipated preserve original
+    order and follow. When the flag is off / no artifact, input
+    order is preserved byte-identically — the pipeline behaviour
+    stays the same as today."""
+
+    def _write(self, tmp_path, niche_id: str, scored: dict):
+        """Write an artifact with topic → score mapping."""
+        from datetime import UTC, datetime
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d")
+        path = tmp_path / f"{stamp}-{niche_id}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "generated_at": "now",
+                    "niche_id": niche_id,
+                    "flag_enabled": True,
+                    "ranking": [
+                        {
+                            "topic": t,
+                            "niche_id": niche_id,
+                            "composite_score": s,
+                            "signals": {},
+                            "anticipated_peak_hours_ahead": 0,
+                            "confidence": 0.25,
+                            "reasons": [],
+                        }
+                        for t, s in scored.items()
+                    ],
+                }
+            )
+        )
+        return path
+
+    def test_flag_off_preserves_order(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("GENLAB_TREND_ANTICIPATION_ENABLED", raising=False)
+        # Even with an artifact + rankings, flag off → identity fn.
+        self._write(tmp_path, "gaming", {"apple": 0.9, "banana": 0.5})
+        result = ta.reorder_by_anticipation(
+            ["banana", "apple", "cherry"], "gaming", output_dir=tmp_path
+        )
+        assert result == ["banana", "apple", "cherry"]
+
+    def test_flag_on_anticipated_surface_first(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        self._write(
+            tmp_path,
+            "gaming",
+            {"cherry": 0.9, "banana": 0.5},  # apple absent
+        )
+        result = ta.reorder_by_anticipation(
+            ["apple", "banana", "cherry", "date"],
+            "gaming",
+            output_dir=tmp_path,
+        )
+        # cherry (0.9) then banana (0.5) — those are the two
+        # anticipated. Then apple, date — preserving input order.
+        assert result == ["cherry", "banana", "apple", "date"]
+
+    def test_case_insensitive_match(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        self._write(tmp_path, "gaming", {"Zelda TOTK": 0.9})
+        result = ta.reorder_by_anticipation(["zelda totk", "mario"], "gaming", output_dir=tmp_path)
+        # Case-insensitive matches — the input's casing is preserved
+        # in output, but it's identified as an anticipated topic.
+        assert result[0] == "zelda totk"
+        assert result[1] == "mario"
+
+    def test_flag_on_no_artifact_preserves_order(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("GENLAB_TREND_ANTICIPATION_ENABLED", "true")
+        # No artifact written
+        result = ta.reorder_by_anticipation(["apple", "banana"], "gaming", output_dir=tmp_path)
+        assert result == ["apple", "banana"]

@@ -31,6 +31,7 @@ import { PipelineCountdowns } from "./PipelineCountdowns";
 import { MonetisationCompact } from "./MonetisationCompact";
 import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { StrategistReportCard } from "./StrategistReportCard";
+import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -306,6 +307,14 @@ export default function MissionControl() {
                 reads them together to reason about "what should we
                 change this week?" */}
             <StrategistReportCard />
+            {/* Intervention 5 Session 3 (2026-07-01): Trend Anticipation
+                daily rankings surface. Reads the artifact written by
+                the 03:30 UTC systemd runner. Sits next to
+                StrategistReportCard because both are periodic
+                LLM/analytic surfaces the operator reads at the same
+                cadence — Strategist for the weekly meta-strategy,
+                TrendAnticipation for the daily topic-selection input. */}
+            <TrendAnticipationCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

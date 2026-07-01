@@ -518,14 +518,94 @@ def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
 
 
 def _signal_news_lead(topic: str, niche_id: str) -> float | None:
-    """News-lead signal — count of news articles about the topic in
+    """News-lead — count of Google News articles about the topic in
     the last 3 days.
 
-    Session 1: stub. Session 3 will wire a news-search source (likely
-    the existing RSS parser in ``genlab_core.intel.rss_parser`` +
-    per-niche allowlist of news feeds from ``sources.yaml``).
+    Session 3 (2026-07-01) wires this via Google News RSS. That feed
+    is zero-cost, no API key required, unratelimited in practice —
+    the simplest of the four signal sources. The URL shape is
+    ``https://news.google.com/rss/search?q=<topic>+when:3d``.
+
+    Score mapping: ``min(1.0, log10(1 + article_count) / 2.0)``.
+    Same log rationale as ``_signal_creator_pickup`` (news article
+    counts range from 0 to hundreds). Denominator 2.0 (vs 3.0 for
+    YouTube) because 10-100 news articles is already "hot news
+    story" — the news pipeline is small enough that saturation
+    hits sooner than YouTube search:
+
+      * 0 articles       → 0.00
+      * 5 articles       → 0.39
+      * 20 articles      → 0.66
+      * 100+ articles    → 1.00
+
+    Guardrails:
+
+    * ``GENLAB_ANTICIPATION_NEWS_ENABLED`` opt-in flag. Zero API
+      cost + no auth, so this flag is more about "don't spam Google
+      News on every daily run before we've validated the score
+      mapping" than quota — flip it after Session 3 ships.
+    * Missing ``feedparser`` → None (fail-open).
+    * Cached 12h per (topic, niche).
     """
-    return None
+    if os.environ.get("GENLAB_ANTICIPATION_NEWS_ENABLED", "") not in (
+        "true",
+        "TRUE",
+        "True",
+    ):
+        return None
+
+    cache = _get_cache()
+    key = _cache_key("nl", topic, niche_id)
+    if cache is not None:
+        cached = cache.get(key, ttl_hours=_CACHE_TTL_HOURS)
+        if cached is not None and isinstance(cached, (int, float)):
+            return float(cached)
+
+    try:
+        import math
+        import urllib.parse
+
+        import feedparser
+
+        # ``when:3d`` in the Google News query limits results to the
+        # last 3 days. URL-encoding the topic string keeps phrases
+        # with spaces / punctuation from breaking the request.
+        encoded = urllib.parse.quote_plus(f"{topic} when:3d")
+        url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US"
+        # feedparser has no built-in timeout — the network fetch is
+        # blocking. Use a short-timeout urlopen wrapper via requests
+        # then hand feedparser the bytes; matches how rss_parser
+        # already reads (defensive against hangs on flaky sources).
+        import requests
+
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "GenLab/1.0"})
+        if resp.status_code != 200:
+            logger.debug(
+                "[trend_anticipation] Google News returned %d for %r",
+                resp.status_code,
+                topic,
+            )
+            return None
+        parsed = feedparser.parse(resp.content)
+        n_articles = len(parsed.get("entries", []))
+    except Exception as exc:
+        logger.debug(
+            "[trend_anticipation] news_lead failed for %r (%s): %s",
+            topic,
+            niche_id,
+            exc,
+        )
+        return None
+
+    if n_articles == 0:
+        return None
+    score = min(1.0, math.log10(1 + n_articles) / 2.0)
+    if cache is not None:
+        try:
+            cache.set(key, score)
+        except Exception:
+            pass
+    return score
 
 
 # ── Composite scoring ──────────────────────────────────────────────
@@ -651,11 +731,147 @@ def persist_ranking(
     return path
 
 
+# ── Read side (pipeline consumers, Session 3) ──────────────────────
+
+
+def read_todays_anticipation(
+    niche_id: str,
+    *,
+    output_dir: Path | None = None,
+) -> list[AnticipationScore] | None:
+    """Load today's anticipation artifact for a niche, or None.
+
+    Pipeline consumers call this when they want to reorder their
+    candidate topic list by anticipation score. Semantics:
+
+    * Returns ``None`` when the flag ``GENLAB_TREND_ANTICIPATION_ENABLED``
+      is off — this is deliberate. The flag is the sole switch that
+      turns pipeline-side steering on; the runner + dashboard read
+      the artifact unconditionally, but the pipeline only acts on it
+      when the operator has explicitly opted in.
+    * Returns ``None`` when today's artifact doesn't exist yet
+      (runner hasn't fired, cold-start day, or systemd unit
+      disabled).
+    * Returns ``None`` when the artifact is malformed. Never raises.
+    * Otherwise returns the ranking as a list of
+      :class:`AnticipationScore` (deserialised — the dashboard reads
+      raw JSON, but pipeline code prefers the typed dataclass).
+
+    Callers should treat ``None`` as "no anticipation signal
+    available — proceed with the default candidate list." Same
+    fail-open pattern the reward-shaper's percentile_targets_fn
+    uses.
+    """
+    if not _integration_enabled():
+        return None
+
+    out_dir = output_dir or _resolve_output_dir()
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    path = out_dir / f"{stamp}-{niche_id}.json"
+    if not path.exists():
+        return None
+
+    try:
+        payload = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.debug(
+            "[trend_anticipation] read failed for %s/%s: %s",
+            stamp,
+            niche_id,
+            exc,
+        )
+        return None
+
+    raw = payload.get("ranking") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return None
+
+    scored: list[AnticipationScore] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        try:
+            scored.append(
+                AnticipationScore(
+                    topic=str(row.get("topic", "")),
+                    niche_id=str(row.get("niche_id", niche_id)),
+                    composite_score=float(row.get("composite_score", 0.0)),
+                    signals=row.get("signals", {}) or {},
+                    anticipated_peak_hours_ahead=(
+                        int(row["anticipated_peak_hours_ahead"])
+                        if row.get("anticipated_peak_hours_ahead") is not None
+                        else None
+                    ),
+                    confidence=float(row.get("confidence", 0.0)),
+                    reasons=list(row.get("reasons") or []),
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            logger.debug(
+                "[trend_anticipation] skipping malformed ranking row: %s",
+                exc,
+            )
+    return scored
+
+
+def reorder_by_anticipation(
+    candidates: list[str],
+    niche_id: str,
+    *,
+    output_dir: Path | None = None,
+) -> list[str]:
+    """Reorder a candidate topic list by today's anticipation ranking.
+
+    Convenience wrapper around :func:`read_todays_anticipation` for
+    pipeline call sites that want a same-shape output (list[str] in,
+    list[str] out). When the anticipation artifact is unavailable
+    (flag off / cold start / stale), returns the input unchanged —
+    the pipeline decision path stays byte-identical to today's
+    behaviour.
+
+    Ranking logic:
+
+    * Candidates that appear in today's anticipation ranking surface
+      FIRST, ordered by anticipation composite_score descending.
+    * Candidates that don't appear in the ranking preserve their
+      original order and follow.
+
+    This is the minimally-invasive shape a pipeline stage can adopt:
+    the anticipation module doesn't remove any candidates or inject
+    new ones — it only reorders WHICH of the caller's candidates
+    the pipeline picks first.
+    """
+    ranking = read_todays_anticipation(niche_id, output_dir=output_dir)
+    if not ranking:
+        return list(candidates)
+
+    # Case-insensitive match — pytrends topics use varied casing.
+    score_by_topic: dict[str, float] = {s.topic.strip().lower(): s.composite_score for s in ranking}
+
+    scored_candidates = [
+        (score_by_topic.get(c.strip().lower(), None), i, c) for i, c in enumerate(candidates)
+    ]
+
+    # Anticipated topics first (highest composite score → lowest);
+    # unscored preserve original order via the tuple's index tiebreak.
+    def sort_key(item: tuple[float | None, int, str]):
+        score, idx, _ = item
+        # None → last; score → sort descending
+        if score is None:
+            return (1, idx, 0.0)
+        return (0, 0, -score)
+
+    scored_candidates.sort(key=sort_key)
+    return [c for _, _, c in scored_candidates]
+
+
 __all__ = [
     "AnticipationScore",
     "compute_anticipation_score",
     "rank_topics",
     "persist_ranking",
+    "read_todays_anticipation",
+    "reorder_by_anticipation",
     "_signal_search_velocity",
     "_search_velocity_from_series",
     "_SIGNAL_WEIGHTS",

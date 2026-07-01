@@ -1107,6 +1107,23 @@ function unwrapEnvelope<T>(response: unknown): T | null {
   return response as T;
 }
 
+// ───────────────────────────────────────────────────────────────
+// Intervention 5 Session 3 (2026-07-01) — Trend Anticipation client.
+// ───────────────────────────────────────────────────────────────
+
+export const trendAnticipation = {
+  /** Fetch today's anticipation ranking for one niche. Returns null
+   *  when the runner hasn't fired yet (cold start day, first run
+   *  after enable). Frontend renders that as "No ranking yet". */
+  latest: (nicheId: string) =>
+    get<{
+      data: import("./types").TrendAnticipationArtifact | null;
+    }>("/trend-anticipation/latest", { niche_id: nicheId }).then(
+      (d) =>
+        unwrapEnvelope<import("./types").TrendAnticipationArtifact>(d),
+    ),
+};
+
 export const strategist = {
   /** Fetch the latest Strategist report for a niche.
    *  Returns null when the persister has no rows yet (cold start —

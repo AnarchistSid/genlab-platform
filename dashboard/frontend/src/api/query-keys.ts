@@ -111,6 +111,13 @@ export const queryKeys = {
     unreviewed: (limit: number) =>
       ["strategist", "unreviewed", limit] as const,
   },
+  trendAnticipation: {
+    /** Intervention 5 Session 3 (2026-07-01) — per-niche latest artifact
+     *  cache key. Polled every 10 minutes; artifact rewrites daily at
+     *  03:30 UTC. */
+    latest: (nicheId: string) =>
+      ["trend-anticipation", "latest", nicheId] as const,
+  },
   revenue: {
     summary: () => ["revenue", "summary"] as const,
     clickTrends: () => ["revenue", "click-trends"] as const,

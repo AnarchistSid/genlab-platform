@@ -808,6 +808,7 @@ from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
+from server.api.trend_anticipation import bp as trend_anticipation_bp
 from server.api.trends import bp as trends_bp
 from server.api.webhook_receiver import webhook_bp
 from server.api.youtube_quota import bp as youtube_quota_bp
@@ -836,6 +837,9 @@ app.register_blueprint(source_performance_bp)  # Phase 2 L1: /api/v1/source-perf
 app.register_blueprint(
     strategist_bp
 )  # PR Strategist-2: /api/v1/strategist/reports/{latest,unreviewed,<id>/review}
+app.register_blueprint(
+    trend_anticipation_bp
+)  # Intervention 5 Session 3 (2026-07-01): /api/v1/trend-anticipation/latest
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

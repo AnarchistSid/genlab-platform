@@ -1304,3 +1304,45 @@ export interface StrategistReviewRequest {
   rejected_proposal_indices: number[];
   notes?: string;
 }
+
+// ───────────────────────────────────────────────────────────────
+// Intervention 5 Session 3 (2026-07-01) — Trend Anticipation card.
+//
+// Mirrors ``genlab_core.intel.trend_anticipation.AnticipationScore``
+// dataclass. The endpoint returns whatever the runner wrote to disk;
+// the frontend renders that verbatim.
+// ───────────────────────────────────────────────────────────────
+
+export interface AnticipationScore {
+  topic: string;
+  niche_id: string;
+  composite_score: number;
+  /** Per-signal contribution: null when the signal source couldn't
+   *  produce a value (missing API key / rate-limited / stubbed).
+   *  The card shows a subtle dot when null, a coloured bar when
+   *  populated. */
+  signals: {
+    search_velocity: number | null;
+    creator_pickup: number | null;
+    social_velocity: number | null;
+    news_lead: number | null;
+  };
+  /** Positive = peak ahead (anticipation firing correctly).
+   *  0 = at/near peak. Negative = past peak (score should be low). */
+  anticipated_peak_hours_ahead: number | null;
+  /** [0, 1] — Session-1 uses n_signals/4. Card shows it as an
+   *  "N/4 signals" label rather than a raw percentage. */
+  confidence: number;
+  reasons: string[];
+}
+
+/** Full artifact envelope. `flag_enabled` echoes the Python
+ *  `GENLAB_TREND_ANTICIPATION_ENABLED` — the card badges the
+ *  "observation only" vs "steering" state so the operator knows
+ *  whether the pipeline is actually acting on the ranking. */
+export interface TrendAnticipationArtifact {
+  generated_at: string;
+  niche_id: string;
+  flag_enabled: boolean;
+  ranking: AnticipationScore[];
+}
