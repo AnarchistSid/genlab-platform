@@ -96,7 +96,7 @@ jobs:
       # files" toxicity-gate failures).
       - name: Cache HuggingFace + torch hubs (Detoxify model weights)
         id: hf-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ${{ runner.tool_cache }}/.hf-cache
@@ -165,7 +165,7 @@ jobs:
       # across jobs).
       - name: Cache HuggingFace + torch hubs (Detoxify model weights)
         id: hf-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ${{ runner.tool_cache }}/.hf-cache
