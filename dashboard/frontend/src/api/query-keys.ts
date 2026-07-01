@@ -117,6 +117,12 @@ export const queryKeys = {
      *  poll matches. */
     priors: () => ["cross-niche-transfer", "priors"] as const,
   },
+  counterfactualReplay: {
+    /** Intervention 7 observability (2026-07-01) — per-niche latest
+     *  replay artifact. Monthly rewrite; daily poll is plenty. */
+    latest: (nicheId: string) =>
+      ["counterfactual-replay", "latest", nicheId] as const,
+  },
   trendAnticipation: {
     /** Intervention 5 Session 3 (2026-07-01) — per-niche latest artifact
      *  cache key. Polled every 10 minutes; artifact rewrites daily at

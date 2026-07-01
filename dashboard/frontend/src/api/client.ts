@@ -1111,6 +1111,18 @@ function unwrapEnvelope<T>(response: unknown): T | null {
 // Intervention 5 Session 3 (2026-07-01) — Trend Anticipation client.
 // ───────────────────────────────────────────────────────────────
 
+export const counterfactualReplay = {
+  /** Fetch the latest replay artifact for one niche. Returns null
+   *  when the monthly runner hasn't fired yet (first-of-month
+   *  cadence — up to 30 days between rewrites). */
+  latest: (nicheId: string) =>
+    get<{
+      data: import("./types").CounterfactualReplayArtifact | null;
+    }>("/counterfactual-replay/latest", { niche_id: nicheId }).then((d) =>
+      unwrapEnvelope<import("./types").CounterfactualReplayArtifact>(d),
+    ),
+};
+
 export const crossNicheTransfer = {
   /** Fetch the current cross-niche transferred priors. Returns null
    *  when the weekly runner hasn't fired yet (first Monday after

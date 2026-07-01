@@ -34,6 +34,7 @@ import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
+import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -334,6 +335,13 @@ export default function MissionControl() {
                 vs "observation only" badge tells them which state
                 they're in without needing to check .env. */}
             <CrossNichePriorsCard />
+            {/* Intervention 7 observability (2026-07-01): monthly
+                counterfactual replay. Shows per-niche IPS + DR reward
+                estimates so the operator can see which arms would
+                have earned the most reward if picked more often —
+                complements the daily bandit_arms view with a
+                counterfactual overlay. */}
+            <CounterfactualReplayCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

@@ -1361,6 +1361,43 @@ export interface AnticipationAccuracy {
   reasons: string[];
 }
 
+// Intervention 7 observability (2026-07-01) — counterfactual replay artifact.
+// Mirrors ``scripts/run_counterfactual_replay._build_report`` output.
+export interface CounterfactualReplayArm {
+  arm_id: string;
+  n_decisions: number;
+  n_with_reward: number;
+  /** Naive per-arm mean reward. */
+  naive_reward: number | null;
+  /** IPS-corrected reward — the counterfactual "if we'd chosen this
+   *  arm more often" estimate. */
+  ips_reward: number | null;
+  relative_lift: number | null;
+  /** Effective sample size — high ESS means the IPS weights are
+   *  well-distributed; low ESS (< n/2) means a few high-weight
+   *  observations dominate the estimator. */
+  ess: number;
+  /** Doubly-robust reward (Intervention 7). null when the flag is
+   *  off, sklearn missing, or too few rows carry LinUCB context.
+   *  ``dr_note`` explains why. */
+  dr_reward: number | null;
+  dr_direct_method?: number | null;
+  dr_ips_correction?: number | null;
+  dr_n_used?: number;
+  dr_note?: string;
+}
+
+export interface CounterfactualReplayArtifact {
+  generated_at: string;
+  niche: string;
+  window_days: number;
+  n_decisions_total: number;
+  /** Server-injected mirror of ``GENLAB_COUNTERFACTUAL_REPLAY_ENABLED``.
+   *  Frontend badges ``active`` vs ``stub only`` from this. */
+  dr_enabled: boolean;
+  per_arm: CounterfactualReplayArm[];
+}
+
 // Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
 // Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
 export interface CrossNichePrior {
