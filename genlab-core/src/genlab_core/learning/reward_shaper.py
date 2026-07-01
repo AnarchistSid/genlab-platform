@@ -244,7 +244,7 @@ class RewardShaper:
                     prefix = f"{self._niche_id}.reward_weight.{platform}."
                     if not target.startswith(prefix):
                         continue
-                    metric = target[len(prefix):]
+                    metric = target[len(prefix) :]
                     if metric in weights and 0.0 <= value <= 5.0:
                         old = weights[metric]
                         weights[metric] = value
@@ -329,11 +329,48 @@ class RewardShaper:
         # weights (e.g. IG skip_rate's -0.05 penalty) are preserved
         # only when the metric is present so the reweight stays bounded
         # to [0, 1].
+        #
+        # Blind Spot #2 telemetry (2026-07-01): make the redistribution
+        # observable. Silent 30% shifts (e.g. IG dm_send unavailable →
+        # 30% of weight shifts to saves/shares) inflate reward signals
+        # for the still-present metrics without any operator visibility.
+        # We log at DEBUG for every non-trivial redistribution and at
+        # WARNING when the dropped share crosses 15% of total weight —
+        # the threshold picked because IG's typical unreachable-DM
+        # slice is 30% (well above), and small drops from any single
+        # platform slice sit well below.
+        total_abs_weight = sum(abs(w) for w in weights.values())
         present_weights = {k: w for k, w in weights.items() if k in metrics}
         weight_sum = sum(abs(w) for w in present_weights.values())
-        if weight_sum > 0:
-            scale = sum(abs(w) for w in weights.values()) / weight_sum
+        if weight_sum > 0 and total_abs_weight > 0:
+            dropped_keys = sorted(k for k in weights.keys() if k not in metrics)
+            dropped_abs = total_abs_weight - weight_sum
+            dropped_pct = dropped_abs / total_abs_weight
+            scale = total_abs_weight / weight_sum
             weights = {k: w * scale for k, w in present_weights.items()}
+            if dropped_pct >= 0.15:
+                logger.warning(
+                    "[REWARD] weight redistribution on %s: dropped %.0f%% of "
+                    "weight from %d missing metrics %s → scale=%.2f× applied to "
+                    "%d present metrics. This inflates the present-metric "
+                    "signals; if the missing metrics are systematically absent "
+                    "for this platform (e.g. IG dm_send without webhook), the "
+                    "bandit posterior is being trained on partial evidence.",
+                    platform,
+                    dropped_pct * 100,
+                    len(dropped_keys),
+                    dropped_keys,
+                    scale,
+                    len(present_weights),
+                )
+            elif dropped_pct > 0:
+                logger.debug(
+                    "[REWARD] weight redistribution on %s: dropped %.0f%% (%d keys) → scale=%.2f×",
+                    platform,
+                    dropped_pct * 100,
+                    len(dropped_keys),
+                    scale,
+                )
 
         raw_reward = 0.0
         for metric, weight in weights.items():

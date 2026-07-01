@@ -581,6 +581,7 @@ class PostgresBackend:
         niche_id: str = "",
         max_records: int | None = None,
         columns: list[str] | None = None,
+        order_by: str | None = None,
         _skip_validation: bool = False,
     ) -> list[dict[str, Any]]:
         """Find records matching a formula filter with RLS niche isolation.
@@ -590,6 +591,15 @@ class PostgresBackend:
                 uses ``SELECT col1, col2, ...`` instead of ``SELECT *``.
                 The ``id``, ``extra``, ``created_at``, and ``updated_at``
                 columns are always included automatically.
+            order_by: Optional ORDER BY clause (e.g. ``"updated_at DESC"``,
+                ``"scheduled_for ASC NULLS LAST"``). Default None uses
+                ``created_at DESC`` — matches legacy behavior. Callers
+                that care about most-recently-MODIFIED (rescheduling,
+                dashboard schedule view) should pass ``updated_at DESC``
+                so max_records truncation keeps the still-relevant
+                records instead of the oldest-created. Whitelist-only
+                for safety: must match ``^[a-z_]+(_at|_for|_id)?\\s+(ASC|DESC)(\\s+NULLS\\s+(FIRST|LAST))?$``.
+                Falls back to default if malformed.
         """
         table = _validate_table(table)
         from psycopg.rows import dict_row
@@ -625,7 +635,27 @@ class PostgresBackend:
 
                     pg_where = re.sub(r"\$\d+", "%s", where_clause)
                     sql += f" WHERE {pg_where}"
-                sql += " ORDER BY created_at DESC"
+                # ORDER BY — legacy default `created_at DESC` unless caller
+                # supplies `order_by`. Whitelist-validate to prevent SQL
+                # injection (this string ends up unescaped in the query).
+                order_clause = "created_at DESC"
+                if order_by:
+                    import re
+
+                    if re.match(
+                        r"^[a-z_]+(_at|_for|_id)?\s+(ASC|DESC)"
+                        r"(\s+NULLS\s+(FIRST|LAST))?$",
+                        order_by,
+                        re.IGNORECASE,
+                    ):
+                        order_clause = order_by
+                    else:
+                        logger.warning(
+                            "postgres.find: order_by %r failed whitelist — "
+                            "falling back to created_at DESC",
+                            order_by,
+                        )
+                sql += f" ORDER BY {order_clause}"
                 if max_records:
                     sql += f" LIMIT {int(max_records)}"
                 cur.execute(sql, params)
@@ -640,11 +670,18 @@ class PostgresBackend:
         formula: str = "",
         niche_id: str = "",
         max_records: int | None = None,
+        order_by: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Alias for find()."""
+        """Alias for find(). See find() for order_by semantics."""
         if table is None:
             raise ValueError("table is required for PostgresBackend.all()")
-        return self.find(table, formula=formula, niche_id=niche_id, max_records=max_records)
+        return self.find(
+            table,
+            formula=formula,
+            niche_id=niche_id,
+            max_records=max_records,
+            order_by=order_by,
+        )
 
     # ── UPDATE ──────────────────────────────────────────────────────
 
@@ -960,6 +997,7 @@ class PostgresTableProxy:
         niche_id: str = "",
         max_records: int | None = None,
         columns: list[str] | None = None,
+        order_by: str | None = None,
     ) -> list:
         return self._backend.find(
             table or self._table,
@@ -967,6 +1005,7 @@ class PostgresTableProxy:
             niche_id=niche_id,
             max_records=max_records,
             columns=columns,
+            order_by=order_by,
         )
 
     def all(
@@ -977,6 +1016,7 @@ class PostgresTableProxy:
         niche_id: str = "",
         max_records: int | None = None,
         columns: list[str] | None = None,
+        order_by: str | None = None,
     ) -> list:
         return self._backend.find(
             table or self._table,
@@ -984,6 +1024,7 @@ class PostgresTableProxy:
             niche_id=niche_id,
             max_records=max_records,
             columns=columns,
+            order_by=order_by,
         )
 
     def get(

@@ -200,27 +200,30 @@ def _build_overview() -> dict:
     # cascade debug session revealed the 500 cap was silently dropping
     # legitimately-scheduled blueprints from the Mission Control view. Prod
     # currently has ~2000 rows matching this formula (ARCHIVED alone is 1414),
-    # so 500 was well past the truncation point. The Postgres backend does not
-    # currently ORDER BY, so the 500 returned was an arbitrary subset —
-    # scheduled blueprints in the tail were silently invisible.
+    # so 500 was well past the truncation point.
     #
-    # 3000 gives ~1.5× headroom over today's row count. When we cross that,
-    # the right fix is to (a) add ORDER BY updated_at DESC to the Postgres
-    # backend's find() so truncation always keeps the most-recent-first, and
-    # (b) narrow the query to only recent ARCHIVED (last 7 days) since old
-    # archives don't participate in overview metrics anyway.
+    # 2026-07-01 structural fix: `order_by='updated_at DESC'` now threaded
+    # through PostgresTableProxy + PostgresBackend.find(). Whitelist-
+    # validated against the SQL-injection whitelist regex in postgres.py.
+    # Once max_records eventually truncates, we keep the MOST-RECENTLY-
+    # MODIFIED (rescheduling / approval / new render), not the arbitrary
+    # tail — so scheduled blueprints in the working set stay visible.
+    # `created_at DESC` (the legacy default) would keep the newest-created
+    # ARCHIVED rows and silently drop actively-managed VISUAL_READY rows
+    # that were originally created weeks ago.
     all_records: list[dict] = []
     if client:
         try:
             all_records = client.blueprints.all(
                 formula="OR({status}='DRAFTED',{status}='VISUAL_READY',{status}='PUBLISHED',{status}='ARCHIVED')",
                 max_records=3000,
+                order_by="updated_at DESC",
             )
             if len(all_records) >= 3000:
                 logger.warning(
-                    "overview: hit max_records=3000 cap (%d returned) — scheduled "
-                    "blueprints in the tail may be silently missing from Mission "
-                    "Control. Time to add ORDER BY + narrow ARCHIVED to recent.",
+                    "overview: hit max_records=3000 cap (%d returned) — order_by "
+                    "keeps most-recently-modified visible, but the ARCHIVED tail "
+                    "is being dropped. Next step: narrow ARCHIVED to last 7 days.",
                     len(all_records),
                 )
         except Exception as e:
