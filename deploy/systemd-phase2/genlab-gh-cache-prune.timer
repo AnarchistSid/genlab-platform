@@ -1,0 +1,17 @@
+[Unit]
+Description=Prune gh-runner cache every 5 min — burst-commit protection
+Documentation=file:///opt/genlab/scripts/prune_gh_runner_cache.sh
+
+[Timer]
+# 2026-07-01: shipped after verifying the runner (v2.335.1) does not
+# actually implement ACTIONS_RUNNER_HOOK_JOB_COMPLETED. Instead of a
+# per-job hook we run every 5 min — fast, targeted, only touches
+# .cache directories. Compares favorably to the hourly disk_cleanup:
+# that one is comprehensive (docker prune + apt + journal), this
+# one is surgical (only .cache subdirs).
+OnCalendar=*:0/5
+Persistent=false
+Unit=genlab-gh-cache-prune.service
+
+[Install]
+WantedBy=timers.target

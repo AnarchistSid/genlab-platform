@@ -1,0 +1,20 @@
+[Unit]
+Description=GenLab gh-runner cache prune — fast surgical cleanup between CI jobs
+After=network-online.target
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/genlab
+TimeoutStartSec=2min
+ExecStart=/opt/genlab/scripts/prune_gh_runner_cache.sh
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=128M
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target
