@@ -1,0 +1,27 @@
+[Unit]
+Description=GenLab Strategist actions applier — materialise accepted arm_add proposals
+After=network-online.target genlab-postgres.service
+Requires=genlab-postgres.service
+OnFailure=genlab-service-failure-alert@%n.service
+# Fire AFTER Sunday's Strategist run + a review buffer
+After=genlab-strategist.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+TimeoutStartSec=5min
+ExecStart=/usr/local/bin/uv run python -m scripts.apply_strategist_actions
+StandardOutput=journal
+StandardError=journal
+
+MemoryMax=256M
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target

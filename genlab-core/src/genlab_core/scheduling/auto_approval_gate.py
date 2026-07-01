@@ -136,14 +136,16 @@ def evaluate(
     if not isinstance(extra, dict):
         extra = {}
 
-    # ── Resolve thresholds: explicit kwarg > niche override > default ──
+    # ── Resolve thresholds: explicit kwarg > Strategist accepted proposal ──
+    # ──                     > gate_tuner niche override > default        ──
     # Lazy import: gate_tuner imports calibration_logger which imports psycopg.
     # The gate is in many import paths that shouldn't require DB libs.
     if min_composite_score is None or min_virality_score is None:
+        niche_id = (blueprint.get("niche_id") or "").strip()
+
         try:
             from genlab_core.learning.gate_tuner import get_overrides_for_niche
 
-            niche_id = (blueprint.get("niche_id") or "").strip()
             override_composite, override_virality = get_overrides_for_niche(niche_id)
         except Exception as exc:
             # The override system MUST NEVER block evaluation. Fall back
@@ -151,6 +153,26 @@ def evaluate(
             # as it did pre-Lever-A.
             logger.debug("[gate] override lookup failed (%s); using defaults", exc)
             override_composite, override_virality = None, None
+
+        # PR Strategist-3: an operator-accepted Strategist gate_threshold
+        # proposal WINS over gate_tuner because the operator's manual
+        # accept is more deliberate than the auto-tuning calibration.
+        # Fail-closed: if strategy_phase can't be loaded, we silently
+        # fall back to gate_tuner + default. This is the SAME safety
+        # contract as gate_tuner itself.
+        try:
+            from genlab_core.scheduling.strategy_phase import get_phase_config
+
+            phase_config = get_phase_config(niche_id)
+            if phase_config.gate_threshold_override is not None:
+                override_composite = phase_config.gate_threshold_override
+                logger.debug(
+                    "[gate] Strategist proposal override niche=%s threshold=%.3f",
+                    niche_id,
+                    override_composite,
+                )
+        except Exception as exc:
+            logger.debug("[gate] Strategist override lookup failed (%s)", exc)
 
         if min_composite_score is None:
             min_composite_score = (

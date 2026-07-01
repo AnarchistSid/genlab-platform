@@ -225,6 +225,40 @@ class RewardShaper:
         if not weights:
             return weights
 
+        # PR Strategist-3: apply operator-accepted reward_weight overrides
+        # from the latest Strategist report BEFORE monetisation-threshold
+        # boosting. Overrides target format is
+        # ``{niche_id}.reward_weight.{platform}.{metric}`` (matches what
+        # the proposal schema documents at proposal_schema.Proposal.target).
+        # Fail-closed: any error → skip overrides, use BASE_WEIGHTS as-is.
+        # The proposal-level clamp (0.0 ≤ value ≤ reasonable bounds) is
+        # trusted from strategy_phase._load_phase_config; we don't
+        # re-validate here to keep this hot path fast.
+        if self._niche_id:
+            try:
+                from genlab_core.scheduling.strategy_phase import get_phase_config
+
+                phase_cfg = get_phase_config(self._niche_id)
+                for target, value in phase_cfg.reward_weight_overrides.items():
+                    # Only apply overrides matching (this niche, this platform)
+                    prefix = f"{self._niche_id}.reward_weight.{platform}."
+                    if not target.startswith(prefix):
+                        continue
+                    metric = target[len(prefix):]
+                    if metric in weights and 0.0 <= value <= 5.0:
+                        old = weights[metric]
+                        weights[metric] = value
+                        logger.info(
+                            "[REWARD] Strategist override %s/%s %s: %.3f -> %.3f",
+                            self._niche_id,
+                            platform,
+                            metric,
+                            old,
+                            value,
+                        )
+            except Exception as exc:
+                logger.debug("[REWARD] Strategist override skipped: %s", exc)
+
         if channel_metrics is None and self._channel_metrics_fn is not None:
             try:
                 channel_metrics = self._channel_metrics_fn(platform)

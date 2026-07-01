@@ -305,6 +305,25 @@ def write_video_content(
     if chosen_style and chosen_style in _HOOK_STYLES:
         style_hint = f"\nSTYLE TARGET: {_HOOK_STYLES[chosen_style]}\n"
 
+    # PR Strategist-3: append operator-approved learning findings (top 5)
+    # into the system prompt so the writer leans on causal patterns the
+    # operator has explicitly validated. Fail-closed: if strategy_phase
+    # can't be loaded, we just skip the injection — the writer works
+    # exactly as before.
+    findings_hint = ""
+    try:
+        from genlab_core.scheduling.strategy_phase import get_phase_config
+
+        phase_cfg = get_phase_config(niche_id)
+        if phase_cfg.active_findings:
+            findings_text = "\n".join(f"  - {f}" for f in phase_cfg.active_findings[:5])
+            findings_hint = (
+                "\nOPERATOR-VALIDATED LEARNINGS (lean on these):\n"
+                f"{findings_text}\n"
+            )
+    except Exception as exc:
+        logger.debug("[%s] Strategist findings injection skipped: %s", niche_id, exc)
+
     age_hours = video.get("age_hours", 1)
     if not age_hours:
         # Compute from view_count / view_velocity if available
@@ -411,6 +430,7 @@ def write_video_content(
         )
         + (f"{extra_instructions}\n\n" if extra_instructions else "")
         + style_hint
+        + findings_hint
         + "OUTPUT FORMAT — strictly enforced:\n"
         "Respond ONLY with valid JSON. ALL SIX KEYS ARE REQUIRED and must\n"
         "have non-empty string values:\n"

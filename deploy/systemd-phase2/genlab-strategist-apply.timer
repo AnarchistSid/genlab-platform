@@ -1,0 +1,17 @@
+[Unit]
+Description=Apply operator-accepted Strategist proposals — daily 03:00 UTC
+Documentation=file:///opt/genlab/genlab-core/src/genlab_core/scheduling/strategist_actions.py
+
+[Timer]
+# 03:00 UTC = 08:30 IST. Sits between:
+#   * Sunday 02:00 UTC — Strategist runs (produces reports)
+#   * Sunday 07:30 IST + rest of week — operator reviews reports
+#   * Publisher windows at 06:30 + 10:30 UTC
+# Runs daily so proposals accepted mid-week get applied by next dawn.
+# Idempotent per (report, index) so re-running is a no-op.
+OnCalendar=*-*-* 03:00:00 UTC
+Persistent=true
+Unit=genlab-strategist-apply.service
+
+[Install]
+WantedBy=timers.target
