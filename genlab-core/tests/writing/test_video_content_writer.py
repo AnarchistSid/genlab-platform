@@ -174,7 +174,11 @@ class TestHookStylePropagation:
         assert result.get("hook_style") == "question"
         # Style hint should also appear in the LLM system prompt
         system = llm.complete.call_args.kwargs.get("system", "")
-        assert "STYLE TARGET" in system
+        # Intervention 3 (commit 9e72d618, 2026-07-01) upgraded the
+        # prompt string from "STYLE TARGET" (soft hint) to "STYLE
+        # MANDATE" (constraint) + verbal exemplars. Test string
+        # updated to track.
+        assert "STYLE MANDATE" in system
 
     def test_hook_style_omitted_when_picker_returns_none(self, monkeypatch):
         monkeypatch.setattr(
@@ -190,7 +194,7 @@ class TestHookStylePropagation:
         # send false reward to a phantom arm).
         assert "hook_style" not in result
         system = llm.complete.call_args.kwargs.get("system", "")
-        assert "STYLE TARGET" not in system
+        assert "STYLE MANDATE" not in system
 
     def test_hook_style_omitted_when_hook_was_rejected(self, monkeypatch):
         # Banned phrase trips the post-LLM filter and clears the hook;
