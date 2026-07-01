@@ -1360,3 +1360,25 @@ export interface AnticipationAccuracy {
   measured_at: string;
   reasons: string[];
 }
+
+// Intervention 2 observability (2026-07-01) — cross-niche transferred priors.
+// Mirrors ``genlab_core.learning.cross_niche_transfer.TransferredPrior``.
+export interface CrossNichePrior {
+  style: string;
+  alpha: number;
+  beta: number;
+  observed_rate_mean: number;
+  observed_rate_variance: number;
+  n_niches: number;
+  reasons: string[];
+}
+
+/** Full artifact envelope. ``flag_enabled`` is server-injected —
+ *  reflects the current ``GENLAB_CROSS_NICHE_TRANSFER_ENABLED``
+ *  runtime state so the card can badge "observation only" vs
+ *  "active" without a separate endpoint. */
+export interface CrossNichePriorsArtifact {
+  generated_at: string;
+  flag_enabled: boolean;
+  priors: Record<string, CrossNichePrior>;
+}

@@ -33,6 +33,7 @@ import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
+import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -325,6 +326,14 @@ export default function MissionControl() {
                 is the operator's go/wait/rollback signal for flipping
                 pipeline steering on. */}
             <TrendAnticipationAccuracyCard />
+            {/* Intervention 2 observability (2026-07-01): cross-niche
+                Bayes transferred priors. Weekly refit shows per-style
+                (α, β) alongside (μ, σ², N) empirical fit. Operator
+                validates the priors look reasonable before flipping
+                GENLAB_CROSS_NICHE_TRANSFER_ENABLED — the "active"
+                vs "observation only" badge tells them which state
+                they're in without needing to check .env. */}
+            <CrossNichePriorsCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

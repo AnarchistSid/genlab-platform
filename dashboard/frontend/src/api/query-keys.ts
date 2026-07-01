@@ -111,6 +111,12 @@ export const queryKeys = {
     unreviewed: (limit: number) =>
       ["strategist", "unreviewed", limit] as const,
   },
+  crossNicheTransfer: {
+    /** Intervention 2 observability (2026-07-01) — cross-niche
+     *  priors cache key. Rewrites weekly (Mon 05:30 UTC); hourly
+     *  poll matches. */
+    priors: () => ["cross-niche-transfer", "priors"] as const,
+  },
   trendAnticipation: {
     /** Intervention 5 Session 3 (2026-07-01) — per-niche latest artifact
      *  cache key. Polled every 10 minutes; artifact rewrites daily at

@@ -806,6 +806,7 @@ from server.api.source_performance import bp as source_performance_bp
 from server.api.sources import bp as sources_bp
 from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
+from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
 from server.api.trend_anticipation import bp as trend_anticipation_bp
@@ -840,6 +841,9 @@ app.register_blueprint(
 app.register_blueprint(
     trend_anticipation_bp
 )  # Intervention 5 Session 3 (2026-07-01): /api/v1/trend-anticipation/latest
+app.register_blueprint(
+    cross_niche_transfer_bp
+)  # Intervention 2 (2026-07-01): /api/v1/cross-niche-transfer/priors
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

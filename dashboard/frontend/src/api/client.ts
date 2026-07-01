@@ -1111,6 +1111,18 @@ function unwrapEnvelope<T>(response: unknown): T | null {
 // Intervention 5 Session 3 (2026-07-01) — Trend Anticipation client.
 // ───────────────────────────────────────────────────────────────
 
+export const crossNicheTransfer = {
+  /** Fetch the current cross-niche transferred priors. Returns null
+   *  when the weekly runner hasn't fired yet (first Monday after
+   *  enable). Frontend renders "No priors yet" defensively. */
+  priors: () =>
+    get<{
+      data: import("./types").CrossNichePriorsArtifact | null;
+    }>("/cross-niche-transfer/priors").then((d) =>
+      unwrapEnvelope<import("./types").CrossNichePriorsArtifact>(d),
+    ),
+};
+
 export const trendAnticipation = {
   /** Fetch today's anticipation ranking for one niche. Returns null
    *  when the runner hasn't fired yet (cold start day, first run
