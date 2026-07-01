@@ -31,6 +31,12 @@
 #   * MUST exit 0 — a failing hook is logged but doesn't fail the job.
 #     Any command failure is contained via best-effort semantics.
 #   * Stdout/stderr surface in the runner log at /home/gh-runner/actions-runner/_diag/
+#
+# Wire (on prod, set at runner install time):
+#   * /home/gh-runner/actions-runner/.env
+#     ACTIONS_RUNNER_HOOK_JOB_COMPLETED=/opt/genlab/scripts/gh_runner_post_job.sh
+#   * Runner service restart required after appending the line.
+#   * Verify: `grep ACTIONS_RUNNER_HOOK /home/gh-runner/actions-runner/.env`
 # ============================================================================
 
 set -u  # Fail on unset vars; DON'T set -e (best-effort per section)
