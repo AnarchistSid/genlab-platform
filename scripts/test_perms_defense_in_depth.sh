@@ -63,7 +63,7 @@ assert_exit 0 "$rc" "exits 0 for --help"
 
 declare_test "repair_permissions: unknown flag exits 1"
 rc=0
-"$SCRIPT_DIR/repair_permissions.sh" --bogus 2>&1 >/dev/null || rc=$?
+"$SCRIPT_DIR/repair_permissions.sh" --bogus >/dev/null 2>&1 || rc=$?
 assert_exit 1 "$rc" "exits 1 for unknown flag"
 
 declare_test "repair_permissions: syntax check"
@@ -103,7 +103,7 @@ fi
 
 declare_test "systemd_failure_alert: missing argument exits 1"
 rc=0
-"$SCRIPT_DIR/systemd_failure_alert.sh" 2>&1 >/dev/null || rc=$?
+"$SCRIPT_DIR/systemd_failure_alert.sh" >/dev/null 2>&1 || rc=$?
 assert_exit 1 "$rc" "exits 1 without unit name"
 
 declare_test "systemd_failure_alert: syntax check"

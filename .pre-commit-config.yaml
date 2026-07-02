@@ -24,3 +24,24 @@ repos:
     rev: v8.24.3
     hooks:
       - id: gitleaks
+
+  # shellcheck for scripts/*.sh — locks in the SC2069 fix class
+  # from PR #653 so future changes can't reintroduce silent
+  # stderr-drop bugs. Scoped to warning severity but excludes the
+  # 6 codes present at pre-commit-adoption time (mostly SC2155
+  # cosmetic) so this hook stays green today without a big touch-
+  # everything sweep. Remove excludes incrementally as those sites
+  # get touched for other reasons.
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        files: ^scripts/.*\.sh$
+        args:
+          - --severity=warning
+          - --exclude=SC2155  # local x=$(...) masks exit code — 16 sites
+          - --exclude=SC2034  # unused variable — 4 sites, some intentional
+          - --exclude=SC1090  # can't follow non-constant source — 4 sites, dynamic
+          - --exclude=SC2044  # for X in $(find ...) — 2 sites
+          - --exclude=SC2043  # for var in $constant — 2 sites
+          - --exclude=SC2010  # ls | grep — 2 sites
