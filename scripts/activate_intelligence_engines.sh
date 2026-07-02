@@ -20,8 +20,9 @@
 #            preview payload, anticipation accuracy runner, 3 paid
 #            anticipation signals (YT/Reddit/News).
 #
-#   PHASE=2  Quality boost — LLM judge + per-niche Bayesian gate.
-#            Requires PHASE=1 flags already active. Costs ~$0.10/day.
+#   PHASE=2  Quality boost — LLM judge + per-niche Bayesian gate +
+#            multi-window reward push. Requires PHASE=1 flags already
+#            active. Costs ~$0.10/day.
 #
 #   PHASE=3  Anticipation steering — pipeline reorders candidates by
 #            anticipated peak. Requires TrendAnticipationAccuracyCard
@@ -36,11 +37,10 @@
 #              pre-phased 2026-07-02 activator. Not recommended for
 #              first activation — you lose the observation window.
 #
-# BLOCKED: GENLAB_MULTI_WINDOW_REWARD_ENABLED is deliberately not in
-# any phase — its schema migration (reward_6h/24h/168h columns on
-# pending_feedback) has not landed. Flipping it would silent-no-op or
-# error the daily late_reward runner. Land the migration first, then
-# add it back to PHASE=2.
+# FLAGS_BLOCKED is kept as a defence-in-depth framework — populated
+# only if a real, verified schema/runtime dependency blocks activation.
+# The framework guards flip_flag() from ever mutating a listed flag
+# even if it accidentally landed in a phase array. Currently empty.
 #
 # Exit codes:
 #   0 — success (all flags flipped, services restarted)
@@ -90,7 +90,7 @@ declare -a FLAGS_PHASE_1=(
   "GENLAB_ANTICIPATION_NEWS_ENABLED"
 )
 
-# Phase 2 — Quality boost. Modifies gate decisions.
+# Phase 2 — Quality boost. Modifies gate decisions + bandit updates.
 declare -a FLAGS_PHASE_2=(
   # LLM-as-judge — ~$0.10/day cost. Immediate ~85% agreement lift on
   # gaming niche (currently at 53.4%). Fails open if API is down.
@@ -101,6 +101,15 @@ declare -a FLAGS_PHASE_2=(
   # heuristic otherwise. Current calibration per niche:
   #   ai_creators=38, gaming=116, anime=59, movies=56, sports=36
   "GENLAB_BAYESIAN_GATE_ENABLED"
+
+  # Multi-window reward — daily late_reward.py runner has been
+  # writing telemetry to late_reward_deltas since it shipped.
+  # Flipping this flag turns on the bandit-push side: arms with
+  # |delta_pct| > 20% at 7-day window get incremental Beta updates
+  # in bandit_arms.alpha/beta. No schema migration needed — the
+  # audit table is created lazily via CREATE TABLE IF NOT EXISTS
+  # on first runner fire; bandit_arms.alpha/beta already exist.
+  "GENLAB_MULTI_WINDOW_REWARD_ENABLED"
 )
 
 # Phase 3 — Anticipation steering. Real pipeline behavior change.
@@ -121,10 +130,10 @@ declare -a FLAGS_PHASE_4=(
   "GENLAB_CONFORMAL_ROUTER_ENABLED"
 )
 
-# BLOCKED — schema migration missing. See file header.
-declare -a FLAGS_BLOCKED=(
-  "GENLAB_MULTI_WINDOW_REWARD_ENABLED"
-)
+# BLOCKED — defence-in-depth framework, currently empty. See file
+# header. Populate only when a verified schema/runtime dependency
+# would break the runner on flag flip.
+declare -a FLAGS_BLOCKED=()
 
 # ── Services to restart after flag flip ─────────────────────────
 # Each service's env is re-read on start; systemctl restart is
@@ -283,7 +292,10 @@ preflight_check() {
 # manually. We do not flip it back to false (that could break something
 # that depends on the schema being present), just surface it.
 check_blocked_flags() {
-  for flag in "${FLAGS_BLOCKED[@]}"; do
+  # ${FLAGS_BLOCKED[@]+"${FLAGS_BLOCKED[@]}"} expands to nothing when
+  # the array is empty — required under `set -u`, which errors on
+  # naked ${empty_array[@]} in bash pre-4.4.
+  for flag in ${FLAGS_BLOCKED[@]+"${FLAGS_BLOCKED[@]}"}; do
     local value
     value=$(sed -n "s|^${flag}=||p" "$ENV_FILE" 2>/dev/null | tail -1 | tr -d '[:space:]')
     if [[ "$value" == "true" ]]; then
@@ -311,8 +323,9 @@ flip_flag() {
   local flag="$1"
 
   # Guard against accidentally flipping a BLOCKED flag if it somehow
-  # made it into a phase array (defense in depth).
-  for blocked in "${FLAGS_BLOCKED[@]}"; do
+  # made it into a phase array (defense in depth). Empty-array guard
+  # required under `set -u`; see check_blocked_flags() for the idiom.
+  for blocked in ${FLAGS_BLOCKED[@]+"${FLAGS_BLOCKED[@]}"}; do
     if [[ "$flag" == "$blocked" ]]; then
       warn "Refusing to flip BLOCKED flag $flag — see file header."
       return 0
@@ -382,6 +395,11 @@ EFF
 	    niches with ≥50 calibration observations (gaming, anime, movies).
 	    ai_creators + sports fall back to heuristic threshold.
 	  * Preview endpoint gate confidence becomes data-driven per niche.
+	  * Multi-window reward: recompute_late_rewards.py (daily 04:00 UTC)
+	    starts pushing bandit posterior updates for arms with |delta_pct|
+	    > 20% at the 7-day window. Telemetry table late_reward_deltas
+	    already populates regardless of flag; only the bandit push
+	    activates. Watch bandit_arms.updated_at for delta events.
 EFF
       ;;
     3)
