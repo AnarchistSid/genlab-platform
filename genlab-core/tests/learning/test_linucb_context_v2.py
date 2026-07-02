@@ -21,7 +21,6 @@ from datetime import UTC, datetime
 import pytest
 from genlab_core.learning import linucb
 
-
 # ── Feature flag ─────────────────────────────────────────────────────
 
 

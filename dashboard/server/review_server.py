@@ -780,6 +780,8 @@ from server.api.compliance import bp as compliance_bp
 from server.api.config_routes import bp as config_bp
 from server.api.config_routes import settings_bp
 from server.api.costs import bp as costs_bp
+from server.api.counterfactual_replay import bp as counterfactual_replay_bp
+from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
 from server.api.engagement import bp as engagement_bp
 from server.api.events import bp as events_bp
 from server.api.health import bp as health_bp
@@ -806,8 +808,6 @@ from server.api.source_performance import bp as source_performance_bp
 from server.api.sources import bp as sources_bp
 from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
-from server.api.counterfactual_replay import bp as counterfactual_replay_bp
-from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
 from server.api.trend_anticipation import bp as trend_anticipation_bp
