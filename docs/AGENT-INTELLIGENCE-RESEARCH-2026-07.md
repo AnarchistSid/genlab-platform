@@ -913,3 +913,72 @@ All shipped, all deployed, all tested. 15 commits total. This research document 
 ## Version
 
 - v1 (2026-07-01) — initial write after 15-commit session
+- v2 (2026-07-02) — Appendix D: implementation status
+
+## Appendix D: Implementation Status (2026-07-02)
+
+The 2026-07-01→02 two-day sprint (21 commits) shipped every
+intervention that wasn't data-volume-blocked. Status per intervention:
+
+### Shipped end-to-end + visualized
+
+| # | Intervention | Impl memory | Card |
+|---|---|---|---|
+| 1 | Multi-window reward re-evaluation | [[dr-estimator-shipped-2026-07-01]] shipped Batch A | (no dedicated card) |
+| 2 | Cross-niche hierarchical Bayes transfer | [[intervention-2-cross-niche-transfer-shipped-2026-07-01]] | `CrossNichePriorsCard` |
+| 3 | Writer sees arm_id as prompt constraint | Batch A commit 9e72d618 | (no dedicated card — visible via hook_classifier) |
+| 5 | Trend anticipation (4 sessions) | [[intervention-5-session-1-shipped-2026-07-01]] | `TrendAnticipationCard` + `TrendAnticipationAccuracyCard` |
+| 6 | Ensemble decision-making | [[intervention-6-ensemble-shipped-2026-07-01]] | `EnsembleBadge` (Focus Review) |
+| 7 | Doubly-robust reward estimator | [[dr-estimator-shipped-2026-07-01]] | `CounterfactualReplayCard` |
+| 9 | Cyclical time context (v2) | [[intervention-9-cyclical-context-shipped-2026-07-01]] | (v2 is data-collection only) |
+| 10 | Percentile-relative reward targets | Batch C gap-fill (commit 82708606) | (visible via bandit_arms) |
+
+Session-summary pointer: [[session-2026-07-01-02-intelligence-buildout]].
+
+### Deferred by data volume
+
+Interventions 4, 8, 11, 12 all require multiples of current
+audience/post/report volumes. Deferred until channel growth crosses
+the thresholds documented in each intervention's body.
+
+### Consumer wires still needed (validation-blocked)
+
+Every shipped intervention exposes a READ function + observability
+card. The one-line consumer wires that ACTIVATE runtime behaviour
+are validation-blocked — operator must see the observability card
+data look sane for 1-2 weeks before the wire is safe to add:
+
+- **Intervention 2**: `get_transferred_prior()` adopter at
+  `arm_loader.save_arm` creation branch
+- **Intervention 5**: `reorder_by_anticipation()` adopter in the
+  pipeline candidate builder
+- **Intervention 7**: Strategist reads top-DR arm as evidence for
+  weekly proposals
+
+Each is small (~50 lines) but load-bearing. Each ships after the
+respective card shows sustained sane values.
+
+### Operational fixes shipped this sprint
+
+- Systemd `-m scripts.X` gotcha fix (4 services) —
+  [[systemd-scripts-invocation-gotcha]]
+- Dashboard ORDER BY structural fix + reward-redistribution telemetry
+- Ruff hygiene + Intervention-3 test-string catchup
+- Psycopg allowlist for 6 pre-existing sites
+- Self-hosted runner post-job hook bug documented —
+  [[gh-runner-post-job-hook-broken-2026-07-02]]
+
+### Established rollout discipline
+
+Every intervention follows the same pattern:
+
+1. **Runner writes artifact** to `.tmp/<intervention>/`
+2. **Endpoint globs** artifact + returns verbatim (fail-open, never 500)
+3. **Card renders** with "active vs observation only" flag-state badge
+4. **Operator validates** numbers look reasonable
+5. **Operator flips** the intervention's env flag
+6. **Consumer wire** added in a follow-up PR (each ~50 lines)
+
+This is what makes "shipped code" become "shipped machinery" while
+preserving rollback safety — every step is independently deployable
+and independently revertable.
