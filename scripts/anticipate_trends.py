@@ -196,10 +196,18 @@ def main(argv: list[str] | None = None) -> int:
             logger.warning("Anticipation run failed for niche=%s: %s", nid, exc)
             summary.append({"niche_id": nid, "error": str(exc)})
 
+    n_errors = sum(1 for s in summary if "error" in s)
     if args.format == "table" or args.verbose:
-        n_ok = sum(1 for s in summary if "error" not in s)
+        n_ok = len(summary) - n_errors
         print(f"\n── summary: {n_ok}/{len(summary)} niches processed ──")
-    return 0
+
+    # 2026-07-02: exit nonzero when the per-niche loop hit a systemic
+    # error rate — see [[late-reward-sql-bug-2026-07-02]] for the class
+    # of bug this pattern catches. Runner returning 0 while every niche
+    # errored would let systemd think everything's fine.
+    from genlab_core.runner_healthcheck import exit_code_from_health
+
+    return exit_code_from_health(total=len(summary), errors=n_errors)
 
 
 if __name__ == "__main__":

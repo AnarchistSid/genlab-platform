@@ -207,9 +207,29 @@ def _run_all(niches: list[str], week: date, *, dry_run: bool) -> int:
         total,
         failures,
     )
-    # Exit 1 only if EVERY attempted niche failed — otherwise the timer log
-    # would be red on transient LLM outages that only affected 1-2 niches.
-    return 1 if total > 0 and successes == 0 else 0
+    # Uses the shared runner_healthcheck helper (2026-07-02, PR #657)
+    # with strategist-specific thresholds preserved from the original
+    # ``return 1 if total > 0 and successes == 0 else 0`` semantics:
+    #
+    #   * max_error_rate=0.999 — only 100% failure counts. Rationale:
+    #     Strategist LLM calls are expensive and flaky (Anthropic
+    #     rate limits, transient timeouts). 1-2 failed niches out of
+    #     5 is often environmental, not a code bug. Only ALL-fail
+    #     signals something worth alerting on.
+    #   * high_error_exit_code=1 — preserves the original contract.
+    #     Systemd OnFailure fires on any nonzero regardless of value.
+    #   * min_total_for_check=1 — total=0 is legit (all niches
+    #     skipped due to config), so respect that; anything above
+    #     0 is check-eligible.
+    from genlab_core.runner_healthcheck import exit_code_from_health
+
+    return exit_code_from_health(
+        total=total,
+        errors=failures,
+        min_total_for_check=1,
+        max_error_rate=0.999,
+        high_error_exit_code=1,
+    )
 
 
 class _MinimalCollector:
