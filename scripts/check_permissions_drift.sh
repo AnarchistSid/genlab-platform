@@ -98,7 +98,7 @@ if [[ "$DRIFT_COUNT" -eq 0 ]]; then
         WHERE check_name = 'permissions_drift'
           AND severity = 'critical'
           AND resolved_at IS NULL;
-    " 2>&1 >> "$LOG_FILE" || log "WARN: could not auto-resolve prior alert"
+    " >> "$LOG_FILE" 2>&1 || log "WARN: could not auto-resolve prior alert"
     unset PGPASSWORD
     exit 0
 fi
@@ -133,7 +133,7 @@ INSERT INTO pipeline_alerts (
 SQL
 )
 
-if ! echo "$SQL_INSERT" | psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -X -q 2>&1 >> "$LOG_FILE"; then
+if ! echo "$SQL_INSERT" | psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -X -q >> "$LOG_FILE" 2>&1; then
     log "FATAL: alert write failed"
     unset PGPASSWORD
     exit 1

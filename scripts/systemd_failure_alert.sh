@@ -153,7 +153,7 @@ SQL
 # 13s of headroom, and well within the bumped systemd TimeoutSec=120.
 # If the timeout fires, the journal entry from the `logger` call above
 # is the surviving record.
-if ! timeout 15 bash -c 'echo "$1" | psql -h "$2" -p "$3" -U "$4" -d "$5" -X -q 2>&1 >> "$6"' \
+if ! timeout 15 bash -c 'echo "$1" | psql -h "$2" -p "$3" -U "$4" -d "$5" -X -q >> "$6" 2>&1' \
     _ "$SQL_INSERT" "$DB_HOST" "$DB_PORT" "$DB_USER" "$DB_NAME" "$LOG_FILE"; then
     log "WARN: alert write to pipeline_alerts failed or timed out (>15s); journal entry retained"
     unset PGPASSWORD
