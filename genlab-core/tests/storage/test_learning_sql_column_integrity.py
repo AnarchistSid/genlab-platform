@@ -66,12 +66,19 @@ _MODULES_TO_SCAN: list[tuple[str, int]] = [
 # ─────────────────────────────────────────────────────────────────────
 
 # Match a triple-quoted string that starts (after any whitespace) with
-# a SQL keyword. This deliberately misses f-strings and dynamic
-# concatenation — those need to be extracted differently or tested
-# via their own runtime paths. See ``_MODULES_TO_SCAN`` note.
+# an UPPERCASE SQL keyword. Case-sensitive by design — the repo's real
+# SQL uses uppercase keywords (verified across all currently-covered
+# modules), whereas docstrings like ``"""Update the (niche, source)
+# arm..."""`` use lowercase "Update". Case-insensitive matching pulled
+# in that docstring as a false-positive on ``source_performance.py``;
+# the case-sensitive form correctly ignores it.
+#
+# Deliberately misses f-strings and dynamic concatenation — those need
+# to be extracted differently or tested via their own runtime paths.
+# See ``_MODULES_TO_SCAN`` note.
 _SQL_STRING_RE = re.compile(
     r'"""\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b(.+?)"""',
-    re.DOTALL | re.IGNORECASE,
+    re.DOTALL,  # case-sensitive; see comment above
 )
 
 
@@ -191,6 +198,39 @@ def _prepare_and_rollback(sql: str, stmt_name: str) -> tuple[bool, str]:
 # ─────────────────────────────────────────────────────────────────────
 # Tests
 # ─────────────────────────────────────────────────────────────────────
+
+
+class TestExtractorCaseSensitivity:
+    """The extractor MUST be case-sensitive on the SQL keyword.
+
+    Docstrings starting with lowercase verbs ("Update the ...",
+    "Select which arm...") would otherwise get picked up as SQL and
+    fail EXPLAIN. Case-insensitive matching caught 1 false-positive on
+    ``source_performance.py`` during initial development; the
+    case-sensitive form correctly ignores it.
+
+    Real SQL in this codebase uses uppercase keywords everywhere —
+    verified across all currently-covered modules.
+    """
+
+    def test_uppercase_select_extracted(self):
+        # Simulate a module source with real SQL
+        src = 'x = conn.execute("""SELECT * FROM t""")'
+        matches = _SQL_STRING_RE.findall(src)
+        assert len(matches) == 1
+        assert matches[0][0] == "SELECT"
+
+    def test_lowercase_docstring_verb_not_extracted(self):
+        """The bug we're guarding against — lowercase 'Update' in a
+        docstring must NOT be treated as SQL."""
+        src = '"""Update the (niche, source) arm with a Bayesian update"""'
+        assert _SQL_STRING_RE.findall(src) == []
+
+    def test_mixed_case_extraction(self):
+        """Belt-and-suspenders — 'Insert' as a docstring word doesn't
+        trip the extractor either."""
+        src = '"""Insert into the flow at the right moment"""'
+        assert _SQL_STRING_RE.findall(src) == []
 
 
 class TestSqlExtractionSanity:
