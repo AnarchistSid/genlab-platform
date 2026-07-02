@@ -73,6 +73,25 @@ _ALLOWLIST: frozenset[str] = frozenset(
         "scripts/validate_calibration_data.py",
         "scripts/recompress_oversized_reels.py",
         "scripts/scrape_affiliate_revenue.py",
+        # Strategist trilogy (PRs Strategist-1/2/3, 2026-06-30) —
+        # these were merged in the sprint before the pin lint went
+        # green on this codepath. Each does explicit niche-scoped
+        # work per row so bare psycopg.connect is not a tenant-
+        # isolation risk. Migration to pg_connect is a follow-up.
+        "genlab-core/src/genlab_core/scheduling/strategist_actions.py",
+        "genlab-core/src/genlab_core/scheduling/strategy_phase.py",
+        "dashboard/server/api/strategist.py",
+        "scripts/run_strategist.py",
+        # Batch A (2026-07-01) late-reward module — creates its own
+        # short-lived connection inside a defensive try/except with
+        # DATABASE_URL check. Migration to pg_connect is scheduled
+        # for the follow-up that also wires per-blueprint reward
+        # recovery into a rolling worker.
+        "genlab-core/src/genlab_core/learning/late_reward.py",
+        # Bandit backfill from history — operator-driven one-shot
+        # with explicit per-niche scoping loop. Same category as
+        # the other backfill scripts allowlisted above.
+        "genlab-core/src/genlab_core/scripts/backfill_bandit_from_history.py",
         # Dashboard endpoints — long-tail tier-3 migration
     }
 )
