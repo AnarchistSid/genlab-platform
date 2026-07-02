@@ -53,6 +53,11 @@ class PostgresStateCollector:
         state["other_niches_summary"] = self._cross_niche_summary(exclude=niche_id)
         state["active_findings"] = self._active_findings(niche_id)
         state["last_week_outcomes"] = self._last_week_outcomes(niche_id, week_of)
+        # Intervention 7 consumer wire (2026-07-02): DR replay artifact
+        # as evidence for the Strategist. Fail-safe by construction:
+        # no artifact → None → prompt formatter renders explicit "no
+        # artifact yet" line so the LLM sees the missing-signal.
+        state["counterfactual_replay"] = self._counterfactual_replay(niche_id)
         return state
 
     # ----- per-section best-effort queries -----
@@ -315,3 +320,51 @@ class PostgresStateCollector:
             return []
         # Just summarize; full structure is in DB
         return [{"proposal_summary": "see prior report", "operator_action": "see prior report"}]
+
+    def _counterfactual_replay(self, niche_id: str) -> dict[str, Any] | None:
+        """Intervention 7 (2026-07-02): load the latest DR replay
+        artifact for this niche. Returns None when no artifact exists
+        (monthly runner hasn't fired yet OR flag off).
+
+        Reads ``$GENLAB_TMP/counterfactual-replay/replay-*-<niche>.json``
+        (globbing + mtime-sort). Same file layout the dashboard
+        endpoint at ``dashboard/server/api/counterfactual_replay.py``
+        reads from — one source of truth per artifact directory.
+
+        Fail-open: any error (no dir, no matching files, malformed
+        JSON) returns None → prompt formatter renders an explicit
+        "no artifact yet" line so the Strategist LLM knows.
+        """
+        try:
+            import json
+            import os
+            from pathlib import Path
+
+            tmp = os.environ.get("GENLAB_TMP")
+            root = Path(tmp) if tmp else Path.cwd() / ".tmp"
+            replay_dir = root / "counterfactual-replay"
+            if not replay_dir.exists():
+                return None
+
+            # Prefer niche-specific artifact; fall back to the
+            # cross-niche ``*-all.json`` when the specific one is
+            # missing but a cross-niche run exists. The dashboard
+            # endpoint deliberately isolates suffixes, but the LLM
+            # prompt benefits from having SOMETHING to reason about
+            # rather than nothing — hence the fallback here.
+            for suffix in (niche_id, "all"):
+                candidates = sorted(
+                    replay_dir.glob(f"replay-*-{suffix}.json"),
+                    key=lambda p: p.stat().st_mtime,
+                    reverse=True,
+                )
+                if candidates:
+                    try:
+                        return json.loads(candidates[0].read_text())
+                    except (json.JSONDecodeError, OSError):
+                        continue
+            return None
+        except Exception:
+            # Belt + suspenders — a broken artifact path must NEVER
+            # break the Strategist run.
+            return None

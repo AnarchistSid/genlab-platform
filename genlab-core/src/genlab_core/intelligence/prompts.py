@@ -115,6 +115,10 @@ LAST WEEK'S PROPOSALS + OUTCOMES
 --------------------------------
 {_format_last_week(_get("last_week_outcomes", []))}
 
+COUNTERFACTUAL REPLAY (top DR arms — offline policy eval)
+---------------------------------------------------------
+{_format_counterfactual_replay(_get("counterfactual_replay", None))}
+
 ---
 
 Generate your weekly report as JSON conforming to this schema (schema_version={schema_version}):
@@ -178,6 +182,52 @@ def _format_last_week(outcomes: list[dict[str, Any]]) -> str:
     for o in outcomes:
         action = o.get("operator_action", "unreviewed")
         lines.append(f"  - {o.get('proposal_summary', '?')} → {action}")
+    return "\n".join(lines)
+
+
+def _format_counterfactual_replay(replay: dict[str, Any] | None) -> str:
+    """Intervention 7 consumer wire (2026-07-02) — DR replay artifact.
+
+    Renders the top-5 arms by DR reward (falling back to IPS when DR
+    null) as evidence the Strategist can cite in its proposals.
+    Returns an ``(no artifact yet)`` cold-start line when the monthly
+    runner hasn't fired or the flag is off — LLM sees explicit
+    missing-signal rather than silence.
+
+    The ``dr_enabled`` flag in the artifact is surfaced so the LLM
+    knows whether the ``dr_reward`` field is Ridge-model output or
+    a null stub (in which case IPS is the meaningful signal).
+    """
+    if not replay or not isinstance(replay, dict):
+        return "  (no artifact yet — monthly runner or DR flag disabled)"
+    per_arm = replay.get("per_arm") or []
+    if not per_arm:
+        return "  (empty replay — no arms with reward+context in window)"
+    dr_enabled = bool(replay.get("dr_enabled"))
+    signal_label = "DR" if dr_enabled else "IPS (DR stub — flag off)"
+
+    def _score(arm: dict[str, Any]) -> float:
+        dr = arm.get("dr_reward")
+        if dr is not None:
+            return float(dr)
+        ips = arm.get("ips_reward")
+        return float(ips) if ips is not None else float("-inf")
+
+    scored = [a for a in per_arm if a.get("n_with_reward", 0) >= 3]
+    scored.sort(key=_score, reverse=True)
+    top = scored[:5]
+    if not top:
+        return "  (no arm cleared n>=3 threshold — sample too thin for offline eval)"
+
+    lines = [f"  Signal: {signal_label}, window={replay.get('window_days', '?')}d"]
+    for a in top:
+        arm_id = str(a.get("arm_id", "?"))
+        n = a.get("n_with_reward", "?")
+        ips = a.get("ips_reward")
+        dr = a.get("dr_reward")
+        ips_str = f"{ips:.3f}" if isinstance(ips, (int, float)) else "-"
+        dr_str = f"{dr:.3f}" if isinstance(dr, (int, float)) else "-"
+        lines.append(f"    {arm_id[:45]:<45} n={n:<4} ips={ips_str:<6} dr={dr_str}")
     return "\n".join(lines)
 
 

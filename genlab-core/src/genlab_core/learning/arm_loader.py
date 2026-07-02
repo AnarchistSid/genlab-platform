@@ -207,6 +207,58 @@ def save_arm(
             proxy.update(match["id"], fields)
         else:
             fields["n_plays"] = n_plays if n_plays is not None else 0
+            # Intervention 2 consumer wire (2026-07-02): apply cross-niche
+            # transferred prior when creating a fresh arm. Fail-safe by
+            # construction:
+            #   * ``get_transferred_prior`` returns None when
+            #     ``GENLAB_CROSS_NICHE_TRANSFER_ENABLED`` is off →
+            #     alpha/beta stay at whatever the caller passed
+            #   * ``get_transferred_prior`` returns None when no artifact
+            #     / no cross-niche data / non-style arm → same fallback
+            #   * The (alpha_caller - 1.0) preserves the first
+            #     observation's contribution when the caller had a
+            #     Beta(1,1) baseline plus one reward. Only applied when
+            #     alpha + beta < 3.0 — a heuristic that says "caller had
+            #     the uniform prior plus zero-or-one obs, not a warm-
+            #     start of their own." Threshold ``<= 3.0`` captures
+            #     both cases: brand-new arm (α+β=2.0) AND first-
+            #     observation (α+β=3.0 for any reward in [0, 1]).
+            #     Larger caller values (e.g. from meta_prior.py's
+            #     niche-to-niche transfer with inflation) keep their
+            #     original semantics — this wire deliberately doesn't
+            #     override callers that already did their own transfer.
+            if niche_id:
+                try:
+                    # Module-level import (not ``from X import Y``) so
+                    # test monkeypatching of the source module reaches
+                    # this call site. Same defensive-imports pattern
+                    # the intel package uses.
+                    from genlab_core.learning import cross_niche_transfer
+
+                    transferred = cross_niche_transfer.get_transferred_prior(niche_id, arm_id)
+                except Exception as exc:
+                    logger.debug(
+                        "[arm_loader] transferred prior lookup failed for %s/%s: %s",
+                        niche_id,
+                        arm_id,
+                        exc,
+                    )
+                    transferred = None
+                if transferred is not None:
+                    alpha_caller = float(fields.get("alpha", 1.0) or 1.0)
+                    beta_caller = float(fields.get("beta", 1.0) or 1.0)
+                    if alpha_caller + beta_caller <= 3.0:
+                        alpha_t, beta_t = transferred
+                        fields["alpha"] = alpha_t + max(0.0, alpha_caller - 1.0)
+                        fields["beta"] = beta_t + max(0.0, beta_caller - 1.0)
+                        logger.info(
+                            "[arm_loader] applied cross-niche transferred "
+                            "prior to new arm %s/%s: (α, β) = (%.2f, %.2f)",
+                            niche_id,
+                            arm_id,
+                            fields["alpha"],
+                            fields["beta"],
+                        )
             proxy.create(fields)
     except Exception as e:
         logger.warning("[arm_loader] save failed for %s: %s", arm_id, e)

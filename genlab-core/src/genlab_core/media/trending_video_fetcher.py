@@ -1442,6 +1442,38 @@ class FetchTrendingVideos(FetcherStage):
             except Exception as e:
                 logger.warning("[FetchTrendingVideos] Google Trends failed: %s", e)
 
+        # Intervention 5 consumer wire (2026-07-02): reorder trending
+        # keywords by anticipation composite_score when the flag is on.
+        # Fail-safe by construction: ``reorder_by_anticipation`` returns
+        # the input list unchanged when
+        #   * ``GENLAB_TREND_ANTICIPATION_ENABLED`` is off
+        #   * The daily 03:30 UTC runner hasn't fired yet
+        #   * The artifact is malformed
+        # Only when the flag is on AND a valid artifact exists AND
+        # accuracy validation supports steering (operator-flipped)
+        # does the order change — anticipated topics surface first
+        # so downstream YouTube-search queries hit the topics
+        # peaking soonest.
+        if extra_keywords:
+            try:
+                from genlab_core.intel.trend_anticipation import (
+                    reorder_by_anticipation,
+                )
+
+                reordered = reorder_by_anticipation(extra_keywords, niche_id)
+                if reordered != extra_keywords:
+                    logger.info(
+                        "[FetchTrendingVideos] Anticipation reorder: %s → %s",
+                        extra_keywords[:3],
+                        reordered[:3],
+                    )
+                extra_keywords = reordered
+            except Exception as exc:
+                logger.debug(
+                    "[FetchTrendingVideos] anticipation reorder failed: %s",
+                    exc,
+                )
+
         fetcher = TrendingVideoFetcher(api_key=api_key)
         videos = fetcher.fetch_trending(
             niche_id=niche_id,
