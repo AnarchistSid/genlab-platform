@@ -703,6 +703,46 @@ def write_video_content(
         if chosen_style and content.get("hook"):
             content["hook_style"] = chosen_style
 
+        # Intelligent transformation wire (PR 15 orchestrator consumer):
+        # After the hook is finalized, generate structured caption segments
+        # so the transformation pipeline's caption_animator has content to
+        # burn onto the video. Segments are stored as JSON-friendly
+        # ``list[dict]`` so ``blueprint_context.get('caption_segments')``
+        # round-trips through DB storage.
+        #
+        # Fail-open: generate_caption_segments returns None on missing
+        # ANTHROPIC_API_KEY / API error / unparseable output — orchestrator
+        # then skips caption_style stage cleanly. Writer's own hook +
+        # caption fields still ship regardless.
+        hook_for_segments = content.get("hook") or ""
+        if hook_for_segments:
+            try:
+                from genlab_core.writing.caption_segments import (
+                    generate_caption_segments,
+                )
+
+                seg_result = generate_caption_segments(
+                    {
+                        "title": video.get("title", ""),
+                        "summary": video.get("description_snippet", ""),
+                    },
+                    niche_id,
+                    hook_for_segments,
+                )
+                if seg_result is not None and seg_result.is_usable():
+                    content["caption_segments"] = [
+                        {
+                            "text": s.text,
+                            "emphasis_words": list(s.emphasis_words),
+                        }
+                        for s in seg_result.segments
+                    ]
+            except Exception as exc:
+                logger.debug(
+                    "[%s] caption_segments generation skipped: %s",
+                    niche_id, exc,
+                )
+
         # ── R-50: enforce sentence case on every shipped text field ──────
         # The prompt asks for sentence case but nothing enforced it, so
         # all-lowercase "shitpost" output slipped through. to_sentence_case is
