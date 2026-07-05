@@ -1,7 +1,6 @@
 [Unit]
 Description=GenLab Strategist actions applier — materialise accepted arm_add proposals
-After=network-online.target genlab-postgres.service
-Requires=genlab-postgres.service
+After=network-online.target
 OnFailure=genlab-service-failure-alert@%n.service
 # Fire AFTER Sunday's Strategist run + a review buffer
 After=genlab-strategist.service

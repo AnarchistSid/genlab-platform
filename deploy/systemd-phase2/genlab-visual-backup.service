@@ -1,6 +1,6 @@
 [Unit]
 Description=GenLab visual asset backup — daily rendered .mp4 snapshot
-After=network-online.target genlab-postgres.service
+After=network-online.target
 # Fire AFTER pg-backup so both DB + files land in the same daily window
 After=genlab-pg-backup.service
 OnFailure=genlab-service-failure-alert@%n.service

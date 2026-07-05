@@ -1,7 +1,6 @@
 [Unit]
 Description=GenLab late-window reward re-evaluation
-After=network-online.target genlab-postgres.service
-Requires=genlab-postgres.service
+After=network-online.target
 OnFailure=genlab-service-failure-alert@%n.service
 
 [Service]

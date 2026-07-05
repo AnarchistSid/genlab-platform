@@ -1,8 +1,7 @@
 [Unit]
 Description=GenLab Strategist — weekly LLM-based meta-cognition per niche
-After=network-online.target genlab-postgres.service
+After=network-online.target
 Wants=network-online.target
-Requires=genlab-postgres.service
 # Surface unit failures to the dashboard CriticalAlertsBanner
 OnFailure=genlab-service-failure-alert@%n.service
 
