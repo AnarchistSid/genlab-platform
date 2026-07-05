@@ -247,9 +247,31 @@ def apply_transformations(
         # ── Stage 3: caption overlay ───────────────────────────
         # Requires blueprint_context to carry pre-computed segments
         # (from PR 10's generate_caption_segments in the writer stage).
+        # Writer stores as list[dict] for DB round-trip compatibility;
+        # convert back to CaptionSegment objects for the animator.
         segments = None
         if blueprint_context is not None:
-            segments = blueprint_context.get("caption_segments")
+            raw = blueprint_context.get("caption_segments")
+            if isinstance(raw, list) and raw:
+                try:
+                    from genlab_core.writing.caption_segments import (
+                        CaptionSegment,
+                    )
+
+                    segments = [
+                        CaptionSegment(
+                            text=item.get("text", ""),
+                            emphasis_words=list(item.get("emphasis_words") or []),
+                        )
+                        for item in raw
+                        if isinstance(item, dict) and item.get("text")
+                    ]
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(
+                        "[transformation_orchestrator] caption_segments "
+                        "deserialize failed: %s", exc,
+                    )
+                    segments = None
 
         if segments and "caption_style" in choices.choices:
             style = choices.choices["caption_style"].dimension_value
