@@ -140,11 +140,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     results: list[AccuracyMeasurement] = []
+    n_errors = 0
     for nid in niches:
         try:
             results.append(_run_one_niche(nid, args))
         except Exception as exc:
             logger.warning("measurement failed for niche=%s: %s", nid, exc)
+            n_errors += 1
 
     if args.format == "json":
         print(
@@ -157,7 +159,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         _print_table(results)
 
-    return 0
+    # 2026-07-02: exit nonzero when systemic error rate — see
+    # [[late-reward-sql-bug-2026-07-02]].
+    from genlab_core.runner_healthcheck import exit_code_from_health
+
+    return exit_code_from_health(total=len(niches), errors=n_errors)
 
 
 if __name__ == "__main__":
