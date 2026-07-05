@@ -57,7 +57,15 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
     )
 
     # Try Reels-compatible metrics first (Break 3 fix)
+    # 2026-07-05 (PR 6/16): added ``total_interactions`` to the primary
+    # set for the sends_per_reach proxy consumed by
+    # transformation_reward_router.compute_dimension_reward. Meta doesn't
+    # expose direct sends/DM-shares on Insights; the proxy is
+    # ``total_interactions - (likes + comments + saves)`` = residual
+    # weight ≈ shares + follows + profile visits. Falls back cleanly to
+    # the legacy metric sets when total_interactions isn't accepted.
     for metric_set in [
+        "plays,reach,likes,comments,shares,saved,total_interactions",
         "plays,reach,likes,comments,shares,saved",
         "reach,saved,comments,shares,likes",  # without 'plays' (some posts reject it)
         "impressions,reach",  # minimal fallback
@@ -87,6 +95,10 @@ def _fetch_instagram(post_id: str, niche_id: str = "") -> dict:
                     metrics.setdefault("views", val)
                 elif name == "saved":
                     metrics["saves"] = val
+                elif name == "total_interactions":
+                    # 2026-07-05: consumed by retention_derivations for the
+                    # sends_per_reach proxy. Preserve when present.
+                    metrics["total_interactions"] = val
                 elif name in ("reach", "likes", "comments", "shares"):
                     metrics[name] = val
             # dm_send_rate and skip_rate aren't directly available from the
