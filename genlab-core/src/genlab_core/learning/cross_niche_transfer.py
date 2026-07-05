@@ -177,6 +177,58 @@ def extract_style_suffix(arm_id: str) -> str | None:
     return segments[-1] or None
 
 
+def extract_transformation_suffix(arm_id: str) -> str | None:
+    """Extract the cross-niche prior key from a transformation arm_id.
+
+    Registered by PR 3 (#667), transformation arm_ids have the shape
+    ``transform__<dimension>__<value>``. The cross-niche key is the
+    ``<dimension>__<value>`` composite — same dimension + same value
+    across niches shares the prior.
+
+    Rationale for grouping by ``<dim>__<value>`` (not just ``<value>``):
+    ``music_mood__cinematic`` and (hypothetically)
+    ``caption_style__cinematic_style`` have completely different
+    semantic scope — never share priors. The dimension is part of the
+    key.
+
+    Examples:
+      * ``transform__music_mood__cinematic``  → ``music_mood__cinematic``
+      * ``transform__hook_framing__question`` → ``hook_framing__question``
+      * ``transform__audio_ducking__-12``     → ``audio_ducking__-12``
+      * ``style:gaming:revelation``           → None
+      * ``source:youtube_trending``           → None
+      * ``transform__bad_shape``              → None (missing value segment)
+    """
+    if not arm_id.startswith("transform__"):
+        return None
+    rest = arm_id[len("transform__"):]
+    # rest must be '<dim>__<value>' — needs at least one more '__'
+    if "__" not in rest:
+        return None
+    # Must have both non-empty segments after split.
+    parts = rest.split("__", 1)
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return None
+    return rest
+
+
+def extract_prior_key(arm_id: str) -> str | None:
+    """Unified extractor — routes to style / transformation / None.
+
+    This is the function ``compute_transferred_priors`` and
+    ``get_transferred_prior`` call to derive the cross-niche group
+    key for any arm_id.
+
+    Adding a new arm class (e.g. per-hour or per-source) that should
+    participate in cross-niche transfer means adding a branch here
+    and its extractor — the callers don't need to change.
+    """
+    style = extract_style_suffix(arm_id)
+    if style is not None:
+        return style
+    return extract_transformation_suffix(arm_id)
+
+
 # ── Moment matching ───────────────────────────────────────────────
 
 
@@ -238,11 +290,14 @@ def compute_transferred_priors(
         returned dict — consumers treat "no key" as "fall back to
         Beta(1,1)".
     """
-    # Group observed rates by style across niches.
+    # Group observed rates by prior-key across niches. ``prior_key``
+    # is a string that unifies "style suffix" (legacy) and
+    # "transformation dimension__value" (PR 13, 2026-07-05) — see
+    # extract_prior_key for the routing.
     per_style: dict[str, list[tuple[str, float, int]]] = {}
     for niche_id, arms in bandit_state.items():
         for arm_id, (alpha, beta) in arms.items():
-            style = extract_style_suffix(arm_id)
+            style = extract_prior_key(arm_id)
             if style is None:
                 continue
             # a + b - 2 is the "effective observation count" beyond
@@ -392,7 +447,9 @@ def get_transferred_prior(
     if not _integration_enabled():
         return None
 
-    style = extract_style_suffix(arm_id)
+    # PR 13 (2026-07-05): unified extractor handles both legacy
+    # ``style:...`` arms AND transformation arms ``transform__dim__value``.
+    style = extract_prior_key(arm_id)
     if style is None:
         return None
 
@@ -406,6 +463,8 @@ def get_transferred_prior(
 __all__ = [
     "TransferredPrior",
     "extract_style_suffix",
+    "extract_transformation_suffix",
+    "extract_prior_key",
     "compute_transferred_priors",
     "persist_priors",
     "load_persisted_priors",
