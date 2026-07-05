@@ -17,8 +17,17 @@ Safe rollout path (per Intervention 1 in the research doc):
   Week 4+: expand to other niches per operator judgment
 
 Exit codes:
-  0 — completed (any counts)
-  1 — DATABASE_URL missing / DB unreachable
+  0 — completed successfully (any counts, including scanned=0)
+  2 — high error rate (>50% of scanned blueprints hit an error path).
+      Distinguishes "runner ran but its work failed systematically" from
+      "runner exited SUCCESS". Wired via systemd OnFailure= to
+      systemd-failure-alert@%n.service so the operator sees CRITICAL
+      alerts on the Mission Control dashboard.
+
+      Added 2026-07-02 after a 7-week SQL bug (see
+      [[late-reward-sql-bug-2026-07-02]]) had every blueprint error
+      out silently while the runner exited 0 — systemd saw SUCCESS,
+      no alert fired, no telemetry produced.
 """
 
 from __future__ import annotations
@@ -26,6 +35,12 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+
+# Health-check tuning knobs — module-level so tests can monkey-patch
+# without duplicating the logic below in main().
+_MIN_SCANNED_FOR_HEALTHCHECK = 3
+_MAX_ERROR_RATE = 0.5
+_EXIT_HIGH_ERROR_RATE = 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -73,6 +88,36 @@ def main(argv: list[str] | None = None) -> int:
         push_to_bandit=push,
     )
     logger.info("Complete: %s", counters)
+
+    # 2026-07-02 hardening — see [[late-reward-sql-bug-2026-07-02]].
+    #
+    # If we scanned >= _MIN_SCANNED_FOR_HEALTHCHECK blueprints and
+    # more than _MAX_ERROR_RATE of them errored, exit nonzero so
+    # systemd's OnFailure= fires the CRITICAL alert. Without this,
+    # a systematic bug (bad SQL, network flake, permission drift)
+    # can silently produce zero telemetry for weeks — because the
+    # runner's own success path counts errors WITHIN the loop but
+    # exits 0 unconditionally.
+    #
+    # Threshold rationale:
+    #   * min_scanned=3 avoids flapping on days with tiny samples
+    #     (empty window, weekend traffic dip, etc)
+    #   * max_rate=0.5 is aggressive but appropriate: at 50%+ error
+    #     rate the runner isn't producing useful telemetry — the
+    #     operator should investigate BEFORE the next 24h fire.
+    scanned = int(counters.get("scanned", 0) or 0)
+    errors = int(counters.get("errors", 0) or 0)
+    if scanned >= _MIN_SCANNED_FOR_HEALTHCHECK and errors / scanned > _MAX_ERROR_RATE:
+        logger.error(
+            "High error rate: %d/%d blueprints failed (>%.0f%% threshold). "
+            "See WARN lines above for individual failures. Exiting %d so "
+            "systemd OnFailure alert fires.",
+            errors,
+            scanned,
+            _MAX_ERROR_RATE * 100,
+            _EXIT_HIGH_ERROR_RATE,
+        )
+        return _EXIT_HIGH_ERROR_RATE
     return 0
 
 
