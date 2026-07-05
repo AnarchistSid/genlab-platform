@@ -152,10 +152,10 @@ class TestRouteFailOpen:
 
 
 class TestComputeDimensionReward:
-    def test_scalar_only_pr5(self) -> None:
-        """PR 5 posture — returns scalar_reward unchanged for every dim.
-        This test pins the scalar-only behavior; the assertion will
-        need updating when PR 6 branches on dimension + metrics."""
+    def test_no_metrics_returns_scalar(self) -> None:
+        """When metrics dict is missing/empty, fall back to scalar.
+        This covers pre-sprint publish rows AND collection windows
+        where the fetcher returned nothing."""
         for dim in [
             "music_mood",
             "caption_style",
@@ -165,12 +165,54 @@ class TestComputeDimensionReward:
         ]:
             assert compute_dimension_reward(dim, 0.42) == 0.42
 
-    def test_metrics_arg_accepted_but_ignored_pr5(self) -> None:
-        """PR 5 accepts the metrics kwarg for API stability. PR 6 will
-        start reading it. Pin that scalar is preserved regardless."""
+    def test_metrics_without_platform_falls_back(self) -> None:
+        """Legacy callers that pass metrics but no platform get
+        scalar. Prevents crash on caller-that-forgot-to-upgrade."""
         assert compute_dimension_reward(
-            "music_mood", 0.5, metrics={"plays_past_15s": 100}
+            "music_mood", 0.5, metrics={"reach": 100, "likes": 5}
         ) == 0.5
+
+    def test_unknown_dimension_falls_back(self) -> None:
+        """A dim not in _DIMENSION_TO_METRIC_FN → scalar fallback."""
+        assert compute_dimension_reward(
+            "some_new_dim_added_later",
+            0.42,
+            metrics={"reach": 100, "avg_watch_time": 15000},
+            platform="instagram",
+        ) == 0.42
+
+    def test_derived_metric_none_falls_back(self) -> None:
+        """When raw signals for the derived metric are missing,
+        scalar fallback kicks in instead of crashing on None."""
+        # music_mood needs hold_15s; hold_15s needs avg_watch_time
+        # metrics dict omits it entirely.
+        assert compute_dimension_reward(
+            "music_mood",
+            0.42,
+            metrics={"reach": 100, "likes": 5},
+            platform="instagram",
+        ) == 0.42
+
+    def test_hook_framing_uses_hold_3s(self) -> None:
+        """hook_framing → hold_3s. avg 3s Instagram watch → hold_3s=1.0."""
+        result = compute_dimension_reward(
+            "hook_framing",
+            0.5,
+            # 3000ms = 3s → hold_3s proxy = 1.0
+            metrics={"reach": 100, "avg_watch_time": 3000},
+            platform="instagram",
+        )
+        assert result == 1.0
+
+    def test_music_mood_uses_hold_15s(self) -> None:
+        """music_mood → hold_15s. avg 7.5s = hold_15s proxy 0.5."""
+        result = compute_dimension_reward(
+            "music_mood",
+            0.42,
+            metrics={"reach": 100, "avg_watch_time": 7500},
+            platform="instagram",
+        )
+        assert result == pytest.approx(0.5)
 
 
 class TestPendingFeedbackTaskRoundTrip:

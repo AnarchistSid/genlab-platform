@@ -74,27 +74,57 @@ def compute_dimension_reward(
     dimension: str,
     scalar_reward: float,
     metrics: dict[str, Any] | None = None,
+    *,
+    platform: str = "",
+    video_duration_s: float | None = None,
 ) -> float:
     """Compute the reward signal for a specific transformation dimension.
 
-    PR 5 posture: returns scalar_reward as-is for every dimension. The
-    metrics dict is accepted (for API stability) but not consumed.
-
-    PR 6 will replace this stub with per-dimension retention-window
-    extraction using ``_DIMENSION_TO_METRIC_FN``.
+    PR 6 posture: branches on dimension + reads retention proxies from
+    ``retention_derivations``. Falls back to scalar_reward when:
+      * ``metrics`` is None or empty (legacy call path)
+      * ``platform`` unset (caller didn't upgrade to new signature)
+      * Dimension not in _DIMENSION_TO_METRIC_FN (unknown/new dim)
+      * The specific derived metric came back None (raw signal missing)
 
     Args:
         dimension: e.g. 'music_mood', 'caption_style'.
         scalar_reward: the composite reward computed by RewardShaper.
-        metrics: fetched platform metrics dict (ignored in PR 5).
+        metrics: fetched platform metrics dict.
+        platform: which platform's metrics (determines unit conversions
+            in retention_derivations).
+        video_duration_s: total video length for completion rate.
 
     Returns:
         Reward in [0, 1] to update the arm's Beta posterior with.
     """
-    # PR 5: scalar-only. PR 6 will branch on dimension + read from metrics.
-    # Keep dimension arg so the API stays stable across the transition.
-    _ = dimension, metrics
-    return scalar_reward
+    if not metrics or not platform:
+        return scalar_reward
+
+    metric_key = _DIMENSION_TO_METRIC_FN.get(dimension)
+    if metric_key is None:
+        # Unknown / new dimension not yet mapped — safe scalar fallback.
+        return scalar_reward
+
+    # Lazy import to avoid a circular import if retention_derivations
+    # ever grows to consume router types.
+    from genlab_core.learning.retention_derivations import derive_retention_metrics
+
+    derived = derive_retention_metrics(
+        metrics, platform, video_duration_s=video_duration_s
+    )
+    value = derived.get(metric_key)
+    if value is None:
+        # The specific proxy this dim wants isn't derivable from what
+        # the platform returned — scalar fallback keeps learning going.
+        logger.debug(
+            "[compute_dimension_reward] %s/%s: derived %s = None; "
+            "using scalar reward %.3f",
+            platform, dimension, metric_key, scalar_reward,
+        )
+        return scalar_reward
+
+    return max(0.0, min(1.0, float(value)))
 
 
 def route_transformation_rewards(
@@ -106,6 +136,7 @@ def route_transformation_rewards(
     bandit_updater: Callable[[str, str, str, float, Any], None],
     bandit_context: Any = None,
     metrics: dict[str, Any] | None = None,
+    video_duration_s: float | None = None,
 ) -> int:
     """Route the composite reward to N transformation-arm posteriors.
 
@@ -142,7 +173,11 @@ def route_transformation_rewards(
         if not arm_id:
             continue
         dim_reward = compute_dimension_reward(
-            dimension, scalar_reward, metrics=metrics
+            dimension,
+            scalar_reward,
+            metrics=metrics,
+            platform=platform,
+            video_duration_s=video_duration_s,
         )
         try:
             bandit_updater(
