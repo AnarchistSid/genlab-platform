@@ -54,3 +54,55 @@ branding:
   handle: "@theframedrift"
   logo_path: "assets/logos/FrameDrift-Logo.png"
   accent_color: "#7B3FE4"
+
+
+# Intelligent Transformation (PR 1-16 sprint, 2026-07-05)
+# Multi-dimensional bandit-driven render choices per publish.
+# Schema-only until GENLAB_INTELLIGENT_TRANSFORM_ENABLED=1 + enabled: true below.
+# See memory: intelligent-transformation-architecture-2026-07-05
+# Note: FrameDrift audience prefers source audio per prior analysis
+# (content-policy-deep-dive-2026-07-05); conservative audio_ducking
+# defaults preserve more of the original clip.
+intelligent_transform:
+  enabled: false  # per-niche activation; GENLAB_INTELLIGENT_TRANSFORM_ENABLED env also required
+  dimensions:
+    music_mood:
+      enabled: true
+      moods: [dramatic, orchestral, emotional, epic_battle, whimsical, ethereal]
+      source: pixabay
+      source_audio_duck_db: -9   # anime: less aggressive ducking, source audio matters more
+      music_bed_db: -9           # music bed quieter than default
+    caption_style:
+      enabled: true
+      styles: [word_by_word, hormozi_yellow, karaoke, minimal, meme]
+      default_pacing_ms: 750
+    hook_framing:
+      enabled: true
+      framings: [question_open, statistic_shock, contrarian_take, curiosity_gap, jump_cut_visual, story_open, pov_frame, pattern_break]
+    intro_animation:
+      enabled: true
+      templates: [logo_zoom, logo_tagline_reveal, pattern_break_intro]
+      asset_dir: assets/motion/intros
+    outro_cta:
+      enabled: true
+      styles: [follow, comment, save, share, question]
+      asset_dir: assets/motion/outros
+    pan_zoom:
+      enabled: true
+      patterns: [ken_burns_slow, punch_in, jump_cut, no_motion, dolly]
+    highlight_moment:
+      enabled: true
+      methods: [llm_pick, audio_peak, motion_peak, first_frame]
+      window_seconds: 8
+    audio_ducking:
+      enabled: true
+      levels_db: [-6, -9, -12]  # anime: conservative range (less aggressive than other niches)
+    music_visual_sync:
+      enabled: true
+      modes: [beat_cut, ambient, none]
+    caption_emphasis_color:
+      enabled: true
+      colors: [yellow, red, cyan, gradient, none]
+    caption_pacing:
+      enabled: true
+      pacing_ms_options: [600, 700, 800, 900]
