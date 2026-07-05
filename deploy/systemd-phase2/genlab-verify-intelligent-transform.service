@@ -1,0 +1,44 @@
+[Unit]
+Description=GenLab Intelligent-Transform Verification — post-publish attribution check
+Documentation=file:///opt/genlab/scripts/verify_intelligent_transform.py
+After=network-online.target
+
+# Sprint activation follow-up (2026-07-05). Wraps
+# scripts/verify_intelligent_transform.py in a daily fire that reports
+# per-niche transformation attribution and surfaces exit code 3 as a
+# CRITICAL alert on Mission Control via the OnFailure hook.
+#
+# Companion memory: pixabay-music-seed-2026-07-05 +
+# sprint-intelligent-transformation-complete-2026-07-05.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+
+# File-path invocation — scripts/ is not a Python package. See
+# genlab-late-reward.service and test_systemd_module_drift.py for the
+# sibling gotcha + CI regression pin.
+#
+# --window-hours 12 covers all pipelines that fired between last
+# midnight IST and this run's 16:30 IST timer fire. If today's cycle
+# published anything, the JSONB attribution should be non-empty on
+# every activated niche.
+ExecStart=/opt/genlab/.venv/bin/python scripts/verify_intelligent_transform.py \
+    --window-hours 12
+
+# Exit codes:
+#   0 — healthy (either N/N attribution or zero reels in window)
+#   3 — regression (reels published with empty arm_ids_by_dimension)
+# systemd treats non-zero as failure → OnFailure hook fires → dashboard
+# CRITICAL alert lands. Do NOT SuccessExitStatus= override the 3 —
+# that would defeat the whole point of this timer.
+TimeoutSec=120
+
+[Install]
+WantedBy=multi-user.target

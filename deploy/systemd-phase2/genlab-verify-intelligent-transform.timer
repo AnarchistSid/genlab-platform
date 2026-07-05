@@ -1,0 +1,19 @@
+[Unit]
+Description=GenLab Verify Intelligent-Transform Timer — daily 11:00 UTC (16:30 IST)
+
+[Timer]
+# 11:00 UTC = 16:30 IST — fires 60 min AFTER the last per-niche pipeline
+# (sports at 10:00 UTC / 15:30 IST) completes. By then any publishes
+# from today's cycle have written their pending_feedback rows with
+# arm_ids_by_dimension attribution. --window-hours 12 covers back to
+# yesterday's late-night runs too.
+OnCalendar=*-*-* 11:00:00 UTC
+
+# Persistent — catch-up after reboot / downtime. A missed daily check
+# just means the operator gets tomorrow's report; nothing time-sensitive
+# is dropped.
+Persistent=true
+Unit=genlab-verify-intelligent-transform.service
+
+[Install]
+WantedBy=timers.target
