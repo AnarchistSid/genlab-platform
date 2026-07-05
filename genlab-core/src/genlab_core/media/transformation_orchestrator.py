@@ -80,6 +80,66 @@ def _flag_enabled() -> bool:
     return value in ("1", "true", "yes", "on")
 
 
+def _trim_video(
+    source_path: Path,
+    output_path: Path,
+    start_s: float,
+    end_s: float,
+    *,
+    timeout_seconds: int = 120,
+) -> bool:
+    """Trim a video to [start_s, end_s] using FFmpeg stream-copy.
+
+    Uses ``-c copy`` for fast passthrough — no re-encode. Frame-accurate
+    at keyframes only, which is fine for highlight windows that don't
+    need pixel-perfect start times (the bandit is picking a rough
+    "interesting region," not a frame-precise cut).
+
+    Returns True on success, False on:
+      * ffmpeg unavailable
+      * timeout / nonzero exit / tiny output
+    """
+    import subprocess
+
+    from genlab_core.media.ffmpeg import get_ffmpeg_binary
+
+    try:
+        ffmpeg = get_ffmpeg_binary()
+    except RuntimeError as exc:
+        logger.warning("[transformation_orchestrator] ffmpeg not available for trim: %s", exc)
+        return False
+
+    duration = max(0.1, end_s - start_s)
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-ss", f"{start_s:.3f}",
+        "-i", str(source_path),
+        "-t", f"{duration:.3f}",
+        "-c", "copy",
+        str(output_path),
+    ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout_seconds
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning(
+            "[transformation_orchestrator] trim ffmpeg failed: %s", exc
+        )
+        return False
+    if result.returncode != 0:
+        logger.warning(
+            "[transformation_orchestrator] trim exit=%d — %s",
+            result.returncode,
+            "\n".join(result.stderr.strip().splitlines()[-3:]),
+        )
+        return False
+    if not output_path.exists() or output_path.stat().st_size < 1024:
+        return False
+    return True
+
+
 def _get_source_duck_db(config, choices) -> int:
     """Pick the source-audio ducking level.
 
@@ -185,6 +245,71 @@ def apply_transformations(
     temp_dir = Path(tempfile.mkdtemp(prefix="genlab_transform_"))
     try:
         current_path = source_video_path
+
+        # ── Stage 0: highlight-window trim ─────────────────────
+        # Consumer wire for PR 12's HighlightDetector (task #522).
+        # Runs BEFORE audio/pan/captions/motion so every downstream
+        # stage operates on the trimmed clip. When the highlight_moment
+        # arm picks 'first_frame' (baseline), the window starts at 0
+        # and this stage is a near-no-op — we skip the ffmpeg pass
+        # entirely in that case to save render time.
+        if "highlight_moment" in choices.choices:
+            method = choices.choices["highlight_moment"].dimension_value
+            try:
+                window_seconds = int(
+                    config.dimensions.highlight_moment.window_seconds
+                )
+            except (AttributeError, ValueError, TypeError):
+                window_seconds = 8
+
+            try:
+                from genlab_core.media.highlight_detector import (
+                    detect_highlight,
+                )
+
+                window = detect_highlight(
+                    current_path,
+                    method,
+                    video_duration_s=video_duration_s,
+                    window_s=float(window_seconds),
+                    fallback_to_first_frame=True,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[transformation_orchestrator] highlight_detector "
+                    "raised: %s", exc,
+                )
+                window = None
+
+            # Skip the trim pass when the window starts at 0 AND covers
+            # the full source (baseline first_frame with window >= dur)
+            # — saves an unnecessary ffmpeg round-trip.
+            need_trim = (
+                window is not None
+                and window.is_valid()
+                and (
+                    window.start_s > 0.01
+                    or window.end_s < video_duration_s - 0.01
+                )
+            )
+            if need_trim:
+                trim_path = temp_dir / "00_trim.mp4"
+                trim_success = _trim_video(
+                    current_path, trim_path, window.start_s, window.end_s
+                )
+                if trim_success:
+                    current_path = trim_path
+                    # Downstream caption timing must reflect the
+                    # trimmed duration.
+                    video_duration_s = window.end_s - window.start_s
+                    result.stages_applied.append("highlight_moment")
+                else:
+                    result.stages_skipped.append("highlight_moment")
+            else:
+                # Fallback to first_frame or full-video window — treat
+                # as a valid selection (arm still gets attributed) but
+                # no ffmpeg pass needed.
+                result.stages_applied.append("highlight_moment")
 
         # ── Stage 1: audio replacement ─────────────────────────
         if "music_mood" in choices.choices:
