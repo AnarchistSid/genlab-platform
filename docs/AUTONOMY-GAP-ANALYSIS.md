@@ -1,5 +1,53 @@
 # Autonomy Gap Analysis — 2026-06-12
 
+> ## ⚠ Status as of 2026-06-28
+>
+> This doc is the forensic prod-snapshot from 2026-06-12. ~60% of the gaps
+> identified here have shipped since (most over the 2026-06-26 → 2026-06-28
+> sprint). For the **forward-looking roadmap** see
+> [`AGENT-AUTONOMY-RESEARCH.md`](AGENT-AUTONOMY-RESEARCH.md). This doc
+> remains canonical for: (a) the 5-dimension framework, (b) the appendix
+> SQL queries (still re-runnable), (c) several still-open gaps that lack
+> a more recent write-up.
+>
+> **Now CLOSED** (struck through in inventory below):
+> - **L1** (`publishing_analytics.views=0` for 99.4% of rows) — fixed via
+>   PR #588 (engagement_rate write fix) + 33-row backfill. Single most
+>   leveraged fix in the register's history.
+> - **L5** (`pending_feedback.post_id ≠ analytics.post_id` join broken) —
+>   resolved alongside L1.
+> - **T1, T2, T3** (no `confidence_score` / no `auto_publish` code path /
+>   no graduated rollout) — AUTO #1 (observation gate + calibration logger)
+>   and AUTO #2 (enforcement worker + per-niche enable + 4-tier kill +
+>   auto-resume sweeper) shipped end-to-end. ai_creators enabled at 10%
+>   rollout.
+> - **B.12** (reward fill-rate threshold unreachable) — same root cause as L1.
+> - **B.14 Pattern A** (two-store divergence) — collapsed by the
+>   engagement_rate fix.
+> - **R2** (yt-dlp wrapper + cookie chown regression) — closed by
+>   deploy.sh oneshots PR (2026-06-28).
+> - **R3** (BacklogClient Postgres path missing Tier 2 stores) — fixed
+>   across the Postgres migration sweeps.
+> - **B.3** (engagement engine silent since 2026-05-21) — resumed
+>   post-WARP reboot + subsequent engagement-poller work.
+> - **V3 partial** — Slack webhook plumbing shipped (PR #584, #585) but
+>   webhook URL itself remains unfilled.
+> - **V1 partial** — per-platform health card shipped today (PR #617).
+>
+> **Genuinely-still-open** (ranked by leverage):
+> 1. **Q1** — All 5 niches have zero `negative_keywords`. Cheapest unshipped
+>    quality win. ~1 hour/niche curation.
+> 2. **Q3** — Portrait layout draws logo but not name/handle
+>    (`frame_compositor.py:563-595`). Single function call missing.
+> 3. **L6** — No per-platform bandit arms.
+> 4. **Q2 routing half** — 77% of blueprints bypass content_pool classifier
+>    (PreflightDedup shipped today addresses the dedup half).
+> 5. **R4** — Stale-schedule cutoff (18h) strands approved blueprints.
+> 6. **R5** — Daily WARP wedge root cause unrooted (mitigated by reboot).
+> 7. **B.6** — content_pool 9.1% consumption rate.
+> 8. **B.9** — Sports funnel 5.7% efficiency.
+> 9. **B.11** — Negative audience trajectories (symptom of content quality).
+
 **North star** ([[project-autonomous-agent-vision]]): an AI agent autonomously running 5 social channels at scale, getting smarter over time, requiring no manual approval.
 
 This document is the **exhaustive current-state snapshot** mapped against that vision, with file:line citations and prod-DB measurements taken 2026-06-12 22:00 IST. Refresh by re-running the queries in the appendix.

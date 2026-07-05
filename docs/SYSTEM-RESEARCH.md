@@ -4,7 +4,30 @@
 > how the Gen Lab system is *actually* built (as opposed to how the docs describe it).
 > It is meant to be appended to over time, not rewritten.
 
-_Last updated: 2026-06-11_
+_Last updated: 2026-06-12_ (Section 6 newest entry: R-70 part 2 + R-31(a)
+PA-API + R-81 phantom-prune sweep. Header date corrected from 2026-06-11
+on 2026-06-28 after AGENT-AUTONOMY-RESEARCH synthesis surfaced the drift.)
+
+> ## ⚠ Register status as of 2026-06-28
+>
+> **82 of 83 R-IDs are Done**; the one outstanding (R-31(a) — 4 per-network
+> affiliate adapters: EarnKaro / Impact / ShareASale / CJ) is
+> credential-blocked on the operator side, not engineering work.
+>
+> The remediation phase ended ~2026-06-12. Subsequent sessions
+> (especially 2026-06-26 → 2026-06-28) have been **maintenance-phase
+> deepening** — extending the fixes for R-01, R-29, R-36, R-37, R-54,
+> R-67 etc. via additional sensors, auto-resolve sweepers, per-platform
+> health visibility, and source-pipeline tuning. None of those PRs
+> close additional R-IDs; they harden areas the register already
+> shipped against.
+>
+> **Highest-leverage *next* work is no longer in the R-XX register**
+> but in:
+> - §9 SaaS isolation bugs (SR-A through SR-D) — pre-launch correctness
+> - U-01 Anthropic prompt caching — single largest cost win available
+> - R-31(a) EarnKaro adapter — first affiliate revenue diversification
+> - §7 host-side verify sweep — retire residual `[verify on host]` flags
 
 ---
 

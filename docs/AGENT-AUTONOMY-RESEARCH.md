@@ -1,18 +1,48 @@
 # Making the GenLab agent smarter, self-reliant, and more capable
 
 **Author:** Synthesis from 4 parallel research agents — codebase inventory, 2026 SOTA survey, self-improvement-patterns deep-dive, operator-workload mapping
-**Date:** 2026-06-26
+**Date:** 2026-06-26 (corrections appended 2026-06-28)
 **Audience:** GenLab operator (Aditya) — solo, running GenLab + AspireHub in parallel
 **Status:** Research deliverable + concrete next-PR proposals
 **Length:** ~7,000 words, structured for skimming
+
+> ## ⚠ 2026-06-28 corrections — read before acting on the TL;DR
+>
+> The original TL;DR's **item #3 (flip AUTO #2 for gaming)** is **REVERSED** by
+> calibration-data verification. Two factual errors were caught during the
+> 2026-06-26-27 extended sprint:
+>
+> 1. **`ai_creators` is the calibration-correct first niche, NOT gaming.**
+>    Real per-niche calibration query showed `ai_creators` at **96.4% agreement,
+>    28 samples** — the highest agreement-rate above the 90% threshold, only 2
+>    samples short of the 30-row qualifier. It is the calibration-evidence-correct
+>    ramp candidate; the original doc called it "anomalous" because it
+>    misread the sample-count threshold.
+> 2. **Gaming's "114 samples" included synthetic test data.** Of the 78 rows
+>    in `auto_approval_calibration` for gaming, **only 24 are real
+>    (UUID-shape) operator-click rows**; the other 54 are smoke-test
+>    fixtures inflating the count. Real gate-operator agreement is **33.3%**.
+>    Enabling AUTO #2 for gaming would auto-approve content the operator
+>    rejects 2 out of 3 times — **actively harmful**.
+>
+> The corrected next-action sequence is:
+> - ai_creators AUTO #2 enable remains correct (currently 10% rollout; ramp
+>   to 25% when sample count crosses 30 ≈ a few more operator clicks)
+> - Gaming AUTO #2 must NOT be enabled until calibration data is repaired
+>   (filter synthetic rows + accumulate ≥30 real samples + reach ≥90% agreement)
+> - The drift detector cited in item #2 SHIPPED as PR #614 (2026-06-26)
+>
+> See `MEMORY.md` → `session-2026-06-26-27-extended-sprint.md` for the prod
+> queries that surfaced these corrections. Future sessions reading this doc
+> must apply the corrections; the body text below is otherwise still valid.
 
 ---
 
 ## TL;DR — three things to do first, in order
 
 1. **Activate auto-deploy on merge to main** (`existing-flag-flip` + 2 GitHub secrets). PR #590 wired the workflow already; flipping `if: false` to `if: true` closes the "9 PRs invisible on prod" problem permanently. ~2 hour operator action.
-2. **Ship a daily drift-detection job on the engagement-rate distribution per niche.** Would have caught the 16-day-old `engagement_rate=0` bug in 24 hours instead of 16 days. ~50 LOC + cron. The single highest-leverage observability addition possible given today's state.
-3. **Flip AUTO #2 enable for `gaming`** — it has 114 calibration samples (4× the 30-sample threshold) and is the highest-volume niche. Current AUTO #2 enable on `ai_creators` is anomalous because ai_creators only has 28 samples (BELOW threshold) — gaming is the calibration-evidence-correct first niche to ramp.
+2. **Ship a daily drift-detection job on the engagement-rate distribution per niche.** Would have caught the 16-day-old `engagement_rate=0` bug in 24 hours instead of 16 days. ~50 LOC + cron. The single highest-leverage observability addition possible given today's state. **STATUS 2026-06-28: shipped as PR #614.**
+3. ~~**Flip AUTO #2 enable for `gaming`**~~ **— STRIKE. Per 2026-06-28 corrections (above): gaming would be actively harmful. The correct first ramp is `ai_creators` (already enabled at 10%); promote to 25% when its sample count crosses 30 — typically ~1 week of operator-click accumulation.**
 
 Everything else in this document is a 3-12 month roadmap. The above three are the only "do this week" items, and together they remove the largest invisible failure modes the system currently has.
 
