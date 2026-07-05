@@ -810,6 +810,7 @@ from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
+from server.api.transformation_bandit import bp as transformation_bandit_bp
 from server.api.trend_anticipation import bp as trend_anticipation_bp
 from server.api.trends import bp as trends_bp
 from server.api.webhook_receiver import webhook_bp
@@ -848,6 +849,9 @@ app.register_blueprint(
 app.register_blueprint(
     counterfactual_replay_bp
 )  # Intervention 7 (2026-07-01): /api/v1/counterfactual-replay/latest
+app.register_blueprint(
+    transformation_bandit_bp
+)  # PR 14 (2026-07-05): /api/v1/transformation-bandit/summary — intelligent transformation sprint observability
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)

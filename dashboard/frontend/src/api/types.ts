@@ -1419,3 +1419,29 @@ export interface CrossNichePriorsArtifact {
   flag_enabled: boolean;
   priors: Record<string, CrossNichePrior>;
 }
+
+// ───────────────────────────────────────────────────────────────
+// PR 14 (2026-07-05) — Transformation bandit observability types.
+// ───────────────────────────────────────────────────────────────
+
+/** One transformation-arm summary within a dimension. */
+export interface TransformationArm {
+  value: string;
+  rate: number;
+  n_obs: number;
+  alpha: number;
+  beta: number;
+  arm_id: string;
+}
+
+/** Per-niche breakdown: dimension → top-N arms by rate. */
+export type TransformationNicheSummary = Record<string, TransformationArm[]>;
+
+/** Full response envelope. ``flag_enabled`` reflects the current
+ *  ``GENLAB_INTELLIGENT_TRANSFORM_ENABLED`` runtime state so the
+ *  card can badge "active" vs "observation only". */
+export interface TransformationBanditSummary {
+  generated_at: string;
+  flag_enabled: boolean;
+  niches: Record<string, TransformationNicheSummary>;
+}
