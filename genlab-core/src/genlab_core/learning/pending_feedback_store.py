@@ -312,6 +312,25 @@ class PendingFeedbackStore:
         propensity = _opt_float("Propensity", "propensity")
         temperature = _opt_float("Temperature", "temperature")
 
+        # Intelligent transformation multi-arm attribution (PR 5, 2026-07-05).
+        # Postgres JSONB auto-parses to dict; SharePoint stores as JSON
+        # string. Handle both shapes for round-trip parity — same pattern
+        # as bandit_context above.
+        arm_ids_raw = _f(
+            fields, "ArmIdsByDimension", "arm_ids_by_dimension", default=None
+        )
+        if isinstance(arm_ids_raw, dict):
+            arm_ids_by_dim = arm_ids_raw
+        elif isinstance(arm_ids_raw, str) and arm_ids_raw:
+            try:
+                arm_ids_by_dim = json.loads(arm_ids_raw)
+                if not isinstance(arm_ids_by_dim, dict):
+                    arm_ids_by_dim = {}
+            except (ValueError, TypeError):
+                arm_ids_by_dim = {}
+        else:
+            arm_ids_by_dim = {}
+
         return PendingFeedbackTask(
             content_id=post_id,
             platform=_f(fields, "Platform", "platform", default=""),
@@ -331,4 +350,5 @@ class PendingFeedbackStore:
             reward_48h=reward_48h,
             propensity=propensity,
             temperature=temperature,
+            arm_ids_by_dimension=arm_ids_by_dim,
         )

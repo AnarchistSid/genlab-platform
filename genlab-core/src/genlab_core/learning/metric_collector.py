@@ -1058,6 +1058,46 @@ def process_pending_task(
                         "[metric_collector] per-platform bandit split check failed: %s",
                         exc,
                     )
+
+            # Intelligent transformation multi-arm attribution (PR 5, 2026-07-05).
+            # When the reel was published with transformation choices,
+            # arm_ids_by_dimension carries N (dim → arm_id) pairs. The
+            # router iterates them and calls bandit_updater once per
+            # dimension so N transformation-arm posteriors update from
+            # this single reel's reward signal.
+            #
+            # Empty dict is expected for pre-sprint publishes AND for
+            # any reel where GENLAB_INTELLIGENT_TRANSFORM_ENABLED was
+            # off at selection time — the router short-circuits without
+            # calling bandit_updater at all.
+            #
+            # Fail-OPEN by design (same policy as per-platform split):
+            # a single dim-arm failure NEVER unwinds the content-type
+            # update that already succeeded.
+            if bandit_update_succeeded and task_record.arm_ids_by_dimension:
+                try:
+                    from genlab_core.learning.transformation_reward_router import (
+                        route_transformation_rewards,
+                    )
+
+                    route_transformation_rewards(
+                        niche_id=task_record.niche_id,
+                        platform=task_record.platform,
+                        arm_ids_by_dimension=task_record.arm_ids_by_dimension,
+                        scalar_reward=reward_48h,
+                        bandit_updater=bandit_updater,
+                        bandit_context=task_record.bandit_context,
+                        metrics=metrics,
+                    )
+                except Exception as exc:  # noqa: BLE001 — fail-open
+                    logger.warning(
+                        "[metric_collector] transformation reward router "
+                        "failed for %s/%s: %s",
+                        task_record.niche_id,
+                        task_record.platform_post_id,
+                        exc,
+                    )
+
             # Stamp the row so the daily backfill timer's
             # ``(extra->>'bandit_backfilled_at') IS NULL`` filter
             # correctly excludes it. Without this, the live updater
