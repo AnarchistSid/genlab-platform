@@ -1135,6 +1135,22 @@ export const crossNicheTransfer = {
     ),
 };
 
+// ───────────────────────────────────────────────────────────────
+// PR 14 (2026-07-05) — Transformation bandit observability client.
+// ───────────────────────────────────────────────────────────────
+
+export const transformationBandit = {
+  /** Fetch per-niche transformation-bandit summary. Returns null
+   *  when no arms are registered yet (pre-PR-3-run install) or
+   *  DB unavailable. Frontend renders "No transformation arms yet". */
+  summary: () =>
+    get<{
+      data: import("./types").TransformationBanditSummary | null;
+    }>("/transformation-bandit/summary").then((d) =>
+      unwrapEnvelope<import("./types").TransformationBanditSummary>(d),
+    ),
+};
+
 export const trendAnticipation = {
   /** Fetch today's anticipation ranking for one niche. Returns null
    *  when the runner hasn't fired yet (cold start day, first run

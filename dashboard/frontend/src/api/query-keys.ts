@@ -117,6 +117,12 @@ export const queryKeys = {
      *  poll matches. */
     priors: () => ["cross-niche-transfer", "priors"] as const,
   },
+  transformationBandit: {
+    /** PR 14 (2026-07-05) — transformation-arm summary cache key.
+     *  Reads live from bandit_arms (no artifact); 60s poll matches
+     *  the AutoApprovalCalibrationCard cadence. */
+    summary: () => ["transformation-bandit", "summary"] as const,
+  },
   counterfactualReplay: {
     /** Intervention 7 observability (2026-07-01) — per-niche latest
      *  replay artifact. Monthly rewrite; daily poll is plenty. */

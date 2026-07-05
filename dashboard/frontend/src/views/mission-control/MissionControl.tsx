@@ -35,6 +35,7 @@ import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
+import { TransformationBanditCard } from "./TransformationBanditCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
 import { ComplianceStatsCard } from "./ComplianceStatsCard";
@@ -342,6 +343,14 @@ export default function MissionControl() {
                 complements the daily bandit_arms view with a
                 counterfactual overlay. */}
             <CounterfactualReplayCard />
+            {/* PR 14 (2026-07-05): intelligent transformation sprint
+                observability. Shows top arm per (niche × dimension)
+                so operator eyeballs whether the bandit is learning
+                consistent preferences BEFORE flipping
+                GENLAB_INTELLIGENT_TRANSFORM_ENABLED. Same
+                observation-only vs active badge pattern as the
+                other intervention cards. */}
+            <TransformationBanditCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).
