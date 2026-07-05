@@ -1,0 +1,30 @@
+[Unit]
+Description=GenLab nightly auto-scheduler Timer — daily 16:30 UTC (22:00 IST)
+
+[Timer]
+# 16:30 UTC = 22:00 IST — deliberately AFTER the last pipeline (sports
+# at 10:00 UTC / 15:30 IST) so today's fresh VISUAL_READY blueprints
+# are available for ranking. Well BEFORE tomorrow's 06:35 UTC / 12:05
+# IST publisher fire so the operator has time to override if the pick
+# is bad.
+#
+# Timing rationale:
+#   03:30 UTC (09:00 IST) — trend anticipation runs
+#   04:30 UTC (10:00 IST) — DR replay runs
+#   05:00 UTC (10:30 IST) — cross-niche transfer
+#   05:30 UTC (11:00 IST) — anticipation accuracy
+#   06:35 UTC (12:05 IST) — publisher fires
+#   10:00 UTC (15:30 IST) — last per-niche pipeline (sports)
+#   11:00 UTC (16:30 IST) — verify_intelligent_transform fires
+#   16:30 UTC (22:00 IST) — THIS timer — final gate before overnight
+OnCalendar=*-*-* 16:30:00 UTC
+
+# Persistent — if the box was down at 22:00 IST, catch up on next boot
+# so tomorrow still has schedules. Missing one night still leaves the
+# publisher firing with 0 scheduled, which is exactly what this timer
+# prevents.
+Persistent=true
+Unit=genlab-nightly-schedule.service
+
+[Install]
+WantedBy=timers.target

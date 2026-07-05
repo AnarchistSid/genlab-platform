@@ -1,0 +1,38 @@
+[Unit]
+Description=GenLab nightly auto-scheduler — Path B safety net (2026-07-06)
+Documentation=file:///opt/genlab/scripts/nightly_schedule_top_per_niche.py
+After=network-online.target
+
+# Companion memory: [[agent-learning-state-2026-06-30]] documents why
+# auto-approver stays in observation-only mode per niche until
+# calibration proves it. This script picks up the slack: for every
+# niche that lacks a scheduled blueprint for tomorrow's publisher fire,
+# schedule the top-scoring VISUAL_READY at 06:00 UTC.
+#
+# Composes with — does NOT replace — the auto-approver. If auto-approver
+# already scheduled ai_creators for tomorrow (Path A), this script's
+# `niches_needing_scheduling()` skips ai_creators.
+#
+# Exit code 1 → at least one niche had no schedulable VISUAL_READY.
+# Route to Mission Control alert via OnFailure so operator knows to
+# investigate (empty queue, all filtered, or content-quality regression).
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+
+# File-path invocation — scripts/ is not a Python package. Sibling
+# gotcha [[systemd-scripts-invocation-gotcha]] + CI regression pin at
+# test_systemd_module_drift.py.
+ExecStart=/opt/genlab/.venv/bin/python scripts/nightly_schedule_top_per_niche.py
+
+TimeoutSec=120
+
+[Install]
+WantedBy=multi-user.target
