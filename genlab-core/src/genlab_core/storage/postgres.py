@@ -257,6 +257,14 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "beta",
         "n_plays",
         "linucb_state",
+        # Intelligent transformation sprint (2026-07-05, migration
+        # a7v8w9x0y1z2). Arms are classified by type to enable
+        # analytical queries + partial-index efficiency without
+        # parsing the composite arm_id string. See memory:
+        # intelligent-transformation-architecture-2026-07-05.
+        "arm_type",         # 'content'|'transformation'|'hour'|'source'|'style'|NULL
+        "dimension",        # populated only for transformation arms
+        "dimension_value",  # the specific value bandit selected
     },
     "pending_engagement": {
         "niche_id",
@@ -280,6 +288,11 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         # See migration v3q4r5s6t7u8_pending_feedback_propensity.py.
         "propensity",
         "temperature",
+        # Intelligent transformation sprint (2026-07-05, migration
+        # a7v8w9x0y1z2). Multi-arm attribution — carries N
+        # transformation-dim arm assignments per reel, iterated at
+        # reward time to update N posteriors.
+        "arm_ids_by_dimension",
     },
     "templates": {
         "niche_id",

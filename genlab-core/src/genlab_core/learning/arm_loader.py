@@ -131,6 +131,10 @@ def save_arm(
     linucb_state: dict[str, Any] | None = None,
     n_plays: int | None = None,
     niche_id: str = "",
+    *,
+    arm_type: str = "",
+    dimension: str = "",
+    dimension_value: str = "",
 ) -> None:
     """Save a single bandit arm — upsert by ``(niche_id, arm_id)``.
 
@@ -147,6 +151,19 @@ def save_arm(
             to the row's ``niche_id`` column on create. Without it the
             lookup falls back to ``arm_id``-only, preserving prior
             behavior for any caller that hasn't been updated yet.
+        arm_type: Optional arm classification — 'content' | 'transformation'
+            | 'hour' | 'source' | 'style'. Enables analytical queries
+            without parsing the composite ``arm_id`` string. Legacy
+            callers don't set this; existing rows migrate as NULL.
+            Added by intelligent transformation sprint (migration
+            ``a7v8w9x0y1z2``, 2026-07-05).
+        dimension: Optional dimension name (e.g. 'music_mood') —
+            populated only for transformation arms. Enables per-
+            dimension arm enumeration for Mission Control cards +
+            Strategist meta-analysis.
+        dimension_value: Optional dimension value (e.g. 'cinematic')
+            — the specific choice this arm represents. Ships alongside
+            ``dimension`` for transformation arms.
 
     Perf (2026-06-21): the lookup was previously ``proxy.all() + Python
     next()`` — a full-table scan + linear search per call. Inside the
@@ -173,6 +190,14 @@ def save_arm(
         fields["niche_id"] = niche_id
     if linucb_state is not None:
         fields["linucb_state"] = json.dumps(linucb_state)
+    # Only populate the classification triple when caller explicitly
+    # sets them — legacy callers preserve existing row NULLs on update.
+    if arm_type:
+        fields["arm_type"] = arm_type
+    if dimension:
+        fields["dimension"] = dimension
+    if dimension_value:
+        fields["dimension_value"] = dimension_value
     try:
         # Indexed lookup via the composite UNIQUE constraint. When the
         # caller passed ``niche_id`` we use the (niche_id, arm_id) pair
