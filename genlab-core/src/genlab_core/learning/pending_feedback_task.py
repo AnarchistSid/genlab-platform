@@ -57,6 +57,13 @@ class PendingFeedbackTask(BaseModel):
     # ``learning/linucb.py.select_with_propensity`` for the producer.
     propensity: float | None = None
     temperature: float | None = None
+    # Intelligent transformation sprint (2026-07-05, migration a7v8w9x0y1z2).
+    # Multi-arm attribution carrier: N transformation-dimension arm
+    # assignments per reel. Iterated by transformation_reward_router at
+    # each collection window to update N Beta posteriors from one
+    # publish. Empty dict is the default (transformation off or pre-
+    # sprint publishes) — the router skips iteration on empty.
+    arm_ids_by_dimension: dict[str, str] = Field(default_factory=dict)
     collection_windows: list[CollectionWindow] = Field(
         default_factory=lambda: ["6h", "24h", "48h", "168h"]
     )
@@ -124,4 +131,12 @@ class PendingFeedbackTask(BaseModel):
             fields["propensity"] = self.propensity
         if self.temperature is not None:
             fields["temperature"] = self.temperature
+        # Intelligent transformation multi-arm attribution (PR 5, 2026-07-05).
+        # Only write when non-empty — legacy publishes keep the promoted
+        # column at the SQL DEFAULT '{}'. JSONB serialization matches
+        # bandit_context pattern above.
+        if self.arm_ids_by_dimension:
+            fields["arm_ids_by_dimension"] = _json.dumps(
+                self.arm_ids_by_dimension
+            )
         return fields
