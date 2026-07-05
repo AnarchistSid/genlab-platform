@@ -1,0 +1,685 @@
+{
+  "ai_creators": {
+    "electronic": [
+      {
+        "id": 549463,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/22/audio_155ca0c7d3.mp3",
+        "title": "Technology - Tech Technology"
+      },
+      {
+        "id": 547899,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/19/audio_63ea11e12d.mp3",
+        "title": "Technology - Tech Technology"
+      },
+      {
+        "id": 484304,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/13/audio_3562a493b5.mp3",
+        "title": "Technology - Tech Technology"
+      },
+      {
+        "id": 410669,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/09/25/audio_58b2e9c183.mp3",
+        "title": "Tech"
+      },
+      {
+        "id": 513016,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/02/audio_67005dc1bc.mp3",
+        "title": "Technology - Tech Music"
+      }
+    ],
+    "ambient_tech": [
+      {
+        "id": 443113,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/11/26/audio_e0690e1ffb.mp3",
+        "title": "Cyber Crime"
+      },
+      {
+        "id": 524300,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/24/audio_fdf2509563.mp3",
+        "title": "Ambient Electronics"
+      },
+      {
+        "id": 474697,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/01/27/audio_5945848d7b.mp3",
+        "title": "Cyberpunk - Futuristic Cyberpunk Industrial Music"
+      },
+      {
+        "id": 153473,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/06/12/audio_4e260265ef.mp3",
+        "title": "Ambient Technology"
+      },
+      {
+        "id": 151187,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/05/25/audio_9ae43b2789.mp3",
+        "title": "Ambient Technology"
+      }
+    ],
+    "focused": [
+      {
+        "id": 548638,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/08/audio_b7faf7a999.mp3",
+        "title": "Study Lofi Music"
+      },
+      {
+        "id": 112191,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
+        "title": "Lofi Study - Calm Peaceful Chill Hop"
+      },
+      {
+        "id": 160166,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/07/30/audio_e0908e8569.mp3",
+        "title": "Good Night - Lofi Cozy Chill Music"
+      },
+      {
+        "id": 473154,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/01/25/audio_1dd7f3126d.mp3",
+        "title": "Lo-fi Music Loop - Sentimental Jazzy Love"
+      },
+      {
+        "id": 542566,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_289e523db8.mp3",
+        "title": "Lofi Study"
+      }
+    ],
+    "upbeat": [
+      {
+        "id": 487426,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/19/audio_8e10e01af1.mp3",
+        "title": "Upbeat Happy Corporate"
+      },
+      {
+        "id": 513423,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/08/audio_c354d14dc1.mp3",
+        "title": "Corporate Upbeat"
+      },
+      {
+        "id": 481658,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/08/audio_00101e9782.mp3",
+        "title": "Corporate Upbeat"
+      },
+      {
+        "id": 323642,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/04/06/audio_63ddcb47bc.mp3",
+        "title": "Corporate Upbeat"
+      },
+      {
+        "id": 507151,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/23/audio_41d4f638b4.mp3",
+        "title": "Corporate Background Music - Quiet Progress"
+      }
+    ],
+    "cinematic": [
+      {
+        "id": 164798,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/09/03/audio_17f1bc5a78.mp3",
+        "title": "Corporate Cinematic"
+      },
+      {
+        "id": 552759,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/26/audio_f68a769b76.mp3",
+        "title": "Cinematic Corporate Business Background"
+      },
+      {
+        "id": 556231,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/23/audio_506b25c5cd.mp3",
+        "title": "cinematic-corporate-presentation"
+      },
+      {
+        "id": 493209,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/28/audio_3d851a90c2.mp3",
+        "title": "Corporate - Corporate Music_37s"
+      },
+      {
+        "id": 552762,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/26/audio_dabca1ddd2.mp3",
+        "title": "Cinematic Corporate Advertising"
+      }
+    ],
+    "contemplative": [
+      {
+        "id": 512372,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/01/audio_97c58a3375.mp3",
+        "title": "Thoughtful"
+      },
+      {
+        "id": 399305,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/09/04/audio_2e6a8d85f0.mp3",
+        "title": "Thoughtful Flow"
+      },
+      {
+        "id": 376008,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/07/17/audio_1d484c623b.mp3",
+        "title": "Thoughtful Piano Calm"
+      },
+      {
+        "id": 354127,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/06/04/audio_8af37b65ec.mp3",
+        "title": "Thoughtful Hopeful Melancholic Music"
+      },
+      {
+        "id": 115562,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/07/24/audio_6108c0bab5.mp3",
+        "title": "Thoughtful Ambient Piano"
+      }
+    ],
+    "tech_hype": [
+      {
+        "id": 232981,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/08/16/audio_5bd867ae3c.mp3",
+        "title": "Matth Samm - CAT HYPE CAT"
+      },
+      {
+        "id": 441346,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/11/23/audio_39acd0dd09.mp3",
+        "title": "All Cases"
+      },
+      {
+        "id": 395826,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/08/28/audio_fc11107a6d.mp3",
+        "title": "Hype"
+      },
+      {
+        "id": 415728,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/10/05/audio_9ae6d697d8.mp3",
+        "title": "Adrenaline Circuit"
+      },
+      {
+        "id": 530691,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/05/07/audio_83b01370b6.mp3",
+        "title": "Intro podcast"
+      }
+    ]
+  },
+  "gaming": {
+    "energetic": [
+      {
+        "id": 545508,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_8790a096a6.mp3",
+        "title": "Gaming Rock"
+      },
+      {
+        "id": 331807,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/04/24/audio_ac4d536296.mp3",
+        "title": "Gaming"
+      },
+      {
+        "id": 560338,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/07/01/audio_5c60eaa044.mp3",
+        "title": "Gaming Game Video Game Music"
+      },
+      {
+        "id": 251284,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/10/15/audio_b6a924f2f7.mp3",
+        "title": "Level Up - Energetic Gaming Rock Music"
+      },
+      {
+        "id": 138617,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/02/09/audio_93187c7251.mp3",
+        "title": "Gaming Rock"
+      }
+    ],
+    "hype": [
+      {
+        "id": 549448,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/21/audio_5d351871d3.mp3",
+        "title": "Trap - Trap Hype Beat"
+      },
+      {
+        "id": 558229,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/27/audio_bed17eb939.mp3",
+        "title": "Hype Criminal Trap Beat"
+      },
+      {
+        "id": 542570,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_68f8ba9bbe.mp3",
+        "title": "Trap - Trap Hype Beat"
+      },
+      {
+        "id": 529527,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/05/19/audio_d56877f921.mp3",
+        "title": "Trap - Trap Hype Beat"
+      },
+      {
+        "id": 515501,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/18/audio_557b9f0e7b.mp3",
+        "title": "Trap Hype Beat"
+      }
+    ],
+    "adrenaline": [
+      {
+        "id": 492798,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/27/audio_3ff32914d3.mp3",
+        "title": "Action Rock"
+      },
+      {
+        "id": 514148,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/11/audio_3a8ab2915b.mp3",
+        "title": "Action Rock - Rock Music"
+      },
+      {
+        "id": 478795,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/03/audio_b9a317eb37.mp3",
+        "title": "Action Sport Music"
+      },
+      {
+        "id": 208914,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/05/13/audio_a75d496e29.mp3",
+        "title": "Upbeat Rock Action Sport - Adrenaline Rush (Short Version)"
+      },
+      {
+        "id": 544102,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_564b0d4a68.mp3",
+        "title": "Action Rock - Rock Music Version 4"
+      }
+    ],
+    "intense": [
+      {
+        "id": 131566,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/12/29/audio_265ab80d58.mp3",
+        "title": "Dark Mystery Trailer (Taking Our time)"
+      },
+      {
+        "id": 179466,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/12/03/audio_f03df0935b.mp3",
+        "title": "Trailer Intense"
+      },
+      {
+        "id": 493730,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/01/audio_bd4482387f.mp3",
+        "title": "Trailer Intense"
+      },
+      {
+        "id": 9489,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2021/10/15/audio_2320f2b0bc.mp3",
+        "title": "Epic Hollywood Trailer"
+      },
+      {
+        "id": 453507,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/12/18/audio_95b43caa2d.mp3",
+        "title": "Intense"
+      }
+    ],
+    "epic": [
+      {
+        "id": 513668,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/10/audio_8470cb423f.mp3",
+        "title": "Total War (Epic Action Cinematic Trailer Main)"
+      },
+      {
+        "id": 491417,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/26/audio_10f3906133.mp3",
+        "title": "Battle - Battle Music"
+      },
+      {
+        "id": 508009,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/24/audio_28217ddfbb.mp3",
+        "title": "Epic"
+      },
+      {
+        "id": 347288,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/05/26/audio_3aa036c0b5.mp3",
+        "title": "Epic Battle Music"
+      },
+      {
+        "id": 274997,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/12/17/audio_3f8035c7bf.mp3",
+        "title": "Battle Epic"
+      }
+    ],
+    "aggressive": [
+      {
+        "id": 319923,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/03/28/audio_160a29bb6d.mp3",
+        "title": "Aggressive Fire Flow Type Hard Trap Beat (prod by onesevenbe"
+      },
+      {
+        "id": 524142,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/24/audio_c9d3e141e5.mp3",
+        "title": "Trap"
+      },
+      {
+        "id": 526146,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/28/audio_7125aa69a0.mp3",
+        "title": "Trap"
+      },
+      {
+        "id": 558263,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/27/audio_6aa8062057.mp3",
+        "title": "Trap Instrumental"
+      },
+      {
+        "id": 549469,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/22/audio_052dea1a37.mp3",
+        "title": "Trap Instrumental"
+      }
+    ]
+  },
+  "sports": {
+    "epic": [
+      {
+        "id": 111444,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/05/17/audio_407815a564.mp3",
+        "title": "Motivation Epic Rock"
+      },
+      {
+        "id": 347371,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/06/13/audio_a53f29a61d.mp3",
+        "title": "Epic Sport Sports Music"
+      },
+      {
+        "id": 129175,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/12/13/audio_af628324c2.mp3",
+        "title": "Epic Sports"
+      },
+      {
+        "id": 414107,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/10/27/audio_2001ce73e7.mp3",
+        "title": "Epic Sport Sports Music"
+      },
+      {
+        "id": 522477,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/20/audio_377d4828ae.mp3",
+        "title": "Sport"
+      }
+    ],
+    "victorious": [
+      {
+        "id": 186308,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/01/15/audio_2a9142d9ae.mp3",
+        "title": "Victory"
+      },
+      {
+        "id": 545875,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_46c3f83743.mp3",
+        "title": "Nomination Victory Winner Music"
+      },
+      {
+        "id": 478173,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/02/audio_fc5102b83d.mp3",
+        "title": "Trap Victory Winner Beat"
+      },
+      {
+        "id": 479676,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/02/05/audio_81cbded2f8.mp3",
+        "title": "Trap Victory Winner Music"
+      },
+      {
+        "id": 335679,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/05/02/audio_ce8936806f.mp3",
+        "title": "Winner - Winner Champions Victory Music"
+      }
+    ],
+    "driving": [
+      {
+        "id": 500409,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/12/audio_bea8e8877a.mp3",
+        "title": "Energetic Action Sport"
+      },
+      {
+        "id": 556468,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/07/01/audio_cd87905826.mp3",
+        "title": "Sad Rock - Sad Rock Music"
+      },
+      {
+        "id": 543109,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_1e675c78ac.mp3",
+        "title": "Driving Rock Music"
+      },
+      {
+        "id": 439500,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/11/19/audio_f1a5f3970f.mp3",
+        "title": "Driving"
+      },
+      {
+        "id": 545498,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/12/audio_76d9a4e04c.mp3",
+        "title": "Rock - Rock Music"
+      }
+    ],
+    "uplifting": [
+      {
+        "id": 472317,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/01/24/audio_268573df67.mp3",
+        "title": "Uplifting Trance"
+      },
+      {
+        "id": 274383,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/12/09/audio_216b0abd33.mp3",
+        "title": "Uplifting Rock"
+      },
+      {
+        "id": 347371,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/06/13/audio_a53f29a61d.mp3",
+        "title": "Epic Sport Sports Music"
+      },
+      {
+        "id": 179146,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/12/01/audio_0c48de74a5.mp3",
+        "title": "Kings Of The Surf (Uplifting summer sport rock)"
+      },
+      {
+        "id": 393139,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/08/29/audio_fba9035557.mp3",
+        "title": "Running Night"
+      }
+    ],
+    "cinematic_sport": [
+      {
+        "id": 493550,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/01/audio_2773a4f3e3.mp3",
+        "title": "Cinematic Sport"
+      },
+      {
+        "id": 556479,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/07/01/audio_10b72fbb75.mp3",
+        "title": "Energetic Sport - Sport Music"
+      },
+      {
+        "id": 558234,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/27/audio_2b54f94900.mp3",
+        "title": "Sport - Sport Music"
+      },
+      {
+        "id": 520387,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/16/audio_ff771cb64c.mp3",
+        "title": "Sport Hip-Hop Trap"
+      },
+      {
+        "id": 549459,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/22/audio_2581a86fb0.mp3",
+        "title": "Sport - Sport Music"
+      }
+    ],
+    "hype": [
+      {
+        "id": 519238,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/14/audio_b8038d1600.mp3",
+        "title": "Hype"
+      },
+      {
+        "id": 512827,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/08/audio_c66f36f862.mp3",
+        "title": "Hype"
+      },
+      {
+        "id": 549448,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/21/audio_5d351871d3.mp3",
+        "title": "Trap - Trap Hype Beat"
+      },
+      {
+        "id": 519206,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/21/audio_f95316d308.mp3",
+        "title": "Hype 2"
+      },
+      {
+        "id": 542570,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_68f8ba9bbe.mp3",
+        "title": "Trap - Trap Hype Beat"
+      }
+    ]
+  },
+  "movies": {
+    "cinematic": [
+      {
+        "id": 518713,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/13/audio_339e92e1e4.mp3",
+        "title": "Orchestral"
+      },
+      {
+        "id": 409347,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/09/23/audio_1b6f4de1c4.mp3",
+        "title": "Inspiring Cinematic Music"
+      },
+      {
+        "id": 507851,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/24/audio_0d4f0907cb.mp3",
+        "title": "Orchestral - Orchestral Music"
+      },
+      {
+        "id": 513668,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/10/audio_8470cb423f.mp3",
+        "title": "Total War (Epic Action Cinematic Trailer Main)"
+      },
+      {
+        "id": 550792,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/13/audio_73aac427fe.mp3",
+        "title": "Wonders of the Earth"
+      }
+    ],
+    "dramatic": [
+      {
+        "id": 545512,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/09/audio_065765a69f.mp3",
+        "title": "Horror Thriller"
+      },
+      {
+        "id": 511166,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/30/audio_cdeaf09397.mp3",
+        "title": "Thriller"
+      },
+      {
+        "id": 519906,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/21/audio_3d889f4df3.mp3",
+        "title": "Crime Thriller"
+      },
+      {
+        "id": 466249,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/01/14/audio_c1c576ebc2.mp3",
+        "title": "Thriller"
+      },
+      {
+        "id": 520374,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/16/audio_0e2663ec8c.mp3",
+        "title": "Dystopian Thriller"
+      }
+    ],
+    "trailer": [
+      {
+        "id": 356422,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/06/07/audio_21b156ae56.mp3",
+        "title": "Epic Trailer"
+      },
+      {
+        "id": 9489,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2021/10/15/audio_2320f2b0bc.mp3",
+        "title": "Epic Hollywood Trailer"
+      },
+      {
+        "id": 111444,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2022/05/17/audio_407815a564.mp3",
+        "title": "Motivation Epic Rock"
+      },
+      {
+        "id": 549433,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/10/audio_e1bce735f7.mp3",
+        "title": "Epic Trailer"
+      },
+      {
+        "id": 251476,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/10/16/audio_cd776bb3e5.mp3",
+        "title": "Epic Trailer"
+      }
+    ],
+    "epic": [
+      {
+        "id": 509664,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/27/audio_a3f5914e9d.mp3",
+        "title": "Epic"
+      },
+      {
+        "id": 512484,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/01/audio_736b6acb31.mp3",
+        "title": "Epic Action"
+      },
+      {
+        "id": 274992,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2024/12/17/audio_56c2a03ae9.mp3",
+        "title": "Epic Orchestral"
+      },
+      {
+        "id": 549436,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/10/audio_81d435367a.mp3",
+        "title": "Epic - Epical Epic Cinematic"
+      },
+      {
+        "id": 509714,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/27/audio_eceb74f5a5.mp3",
+        "title": "Epic Uplifting"
+      }
+    ],
+    "mysterious": [
+      {
+        "id": 347171,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/06/13/audio_8041ac934e.mp3",
+        "title": "Mysterious Dark Music"
+      },
+      {
+        "id": 412770,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/10/27/audio_3c97d64017.mp3",
+        "title": "Cinematic Dark Mysterious Music"
+      },
+      {
+        "id": 510496,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/29/audio_9b7af36d58.mp3",
+        "title": "Dark"
+      },
+      {
+        "id": 512360,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/01/audio_43c4885852.mp3",
+        "title": "Dark"
+      },
+      {
+        "id": 513610,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/04/09/audio_074167061c.mp3",
+        "title": "Dark"
+      }
+    ],
+    "romantic": [
+      {
+        "id": 510293,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/28/audio_3fcffb7ea4.mp3",
+        "title": "Piano Romantic"
+      },
+      {
+        "id": 512030,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/03/31/audio_f61a36c81f.mp3",
+        "title": "Romantic Piano"
+      },
+      {
+        "id": 548637,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2026/06/08/audio_7946e652ae.mp3",
+        "title": "Romantic Date Piano"
+      },
+      {
+        "id": 164822,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2023/09/03/audio_29bd9fc383.mp3",
+        "title": "Romantic Piano"
+      },
+      {
+        "id": 431010,
+        "cdn_url": "https://cdn.pixabay.com/download/audio/2025/11/04/audio_4d1bf9ad93.mp3",
+        "title": "Romantic Piano"
+      }
+    ]
+  }
+}
