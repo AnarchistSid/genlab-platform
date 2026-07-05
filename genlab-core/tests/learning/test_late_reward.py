@@ -48,6 +48,51 @@ class TestPercentileTargetsWireGap:
         )
 
 
+class TestSQLColumnIntegrity:
+    """2026-07-02: pin the two column-name bugs that had Intervention 1
+    silently no-op'ing in prod for 7+ weeks.
+
+    ``late_reward.py`` originally queried:
+
+      * ``pa.platform_post_id`` — column is called ``post_id``
+      * ``p.blueprint_id`` — column doesn't exist in pending_feedback
+
+    Every runner call errored on parse, got caught by the generic
+    exception handler with ``logger.warning``, returned None → no
+    persist → ``late_reward_deltas`` table stayed empty forever.
+
+    Source pin (fast, no DB) — protects the specific class of bug.
+    A parse-time EXPLAIN test would be more robust but requires
+    integration test infrastructure; source pin catches the exact
+    regression that would silently reintroduce the bug.
+    """
+
+    def test_sql_does_not_reference_nonexistent_columns(self):
+        src = inspect.getsource(late_reward.recompute_late_reward)
+        # The two dead references — mutating either back to the broken
+        # form silently kills Intervention 1 again.
+        assert "pa.platform_post_id" not in src, (
+            "publishing_analytics has no ``platform_post_id`` column — "
+            "use ``pa.post_id AS platform_post_id`` if you need the alias."
+        )
+        assert "p.blueprint_id" not in src, (
+            "pending_feedback has no ``blueprint_id`` column — join via "
+            "(p.platform, p.post_id) against publishing_analytics."
+        )
+
+    def test_sql_uses_working_join_shape(self):
+        src = inspect.getsource(late_reward.recompute_late_reward)
+        # Positive assertion — the working join must be present. Guards
+        # against a refactor that removes columns but doesn't add the
+        # correct join.
+        assert "p.platform = pa.platform" in src, (
+            "pending_feedback join must include ``p.platform = pa.platform``."
+        )
+        assert "p.post_id" in src, (
+            "pending_feedback join must include a ``p.post_id`` predicate."
+        )
+
+
 class TestFeatureFlag:
     def test_disabled_by_default(self, monkeypatch):
         monkeypatch.delenv("GENLAB_MULTI_WINDOW_REWARD_ENABLED", raising=False)

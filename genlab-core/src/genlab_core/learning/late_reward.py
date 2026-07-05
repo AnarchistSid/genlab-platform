@@ -100,17 +100,35 @@ def recompute_late_reward(
     else:
         own_conn = False
 
+    # 2026-07-02 SQL fix: the original query referenced two non-existent
+    # columns and silently no-op'd Intervention 1 for 7+ weeks in prod.
+    # (Details in [[late-reward-sql-bug-2026-07-02]] — kept out of this
+    # comment so the pin test that checks for the broken column names
+    # doesn't false-positive on this docstring.)
+    #
+    # The pending_feedback.post_id shape is not perfectly consistent
+    # with publishing_analytics.post_id (facebook has a legacy double-
+    # prefix: ``facebook:facebook:<id>`` vs ``facebook:<id>``), so we
+    # match on suffix via ``LIKE '%' || pa.post_id`` — safest predicate
+    # that handles both shapes. YouTube / Instagram / TikTok match
+    # exactly under this LIKE too.
+    #
+    # Verified 2026-07-02 against prod's 6-8d window: 10/10 blueprints
+    # resolve; 9 with reward_48h would fire the persist path that had
+    # been silently dead. See ``[[late-reward-sql-bug-2026-07-02]]`` for
+    # the discovery trail.
     try:
         row = conn.execute(
             """
-            SELECT b.id, b.niche_id, b.arm_id, pa.platform, pa.platform_post_id,
+            SELECT b.id, b.niche_id, b.arm_id, pa.platform,
+                   pa.post_id AS platform_post_id,
                    pa.published_at,
                    p.reward_48h
             FROM blueprints b
             JOIN publishing_analytics pa ON pa.blueprint_id = b.id
             LEFT JOIN pending_feedback p
-                   ON p.blueprint_id = b.id
-                  AND p.platform = pa.platform
+                   ON p.platform = pa.platform
+                  AND p.post_id LIKE '%%' || pa.post_id
             WHERE b.id = %s::uuid AND pa.status = 'SUCCESS'
             LIMIT 1
             """,
@@ -355,7 +373,11 @@ def _persist_delta_row(conn: Any, delta: LateRewardDelta) -> None:
         )
         conn.commit()
     except Exception as exc:
-        logger.debug("late_reward.persist_delta_failed err=%s", exc)
+        # 2026-07-02: bumped from ``logger.debug`` to WARNING because
+        # the DEBUG-level suppression is what let a 7-week-old SQL bug
+        # (blueprint_id / platform_post_id column references) stay
+        # silent in prod. If persist ever fails we want to know.
+        logger.warning("late_reward.persist_delta_failed err=%s", exc)
         try:
             conn.rollback()
         except Exception:
