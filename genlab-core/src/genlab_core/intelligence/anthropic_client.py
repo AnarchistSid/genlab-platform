@@ -26,7 +26,18 @@ logger = logging.getLogger(__name__)
 # treating them as a versioned contract surface prevents silent drift).
 STRATEGIST_MODEL = "claude-sonnet-4-6"
 MAX_OUTPUT_TOKENS = 4_000  # ~3K JSON + headroom
-DEFAULT_TIMEOUT_SEC = 60.0
+# 2026-07-07: bumped 60.0 → 180.0 after live-fire caught 60s was
+# ~10% short of the real call duration. Measured on prod with the
+# actual Strategist prompt shape: 67.02s for one niche (1724 input
+# tokens + 3323 output tokens at Sonnet 4.6 throughput). The 60s
+# limit caused every single call to time out; the Anthropic SDK's
+# built-in 3 retries then multiplied the 60s wait × 3 attempts × 2
+# our-attempts = 360s of wasted wall-time before we surfaced the
+# failure. 180s gives ~2.7× headroom over the measured p50 without
+# masking a real degradation — if a future call ever takes 180s+
+# that's a legitimate incident to investigate (prompt bloat or
+# Anthropic API slowness) rather than "just bump the timeout again".
+DEFAULT_TIMEOUT_SEC = 180.0
 
 
 @dataclass
