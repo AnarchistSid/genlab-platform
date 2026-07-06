@@ -215,13 +215,71 @@ class Strategist:
         payload["niche_id"] = niche_id
         payload["week_of"] = week_of.isoformat()
 
+        # 2026-07-07 salvage pass — drop list entries the LLM produced that
+        # violate list-item min_length constraints. Live-fire caught gaming
+        # failing schema validation on `too_short` after the anthropic
+        # timeout fix let the LLM actually return a response for the first
+        # time. Prevention beats a wasted $0.05 weekly run.
+        #
+        # PlaybookProposal.evidence_niches requires ≥2 items — filter out
+        # single-niche playbook entries. If ALL playbook entries fail,
+        # LLM effectively produced no playbook this week; the schema
+        # accepts an empty list.
+        playbook = payload.get("universal_playbook_proposals") or []
+        if isinstance(playbook, list):
+            salvaged = [
+                p
+                for p in playbook
+                if isinstance(p, dict)
+                and isinstance(p.get("evidence_niches"), list)
+                and len(p["evidence_niches"]) >= 2
+            ]
+            if len(salvaged) < len(playbook):
+                logger.warning(
+                    "strategist.salvage_playbook niche=%s dropped=%d kept=%d "
+                    "reason=evidence_niches<2",
+                    niche_id,
+                    len(playbook) - len(salvaged),
+                    len(salvaged),
+                )
+            payload["universal_playbook_proposals"] = salvaged
+
+        # CausalHypothesis.evidence requires ≥1 item — filter empty-evidence
+        # hypotheses. Same principle: don't let one under-specified entry
+        # burn the whole niche's report.
+        hypotheses = payload.get("causal_hypotheses") or []
+        if isinstance(hypotheses, list):
+            salvaged = [
+                h
+                for h in hypotheses
+                if isinstance(h, dict)
+                and isinstance(h.get("evidence"), list)
+                and len(h["evidence"]) >= 1
+            ]
+            if len(salvaged) < len(hypotheses):
+                logger.warning(
+                    "strategist.salvage_hypotheses niche=%s dropped=%d kept=%d reason=evidence<1",
+                    niche_id,
+                    len(hypotheses) - len(salvaged),
+                    len(salvaged),
+                )
+            payload["causal_hypotheses"] = salvaged
+
         try:
             return StrategistReport.model_validate(payload)
         except ValidationError as exc:
+            # Include per-error field paths so future diagnostics don't
+            # require re-running the failing call to see what was too_short.
+            # errors() gives structured detail; the whole exception message
+            # was previously truncated in journal to the first line.
+            error_details = "; ".join(
+                f"{'.'.join(str(x) for x in err.get('loc', []))}={err.get('type')}"
+                for err in exc.errors()
+            )
             logger.error(
-                "strategist.schema_validation_failed niche=%s err=%s",
+                "strategist.schema_validation_failed niche=%s errors=%s",
                 niche_id,
-                exc,
+                error_details or str(exc),
             )
             return None
 
