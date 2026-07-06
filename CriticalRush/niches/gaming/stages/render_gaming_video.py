@@ -355,6 +355,40 @@ class RenderGamingVideo(VisualRenderStrategy):
                         duration_seconds=min(clip_dur, 60),
                     )
                     render_method = "frame_compositor"
+                    # Task #466 wire (2026-07-06): run the intelligent-
+                    # transformation orchestrator on the composite.
+                    # Fail-open — returns the base composite path unchanged
+                    # if anything goes wrong.
+                    if rendered_path:
+                        try:
+                            from genlab_core.media.post_render_transform import (
+                                apply_post_render_transformations,
+                            )
+                            content = story.get("content") or {}
+                            blueprint_context = {
+                                "hook": hook,
+                                "caption_segments": content.get("caption_segments"),
+                                "title": story.get("title", ""),
+                                "summary": story.get("summary", ""),
+                            }
+                            gaming_niche_root = (
+                                Path(__file__).resolve().parents[1]
+                            )
+                            rendered_path = apply_post_render_transformations(
+                                rendered_path,
+                                niche_id="gaming",
+                                niche_root=gaming_niche_root,
+                                visuals_yaml_path=str(
+                                    gaming_niche_root / "config" / "visuals.yaml"
+                                ),
+                                blueprint_context=blueprint_context,
+                                video_duration_s=float(min(clip_dur, 60)),
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "[RENDER] post_render_transform wire raised: %s",
+                                exc,
+                            )
                     rendered_variants["vertical"] = rendered_path
                 except Exception as e:
                     logger.warning("[RENDER] FrameCompositor vertical failed: %s", e)

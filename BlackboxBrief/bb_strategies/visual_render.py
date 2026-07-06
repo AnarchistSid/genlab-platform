@@ -63,6 +63,29 @@ class BBVisualRenderStrategy(VisualRenderStrategy):
                                 duration_seconds=55,
                             )
                             if result:
+                                # Task #466 wire (2026-07-06): run the
+                                # intelligent-transformation orchestrator
+                                # on the composite. Fail-open — returns
+                                # the base composite path unchanged if
+                                # anything goes wrong.
+                                from genlab_core.media.post_render_transform import (
+                                    apply_post_render_transformations,
+                                )
+                                content = story.get("content") or {}
+                                blueprint_context = {
+                                    "hook": hook_text,
+                                    "caption_segments": content.get("caption_segments"),
+                                    "title": story.get("title", ""),
+                                    "summary": story.get("summary", ""),
+                                }
+                                result = apply_post_render_transformations(
+                                    result,
+                                    niche_id="ai_creators",
+                                    niche_root=BB_ROOT,
+                                    visuals_yaml_path=visuals_yaml,
+                                    blueprint_context=blueprint_context,
+                                    video_duration_s=55.0,
+                                )
                                 story.setdefault("media", {})["rendered_path"] = result
                                 story["media"]["render_status"] = "video_ready"
                                 story["media"]["compositor"] = "frame_compositor"

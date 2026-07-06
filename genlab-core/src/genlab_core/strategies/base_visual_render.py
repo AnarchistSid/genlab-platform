@@ -162,12 +162,56 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 dur = min(info.duration_seconds, 60) if info.duration_seconds > 0 else 55
             except Exception:
                 dur = 55
-            return compositor.compose(
+            composite_path = compositor.compose(
                 source_video_path=str(clip_path),
                 hook_text=hook_text,
                 output_path=output_path,
                 duration_seconds=dur,
             )
+            if not composite_path:
+                return ""
+
+            # Task #466 wire (2026-07-06): run the intelligent-
+            # transformation orchestrator on the composite. Fail-open —
+            # returns the base composite path unchanged if anything
+            # goes wrong (flag off, config disabled, missing assets,
+            # any error). Every subclass that inherits _compose_frame
+            # gets this for free: ClutchWire (sports), SpliceReel
+            # (movies), FrameDrift (anime — no-op today because its
+            # visuals.yaml has intelligent_transform.enabled: false).
+            try:
+                from genlab_core.media.post_render_transform import (
+                    apply_post_render_transformations,
+                )
+                niche_id = getattr(self, "_niche_id", None) or (
+                    self._log_prefix.strip().strip("[]") or ""
+                )
+                niche_root = self._visuals_yaml_path.parent.parent
+                content = story.get("content") or {}
+                blueprint_context = {
+                    "hook": hook_text,
+                    "caption_segments": content.get("caption_segments"),
+                    "title": story.get("title", ""),
+                    "summary": story.get("summary", ""),
+                }
+                composite_path = apply_post_render_transformations(
+                    composite_path,
+                    niche_id=niche_id,
+                    niche_root=niche_root,
+                    visuals_yaml_path=str(self._visuals_yaml_path),
+                    blueprint_context=blueprint_context,
+                    video_duration_s=float(dur),
+                )
+            except Exception as exc:
+                # Extra defense: apply_post_render_transformations
+                # promises no-raise, but if some import path breaks,
+                # never let it kill the base render.
+                logger.warning(
+                    "%s post_render_transform wire raised (%s) — "
+                    "returning base composite",
+                    self._log_prefix, exc,
+                )
+            return composite_path
         except Exception as e:
             logger.error("%s FrameCompositor failed: %s", self._log_prefix, e)
             # Persist the exception string onto the story so push_to_backlog
