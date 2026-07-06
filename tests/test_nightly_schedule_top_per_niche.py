@@ -101,6 +101,70 @@ def test_sql_filters_hook_length(script_module):
     assert "length(hook) BETWEEN 15 AND 100" in source
 
 
+# ── publisher-visibility pin ────────────────────────────────────────
+
+
+def test_schedule_blueprints_does_not_touch_status(script_module):
+    """LIVE-FIRE BUG 2026-07-06: setting ``status='SCHEDULED'`` made the
+    blueprints INVISIBLE to publisher (which queries VISUAL_READY only).
+    Publisher published 1 gaming reel out of 5 that Monday. The nightly
+    script must NEVER emit a ``status =`` assignment in the UPDATE."""
+    import inspect
+    import re
+    body = inspect.getsource(script_module.schedule_blueprints)
+
+    # Strip docstrings + comments before checking — status may appear
+    # in explanation text without regressing behavior.
+    # Simple approach: check for the specific SQL SET column pattern
+    # "status =" or "status=" (SQL assignment shape), not the word
+    # "status" alone.
+    sql_status_set = re.compile(
+        r"\bstatus\s*=\s*['\"]", re.IGNORECASE
+    )
+    matches = sql_status_set.findall(body)
+    # Filter out any that appear inside a docstring or comment — the
+    # inspect.getsource output preserves those. Cheap check: if the
+    # match is on a line that starts with # or is between triple-quotes,
+    # it's not a real SQL assignment. Since we can't easily parse quotes
+    # here, use a stricter constraint: only fail if the match is
+    # inside an SQL string literal ending with ", " AND followed by
+    # another SQL assignment.
+    # Simplest: assert no line in the function body outside of
+    # docstrings contains "status = '"
+    lines = body.splitlines()
+    in_docstring = False
+    live_matches = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("\"\"\"") or stripped.startswith("'''"):
+            in_docstring = not in_docstring
+            continue
+        if in_docstring:
+            continue
+        # Skip Python-level comments
+        code_part = line.split("#", 1)[0]
+        if sql_status_set.search(code_part):
+            live_matches.append(line.strip())
+    assert not live_matches, (
+        "schedule_blueprints must not set status column — publisher "
+        "queries status='VISUAL_READY' only. Setting to SCHEDULED "
+        "makes blueprint invisible to publisher (Mon 2026-07-06 bug). "
+        f"Offending line(s): {live_matches}"
+    )
+
+
+def test_schedule_blueprints_sets_action_taken_approved(script_module):
+    """The other half of the auto-approver contract: publisher's
+    approval_gate checks action_taken == 'approved'. Missing this
+    means blueprint fails the approval gate and never publishes."""
+    import inspect
+    body = inspect.getsource(script_module.schedule_blueprints)
+    assert "action_taken = 'approved'" in body, (
+        "schedule_blueprints must set action_taken='approved' — "
+        "publisher's approval_gate rejects anything else."
+    )
+
+
 # ── idempotency pin ─────────────────────────────────────────────────
 
 
