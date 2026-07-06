@@ -298,6 +298,24 @@ class BaseWritingStrategy(WritingStrategy):
             story["hook_style"] = result["hook_style"]
             content["hook_style"] = result["hook_style"]
 
+        # 2026-07-06 fix (task #531): propagate caption_segments from
+        # video_content_writer's ``result`` into ``story["content"]``.
+        # video_content_writer generates them (PR #695) but the
+        # transformation orchestrator's caption_style stage reads
+        # them from ``blueprint_context["caption_segments"]`` — which
+        # my post_render_transform wire (PR #705) populates from
+        # ``story.get("content", {}).get("caption_segments")``.
+        # Without this propagation the ``result["caption_segments"]``
+        # value silently drops on the floor here, and every render
+        # since PR #705 has been logging ``skipped=['caption_style']``
+        # for that reason (0 of 15 blueprints in the last 12h had
+        # caption_segments persisted before this fix). The three
+        # caption-related bandit dimensions (caption_style,
+        # caption_pacing, caption_emphasis_color) were therefore
+        # dormant.
+        if result.get("caption_segments"):
+            content["caption_segments"] = result["caption_segments"]
+
         # 2026-06-17 fix: when the LLM returns no `instagram_caption`,
         # fall back through facebook_content → youtube_content → hook
         # → title rather than letting IG/Threads/TikTok silently fail.
