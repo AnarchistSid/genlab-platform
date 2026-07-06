@@ -216,6 +216,46 @@ log "Restoring +x bit on shell scripts in scripts/..."
 chmod +x scripts/*.sh 2>&1 | tee -a "$LOG" || true
 
 # ----------------------------------------------------------------------------
+# Phase 5.6 — Sync .venv against uv.lock
+# ----------------------------------------------------------------------------
+# Discovered 2026-07-06: a dep-only pull (PR #711, dramatiq 2.1.0 →
+# 2.2.0) landed on prod cleanly but the running services stayed on the
+# old package because deploy.sh restarts systemd units WITHOUT first
+# refreshing /opt/genlab/.venv against the new uv.lock. Symptom:
+# `/opt/genlab/.venv/bin/python -c "import dramatiq; print(dramatiq.
+# __version__)"` returned 2.1.0 even after --apply reported success and
+# the engagement worker was restarted. Manual `uv sync --frozen`
+# followed by a second worker restart was needed to actually pick up
+# the new package.
+#
+# The root cause is subtle: `"$UV" run --package genlab-core alembic`
+# on line 247 DOES do a workspace sync — but scoped to genlab-core's
+# transient venv, not the root `/opt/genlab/.venv` that systemd
+# services use. Result: alembic migrations run against fresh packages
+# while services keep running against stale ones.
+#
+# Fix: always run `uv sync --frozen` after pull. It's a fast no-op
+# when uv.lock didn't change (uv checks package hashes and short-
+# circuits). When the lockfile DID change, it installs/updates exactly
+# what the lockfile pins — no drift, no accidental upgrades.
+#
+# --frozen refuses to update uv.lock even if pyproject.toml disagrees
+# — this catches the "someone edited pyproject on prod but forgot to
+# push" case as a hard fail rather than a silent lockfile rewrite that
+# would then get lost on the next deploy.
+LOCKFILE_CHANGED=""
+if [[ "$BEHIND_COUNT" -gt 0 ]]; then
+    LOCKFILE_CHANGED=$(git diff --name-only "$HEAD_BEFORE..$HEAD_AFTER" -- 'uv.lock' || true)
+fi
+if [[ -n "$LOCKFILE_CHANGED" ]]; then
+    log "uv.lock changed in this pull — syncing .venv against new lockfile..."
+else
+    log "uv.lock unchanged; running sync anyway (idempotent no-op)..."
+fi
+"$UV" sync --frozen 2>&1 | tee -a "$LOG" \
+    || fail "uv sync --frozen FAILED — .venv is now in an inconsistent state (may still have OLD packages while code is on NEW HEAD). Investigate: does uv.lock match pyproject.toml? Was pyproject.toml edited on prod without a matching lockfile? Run 'uv lock' locally + push before retrying."
+
+# ----------------------------------------------------------------------------
 # Phase 6 — Migrate (unless --skip-migrate)
 # ----------------------------------------------------------------------------
 if [[ "$SKIP_MIGRATE" -eq 1 ]]; then
