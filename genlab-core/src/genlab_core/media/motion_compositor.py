@@ -105,14 +105,23 @@ def build_concat_filtergraph(
     """Build the FFmpeg filter_complex string for concat with normalization.
 
     Each input's video is scaled + padded to (width, height) so mismatched
-    aspect ratios don't distort. Audio is passed through unchanged.
+    aspect ratios don't distort. Each input's AUDIO is normalized to
+    48 kHz stereo via ``aformat`` — the concat filter's ``a=1`` output
+    requires all audio inputs to share sample rate + channel layout, or
+    it fails with ``[aost#0:1/aac] error code: -22 (Invalid argument),
+    Nothing was written into output file``. Live-fire caught this on
+    2026-07-06 movies render 1 of 5 when the source clip's audio was
+    mono/44100Hz and my placeholder motion assets were stereo/48kHz.
 
     Example for n_segments=3:
         [0:v]scale=1080:1920:force_original_aspect_ratio=decrease,
         pad=1080:1920:-1:-1:color=black[v0];
         [1:v]scale=...pad...[v1];
         [2:v]scale=...pad...[v2];
-        [v0][0:a][v1][1:a][v2][2:a]concat=n=3:v=1:a=1[outv][outa]
+        [0:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];
+        [1:a]aformat=sample_rates=48000:channel_layouts=stereo[a1];
+        [2:a]aformat=sample_rates=48000:channel_layouts=stereo[a2];
+        [v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[outv][outa]
     """
     if n_segments < 1:
         raise ValueError("n_segments must be >= 1")
@@ -122,12 +131,20 @@ def build_concat_filtergraph(
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:-1:-1:color=black"
     )
+    # Video normalization
     for i in range(n_segments):
         parts.append(f"[{i}:v]{scale_expr}[v{i}]")
 
-    # Compose the concat inputs — interleaved [vN][N:a] pairs.
+    # Audio normalization — matches the outer -ar 48000 -ac 2 encode
+    # spec so concat has homogeneous inputs. Regression here reproduces
+    # the exit=-22 failure from 2026-07-06.
+    aformat_expr = "aformat=sample_rates=48000:channel_layouts=stereo"
+    for i in range(n_segments):
+        parts.append(f"[{i}:a]{aformat_expr}[a{i}]")
+
+    # Compose the concat inputs — interleaved [vN][aN] pairs.
     concat_inputs = "".join(
-        f"[v{i}][{i}:a]" for i in range(n_segments)
+        f"[v{i}][a{i}]" for i in range(n_segments)
     )
     parts.append(
         f"{concat_inputs}concat=n={n_segments}:v=1:a=1[outv][outa]"
