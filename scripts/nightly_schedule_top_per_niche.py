@@ -170,11 +170,22 @@ def pick_top_per_niche(cur, needing: set[str]) -> list[dict]:
 def schedule_blueprints(
     cur, picks: list[dict], target_slot: datetime,
 ) -> list[dict]:
-    """Set status=SCHEDULED, action_taken=approved, scheduled_for=slot on
-    each pick. Returns the mutated rows for logging.
+    """Set action_taken=approved + scheduled_for=slot on each pick,
+    LEAVING status='VISUAL_READY' untouched. Returns the mutated rows.
 
-    Emulates auto-approver's UPDATE shape so the calibration logger's
-    downstream analytics stay consistent.
+    2026-07-06 live-fire fix: publisher's ``blueprint_selector.
+    select_blueprint`` calls ``get_blueprints_by_status('VISUAL_READY',
+    niche_id=...)``. Setting ``status='SCHEDULED'`` here made the
+    resulting blueprints INVISIBLE to publisher — Mon's 12:05 IST
+    fire published only 1 gaming blueprint (dashboard-approved,
+    VISUAL_READY) while the 5 blueprints I'd SQL-scheduled overnight
+    with status='SCHEDULED' were skipped entirely.
+
+    The correct shape mirrors the auto-approver's UPDATE
+    (see genlab_core.scheduling.auto_approver): only touch
+    action_taken + reviewed_at + scheduled_for. Status remains
+    VISUAL_READY until publisher advances it to PUBLISHED (or the
+    approval gate rejects and it's demoted elsewhere).
     """
     if not picks:
         return []
@@ -182,8 +193,7 @@ def schedule_blueprints(
     cur.execute(
         """
         UPDATE blueprints
-        SET status = 'SCHEDULED',
-            action_taken = 'approved',
+        SET action_taken = 'approved',
             reviewed_at = now(),
             scheduled_for = %s,
             updated_at = now()
