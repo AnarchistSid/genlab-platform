@@ -16,7 +16,13 @@ Environment=HOME=/opt/genlab
 Environment=UV_FROZEN=1
 # Strategist calls the LLM at most once per niche per week, so a
 # generous timeout is fine — it's not going to hog resources.
-TimeoutStartSec=15min
+# 2026-07-07 bump: 15min was insufficient at 5-niche prod runtime.
+# Real-world runtime measured 00:01→00:16 UTC processing ai_creators
+# + gaming, timeout hit during movies. Each niche takes ~5-10 min
+# with Anthropic API retries (small backoff windows suggest transient
+# API pressure, not hard failure). 45min budget = ~9min per niche
+# with headroom for one bad retry cycle.
+TimeoutStartSec=45min
 # File-path invocation — see sibling ``genlab-late-reward.service``
 # for the same fix. ``scripts/`` is not a Python package (no
 # ``__init__.py``), so ``-m scripts.run_strategist`` fails at import
