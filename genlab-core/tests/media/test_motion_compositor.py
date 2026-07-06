@@ -51,9 +51,44 @@ class TestFiltergraph:
         for i in range(3):
             assert f"[{i}:v]" in fg
             assert f"[v{i}]" in fg
-        # Concat inputs interleave [vN][N:a] pairs
-        assert "[v0][0:a][v1][1:a][v2][2:a]" in fg
+        # Concat inputs interleave normalized-video + normalized-audio
+        # per-segment: [vN][aN]. The [aN] labels come from the aformat
+        # audio-normalization stage (added 2026-07-06 to fix the concat
+        # filter's exit=-22 when sample-rates or channel-layouts differ
+        # across inputs).
+        assert "[v0][a0][v1][a1][v2][a2]" in fg
         assert "concat=n=3:v=1:a=1[outv][outa]" in fg
+
+    def test_three_segment_normalizes_audio_before_concat(self) -> None:
+        """LIVE-FIRE BUG 2026-07-06: concat filter fails with
+        ``[aost#0:1/aac] error code: -22 (Invalid argument)`` when
+        inputs have mismatched audio sample rates or channel layouts.
+        Fix: aformat each audio stream to 48kHz stereo BEFORE concat.
+        Regression = movies pipeline fails 1-in-5 intro/outro renders
+        with 0-byte outputs."""
+        fg = build_concat_filtergraph(3, 1080, 1920)
+        for i in range(3):
+            # Each input's audio must be aformat-normalized to a
+            # labeled [aN] stream before it enters the concat.
+            assert f"[{i}:a]aformat=" in fg, (
+                f"input {i} audio missing aformat normalization"
+            )
+            assert f"[a{i}]" in fg, (
+                f"input {i} aformat output label [a{i}] missing"
+            )
+        # The specific normalization params must match the outer
+        # -ar 48000 -ac 2 encode spec — otherwise concat still fails.
+        assert "sample_rates=48000" in fg
+        assert "channel_layouts=stereo" in fg
+
+
+    def test_single_segment_also_normalizes_audio(self) -> None:
+        """Even n=1 (no intro/outro, just source) needs the aformat
+        pass — the concat filter still runs, and if the source's audio
+        differs from the outer encode spec the output is silent."""
+        fg = build_concat_filtergraph(1, 1080, 1920)
+        assert "[0:a]aformat=" in fg
+        assert "[a0]" in fg
 
     def test_scale_preserves_aspect(self) -> None:
         """Filter uses force_original_aspect_ratio=decrease + pad —
