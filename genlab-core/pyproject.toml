@@ -32,7 +32,11 @@ tts-gtts = ["gtts>=2.0"]
 http = ["httpx>=0.27"]
 publishing = ["httpx>=0.27"]
 engagement = [
-    "dramatiq[redis]>=2.0",
+    # 2026-07-06 bump to 2.2.0: fixes upstream issue #850 "messages could get
+    # stuck in Worker's in-memory prefetch queue for indefinite amount of
+    # time" — surfaces as `IndexError: pop from empty list` in
+    # `brokers/redis.py:342` at ~108 fires/24h on our prod. See task #537.
+    "dramatiq[redis]>=2.2.0",
     "redis>=5.0",
     "detoxify>=0.5.1",
     # 2026-06-29: declare torch as a DIRECT dep so the workspace-root
