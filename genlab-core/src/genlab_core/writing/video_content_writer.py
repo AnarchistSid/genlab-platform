@@ -33,6 +33,46 @@ _SENTENCE_CASE_FIELDS = (
 )
 
 
+# Prefixes that indicate the LLM refused the task and returned its
+# preamble as the answer. Two forms observed in prod (2026-07-05):
+#
+#   anime      "I need to stop here and flag a critical issue. The..."
+#   ai_creators "I need the Story title and Summary to write a hook for."
+#
+# Also covered: Anthropic's classic safety refusals ("I cannot", "I can't
+# help", "I'm sorry", "I apologize", "I am unable") and context-request
+# preambles ("I need the", "I don't have enough").
+#
+# Matched case-insensitively as PREFIXES only — a legitimate hook that
+# happens to contain the phrase mid-sentence ("...why I cannot stop
+# thinking about it") is not a refusal. Task #526 pin covers this.
+_LLM_REFUSAL_PREFIXES: tuple[str, ...] = (
+    "i need to stop",
+    "i need the",
+    "i don't have enough",
+    "i cannot",
+    "i can't help",
+    "i can't provide",
+    "i can't write",
+    "i am unable",
+    "i'm sorry",
+    "i apologize",
+)
+
+
+def _is_llm_refusal(text: str) -> bool:
+    """True if ``text`` starts with a known LLM-refusal preamble.
+
+    See :data:`_LLM_REFUSAL_PREFIXES`. Called from ``write_video_content``
+    (hook validation) and downstream anywhere hook-shaped text needs a
+    trust check.
+    """
+    if not text or not isinstance(text, str):
+        return False
+    lowered = text.strip().lower()
+    return any(lowered.startswith(prefix) for prefix in _LLM_REFUSAL_PREFIXES)
+
+
 def _apply_sentence_case(content: dict[str, Any]) -> None:
     """In-place sentence-case the shipped text fields of a content dict (R-50)."""
     from genlab_core.writing.text_case import to_sentence_case
@@ -513,6 +553,23 @@ def write_video_content(
                 "[%s] Rejected banned hook (pattern): %s",
                 niche_id,
                 hook[:60],
+            )
+            content["hook"] = ""
+        elif _is_llm_refusal(hook):
+            # Task #526 (2026-07-06): Claude occasionally refuses to
+            # write a hook (safety-triggered, missing context, or
+            # empty story) and returns its preamble as if it were the
+            # hook. Persisting that ships "I need to stop here and
+            # flag a critical issue..." as the reel's on-screen
+            # opener — a 100% funnel leak. Reject at generation time
+            # so downstream stages skip the story rather than render
+            # a broken reel. Mirrors the filter shipped in PR #702
+            # (nightly_schedule_top_per_niche.py) that catches
+            # already-persisted refusals; this is the upstream fix.
+            logger.warning(
+                "[%s] Rejected LLM-refusal hook: %s",
+                niche_id,
+                hook[:80],
             )
             content["hook"] = ""
 
