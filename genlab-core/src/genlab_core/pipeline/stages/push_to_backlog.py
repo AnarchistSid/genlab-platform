@@ -94,9 +94,39 @@ _ARM_KEYWORDS: dict[str, list[tuple[str, list[str]]]] = {
 
 
 def _is_blocking(row: dict) -> bool:
-    """True if an existing blueprint row should block re-creation of the same content."""
+    """True if an existing blueprint row should block re-creation of the same content.
+
+    Two independent gates make a blueprint blocking:
+
+    1. ``status`` in ``_BLOCKING_STATUSES`` (``LIVE_OR_PENDING``) — the
+       original semantics: live, publishing, visual_ready, drafted, or
+       scored.
+
+    2. **Committed to publish**: ``action_taken == 'approved'`` AND
+       ``scheduled_for`` is populated. This catches the case where the
+       operator (via dashboard) or the auto-approver has committed the
+       blueprint to a future publish slot, but its status hasn't yet
+       migrated into ``_BLOCKING_STATUSES`` (some code paths set the
+       status to ``SCHEDULED`` or leave it at ``VISUAL_READY`` while
+       populating ``scheduled_for`` — either way, reviving the row
+       would silently drop the approval AND the schedule slot).
+
+    Rule 2 was added 2026-07-06 after a live-fire watch caught the
+    07:00 IST ai_creators pipeline demoting a Mon 12:05 IST publisher-
+    fire commitment from SCHEDULED → VISUAL_READY, clearing
+    ``action_taken='approved'``. Without a fresh manual reschedule the
+    channel would have published nothing that day. See task #525 +
+    ``cleanup_safety.md`` "Scheduled Posts Are Sacred".
+    """
     fields = row.get("fields", row)
-    return fields.get("status", "") in _BLOCKING_STATUSES
+    if fields.get("status", "") in _BLOCKING_STATUSES:
+        return True
+    # Committed-to-publish gate: an operator (or the auto-approver in
+    # enforce mode) has already promised this blueprint a publish slot.
+    # Reviving would break the promise silently.
+    if fields.get("action_taken") == "approved" and fields.get("scheduled_for"):
+        return True
+    return False
 
 
 _TOPIC_MAP = {
