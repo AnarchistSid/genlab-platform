@@ -169,10 +169,19 @@ ROLLBACK;
 SQL
 )
 
-RESTORE_COUNT=$(echo "$RESTORE_COUNT" | tail -n1 | tr -d ' ')
+# 2026-07-06 fix: psql emits multiple status lines (BEGIN, CREATE TABLE,
+# COPY N, <count>, ROLLBACK). The old ``tail -n1 | tr -d ' '`` grabbed
+# "ROLLBACK". Then ``[[ "$RESTORE_COUNT" -le 0 ]]`` inside a set -u
+# script triggered bash's arithmetic evaluation of the operand, which
+# treats the bare identifier ROLLBACK as a variable reference —
+# "ROLLBACK: unbound variable" and the whole restore validation exits
+# 1. Filter to the first line that is PURELY numeric (the SELECT count
+# result), fall back to 0 if none. Then the numeric compare is safe.
+RESTORE_COUNT=$(echo "$RESTORE_COUNT" | grep -oE '^[0-9]+$' | head -n1)
+RESTORE_COUNT="${RESTORE_COUNT:-0}"
 echo "[backup-test] loaded $RESTORE_COUNT rows into TEMP table (rolled back)"
 
-if [[ -z "$RESTORE_COUNT" || "$RESTORE_COUNT" -le 0 ]]; then
+if [[ "$RESTORE_COUNT" -le 0 ]]; then
     echo "[backup-test] ERROR: TEMP-table load returned 0 rows" >&2
     exit 1
 fi
