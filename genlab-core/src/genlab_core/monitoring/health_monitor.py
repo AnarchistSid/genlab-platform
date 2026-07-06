@@ -601,6 +601,15 @@ def check_missing_media(niche_id: str) -> list[Alert]:
         rows = cur.fetchall()
         broken = []
         scheduled_broken = []  # R-79: scheduled posts are sacred — never auto-archive
+        past_due_broken = []  # 2026-07-06: scheduled_for > 24h in the past AND
+        # media missing = stuck-broken with no publish window left. Surface as
+        # a distinct warning alert (not the CRITICAL missing_media_scheduled
+        # noise) so operator visibility is retained without duplicate CRITICAL
+        # fires on state that hasn't changed for days. Data is still not
+        # touched — R-79 still applies; this only refines the ALERT taxonomy.
+        # See task #535 + session-2026-07-06-evening-3-flag-activations.
+        now_utc = datetime.now(UTC)
+        past_due_cutoff = now_utc - timedelta(hours=24)
         total_with_paths = 0
         for bp_id, _title, vp, scheduled_for in rows:
             is_broken = False
@@ -617,7 +626,20 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             if is_broken:
                 broken.append(bp_id)
                 if scheduled_for:
-                    scheduled_broken.append(bp_id)
+                    # Bucket by whether the publish window is still live.
+                    # Compare tz-aware; scheduled_for is timestamptz. Handle
+                    # string form for MagicMock-driven tests that pass ISO
+                    # strings instead of real datetimes.
+                    sf = scheduled_for
+                    if isinstance(sf, str):
+                        try:
+                            sf = datetime.fromisoformat(sf.replace("Z", "+00:00"))
+                        except ValueError:
+                            sf = None
+                    if sf is not None and sf < past_due_cutoff:
+                        past_due_broken.append(bp_id)
+                    else:
+                        scheduled_broken.append(bp_id)
 
         # SAFETY GATE 1: bail out on mass-failure patterns that look like a mount
         # issue rather than genuine per-row media loss. Two patterns trigger:
@@ -668,8 +690,12 @@ def check_missing_media(niche_id: str) -> list[Alert]:
             # R-79: NEVER auto-archive a scheduled post (cleanup_safety.md).
             # Archive only unscheduled broken blueprints; surface scheduled-broken
             # ones as an alert so an operator can fix them without losing the slot.
-            _scheduled = set(scheduled_broken)
-            unscheduled_broken = [b for b in broken if b not in _scheduled]
+            # Past-due scheduled posts are also protected — they get a distinct
+            # WARNING alert (see below) but data is NEVER touched. R-79 applies
+            # to ALL blueprints with a scheduled_for timestamp, regardless of
+            # whether the window is future or past.
+            _protected = set(scheduled_broken) | set(past_due_broken)
+            unscheduled_broken = [b for b in broken if b not in _protected]
             if unscheduled_broken:
                 cur.execute(
                     "UPDATE blueprints SET status = 'ARCHIVED', "
@@ -698,6 +724,24 @@ def check_missing_media(niche_id: str) -> list[Alert]:
                         ),
                         niche_id=niche_id,
                         details={"blueprint_ids": scheduled_broken},
+                    )
+                )
+            if past_due_broken:
+                # Distinct WARNING alert for scheduled-broken blueprints whose
+                # publish window has already closed (>24h in the past). These
+                # can't publish anyway; separating them out prevents CRITICAL
+                # alert noise on stuck state that hasn't changed for days.
+                # R-79 still applies: NO data touched.
+                alerts.append(
+                    Alert(
+                        check="missing_media_past_due",
+                        severity="warning",
+                        message=(
+                            f"{len(past_due_broken)} past-due scheduled blueprints have missing "
+                            "media — publish window closed >24h ago; safe to manually archive"
+                        ),
+                        niche_id=niche_id,
+                        details={"blueprint_ids": past_due_broken},
                     )
                 )
         conn.close()
