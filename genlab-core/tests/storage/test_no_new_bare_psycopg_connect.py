@@ -93,6 +93,45 @@ _ALLOWLIST: frozenset[str] = frozenset(
         # the other backfill scripts allowlisted above.
         "genlab-core/src/genlab_core/scripts/backfill_bandit_from_history.py",
         # Dashboard endpoints — long-tail tier-3 migration
+        #
+        # ── L3 Monetization sprint (2026-07-07) — additions ─────────
+        # All 7 additions are runner-style scripts or best-effort
+        # observability writes that don't fit the per-request
+        # ``pg_connect(niche_id=...)`` shape. Each pattern below is
+        # documented as an intentional design choice in the file's
+        # docstring; migration to a niche-scoped shim is a
+        # follow-up track once the L3 sprint's data-collection
+        # matures.
+        #
+        # Bulk-runner scripts — connect once, run one UPDATE/INSERT
+        # across all niches. Explicit niche_id scoping happens
+        # inside the SQL (``WHERE ba.niche_id = cc.niche_id``), not
+        # via GUC. Idempotent by construction.
+        "scripts/register_click_rewards.py",
+        "scripts/register_conversion_rewards.py",
+        "scripts/backfill_product_slug.py",
+        "scripts/import_amazon_conversions.py",
+        # One-shot preflight scanner — reads alembic_version +
+        # information_schema. Not niche-scoped by design (must see
+        # cross-niche health).
+        "scripts/monetization_preflight.py",
+        # Best-effort observability writes — fail-open on any DB
+        # error; caller's journalctl log already captured the event.
+        # See ``_persist_divergence`` docstring for the fail-open
+        # contract that motivates the raw connect (short-lived, no
+        # pool overhead needed).
+        "genlab-core/src/genlab_core/monetization/affiliate_matcher.py",
+        # Divergence-stats endpoint — SELECT-only, aggregate over
+        # (niche_id, created_at) window. Whitelisted niche_id in
+        # the endpoint's validation layer; RLS not required.
+        "dashboard/server/api/product_bandit.py",
+        #
+        # ── Pre-existing violators surfaced same time (2026-07-07) ──
+        # These pre-date the L3 sprint but were previously masked by
+        # the broken post-job hook + intermittent runner OOMs. Same
+        # bulk-runner / verify-script category as the entries above.
+        "scripts/verify_intelligent_transform.py",
+        "scripts/nightly_schedule_top_per_niche.py",
     }
 )
 

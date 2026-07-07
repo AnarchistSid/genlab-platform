@@ -284,9 +284,16 @@ def _persist_divergence(
         if not matcher_slug or not selector_slug:
             return
 
-        import psycopg
+        # 2026-07-07 (test_migrated_site_no_bare_psycopg_connect_call):
+        # affiliate_matcher.py is a _MIGRATED_SITE — bare psycopg.connect
+        # is banned here. Use pg_connect + explicit niche_id so the
+        # RLS policy on selector_divergences sees the correct tenant
+        # for the INSERT (though there's no per-niche RLS filter today,
+        # the discipline scales to Phase-2 multi-tenant without a
+        # re-migration).
+        from genlab_core.storage.tenant_context import pg_connect
 
-        with psycopg.connect(dsn, connect_timeout=5) as conn:
+        with pg_connect(dsn, niche_id=niche_id, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """

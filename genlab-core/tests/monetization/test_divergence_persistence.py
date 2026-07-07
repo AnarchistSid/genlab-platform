@@ -50,7 +50,7 @@ class TestPersistDivergence:
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = mock_conn
 
-        with patch("psycopg.connect", return_value=mock_ctx):
+        with patch("genlab_core.storage.tenant_context.pg_connect", return_value=mock_ctx):
             _persist_divergence(
                 niche_id="gaming",
                 matcher_name="PS5 Console",
@@ -79,7 +79,7 @@ class TestPersistDivergence:
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = mock_conn
 
-        with patch("psycopg.connect", return_value=mock_ctx):
+        with patch("genlab_core.storage.tenant_context.pg_connect", return_value=mock_ctx):
             _persist_divergence(
                 niche_id="gaming",
                 matcher_name="",
@@ -101,7 +101,7 @@ class TestPersistDivergence:
         from genlab_core.monetization.affiliate_matcher import _persist_divergence
 
         with patch(
-            "psycopg.connect",
+            "genlab_core.storage.tenant_context.pg_connect",
             side_effect=RuntimeError("db unreachable"),
         ):
             # Must not raise
@@ -125,7 +125,7 @@ class TestPersistDivergence:
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = mock_conn
 
-        with patch("psycopg.connect", return_value=mock_ctx):
+        with patch("genlab_core.storage.tenant_context.pg_connect", return_value=mock_ctx):
             _persist_divergence(
                 niche_id="gaming",
                 matcher_name="PS5 Console",

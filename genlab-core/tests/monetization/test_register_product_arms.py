@@ -288,6 +288,12 @@ class TestRealCatalogSmoke:
         catalog_path = _REPO_ROOT / "genlab-core" / "config" / "affiliate_catalog.yaml"
         seasonal_path = _REPO_ROOT / "genlab-core" / "config" / "affiliate_seasonal.yaml"
 
+        # 2026-07-07 hardening: affiliate_catalog.yaml is ALSO gitignored
+        # (see L3 PR 14 memory + `.gitignore:135`). Not seeded on fresh
+        # runner checkouts. Skip gracefully rather than fail — same
+        # discipline as ``test_catalog_structural_invariants.py`` fixture.
+        if not catalog_path.is_file():
+            pytest.skip(f"catalog not present at {catalog_path} — gitignored operator config")
         # affiliate_seasonal.yaml is gitignored — treat as empty if missing.
         catalog = yaml.safe_load(catalog_path.read_text())
         seasonal_text = seasonal_path.read_text() if seasonal_path.is_file() else "events: []"
