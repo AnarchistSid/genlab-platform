@@ -811,6 +811,7 @@ from server.api.sponsorship_readiness import bp as sponsorship_bp
 from server.api.stories import bp as stories_bp
 from server.api.strategist import bp as strategist_bp
 from server.api.token_health import bp as token_health_bp
+from server.api.top_creator_priors import bp as top_creator_priors_bp
 from server.api.transformation_bandit import bp as transformation_bandit_bp
 from server.api.trend_anticipation import bp as trend_anticipation_bp
 from server.api.trends import bp as trends_bp
@@ -856,6 +857,9 @@ app.register_blueprint(
 app.register_blueprint(
     product_bandit_bp
 )  # L3 PR 9 (2026-07-07): /api/v1/product-bandit/summary — monetization Layer 3 sprint observability
+app.register_blueprint(
+    top_creator_priors_bp
+)  # B.2 + B.3 (2026-07-08): /api/v1/top-creator-priors/{latest,uploads} — A+B intelligence stack observability
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
