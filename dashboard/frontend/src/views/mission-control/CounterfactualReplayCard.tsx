@@ -68,7 +68,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">Loading…</span>
       </div>
@@ -79,7 +79,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">
           No replay yet — monthly runner may not have fired
@@ -109,7 +109,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     <div className="flex items-center justify-between gap-2 border-b border-border/40 py-2 text-sm">
       <div className="flex items-center gap-2">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         {drBadge}
         <span className="text-xs text-text-muted">

@@ -125,7 +125,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">Loading…</span>
       </div>
@@ -136,7 +136,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">
           No ranking today — runner may not have fired yet
@@ -157,7 +157,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
             className="font-semibold"
             style={{ color: info.color }}
           >
-            {info.short}
+            {info.shortLabel}
           </span>
           <SignalStrip signals={top.signals} />
           <span className="truncate" title={top.topic}>

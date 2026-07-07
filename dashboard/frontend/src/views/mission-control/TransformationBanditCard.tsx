@@ -96,9 +96,9 @@ function NicheRow({
       <span
         className="text-xs font-semibold"
         style={{ color: info.color }}
-        title={info.short}
+        title={info.shortLabel}
       >
-        {info.short}
+        {info.shortLabel}
       </span>
       {DIMENSION_ORDER.map((dim) => (
         <DimensionCell key={dim} arms={summary?.[dim]} />

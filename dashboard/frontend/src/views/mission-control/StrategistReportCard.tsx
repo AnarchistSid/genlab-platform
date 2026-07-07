@@ -145,7 +145,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
         rejected_proposal_indices: Array.from(rejectedIdxs).sort(),
       }),
     onSuccess: () => {
-      toast.success(`Strategist review recorded for ${info.short}`);
+      toast.success(`Strategist review recorded for ${info.shortLabel}`);
       setReviewOpen(false);
       setAcceptedIdxs(new Set());
       setRejectedIdxs(new Set());
@@ -198,7 +198,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">Loading…</span>
       </div>
@@ -209,7 +209,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
     return (
       <div className="flex items-center justify-between border-b border-border/40 py-2 text-sm">
         <span className="font-semibold" style={{ color: info.color }}>
-          {info.short}
+          {info.shortLabel}
         </span>
         <span className="text-xs text-text-muted">
           No Strategist report yet — first run pending
@@ -224,7 +224,7 @@ function NicheRow({ nicheId }: { nicheId: NicheId }) {
       <div className="flex items-center justify-between gap-2 text-sm">
         <div className="flex flex-1 items-center gap-2">
           <span className="font-semibold" style={{ color: info.color }}>
-            {info.short}
+            {info.shortLabel}
           </span>
           <span
             className={`rounded border px-1.5 py-0.5 text-xs font-medium ${
