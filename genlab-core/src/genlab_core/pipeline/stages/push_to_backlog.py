@@ -333,7 +333,26 @@ def _derive_render_failure_reason(story: dict, clip_index: dict | None, story_id
     # 1. Validation failure — most precise; explicit ``valid: False``
     validation = media.get("video_validation") or {}
     if validation.get("valid") is False:
-        reason = validation.get("reason", "unknown")
+        # 2026-07-07 diagnostic fix — validate_videos.py writes an
+        # ``issues`` list (e.g. ["too_short:13.1s", "colorspace_mismatch"])
+        # and/or an ``error`` string ("probe_failed", "exception"), but
+        # previously this helper only looked at ``reason`` (never set),
+        # so every failure got logged as ``render:validation_failed:
+        # unknown``. Live-fire on 2026-07-07 found 100% of gaming
+        # DRAFTED blueprints stuck with unknown reasons for days.
+        # Prefer ``issues`` (list), fall back to ``error`` (string),
+        # final fallback to ``reason`` (legacy) or literal "unknown".
+        issues = validation.get("issues") or []
+        error_key = validation.get("error", "")
+        legacy = validation.get("reason", "")
+        if issues:
+            reason = ",".join(str(x) for x in issues)
+        elif error_key:
+            reason = error_key
+        elif legacy:
+            reason = legacy
+        else:
+            reason = "unknown"
         return f"render:validation_failed:{reason}"[:500]
 
     # 2. Compositor failure — ``_compose_frame`` caught an exception and

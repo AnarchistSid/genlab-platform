@@ -35,12 +35,45 @@ Related
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _probe_duration_seconds(video_path: Path) -> float | None:
+    """Return the duration of ``video_path`` in seconds via ffprobe, or None on
+    any failure. Used by the min-duration guard below.
+
+    Kept local to this module (vs importing ValidateVideos._probe) so this
+    guard doesn't drag validate_videos.py + its VMAF machinery into every
+    render pipeline invocation. The 2-line ffprobe call is cheap.
+    """
+    if not video_path.is_file():
+        return None
+    try:
+        raw = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(video_path),
+            ],
+            timeout=15,
+        )
+        data = json.loads(raw)
+        dur = data.get("format", {}).get("duration")
+        return float(dur) if dur is not None else None
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, KeyError):
+        return None
 
 
 def apply_post_render_transformations(
@@ -84,8 +117,7 @@ def apply_post_render_transformations(
     # Env kill-switch: if the flag isn't "1", short-circuit.
     if os.environ.get("GENLAB_INTELLIGENT_TRANSFORM_ENABLED") != "1":
         logger.debug(
-            "[%s] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off — "
-            "post_render_transform skipping",
+            "[%s] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off — post_render_transform skipping",
             niche_id,
         )
         return rendered_path
@@ -103,9 +135,9 @@ def apply_post_render_transformations(
         )
     except Exception as exc:  # pragma: no cover — dep import failure
         logger.warning(
-            "[%s] post_render_transform dep import failed (%s) — "
-            "returning base composite",
-            niche_id, exc,
+            "[%s] post_render_transform dep import failed (%s) — returning base composite",
+            niche_id,
+            exc,
         )
         return rendered_path
 
@@ -116,7 +148,8 @@ def apply_post_render_transformations(
     except Exception as exc:
         logger.warning(
             "[%s] visuals.yaml parse failed (%s) — returning base composite",
-            niche_id, exc,
+            niche_id,
+            exc,
         )
         return rendered_path
 
@@ -149,26 +182,68 @@ def apply_post_render_transformations(
         # raise, but defense in depth.
         logger.warning(
             "[%s] apply_transformations raised (%s) — returning base composite",
-            niche_id, exc,
+            niche_id,
+            exc,
         )
         return rendered_path
 
     # Any stages actually applied? Verify the file exists + has bytes.
     if transformed.is_file() and transformed.stat().st_size > 0:
+        # 2026-07-07 min-duration guard — live-fire caught the
+        # transformation orchestrator producing 13.056s output on
+        # 28s source clips because HighlightMomentConfig.window_seconds
+        # defaults to 8 and intro/outro concat adds only ~3s each.
+        # ValidateVideos then rejects with ``too_short:13.1s`` (SPEC.
+        # min_duration=15.0). Every render since transformation
+        # activated 2026-07-06 hit this — 4 gaming + 4 anime + 7
+        # movies + 4 sports + 4 ai_creators DRAFTED as of catch time.
+        #
+        # Rather than risk transformation degrading the reel below
+        # spec, fall back to the untransformed composite whenever the
+        # transformed output would fail publish. The base composite
+        # is known-good (source-clip duration untouched); the
+        # transformation is only a value-add — never worth failing
+        # publish for.
+        _SPEC_MIN_DURATION_S = 15.0
+        try:
+            probe_dur = _probe_duration_seconds(transformed)
+        except Exception as exc:  # noqa: BLE001 — fail-open to base
+            logger.warning(
+                "[%s] transformed-duration probe failed (%s) — returning base composite",
+                niche_id,
+                exc,
+            )
+            return rendered_path
+        if probe_dur is not None and probe_dur < _SPEC_MIN_DURATION_S:
+            logger.warning(
+                "[%s] transformed output %.2fs < SPEC.min_duration %.1fs "
+                "— returning base composite (stages_applied=%s). Check "
+                "HighlightMomentConfig.window_seconds vs intro+outro "
+                "concat overhead.",
+                niche_id,
+                probe_dur,
+                _SPEC_MIN_DURATION_S,
+                list(result.stages_applied),
+            )
+            # Leave the base composite untouched at ``rendered``.
+            # The transformed side-file will get cleaned by disk_cleanup.
+            return rendered_path
+
         # Replace the composite in-place so downstream sees the
         # transformed reel at the same path.
         try:
             transformed.replace(rendered)
         except Exception as exc:
             logger.warning(
-                "[%s] transformed-file rename failed (%s) — returning "
-                "transformed side-file",
-                niche_id, exc,
+                "[%s] transformed-file rename failed (%s) — returning transformed side-file",
+                niche_id,
+                exc,
             )
             return str(transformed)
         logger.info(
             "[%s] Intelligent transformation applied: stages=%s",
-            niche_id, list(result.stages_applied),
+            niche_id,
+            list(result.stages_applied),
         )
         return rendered_path  # same path, now overwritten with transformed bytes
 
