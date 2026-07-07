@@ -162,6 +162,80 @@ def _keyword_hits(
 _DEFAULT_MAX_PRICE_INR = 2500  # Impulse-buy threshold for short-form video viewers
 
 
+def _log_selector_divergence(
+    *,
+    niche_id: str,
+    matcher_pick: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> None:
+    """Log the ProductSelector's top pick alongside the keyword matcher's.
+
+    L3 PR 5 (2026-07-07): observation-only wire. When the selector is
+    enabled AND registered arms exist, we score the same candidate set
+    the keyword matcher chose from. If the bandit's top pick differs
+    from the matcher's, that divergence is what a future PR will use
+    to decide whether to flip enforcement per niche.
+
+    Fail-open at every layer:
+    * Selector disabled → immediate return (no cost to production path).
+    * Selector raises → caught, logged at DEBUG, matcher continues.
+    * Empty candidate list → immediate return (nothing to rank).
+
+    The matcher's return value is NOT affected. This function is purely
+    a side-channel observability wire.
+
+    Observability contract:
+    * INFO log ``[AffiliateMatch] selector agreed`` when matcher &
+      selector converge — useful for computing agreement rate.
+    * INFO log ``[AffiliateMatch] selector DIVERGES`` when they differ
+      — includes both picks + their scores for offline analysis.
+    """
+    try:
+        from genlab_core.monetization.product_selector import (
+            is_enabled,
+            select_products,
+        )
+
+        if not is_enabled():
+            return
+        if not candidates:
+            return
+
+        ranked = select_products(niche_id, candidates, top_k=1)
+        if not ranked:
+            # Selector returned empty — no registered arms or all
+            # slugs empty. Not a divergence signal, just cold-start.
+            return
+
+        selector_pick, selector_score = ranked[0]
+        matcher_name = matcher_pick.get("name", "")
+        selector_name = selector_pick.get("name", "")
+
+        if matcher_name == selector_name:
+            logger.info(
+                "[AffiliateMatch] selector agreed: %s (niche=%s, score=%.3f)",
+                matcher_name,
+                niche_id,
+                selector_score,
+            )
+        else:
+            logger.info(
+                "[AffiliateMatch] selector DIVERGES: matcher=%s selector=%s "
+                "(niche=%s, selector_score=%.3f, matcher pick will be used — "
+                "observation-only mode)",
+                matcher_name,
+                selector_name,
+                niche_id,
+                selector_score,
+            )
+    except Exception as exc:  # noqa: BLE001 — never let observability
+        # break the production matcher path
+        logger.debug(
+            "[AffiliateMatch] selector divergence check failed: %s (matcher path unaffected)",
+            exc,
+        )
+
+
 def _price_filter(products: list, max_price_inr: int = _DEFAULT_MAX_PRICE_INR) -> list:
     """Filter products to those at or below the max price.
 
@@ -267,9 +341,18 @@ def match_product(
             niche_max_price,
         )
 
+    # L3 PR 5 (2026-07-07): collect ALL candidates with >= 1 hit for
+    # optional bandit reranking. Prior loop only tracked the top-hits
+    # product; we now also carry the runners-up so the ProductSelector
+    # can rerank by (posterior × value) when the flag is on. Falls
+    # through to prior behaviour when the flag is off.
+    keyword_candidates: list[dict[str, Any]] = []
+
     for product in niche_products:
         keywords = product.get("keywords") or []
         hits, matched_kws = _keyword_hits(keywords, text_lower, return_matched=True)
+        if hits > 0:
+            keyword_candidates.append(product)
         if hits > best_hits:
             best_hits = hits
             best_product = product
@@ -287,6 +370,27 @@ def match_product(
     _STATIC_MIN_HITS = 2
 
     if best_product is not None and best_hits >= _STATIC_MIN_HITS:
+        # L3 PR 5: bandit-driven rerank, observation-only by default.
+        #
+        # Rerank layer: consider only the candidates that passed the
+        # keyword threshold (best_hits >= _STATIC_MIN_HITS AND ties on
+        # a comparable hit count — currently we pass all >= 1-hit
+        # candidates and let the bandit score them). The selector is
+        # flag-gated + fail-open, so this call collapses to a no-op
+        # when disabled or when no arms are registered yet.
+        #
+        # Observation-only: even when the selector picks a different
+        # product than the matcher, we RETURN the matcher's pick and
+        # only LOG the divergence. A future PR (L3 PR 12) will flip
+        # the enforce flag per-niche after operator validation of the
+        # divergence logs.
+        matcher_pick = best_product
+        _log_selector_divergence(
+            niche_id=niche_id,
+            matcher_pick=matcher_pick,
+            candidates=keyword_candidates,
+        )
+
         logger.debug(
             "[AffiliateMatch] Static match: '%s' (%d hits, keywords=%s)",
             best_product.get("name", ""),
