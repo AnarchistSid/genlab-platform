@@ -1,0 +1,32 @@
+[Unit]
+Description=GenLab click → product-arm reward timer — daily 06:00 UTC (11:30 IST)
+
+[Timer]
+# 06:00 UTC = 11:30 IST — sequencing rationale:
+#
+#   03:30 UTC — genlab-anticipate-trends.timer (Intervention 5)
+#   04:00 UTC — genlab-late-reward.timer (Intervention 1)
+#   04:30 UTC — genlab-counterfactual-replay.timer (Intervention 7, monthly)
+#   05:00 UTC — genlab-anticipation-accuracy.timer (Intervention 5b, weekly Mon)
+#   05:30 UTC — genlab-cross-niche-transfer.timer (Intervention 2, weekly Mon)
+#   06:00 UTC — genlab-register-click-rewards.timer  ← THIS
+#   06:30 UTC — pipelines start firing (per-niche)
+#
+# Positioned AFTER cross-niche transfer's weekly Monday refit so a
+# Monday morning brings the reward attribution + the fresh
+# cross-niche priors online in the same sequence — new product arms
+# created during that day's pipeline runs get the latest priors
+# via get_transferred_prior().
+#
+# Positioned BEFORE the 06:30 UTC pipeline starts so today's
+# ProductSelector calls read yesterday's cumulative click posterior
+# (not two-days-old data).
+OnCalendar=*-*-* 06:00:00 UTC
+# Persistent — catch-up after reboot / downtime. A missed run just
+# means yesterday's clicks land in the day-after-tomorrow update
+# (still eventually correct, thanks to idempotence).
+Persistent=true
+Unit=genlab-register-click-rewards.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,40 @@
+[Unit]
+Description=GenLab click → product-arm reward attribution — updates bandit_arms from affiliate_clicks
+Documentation=file:///opt/genlab/scripts/register_click_rewards.py
+After=network-online.target genlab-late-reward.service
+# late-reward.service is the 04:00 UTC daily runner; we intentionally
+# sequence AFTER it to avoid any window where both are updating
+# bandit_arms simultaneously (they don't touch overlapping arms —
+# late_reward targets source/style arms, we target product arms — but
+# the ordering discipline is good hygiene).
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# L3 PR 8 (2026-07-07) — the click → product-arm reward wire.
+#
+# Reads affiliate_clicks (populated by the bio-link hub click handler,
+# L3 PR 7's hardening) and UPDATEs bandit_arms via the composite
+# arm_id = 'product__' || product_id JOIN key. All click events map to
+# reward=1 in v1 (see script docstring — L3 PR 11 will escalate to
+# purchase-conversion Bernoulli once the Amazon Report API is wired).
+#
+# Idempotent by construction: the SQL is a pure recompute from
+# affiliate_clicks truth. Rerunning always converges. A missed daily
+# run just means yesterday's clicks land in today's update.
+#
+# File-path invocation because scripts/ is not a Python package. See
+# genlab-late-reward.service for the sibling gotcha and
+# tests/runbooks/test_systemd_module_drift.py for the CI regression
+# pin (checks every unit file references a real script).
+ExecStart=/opt/genlab/.venv/bin/python scripts/register_click_rewards.py --apply
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target
