@@ -253,6 +253,25 @@ jobs:
   # errors — is a separate triage task, not gated here yet.)
   test-frontend:
     runs-on: [self-hosted, genlab-prod]
+    # 2026-07-07: raise Node.js heap ceiling for the self-hosted runner
+    # on the 4 GB Hetzner VPS. Node's default old-space size (~512MB or
+    # so, but effectively capped by whatever cgroup/env limits the box
+    # sets) was hitting a heap OOM at ~358MB during ``vite build``:
+    #
+    #   FATAL ERROR: Reached heap limit Allocation failed —
+    #   JavaScript heap out of memory
+    #   ...
+    #   Aborted (core dumped)
+    #   ##[error]Process completed with exit code 134.
+    #
+    # This is the same memory constraint that OOM-killed the runner
+    # itself earlier the same day. 1024 MB is a compromise: enough
+    # headroom for the growing dashboard bundle (~5 MB output, but
+    # tsc + vite's build graph is 3-5× larger in RAM), while leaving
+    # ~1 GB for the runner, npm, and any concurrent prod processes
+    # (see CLAUDE.md's note on the 4GB VPS memory topology).
+    env:
+      NODE_OPTIONS: "--max-old-space-size=1024"
     steps:
       - uses: actions/checkout@v6
         with:
