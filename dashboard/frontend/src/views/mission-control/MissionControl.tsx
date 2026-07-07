@@ -35,6 +35,7 @@ import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
+import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
 import { BanditHourHeatmap } from "./BanditHourHeatmap";
 import { NichePauseCard } from "./NichePauseCard";
@@ -351,6 +352,15 @@ export default function MissionControl() {
                 observation-only vs active badge pattern as the
                 other intervention cards. */}
             <TransformationBanditCard />
+            {/* L3 PR 9 (2026-07-07): Monetization Layer 3 sprint
+                observability. Shows top-5 product arms per niche by
+                Beta posterior mean so operator sees which affiliate
+                products are earning clicks. Same active-vs-observation-
+                only badge as TransformationBanditCard; flips to active
+                when GENLAB_PRODUCT_SELECTOR_ENABLED=true (L3 PR 5's
+                wire ships observation-only until PR 12 flips
+                enforcement per-niche after divergence-log review). */}
+            <ProductBanditCard />
             {/* PR after #580 (2026-06-25): operator emergency-stop
                 surface. Wraps PR #577 endpoints + the niche_pause
                 primitive (PR #575) + the auto-pause wire (PR #579).

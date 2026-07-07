@@ -1151,6 +1151,21 @@ export const transformationBandit = {
     ),
 };
 
+export const productBandit = {
+  /** L3 PR 9 (2026-07-07) — per-niche product-bandit summary.
+   *  Returns null when no product arms are registered yet
+   *  (pre-register_product_arms.py run) or DB unavailable. Frontend
+   *  renders "No product arms yet". Endpoint filters bandit_arms to
+   *  arm_type='product' and groups by niche → top-5 by posterior
+   *  mean. */
+  summary: () =>
+    get<{
+      data: import("./types").ProductBanditSummary | null;
+    }>("/product-bandit/summary").then((d) =>
+      unwrapEnvelope<import("./types").ProductBanditSummary>(d),
+    ),
+};
+
 export const trendAnticipation = {
   /** Fetch today's anticipation ranking for one niche. Returns null
    *  when the runner hasn't fired yet (cold start day, first run

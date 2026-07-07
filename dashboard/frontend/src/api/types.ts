@@ -1445,3 +1445,37 @@ export interface TransformationBanditSummary {
   flag_enabled: boolean;
   niches: Record<string, TransformationNicheSummary>;
 }
+
+// ───────────────────────────────────────────────────────────────
+// L3 PR 9 (2026-07-07) — Product bandit observability types.
+// Monetization Layer 3 sprint. Sibling of TransformationBanditSummary
+// but simpler shape: products live under one dimension
+// (affiliate_product) so per-niche is just a flat top-N list, not a
+// dimension→list nesting.
+// ───────────────────────────────────────────────────────────────
+
+/** One product-arm summary. ``slug`` mirrors ``product__<slug>`` on
+ *  the DB row; frontend uses it as a stable React key + as the
+ *  display name (slug is the canonical product identifier per L3
+ *  PR 2's slugify_product_name). */
+export interface ProductArm {
+  slug: string;
+  rate: number;
+  n_obs: number;
+  alpha: number;
+  beta: number;
+  arm_id: string;
+}
+
+/** Per-niche breakdown: top-N products by Beta posterior mean. */
+export type ProductNicheSummary = ProductArm[];
+
+/** Full response envelope. ``flag_enabled`` reflects the current
+ *  ``GENLAB_PRODUCT_SELECTOR_ENABLED`` runtime state so the card can
+ *  badge "active" vs "observation only" — the same pattern as
+ *  TransformationBanditSummary and the intervention cards. */
+export interface ProductBanditSummary {
+  generated_at: string;
+  flag_enabled: boolean;
+  niches: Record<string, ProductNicheSummary>;
+}

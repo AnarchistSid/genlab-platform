@@ -123,6 +123,12 @@ export const queryKeys = {
      *  the AutoApprovalCalibrationCard cadence. */
     summary: () => ["transformation-bandit", "summary"] as const,
   },
+  productBandit: {
+    /** L3 PR 9 (2026-07-07) — product-arm summary cache key.
+     *  Reads live from bandit_arms (arm_type='product'); 60s poll
+     *  matches the TransformationBanditCard cadence. */
+    summary: () => ["product-bandit", "summary"] as const,
+  },
   counterfactualReplay: {
     /** Intervention 7 observability (2026-07-01) — per-niche latest
      *  replay artifact. Monthly rewrite; daily poll is plenty. */
