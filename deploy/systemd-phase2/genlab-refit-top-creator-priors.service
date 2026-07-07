@@ -1,0 +1,34 @@
+[Unit]
+Description=GenLab top-creator prior refit — weekly Spearman feature correlations
+Documentation=file:///opt/genlab/scripts/refit_top_creator_priors.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# B.2 (2026-07-08) — weekly refit of top_creator_priors.json per
+# niche. Fetches YouTube's mostPopular chart per niche category,
+# extracts B.1 structural features, computes Spearman correlations
+# between each feature and view velocity. Consumer (B.3) reads
+# these correlations to seed weak cold-start priors on new bandit
+# arms.
+#
+# Quota cost: 4 units per fire × 1/week = ~17 units/month.
+#
+# GENLAB_TOP_CREATOR_PRIORS_ENABLED is the activation flag — off
+# by default. Runner is a no-op unless flipped. See B.3 (deferred)
+# for the consumer wire at bandit arm instantiation.
+#
+# File-path invocation — scripts/ is not a Python package. See
+# tests/runbooks/test_systemd_module_drift.py for the CI regression.
+ExecStart=/opt/genlab/.venv/bin/python scripts/refit_top_creator_priors.py
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target

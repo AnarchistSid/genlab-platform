@@ -1,0 +1,26 @@
+[Unit]
+Description=GenLab top-creator prior refit timer — weekly Sundays
+
+[Timer]
+# Weekly Sunday 04:00 UTC. Rationale:
+#
+# * Sunday 04:00 UTC = Sunday 09:30 IST — well before the busy IST
+#   business day and after the daily-cycle scripts finish
+# * Feature-view correlations are structural (question-format vs
+#   listicle-format) — they shift on weekly-to-monthly timescales,
+#   not daily
+# * Quota is trivial (4 units/fire × ~4 fires/month = 17 units) so
+#   we're not burning budget by running weekly instead of monthly
+# * Sunday alignment matches the cross-niche transfer refit
+#   (genlab-refit-cross-niche-priors.timer runs Mon 05:30 UTC).
+#   Weekly cadence, staggered day.
+#
+# Persistent — catch up on reboot. A missed weekly fire means the
+# next batch inherits last week's correlations, which the fail-open
+# read side handles cleanly.
+OnCalendar=Sun *-*-* 04:00:00 UTC
+Persistent=true
+Unit=genlab-refit-top-creator-priors.service
+
+[Install]
+WantedBy=timers.target
