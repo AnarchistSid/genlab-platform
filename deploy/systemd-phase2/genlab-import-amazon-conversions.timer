@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab Amazon CSV importer timer — daily 05:45 UTC (11:15 IST)
+
+[Timer]
+# 05:45 UTC = 11:15 IST — 15 minutes BEFORE
+# genlab-register-click-rewards.timer (06:00 UTC) so today's Amazon-
+# reported purchases (that operator uploaded during their morning
+# ~10am IST window) land in affiliate_conversions before either
+# reward runner reads them.
+#
+# Full daily sequence:
+#   05:45 UTC — genlab-import-amazon-conversions      ← THIS
+#   06:00 UTC — genlab-register-click-rewards (L3 PR 8, will retire)
+#   06:15 UTC — genlab-register-conversion-rewards (L3 PR 11)
+#   06:30 UTC — pipelines start
+#
+# Persistent — CSVs uploaded overnight get picked up on reboot.
+# Zero-file case is a fast no-op so daily-fire when operator forgot
+# to upload isn't wasteful.
+OnCalendar=*-*-* 05:45:00 UTC
+Persistent=true
+Unit=genlab-import-amazon-conversions.service
+
+[Install]
+WantedBy=timers.target

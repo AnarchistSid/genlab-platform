@@ -1,0 +1,34 @@
+[Unit]
+Description=GenLab Amazon Associates CSV importer → affiliate_conversions
+Documentation=file:///opt/genlab/scripts/import_amazon_conversions.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# L3 PR 10 (2026-07-07) — Amazon CSV importer.
+#
+# Reads $GENLAB_TMP/amazon-reports/*.csv (operator uploads daily
+# from associates.amazon.com dashboard) and INSERTs into
+# affiliate_conversions with ON CONFLICT DO NOTHING on
+# (source_csv_hash, csv_line_no) for idempotence.
+#
+# Amazon has no affiliate-conversions API — CSV upload is the
+# industry standard for this. Genius Link, Refersion, etc. all
+# work the same way.
+#
+# Zero-file case: exits 0 silently when no CSVs present. Operator
+# uploading a new CSV between fires is picked up on next run.
+#
+# File-path invocation because scripts/ is not a Python package.
+ExecStart=/opt/genlab/.venv/bin/python scripts/import_amazon_conversions.py --apply
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target

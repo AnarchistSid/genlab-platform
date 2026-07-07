@@ -1,0 +1,28 @@
+[Unit]
+Description=GenLab conversion-aware reward timer — daily 06:15 UTC (11:45 IST)
+
+[Timer]
+# 06:15 UTC = 11:45 IST — 15 minutes AFTER
+# genlab-register-click-rewards.timer (06:00 UTC). Sequencing rationale:
+#
+#   06:00 UTC — click-rewards (L3 PR 8, click-only reward)
+#   06:15 UTC — conversion-rewards (L3 PR 11, ← THIS)
+#              Overwrites the arms that have conversion data with
+#              Bernoulli reward; arms without conversions stay on
+#              click-only (byte-identical to the 06:00 write).
+#   06:30 UTC — pipelines fire, ProductSelector reads the freshest
+#              posteriors.
+#
+# Positioned BEFORE the 06:30 UTC pipeline start so today's
+# ProductSelector calls read the FRESHER conversion-informed
+# posterior for arms that have Bernoulli data.
+#
+# When the operator disables the L3 PR 8 timer (this runner is a
+# strict superset), the 06:00 UTC slot frees up. This runner can
+# then move to 06:00 UTC by editing OnCalendar below.
+OnCalendar=*-*-* 06:15:00 UTC
+Persistent=true
+Unit=genlab-register-conversion-rewards.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,42 @@
+[Unit]
+Description=GenLab conversion-aware reward — bandit_arms Bernoulli update from affiliate_conversions
+Documentation=file:///opt/genlab/scripts/register_conversion_rewards.py
+After=network-online.target genlab-register-click-rewards.service genlab-import-amazon-conversions.service
+# Sequencing: this runner UPDATEs bandit_arms with the more-informed
+# Bernoulli reward when affiliate_conversions has data, else falls
+# back to click-only (matching L3 PR 8's behavior). Runs AFTER the
+# L3 PR 10 CSV importer so today's Amazon-reported purchases land
+# before we escalate the reward.
+#
+# When the operator adopts this as the canonical reward runner
+# (typically after seeing the first Bernoulli-mode arm in dry-run),
+# they can disable the L3 PR 8 timer — this runner supersedes it
+# because the click-only fallback branch is byte-identical to L3 PR 8.
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=GENLAB_TMP=/opt/genlab/.tmp
+# L3 PR 11 (2026-07-07) — real-revenue reward escalation.
+#
+# Reads affiliate_clicks + affiliate_conversions per (niche, product_slug)
+# and UPDATEs bandit_arms with:
+#   alpha = 1 + n_purchases   (when conversions exist)
+#         or 1 + n_clicks     (fallback)
+#   beta  = 1 + max(0, n_clicks - n_purchases)  (Bernoulli)
+#         or 1                                   (fallback)
+#
+# Idempotent by construction. Safe to rerun. Safe to run alongside
+# the L3 PR 8 click-rewards runner (this one is a strict superset).
+#
+# File-path invocation because scripts/ is not a Python package.
+ExecStart=/opt/genlab/.venv/bin/python scripts/register_conversion_rewards.py --apply
+TimeoutSec=600
+
+[Install]
+WantedBy=multi-user.target
