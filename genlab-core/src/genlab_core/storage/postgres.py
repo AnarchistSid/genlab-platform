@@ -138,6 +138,9 @@ _VALID_TABLES: frozenset[str] = frozenset(
         "audience_snapshots",
         "affiliate_clicks",
         "email_subscribers",
+        # L3 sprint (2026-07-07)
+        "affiliate_conversions",  # L3 PR 10 migration b9y0z1a2b3c4
+        "selector_divergences",  # L3 PR 12a migration c0z1a2b3c4d5
     }
 )
 

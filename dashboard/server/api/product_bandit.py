@@ -65,9 +65,7 @@ _TOP_N_PER_NICHE = 5
 
 def _flag_enabled() -> bool:
     """Whether the ProductSelector consumer is currently active."""
-    return (
-        os.environ.get("GENLAB_PRODUCT_SELECTOR_ENABLED", "").strip().lower() == "true"
-    )
+    return os.environ.get("GENLAB_PRODUCT_SELECTOR_ENABLED", "").strip().lower() == "true"
 
 
 def _parse_slug(arm_id: str) -> str | None:
@@ -206,3 +204,149 @@ def get_summary():
     arms = _load_product_arms()
     payload = _shape_response(arms)
     return jsonify({"status": "success", "data": payload})
+
+
+# L3 PR 12a (2026-07-07) — divergence-stats endpoint. Consumes
+# ``selector_divergences`` table populated by
+# ``affiliate_matcher._persist_divergence``. Mirrors the
+# calibration-stats endpoint from AUTO #1b so operators have a
+# consistent mental model:
+#
+#   auto-approval:  gate would-approve vs operator action
+#   selector:       bandit pick vs keyword matcher pick
+#
+# Both accumulate a rolling window, both surface agreement rate +
+# ready-for-enforcement threshold.
+
+_VALID_NICHES = frozenset({"ai_creators", "gaming", "sports", "movies", "anime"})
+
+# Enforcement threshold — matches AutoApprovalGate's convention.
+# 30 samples is enough to distinguish random-from-signal at α=0.05;
+# 90% agreement is the operator-observed threshold where the
+# selector's picks are trustworthy enough to REPLACE (not just
+# observe alongside) the matcher's picks.
+_MIN_SAMPLES = 30
+_MIN_AGREEMENT_RATE = 0.90
+
+
+def _fetch_divergence_stats(niche_id: str, window_days: int) -> dict:
+    """Query the aggregate stats for one niche's rolling window.
+
+    Returns a dict with the same shape as the calibration-stats
+    endpoint so frontend can reuse card patterns.
+    """
+    import os
+
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        return {
+            "niche_id": niche_id,
+            "window_days": window_days,
+            "sample_count": 0,
+            "agreement_count": 0,
+            "agreement_rate": 0.0,
+            "ready_for_enforcement": False,
+            "message": "DATABASE_URL not set",
+        }
+
+    try:
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS sample_count,
+                           SUM(CASE WHEN agreed THEN 1 ELSE 0 END) AS agreement_count
+                    FROM selector_divergences
+                    WHERE niche_id = %s
+                      AND created_at > NOW() - (%s || ' days')::interval
+                    """,
+                    (niche_id, str(window_days)),
+                )
+                row = cur.fetchone()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("product_bandit divergence-stats query failed: %s", exc)
+        return {
+            "niche_id": niche_id,
+            "window_days": window_days,
+            "sample_count": 0,
+            "agreement_count": 0,
+            "agreement_rate": 0.0,
+            "ready_for_enforcement": False,
+            "message": f"Query failed: {exc}",
+        }
+
+    sample_count = int(row[0] or 0) if row else 0
+    agreement_count = int(row[1] or 0) if row else 0
+    agreement_rate = agreement_count / sample_count if sample_count > 0 else 0.0
+    ready = sample_count >= _MIN_SAMPLES and agreement_rate >= _MIN_AGREEMENT_RATE
+    return {
+        "niche_id": niche_id,
+        "window_days": window_days,
+        "sample_count": sample_count,
+        "agreement_count": agreement_count,
+        "agreement_rate": round(agreement_rate, 3),
+        "ready_for_enforcement": ready,
+    }
+
+
+@bp.route("/divergence-stats", methods=["GET"])
+def divergence_stats():
+    """Return per-niche selector-vs-matcher agreement stats.
+
+    Query params:
+        niche_id (required): one of ai_creators, gaming, sports, movies, anime
+        window_days (optional, default 7): rolling window size (1..90)
+
+    Response:
+        {
+          "status": "success",
+          "data": {
+            "niche_id": "gaming",
+            "window_days": 7,
+            "sample_count": 42,
+            "agreement_count": 39,
+            "agreement_rate": 0.929,
+            "ready_for_enforcement": true
+          }
+        }
+
+    Empty stats (sample_count=0) return normally with rate=0.0
+    and ready=false — no error path. That's the expected state
+    when GENLAB_PRODUCT_SELECTOR_ENABLED has never been flipped.
+    """
+    from flask import request
+
+    niche_id = (request.args.get("niche_id") or "").strip()
+    if not niche_id:
+        return (
+            jsonify({"status": "error", "error": "niche_id query param required"}),
+            400,
+        )
+    if niche_id not in _VALID_NICHES:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error": f"niche_id must be one of {sorted(_VALID_NICHES)}",
+                }
+            ),
+            400,
+        )
+
+    try:
+        window_days = int(request.args.get("window_days", "7"))
+    except (TypeError, ValueError):
+        return (
+            jsonify({"status": "error", "error": "window_days must be an integer"}),
+            400,
+        )
+    if window_days < 1 or window_days > 90:
+        return (
+            jsonify({"status": "error", "error": "window_days must be 1..90"}),
+            400,
+        )
+
+    stats = _fetch_divergence_stats(niche_id, window_days)
+    return jsonify({"status": "success", "data": stats})

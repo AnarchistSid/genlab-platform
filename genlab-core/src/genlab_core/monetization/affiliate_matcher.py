@@ -228,10 +228,86 @@ def _log_selector_divergence(
                 niche_id,
                 selector_score,
             )
+
+        # L3 PR 12a (2026-07-07): persist the divergence to
+        # ``selector_divergences`` for the analyzer stats endpoint.
+        # Best-effort — journalctl already recorded the event above,
+        # so the DB write is a bonus for analyzable data. Any failure
+        # here (missing table, DB unreachable) is caught + DEBUG-logged
+        # by the outer try/except.
+        _persist_divergence(
+            niche_id=niche_id,
+            matcher_name=matcher_name,
+            selector_name=selector_name,
+            selector_score=selector_score,
+            agreed=(matcher_name == selector_name),
+        )
     except Exception as exc:  # noqa: BLE001 — never let observability
         # break the production matcher path
         logger.debug(
             "[AffiliateMatch] selector divergence check failed: %s (matcher path unaffected)",
+            exc,
+        )
+
+
+def _persist_divergence(
+    *,
+    niche_id: str,
+    matcher_name: str,
+    selector_name: str,
+    selector_score: float,
+    agreed: bool,
+) -> None:
+    """Best-effort append to ``selector_divergences`` (L3 PR 12a).
+
+    The row is stored with the CANONICAL slug (via
+    ``slugify_product_name``) rather than the display name so the
+    analyzer can JOIN back to bandit_arms via ``product__<slug>``
+    if needed. Storing display names would fork the JOIN key set
+    yet again (the exact bug L3 PR 2 fixed for blueprints).
+
+    Fail-open at every layer — the caller's journalctl log has
+    already recorded the divergence; the DB write is a queryable
+    bonus, not a correctness requirement.
+    """
+    try:
+        import os
+
+        dsn = os.environ.get("DATABASE_URL", "").strip()
+        if not dsn:
+            return
+
+        # slugify the display names so the analyzer can JOIN back to
+        # bandit_arms via product__<slug>.
+        matcher_slug = slugify_product_name(matcher_name)
+        selector_slug = slugify_product_name(selector_name)
+        if not matcher_slug or not selector_slug:
+            return
+
+        import psycopg
+
+        with psycopg.connect(dsn, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO selector_divergences (
+                        niche_id, matcher_pick, selector_pick,
+                        selector_score, agreed
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        niche_id,
+                        matcher_slug,
+                        selector_slug,
+                        float(selector_score),
+                        agreed,
+                    ),
+                )
+                conn.commit()
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.debug(
+            "[AffiliateMatch] divergence persistence failed: %s "
+            "(journalctl log preserved; matcher path unaffected)",
             exc,
         )
 
