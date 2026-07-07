@@ -34,6 +34,7 @@ import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
+import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
 import { ProductBanditCard } from "./ProductBanditCard";
 import { TransformationBanditCard } from "./TransformationBanditCard";
@@ -337,6 +338,14 @@ export default function MissionControl() {
                 vs "observation only" badge tells them which state
                 they're in without needing to check .env. */}
             <CrossNichePriorsCard />
+            {/* B.2 + B.3 observability (2026-07-08): A+B intelligence
+                stack — top-creator upload watchlist (A.2) + weekly
+                Spearman correlations (B.2). Per-niche row shows top
+                correlated feature + count of fresh (<24h) uploads
+                on watchlist. Two independent flag badges (B.2 + A.2)
+                so operator can see which artifact source is
+                observation-only vs active without checking .env. */}
+            <TopCreatorPriorsCard />
             {/* Intervention 7 observability (2026-07-01): monthly
                 counterfactual replay. Shows per-niche IPS + DR reward
                 estimates so the operator can see which arms would

@@ -1421,6 +1421,51 @@ export interface CrossNichePriorsArtifact {
 }
 
 // ───────────────────────────────────────────────────────────────
+// B.2 + B.3 observability (2026-07-08) — top-creator prior types.
+// Mirrors the artifacts written by
+// ``scripts/refit_top_creator_priors.py`` (B.2) and
+// ``scripts/watch_top_creator_uploads.py`` (A.2). Read by the
+// dashboard/server/api/top_creator_priors.py endpoint pair.
+// ───────────────────────────────────────────────────────────────
+
+/** B.2 correlations artifact. ``correlations`` is B.1's 13
+ *  structural features mapped to Spearman r ∈ [-1, 1] vs view
+ *  velocity on the mostPopular chart. ``flag_enabled`` +
+ *  ``artifact_stamp`` are server-injected. */
+export interface TopCreatorPriorsArtifact {
+  generated_at: string;
+  niche_id: string;
+  video_count: number;
+  correlations: Record<string, number>;
+  flag_enabled: boolean;
+  artifact_stamp: string;
+}
+
+/** A.2 uploads snapshot — one entry per watchlist creator. Each
+ *  ``upload`` has ``hours_since_publish`` so the card can render
+ *  the same recency thresholds A.3 uses in its composite. */
+export interface TopCreatorUpload {
+  video_id: string;
+  title: string;
+  published_at: string;
+  hours_since_publish: number;
+}
+
+export interface TopCreatorCreator {
+  channel_id: string;
+  label: string;
+  uploads: TopCreatorUpload[];
+}
+
+export interface TopCreatorUploadsArtifact {
+  generated_at: string;
+  niche_id: string;
+  creators: TopCreatorCreator[];
+  flag_enabled: boolean;
+  artifact_stamp: string;
+}
+
+// ───────────────────────────────────────────────────────────────
 // PR 14 (2026-07-05) — Transformation bandit observability types.
 // ───────────────────────────────────────────────────────────────
 

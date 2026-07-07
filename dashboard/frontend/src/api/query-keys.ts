@@ -117,6 +117,17 @@ export const queryKeys = {
      *  poll matches. */
     priors: () => ["cross-niche-transfer", "priors"] as const,
   },
+  topCreatorPriors: {
+    /** B.2 + B.3 observability (2026-07-08) — A+B intelligence
+     *  stack cache keys. Two independent artifact sources with
+     *  independent flag gates + cadences. Niche-scoped because
+     *  each niche has its own artifacts (unlike cross-niche
+     *  transfer which is global). */
+    latest: (nicheId: string) =>
+      ["top-creator-priors", "latest", nicheId] as const,
+    uploads: (nicheId: string) =>
+      ["top-creator-priors", "uploads", nicheId] as const,
+  },
   transformationBandit: {
     /** PR 14 (2026-07-05) — transformation-arm summary cache key.
      *  Reads live from bandit_arms (no artifact); 60s poll matches

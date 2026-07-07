@@ -1136,6 +1136,35 @@ export const crossNicheTransfer = {
 };
 
 // ───────────────────────────────────────────────────────────────
+// B.2 + B.3 observability (2026-07-08) — top-creator prior client.
+// Two endpoints because the two runners have independent flag
+// gates + cadences (see the API blueprint docstring).
+// ───────────────────────────────────────────────────────────────
+
+export const topCreatorPriors = {
+  /** Fetch B.2's most recent correlations for one niche. 8-day
+   *  fallback window on the server side. Returns null when nothing
+   *  in window (weekly runner hasn't fired or all niches skipped). */
+  latest: (nicheId: string) =>
+    get<{
+      data: import("./types").TopCreatorPriorsArtifact | null;
+    }>("/top-creator-priors/latest", { niche_id: nicheId }).then((d) =>
+      unwrapEnvelope<import("./types").TopCreatorPriorsArtifact>(d),
+    ),
+
+  /** Fetch A.2's most recent uploads snapshot for one niche. 1-day
+   *  fallback window (today or yesterday) — matches A.3's recency-
+   *  weight zeroing at >24h. Returns null when nothing today or
+   *  yesterday. */
+  uploads: (nicheId: string) =>
+    get<{
+      data: import("./types").TopCreatorUploadsArtifact | null;
+    }>("/top-creator-priors/uploads", { niche_id: nicheId }).then((d) =>
+      unwrapEnvelope<import("./types").TopCreatorUploadsArtifact>(d),
+    ),
+};
+
+// ───────────────────────────────────────────────────────────────
 // PR 14 (2026-07-05) — Transformation bandit observability client.
 // ───────────────────────────────────────────────────────────────
 
