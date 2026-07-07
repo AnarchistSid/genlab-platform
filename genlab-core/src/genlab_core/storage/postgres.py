@@ -262,8 +262,8 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         # analytical queries + partial-index efficiency without
         # parsing the composite arm_id string. See memory:
         # intelligent-transformation-architecture-2026-07-05.
-        "arm_type",         # 'content'|'transformation'|'hour'|'source'|'style'|NULL
-        "dimension",        # populated only for transformation arms
+        "arm_type",  # 'content'|'transformation'|'hour'|'source'|'style'|NULL
+        "dimension",  # populated only for transformation arms
         "dimension_value",  # the specific value bandit selected
     },
     "pending_engagement": {
@@ -349,6 +349,10 @@ PROMOTED_COLUMNS: dict[str, set[str]] = {
         "platform_source",
         "blueprint_id",
         "channel_id",
+        # L3 PR 7 (2026-07-07): denormalized commission_pct snapshot at
+        # click time so retroactive catalog rate changes don't invalidate
+        # historical reward attribution. Migration a8w9x0y1z2a3 (L3 PR 1).
+        "commission_pct",
     },
 }
 

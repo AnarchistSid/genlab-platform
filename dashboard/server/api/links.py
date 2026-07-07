@@ -1043,6 +1043,18 @@ def link_go(product_slug: str):
     network_data = product["_best_network"]
     raw_affiliate_url = network_data.get("url", "")
 
+    # L3 PR 7 (2026-07-07): snapshot the network's commission_pct at
+    # click time. Persisted onto affiliate_clicks.commission_pct
+    # (column added in L3 PR 1 migration) so a retroactive catalog
+    # rate change doesn't invalidate historical reward attribution.
+    click_commission_pct: float | None = None
+    try:
+        raw_commission = network_data.get("commission_pct")
+        if raw_commission is not None:
+            click_commission_pct = float(raw_commission)
+    except (TypeError, ValueError):
+        click_commission_pct = None
+
     # Derive channel_id from referrer path (e.g. /links/criticalrush → "criticalrush")
     channel_id = ""
     if referrer:
@@ -1081,6 +1093,7 @@ def link_go(product_slug: str):
             platform_source=platform_source,
             channel_id=channel_id,
             blueprint_id=blueprint_id,
+            commission_pct=click_commission_pct,
         )
     except Exception as e:
         logger.warning("[Links] log_click import/call failed: %s", e)
