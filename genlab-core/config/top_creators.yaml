@@ -1,0 +1,114 @@
+# Per-niche top-tier YouTube creator watchlist (A.1, 2026-07-07).
+#
+# The agent doesn't try to imitate these creators' style (correlation
+# ≠ causation — see [[ci-layered-noise-pattern-2026-07-07]] and
+# adjacent memory on why cross-channel style-copy doesn't transfer).
+# Instead it uses their UPLOAD TIMING as a leading indicator: when a
+# top-tier gaming YouTuber publishes about game X, X is trending
+# hours before Google Trends catches it.
+#
+# ## Selection criteria
+#
+# * ≥ 1M subscribers in the niche
+# * Consistent upload cadence (≥ 1/week)
+# * "Reaction" or "topical" formats preferred over "story" formats
+#   — reactive content signals real-time trends
+# * Avoid creators whose content is 90% collabs/features — hard to
+#   attribute their upload timing to specific topics
+#
+# ## Cost model
+#
+# YouTube API cost per watcher poll: 1 unit per `playlistItems.list`
+# call (~50 recent uploads). Polling 5 creators × 5 niches × 4×/day
+# = 100 units/day out of a 10K daily quota. Cheap.
+#
+# ## How to edit
+#
+# * Add / remove `channel_id` entries per niche as you learn who
+#   really moves the needle
+# * `channel_id` MUST be the raw YouTube UC... identifier, not the
+#   @handle. Use https://commentpicker.com/youtube-channel-id.php
+#   or scrape from the channel's About page.
+# * `label` is human-readable only; not used by the agent
+# * `notes` is a free-form justification for future you — writing
+#   "why did I pick this one?" catches drift later
+
+niches:
+  ai_creators:
+    # AI creator space is smaller — most viral AI content lands with
+    # generalists (MKBHD, Fireship). Populate as operator research
+    # completes.
+    channels:
+      - channel_id: UCBJycsmduvYEL83R_U4JriQ
+        label: MKBHD
+        notes: >-
+          Generalist reviews, but ~30% of uploads are AI-tool showcases.
+          His timing on releases is 24-48h behind announcement, so use
+          as CONFIRMATION signal rather than leading edge.
+      - channel_id: UCsBjURrPoezykLs9EqgamOA
+        label: Fireship
+        notes: >-
+          100-second developer explainers. Publishes within hours of
+          major AI releases. Strong leading indicator for developer-
+          adjacent topics.
+
+  gaming:
+    channels:
+      # NOTE: verify these UCIDs are current before enabling in prod.
+      # Some auto-generated Music channel IDs get merged over time.
+      - channel_id: UC-lHJZR3Gqxm24_Vd_AJ5Yw
+        label: PewDiePie
+        notes: >-
+          Historically the largest gaming channel by subs. Upload
+          cadence is intermittent; use as topic-confirmation signal.
+      - channel_id: UC7_YxT-KID8kRbqZo7MyscQ
+        label: Markiplier
+        notes: >-
+          Consistent horror/indie coverage. Strong signal for viral
+          indie game moments 12-24h before mainstream coverage.
+      - channel_id: UCTkXRDQl0luXxVQrRQvWS6w
+        label: Dream
+        notes: >-
+          Minecraft-focused; use gate to trigger only when video
+          mentions Minecraft in title.
+
+  sports:
+    channels:
+      - channel_id: UCiWLfSweyRNmLpgEHekhoAg
+        label: ESPN
+        notes: >-
+          Highlights + reaction. Publishes within an hour of major
+          plays — strongest leading indicator in this niche.
+
+  movies:
+    channels:
+      - channel_id: UC1EQPq_ZLXfDCA9WjPmcCyw
+        label: Screen Junkies
+        notes: >-
+          Honest Trailers + reaction to trailers. Trailers-side is
+          reactive within a day of studio release.
+      - channel_id: UCatt7TBjfBkiJWx8khav_Gg
+        label: RedLetterMedia
+        notes: >-
+          Long-form reviews; use as QUALITY signal (topics they cover
+          are likely to sustain conversation past first-day).
+
+  anime:
+    channels:
+      - channel_id: UC5Ugo9WCYt_5-lIiybOSyeg
+        label: Gigguk
+        notes: >-
+          Seasonal reviews + reaction. Publishes within a week of
+          major anime episode drops.
+      - channel_id: UC7TsvhZ2q0AoI-M46K5QDpg
+        label: The Anime Man
+        notes: >-
+          Japan-based, catches trends 12-24h before English-language
+          coverage.
+
+# ## Config version
+#
+# Bump `version` when the SHAPE of this YAML changes (not when
+# individual channels change). Runners and tests pin against the
+# version to catch drift.
+version: 1
