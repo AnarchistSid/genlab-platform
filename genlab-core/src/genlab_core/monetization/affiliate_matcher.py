@@ -27,6 +27,48 @@ from genlab_core.monetization.seasonal import get_seasonal_products, load_season
 
 logger = logging.getLogger(__name__)
 
+
+def slugify_product_name(name: str) -> str:
+    """Return the canonical slug for a product name.
+
+    Layer 3 PR 2 (2026-07-07) — the JOIN key that makes click →
+    blueprint attribution possible. Blueprints historically stored the
+    display name ("NVIDIA RTX 4090"); ``affiliate_clicks`` stores the
+    slug ("nvidia-rtx-4090") because the bio-link hub at
+    ``review.aspirehub.ai/links/go/<slug>`` uses slug URLs. Without a
+    canonical shared key, correlation queries return 0 for every
+    niche (audit found this on 2026-07-07 — 30 days of clicks with
+    zero attributable blueprint IDs).
+
+    Rule (matches what the bio-link hub emits):
+      1. lowercase
+      2. drop everything that isn't a-z, 0-9, whitespace, or hyphen
+      3. collapse runs of whitespace/underscore to a single hyphen
+      4. de-double consecutive hyphens
+      5. strip leading/trailing hyphens
+
+    >>> slugify_product_name("NVIDIA RTX 4090")
+    'nvidia-rtx-4090'
+    >>> slugify_product_name("Xbox Game Pass Ultimate")
+    'xbox-game-pass-ultimate'
+    >>> slugify_product_name("PS5 Console")
+    'ps5-console'
+    >>> slugify_product_name("Claude Pro Subscription")
+    'claude-pro-subscription'
+    >>> slugify_product_name("")
+    ''
+    """
+    if not name:
+        return ""
+    lowered = name.lower()
+    # Keep _ initially so it can act as a separator in step 3; strip
+    # everything else outside [a-z0-9\s_-].
+    kept = re.sub(r"[^a-z0-9\s_\-]", "", lowered)
+    collapsed = re.sub(r"[\s_]+", "-", kept)
+    collapsed = re.sub(r"-+", "-", collapsed)
+    return collapsed.strip("-")
+
+
 # Absolute path to the shared affiliate catalog.
 # Path: affiliate_matcher.py → monetization/ → genlab_core/ → src/ → genlab-core/
 _CATALOG_PATH = Path(__file__).parent.parent.parent.parent / "config" / "affiliate_catalog.yaml"
@@ -568,6 +610,9 @@ class AffiliateMatch:
             story["affiliate_cta"] = cta
             story["affiliate_price_inr"] = int(product.get("price_inr", 0) or 0)
             story["_affiliate_disclosure_map"] = disclosure_map
+            # L3 PR 2: canonical slug for click → blueprint JOIN in the
+            # attribution query (affiliate_clicks.product_id uses slugs).
+            story["product_slug"] = slugify_product_name(product_name)
 
             matched += 1
             logger.info(

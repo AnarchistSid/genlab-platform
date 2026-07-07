@@ -2097,9 +2097,20 @@ class PushToBacklog:
                         "affiliate_network",
                         "affiliate_commission_pct",
                         "affiliate_cta",
+                        # L3 PR 2 (2026-07-07): canonical slug for click→
+                        # blueprint attribution JOIN. affiliate_matcher sets
+                        # this via slugify_product_name(product_name).
+                        "product_slug",
                     ):
                         if story.get(af_key):
                             fields[af_key] = story[af_key]
+
+                    # L3 PR 2: story key is ``affiliate_price_inr`` (kept for
+                    # cta_engine backward compat) but the DB column is
+                    # ``price_inr`` (per schema migration a8w9x0y1z2a3).
+                    # Map story → column at write time.
+                    if story.get("affiliate_price_inr"):
+                        fields["price_inr"] = story["affiliate_price_inr"]
 
                     # Inject platform-specific CTAs into captions
                     if story.get("affiliate_product"):
