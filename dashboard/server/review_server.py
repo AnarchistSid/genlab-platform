@@ -796,6 +796,7 @@ from server.api.outreach_template import bp as outreach_template_bp
 from server.api.overview import bp as overview_bp
 from server.api.pipeline import bp as pipeline_bp
 from server.api.platform_posts import bp as platform_posts_bp
+from server.api.product_bandit import bp as product_bandit_bp
 from server.api.publishing_health import bp as publishing_health_bp
 from server.api.publishing_queue import bp as queue_bp
 from server.api.revenue import bp as revenue_bp
@@ -852,6 +853,9 @@ app.register_blueprint(
 app.register_blueprint(
     transformation_bandit_bp
 )  # PR 14 (2026-07-05): /api/v1/transformation-bandit/summary — intelligent transformation sprint observability
+app.register_blueprint(
+    product_bandit_bp
+)  # L3 PR 9 (2026-07-07): /api/v1/product-bandit/summary — monetization Layer 3 sprint observability
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
