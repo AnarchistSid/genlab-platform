@@ -42,7 +42,18 @@ _CATALOG_PATH = Path(__file__).resolve().parents[2] / "config" / "affiliate_cata
 
 @pytest.fixture(scope="module")
 def catalog() -> dict:
-    """Load the real catalog once for all tests."""
+    """Load the real catalog once for all tests.
+
+    The catalog file is gitignored — operator-maintained on prod, not
+    committed. When running in CI without the seeded catalog, skip
+    these tests rather than failing spuriously. The invariants still
+    codify the contract; they just don't validate on CI-without-catalog.
+    """
+    if not _CATALOG_PATH.is_file():
+        pytest.skip(
+            f"catalog not present at {_CATALOG_PATH} — gitignored operator config",
+            allow_module_level=False,
+        )
     with open(_CATALOG_PATH) as f:
         return yaml.safe_load(f) or {}
 
@@ -178,6 +189,40 @@ class TestFieldTypes:
                 if not isinstance(enabled_val, bool):
                     wrong_type.append(f"{niche_id} / {name}: {enabled_val!r}")
         assert not wrong_type, f"enabled field is not bool (likely YAML typo): {wrong_type[:5]}"
+
+
+class TestNoDisabledProducts:
+    """Invariant 7 (L3 PR 14, 2026-07-07): the catalog should contain
+    zero ``enabled: false`` products.
+
+    Historically, disabled entries were runtime no-ops (matcher skips
+    via ``enabled`` filter). After L3 PR 3 shipped arm registration,
+    disabled products would still spawn ``bandit_arms`` rows and clutter
+    the ProductBanditCard.
+
+    The clean semantics: if a product should not run, delete the entry
+    entirely (git history is a better bookmark than an ``enabled: false``
+    line). L3 PR 14 documented 5 such removals in
+    ``docs/OPERATOR-monetization-cleanup-2026-07-07.md``.
+
+    This pin catches:
+    * An operator adding ``enabled: false`` as a "will fix later" marker
+    * A future PR reintroducing a dead-network product entry
+    """
+
+    def test_no_products_have_enabled_false(self, catalog):
+        disabled = []
+        for niche_id, niche in (catalog.get("niches") or {}).items():
+            for product in niche.get("products") or []:
+                name = product.get("name", "")
+                if product.get("enabled") is False:
+                    disabled.append(f"{niche_id} / {name}")
+        assert not disabled, (
+            f"{len(disabled)} disabled product(s) remain in catalog: "
+            f"{disabled}. Delete entirely (git preserves history) rather "
+            f"than keeping ``enabled: false`` bookmarks. See "
+            f"docs/OPERATOR-monetization-cleanup-2026-07-07.md."
+        )
 
 
 class TestKeywordsCoverage:
