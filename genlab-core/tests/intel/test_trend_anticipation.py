@@ -108,18 +108,20 @@ class TestCompositeScoring:
 
     def test_only_search_velocity_populated(self, monkeypatch):
         """search_velocity=0.8 → composite should be ~0.8 (not shrunk
-        by the 3 abstaining signals)."""
+        by the 4 abstaining signals). Updated for A.3 which added
+        ``creator_upload_lead`` — confidence dropped from 1/4 to 1/5."""
         monkeypatch.setattr(ta, "_signal_search_velocity", lambda t, n: (0.8, 12))
         # Stubs already return None; explicit patch keeps the pin
         # independent of any future signal wire.
         monkeypatch.setattr(ta, "_signal_creator_pickup", lambda t, n: None)
+        monkeypatch.setattr(ta, "_signal_creator_upload_lead", lambda t, n: None)
         monkeypatch.setattr(ta, "_signal_social_velocity", lambda t, n: None)
         monkeypatch.setattr(ta, "_signal_news_lead", lambda t, n: None)
 
         score = ta.compute_anticipation_score("test-topic", "gaming")
         assert score.composite_score == pytest.approx(0.8)
         assert score.anticipated_peak_hours_ahead == 12
-        assert score.confidence == pytest.approx(0.25)  # 1 of 4 signals
+        assert score.confidence == pytest.approx(0.2)  # 1 of 5 signals
 
     def test_all_signals_none_abstains(self, monkeypatch):
         monkeypatch.setattr(ta, "_signal_search_velocity", lambda t, n: None)
@@ -129,16 +131,18 @@ class TestCompositeScoring:
         assert "No signals available" in score.reasons[0]
 
     def test_two_signals_weight_redistributes(self, monkeypatch):
-        """If search_velocity=0.6 (weight 0.60) and creator_pickup=0.9
-        (weight 0.20), the composite renormalises those two weights
-        to sum 1: search=0.75, creator=0.25 → composite = 0.6*0.75 +
-        0.9*0.25 = 0.675."""
+        """If search_velocity=0.6 (weight 0.55) and creator_pickup=0.9
+        (weight 0.15), the composite renormalises those two weights.
+        Updated for A.3's rebalance: sum_used = 0.55+0.15 = 0.70;
+        search share = 0.55/0.70 ≈ 0.786, creator share = 0.15/0.70
+        ≈ 0.214 → composite = 0.6*0.786 + 0.9*0.214 ≈ 0.664."""
         monkeypatch.setattr(ta, "_signal_search_velocity", lambda t, n: (0.6, 6))
         monkeypatch.setattr(ta, "_signal_creator_pickup", lambda t, n: 0.9)
+        monkeypatch.setattr(ta, "_signal_creator_upload_lead", lambda t, n: None)
         score = ta.compute_anticipation_score("test", "gaming")
-        expected = 0.6 * (0.60 / 0.80) + 0.9 * (0.20 / 0.80)
+        expected = 0.6 * (0.55 / 0.70) + 0.9 * (0.15 / 0.70)
         assert score.composite_score == pytest.approx(expected)
-        assert score.confidence == pytest.approx(0.5)  # 2 of 4
+        assert score.confidence == pytest.approx(0.4)  # 2 of 5
 
 
 # ── Signal opt-in guards (Session 2, 2026-07-01) ──────────────────

@@ -122,11 +122,19 @@ def _integration_enabled() -> bool:
 #
 # Sum: 1.00. Adjust in a future session once we have Spearman
 # correlations between each signal and observed peak-lag.
+#
+# A.3 (2026-07-08): rebalance to fit ``creator_upload_lead`` as
+# a 5th signal. Top-tier hand-curated creators publishing about a
+# topic is the strongest LEADING indicator we can observe — it's
+# also the narrowest (only ~10 creators total), so weight ~0.10
+# rather than the 0.20 that creator_pickup gets. Search velocity
+# eases from 0.60 → 0.55; the other three narrow proportionally.
 _SIGNAL_WEIGHTS: Final[dict[str, float]] = {
-    "search_velocity": 0.60,
-    "creator_pickup": 0.20,
-    "social_velocity": 0.15,
-    "news_lead": 0.05,
+    "search_velocity": 0.55,
+    "creator_pickup": 0.15,
+    "creator_upload_lead": 0.10,
+    "social_velocity": 0.13,
+    "news_lead": 0.07,
 }
 
 
@@ -517,6 +525,126 @@ def _signal_social_velocity(topic: str, niche_id: str) -> float | None:
     return signal
 
 
+def _signal_creator_upload_lead(topic: str, niche_id: str) -> float | None:
+    """Creator-upload-lead — fraction of hand-curated top-tier creators
+    who published about the topic in the last 24h.
+
+    A.3 (2026-07-08). Consumes the JSON artifacts written by A.2's
+    ``watch_top_creator_uploads.py`` runner at
+    ``$GENLAB_TMP/top-creator-uploads/YYYYMMDD-<niche>.json``.
+
+    The signal is more targeted than ``creator_pickup`` (which counts
+    YouTube search results): here we only look at operator-curated
+    top-tier channels. Coverage is narrow (~10 creators total), but
+    when the signal fires it's a strong leading indicator — top
+    creators typically publish 6-24h before Google Trends catches
+    the topic.
+
+    Score construction:
+
+        Let N = total creators polled in the artifact for this niche
+        Let M = creators whose most-recent upload title matches the
+                topic (case-insensitive word-boundary)
+        Let R = recency weight: uploads within 6h → 1.0, 6-24h → 0.5,
+                > 24h → 0.0
+
+        score = min(1.0, weighted_matches / min(N, 3))
+
+    The ``min(N, 3)`` cap treats "3 top creators mentioned it" as
+    saturation — after that we're confident this is a real trend.
+    This is a MODEST prior compared to the other signals; matches
+    the "narrow but sharp" character of the source.
+
+    Fail-open contract:
+    * Missing artifact directory → None (no data yet — expected on
+      day 0 before the runner has fired)
+    * No YYYYMMDD-<niche>.json for TODAY or YESTERDAY → None
+    * Malformed JSON → None (log at DEBUG, don't warn — the runner
+      writes the file, we don't need to alert on transient reads)
+    * Empty creators list → None (watchlist not populated yet)
+    * Zero matches → 0.0 (this IS informative; the topic isn't hot
+      among the curated creators)
+
+    Case-insensitive word-boundary match: the topic ``"vision pro"``
+    matches titles like ``"Apple Vision Pro Hands-On"`` but NOT
+    ``"provision"``.
+    """
+    import re
+    from datetime import timedelta
+
+    tmp = os.environ.get("GENLAB_TMP")
+    root = Path(tmp) if tmp else Path.cwd() / ".tmp"
+    dir_ = root / "top-creator-uploads"
+    if not dir_.is_dir():
+        return None
+
+    # Look for today's artifact first, then yesterday's. Older files
+    # aren't leading indicators anymore.
+    today = datetime.now(UTC).strftime("%Y%m%d")
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y%m%d")
+    candidates = [
+        dir_ / f"{today}-{niche_id}.json",
+        dir_ / f"{yesterday}-{niche_id}.json",
+    ]
+    payload: dict | None = None
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text())
+            break
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.debug(
+                "[trend_anticipation] creator_upload_lead read %s: %s",
+                path.name,
+                exc,
+            )
+            continue
+
+    if payload is None:
+        return None
+
+    creators = payload.get("creators") or []
+    if not creators:
+        return None
+
+    # Case-insensitive word-boundary regex for the topic. Escape any
+    # regex meta chars in the topic string.
+    escaped = re.escape(topic.strip().lower())
+    if not escaped:
+        return None
+    matcher = re.compile(r"\b" + escaped + r"\b", re.IGNORECASE)
+
+    # Recency weight decays over 24h. Uploads > 24h old contribute 0.
+    def _recency_weight(hours: float) -> float:
+        if hours < 0 or hours > 24:
+            return 0.0
+        if hours <= 6:
+            return 1.0
+        # 6-24h: linear decay 1.0 → 0.5
+        return 1.0 - 0.5 * ((hours - 6.0) / 18.0)
+
+    weighted_matches = 0.0
+    for creator in creators:
+        best_match_weight = 0.0
+        for upload in creator.get("uploads") or []:
+            title = str(upload.get("title") or "")
+            if not title:
+                continue
+            if matcher.search(title):
+                weight = _recency_weight(float(upload.get("hours_since_publish") or 0))
+                if weight > best_match_weight:
+                    best_match_weight = weight
+        weighted_matches += best_match_weight
+
+    # Saturation cap: 3 matching creators (weighted) → 1.0. This
+    # keeps the signal MODEST relative to the other four.
+    n = min(len(creators), 3)
+    if n == 0:
+        return None
+    return min(1.0, weighted_matches / n)
+
+
 def _signal_news_lead(topic: str, niche_id: str) -> float | None:
     """News-lead — count of Google News articles about the topic in
     the last 3 days.
@@ -630,6 +758,7 @@ def compute_anticipation_score(topic: str, niche_id: str) -> AnticipationScore:
     signals: dict[str, float | None] = {
         "search_velocity": search_velocity,
         "creator_pickup": _signal_creator_pickup(topic, niche_id),
+        "creator_upload_lead": _signal_creator_upload_lead(topic, niche_id),
         "social_velocity": _signal_social_velocity(topic, niche_id),
         "news_lead": _signal_news_lead(topic, niche_id),
     }
