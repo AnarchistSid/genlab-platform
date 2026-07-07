@@ -201,7 +201,7 @@ def extract_transformation_suffix(arm_id: str) -> str | None:
     """
     if not arm_id.startswith("transform__"):
         return None
-    rest = arm_id[len("transform__"):]
+    rest = arm_id[len("transform__") :]
     # rest must be '<dim>__<value>' — needs at least one more '__'
     if "__" not in rest:
         return None
@@ -212,8 +212,46 @@ def extract_transformation_suffix(arm_id: str) -> str | None:
     return rest
 
 
+def extract_product_suffix(arm_id: str) -> str | None:
+    """Extract the cross-niche prior key from a product arm_id.
+
+    L3 PR 6 (2026-07-07). Registered by ``register_product_arms.py``
+    (L3 PR 3), product arm_ids have the shape ``product__<slug>``.
+    The cross-niche key is ``product:<slug>`` — same product across
+    niches shares the prior.
+
+    Namespaced with ``product:`` (colon prefix) — distinct from
+    style keys (``revelation`` / ``patch_news``) and transformation
+    keys (``music_mood__cinematic``). This prevents accidental
+    collision if a style ever gets named after a product slug (e.g.
+    a style ``ps5-console`` would otherwise share a prior with
+    ``product__ps5-console``).
+
+    Rationale for sharing priors across niches for the same product:
+    reward for a click on PS5 is roughly the same physical event
+    regardless of whether it surfaced on a gaming reel, a movies
+    reel about a PS5-exclusive game, or a sports reel about NBA 2K.
+    Cold-start on a new niche's product arm should benefit from
+    what other niches have already learned.
+
+    Examples:
+      * ``product__ps5-console``              → ``product:ps5-console``
+      * ``product__nvidia-rtx-4090``          → ``product:nvidia-rtx-4090``
+      * ``product__prime-day-ps5-console``    → ``product:prime-day-ps5-console``
+      * ``style:gaming:revelation``           → None
+      * ``transform__music_mood__cinematic``  → None
+      * ``product__``                         → None (empty slug)
+    """
+    if not arm_id.startswith("product__"):
+        return None
+    slug = arm_id[len("product__") :]
+    if not slug:
+        return None
+    return f"product:{slug}"
+
+
 def extract_prior_key(arm_id: str) -> str | None:
-    """Unified extractor — routes to style / transformation / None.
+    """Unified extractor — routes to style / transformation / product / None.
 
     This is the function ``compute_transferred_priors`` and
     ``get_transferred_prior`` call to derive the cross-niche group
@@ -222,11 +260,20 @@ def extract_prior_key(arm_id: str) -> str | None:
     Adding a new arm class (e.g. per-hour or per-source) that should
     participate in cross-niche transfer means adding a branch here
     and its extractor — the callers don't need to change.
+
+    L3 PR 6 (2026-07-07): product routing added. Same-product arms
+    across niches share a moment-matched Beta prior — e.g. a new
+    ``product__crunchyroll-premium`` arm in the anime niche warms
+    up from observations of the same arm in ai_creators (if that
+    niche also surfaces Crunchyroll).
     """
     style = extract_style_suffix(arm_id)
     if style is not None:
         return style
-    return extract_transformation_suffix(arm_id)
+    transform = extract_transformation_suffix(arm_id)
+    if transform is not None:
+        return transform
+    return extract_product_suffix(arm_id)
 
 
 # ── Moment matching ───────────────────────────────────────────────
@@ -464,6 +511,7 @@ __all__ = [
     "TransferredPrior",
     "extract_style_suffix",
     "extract_transformation_suffix",
+    "extract_product_suffix",
     "extract_prior_key",
     "compute_transferred_priors",
     "persist_priors",
