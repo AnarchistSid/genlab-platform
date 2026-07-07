@@ -1,0 +1,25 @@
+[Unit]
+Description=GenLab top-creator upload watcher timer — 4× daily
+
+[Timer]
+# 4× daily: 02:00, 08:00, 14:00, 20:00 UTC.  Rationale for cadence:
+#
+# * Top-tier creators upload globally (Japan / US / Europe timezones);
+#   4 polls/day catches uploads within ~6h of publish → still leading
+#   Google Trends (which typically lags 12-24h)
+# * Quota cost per fire: 10 creators × 1 unit = 10 units.  4 fires
+#   × 10 = 40 units/day.  Well under the 10K budget.
+# * Timing avoids the busy 03:30–06:30 UTC window (anticipate-trends,
+#   late-reward, cross-niche, reward runners, pipelines)
+#
+# Persistent — catch-up on reboot.  A missed fire just means the
+# next artifact contains slightly staler timing data.
+OnCalendar=*-*-* 02:00:00 UTC
+OnCalendar=*-*-* 08:00:00 UTC
+OnCalendar=*-*-* 14:00:00 UTC
+OnCalendar=*-*-* 20:00:00 UTC
+Persistent=true
+Unit=genlab-watch-top-creators.service
+
+[Install]
+WantedBy=timers.target
