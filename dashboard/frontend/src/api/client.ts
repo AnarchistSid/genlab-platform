@@ -1164,6 +1164,17 @@ export const productBandit = {
     }>("/product-bandit/summary").then((d) =>
       unwrapEnvelope<import("./types").ProductBanditSummary>(d),
     ),
+
+  /** L3 PR 12a (2026-07-07) — per-niche selector-vs-matcher
+   *  agreement stats. Called once per niche_id per card refresh.
+   *  Fails-open server-side to sample_count=0 when DB unavailable
+   *  or DATABASE_URL unset (no error path visible to caller). */
+  divergenceStats: (nicheId: string, windowDays = 7) =>
+    get<{
+      data: import("./types").DivergenceStats;
+    }>(
+      `/product-bandit/divergence-stats?niche_id=${encodeURIComponent(nicheId)}&window_days=${windowDays}`,
+    ).then((d) => unwrapEnvelope<import("./types").DivergenceStats>(d)),
 };
 
 export const trendAnticipation = {

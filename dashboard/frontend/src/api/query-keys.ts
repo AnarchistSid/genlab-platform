@@ -128,6 +128,10 @@ export const queryKeys = {
      *  Reads live from bandit_arms (arm_type='product'); 60s poll
      *  matches the TransformationBanditCard cadence. */
     summary: () => ["product-bandit", "summary"] as const,
+    /** L3 PR 12a (2026-07-07) — per-niche selector divergence
+     *  stats cache key. Rolling 7-day window; 60s poll. */
+    divergenceStats: (nicheId: string, windowDays: number) =>
+      ["product-bandit", "divergence-stats", nicheId, windowDays] as const,
   },
   counterfactualReplay: {
     /** Intervention 7 observability (2026-07-01) — per-niche latest

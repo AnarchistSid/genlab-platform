@@ -1479,3 +1479,17 @@ export interface ProductBanditSummary {
   flag_enabled: boolean;
   niches: Record<string, ProductNicheSummary>;
 }
+
+/** L3 PR 12a — per-niche selector-vs-matcher agreement stats. Same
+ *  shape as AUTO #1b's calibration-stats so the frontend can reuse
+ *  card patterns. ``ready_for_enforcement`` is true when
+ *  ``sample_count >= 30 AND agreement_rate >= 0.90`` — the threshold
+ *  where L3 PR 12b will flip per-niche enforcement. */
+export interface DivergenceStats {
+  niche_id: string;
+  window_days: number;
+  sample_count: number;
+  agreement_count: number;
+  agreement_rate: number;
+  ready_for_enforcement: boolean;
+}

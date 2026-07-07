@@ -25,11 +25,15 @@
  * server returns ``niches: {}``. Card renders instructions pointing
  * to the register script so the operator has a clear next action.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { productBandit } from "@/api/client";
 import { queryKeys } from "@/api/query-keys";
-import type { ProductArm, ProductNicheSummary } from "@/api/types";
+import type {
+  DivergenceStats,
+  ProductArm,
+  ProductNicheSummary,
+} from "@/api/types";
 import { NICHE_IDS, getNicheInfo, type NicheId } from "@/niches/registry";
 
 /** Truncate long product slugs (e.g. "prime-day-wireless-earbuds") for
@@ -58,12 +62,53 @@ function ProductCell({ arm }: { arm: ProductArm }) {
   );
 }
 
+function DivergenceBadge({ stats }: { stats: DivergenceStats | undefined }) {
+  /**
+   * L3 PR 12a — per-niche selector-vs-matcher agreement badge.
+   *
+   * Three visual states:
+   * - Empty (sample_count=0): dimmed placeholder — expected when
+   *   GENLAB_PRODUCT_SELECTOR_ENABLED hasn't been flipped yet
+   * - Accumulating: shows sample_count / 30 progress toward ready
+   * - Ready: green pill with agreement rate — L3 PR 12b's auto-flip
+   *   will consult this state per niche
+   */
+  if (!stats || stats.sample_count === 0) {
+    return (
+      <span className="text-[10px] text-text-muted/40" title="No divergence data yet — flip GENLAB_PRODUCT_SELECTOR_ENABLED to start collecting">
+        no data
+      </span>
+    );
+  }
+  const rate = (stats.agreement_rate * 100).toFixed(0);
+  if (stats.ready_for_enforcement) {
+    return (
+      <span
+        className="rounded border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] text-success"
+        title={`${stats.agreement_count}/${stats.sample_count} agreement over ${stats.window_days}d — ready for L3 PR 12b enforcement`}
+      >
+        {rate}% · READY
+      </span>
+    );
+  }
+  return (
+    <span
+      className="text-[10px] text-text-muted"
+      title={`${stats.agreement_count}/${stats.sample_count} agreement over ${stats.window_days}d — need 30 samples + 90% for ready`}
+    >
+      {rate}% · {stats.sample_count}/30
+    </span>
+  );
+}
+
 function NicheRow({
   nicheId,
   arms,
+  divergenceStats,
 }: {
   nicheId: NicheId;
   arms: ProductNicheSummary | undefined;
+  divergenceStats: DivergenceStats | undefined;
 }) {
   const info = getNicheInfo(nicheId);
 
@@ -76,7 +121,7 @@ function NicheRow({
   ].slice(0, 5);
 
   return (
-    <div className="grid grid-cols-[80px_repeat(5,minmax(90px,1fr))] items-center gap-1 border-b border-border/40 py-2">
+    <div className="grid grid-cols-[80px_repeat(5,minmax(90px,1fr))_100px] items-center gap-1 border-b border-border/40 py-2">
       <span
         className="text-xs font-semibold"
         style={{ color: info.color }}
@@ -93,9 +138,14 @@ function NicheRow({
           </div>
         ),
       )}
+      <div className="text-right">
+        <DivergenceBadge stats={divergenceStats} />
+      </div>
     </div>
   );
 }
+
+const DIVERGENCE_WINDOW_DAYS = 7;
 
 export function ProductBanditCard() {
   const { data, isLoading, isError } = useQuery({
@@ -109,6 +159,22 @@ export function ProductBanditCard() {
     refetchInterval: 60 * 1000,
     staleTime: 30 * 1000,
   });
+
+  // L3 PR 12a — batch-fetch per-niche divergence stats. Five parallel
+  // requests share the 60s cadence with the summary poll. Each fails
+  // open server-side (sample_count=0 when DB unreachable) so we can
+  // safely default `undefined` to "no data yet" in the render.
+  const divergenceQueries = useQueries({
+    queries: NICHE_IDS.map((n) => ({
+      queryKey: queryKeys.productBandit.divergenceStats(n, DIVERGENCE_WINDOW_DAYS),
+      queryFn: () => productBandit.divergenceStats(n, DIVERGENCE_WINDOW_DAYS),
+      refetchInterval: 60 * 1000,
+      staleTime: 30 * 1000,
+    })),
+  });
+  const divergenceByNiche = Object.fromEntries(
+    NICHE_IDS.map((n, i) => [n, divergenceQueries[i]?.data]),
+  ) as Record<NicheId, DivergenceStats | undefined>;
 
   if (isLoading) {
     return (
@@ -159,7 +225,7 @@ export function ProductBanditCard() {
         {flagBadge}
       </div>
       <div className="text-xs text-text-muted">
-        Top 5 products per niche by posterior mean · updates 60s
+        Top 5 products + selector-vs-matcher agreement · updates 60s
       </div>
       {!hasAnyNiche ? (
         <div className="mt-2 text-xs text-text-muted">
@@ -169,7 +235,12 @@ export function ProductBanditCard() {
       ) : (
         <div className="mt-3">
           {NICHE_IDS.map((n) => (
-            <NicheRow key={n} nicheId={n} arms={data.niches[n]} />
+            <NicheRow
+              key={n}
+              nicheId={n}
+              arms={data.niches[n]}
+              divergenceStats={divergenceByNiche[n]}
+            />
           ))}
         </div>
       )}
