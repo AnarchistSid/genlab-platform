@@ -12,6 +12,27 @@ echo "=== Cleanup started $(date -u '+%Y-%m-%d %H:%M UTC') ===" >> "$LOG"
 
 # ── Step 1: Build a set of all video file paths referenced by active blueprints ──
 # This is the safety check that prevents deleting scheduled content.
+#
+# The WHERE clause MUST stay in sync with
+# ``genlab_core.storage.disk_quota._get_pending_publish_run_ids`` — that
+# Python function is the single source of truth for "is this blueprint
+# still publishable?" and this shell path is one of TWO cleanup entry
+# points on prod (the other is DiskQuotaManager.enforce()). If they
+# diverge, one path can evict media the other considers active.
+#
+# ROOT CAUSE FOUND 2026-07-08 (task #573): the shell version used to
+# filter ``status = 'VISUAL_READY' AND scheduled_for >= CURRENT_DATE``.
+# That missed:
+#   1. DRAFTED blueprints (rendered but awaiting approval)
+#   2. VISUAL_READY blueprints with ``scheduled_for IS NULL`` (rendered
+#      but not yet scheduled)
+#   3. VISUAL_READY blueprints with past ``scheduled_for`` (previously
+#      failed, awaiting retry — e.g. the 2026-07-07 sports blueprint
+#      that hit "No valid media files" because its 8-day-old run dir
+#      had been GCed by this exact filter)
+# The broadened filter now matches the Python version: exclude ONLY
+# terminal statuses (PUBLISHED / ARCHIVED / PUBLISH_FAILED / REJECTED).
+# Anything else is "still publishable" and gets its run dir protected.
 PROTECTED_PATHS=$("$UV" run --project "$GENLAB" python3 -c "
 import psycopg, json, os
 from pathlib import Path
@@ -21,9 +42,8 @@ cur = conn.cursor()
 cur.execute(\"SELECT set_config('app.niche_id', '', true)\")
 cur.execute(\"\"\"
     SELECT extra->>'visual_paths' as vpaths FROM blueprints
-    WHERE status = 'VISUAL_READY'
-      AND extra->>'visual_paths' IS NOT NULL
-      AND scheduled_for >= CURRENT_DATE
+    WHERE status NOT IN ('PUBLISHED', 'ARCHIVED', 'PUBLISH_FAILED', 'REJECTED')
+      AND extra ? 'visual_paths'
 \"\"\")
 protected = set()
 for (vpaths_raw,) in cur.fetchall():
