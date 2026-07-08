@@ -1,7 +1,7 @@
 """blueprints — CHECK constraint: approved+scheduled requires visual_paths (#577)
 
 Revision ID: d0z1a2b3c4d5
-Revises: c9x0y1z2ab34
+Revises: c0z1a2b3c4d5
 Create Date: 2026-07-08 16:50:00.000000+00:00
 
 ## Background
@@ -57,10 +57,13 @@ native JSONB array. All 511 rows with the key use ``jsonb_typeof =
 
 Initial attempt used revision ``a8w9x0y1z2a3`` which collided with
 the L3 sprint's ``a8w9x0y1z2a3_monetization_l3_product_bandit_schema
-.py``. Down_revision also had to point at ``c9x0y1z2ab34``
-(2026-07-05 mergepoint) rather than ``z7v8w9x0y1z2`` (late_reward
-head that got merged into c9x…). Both errors surfaced at
-``alembic upgrade head`` on prod and are corrected here.
+.py``. Second attempt used down_revision ``c9x0y1z2ab34`` (2026-07-05
+mergepoint) but the L3 chain descends from ``z7v8w9x0y1z2``
+(late_reward) NOT ``c9x0y1z2ab34``, so 2 unmerged heads persisted:
+``c0z1a2b3c4d5`` (L3 selector_divergences) and ``d0z1a2b3c4d5``
+(this migration). Correct linear chain requires this migration
+depend on ``c0z1a2b3c4d5`` — the current L3 head. Now:
+``… → c0z1a2b3c4d5 → d0z1a2b3c4d5`` is the single upgrade path.
 
 ## Downgrade
 
@@ -72,7 +75,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d0z1a2b3c4d5"
-down_revision = "c9x0y1z2ab34"
+down_revision = "c0z1a2b3c4d5"
 branch_labels = None
 depends_on = None
 
