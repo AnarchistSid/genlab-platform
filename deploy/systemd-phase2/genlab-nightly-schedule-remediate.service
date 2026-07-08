@@ -1,0 +1,46 @@
+[Unit]
+Description=GenLab nightly-schedule failure remediation (task #612, 2026-07-09)
+Documentation=file:///opt/genlab/scripts/nightly_schedule_remediate.py
+After=network-online.target postgresql.service
+
+# Companion OnFailure service for genlab-nightly-schedule.service.
+# Writes an actionable pipeline_alerts row when the parent runner
+# exits 1 with the "No schedulable candidate for: [niches]" shape.
+#
+# Composes with — does NOT replace — the generic
+# genlab-service-failure-alert@%n.service. Both fire in parallel on
+# the parent's failure; operator sees both alerts in
+# CriticalAlertsBanner.
+#
+# Why not just enhance the generic alert script? Sibling remediation
+# scripts (one per service-with-known-remediation) is a cleaner
+# architecture than coupling the generic path to specific unit
+# semantics. Each remediate script owns its own detection + suggestion
+# logic.
+#
+# This unit itself has NO OnFailure — a cascade of failure-alerts
+# would lose the original signal. If this unit fails, the generic
+# systemd_failure_alert.sh already-fired for the PARENT covers it.
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+
+# File-path invocation — scripts/ is not a Python package. Sibling
+# gotcha [[systemd-scripts-invocation-gotcha]] + CI regression pin at
+# test_systemd_module_drift.py.
+ExecStart=/opt/genlab/.venv/bin/python scripts/nightly_schedule_remediate.py
+
+# 30s: journal parse (<1s) + 5 niche queries × ~1s each + insert
+# alerts (<1s). Well within the 120s budget the generic
+# failure-alert uses. Kept intentionally tighter — remediate runs
+# after the parent already failed, we don't want it to linger.
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target
