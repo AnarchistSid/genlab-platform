@@ -17,7 +17,7 @@ If these pins regress:
 from __future__ import annotations
 
 import importlib.util
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -30,9 +30,7 @@ TIMER = REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-nightly-schedule.timer
 
 @pytest.fixture(scope="module")
 def script_module():
-    spec = importlib.util.spec_from_file_location(
-        "nightly_schedule_top_per_niche", SCRIPT_PATH
-    )
+    spec = importlib.util.spec_from_file_location("nightly_schedule_top_per_niche", SCRIPT_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -47,7 +45,11 @@ def test_all_5_niches_in_scope(script_module):
     Dropping one = that niche silently gets 0 publishes on days the
     auto-approver misses it."""
     assert set(script_module.NICHES) == {
-        "ai_creators", "gaming", "sports", "movies", "anime",
+        "ai_creators",
+        "gaming",
+        "sports",
+        "movies",
+        "anime",
     }
 
 
@@ -57,9 +59,9 @@ def test_all_5_niches_in_scope(script_module):
 def test_compute_target_slot_is_tomorrow_06_utc(script_module):
     """Publisher fires 06:35 UTC — we schedule for 06:00 UTC to give a
     35-minute buffer so publisher sees it as already-past-due."""
-    fixed_now = datetime(2026, 7, 5, 18, 0, 0, tzinfo=timezone.utc)
+    fixed_now = datetime(2026, 7, 5, 18, 0, 0, tzinfo=UTC)
     slot = script_module.compute_target_slot(fixed_now)
-    assert slot == datetime(2026, 7, 6, 6, 0, 0, tzinfo=timezone.utc)
+    assert slot == datetime(2026, 7, 6, 6, 0, 0, tzinfo=UTC)
 
 
 def test_compute_target_slot_uses_utc_not_local(script_module):
@@ -67,7 +69,7 @@ def test_compute_target_slot_uses_utc_not_local(script_module):
     ``scheduled_for::date`` comparisons in downstream queries line up.
     """
     slot = script_module.compute_target_slot()
-    assert slot.tzinfo == timezone.utc
+    assert slot.tzinfo == UTC
     assert slot.hour == 6 and slot.minute == 0 and slot.second == 0
 
 
@@ -111,6 +113,7 @@ def test_schedule_blueprints_does_not_touch_status(script_module):
     script must NEVER emit a ``status =`` assignment in the UPDATE."""
     import inspect
     import re
+
     body = inspect.getsource(script_module.schedule_blueprints)
 
     # Strip docstrings + comments before checking — status may appear
@@ -118,9 +121,7 @@ def test_schedule_blueprints_does_not_touch_status(script_module):
     # Simple approach: check for the specific SQL SET column pattern
     # "status =" or "status=" (SQL assignment shape), not the word
     # "status" alone.
-    sql_status_set = re.compile(
-        r"\bstatus\s*=\s*['\"]", re.IGNORECASE
-    )
+    sql_status_set = re.compile(r"\bstatus\s*=\s*['\"]", re.IGNORECASE)
     matches = sql_status_set.findall(body)
     # Filter out any that appear inside a docstring or comment — the
     # inspect.getsource output preserves those. Cheap check: if the
@@ -136,7 +137,7 @@ def test_schedule_blueprints_does_not_touch_status(script_module):
     live_matches = []
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith("\"\"\"") or stripped.startswith("'''"):
+        if stripped.startswith('"""') or stripped.startswith("'''"):
             in_docstring = not in_docstring
             continue
         if in_docstring:
@@ -158,6 +159,7 @@ def test_schedule_blueprints_sets_action_taken_approved(script_module):
     approval_gate checks action_taken == 'approved'. Missing this
     means blueprint fails the approval gate and never publishes."""
     import inspect
+
     body = inspect.getsource(script_module.schedule_blueprints)
     assert "action_taken = 'approved'" in body, (
         "schedule_blueprints must set action_taken='approved' — "
@@ -176,8 +178,61 @@ def test_idempotency_via_niches_needing_scheduling(script_module):
     # And it must return a set (not a list) so set arithmetic works
     # in main().
     import inspect
+
     src = inspect.getsource(script_module.niches_needing_scheduling)
     assert "return set(" in src or "- already" in src
+
+
+def test_idempotency_covers_visual_ready_plus_action_taken(script_module):
+    """2026-07-08 LIVE-FIRE BUG: task #528 (2026-07-06) changed the
+    write side of ``schedule_blueprints`` to LEAVE status='VISUAL_READY'
+    untouched so publisher's ``blueprint_selector.select_blueprint``
+    would still see the row. But the read side (this idempotency
+    query) still only looked at ``status IN ('SCHEDULED',
+    'PUBLISHED')`` — invisible to fresh nightly-cron picks. Result:
+    on 2026-07-07 22:00 IST the cron scheduled a stale 11-day-old
+    Getafe-Barcelona blueprint on top of Arsenal-Newcastle, which had
+    been scheduled earlier that day with the new shape. Operator had
+    to demote by hand.
+
+    The pin asserts the WHERE clause explicitly names BOTH shapes:
+    * Legacy: ``status IN ('SCHEDULED', 'PUBLISHED')``
+    * Current: ``status = 'VISUAL_READY'`` + ``action_taken = 'approved'``
+
+    If a future refactor drops either branch, this test fires
+    immediately rather than after a live-fire dupe."""
+    import inspect
+
+    src = inspect.getsource(script_module.niches_needing_scheduling)
+
+    # Legacy branch — historical rows with SCHEDULED/PUBLISHED status.
+    assert "'SCHEDULED'" in src and "'PUBLISHED'" in src, (
+        "niches_needing_scheduling must still catch the legacy "
+        "status='SCHEDULED'/'PUBLISHED' rows — otherwise re-running "
+        "the cron on a day with historical scheduled posts would "
+        "duplicate them."
+    )
+
+    # Current branch — VISUAL_READY + action_taken='approved' is what
+    # both this script's schedule_blueprints AND the auto-approver
+    # actually write.
+    assert "'VISUAL_READY'" in src, (
+        "niches_needing_scheduling must include status='VISUAL_READY' "
+        "in its idempotency check — task #528 (2026-07-06) changed "
+        "the write side to leave status='VISUAL_READY' untouched. "
+        "Missing this catches nothing scheduled by the current path."
+    )
+    assert "'approved'" in src, (
+        "niches_needing_scheduling must scope the VISUAL_READY case "
+        "to action_taken='approved' — otherwise it would catch every "
+        "VISUAL_READY blueprint with a scheduled_for date even if "
+        "the operator explicitly rejected it."
+    )
+    assert "action_taken" in src, (
+        "niches_needing_scheduling must reference the action_taken "
+        "column — the 'approved' literal alone isn't enough proof "
+        "the column is checked (could be in a comment)."
+    )
 
 
 # ── systemd unit pins ───────────────────────────────────────────────
@@ -234,12 +289,9 @@ def test_auto_approver_no_longer_dry_run():
     safety maintained by publishing.yaml's auto_publish.enabled +
     rollout_pct. If someone re-adds --dry-run, they've silently
     disabled all approval work for ai_creators."""
-    approver = (
-        REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-auto-approver.service"
-    )
+    approver = REPO_ROOT / "deploy" / "systemd-phase2" / "genlab-auto-approver.service"
     exec_start_lines = [
-        line for line in approver.read_text().splitlines()
-        if line.strip().startswith("ExecStart=")
+        line for line in approver.read_text().splitlines() if line.strip().startswith("ExecStart=")
     ]
     assert exec_start_lines, "auto-approver service missing ExecStart"
     assert not any("--dry-run" in line for line in exec_start_lines), (

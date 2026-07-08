@@ -71,7 +71,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 NICHES = ("ai_creators", "gaming", "sports", "movies", "anime")
@@ -97,9 +97,7 @@ def _connect():
 
     url = os.environ.get("DATABASE_URL")
     if not url:
-        raise SystemExit(
-            "DATABASE_URL not set; source /opt/genlab/.env before running."
-        )
+        raise SystemExit("DATABASE_URL not set; source /opt/genlab/.env before running.")
     return psycopg.connect(url, row_factory=dict_row)
 
 
@@ -114,21 +112,45 @@ def compute_target_slot(now_utc: datetime | None = None) -> datetime:
     UTC-based Postgres ``current_date + 1`` semantics.
     """
     if now_utc is None:
-        now_utc = datetime.now(timezone.utc)
-    tomorrow_utc: date = (now_utc.date() + timedelta(days=1))
-    return datetime.combine(tomorrow_utc, time(6, 0, 0), tzinfo=timezone.utc)
+        now_utc = datetime.now(UTC)
+    tomorrow_utc: date = now_utc.date() + timedelta(days=1)
+    return datetime.combine(tomorrow_utc, time(6, 0, 0), tzinfo=UTC)
 
 
 def niches_needing_scheduling(cur, target_date: date) -> set[str]:
     """Return niches that DON'T yet have anything scheduled on target_date.
     This is what makes the script idempotent with the auto-approver.
+
+    A niche is considered "already scheduled" for target_date if it has
+    a blueprint whose ``scheduled_for::date`` matches AND that blueprint
+    is in one of the two shapes that count as scheduled:
+
+    1. **Legacy** — ``status IN ('SCHEDULED', 'PUBLISHED')``. Any
+       historical rows written before the 2026-07-06 live-fire fix.
+    2. **Current** — ``status = 'VISUAL_READY' AND action_taken =
+       'approved'``. Matches what ``schedule_blueprints`` (this file,
+       line 189+) and the auto-approver both write. Publisher's
+       ``blueprint_selector.select_blueprint`` only sees ``VISUAL_READY``
+       so we can't advance to ``SCHEDULED`` at write time — the
+       read side has to catch that shape.
+
+    2026-07-08 bug: this query originally only checked case 1. Result:
+    sports' Arsenal-Newcastle blueprint (VISUAL_READY + action_taken=
+    approved + scheduled_for=today) was invisible to idempotency, so
+    nightly cron scheduled a stale 11-day-old Getafe-Barcelona
+    blueprint on top of it. ``DailyCapEnforcer`` at publish time
+    prevented the double-publish but the queue clutter was real and
+    the operator had to demote by hand. See task #570.
     """
     cur.execute(
         """
         SELECT niche_id
         FROM blueprints
         WHERE scheduled_for::date = %s
-          AND status IN ('SCHEDULED', 'PUBLISHED')
+          AND (
+            status IN ('SCHEDULED', 'PUBLISHED')
+            OR (status = 'VISUAL_READY' AND action_taken = 'approved')
+          )
         GROUP BY niche_id
         """,
         (target_date,),
@@ -168,7 +190,9 @@ def pick_top_per_niche(cur, needing: set[str]) -> list[dict]:
 
 
 def schedule_blueprints(
-    cur, picks: list[dict], target_slot: datetime,
+    cur,
+    picks: list[dict],
+    target_slot: datetime,
 ) -> list[dict]:
     """Set action_taken=approved + scheduled_for=slot on each pick,
     LEAVING status='VISUAL_READY' untouched. Returns the mutated rows.
@@ -209,11 +233,13 @@ def schedule_blueprints(
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Preview picks; do NOT write to database",
     )
     ap.add_argument(
-        "--env-file", default="/opt/genlab/.env",
+        "--env-file",
+        default="/opt/genlab/.env",
         help="Path to .env (default /opt/genlab/.env)",
     )
     args = ap.parse_args()
@@ -222,16 +248,14 @@ def main() -> int:
 
     target_slot = compute_target_slot()
     target_date = target_slot.date()
-    print(f"Target slot: {target_slot.isoformat()} "
-          f"(scheduling for {target_date})")
+    print(f"Target slot: {target_slot.isoformat()} (scheduling for {target_date})")
 
     try:
         with _connect() as conn, conn.cursor() as cur:
             needing = niches_needing_scheduling(cur, target_date)
             already = set(NICHES) - needing
             if already:
-                print(f"Already scheduled for {target_date}: "
-                      f"{sorted(already)}")
+                print(f"Already scheduled for {target_date}: {sorted(already)}")
             if not needing:
                 print("Every niche already has tomorrow scheduled. Done.")
                 return 0
@@ -243,22 +267,28 @@ def main() -> int:
             picked_niches = {p["niche_id"] for p in picks}
             missing = needing - picked_niches
             if missing:
-                print(f"⚠️  No schedulable candidate for: {sorted(missing)} "
-                      "(empty VISUAL_READY queue or all filtered)")
+                print(
+                    f"⚠️  No schedulable candidate for: {sorted(missing)} "
+                    "(empty VISUAL_READY queue or all filtered)"
+                )
 
             if args.dry_run:
                 for p in picks:
-                    print(f"  DRY  {p['niche_id']:12s}  "
-                          f"score={p['priority_score']:.4f}  "
-                          f"hook={p['hook'][:60]!r}")
+                    print(
+                        f"  DRY  {p['niche_id']:12s}  "
+                        f"score={p['priority_score']:.4f}  "
+                        f"hook={p['hook'][:60]!r}"
+                    )
                 return 1 if missing else 0
 
             rows = schedule_blueprints(cur, picks, target_slot)
             conn.commit()
             for r in rows:
-                print(f"  ✓ {r['niche_id']:12s}  "
-                      f"score={r['priority_score']:.4f}  "
-                      f"hook={r['hook'][:60]!r}")
+                print(
+                    f"  ✓ {r['niche_id']:12s}  "
+                    f"score={r['priority_score']:.4f}  "
+                    f"hook={r['hook'][:60]!r}"
+                )
 
             return 1 if missing else 0
     except Exception as exc:
