@@ -202,6 +202,18 @@ class InstagramClient:
             share_to_feed = ig_specific.share_to_feed
             cover_url = ig_specific.cover_url
 
+        # R-29 (2026-07-08 revision): create a SINGLE shared deadline for the
+        # whole publish() call — including any CDN-provider retries. Previously
+        # each ``_publish_reel`` call would default its own 540s ``_deadline``,
+        # so a CDN retry could stack (60s upload + 540s publish) × 2 = 1200s,
+        # blowing past the 600s executor timeout in
+        # ``parallel_publish.execute_parallel_publish``. 2026-07-07 live-fire:
+        # 2 of 5 niches hit "Publish timed out after 600s for instagram"
+        # exactly because of this stacking; anime never got processed because
+        # the resulting service TERM at 30 min killed the sequential loop.
+        # See task #572 for the full analysis.
+        shared_deadline = time.monotonic() + _TOTAL_PUBLISH_BUDGET_SECONDS
+
         # Fast path: caller already supplied a public URL — skip CDN entirely.
         if video_url.startswith("http"):
             self._last_error = ""
@@ -211,6 +223,7 @@ class InstagramClient:
                 share_to_feed=share_to_feed,
                 cover_url=cover_url,
                 max_poll_seconds=self._max_poll_seconds,
+                _deadline=shared_deadline,
             )
             if post_id is None:
                 return PublishResult(
@@ -240,6 +253,32 @@ class InstagramClient:
         last_failure_error = ""
 
         for _ in provider_order:
+            # R-29 (2026-07-08 revision): honour the shared deadline BEFORE
+            # spending time on a fresh CDN upload. If <90s remain, another
+            # provider iteration can't complete a create + poll + publish
+            # cycle before the executor kills us — bail with a clean error
+            # so the outer publisher records FAILED cleanly instead of the
+            # thread outliving the executor and posting a phantom reel.
+            remaining = shared_deadline - time.monotonic()
+            if remaining < _RETRY_MIN_REMAINING_SECONDS:
+                self._log.warning(
+                    "[IG] Skipping CDN retry — only %.0fs of the publish budget "
+                    "left (< %ds needed for another provider attempt). Bailing "
+                    "so the executor doesn't have to kill an orphaned thread.",
+                    remaining,
+                    _RETRY_MIN_REMAINING_SECONDS,
+                )
+                return PublishResult(
+                    platform=self.platform_id,
+                    success=False,
+                    error=(
+                        f"Instagram: publish budget exhausted after "
+                        f"{_TOTAL_PUBLISH_BUDGET_SECONDS - int(remaining)}s "
+                        f"across CDN retries. Excluded providers: {sorted(excluded)}. "
+                        f"Last error: {last_failure_error or 'none yet'}"
+                    ),
+                )
+
             cdn_result = upload_to_cdn_full(
                 video_url,
                 require_external=True,
@@ -273,6 +312,7 @@ class InstagramClient:
                 share_to_feed=share_to_feed,
                 cover_url=cover_url,
                 max_poll_seconds=self._max_poll_seconds,
+                _deadline=shared_deadline,
             )
 
             if post_id is not None:
