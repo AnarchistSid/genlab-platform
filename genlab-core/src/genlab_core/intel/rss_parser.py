@@ -132,12 +132,31 @@ def _select_primary_url(entry_link: str, summary_raw: str) -> dict[str, Any]:
 
 
 def parse_entry(entry: dict[str, Any], source_priority: float) -> dict[str, Any]:
-    """Parse a single raw entry into a normalized item."""
+    """Parse a single raw entry into a normalized item.
+
+    Raises ``ValueError`` when the entry is missing usable link
+    metadata — ``parse_fetch_log`` catches this and drops the row.
+    Direct callers should be prepared for the same. DEV-3 (2026-07-08)
+    observation: prior behaviour was to crash inside ``generate_story_id``
+    with ``normalize_url requires a non-empty string`` — the raise is
+    now explicit and validates the invariant at the top of the function
+    rather than deep in a helper.
+    """
     raw_link = entry.get("link", "")
     summary_raw = entry.get("summary", "")
     primary = _select_primary_url(raw_link, summary_raw)
     url = primary.get("primary_url", raw_link)
-    canonical_url = normalize_url(url) if url else ""
+    if not url:
+        # Fail-fast with a clear reason instead of ``normalize_url``'s
+        # deeper "requires non-empty string". ``parse_fetch_log`` catches
+        # ValueError and logs the row with an ERROR + skips it. A
+        # missing link is a producer bug in the fetcher, not something
+        # this parser can recover from.
+        raise ValueError(
+            "parse_entry requires 'link' or an extractable URL from "
+            "the summary — got empty. Producer bug in the fetcher."
+        )
+    canonical_url = normalize_url(url)
 
     title = sanitize_text(strip_html(entry.get("title", "")), max_length=500)
     summary = sanitize_text(strip_html(summary_raw), max_length=5000)

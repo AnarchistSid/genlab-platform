@@ -331,11 +331,54 @@ class TestSuccessPath:
         assert isinstance(result.duration_sec, float)
         assert result.duration_sec >= 0.0
 
-    def test_pricing_constants_match_module(self):
-        """The class-level pricing constants are load-bearing for cost
-        accounting. Pin the values here so a stealth edit shows up."""
-        assert AnthropicStrategistClient.INPUT_COST_PER_M == 3.00
-        assert AnthropicStrategistClient.OUTPUT_COST_PER_M == 15.00
+    def test_pricing_reads_from_cost_accumulator(self):
+        """Post-2026-07-08 fix: pricing lives in ONE place —
+        :data:`cost_accumulator.MODEL_COSTS`. The client reads from
+        that dict via `_pricing()` so a pricing update in
+        cost_accumulator propagates to CallResult.cost_usd
+        automatically.
+
+        Prior to the fix the client held its own INPUT_COST_PER_M /
+        OUTPUT_COST_PER_M constants that would silently drift from
+        the dashboard aggregate on a pricing change."""
+        from genlab_core.intelligence.anthropic_client import (
+            STRATEGIST_MODEL,
+        )
+        from genlab_core.intelligence.cost_accumulator import MODEL_COSTS
+
+        input_per_m, output_per_m = AnthropicStrategistClient._pricing()
+        # Should equal MODEL_COSTS entry — locks in the delegation.
+        entry = MODEL_COSTS.get(STRATEGIST_MODEL, {})
+        assert input_per_m == entry.get("input", 3.00)
+        assert output_per_m == entry.get("output", 15.00)
+
+    def test_pricing_falls_back_to_default_on_missing_entry(self, monkeypatch):
+        """If MODEL_COSTS is missing STRATEGIST_MODEL (staleness),
+        _pricing() logs a warning and falls back to the pre-fix
+        default (3.00, 15.00). Locks in the no-behaviour-regression
+        contract of the fix."""
+        # Patch the module's MODEL_COSTS to force the fallback path.
+        from genlab_core.intelligence import cost_accumulator
+
+        original = cost_accumulator.MODEL_COSTS
+        monkeypatch.setattr(cost_accumulator, "MODEL_COSTS", {})
+        try:
+            input_per_m, output_per_m = AnthropicStrategistClient._pricing()
+            assert input_per_m == 3.00
+            assert output_per_m == 15.00
+        finally:
+            monkeypatch.setattr(cost_accumulator, "MODEL_COSTS", original)
+
+    def test_pricing_no_longer_exposes_class_constants(self):
+        """Guards against a re-inlining that would recreate the drift
+        risk. Post-fix, no INPUT_COST_PER_M / OUTPUT_COST_PER_M
+        class attribute should exist."""
+        assert not hasattr(
+            AnthropicStrategistClient, "INPUT_COST_PER_M"
+        ), "INPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
+        assert not hasattr(
+            AnthropicStrategistClient, "OUTPUT_COST_PER_M"
+        ), "OUTPUT_COST_PER_M re-added — pricing is now single-source via cost_accumulator"
 
 
 # === Response parsing edge cases ==================================

@@ -59,13 +59,41 @@ class AnthropicStrategistClient:
     the real anthropic.Anthropic with ANTHROPIC_API_KEY from env.
     """
 
-    # Sonnet 4.6 pricing (as of 2026-06; recheck per pricing page when updating model)
-    INPUT_COST_PER_M = 3.00
-    OUTPUT_COST_PER_M = 15.00
-
     def __init__(self, client_factory=None, timeout_sec: float = DEFAULT_TIMEOUT_SEC):
         self._client_factory = client_factory
         self._timeout = timeout_sec
+
+    @classmethod
+    def _pricing(cls) -> tuple[float, float]:
+        """Return ``(input_per_M, output_per_M)`` for the strategist model.
+
+        Reads from :data:`genlab_core.intelligence.cost_accumulator.MODEL_COSTS`
+        so the pricing lives in ONE place. Prior to this fix (DEV-3
+        observation, 2026-07-08), this class held its own
+        ``INPUT_COST_PER_M`` / ``OUTPUT_COST_PER_M`` constants that
+        duplicated the values in ``MODEL_COSTS['claude-sonnet-4-6']``.
+        When Anthropic changed pricing, one path got updated and the
+        other silently drifted — ``CallResult.cost_usd`` would then
+        disagree with the dashboard aggregate that reads from
+        ``cost_accumulator``.
+
+        Falls back to ``(3.00, 15.00)`` (sonnet-4-6 as of 2026-06) if
+        the model isn't in the table — same defensive default the
+        module used pre-fix so no behaviour changes on a stale table.
+        """
+        from genlab_core.intelligence.cost_accumulator import MODEL_COSTS
+
+        rates = MODEL_COSTS.get(STRATEGIST_MODEL)
+        if rates is None or "input" not in rates or "output" not in rates:
+            logger.warning(
+                "strategist.pricing_lookup_fallback model=%s — MODEL_COSTS "
+                "missing entry, defaulting to (3.00, 15.00). Update "
+                "cost_accumulator.MODEL_COSTS to include %s.",
+                STRATEGIST_MODEL,
+                STRATEGIST_MODEL,
+            )
+            return 3.00, 15.00
+        return float(rates["input"]), float(rates["output"])
 
     def generate_report(self, system_prompt: str, user_prompt: str) -> CallResult:
         """Call the model and return raw text + cost telemetry.
@@ -96,8 +124,9 @@ class AnthropicStrategistClient:
                 usage = response.usage
                 input_tokens = getattr(usage, "input_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0)
+                input_per_m, output_per_m = self._pricing()
                 cost = (
-                    input_tokens * self.INPUT_COST_PER_M + output_tokens * self.OUTPUT_COST_PER_M
+                    input_tokens * input_per_m + output_tokens * output_per_m
                 ) / 1_000_000
                 logger.info(
                     "strategist.llm_call_ok model=%s in=%d out=%d cost=$%.4f t=%.2fs",
