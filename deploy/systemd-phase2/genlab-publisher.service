@@ -30,4 +30,25 @@ ExecStart=/opt/genlab/.venv/bin/python -m genlab_core.publishing.publish_all_pla
 # Without this allowlist, 3/4 non-zero exits fire OnFailure → operator
 # alert fatigue → L4 OnFailure value collapses to noise.
 SuccessExitStatus=0 1 3 4
-TimeoutSec=1800
+# TimeoutSec=3600 (bumped from 1800 on 2026-07-08).
+#
+# Publisher processes niches sequentially (see
+# publish_all_platforms.py:688 `for nid in niches:`). Per-blueprint,
+# `parallel_publish.execute_parallel_publish` uses a ThreadPoolExecutor
+# with DEFAULT_PUBLISH_TIMEOUT_SECONDS=600, so worst-case each
+# niche eats up to 600s (dominated by IG's polling budget when a
+# reel gets stuck in Meta's processing queue).
+#
+# 5 niches × 600s = 3000s worst case. The old 1800s TimeoutSec
+# only covered ~3 niches of hangs — yesterday's 2026-07-07 fire
+# processed 4 niches (2 hit IG hangs) before systemd TERMed it,
+# and anime never got processed.
+#
+# 3600s = 1 hour headroom = fits 5 niches × 600s worst-case with
+# 600s margin. Also gives room for a 6th niche if we ever add one.
+#
+# Real fix is reducing DEFAULT_PUBLISH_TIMEOUT_SECONDS from 600
+# to ~300s (IG's healthy SLA is <90s; anything >300s is stuck).
+# That's tracked in a separate task — this bump is the
+# operationally-safe immediate mitigation.
+TimeoutSec=3600
