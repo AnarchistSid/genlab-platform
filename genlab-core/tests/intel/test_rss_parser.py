@@ -717,3 +717,65 @@ class TestParseFetchLog:
         assert len(items) == 3
         urls = {item["url"] for item in items}
         assert urls == {"https://a.com/", "https://b.com/", "https://c.com/"}
+
+
+class TestParseEntryMissingLinkFix:
+    """Post-fix pin: `parse_entry({})` raises ValueError with a
+    specific "producer bug" message rather than the generic
+    "normalize_url requires non-empty string" that leaked from
+    the URL-normalization helper.
+
+    Motivation: the DEV-3 investigation flagged the crash as a
+    latent producer-bug detection gap — the fetcher shouldn't be
+    handing entries with no link, and when it does the error line
+    should say so. This test locks in the improved message so a
+    future refactor that returns None instead of raising, or
+    silently accepts empty URLs, breaks visibly."""
+
+    def test_empty_entry_raises_value_error(self):
+        import pytest
+        from genlab_core.intel.rss_parser import parse_entry
+
+        with pytest.raises(ValueError) as exc_info:
+            parse_entry({}, source_priority=0.5)
+        # Message must name "link" so operator sees WHICH field is
+        # missing without opening the source.
+        assert "link" in str(exc_info.value).lower()
+        # Message must call out the fetcher as the culprit — this
+        # is the "producer bug" surfacing at the parse boundary.
+        assert (
+            "producer bug" in str(exc_info.value).lower()
+            or "fetcher" in str(exc_info.value).lower()
+        )
+
+    def test_entry_with_empty_link_string_raises(self):
+        """An entry with `link=""` (as opposed to no key at all) is
+        still a producer bug. The behaviour is the same."""
+        import pytest
+        from genlab_core.intel.rss_parser import parse_entry
+
+        with pytest.raises(ValueError):
+            parse_entry({"link": ""}, source_priority=0.5)
+
+    def test_reddit_permalink_with_video_hint_still_parses(self):
+        """A well-formed entry with a link + reddit-style summary URLs
+        still parses. The fail-fast only fires when there's NO link
+        AND `_select_primary_url` can't rescue one — this test locks
+        in that the guard doesn't over-reject the common happy path.
+
+        `_select_primary_url` rescues from summary ONLY on reddit
+        permalinks (see :func:`_select_primary_url` source), so this
+        test uses that shape to prove the rescue path still works
+        end-to-end through the fix."""
+        from genlab_core.intel.rss_parser import parse_entry
+
+        entry = {
+            "link": "https://reddit.com/r/example/comments/abc/post/",
+            "summary": '<a href="https://v.redd.it/foo.mp4">video</a>',
+            "title": "Example",
+            "published": "2026-07-08",
+        }
+        item = parse_entry(entry, source_priority=0.5)
+        # Non-empty URL + a story_id was generated.
+        assert item["url"]
+        assert item["story_id"]
