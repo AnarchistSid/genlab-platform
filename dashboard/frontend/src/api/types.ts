@@ -1534,6 +1534,115 @@ export interface FlagStatePayload {
 }
 
 // ───────────────────────────────────────────────────────────────
+// L4 (2026-07-08 audit) — Bayesian gate + conformal router state.
+// Two independent endpoints; each surfaces a per-niche posterior
+// snapshot for the observation-only phase before consumer wire.
+// ───────────────────────────────────────────────────────────────
+
+/** One niche's Bayesian LR gate posterior summary.
+ *  Deliberately EXCLUDES the covariance matrix (payload-size guard —
+ *  see the endpoint pin tests). */
+export interface BayesianGateNicheSummary {
+  niche_id: string;
+  n_rows: number;
+  feature_names: string[];
+  /** Weight per feature — length matches feature_names. */
+  mean: number[];
+}
+
+export interface BayesianGateStatePayload {
+  flag_enabled: boolean;
+  state_path: string;
+  niches: BayesianGateNicheSummary[];
+}
+
+/** One niche's conformal router state summary. */
+export interface ConformalRouterNicheSummary {
+  niche_id: string;
+  sample_count: number;
+  n_train: number;
+  n_calib: number;
+  alpha: number;
+  q_hat: number;
+  feature_names: string[];
+  /** True when sample_count ≥ min_niche_samples (server-computed). */
+  ready: boolean;
+}
+
+export interface ConformalRouterStatePayload {
+  flag_enabled: boolean;
+  state_path: string;
+  min_niche_samples: number;
+  niches: ConformalRouterNicheSummary[];
+}
+
+// ───────────────────────────────────────────────────────────────
+// L5 (2026-07-08 audit) — ensemble vote summary types.
+// One decision → 4-5 component votes → aggregate recommendation.
+// The endpoint returns per-component participation over a window.
+// ───────────────────────────────────────────────────────────────
+
+export interface EnsembleComponentSummary {
+  component: string;
+  voted: number;
+  abstained: number;
+  vote_rate: number;
+  /** null when the component abstained on every decision in window. */
+  mean_score: number | null;
+  mean_disagreement_when_voting: number | null;
+}
+
+export interface EnsembleVotesSummaryPayload {
+  flag_enabled: boolean;
+  window_days: number;
+  niche_id: string | null;
+  total_decisions: number;
+  components: EnsembleComponentSummary[];
+  /** Sparse — only recommendations that occurred in the window
+   *  are present. Common values: `auto_approve`, `worth_your_look`,
+   *  `route_to_operator`, `auto_reject`, `insufficient_data`,
+   *  `disabled`. */
+  recommendations: Record<string, number>;
+}
+
+// ───────────────────────────────────────────────────────────────
+// L7 (2026-07-08 audit) — drift signal summary types.
+// Bandit-arm posterior shift detection persisted per detector run.
+// ───────────────────────────────────────────────────────────────
+
+export interface DriftSignal {
+  arm_id: string;
+  niche_id: string;
+  recent_rate: number;
+  baseline_rate: number;
+  z_score: number;
+  recent_obs: number;
+  baseline_obs: number;
+  is_regression: boolean;
+  /** ISO string. */
+  computed_at: string;
+}
+
+export interface DriftCountByNiche {
+  niche_id: string;
+  regressions: number;
+  improvements: number;
+}
+
+export interface DriftSignalsSummaryPayload {
+  flag_enabled: boolean;
+  window_days: number;
+  niche_id: string | null;
+  min_abs_z: number;
+  /** Capped at 20 by the server (see endpoint). Sorted z_score ASC
+   *  (most-regressed first). */
+  regressions: DriftSignal[];
+  /** Capped at 10. Sorted z_score DESC (most-improved first). */
+  improvements: DriftSignal[];
+  counts_by_niche: DriftCountByNiche[];
+}
+
+// ───────────────────────────────────────────────────────────────
 // L3 PR 9 (2026-07-07) — Product bandit observability types.
 // Monetization Layer 3 sprint. Sibling of TransformationBanditSummary
 // but simpler shape: products live under one dimension

@@ -33,7 +33,11 @@ import { SponsorshipReadinessCard } from "./SponsorshipReadinessCard";
 import { StrategistReportCard } from "./StrategistReportCard";
 import { TrendAnticipationCard } from "./TrendAnticipationCard";
 import { TrendAnticipationAccuracyCard } from "./TrendAnticipationAccuracyCard";
+import { BayesianGateStateCard } from "./BayesianGateStateCard";
+import { ConformalRouterStateCard } from "./ConformalRouterStateCard";
 import { CrossNichePriorsCard } from "./CrossNichePriorsCard";
+import { DriftSignalCard } from "./DriftSignalCard";
+import { EnsembleVotesCard } from "./EnsembleVotesCard";
 import { FlagStateCard } from "./FlagStateCard";
 import { TopCreatorPriorsCard } from "./TopCreatorPriorsCard";
 import { CounterfactualReplayCard } from "./CounterfactualReplayCard";
@@ -362,6 +366,31 @@ export default function MissionControl() {
                 that silently no-op — the class-of-bug that
                 motivated the entire flag-audit epic. */}
             <FlagStateCard />
+            {/* L4 observability (2026-07-08 audit): Bayesian LR
+                gate posterior state. Shows per-niche mean vector
+                + training size so the operator can eyeball
+                whether the fit looks reasonable before flipping
+                GENLAB_BAYESIAN_GATE_ENABLED. Covariance matrix
+                deliberately excluded — see endpoint pin tests. */}
+            <BayesianGateStateCard />
+            {/* L4 observability (2026-07-08 audit): conformal
+                router q_hat + calibration state per niche. `ready`
+                badge derives from sample_count ≥ min_niche_samples
+                (default 50) — under threshold the router falls
+                back to routing to operator regardless of q_hat. */}
+            <ConformalRouterStateCard />
+            {/* L5 observability (2026-07-08 audit): per-component
+                ensemble vote summary. Shows which components voted
+                vs abstained and how their scores agreed with the
+                final recommendation. Enables post-hoc analysis of
+                inter-component disagreement. */}
+            <EnsembleVotesCard />
+            {/* L7 observability (2026-07-08 audit): bandit-arm
+                drift detection. Regressions (negative z_score) at
+                the top — most concerning arms first. `is_regression`
+                partial index on the DB side keeps this hot query
+                cheap even with hundreds of signals per detector run. */}
+            <DriftSignalCard />
             {/* Intervention 7 observability (2026-07-01): monthly
                 counterfactual replay. Shows per-niche IPS + DR reward
                 estimates so the operator can see which arms would
