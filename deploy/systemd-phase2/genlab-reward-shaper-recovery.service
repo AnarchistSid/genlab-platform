@@ -1,0 +1,28 @@
+[Unit]
+# Weekly reward-shaper recovery check (#586, 2026-07-08).
+# Verifies YouTube + Twitter reward writes are recovering after PR #713
+# broke the feedback death spiral. See:
+# scripts/verify_reward_shaper_recovery.py for the interpretation matrix.
+Description=GenLab reward-shaper recovery check (post-#713)
+After=network-online.target docker.service
+Wants=network-online.target
+
+# Same alert-on-failure pattern as sibling verifiers. Exit 3 (regression)
+# will fire the CriticalAlertsBanner via the failure-alert template.
+OnFailure=genlab-service-failure-alert@%n.service
+
+[Service]
+Type=oneshot
+User=genlab
+Group=genlab
+WorkingDirectory=/opt/genlab
+EnvironmentFile=/opt/genlab/.env
+Environment=GENLAB_PROJECT_ROOT=/opt/genlab
+Environment=HOME=/opt/genlab
+Environment=UV_FROZEN=1
+# Explicit systemd-friendly success codes: 0=green, 4=amber (recovering
+# but not yet at target — informational, not a failure). Exit 3 (red)
+# is DELIBERATELY not in this list so it fires OnFailure alerts.
+SuccessExitStatus=0 4
+ExecStart=/opt/genlab/.venv/bin/python /opt/genlab/scripts/verify_reward_shaper_recovery.py --format text
+TimeoutSec=120
