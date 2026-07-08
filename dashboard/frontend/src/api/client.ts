@@ -1183,6 +1183,85 @@ export const flagState = {
 };
 
 // ───────────────────────────────────────────────────────────────
+// L4 (2026-07-08 audit) — Bayesian gate + conformal router clients.
+// Each surfaces the "observation-only" per-niche state snapshot
+// before the consumer wire flip. Both endpoints fail-open on cold
+// start (empty niches list), so callers should render "no niches
+// yet" defensively when `niches.length === 0`.
+// ───────────────────────────────────────────────────────────────
+
+export const bayesianGateState = {
+  /** Fetch the per-niche posterior summary. Never returns null —
+   *  cold start returns `{niches: []}` with `flag_enabled` still
+   *  populated from the runtime env. */
+  get: () =>
+    get<{
+      data: import("./types").BayesianGateStatePayload;
+    }>("/bayesian-gate/state").then((d) =>
+      unwrapEnvelope<import("./types").BayesianGateStatePayload>(d),
+    ),
+};
+
+export const conformalRouterState = {
+  /** Fetch the per-niche conformal router state. Same cold-start
+   *  contract as bayesianGateState — `niches: []` when nothing
+   *  has been fit yet. */
+  get: () =>
+    get<{
+      data: import("./types").ConformalRouterStatePayload;
+    }>("/conformal-router/state").then((d) =>
+      unwrapEnvelope<import("./types").ConformalRouterStatePayload>(d),
+    ),
+};
+
+// ───────────────────────────────────────────────────────────────
+// L5 (2026-07-08 audit) — ensemble votes summary client.
+// niche_id is optional; omit to aggregate across all niches.
+// ───────────────────────────────────────────────────────────────
+
+export const ensembleVotes = {
+  /** Fetch per-component participation + recommendation distribution.
+   *  Returns null when the migration hasn't landed yet on the target
+   *  DB (endpoint's fail-open path — see `test_query_failure_returns_
+   *  pending_migration_message`). */
+  summary: (params: { nicheId?: string; windowDays?: number } = {}) => {
+    const query: Record<string, string | number> = {};
+    if (params.nicheId) query.niche_id = params.nicheId;
+    if (params.windowDays) query.window_days = params.windowDays;
+    return get<{
+      data: import("./types").EnsembleVotesSummaryPayload | null;
+    }>("/ensemble-votes/summary", query).then((d) =>
+      unwrapEnvelope<import("./types").EnsembleVotesSummaryPayload>(d),
+    );
+  },
+};
+
+// ───────────────────────────────────────────────────────────────
+// L7 (2026-07-08 audit) — drift signals summary client.
+// Regressions capped at 20, improvements at 10 (server-side).
+// ───────────────────────────────────────────────────────────────
+
+export const driftSignals = {
+  /** Fetch recent regressions + improvements + per-niche counts.
+   *  Returns null when the migration hasn't landed yet. */
+  summary: (params: {
+    nicheId?: string;
+    windowDays?: number;
+    minAbsZ?: number;
+  } = {}) => {
+    const query: Record<string, string | number> = {};
+    if (params.nicheId) query.niche_id = params.nicheId;
+    if (params.windowDays) query.window_days = params.windowDays;
+    if (params.minAbsZ !== undefined) query.min_abs_z = params.minAbsZ;
+    return get<{
+      data: import("./types").DriftSignalsSummaryPayload | null;
+    }>("/drift-signals/summary", query).then((d) =>
+      unwrapEnvelope<import("./types").DriftSignalsSummaryPayload>(d),
+    );
+  },
+};
+
+// ───────────────────────────────────────────────────────────────
 // PR 14 (2026-07-05) — Transformation bandit observability client.
 // ───────────────────────────────────────────────────────────────
 

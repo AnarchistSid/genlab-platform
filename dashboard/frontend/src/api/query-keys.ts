@@ -236,4 +236,34 @@ export const queryKeys = {
   flagState: {
     get: () => ["flag-state"] as const,
   },
+  /** L4 (2026-07-08 audit) — Bayesian gate posterior state. */
+  bayesianGateState: {
+    get: () => ["bayesian-gate-state"] as const,
+  },
+  /** L4 (2026-07-08 audit) — conformal router state. */
+  conformalRouterState: {
+    get: () => ["conformal-router-state"] as const,
+  },
+  /** L5 (2026-07-08 audit) — ensemble vote summary. Keyed by
+   *  window params so switching niche/window doesn't collide. */
+  ensembleVotes: {
+    summary: (nicheId: string | undefined, windowDays: number | undefined) =>
+      ["ensemble-votes", "summary", nicheId ?? "all", windowDays ?? 7] as const,
+  },
+  /** L7 (2026-07-08 audit) — drift signal summary. Same key
+   *  discipline as ensembleVotes. */
+  driftSignals: {
+    summary: (
+      nicheId: string | undefined,
+      windowDays: number | undefined,
+      minAbsZ: number | undefined,
+    ) =>
+      [
+        "drift-signals",
+        "summary",
+        nicheId ?? "all",
+        windowDays ?? 7,
+        minAbsZ ?? 2.0,
+      ] as const,
+  },
 };
