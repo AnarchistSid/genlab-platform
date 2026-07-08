@@ -57,13 +57,35 @@ def main(argv: list[str] | None = None) -> int:
     # cost only lands when main() actually runs.
     from genlab_core.observability.alert_auto_resolver import (
         _summary_json,
+        auto_resolve_nightly_schedule_missing_slot_alerts,
         auto_resolve_systemd_unit_alerts,
     )
 
-    counters = auto_resolve_systemd_unit_alerts(dry_run=args.dry_run)
+    # Two independent resolvers, each with distinct semantics.
+    # Structured as a list of (label, callable) so adding a new
+    # resolver in the future stays one-line.
+    #
+    # Each resolver's counter dict is emitted under its label so
+    # log-aggregation can distinguish them. Failure of one does NOT
+    # skip the next — same fail-open discipline as the resolvers
+    # themselves.
+    resolvers = [
+        ("systemd_unit_failed", auto_resolve_systemd_unit_alerts),
+        ("nightly_schedule_missing_slot", auto_resolve_nightly_schedule_missing_slot_alerts),
+    ]
+
+    combined: dict[str, dict[str, int]] = {}
+    for label, resolver in resolvers:
+        try:
+            counters = resolver(dry_run=args.dry_run)
+        except Exception as exc:  # noqa: BLE001 — fail-open per resolver
+            logging.warning("[auto_resolve_alerts] %s resolver raised: %s", label, exc)
+            counters = {"errors": 1}
+        combined[label] = counters
+
     # Single-line JSON summary so log-aggregation tooling can scrape
     # it cleanly (matches the metrics-writer JSONL convention).
-    print(_summary_json(counters))
+    print(_summary_json(combined))
     return 0
 
 
