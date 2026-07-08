@@ -29,6 +29,7 @@ import {
   sources,
   type RssFeedEntry,
 } from "@/api/client";
+import { humanizeApiError } from "@/lib/humanize-api-error";
 import { NICHE_IDS, getNicheInfo, type NicheId } from "@/niches/registry";
 
 const RSS_QK = (nicheId: NicheId) => ["config", "rss-feeds", nicheId];
@@ -136,7 +137,7 @@ function RssEditor({ nicheId }: { nicheId: NicheId }) {
       setFormError(null);
       void qc.invalidateQueries({ queryKey: RSS_QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const removeMutation = useMutation({
@@ -144,7 +145,7 @@ function RssEditor({ nicheId }: { nicheId: NicheId }) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: RSS_QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -296,7 +297,7 @@ function SubredditsEditor({ nicheId }: { nicheId: NicheId }) {
       setFormError(null);
       void qc.invalidateQueries({ queryKey: SUBS_QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const removeMutation = useMutation({
@@ -304,7 +305,7 @@ function SubredditsEditor({ nicheId }: { nicheId: NicheId }) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: SUBS_QK(nicheId) });
     },
-    onError: (err: Error) => setFormError(err.message),
+    onError: (err) => setFormError(humanizeApiError(err).message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
