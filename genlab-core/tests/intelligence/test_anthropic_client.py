@@ -270,6 +270,113 @@ class TestIsTransientHeuristic:
 
         assert AnthropicStrategistClient._is_transient(BadRequestError("400")) is False
 
+    # DEV-3 observation fix pins — belt-and-suspenders isinstance
+    # path was added 2026-07-09. Locks in the invariant that the
+    # heuristic also matches by class hierarchy so a future SDK
+    # rename doesn't silently stop retries.
+
+    def test_isinstance_path_catches_renamed_class(self):
+        """The DEV-3 fix (2026-07-09): if the anthropic SDK renamed
+        `APIConnectionError` to a new class name that STILL inherits
+        from the same base, isinstance still catches it — the pre-fix
+        name-only check would have silently stopped retrying.
+
+        We simulate this by injecting a fake `anthropic` module with a
+        renamed class into ``sys.modules`` for the duration of the test,
+        then raising the renamed class. The heuristic should still
+        return True because isinstance sees it."""
+        import sys
+        import types
+
+        # Create a fake anthropic module with a CustomAPIConnectionError
+        # class that's the "renamed" successor to APIConnectionError.
+        fake_anthropic = types.ModuleType("anthropic")
+
+        class BaseAPIError(Exception):
+            pass
+
+        class CustomRenamedConnectionError(BaseAPIError):
+            pass
+
+        # Expose it under the OLD attribute name so the isinstance
+        # path picks it up — this is what a future SDK version that
+        # kept the class but with new backing implementation would
+        # look like.
+        fake_anthropic.APIConnectionError = CustomRenamedConnectionError
+        original = sys.modules.get("anthropic")
+        sys.modules["anthropic"] = fake_anthropic
+        try:
+            # Raise an instance — the CLASS NAME is now
+            # CustomRenamedConnectionError, NOT APIConnectionError.
+            # The name-based check WON'T match. The isinstance check
+            # against fake_anthropic.APIConnectionError WILL match.
+            exc = CustomRenamedConnectionError("simulated SDK rename")
+            assert type(exc).__name__ == "CustomRenamedConnectionError"
+            assert (
+                AnthropicStrategistClient._is_transient(exc) is True
+            ), (
+                "isinstance path failed — the belt-and-suspenders fix "
+                "isn't catching class-hierarchy matches. DEV-3 fix "
+                "regressed."
+            )
+        finally:
+            if original is not None:
+                sys.modules["anthropic"] = original
+            else:
+                sys.modules.pop("anthropic", None)
+
+    def test_missing_anthropic_module_falls_back_to_name_match(self):
+        """When the anthropic SDK isn't installed (test envs), the
+        isinstance path must degrade gracefully to name-match only.
+        Locks in that removing anthropic doesn't crash _is_transient."""
+        import sys
+
+        original = sys.modules.get("anthropic")
+        # Simulate SDK not installed by removing from sys.modules AND
+        # patching the import to fail. Simplest way: remove from
+        # sys.modules; the lazy import inside _is_transient will
+        # try to re-import and (in a real "not installed" scenario)
+        # raise ImportError. Since anthropic IS installed here, we
+        # patch the import machinery.
+        sys.modules["anthropic"] = None  # type: ignore[assignment]
+        try:
+            # Name-match still works — this exception matches the
+            # frozenset directly.
+            exc_cls = type("APIConnectionError", (Exception,), {})
+            assert (
+                AnthropicStrategistClient._is_transient(exc_cls("boom"))
+                is True
+            )
+            # Unrelated exception still returns False even with the
+            # isinstance path unable to import.
+            assert (
+                AnthropicStrategistClient._is_transient(
+                    ValueError("bad")
+                )
+                is False
+            )
+        finally:
+            if original is not None:
+                sys.modules["anthropic"] = original
+            else:
+                sys.modules.pop("anthropic", None)
+
+    def test_transient_error_names_frozenset_is_locked(self):
+        """The name list is now an explicit class attribute so pin
+        tests can assert against it. Locks the set of currently-
+        documented transient class names — any addition/removal
+        forces an intentional test edit."""
+        assert AnthropicStrategistClient._TRANSIENT_ERROR_NAMES == frozenset(
+            {
+                "APIConnectionError",
+                "APITimeoutError",
+                "InternalServerError",
+                "RateLimitError",
+                "TimeoutError",
+                "ConnectionError",
+            }
+        )
+
 
 # === generate_report — happy path ================================
 
