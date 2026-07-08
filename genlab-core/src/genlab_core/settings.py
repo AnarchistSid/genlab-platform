@@ -48,6 +48,67 @@ if _root_env.is_file() and not os.environ.get("GENLAB_SUPPRESS_DOTENV"):
 
 
 # ---------------------------------------------------------------------------
+# Feature-flag helper — enforces uniform truthiness semantics
+# ---------------------------------------------------------------------------
+# The 2026-07-08 round-3 flag audit found the codebase has ~26 GENLAB_*
+# feature flags read with INCOMPATIBLE truthiness checks across sites:
+#   * ``!= "1"`` (strict — only "1" is truthy)
+#   * ``.lower() in ("1", "true", "yes", "on")`` (permissive)
+#   * ``in ("true", "TRUE", "True")`` (case-list, not case-fold — misses "1")
+#
+# Different truthiness checks for the SAME flag caused a documented silent
+# no-op on ``GENLAB_INTELLIGENT_TRANSFORM_ENABLED``: the orchestrator and
+# selector used the permissive check, the post_render entrypoint used the
+# strict check. Setting the flag to ``"true"`` produced a partial fire —
+# selector picks arms, orchestrator accepts, post_render silently rejects.
+# Operator had no visible signal the flag was mis-configured.
+#
+# This helper is the source of truth for boolean env flags. Every new flag
+# read site should call ``env_true(name)``; the round-4 flag-hygiene PR
+# migrates the existing sites.
+_TRUE_VALUES = frozenset({"1", "true", "yes", "on", "y", "t"})
+
+
+def env_true(
+    name: str,
+    *,
+    default: bool = False,
+    legacy_name: str | None = None,
+) -> bool:
+    """Return True if the env var ``name`` is set to a truthy value.
+
+    Accepts (case-insensitive, whitespace-stripped): ``1``, ``true``,
+    ``yes``, ``on``, ``y``, ``t``. Everything else — including empty
+    string, ``0``, ``false``, ``no``, ``off``, and any other string — is
+    False.
+
+    Args:
+        name: Env var name (e.g. ``"GENLAB_INTELLIGENT_TRANSFORM_ENABLED"``).
+        default: Returned when the env var is UNSET. Distinct from unset
+            behavior — use ``env_true(name, default=True)`` for kill-switch
+            flags that should be ON unless explicitly disabled.
+        legacy_name: Optional deprecated env var name to check as a
+            fallback when ``name`` is unset. Used when a flag's canonical
+            name changed (e.g. ``GENLAB_OPTIMAL_TIME_BANDIT`` →
+            ``GENLAB_OPTIMAL_TIME_BANDIT_ENABLED`` to align with the
+            ``_ENABLED`` suffix convention) but existing prod .env files
+            still reference the old name. Both names are checked; the
+            newer ``name`` takes precedence.
+
+    Returns:
+        Boolean truthiness of the flag.
+    """
+    raw = os.environ.get(name)
+    if raw is not None:
+        return raw.strip().lower() in _TRUE_VALUES
+    if legacy_name is not None:
+        legacy_raw = os.environ.get(legacy_name)
+        if legacy_raw is not None:
+            return legacy_raw.strip().lower() in _TRUE_VALUES
+    return default
+
+
+# ---------------------------------------------------------------------------
 # Niche → required credential groups
 # ---------------------------------------------------------------------------
 # Maps niche IDs to the Settings field names each niche needs at runtime.
