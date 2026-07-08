@@ -789,48 +789,96 @@ class SharedIngestionPipeline:
                 view_velocity = COALESCE(EXCLUDED.view_velocity, content_pool.view_velocity)
         """
 
+        # Batch size for the executemany() UPSERT path (task #589,
+        # 2026-07-08). At prod's current 40-200 rows/day, dropping from
+        # 1-savepoint-per-row to 1-savepoint-per-50-row-batch cuts the
+        # savepoint round-trip count by ~40×. When a batch fails the
+        # code falls back to per-row savepoints for THAT batch only —
+        # preserves the original error-isolation contract (a single bad
+        # row can't block the others) while gaining round-trip efficiency
+        # on the happy path.
+        #
+        # Kept intentionally small (50, not 200) so a single bad row's
+        # fallback doesn't process the entire day's queue row-by-row.
+        # At n=50 the worst case is 50 fallback rows per bad batch,
+        # each with its own savepoint. See discussion in
+        # session-2026-07-08-audit-shipping-arc.md.
+        BATCH_SIZE = 50
+
+        def _entry_to_params(entry) -> dict:
+            """Shape one PoolEntry into the upsert parameter dict.
+            Extracted from the inline dict-building so both the batch
+            path and the per-row fallback share one source of truth for
+            the schema."""
+            return {
+                "content_hash": entry.content_hash,
+                "title": entry.title,
+                "summary": entry.summary,
+                "source_url": entry.source_url,
+                "source_name": entry.source_name,
+                "source_platform": entry.source_platform,
+                "video_url": entry.video_url,
+                "video_id": entry.video_id,
+                "thumbnail_url": entry.thumbnail_url,
+                "published_at": entry.published_at,
+                "duration_seconds": entry.duration_seconds,
+                "view_count": entry.view_count,
+                "view_velocity": entry.view_velocity,
+                "source_affinity": entry.source_affinity,
+                "youtube_category_id": entry.youtube_category_id,
+                "niche_scores": json.dumps(entry.niche_scores),
+                "routed_niches": entry.routed_niches,
+                "routing_reason": entry.routing_reason,
+                "extra": json.dumps(entry.extra),
+            }
+
         try:
             with pg_connect(self._db_url, niche_id="all") as conn:
                 with conn.cursor() as cur:
-                    for entry in routed_entries:
+                    # Slice into batches. `range(0, N, k)` gives batch
+                    # start indices — cleaner than a generator for the
+                    # error path below (we need to re-iterate the same
+                    # batch's rows in the fallback).
+                    for batch_start in range(0, len(routed_entries), BATCH_SIZE):
+                        batch = routed_entries[batch_start : batch_start + BATCH_SIZE]
+                        params_list = [_entry_to_params(e) for e in batch]
+
                         try:
-                            # Savepoint so a single row failure doesn't
-                            # abort the entire transaction.
-                            cur.execute("SAVEPOINT sp_upsert")
-                            cur.execute(
-                                upsert_sql,
-                                {
-                                    "content_hash": entry.content_hash,
-                                    "title": entry.title,
-                                    "summary": entry.summary,
-                                    "source_url": entry.source_url,
-                                    "source_name": entry.source_name,
-                                    "source_platform": entry.source_platform,
-                                    "video_url": entry.video_url,
-                                    "video_id": entry.video_id,
-                                    "thumbnail_url": entry.thumbnail_url,
-                                    "published_at": entry.published_at,
-                                    "duration_seconds": entry.duration_seconds,
-                                    "view_count": entry.view_count,
-                                    "view_velocity": entry.view_velocity,
-                                    "source_affinity": entry.source_affinity,
-                                    "youtube_category_id": entry.youtube_category_id,
-                                    "niche_scores": json.dumps(entry.niche_scores),
-                                    "routed_niches": entry.routed_niches,
-                                    "routing_reason": entry.routing_reason,
-                                    "extra": json.dumps(entry.extra),
-                                },
-                            )
-                            cur.execute("RELEASE SAVEPOINT sp_upsert")
-                            self._stats["inserted"] += 1
-                        except Exception as exc:
-                            cur.execute("ROLLBACK TO SAVEPOINT sp_upsert")
+                            # Batch-level savepoint: succeeds atomically
+                            # for the whole batch OR rolls back the whole
+                            # batch and we fall through to per-row below.
+                            cur.execute("SAVEPOINT sp_batch")
+                            cur.executemany(upsert_sql, params_list)
+                            cur.execute("RELEASE SAVEPOINT sp_batch")
+                            self._stats["inserted"] += len(batch)
+                        except Exception as batch_exc:
+                            # Batch failed. Roll it back and reprocess
+                            # this batch's rows individually to isolate
+                            # the bad row(s). This preserves the
+                            # pre-#589 contract that a single bad row
+                            # can't block the whole day's queue.
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_batch")
                             logger.warning(
-                                "[SharedIngestion] Failed to upsert %s: %s",
-                                entry.content_hash[:8],
-                                exc,
+                                "[SharedIngestion] Batch %d-%d failed (%s); "
+                                "falling back to per-row for this batch",
+                                batch_start,
+                                batch_start + len(batch),
+                                batch_exc,
                             )
-                            self._stats["errors"] += 1
+                            for entry, params in zip(batch, params_list, strict=True):
+                                try:
+                                    cur.execute("SAVEPOINT sp_row")
+                                    cur.execute(upsert_sql, params)
+                                    cur.execute("RELEASE SAVEPOINT sp_row")
+                                    self._stats["inserted"] += 1
+                                except Exception as row_exc:
+                                    cur.execute("ROLLBACK TO SAVEPOINT sp_row")
+                                    logger.warning(
+                                        "[SharedIngestion] Failed to upsert %s: %s",
+                                        entry.content_hash[:8],
+                                        row_exc,
+                                    )
+                                    self._stats["errors"] += 1
 
                 conn.commit()
                 logger.info(
