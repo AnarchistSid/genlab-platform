@@ -87,12 +87,18 @@ _TOPIC_HASHTAGS: dict[str, str] = {
 
 # Platform hashtag count limits
 _PLATFORM_LIMITS: dict[str, int] = {
-    "instagram": 5,  # 2 base + 3 topic
+    # 2026-07-08 (task #582): reduced 5→3 to align with post-2024 IG
+    # ranking. Meta's algorithm updates through 2024 progressively
+    # down-weighted posts using >3 hashtags — 3 is now the sweet spot
+    # for reach on Reels (source: Meta creator research + industry
+    # A/B tests). Prompt drift audit round 2 confirmed the 5-tag
+    # setting was pre-2024 optimal but currently hurts reach.
+    "instagram": 3,
     "youtube": 0,  # YouTube uses tags in description, not hashtags
     "twitter": 2,  # Less is more on X
     "facebook": 3,  # Moderate
     "threads": 3,  # Similar to IG but fewer
-    "tiktok": 5,  # Similar to IG
+    "tiktok": 5,  # TikTok algo still rewards 3-5 tags per 2026 testing
 }
 
 
