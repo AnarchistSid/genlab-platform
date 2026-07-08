@@ -784,6 +784,7 @@ from server.api.conformal_router import bp as conformal_router_bp
 from server.api.costs import bp as costs_bp
 from server.api.counterfactual_replay import bp as counterfactual_replay_bp
 from server.api.cross_niche_transfer import bp as cross_niche_transfer_bp
+from server.api.drift_signals import bp as drift_signals_bp
 from server.api.engagement import bp as engagement_bp
 from server.api.ensemble_votes import bp as ensemble_votes_bp
 from server.api.events import bp as events_bp
@@ -876,6 +877,9 @@ app.register_blueprint(
 app.register_blueprint(
     ensemble_votes_bp
 )  # L5 (2026-07-08 audit): /api/v1/ensemble-votes/summary — per-component participation + recommendation distribution
+app.register_blueprint(
+    drift_signals_bp
+)  # L7 (2026-07-08 audit): /api/v1/drift-signals/summary — bandit-arm drift regressions + improvements
 app.register_blueprint(webhook_bp)
 app.register_blueprint(legal_bp)
 app.register_blueprint(runway_bp)
