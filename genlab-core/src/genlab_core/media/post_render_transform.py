@@ -83,7 +83,7 @@ def apply_post_render_transformations(
     visuals_yaml_path: str,
     blueprint_context: dict[str, Any] | None = None,
     video_duration_s: float = 55.0,
-) -> str:
+) -> tuple[str, dict[str, str]]:
     """Run the intelligent transformation on a rendered reel.
 
     Called from each niche's VisualRenderStrategy after
@@ -109,9 +109,25 @@ def apply_post_render_transformations(
             caption timing + highlight window sizing.
 
     Returns:
-        Path to the final reel (str). Either the transformed output
-        (if enabled + config allowed) or the input ``rendered_path``
-        unchanged (fail-open).
+        A 2-tuple of ``(path, arm_ids_by_dimension)``:
+
+        * ``path`` — the final reel path (str). Either the transformed
+          output (if enabled + config allowed AND stages actually ran)
+          or the input ``rendered_path`` unchanged (fail-open).
+        * ``arm_ids_by_dimension`` — dict of ``{dimension: arm_id}``
+          pairs for every transformation dimension the selector picked
+          arms for. Empty ``{}`` on every fail-open path (flag off,
+          config off, exception at any stage) — signals "no arms
+          selected, no reward attribution".
+
+        Task #581 (2026-07-08) changed this from ``str`` to
+        ``tuple[str, dict]`` because the pre-fix return discarded
+        ``TransformationResult.arm_ids_by_dimension``. 255 registered
+        transformation bandit arms had α=β=1 for weeks because reward
+        never routed to them — the selector picked, the orchestrator
+        applied, and then the caller threw away the arm attribution.
+        See ``docs/AUDIT-2026-07-08.md`` §11.2 and
+        ``audit-round-4-2026-07-08.md``.
     """
     # Env kill-switch. Uses the shared ``env_true`` helper so this site's
     # truthiness semantics match the sibling checks in
@@ -128,7 +144,7 @@ def apply_post_render_transformations(
             "[%s] GENLAB_INTELLIGENT_TRANSFORM_ENABLED off — post_render_transform skipping",
             niche_id,
         )
-        return rendered_path
+        return rendered_path, {}
 
     try:
         # Deferred imports so a stale bytecode / missing dep in the
@@ -147,7 +163,7 @@ def apply_post_render_transformations(
             niche_id,
             exc,
         )
-        return rendered_path
+        return rendered_path, {}
 
     try:
         with open(visuals_yaml_path) as f:
@@ -159,7 +175,7 @@ def apply_post_render_transformations(
             niche_id,
             exc,
         )
-        return rendered_path
+        return rendered_path, {}
 
     if not getattr(cfg, "enabled", False):
         logger.debug(
@@ -167,7 +183,7 @@ def apply_post_render_transformations(
             "post_render_transform skipping",
             niche_id,
         )
-        return rendered_path
+        return rendered_path, {}
 
     # Write transformed output alongside the composite. On success we
     # rename over the composite so downstream stages (validate_videos,
@@ -193,7 +209,7 @@ def apply_post_render_transformations(
             niche_id,
             exc,
         )
-        return rendered_path
+        return rendered_path, {}
 
     # Any stages actually applied? Verify the file exists + has bytes.
     if transformed.is_file() and transformed.stat().st_size > 0:
@@ -221,7 +237,7 @@ def apply_post_render_transformations(
                 niche_id,
                 exc,
             )
-            return rendered_path
+            return rendered_path, {}
         if probe_dur is not None and probe_dur < _SPEC_MIN_DURATION_S:
             logger.warning(
                 "[%s] transformed output %.2fs < SPEC.min_duration %.1fs "
@@ -235,7 +251,11 @@ def apply_post_render_transformations(
             )
             # Leave the base composite untouched at ``rendered``.
             # The transformed side-file will get cleaned by disk_cleanup.
-            return rendered_path
+            # Return empty arm_ids: the orchestrator picked arms but we
+            # rejected the output, so no reward should be attributed
+            # (would train the bandit on a bad experience it didn't
+            # actually cause).
+            return rendered_path, {}
 
         # Replace the composite in-place so downstream sees the
         # transformed reel at the same path.
@@ -247,13 +267,17 @@ def apply_post_render_transformations(
                 niche_id,
                 exc,
             )
-            return str(transformed)
+            # Rename failed but transformation DID complete — return the
+            # side-file path AND the arms so reward still attributes.
+            return str(transformed), dict(result.arm_ids_by_dimension)
         logger.info(
             "[%s] Intelligent transformation applied: stages=%s",
             niche_id,
             list(result.stages_applied),
         )
-        return rendered_path  # same path, now overwritten with transformed bytes
+        # Success — same path, now overwritten with transformed bytes,
+        # AND the arm attribution dict so reward routes per-dimension.
+        return rendered_path, dict(result.arm_ids_by_dimension)
 
     logger.info(
         "[%s] Intelligent transformation produced no output — returning "
@@ -262,4 +286,7 @@ def apply_post_render_transformations(
         list(result.stages_applied),
         list(result.stages_skipped),
     )
-    return rendered_path
+    # Orchestrator ran but every stage skipped (no music library, no
+    # intro/outro assets, etc.). No transformation applied → no arm
+    # attribution. Empty dict is correct here.
+    return rendered_path, {}

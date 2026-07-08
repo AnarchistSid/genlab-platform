@@ -41,13 +41,17 @@ def test_flag_off_returns_input_path(monkeypatch, tmp_path: Path):
     input_path = str(tmp_path / "composite.mp4")
     (tmp_path / "composite.mp4").write_bytes(b"x")
 
-    result = apply_post_render_transformations(
+    result, arm_ids = apply_post_render_transformations(
         input_path,
         niche_id="ai_creators",
         niche_root=tmp_path,
         visuals_yaml_path=str(tmp_path / "visuals.yaml"),
     )
     assert result == input_path
+    # Task #581 (2026-07-08): fail-open paths must return empty dict so
+    # register_pending_feedback doesn't attribute reward to arms that
+    # never actually selected.
+    assert arm_ids == {}
 
 
 def test_visuals_yaml_missing_returns_input_path(
@@ -59,13 +63,14 @@ def test_visuals_yaml_missing_returns_input_path(
     input_path = str(tmp_path / "composite.mp4")
     (tmp_path / "composite.mp4").write_bytes(b"x")
 
-    result = apply_post_render_transformations(
+    result, arm_ids = apply_post_render_transformations(
         input_path,
         niche_id="ai_creators",
         niche_root=tmp_path,
         visuals_yaml_path=str(tmp_path / "does_not_exist.yaml"),
     )
     assert result == input_path
+    assert arm_ids == {}
 
 
 def test_config_disabled_returns_input_path(monkeypatch, tmp_path: Path):
@@ -79,13 +84,14 @@ def test_config_disabled_returns_input_path(monkeypatch, tmp_path: Path):
     input_path = str(tmp_path / "composite.mp4")
     (tmp_path / "composite.mp4").write_bytes(b"x")
 
-    result = apply_post_render_transformations(
+    result, arm_ids = apply_post_render_transformations(
         input_path,
         niche_id="anime",
         niche_root=tmp_path,
         visuals_yaml_path=str(yaml_path),
     )
     assert result == input_path
+    assert arm_ids == {}
 
 
 def test_orchestrator_raise_returns_input_path(
@@ -104,13 +110,14 @@ def test_orchestrator_raise_returns_input_path(
         "genlab_core.media.transformation_orchestrator.apply_transformations",
         side_effect=RuntimeError("boom"),
     ):
-        result = apply_post_render_transformations(
+        result, arm_ids = apply_post_render_transformations(
             input_path,
             niche_id="ai_creators",
             niche_root=tmp_path,
             visuals_yaml_path=str(yaml_path),
         )
     assert result == input_path
+    assert arm_ids == {}
 
 
 # ── source-grep pins: every niche actually calls the wire ────────────

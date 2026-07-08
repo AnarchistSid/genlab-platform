@@ -183,6 +183,7 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                 from genlab_core.media.post_render_transform import (
                     apply_post_render_transformations,
                 )
+
                 niche_id = getattr(self, "_niche_id", None) or (
                     self._log_prefix.strip().strip("[]") or ""
                 )
@@ -194,7 +195,13 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     "title": story.get("title", ""),
                     "summary": story.get("summary", ""),
                 }
-                composite_path = apply_post_render_transformations(
+                # Task #581 (2026-07-08): apply_post_render_transformations
+                # now returns (path, arm_ids_by_dimension). The dict lets
+                # `register_pending_feedback` route reward per-dimension
+                # so the 255 transformation arms actually accumulate
+                # observations (they were all α=β=1 pre-fix — the reward
+                # wire ended here silently).
+                composite_path, _arm_ids = apply_post_render_transformations(
                     composite_path,
                     niche_id=niche_id,
                     niche_root=niche_root,
@@ -202,14 +209,22 @@ class BaseVisualRenderStrategy(VisualRenderStrategy):
                     blueprint_context=blueprint_context,
                     video_duration_s=float(dur),
                 )
+                # Write to the story dict at the top-level so
+                # `push_to_backlog._build_blueprint_fields` (see
+                # `pipeline/stages/push_to_backlog.py`) can copy it into
+                # `fields["arm_ids_by_dimension"]`. Empty dict is normal
+                # (flag off, no arms picked, or transformation rejected)
+                # and stays out of pending_feedback naturally.
+                if _arm_ids:
+                    story["arm_ids_by_dimension"] = dict(_arm_ids)
             except Exception as exc:
                 # Extra defense: apply_post_render_transformations
                 # promises no-raise, but if some import path breaks,
                 # never let it kill the base render.
                 logger.warning(
-                    "%s post_render_transform wire raised (%s) — "
-                    "returning base composite",
-                    self._log_prefix, exc,
+                    "%s post_render_transform wire raised (%s) — returning base composite",
+                    self._log_prefix,
+                    exc,
                 )
             return composite_path
         except Exception as e:

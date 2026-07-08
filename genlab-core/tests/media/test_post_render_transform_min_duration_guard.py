@@ -42,11 +42,23 @@ def _visuals_yaml(tmp_path):
     return yaml_path
 
 
-def _make_stub_result(applied=None, skipped=None):
-    """Fake TransformationResult returned by mocked apply_transformations."""
+def _make_stub_result(applied=None, skipped=None, arm_ids=None):
+    """Fake TransformationResult returned by mocked apply_transformations.
+
+    Task #581 (2026-07-08): the real ``TransformationResult`` carries
+    ``arm_ids_by_dimension`` (see
+    ``genlab_core.media.transformation_orchestrator.TransformationResult``).
+    Stub needs it too so ``dict(result.arm_ids_by_dimension)`` doesn't
+    coerce a MagicMock into an empty dict silently (which would obscure
+    the arm-attribution assertion).
+    """
     result = MagicMock()
     result.stages_applied = applied or ["highlight_moment", "music_mood"]
     result.stages_skipped = skipped or []
+    result.arm_ids_by_dimension = arm_ids or {
+        "highlight_moment": "transform__highlight_moment__audio_peak",
+        "music_mood": "transform__music_mood__energetic",
+    }
     return result
 
 
@@ -75,7 +87,7 @@ class TestMinDurationGuard:
         mock_apply.side_effect = _fake_apply
         mock_probe.return_value = 13.056  # actual observed value on 2026-07-07
 
-        out = prt.apply_post_render_transformations(
+        out, arm_ids = prt.apply_post_render_transformations(
             str(composite),
             niche_id="gaming",
             niche_root=tmp_path,
@@ -110,7 +122,7 @@ class TestMinDurationGuard:
         mock_apply.side_effect = _fake_apply
         mock_probe.return_value = 18.5  # well above the 15s threshold
 
-        out = prt.apply_post_render_transformations(
+        out, arm_ids = prt.apply_post_render_transformations(
             str(composite),
             niche_id="gaming",
             niche_root=tmp_path,
@@ -144,7 +156,7 @@ class TestMinDurationGuard:
         mock_apply.side_effect = _fake_apply
         mock_probe.return_value = 15.0
 
-        out = prt.apply_post_render_transformations(
+        out, arm_ids = prt.apply_post_render_transformations(
             str(composite),
             niche_id="movies",
             niche_root=tmp_path,
@@ -180,7 +192,7 @@ class TestMinDurationGuard:
         mock_apply.side_effect = _fake_apply
         mock_probe.return_value = None  # ffprobe failure
 
-        out = prt.apply_post_render_transformations(
+        out, arm_ids = prt.apply_post_render_transformations(
             str(composite),
             niche_id="anime",
             niche_root=tmp_path,

@@ -2085,6 +2085,21 @@ class PushToBacklog:
                         if story.get(ctx_key) is not None:
                             fields[ctx_key] = story[ctx_key]
 
+                    # Task #581 (2026-07-08): transformation arm attribution.
+                    # ``base_visual_render.py`` / ``bb_strategies/visual_render.py``
+                    # write ``story["arm_ids_by_dimension"]`` after
+                    # ``apply_post_render_transformations`` runs the per-
+                    # dimension selectors. Serialize to JSON so downstream
+                    # ``register_pending_feedback`` can deserialize and pass
+                    # to ``PendingFeedbackTask.arm_ids_by_dimension``.
+                    # Reward router at ``metric_collector.py:1077`` reads
+                    # this to route per-dimension bandit updates at the 48h
+                    # window. Pre-fix, 255 transformation arms sat at
+                    # α=β=1 because this bridge was missing.
+                    arm_ids_by_dim = story.get("arm_ids_by_dimension") or {}
+                    if arm_ids_by_dim:
+                        fields["arm_ids_by_dimension"] = json.dumps(arm_ids_by_dim)
+
                     # Persist urgency classification for express lane publishing
                     urgency = story.get("urgency_classification", {})
                     if urgency:
