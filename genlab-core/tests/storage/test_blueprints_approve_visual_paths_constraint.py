@@ -1,4 +1,4 @@
-"""Real-DB pin: blueprints CHECK constraint from migration a8w9x0y1z2a3.
+"""Real-DB pin: blueprints CHECK constraint from migration d0z1a2b3c4d5.
 
 Task #577's structural defense against operator-SQL bypass of the
 publisher's visual_paths invariant. Task #575 shipped the dashboard
@@ -121,7 +121,7 @@ class TestConstraintPresent:
             row = cur.fetchone()
         assert row is not None, (
             f"CHECK constraint {_CONSTRAINT!r} missing from blueprints — "
-            f"migration a8w9x0y1z2a3 didn't apply, or was dropped. Task #577."
+            f"migration d0z1a2b3c4d5 didn't apply, or was dropped. Task #577."
         )
 
 

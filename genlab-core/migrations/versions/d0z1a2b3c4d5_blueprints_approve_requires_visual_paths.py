@@ -1,8 +1,8 @@
 """blueprints — CHECK constraint: approved+scheduled requires visual_paths (#577)
 
-Revision ID: a8w9x0y1z2a3
-Revises: z7v8w9x0y1z2
-Create Date: 2026-07-08 16:45:00.000000+00:00
+Revision ID: d0z1a2b3c4d5
+Revises: c9x0y1z2ab34
+Create Date: 2026-07-08 16:50:00.000000+00:00
 
 ## Background
 
@@ -53,6 +53,15 @@ native JSONB array. All 511 rows with the key use ``jsonb_typeof =
   * Array form (future migration might normalize): fall through the
     OR — ``extra ? 'visual_paths'`` is TRUE either way.
 
+## Revision ID note
+
+Initial attempt used revision ``a8w9x0y1z2a3`` which collided with
+the L3 sprint's ``a8w9x0y1z2a3_monetization_l3_product_bandit_schema
+.py``. Down_revision also had to point at ``c9x0y1z2ab34``
+(2026-07-05 mergepoint) rather than ``z7v8w9x0y1z2`` (late_reward
+head that got merged into c9x…). Both errors surfaced at
+``alembic upgrade head`` on prod and are corrected here.
+
 ## Downgrade
 
 Drops the constraint. Historical + intermediate rows remain
@@ -62,8 +71,8 @@ untouched (constraint only affects future writes).
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "a8w9x0y1z2a3"
-down_revision = "z7v8w9x0y1z2"
+revision = "d0z1a2b3c4d5"
+down_revision = "c9x0y1z2ab34"
 branch_labels = None
 depends_on = None
 
