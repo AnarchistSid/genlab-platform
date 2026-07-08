@@ -1221,6 +1221,63 @@ def _execute_review_action(
         bp_data = None
 
     if action == "approved":
+        # 2026-07-08 (task #575): guard against approving a blueprint that
+        # has no rendered media. Publisher fails at fire time with
+        # "No valid media files for video publish" and the operator has
+        # to chase a scheduled-but-unpublishable ghost in the queue.
+        #
+        # Root-cause path: 3 blueprints found on prod today (1 sports for
+        # tomorrow, 2 movies for 2026-07-28/29) had status='VISUAL_READY'
+        # + action_taken='approved' + scheduled_for=<future> but no
+        # extra.visual_paths key. All created 2026-06-29 16:31:25 UTC in
+        # what looks like an operator bulk-approve session or a batch write
+        # from a pipeline that flipped status without persisting the render
+        # output. Root cause of the missing paths is task #576; THIS guard
+        # blocks the review action from making the situation worse.
+        #
+        # We only guard video formats — text-only posts (if any future
+        # niche ships them) should still approve cleanly.
+        if bp_data is not None:
+            _fields = bp_data.get("fields", {}) or {}
+            _extra = _fields.get("extra") or {}
+            # ``extra`` may still be a JSON string on some fetch paths — decode
+            # defensively so ``.get`` works either way.
+            if isinstance(_extra, str):
+                try:
+                    import json as _json
+
+                    _extra = _json.loads(_extra) or {}
+                except (ValueError, TypeError):
+                    _extra = {}
+
+            _fmt = (_fields.get("format", "") or "").strip().lower()
+            _is_video = _fmt in ("reel", "short", "video") or not _fmt
+
+            _vp_raw = _extra.get("visual_paths") if isinstance(_extra, dict) else None
+            _has_vp = False
+            if isinstance(_vp_raw, list):
+                _has_vp = bool(_vp_raw)
+            elif isinstance(_vp_raw, str) and _vp_raw.strip() not in ("", "[]", "null"):
+                _has_vp = True
+
+            if _is_video and not _has_vp:
+                logger.warning(
+                    "[REVIEW] Refused to approve %s (niche=%s) — no "
+                    "visual_paths in extra (format=%r, extra keys=%s). "
+                    "Publisher would fail at fire time with 'No valid "
+                    "media files'. See task #575.",
+                    record_id,
+                    (_fields.get("niche_id") or "").strip(),
+                    _fmt,
+                    sorted((_extra or {}).keys())[:10],
+                )
+                raise ValueError(
+                    "Cannot approve blueprint without rendered media "
+                    "(visual_paths missing from extra). Re-run render "
+                    "pipeline first, or reject instead of approve if the "
+                    "content isn't salvageable."
+                )
+
         # Always find the next available slot for this niche — even if the
         # pipeline already set a tentative scheduled_for.  Multiple approvals
         # on the same day would otherwise stack on the same slot (1 per niche
